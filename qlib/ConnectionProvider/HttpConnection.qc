@@ -368,6 +368,35 @@ public class HttpConnection inherits AbstractConnectionWithInfo {
         return getPollImpl().startPollConnect();
     }
 
+    #! Returns @ref True since HTTP connections support the async request API
+    /** @return @ref True
+
+        @since ConnectionProvider 2.3
+    */
+    bool supportsAsyncRequestApi() {
+        return True;
+    }
+
+    #! Starts a non-blocking HTTP request on the connection
+    /** @param method the HTTP method (GET, POST, PUT, DELETE, PATCH, etc.)
+        @param path the request path
+        @param body the request body
+        @param headers optional request headers
+        @param logger an optional logger interface
+
+        @return a poll operation for the async request
+
+        @since ConnectionProvider 2.3
+    */
+    Qore::AbstractPollOperation startPollRequest(string method, string path, auto body,
+            *hash<auto> headers, *Logger::LoggerInterface logger) {
+        hash<auto> req_headers;
+        req_headers += opts.headers;
+        req_headers += headers;
+        return new HttpRequestPollOperation(url, method, path, body,
+            opts{keys ConnectionScheme.options} + {"url": url}, req_headers, logger);
+    }
+
     #! Returns options for creating a new connection
     *hash<auto> getConnectionOptions(*hash<auto> rtopts) {
         return {"url": url} + opts;

@@ -1,0 +1,319 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/HttpServerAsyncIo
+%requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/WebSocketUtil.qm
+%requires ../../../../qlib/WebSocketHandler.qm
+%requires ../../../../qlib/WebSocketClient.qm
+
+%exec-class WebSocketClientAsyncTest
+
+#! WebSocket connection that echoes messages back
+class EchoWsConnection inherits WebSocketConnection {
+    constructor(WebSocketHandler handler) : WebSocketConnection(handler) {
+    }
+
+    gotMessage(string msg) {
+        send("ECHO:" + msg);
+    }
+
+    gotMessage(binary msg) {
+        send(msg);
+    }
+}
+
+class EchoWsHandler inherits WebSocketHandler {
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new EchoWsConnection(self);
+    }
+}
+
+public class WebSocketClientAsyncTest inherits QUnit::Test {
+    private {
+        HttpServer m_server;
+        EchoWsHandler ws_handler();
+        hash<auto> linfo;
+        Logger logger;
+    }
+
+    constructor() : Test("WebSocketClientAsyncTest", "1.0") {
+        addTestCase("async send string", \asyncSendStringTest());
+        addTestCase("async send binary", \asyncSendBinaryTest());
+        addTestCase("async send with opcode", \asyncSendOpcodeTest());
+        addTestCase("async send poll state", \asyncSendPollStateTest());
+        addTestCase("concurrent async sends", \concurrentAsyncSendTest());
+        addTestCase("async connect", \asyncConnectTest());
+        addTestCase("async connect poll state", \asyncConnectPollStateTest());
+        addTestCase("async connect then async send", \asyncConnectThenSendTest());
+        addTestCase("async connect error", \asyncConnectErrorTest());
+
+        logger = new Logger("test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        };
+        m_server = new HttpServer(http_opts);
+        m_server.setHandler("ws-handler", "", NOTHING, ws_handler);
+        m_server.setDefaultHandler("ws-handler", ws_handler);
+        linfo = m_server.addListener(<HttpListenerOptionInfo>{"service": 0});
+
+        set_return_value(main());
+
+        m_server.stop();
+    }
+
+    #! Helper to drive a poll operation to completion
+    private auto drivePoll(AbstractPollOperation poller) {
+        int max_iterations = 1000;
+        int iteration = 0;
+        while (!poller.goalReached()) {
+            if (++iteration > max_iterations) {
+                throw "TIMEOUT", "poll operation exceeded max iterations";
+            }
+            *hash<SocketPollInfo> info = poller.continuePoll();
+            if (info) {
+                Socket::poll((info,), 5s);
+            }
+        }
+        return poller.getOutput();
+    }
+
+    asyncSendStringTest() {
+        Queue response_queue();
+        Counter done(1);
+
+        WebSocketClient wsc(sub (auto msg) {
+            response_queue.push(msg);
+        }, {
+            "url": "ws://127.0.0.1:" + linfo.port,
+        });
+        wsc.connect();
+        on_exit {
+            wsc.disconnect();
+        }
+
+        # send a string asynchronously
+        WebSocketSendPollOperation poller = wsc.startPollSend("hello async");
+        drivePoll(poller);
+        assertTrue(poller.goalReached());
+
+        # wait for the echo response
+        auto resp = response_queue.get(5s);
+        assertEq("ECHO:hello async", resp);
+    }
+
+    asyncSendBinaryTest() {
+        Queue response_queue();
+
+        WebSocketClient wsc(sub (auto msg) {
+            response_queue.push(msg);
+        }, {
+            "url": "ws://127.0.0.1:" + linfo.port,
+        });
+        wsc.connect();
+        on_exit {
+            wsc.disconnect();
+        }
+
+        # send binary data asynchronously
+        binary test_data = <beeffeed>;
+        WebSocketSendPollOperation poller = wsc.startPollSend(test_data);
+        drivePoll(poller);
+        assertTrue(poller.goalReached());
+
+        # wait for the echo response
+        auto resp = response_queue.get(5s);
+        assertEq(test_data, resp);
+    }
+
+    asyncSendOpcodeTest() {
+        Queue response_queue();
+
+        WebSocketClient wsc(sub (auto msg) {
+            response_queue.push(msg);
+        }, {
+            "url": "ws://127.0.0.1:" + linfo.port,
+        });
+        wsc.connect();
+        on_exit {
+            wsc.disconnect();
+        }
+
+        # send with explicit opcode
+        WebSocketSendPollOperation poller = wsc.startPollSend("test opcode", WSOP_Text, True);
+        drivePoll(poller);
+        assertTrue(poller.goalReached());
+
+        auto resp = response_queue.get(5s);
+        assertEq("ECHO:test opcode", resp);
+    }
+
+    asyncSendPollStateTest() {
+        WebSocketClient wsc(sub (auto msg) {}, {
+            "url": "ws://127.0.0.1:" + linfo.port,
+        });
+        wsc.connect();
+        on_exit {
+            wsc.disconnect();
+        }
+
+        WebSocketSendPollOperation poller = wsc.startPollSend("state test");
+        assertEq("ws-send", poller.getGoal());
+        assertFalse(poller.goalReached());
+
+        drivePoll(poller);
+        assertTrue(poller.goalReached());
+        assertEq("complete", poller.getState());
+    }
+
+    concurrentAsyncSendTest() {
+        Queue response_queue();
+        int msg_count = 5;
+
+        WebSocketClient wsc(sub (auto msg) {
+            response_queue.push(msg);
+        }, {
+            "url": "ws://127.0.0.1:" + linfo.port,
+        });
+        wsc.connect();
+        on_exit {
+            wsc.disconnect();
+        }
+
+        # send multiple messages using sequential async sends
+        for (int i = 0; i < msg_count; ++i) {
+            WebSocketSendPollOperation poller = wsc.startPollSend("msg-" + i);
+            drivePoll(poller);
+            assertTrue(poller.goalReached());
+        }
+
+        # collect all responses
+        hash<string, bool> received = {};
+        for (int i = 0; i < msg_count; ++i) {
+            auto resp = response_queue.get(5s);
+            received{resp} = True;
+        }
+
+        # verify all messages were echoed back
+        for (int i = 0; i < msg_count; ++i) {
+            assertTrue(received.hasKey("ECHO:msg-" + i),
+                "response for msg-" + i + " received");
+        }
+    }
+
+    asyncConnectTest() {
+        Queue response_queue();
+
+        WebSocketClient wsc(sub (auto msg) {
+            response_queue.push(msg);
+        }, {
+            "url": "ws://127.0.0.1:" + linfo.port,
+        });
+        on_exit {
+            wsc.disconnect();
+        }
+
+        # connect asynchronously
+        WebSocketConnectPollOperation poller = wsc.startPollConnect();
+        assertEq("ws-connect", poller.getGoal());
+        assertFalse(poller.goalReached());
+
+        hash<auto> result = drivePoll(poller);
+        assertTrue(poller.goalReached());
+        assertEq(101, result.status_code);
+
+        # start the event loop for receiving messages
+        wsc.startEventLoop(result);
+
+        # verify connection works by sending a message synchronously
+        wsc.send("async connect test");
+        auto resp = response_queue.get(5s);
+        assertEq("ECHO:async connect test", resp);
+    }
+
+    asyncConnectPollStateTest() {
+        WebSocketClient wsc(sub (auto msg) {}, {
+            "url": "ws://127.0.0.1:" + linfo.port,
+        });
+        on_exit {
+            wsc.disconnect();
+        }
+
+        WebSocketConnectPollOperation poller = wsc.startPollConnect();
+        assertEq("ws-connect", poller.getGoal());
+        assertFalse(poller.goalReached());
+
+        # check initial state contains "connecting"
+        string initial_state = poller.getState();
+        assertTrue(initial_state.find("connecting") >= 0, "initial state contains 'connecting'");
+
+        hash<auto> result = drivePoll(poller);
+        assertTrue(poller.goalReached());
+        assertEq("complete", poller.getState());
+
+        wsc.startEventLoop(result);
+    }
+
+    asyncConnectThenSendTest() {
+        Queue response_queue();
+
+        WebSocketClient wsc(sub (auto msg) {
+            response_queue.push(msg);
+        }, {
+            "url": "ws://127.0.0.1:" + linfo.port,
+        });
+        on_exit {
+            wsc.disconnect();
+        }
+
+        # async connect
+        WebSocketConnectPollOperation connect_poller = wsc.startPollConnect();
+        hash<auto> result = drivePoll(connect_poller);
+        assertTrue(connect_poller.goalReached());
+        wsc.startEventLoop(result);
+
+        # async send after async connect
+        WebSocketSendPollOperation send_poller = wsc.startPollSend("full async flow");
+        drivePoll(send_poller);
+        assertTrue(send_poller.goalReached());
+
+        auto resp = response_queue.get(5s);
+        assertEq("ECHO:full async flow", resp);
+
+        # send multiple messages to verify ongoing functionality
+        for (int i = 0; i < 3; ++i) {
+            send_poller = wsc.startPollSend("msg-" + i);
+            drivePoll(send_poller);
+            assertTrue(send_poller.goalReached());
+        }
+
+        # collect all responses
+        for (int i = 0; i < 3; ++i) {
+            resp = response_queue.get(5s);
+            assertRegex("^ECHO:msg-", resp);
+        }
+    }
+
+    asyncConnectErrorTest() {
+        # test connection to a port that will reject
+        WebSocketClient wsc(sub (auto msg) {}, {
+            "url": "ws://127.0.0.1:1",
+        });
+        WebSocketConnectPollOperation poller = wsc.startPollConnect();
+        assertThrows("SOCKET-CONNECT-ERROR", \drivePoll(), poller);
+    }
+}

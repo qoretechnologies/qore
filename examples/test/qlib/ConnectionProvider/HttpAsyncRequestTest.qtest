@@ -1,0 +1,168 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/HttpServerAsyncIo
+%requires ../../../../qlib/HttpServer.qm
+
+%try-module json >= 1.5
+%define NoJson
+%endtry
+
+%exec-class HttpAsyncRequestTest
+
+#! Simple handler that echoes request info back
+class EchoRequestHandler inherits AbstractHttpRequestHandler {
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        string resp_body;
+%ifndef NoJson
+        resp_body = make_json({
+            "method": hdr.method,
+            "path": hdr.path,
+            "body": body.typeCode() == NT_STRING ? body : NOTHING,
+        });
+%else
+        resp_body = sprintf("method=%s path=%s", hdr.method, hdr.path);
+%endif
+        return makeResponse(200, resp_body, {
+            "Content-Type": MimeTypeJson,
+            "X-Request-Method": hdr.method,
+        });
+    }
+}
+
+public class HttpAsyncRequestTest inherits QUnit::Test {
+    private {
+        HttpServer m_server;
+        int port;
+        Logger logger;
+    }
+
+    constructor() : Test("HttpAsyncRequestTest", "1.0") {
+        addTestCase("HttpRequestPollOperation basic GET", \asyncGetTest());
+        addTestCase("HttpRequestPollOperation POST with body", \asyncPostTest());
+        addTestCase("HttpRequestPollOperation poll state", \asyncPollStateTest());
+        addTestCase("AbstractConnection async request API", \abstractConnectionApiTest());
+        addTestCase("HttpBasedConnection async request", \httpBasedConnectionTest());
+        addTestCase("HttpRequestPollOperation error handling", \asyncErrorTest());
+
+        set_return_value(main());
+    }
+
+    setUp() {
+        logger = new Logger("test",
+            (m_options.verbose > 3 ? LoggerLevel::getLevelDebug() : LoggerLevel::getLevelInfo()));
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        };
+        m_server = new HttpServer(http_opts);
+        m_server.setHandler("/api", "/api", MimeTypeJson, new EchoRequestHandler());
+        m_server.setDefaultHandler("default", new EchoRequestHandler());
+        port = m_server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+    }
+
+    tearDown() {
+        delete m_server;
+    }
+
+    #! Helper to drive a poll operation to completion
+    private auto drivePoll(AbstractPollOperation poller) {
+        int max_iterations = 1000;
+        int iteration = 0;
+        while (!poller.goalReached()) {
+            if (++iteration > max_iterations) {
+                throw "TIMEOUT", "poll operation exceeded max iterations";
+            }
+            *hash<SocketPollInfo> info = poller.continuePoll();
+            if (info) {
+                Socket::poll((info,), 5s);
+            }
+        }
+        return poller.getOutput();
+    }
+
+    asyncGetTest() {
+        HttpRequestPollOperation poller("http://127.0.0.1:" + port, "GET", "/api/test");
+        assertEq("http-request", poller.getGoal());
+        assertFalse(poller.goalReached());
+
+        hash<auto> result = drivePoll(poller);
+        assertTrue(poller.goalReached());
+        assertEq(200, result.code);
+    }
+
+    asyncPostTest() {
+%ifdef NoJson
+        testSkip("no json module");
+%endif
+        HttpRequestPollOperation poller("http://127.0.0.1:" + port, "POST", "/api/data",
+            "test body");
+
+        hash<auto> result = drivePoll(poller);
+        assertEq(200, result.code);
+    }
+
+    asyncPollStateTest() {
+        HttpRequestPollOperation poller("http://127.0.0.1:" + port, "GET", "/api/state");
+
+        # check initial state
+        string initial_state = poller.getState();
+        assertTrue(initial_state.find("send-request") >= 0, "initial state contains 'send-request'");
+
+        drivePoll(poller);
+        assertEq("complete", poller.getState());
+    }
+
+    abstractConnectionApiTest() {
+        # test that AbstractConnection base class returns False for async request support
+        # HttpConnection inherits from AbstractConnectionWithInfo and overrides
+        HttpConnection conn("test-http", "test HTTP connection",
+            "http://127.0.0.1:" + port);
+        assertTrue(conn.supportsAsyncRequestApi());
+
+        AbstractPollOperation poller = conn.startPollRequest("GET", "/api/test", NOTHING,
+            NOTHING, logger);
+        assertEq("http-request", poller.getGoal());
+
+        hash<auto> result = drivePoll(poller);
+        assertTrue(poller.goalReached());
+        assertEq(200, result.code);
+    }
+
+    httpBasedConnectionTest() {
+        HttpConnection conn("test-http2", "test HTTP connection 2",
+            "http://127.0.0.1:" + port);
+        assertTrue(conn.supportsAsyncRequestApi());
+
+        # test POST
+        AbstractPollOperation poller = conn.startPollRequest("POST", "/api/data", "post body",
+            NOTHING, logger);
+        hash<auto> result = drivePoll(poller);
+        assertEq(200, result.code);
+
+        # test GET with custom headers
+        poller = conn.startPollRequest("GET", "/api/headers", NOTHING,
+            {"X-Custom": "test"}, logger);
+        result = drivePoll(poller);
+        assertEq(200, result.code);
+    }
+
+    asyncErrorTest() {
+        # test connection to a port that will reject
+        HttpRequestPollOperation poller("http://127.0.0.1:1", "GET", "/");
+        assertThrows("SOCKET-CONNECT-ERROR", \drivePoll(), poller);
+    }
+}

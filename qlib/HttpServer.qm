@@ -4519,6 +4519,17 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             return <HttpServerAsyncIo::HttpRequestResultInfo>{};
         }
 
+        # If handler consumed the response (e.g., WebSocket/SSE upgrade sent the 101
+        # response directly and deleted async_response), the connection is now managed
+        # by a dedicated handler
+        if (!async_response) {
+            if (request_helper.isDedicated()) {
+                return <HttpServerAsyncIo::HttpRequestResultInfo>{"dedicated": True};
+            }
+            # Response was sent directly by the handler
+            return <HttpServerAsyncIo::HttpRequestResultInfo>{};
+        }
+
         # Translate result to HttpRequestResultInfo for the controller
         return translateToRequestResult(async_response, request_helper, cx, s);
     }

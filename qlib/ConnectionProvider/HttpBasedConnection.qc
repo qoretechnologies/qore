@@ -122,6 +122,109 @@ public class HttpPingPollOperation inherits Qore::AbstractPollOperation {
     }
 }
 
+#! Poll operation for async HTTP requests
+/** Uses non-blocking I/O for arbitrary HTTP requests, returning the full response.
+
+    Unlike @ref HttpPingPollOperation which validates that the response is 2xx, this class
+    returns the full response hash (code, headers, body) for any HTTP status code, allowing
+    the caller to handle the response.
+
+    @since ConnectionProvider 2.3
+*/
+public class HttpRequestPollOperation inherits Qore::AbstractPollOperation {
+    private {
+        #! The underlying poll operation
+        *AbstractPollOperation poller;
+        #! Optional logger
+        *Logger::LoggerInterface logger;
+        #! Goal reached flag
+        bool goal_reached = False;
+        #! Output from the operation
+        auto output;
+        #! Current state
+        string state = "send-request";
+    }
+
+    #! Creates the poll operation for an async HTTP request
+    /** @param base_url the HTTP URL
+        @param method the HTTP method (GET, POST, etc.)
+        @param path the request path
+        @param body the request body
+        @param http_opts HTTP client options
+        @param headers additional headers
+        @param logger optional logger
+    */
+    constructor(string base_url, string method, string path, auto body, *hash<auto> http_opts,
+            *hash<auto> headers, *Logger::LoggerInterface logger) {
+        self.logger = logger;
+
+        hash<auto> req_headers;
+        req_headers += headers;
+
+        HTTPClient hc((http_opts ?? {}) + {"url": base_url});
+        if (path =~ /^http/) {
+            hc.setURL(path);
+            path = "";
+        } else {
+            hash<UrlInfo> u = parse_url(base_url);
+            string base_path = u.path ?? "/";
+            if (path[0] != "/") {
+                if (base_path[-1] != "/") {
+                    base_path += "/";
+                }
+                path = base_path + path;
+            }
+        }
+
+        log("INFO", "HttpRequest async start: method=%s path=%y url=%y", method, path, base_url);
+        poller = hc.startPollSendRecv(method, path, method == "GET" ? NOTHING : body, req_headers);
+    }
+
+    string getGoal() {
+        return "http-request";
+    }
+
+    string getState() {
+        if (goal_reached) {
+            return "complete";
+        }
+        return state + (poller ? ("-" + poller.getState()) : "");
+    }
+
+    bool goalReached() {
+        return goal_reached;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        if (!poller) {
+            return;
+        }
+        *hash<SocketPollInfo> info = poller.continuePoll();
+        if (info) {
+            return info;
+        }
+        output = poller.getOutput();
+        log("INFO", "HttpRequest async complete: code=%d", output.code);
+        goal_reached = True;
+    }
+
+    auto getOutput() {
+        return output;
+    }
+
+    abort() {
+        if (poller) {
+            poller.abort();
+        }
+    }
+
+    private log(string level, string msg, ...) {
+        if (logger) {
+            logger.logArgs(level, msg, argv);
+        }
+    }
+}
+
 #! base class for HTTP-based connections that need their URLs rewritten to create the real connection object
 /** Example of the usage is in \c RestConnection where the scheme \c rest:// is internally used as \c http://
 */
@@ -186,6 +289,32 @@ public class HttpBasedConnection inherits AbstractConnectionWithInfo {
                 getPingHeaders(), getPingBody(opts.ping_method), logger);
         }
         return getPollImpl().startPollConnect();
+    }
+
+    #! Returns @ref True since HTTP-based connections support the async request API
+    /** @return @ref True
+
+        @since ConnectionProvider 2.3
+    */
+    bool supportsAsyncRequestApi() {
+        return True;
+    }
+
+    #! Starts a non-blocking HTTP request on the connection
+    /** @param method the HTTP method (GET, POST, PUT, DELETE, PATCH, etc.)
+        @param path the request path
+        @param body the request body
+        @param headers optional request headers
+        @param logger an optional logger interface
+
+        @return a poll operation for the async request
+
+        @since ConnectionProvider 2.3
+    */
+    Qore::AbstractPollOperation startPollRequest(string method, string path, auto body,
+            *hash<auto> headers, *Logger::LoggerInterface logger) {
+        return new HttpRequestPollOperation(real_url, method, path, body, getPingHttpOpts(),
+            getPingHeaders() + headers, logger);
     }
 
     #! Called by the constructor to set the real URL

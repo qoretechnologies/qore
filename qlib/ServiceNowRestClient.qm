@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file ServiceNowRestClient.qm Qore user module for calling ServiceNow REST services
 
-/*  ServiceNowRestClient.qm Copyright (C) 2020 - 2024 Qore Technologies, s.r.o.
+/*  ServiceNowRestClient.qm Copyright (C) 2020 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -39,7 +39,7 @@
 %requires(reexport) ConnectionProvider >= 1.4
 
 module ServiceNowRestClient {
-    version = "1.2";
+    version = "1.3";
     desc = "user module for calling ServiceNow REST services";
     author = "David Nichols <david@qore.org>";
     url = "https://qore.org";
@@ -89,6 +89,10 @@ printf("%N\n", ans.body);
     @endcode
 
     @section ServiceNowrestclientrelnotes Release Notes
+
+    @subsection ServiceNowrestclientv1_3 ServiceNowRestClient v1.3
+    - added \c processAsyncResponse() override for ServiceNow-specific error handling in async REST
+      requests
 
     @subsection ServiceNowrestclientv1_2 ServiceNowRestClient v1.2
     - use RestClient functionality for OAuth2 authorization
@@ -256,6 +260,31 @@ ServiceNowRestClient rest({
             }
             if (info."response-body".error_description.typeCode() == NT_STRING
                 && info."response-body".error.typeCode() == NT_STRING) {
+                hash<auto> error = info."response-body";
+                string errcode = remove error.error;
+                string msg = remove error.error_description;
+                throw errcode, msg, error + ex.arg;
+            }
+            rethrow;
+        }
+    }
+
+    #! Processes async response with ServiceNow-specific error wrapping
+    /** @since ServiceNowRestClient 1.3
+    */
+    private hash<auto> processAsyncResponse(hash<auto> resp, string method, string path,
+            reference<hash<auto>> info, bool decode_errors) {
+        try {
+            return RestClient::processAsyncResponse(resp, method, path, \info, decode_errors);
+        } catch (hash<ExceptionInfo> ex) {
+            # throw an exception for the error
+            if (info."response-body".response.error.message.typeCode() == NT_STRING) {
+                hash<auto> error = info."response-body".response.error;
+                throw "SERVICENOW-REST-RESPONSE-ERROR", remove error.message, error + ex.arg
+                    + {"decoded_body": info."response-body"};
+            }
+            if (info."response-body".error_description.typeCode() == NT_STRING
+                    && info."response-body".error.typeCode() == NT_STRING) {
                 hash<auto> error = info."response-body";
                 string errcode = remove error.error;
                 string msg = remove error.error_description;

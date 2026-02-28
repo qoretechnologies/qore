@@ -52,7 +52,7 @@
 %endtry
 
 module WebSocketClient {
-    version = "2.7";
+    version = "2.8";
     desc = "user module for providing client support for the WebSocket protocol";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -533,6 +533,11 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
         HTTPClient hc;
         int stop = 0;
 
+        #! Mutex for serializing send operations
+        /** @since WebSocketClient 2.8
+        */
+        Mutex send_lock();
+
         code callback;
         code raw_callback;
         code pong_callback;
@@ -833,6 +838,62 @@ ws.connect();
             opts.hdr.Accept = getAcceptHeader();
         }
         return connectIntern(opts, \info);
+    }
+
+    #! Starts a non-blocking WebSocket connection
+    /** Returns a poll operation that performs the WebSocket handshake asynchronously.
+        After the poll operation completes successfully, call startEventLoop() to start
+        the background receive thread.
+
+        @param opts optional connection options; the \c hdr key can provide additional headers
+        @return a @ref WebSocketConnectPollOperation for the async connect
+
+        @note Only supports HTTP/1.1 WebSocket connections in async mode
+
+        @since WebSocketClient 2.8
+    */
+    WebSocketConnectPollOperation startPollConnect(*hash<auto> opts) {
+        if (!opts.hdr.Accept) {
+            opts.hdr.Accept = getAcceptHeader();
+        }
+        hash<auto> hdr = {
+            "User-Agent": DefaultUserAgent,
+        } + opts.hdr;
+
+        return new WebSocketConnectPollOperation(self, hc, hdr, http_opts, url, ws_ver,
+            offered_extensions);
+    }
+
+    #! Starts the background event loop after an async connect completes
+    /** Call this after WebSocketConnectPollOperation.goalReached() returns True.
+
+        @param connect_result the handshake response from the poll operation's getOutput()
+
+        @since WebSocketClient 2.8
+    */
+    startEventLoop(hash<auto> connect_result) {
+        AutoLock al(m);
+
+        # validate connection state
+        if (!hc.isOpen()) {
+            throw "WEBSOCKET-ERROR", "cannot start event loop: connection not open";
+        }
+
+        # process extensions from the connect result
+        processExtensions(connect_result);
+        finishConnect();
+
+        on_error {
+            clearTid();
+        }
+
+%ifdef PO_NO_THREAD_CONTROL
+        updateTid(start_thread(\eventLoop()));
+%else
+        updateTid(start_thread ? start_thread(\eventLoop()) : background eventLoop());
+%endif
+
+        logDebug("WS I/O thread started with TID %d (async connect)", tid);
     }
 
     #! returns @ref True "True" if the connection is currently open and active, @ref False "False" if not
@@ -1190,6 +1251,73 @@ ws.setEventQueue();
         logDebug("sending message: %y op: %d/%y fin: %y (%y %y)", msg, op, WSOPMap{op} ?? "unknown", fin, hc.isOpen(),
             hc.isConnected());
         sendWithExtensions(msg, op, fin);
+    }
+
+    #! Starts a non-blocking send operation for string data
+    /** @param str the string to send
+
+        @return a @ref WebSocketSendPollOperation for the async send
+
+        @since WebSocketClient 2.8
+    */
+    WebSocketSendPollOperation startPollSend(string str) {
+        return startPollSendIntern(str, WSOP_Text, True);
+    }
+
+    #! Starts a non-blocking send operation for binary data
+    /** @param bin the binary data to send
+
+        @return a @ref WebSocketSendPollOperation for the async send
+
+        @since WebSocketClient 2.8
+    */
+    WebSocketSendPollOperation startPollSend(binary bin) {
+        return startPollSendIntern(bin, WSOP_Binary, True);
+    }
+
+    #! Starts a non-blocking send operation with explicit opcode and FIN flag
+    /** @param msg the message data to send
+        @param op the WebSocket opcode
+        @param fin the FIN flag
+
+        @return a @ref WebSocketSendPollOperation for the async send
+
+        @since WebSocketClient 2.8
+    */
+    WebSocketSendPollOperation startPollSend(data msg, int op, bool fin) {
+        return startPollSendIntern(msg, op, fin);
+    }
+
+    #! Internal method to create a poll send operation
+    /** @since WebSocketClient 2.8
+    */
+    private WebSocketSendPollOperation startPollSendIntern(data msg, int op, bool fin) {
+        int rsv_bits = 0;
+        # Apply extension transforms if active
+        if (active_extensions) {
+            hash<auto> ctx = {
+                "op": op,
+                "fin": fin,
+                "first": True,
+            };
+            foreach AbstractWebSocketExtension ext in (active_extensions) {
+                hash<auto> result = ext.transformOutgoing(msg, ctx);
+                msg = result.data;
+                rsv_bits |= result.rsv_bits;
+            }
+        }
+        binary frame_data = ws_encode_message(msg, op, True, fin, rsv_bits);
+
+        if (http3_websocket && h3_stream_id >= 0) {
+            return new WebSocketSendPollOperation(self, frame_data, "http3", hc, h3_stream_id,
+                timeout_ms, send_lock);
+        } else if (http2_websocket && h2_stream_id > 0) {
+            return new WebSocketSendPollOperation(self, frame_data, "http2", hc, h2_stream_id,
+                timeout_ms, send_lock);
+        } else {
+            return new WebSocketSendPollOperation(self, frame_data, "http1", hc, 0, timeout_ms,
+                send_lock);
+        }
     }
 
     #! Sends a message with extension transforms applied
@@ -1835,6 +1963,14 @@ ws.setEventQueue();
     /** @since WebSocketClient 2.6
     */
     private sendWsFrame(binary data) {
+        AutoLock al(send_lock);
+        sendWsFrameUnlocked(data);
+    }
+
+    #! Sends a WebSocket frame without acquiring the send lock
+    /** @since WebSocketClient 2.8
+    */
+    private sendWsFrameUnlocked(binary data) {
         if (http3_websocket && h3_stream_id >= 0) {
             # HTTP/3: Send data through the QUIC stream
             hc.sendHttp3StreamData(h3_stream_id, data, False, timeout_ms);
@@ -3940,4 +4076,263 @@ class QueuedObserver inherits DataProvider::Observer {
         q.push(data_."data");
     }
 }
+} # namespace Priv
+
+#! Poll operation for non-blocking WebSocket sends
+/** Supports HTTP/1.1, HTTP/2, and HTTP/3 transports.
+
+    For HTTP/1.1, uses Socket.startPollSend() for true non-blocking I/O.
+    For HTTP/2 and HTTP/3, the stream data send is performed directly
+    in the first continuePoll() call since stream multiplexing handles
+    the I/O internally.
+
+    @since WebSocketClient 2.8
+*/
+public class WebSocketSendPollOperation inherits Qore::AbstractPollOperation {
+    private {
+        #! The WebSocketClient that created this operation
+        WebSocketClient wsc;
+        #! The encoded frame data to send
+        binary frame_data;
+        #! Transport type: "http1", "http2", "http3"
+        string transport;
+        #! The HTTPClient to send through
+        HTTPClient hc;
+        #! Stream ID for HTTP/2 and HTTP/3
+        int stream_id;
+        #! Timeout for the send operation
+        timeout send_timeout;
+        #! Send lock reference
+        Mutex send_lock;
+        #! Goal reached flag
+        bool goal_reached = False;
+        #! Inner poll operation for HTTP/1.1
+        *AbstractPollOperation inner_poller;
+        #! Whether the lock is currently held
+        bool lock_held = False;
+    }
+
+    #! Creates a new WebSocketSendPollOperation
+    constructor(WebSocketClient wsc, binary frame_data, string transport, HTTPClient hc,
+            int stream_id, timeout send_timeout, Mutex send_lock) {
+        self.wsc = wsc;
+        self.frame_data = frame_data;
+        self.transport = transport;
+        self.hc = hc;
+        self.stream_id = stream_id;
+        self.send_timeout = send_timeout;
+        self.send_lock = send_lock;
+    }
+
+    string getGoal() {
+        return "ws-send";
+    }
+
+    string getState() {
+        if (goal_reached) {
+            return "complete";
+        }
+        if (inner_poller) {
+            return "sending-" + inner_poller.getState();
+        }
+        return "pending";
+    }
+
+    bool goalReached() {
+        return goal_reached;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        if (goal_reached) {
+            return;
+        }
+
+        # For HTTP/1.1: use non-blocking poll send
+        if (transport == "http1") {
+            if (!inner_poller) {
+                send_lock.lock();
+                lock_held = True;
+                on_error {
+                    send_lock.unlock();
+                    lock_held = False;
+                }
+                inner_poller = hc.startPollSend(frame_data);
+            }
+            on_error {
+                if (lock_held) {
+                    send_lock.unlock();
+                    lock_held = False;
+                }
+            }
+            *hash<SocketPollInfo> info = inner_poller.continuePoll();
+            if (info) {
+                return info;
+            }
+            # send complete
+            goal_reached = True;
+            send_lock.unlock();
+            lock_held = False;
+            return;
+        }
+
+        # For HTTP/2 and HTTP/3: blocking stream send in one call
+        send_lock.lock();
+        on_exit {
+            send_lock.unlock();
+        }
+        if (transport == "http3") {
+            hc.sendHttp3StreamData(stream_id, frame_data, False, send_timeout);
+        } else {
+            hc.sendHttp2StreamData(stream_id, frame_data, False, send_timeout);
+        }
+        goal_reached = True;
+    }
+
+    auto getOutput() {
+        return goal_reached;
+    }
+
+    abort() {
+        if (lock_held) {
+            send_lock.unlock();
+            lock_held = False;
+        }
+        if (inner_poller) {
+            inner_poller.abort();
+        }
+    }
+}
+
+#! Poll operation for non-blocking WebSocket connection establishment
+/** Performs the HTTP/1.1 WebSocket upgrade handshake asynchronously using
+    \c HTTPClient.startPollSendRecv().
+
+    After the poll operation completes successfully, the caller should use
+    \c WebSocketClient.startEventLoop() with the output to start the background
+    receive thread.
+
+    @since WebSocketClient 2.8
+*/
+public class WebSocketConnectPollOperation inherits Qore::AbstractPollOperation {
+    private {
+        #! The WebSocketClient that created this operation
+        WebSocketClient wsc;
+        #! The HTTPClient to connect through
+        HTTPClient hc;
+        #! The WebSocket key for handshake validation
+        string ws_key;
+        #! The inner poll operation for HTTP send/receive
+        *AbstractPollOperation inner_poller;
+        #! Goal reached flag
+        bool goal_reached = False;
+        #! Output from the operation (handshake response)
+        *hash<auto> output;
+        #! Current state
+        string state = "connecting";
+    }
+
+    #! Creates a new WebSocketConnectPollOperation
+    /** @param wsc the WebSocketClient that created this operation
+        @param hc the HTTPClient to connect through
+        @param hdr additional headers for the request
+        @param http_opts HTTP options for the client
+        @param url the WebSocket URL
+        @param ws_ver the WebSocket protocol version (default 13)
+        @param offered_extensions optional list of extensions to offer
+    */
+    constructor(WebSocketClient wsc, HTTPClient hc, hash<auto> hdr, hash<auto> http_opts,
+            string url, softint ws_ver, *list<AbstractWebSocketExtension> offered_extensions) {
+        self.wsc = wsc;
+        self.hc = hc;
+
+        # Generate WebSocket key for handshake
+        ws_key = get_random_string(16).toBase64();
+
+        # Build WebSocket upgrade headers
+        hdr += {
+            "Upgrade": "websocket",
+            "Connection": "Upgrade",
+            "Sec-WebSocket-Key": ws_key,
+        };
+        if (ws_ver) {
+            hdr."Sec-WebSocket-Version" = sprintf("%d", ws_ver);
+        }
+
+        # Add extension offers if configured
+        if (offered_extensions) {
+            *string ext_header = WebSocketExtensionRegistry::buildOfferHeader(offered_extensions);
+            if (ext_header) {
+                hdr."Sec-WebSocket-Extensions" = ext_header;
+            }
+        }
+
+        # Start the async HTTP send/receive for the upgrade request
+        inner_poller = hc.startPollSendRecv("GET", "", NOTHING, hdr);
+    }
+
+    string getGoal() {
+        return "ws-connect";
+    }
+
+    string getState() {
+        if (goal_reached) {
+            return "complete";
+        }
+        return state + (inner_poller ? ("-" + inner_poller.getState()) : "");
+    }
+
+    bool goalReached() {
+        return goal_reached;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        if (goal_reached || !inner_poller) {
+            return;
+        }
+
+        *hash<SocketPollInfo> info = inner_poller.continuePoll();
+        if (info) {
+            return info;
+        }
+
+        # HTTP send/receive complete - validate the WebSocket handshake response
+        hash<auto> resp = inner_poller.getOutput();
+
+        # Expect 101 Switching Protocols
+        if (resp.code != 101) {
+            *string status_message = resp.info."response-headers".status_message;
+            throw "WEBSOCKET-CONNECT-ERROR", sprintf("WebSocket handshake failed: expected 101 Switching "
+                "Protocols, got %d %s", resp.code, status_message ?? "");
+        }
+
+        # Validate Sec-WebSocket-Accept header
+        *hash<auto> response_headers = resp.info."response-headers";
+        *string accept_key = response_headers."sec-websocket-accept";
+        if (!accept_key) {
+            throw "WEBSOCKET-CONNECT-ERROR", "WebSocket handshake failed: missing Sec-WebSocket-Accept "
+                "header";
+        }
+
+        string expected_key = ws_get_response_key(ws_key);
+        if (accept_key != expected_key) {
+            throw "WEBSOCKET-CONNECT-ERROR", sprintf("WebSocket handshake failed: invalid "
+                "Sec-WebSocket-Accept header: got %y, expected %y", accept_key, expected_key);
+        }
+
+        # Build output hash matching the format from connectHttp1WebSocket()
+        output = response_headers;
+        output.status_code = resp.code;
+        state = "complete";
+        goal_reached = True;
+    }
+
+    auto getOutput() {
+        return output;
+    }
+
+    abort() {
+        if (inner_poller) {
+            inner_poller.abort();
+        }
+    }
 }
