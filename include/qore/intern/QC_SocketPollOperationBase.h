@@ -35,6 +35,9 @@
 
 #include "qore/TypedHashDecl.h"
 
+#include <vector>
+#include <utility>
+
 class SocketPollOperationBase : public AbstractPrivateData {
 public:
     DLLLOCAL SocketPollOperationBase(QoreObject* self) : self(self) {
@@ -85,6 +88,28 @@ protected:
         ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollInfo, xsink), xsink);
         info->setKeyValue("events", events, xsink);
         info->setKeyValue("socket", getReferencedSocketObject(xsink), xsink);
+        return info.release();
+    }
+
+    //! Returns a SocketPollInfo hash with extra file descriptors to monitor
+    /** @since %Qore 2.3
+    */
+    DLLLOCAL QoreHashNode* getSocketPollInfoHash(ExceptionSink* xsink, int events,
+            const std::vector<std::pair<int, int>>& extra_fds) const {
+        ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollInfo, xsink), xsink);
+        info->setKeyValue("events", events, xsink);
+        info->setKeyValue("socket", getReferencedSocketObject(xsink), xsink);
+        if (!extra_fds.empty()) {
+            ReferenceHolder<QoreListNode> list(
+                new QoreListNode(hashdeclExtraPollFdInfo->getTypeInfo()), xsink);
+            for (auto& [fd, ev] : extra_fds) {
+                ReferenceHolder<QoreHashNode> h(new QoreHashNode(hashdeclExtraPollFdInfo, xsink), xsink);
+                h->setKeyValue("fd", fd, xsink);
+                h->setKeyValue("events", ev, xsink);
+                list->push(h.release(), xsink);
+            }
+            info->setKeyValue("extra_fds", list.release(), xsink);
+        }
         return info.release();
     }
 

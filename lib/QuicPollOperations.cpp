@@ -376,12 +376,14 @@ SocketQuicClientPollOperation::SocketQuicClientPollOperation(
 
     // Create QUIC session with actual socket addresses; pass through the
     // socket's ssl_verify_mode so SSL_CTX_set_verify() enforces verification;
-    // enable 0-RTT for reconnections with cached session tickets
+    // enable 0-RTT for reconnections with cached session tickets.
+    // Pass client cert/pk for mTLS if configured on the socket.
     quic_session = QuicSession::createClient(sock->priv->socket->priv, xsink, host, port,
         reinterpret_cast<const struct sockaddr*>(&local_addr_), local_addrlen_,
         reinterpret_cast<const struct sockaddr*>(&remote_addr_), remote_addrlen_,
         sock->priv->socket->priv->ssl_verify_mode,
-        /*enable_0rtt=*/true);
+        /*enable_0rtt=*/true,
+        sock->priv->cert, sock->priv->pk);
     if (*xsink || !quic_session) {
         sock->priv->socket->priv->set_non_blocking(false, xsink);
         sock->priv->clearNonBlock();
@@ -531,6 +533,7 @@ int SocketQuicClientPollOperation::recvAndProcessPacket(ExceptionSink* xsink) {
     path.remote.addr = reinterpret_cast<ngtcp2_sockaddr*>(&src_addr);
     path.remote.addrlen = src_addrlen;
 
+    printd(5, "SocketQuicClientPollOperation::recvAndProcessPacket() received %d bytes\n", (int)nread);
     int rv = quic_session->readPacket(recv_buf_, static_cast<size_t>(nread), path, xsink);
     if (*xsink) {
         return -1;
@@ -1029,6 +1032,11 @@ QoreValue SocketQuicServerPollOperation::getOutput() const {
         h->setKeyValue("peer_port", peer_port, nullptr);
     }
 
+    // RFC 9220: Add :protocol pseudo-header for extended CONNECT
+    if (!cached_stream_->stream->connect_protocol.empty()) {
+        h->setKeyValue("connect_protocol", new QoreStringNode(cached_stream_->stream->connect_protocol), nullptr);
+    }
+
     // Headers
     ReferenceHolder<QoreHashNode> headers(new QoreHashNode(autoTypeInfo), nullptr);
     for (const auto& hdr : cached_stream_->stream->headers) {
@@ -1041,6 +1049,11 @@ QoreValue SocketQuicServerPollOperation::getOutput() const {
             }
             headers->setKeyValue(hdr.first.c_str(), values.release(), nullptr);
         }
+    }
+    // RFC 9220: Add :protocol to headers hash (parallel to HTTP/2 for handler compatibility)
+    if (!cached_stream_->stream->connect_protocol.empty()) {
+        headers->setKeyValue(":protocol",
+            new QoreStringNode(cached_stream_->stream->connect_protocol), nullptr);
     }
     h->setKeyValue("headers", headers.release(), nullptr);
 
@@ -1098,6 +1111,8 @@ int SocketQuicServerPollOperation::processTimersAndSendAll(
         int sent = sendQuicPacketsBatch(fd, pkt_batch_,
             reinterpret_cast<const struct sockaddr*>(&peer_addr), peer_addrlen,
             reinterpret_cast<const struct sockaddr*>(&local_addr), local_addrlen);
+        printd(5, "processTimersAndSendAll() session %lld: %d/%d packets sent\n",
+            (long long)entry.first, sent, (int)pkt_batch_.size());
         if (sent < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 result = SOCK_POLLOUT;
@@ -1132,7 +1147,7 @@ int SocketQuicServerPollOperation::recvAndProcessPacket(ExceptionSink* xsink, Qu
                                     cmsg_buf, &cmsg_len);
     if (nread < 0) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
-            return SOCK_POLLIN;
+            return SOCK_POLLIN;  // no data available
         }
         if (errno == EMSGSIZE) {
             return 0;  // truncated datagram discarded; continue draining
@@ -1198,13 +1213,16 @@ int SocketQuicServerPollOperation::recvAndProcessPacket(ExceptionSink* xsink, Qu
             return 0;
         }
 
-        // Create a new session with dispatcher for CID registration and shared SSL_CTX
+        // Create a new session with dispatcher for CID registration and shared SSL_CTX.
+        // Pass through the socket's ssl_verify_mode to enable mTLS when configured.
         auto new_session = QuicSession::createServer(
             sock->priv->socket->priv, xsink, &hdr,
             sock->priv->cert, sock->priv->pk,
             reinterpret_cast<const struct sockaddr*>(&local_addr), local_addrlen,
             reinterpret_cast<const struct sockaddr*>(&src_addr), src_addrlen,
-            &dispatcher, shared_ctx);
+            &dispatcher, shared_ctx,
+            sock->priv->socket->priv->ssl_verify_mode,
+            sock->priv->socket->priv->ssl_accept_all_certs);
         if (*xsink || !new_session) {
             // Log and continue — a single client's failed handshake should not
             // abort the server for all other clients
@@ -1373,6 +1391,18 @@ QoreHashNode* SocketQuicServerPollOperation::continuePoll(ExceptionSink* xsink) 
                     }
                 }
 
+                // Process InputStreams for all sessions with active streams
+                for (auto& entry : sessions_) {
+                    if (entry.second->hasActiveStreamInputStreams()) {
+                        printd(5, "SocketQuicServerPollOperation::continuePoll() session %lld has active InputStreams\n",
+                            (long long)entry.first);
+                        entry.second->processStreamInputStreams(xsink);
+                        if (*xsink) {
+                            return nullptr;
+                        }
+                    }
+                }
+
                 // Coalesced: timer + write + send for all sessions (single pass)
                 {
                     ngtcp2_tstamp min_expiry;
@@ -1405,20 +1435,33 @@ QoreHashNode* SocketQuicServerPollOperation::continuePoll(ExceptionSink* xsink) 
                     }
 
                     // Register for POLLIN always; add POLLOUT if any session has pending writes
+                    // or active InputStreams
                     int events = SOCK_POLLIN;
                     if (srv == SOCK_POLLOUT) {
                         events |= SOCK_POLLOUT;
                     } else {
                         for (auto& entry : sessions_) {
-                            if (entry.second->hasPendingWrite()) {
+                            if (entry.second->hasPendingWrite()
+                                    || entry.second->hasActiveStreamInputStreams()) {
                                 events |= SOCK_POLLOUT;
                                 break;
                             }
                         }
                     }
 
+                    // Collect extra fds from all sessions with active pollable InputStreams
+                    std::vector<std::pair<int, int>> extra_fds;
+                    for (auto& entry : sessions_) {
+                        entry.second->getExtraFds(extra_fds);
+                    }
+
                     // Compute QUIC-aware poll timeout hint from timer expiries
-                    QoreHashNode* poll_info = getSocketPollInfoHash(xsink, events);
+                    QoreHashNode* poll_info;
+                    if (!extra_fds.empty()) {
+                        poll_info = getSocketPollInfoHash(xsink, events, extra_fds);
+                    } else {
+                        poll_info = getSocketPollInfoHash(xsink, events);
+                    }
                     if (poll_info) {
                         setPollTimeoutFromExpiry(poll_info, min_expiry, xsink);
                     }

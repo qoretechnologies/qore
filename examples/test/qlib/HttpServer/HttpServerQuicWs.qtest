@@ -1,0 +1,663 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    WebSocket over HTTP/3 (RFC 9220) tests.
+
+    Tests cover:
+    - WebSocket handshake over HTTP/3 using extended CONNECT
+    - Text message echo (round-trip)
+    - Binary message echo (round-trip)
+    - Close handshake
+    - Multiple concurrent WebSocket streams on one QUIC session
+*/
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/AsyncSocketIo
+%requires ../../../../qlib/HttpServerAsyncIo
+%requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/WebSocketUtil.qm
+%requires ../../../../qlib/WebSocketHandler.qm
+%requires ../../../../qlib/WebSocketClient.qm
+
+%exec-class HttpServerQuicWsTest
+
+#! Echo WebSocket connection — echoes back text and binary messages exactly
+class EchoWsConnection inherits WebSocketConnection {
+    constructor(WebSocketHandler handler) : WebSocketConnection(handler) {
+    }
+
+    gotMessage(string msg) {
+        send(msg);
+    }
+
+    gotMessage(binary msg) {
+        send(msg);
+    }
+}
+
+#! WebSocket handler that creates echo connections
+class EchoWsHandler inherits WebSocketHandler {
+    public {
+        bool debug_output = False;
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new EchoWsConnection(self);
+    }
+
+    logError(string fmt) {
+        if (debug_output) {
+            vprintf("ERROR " + fmt + "\n", argv);
+        }
+    }
+
+    logInfo(string fmt) {
+        if (debug_output) {
+            vprintf("INFO " + fmt + "\n", argv);
+        }
+    }
+
+    logDebug(string fmt) {
+        if (debug_output) {
+            vprintf("DEBUG " + fmt + "\n", argv);
+        }
+    }
+
+    logWarn(string fmt) {
+        if (debug_output) {
+            vprintf("WARN " + fmt + "\n", argv);
+        }
+    }
+}
+
+class HttpServerQuicWsTest inherits Test {
+    private {
+        *Logger mLogger;
+
+        # Self-signed test certificate
+        const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIUahuuRGDlubXWYmiPhjVeT66vtNYwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MDIyMjE5MjIwMVoXDTM2MDIy
+MDE5MjIwMVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEAjZNfLFUyyo02MjZjouaR11FybkZNwDWBG/bhkpTVyj/x
+QKlwKf20LbGSCmMIYHaFnODMg6u6E6sfRJVk+ofwVHBN/Ug+mvoL1zlNJanMdXLH
+7oUsUILY6bVUDPm1ACZmFJsAc9jfHfkluJ6vfYG+DOJbyB0nsMfO9/fvrwndQPUQ
+k9eMq2VfDohni4ijk5BWD/P9UmrciZUNOaNISay469Le5ZrtfGt9An1+Ye3TckJC
+tTF4q7+V+GC88w5QtLd1AMQGf/1ax5cwqQv9SSFvhnwj9o3V3Wkz1dq4XA/9rSA1
+ecPHh/tJeGuvbD11Hyr9LTYjQ+DIel0DV0ZDHdc5vwIDAQABo1MwUTAdBgNVHQ4E
+FgQUYBBsVylVinbbAzTbUt0jRM6mJvwwHwYDVR0jBBgwFoAUYBBsVylVinbbAzTb
+Ut0jRM6mJvwwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAfIAE
+EPvLO+gOnm366xJabLr2Sw3hfmvCq/zSTlPcrB9jdBlOLpMmKcdGiOOCNmzg9+BX
+YNX+I6+MNOGp0j3afWlVwEjiMD66ydSMPEQw0FTzvpIjFN3fHo/MJzFbingRLrk8
+LCo94GmjMBYG+50M8MCKE6EzqfmoYT9fiMJcyJwwdptOWf0URNYKKrG1wRlX4+o8
+uNjQ3VwynI95fAw9WcR/ZtP0pkmCor/hKaYgVRsSGjD78Fu0Uuhm/pCAOuObpEHj
+5eoTlaWC3pZzGA67piqlEDOWiRi9Mo2CzG0t5fmQ83KB51ImauKdYB21whxjkZ+5
+BjwMC4hqSD+bzO2B+A==
+-----END CERTIFICATE-----";
+
+        const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCNk18sVTLKjTYy
+NmOi5pHXUXJuRk3ANYEb9uGSlNXKP/FAqXAp/bQtsZIKYwhgdoWc4MyDq7oTqx9E
+lWT6h/BUcE39SD6a+gvXOU0lqcx1csfuhSxQgtjptVQM+bUAJmYUmwBz2N8d+SW4
+nq99gb4M4lvIHSewx8739++vCd1A9RCT14yrZV8OiGeLiKOTkFYP8/1SatyJlQ05
+o0hJrLjr0t7lmu18a30CfX5h7dNyQkK1MXirv5X4YLzzDlC0t3UAxAZ//VrHlzCp
+C/1JIW+GfCP2jdXdaTPV2rhcD/2tIDV5w8eH+0l4a69sPXUfKv0tNiND4Mh6XQNX
+RkMd1zm/AgMBAAECggEAATo1WYTgPK75DiS4PBR5UDS7DryvoN/LNOsGLUdQC9b+
+aEaacSrAvKKs9vJr2KuTtfahn0SbsjRKFZtL9aYRuHxZbhLfGWiF4MGflcOBQRq+
+eVFl6clwnaS+S/cq5rZD1/WODUhkisslqhI/cubvNwe2rvyduE510LgxYkLuIZ7a
++SCQz1XyPyhb8eVrWIZiprufjqXvDy01MC74l3ZYqaq1hr1oKi0ZDHI95Os7gtwQ
+4HQ3qdJsmYfbaf1223REp8gybnshsxkyjhKRU3nG7ZvgrRRMFkJvfHZ8VcS3cvsK
+ccKBJg7376+VDtc+RHUcBMyVZ881y4Rq2t6ssYVJVQKBgQDFq+N7ZGKOtQChSIXn
+ju/gP5WzSKJFaZhdkSggHi1K+PkuCZ1SXzKD3CPibreSUx9hzoZAAmTjzOfwhVZ7
+5HDqhrKfkWNeThAdXlglhNX5LVKhhmBsNGawANO8Pmq+pueWhK/76XgiGcOknyt6
+NH1ZE/QZpFeZB2binEhf6leYGwKBgQC3WgF2eaj2c4pugq13oZ9BHms5nsbYQgj8
+1H2C1wsgJNiz4tq6xFdvjiaw+r1OrCFrl9nz7npFc7uohtrRxXr7sq5nwMPO3QAP
+VxzyZ/TFP/FI70Avz6x+xX7HIlptpQ1mWacsdrvtoIG1c8veEJTyA4JgjoMhdDer
+JuPze+ZHLQKBgAzuLIhCzcul/W+Pberyx7A0mJdMtgiyWpwsRaKsNqxD0xD24gqk
+XYqQmOxT78Arnc7pEpEXVwArxDRQlJKwI87DluWnPgfKNXWmWT/DC7gsBc65Go+Z
+ceorc65JqvPjuRx4e4aQBCK+6rRXESICUvzDuGEBBhXljQ5fyMA1dRtnAoGAQSFH
+w74Ttvf0BK2G0SgoWglkLWOpXsiWSLlynDenTBPKppu+9vkn1gi41cU72eZrOL0I
+Pw5HgMRLtOGyeTGdLiuaqGBhLepzSv+22KT03dyI6U+TjWhH7gBZuIMLfEdVKzZN
+nA3RU+fgK4SmtotNXWrBtWrqScfuvm1iK+unMUECgYBrwc1rU/GI9tH4MWvBX99n
+pmFneeIUuXJajOsh7jUyTxcrHl+4kkgHDExuFMNPHfrIG8xCj43fjzxD/spz3xRS
++Ki3i3lYOFNhTUCREt5Xx23hkksK6j7SYlfY0IV2UruWt/UubpsfEqxC1Uk07NTo
+l50Xb2GWQesIt9k5jF5IOw==
+-----END PRIVATE KEY-----";
+    }
+
+    constructor() : Test("HttpServerQuicWsTest", "1.0") {
+        @debug {
+            set_signal_handler(SIGUSR1, sub (int sig) {
+                printf("=== SIGUSR1 Thread Stacks ===\n%Y\n=== End Thread Stacks ===\n",
+                    get_all_thread_call_stacks());
+            });
+        }
+
+        addTestCase("WebSocket text echo over HTTP/3", \testH3WsTextEcho());
+        addTestCase("WebSocket binary echo over HTTP/3", \testH3WsBinaryEcho());
+        addTestCase("WebSocket close handshake over HTTP/3", \testH3WsCloseHandshake());
+        addTestCase("WebSocket multiple messages over HTTP/3", \testH3WsMultipleMessages());
+        addTestCase("concurrent WebSocket streams over HTTP/3", \testH3WsConcurrentStreams());
+        addTestCase("abnormal disconnect over HTTP/3", \testH3WsAbnormalDisconnect());
+        addTestCase("large frame over HTTP/3", \testH3WsLargeFrame());
+
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        mLogger = new Logger("quic-ws-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            mLogger.addAppender(new StdoutAppender());
+        }
+    }
+
+    #! Helper to create an HTTP/3 server with WebSocket handler
+    private hash<auto> setupServer(EchoWsHandler ws_handler) {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": mLogger,
+            "debug": True,
+            "async_mode": True,
+        });
+
+        server.setHandler("ws-handler", "", NOTHING, ws_handler);
+        server.setDefaultHandler("ws-handler", ws_handler);
+        server.waitForAsyncIo();
+
+        hash<auto> h3info = server.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "enable_h3": True,
+        });
+        server.waitForAsyncIo();
+
+        return {
+            "server": server,
+            "port": h3info.port,
+            "url": "wss://localhost:" + h3info.port,
+        };
+    }
+
+    #! Helper to create an HTTP/3 WebSocket client
+    private WebSocketClient createH3Client(code cb, int port) {
+        hash<auto> opts = {
+            "url": "wss://localhost:" + port,
+            "logger": mLogger,
+            "http3_mode": "required",
+            "ssl_verify_cert": False,
+        };
+        WebSocketClient wsc(cb, opts);
+        wsc.connect();
+        return wsc;
+    }
+
+    #! Test WebSocket text echo over HTTP/3
+    testH3WsTextEcho() {
+        EchoWsHandler ws_handler();
+        if (m_options.verbose > 2) {
+            ws_handler.debug_output = True;
+        }
+
+        hash<auto> setup = setupServer(ws_handler);
+        HttpServer server = setup.server;
+        on_exit {
+            server.stop();
+            delete server;
+        }
+
+        # Set up message tracking
+        Counter done(1);
+        bool done_signaled = False;
+        *data received_msg;
+
+        code cb = sub (*data msg) {
+            if (!exists msg) {
+                return;
+            }
+            received_msg = msg;
+            if (!done_signaled) {
+                done_signaled = True;
+                done.dec();
+            }
+        };
+
+        WebSocketClient wsc = createH3Client(cb, setup.port);
+        on_exit {
+            try { wsc.disconnect(); } catch () {}
+            delete wsc;
+        }
+
+        assertTrue(wsc.isHttp3(), "WebSocket should connect over HTTP/3");
+
+        # Send a text message
+        string test_msg = "Hello HTTP/3 WebSocket!";
+        wsc.send(test_msg);
+
+        # Wait for echo
+        int rv = done.waitForZero(30s);
+        assertEq(0, rv, "should receive echo within timeout");
+        assertEq(test_msg, received_msg, "echoed message should match sent message");
+    }
+
+    #! Test WebSocket binary echo over HTTP/3
+    testH3WsBinaryEcho() {
+        EchoWsHandler ws_handler();
+        if (m_options.verbose > 2) {
+            ws_handler.debug_output = True;
+        }
+
+        hash<auto> setup = setupServer(ws_handler);
+        HttpServer server = setup.server;
+        on_exit {
+            server.stop();
+            delete server;
+        }
+
+        Counter done(1);
+        bool done_signaled = False;
+        *data received_msg;
+
+        code cb = sub (*data msg) {
+            if (!exists msg) {
+                return;
+            }
+            received_msg = msg;
+            if (!done_signaled) {
+                done_signaled = True;
+                done.dec();
+            }
+        };
+
+        WebSocketClient wsc = createH3Client(cb, setup.port);
+        on_exit {
+            try { wsc.disconnect(); } catch () {}
+            delete wsc;
+        }
+
+        assertTrue(wsc.isHttp3(), "WebSocket should connect over HTTP/3");
+
+        # Send a binary message
+        binary test_data = binary("Binary payload over HTTP/3");
+        wsc.send(test_data);
+
+        # Wait for echo
+        int rv = done.waitForZero(30s);
+        assertEq(0, rv, "should receive echo within timeout");
+        assertEq(test_data, received_msg, "echoed binary should match sent data");
+    }
+
+    #! Test WebSocket close handshake over HTTP/3
+    testH3WsCloseHandshake() {
+        EchoWsHandler ws_handler();
+        if (m_options.verbose > 2) {
+            ws_handler.debug_output = True;
+        }
+
+        hash<auto> setup = setupServer(ws_handler);
+        HttpServer server = setup.server;
+        on_exit {
+            server.stop();
+            delete server;
+        }
+
+        Counter msg_done(1);
+        bool msg_signaled = False;
+        Counter close_done(1);
+        bool close_signaled = False;
+
+        code cb = sub (*data msg) {
+            if (!exists msg) {
+                # Connection closed
+                if (!close_signaled) {
+                    close_signaled = True;
+                    close_done.dec();
+                }
+                return;
+            }
+            if (!msg_signaled) {
+                msg_signaled = True;
+                msg_done.dec();
+            }
+        };
+
+        WebSocketClient wsc = createH3Client(cb, setup.port);
+        on_exit {
+            try { wsc.disconnect(); } catch () {}
+            delete wsc;
+        }
+
+        assertTrue(wsc.isHttp3(), "WebSocket should connect over HTTP/3");
+
+        # Confirm connection works
+        wsc.send("pre-close-test");
+        int rv = msg_done.waitForZero(30s);
+        assertEq(0, rv, "should receive echo before disconnect");
+
+        # Disconnect cleanly
+        wsc.disconnect();
+
+        # The callback should be called with NOTHING to signal close
+        rv = close_done.waitForZero(10s);
+        assertEq(0, rv, "close callback should be triggered");
+    }
+
+    #! Test multiple messages over HTTP/3 WebSocket
+    testH3WsMultipleMessages() {
+        EchoWsHandler ws_handler();
+        if (m_options.verbose > 2) {
+            ws_handler.debug_output = True;
+        }
+
+        hash<auto> setup = setupServer(ws_handler);
+        HttpServer server = setup.server;
+        on_exit {
+            server.stop();
+            delete server;
+        }
+
+        int msg_count = 20;
+        Mutex m();
+        int received = 0;
+        Counter done(1);
+        bool done_signaled = False;
+        list<string> received_msgs();
+
+        code cb = sub (*data msg) {
+            if (!exists msg) {
+                return;
+            }
+            m.lock();
+            on_exit m.unlock();
+            ++received;
+            if (msg.typeCode() == NT_STRING) {
+                received_msgs += msg;
+            } else {
+                received_msgs += msg.toString("UTF-8");
+            }
+            if (received >= msg_count && !done_signaled) {
+                done_signaled = True;
+                done.dec();
+            }
+        };
+
+        WebSocketClient wsc = createH3Client(cb, setup.port);
+        on_exit {
+            try { wsc.disconnect(); } catch () {}
+            delete wsc;
+        }
+
+        assertTrue(wsc.isHttp3(), "WebSocket should connect over HTTP/3");
+
+        # Send multiple messages (alternating text and binary)
+        for (int i = 0; i < msg_count; ++i) {
+            string payload = sprintf("msg-%04d", i);
+            if (i % 2 == 0) {
+                wsc.send(payload);
+            } else {
+                wsc.send(binary(payload));
+            }
+        }
+
+        # Wait for all echoes
+        int rv = done.waitForZero(30s);
+        assertEq(0, rv, "should receive all echoes within timeout");
+
+        m.lock();
+        on_exit m.unlock();
+        assertEq(msg_count, received, sprintf("should receive all %d messages", msg_count));
+
+        # Verify all messages present (order may vary due to async delivery)
+        for (int i = 0; i < msg_count; ++i) {
+            string expected = sprintf("msg-%04d", i);
+            bool found = False;
+            foreach string rmsg in (received_msgs) {
+                if (rmsg == expected) {
+                    found = True;
+                    break;
+                }
+            }
+            assertTrue(found, sprintf("message %y should be in received messages", expected));
+        }
+    }
+
+    #! Test concurrent WebSocket streams on the same QUIC connection
+    testH3WsConcurrentStreams() {
+        EchoWsHandler ws_handler();
+        if (m_options.verbose > 2) {
+            ws_handler.debug_output = True;
+        }
+
+        hash<auto> setup = setupServer(ws_handler);
+        HttpServer server = setup.server;
+        on_exit {
+            server.stop();
+            delete server;
+        }
+
+        int stream_count = 3;
+        int msgs_per_stream = 5;
+        int total_msgs = stream_count * msgs_per_stream;
+
+        # Per-stream tracking
+        Mutex m();
+        hash<string, list<string>> per_stream_received;
+        Counter done(total_msgs);
+
+        list<WebSocketClient> clients();
+        on_exit {
+            foreach WebSocketClient wsc in (clients) {
+                try { wsc.disconnect(); } catch () {}
+                delete wsc;
+            }
+        }
+
+        # Create multiple concurrent WebSocket clients
+        for (int s = 0; s < stream_count; ++s) {
+            string stream_tag = sprintf("stream-%d", s);
+            per_stream_received{stream_tag} = ();
+
+            code cb = sub (*data msg) {
+                if (!exists msg) {
+                    return;
+                }
+                m.lock();
+                on_exit m.unlock();
+                string text = msg.typeCode() == NT_STRING ? msg : msg.toString("UTF-8");
+                per_stream_received{stream_tag} += text;
+                done.dec();
+            };
+
+            WebSocketClient wsc = createH3Client(cb, setup.port);
+            assertTrue(wsc.isHttp3(), sprintf("%s should connect over HTTP/3", stream_tag));
+            clients += wsc;
+        }
+
+        assertEq(stream_count, clients.size(), "all clients connected");
+
+        # Send messages on all streams concurrently
+        for (int i = 0; i < msgs_per_stream; ++i) {
+            for (int s = 0; s < stream_count; ++s) {
+                string payload = sprintf("stream-%d-msg-%d", s, i);
+                clients[s].send(payload);
+            }
+        }
+
+        # Wait for all echoes
+        int rv = done.waitForZero(30s);
+        assertEq(0, rv, "should receive all echoes from all streams within timeout");
+
+        # Verify each stream received its own messages
+        m.lock();
+        on_exit m.unlock();
+        for (int s = 0; s < stream_count; ++s) {
+            string stream_tag = sprintf("stream-%d", s);
+            list<string> msgs = per_stream_received{stream_tag};
+            assertEq(msgs_per_stream, msgs.size(),
+                sprintf("%s should receive %d messages", stream_tag, msgs_per_stream));
+            for (int i = 0; i < msgs_per_stream; ++i) {
+                string expected = sprintf("stream-%d-msg-%d", s, i);
+                bool found = False;
+                foreach string rmsg in (msgs) {
+                    if (rmsg == expected) {
+                        found = True;
+                        break;
+                    }
+                }
+                assertTrue(found, sprintf("%s should contain %y", stream_tag, expected));
+            }
+        }
+    }
+
+    #! Test abnormal disconnect (client drops without close frame)
+    testH3WsAbnormalDisconnect() {
+        EchoWsHandler ws_handler();
+        if (m_options.verbose > 2) {
+            ws_handler.debug_output = True;
+        }
+
+        hash<auto> setup = setupServer(ws_handler);
+        HttpServer server = setup.server;
+        on_exit {
+            server.stop();
+            delete server;
+        }
+
+        # Track that the server-side handler eventually cleans up
+        Counter msg_done(1);
+        bool msg_signaled = False;
+
+        code cb = sub (*data msg) {
+            if (!exists msg) {
+                return;
+            }
+            if (!msg_signaled) {
+                msg_signaled = True;
+                msg_done.dec();
+            }
+        };
+
+        WebSocketClient wsc = createH3Client(cb, setup.port);
+        assertTrue(wsc.isHttp3(), "WebSocket should connect over HTTP/3");
+
+        # Confirm connection works
+        wsc.send("pre-abort-test");
+        int rv = msg_done.waitForZero(30s);
+        assertEq(0, rv, "should receive echo before abort");
+
+        # Force-delete the client without sending a close frame
+        # This simulates abnormal disconnect (network drop, client crash)
+        delete wsc;
+
+        # Verify server is still operational — connect a new client and echo
+        Counter done2(1);
+        bool done2_signaled = False;
+        *data received2;
+
+        code cb2 = sub (*data msg) {
+            if (!exists msg) {
+                return;
+            }
+            received2 = msg;
+            if (!done2_signaled) {
+                done2_signaled = True;
+                done2.dec();
+            }
+        };
+
+        WebSocketClient wsc2 = createH3Client(cb2, setup.port);
+        on_exit {
+            try { wsc2.disconnect(); } catch () {}
+            delete wsc2;
+        }
+
+        assertTrue(wsc2.isHttp3(), "second client should connect over HTTP/3");
+        wsc2.send("post-abort-test");
+        rv = done2.waitForZero(30s);
+        assertEq(0, rv, "server should still work after abnormal disconnect");
+        assertEq("post-abort-test", received2, "echo should match after abnormal disconnect");
+    }
+
+    #! Test large frame with backpressure over HTTP/3
+    testH3WsLargeFrame() {
+        EchoWsHandler ws_handler();
+        if (m_options.verbose > 2) {
+            ws_handler.debug_output = True;
+        }
+
+        hash<auto> setup = setupServer(ws_handler);
+        HttpServer server = setup.server;
+        on_exit {
+            server.stop();
+            delete server;
+        }
+
+        Counter done(1);
+        bool done_signaled = False;
+        *data received_msg;
+
+        code cb = sub (*data msg) {
+            if (!exists msg) {
+                return;
+            }
+            received_msg = msg;
+            if (!done_signaled) {
+                done_signaled = True;
+                done.dec();
+            }
+        };
+
+        WebSocketClient wsc = createH3Client(cb, setup.port);
+        on_exit {
+            try { wsc.disconnect(); } catch () {}
+            delete wsc;
+        }
+
+        assertTrue(wsc.isHttp3(), "WebSocket should connect over HTTP/3");
+
+        # Send a 128KB binary message to exercise flow control / backpressure
+        int large_size = 128 * 1024;
+        binary large_data = binary();
+        # Build deterministic payload
+        string pattern = "ABCDEFGHIJKLMNOP";  # 16 bytes
+        while (large_data.size() < large_size) {
+            large_data += binary(pattern);
+        }
+        large_data = large_data.substr(0, large_size);
+        assertEq(large_size, large_data.size(), "large payload should be exactly 128KB");
+
+        wsc.send(large_data);
+
+        # Wait for the large echo — use longer timeout for valgrind
+        int rv = done.waitForZero(60s);
+        assertEq(0, rv, "should receive large echo within timeout");
+        assertEq(large_size, received_msg.size(), "echoed large message size should match");
+        assertEq(large_data, received_msg, "echoed large message content should match");
+    }
+}

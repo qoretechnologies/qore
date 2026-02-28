@@ -1,0 +1,288 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    QUIC/HTTP/3 mutual TLS (mTLS) tests - exercises server-side client
+    certificate verification for QUIC listeners.
+
+    Tests cover:
+    - Server with get_remote_certs: True + client with cert → cert extracted
+    - Server with get_remote_certs: True + client without cert → no cert, request still works
+    - Server with SSL_VERIFY_FAIL_IF_NO_PEER_CERT + client without cert → handshake failure
+    - Client certificate subject verification
+*/
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/AsyncSocketIo
+%requires ../../../../qlib/HttpServerAsyncIo
+%requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/Http3ClientIo
+
+%try-module json >= 1.5
+%define NoJson
+%endtry
+
+%exec-class HttpServerQuicMtlsTest
+
+#! Handler that reports client certificate info in the response
+class MtlsHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        hash<auto> result;
+        result.has_client_cert = exists cx."client-cert";
+        if (cx."client-cert") {
+            # Extract certificate subject info
+            hash<auto> cert_info = cx."client-cert".getInfo();
+            result.subject = cert_info.subject;
+            result.issuer = cert_info.issuer;
+        }
+        return makeResponse(200, make_json(result), {"Content-Type": MimeTypeJson});
+    }
+}
+
+class HttpServerQuicMtlsTest inherits Test {
+    private {
+        *HttpServer mServer;
+        *Logger mLogger;
+
+        # Self-signed test certificate (RSA 2048-bit, CN=localhost, valid 10 years)
+        # Used as both server cert and client cert for mTLS testing
+        const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIUahuuRGDlubXWYmiPhjVeT66vtNYwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MDIyMjE5MjIwMVoXDTM2MDIy
+MDE5MjIwMVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEAjZNfLFUyyo02MjZjouaR11FybkZNwDWBG/bhkpTVyj/x
+QKlwKf20LbGSCmMIYHaFnODMg6u6E6sfRJVk+ofwVHBN/Ug+mvoL1zlNJanMdXLH
+7oUsUILY6bVUDPm1ACZmFJsAc9jfHfkluJ6vfYG+DOJbyB0nsMfO9/fvrwndQPUQ
+k9eMq2VfDohni4ijk5BWD/P9UmrciZUNOaNISay469Le5ZrtfGt9An1+Ye3TckJC
+tTF4q7+V+GC88w5QtLd1AMQGf/1ax5cwqQv9SSFvhnwj9o3V3Wkz1dq4XA/9rSA1
+ecPHh/tJeGuvbD11Hyr9LTYjQ+DIel0DV0ZDHdc5vwIDAQABo1MwUTAdBgNVHQ4E
+FgQUYBBsVylVinbbAzTbUt0jRM6mJvwwHwYDVR0jBBgwFoAUYBBsVylVinbbAzTb
+Ut0jRM6mJvwwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAfIAE
+EPvLO+gOnm366xJabLr2Sw3hfmvCq/zSTlPcrB9jdBlOLpMmKcdGiOOCNmzg9+BX
+YNX+I6+MNOGp0j3afWlVwEjiMD66ydSMPEQw0FTzvpIjFN3fHo/MJzFbingRLrk8
+LCo94GmjMBYG+50M8MCKE6EzqfmoYT9fiMJcyJwwdptOWf0URNYKKrG1wRlX4+o8
+uNjQ3VwynI95fAw9WcR/ZtP0pkmCor/hKaYgVRsSGjD78Fu0Uuhm/pCAOuObpEHj
+5eoTlaWC3pZzGA67piqlEDOWiRi9Mo2CzG0t5fmQ83KB51ImauKdYB21whxjkZ+5
+BjwMC4hqSD+bzO2B+A==
+-----END CERTIFICATE-----";
+
+        const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCNk18sVTLKjTYy
+NmOi5pHXUXJuRk3ANYEb9uGSlNXKP/FAqXAp/bQtsZIKYwhgdoWc4MyDq7oTqx9E
+lWT6h/BUcE39SD6a+gvXOU0lqcx1csfuhSxQgtjptVQM+bUAJmYUmwBz2N8d+SW4
+nq99gb4M4lvIHSewx8739++vCd1A9RCT14yrZV8OiGeLiKOTkFYP8/1SatyJlQ05
+o0hJrLjr0t7lmu18a30CfX5h7dNyQkK1MXirv5X4YLzzDlC0t3UAxAZ//VrHlzCp
+C/1JIW+GfCP2jdXdaTPV2rhcD/2tIDV5w8eH+0l4a69sPXUfKv0tNiND4Mh6XQNX
+RkMd1zm/AgMBAAECggEAATo1WYTgPK75DiS4PBR5UDS7DryvoN/LNOsGLUdQC9b+
+aEaacSrAvKKs9vJr2KuTtfahn0SbsjRKFZtL9aYRuHxZbhLfGWiF4MGflcOBQRq+
+eVFl6clwnaS+S/cq5rZD1/WODUhkisslqhI/cubvNwe2rvyduE510LgxYkLuIZ7a
++SCQz1XyPyhb8eVrWIZiprufjqXvDy01MC74l3ZYqaq1hr1oKi0ZDHI95Os7gtwQ
+4HQ3qdJsmYfbaf1223REp8gybnshsxkyjhKRU3nG7ZvgrRRMFkJvfHZ8VcS3cvsK
+ccKBJg7376+VDtc+RHUcBMyVZ881y4Rq2t6ssYVJVQKBgQDFq+N7ZGKOtQChSIXn
+ju/gP5WzSKJFaZhdkSggHi1K+PkuCZ1SXzKD3CPibreSUx9hzoZAAmTjzOfwhVZ7
+5HDqhrKfkWNeThAdXlglhNX5LVKhhmBsNGawANO8Pmq+pueWhK/76XgiGcOknyt6
+NH1ZE/QZpFeZB2binEhf6leYGwKBgQC3WgF2eaj2c4pugq13oZ9BHms5nsbYQgj8
+1H2C1wsgJNiz4tq6xFdvjiaw+r1OrCFrl9nz7npFc7uohtrRxXr7sq5nwMPO3QAP
+VxzyZ/TFP/FI70Avz6x+xX7HIlptpQ1mWacsdrvtoIG1c8veEJTyA4JgjoMhdDer
+JuPze+ZHLQKBgAzuLIhCzcul/W+Pberyx7A0mJdMtgiyWpwsRaKsNqxD0xD24gqk
+XYqQmOxT78Arnc7pEpEXVwArxDRQlJKwI87DluWnPgfKNXWmWT/DC7gsBc65Go+Z
+ceorc65JqvPjuRx4e4aQBCK+6rRXESICUvzDuGEBBhXljQ5fyMA1dRtnAoGAQSFH
+w74Ttvf0BK2G0SgoWglkLWOpXsiWSLlynDenTBPKppu+9vkn1gi41cU72eZrOL0I
+Pw5HgMRLtOGyeTGdLiuaqGBhLepzSv+22KT03dyI6U+TjWhH7gBZuIMLfEdVKzZN
+nA3RU+fgK4SmtotNXWrBtWrqScfuvm1iK+unMUECgYBrwc1rU/GI9tH4MWvBX99n
+pmFneeIUuXJajOsh7jUyTxcrHl+4kkgHDExuFMNPHfrIG8xCj43fjzxD/spz3xRS
++Ki3i3lYOFNhTUCREt5Xx23hkksK6j7SYlfY0IV2UruWt/UubpsfEqxC1Uk07NTo
+l50Xb2GWQesIt9k5jF5IOw==
+-----END PRIVATE KEY-----";
+    }
+
+    constructor() : Test("HttpServerQuicMtlsTest", "1.0") {
+        # Set up SIGUSR1 handler to dump thread stacks for debugging hangs
+        @debug {
+            set_signal_handler(SIGUSR1, sub (int sig) {
+                printf("=== SIGUSR1 Thread Stacks ===\n%Y\n=== End Thread Stacks ===\n",
+                    get_all_thread_call_stacks());
+            });
+        }
+
+%ifdef NoJson
+        printf("json module not available, skipping mTLS tests\n");
+%else
+        addTestCase("mTLS with client cert", \testMtlsWithClientCert());
+        addTestCase("get_remote_certs without client cert", \testGetRemoteCertsNoClientCert());
+        addTestCase("SSL_VERIFY_FAIL_IF_NO_PEER_CERT rejects", \testVerifyFailIfNoPeerCert());
+        addTestCase("client cert subject info", \testClientCertSubjectInfo());
+%endif
+
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        mLogger = new Logger("quic-mtls-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            mLogger.addAppender(new StdoutAppender());
+        }
+    }
+
+    globalTearDown() {
+        delete mServer;
+    }
+
+    private hash<auto> createMtlsServer(hash<auto> extra_opts = {}) {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": mLogger,
+            "debug": True,
+            "async_mode": True,
+        });
+
+        server.setHandler("mtls", "/mtls", NOTHING, new MtlsHandler());
+        server.waitForAsyncIo();
+
+        hash<HttpListenerOptionInfo> listener_opts = <HttpListenerOptionInfo>{
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        };
+        # Apply extra options
+        if (extra_opts.get_remote_certs) {
+            listener_opts.get_remote_certs = extra_opts.get_remote_certs;
+        }
+        if (extra_opts.ssl_verify_flags) {
+            listener_opts.ssl_verify_flags = extra_opts.ssl_verify_flags;
+        }
+
+        hash<auto> h3info = server.addQuicListener(listener_opts);
+        return {"server": server, "port": h3info.port};
+    }
+
+    #! Test mTLS with client certificate — server should see the client cert
+    testMtlsWithClientCert() {
+        hash<auto> setup = createMtlsServer({
+            "get_remote_certs": True,
+        });
+        HttpServer server = setup.server;
+        int quic_port = setup.port;
+        on_exit delete server;
+
+        # Create client with certificate for mTLS
+        Http3ClientConnectionManager mgr(<Http3ClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "client_cert": new SSLCertificate(CertPem),
+            "client_pk": new SSLPrivateKey(KeyPem),
+            "logger": mLogger,
+        });
+        on_exit mgr.closeAll();
+
+        hash<auto> resp = mgr.request(sprintf("https://localhost:%d", quic_port), "GET", "/mtls");
+        assertEq(200, resp.status_code, "mTLS request should succeed");
+
+        hash<auto> body = parse_json(binary_to_string(resp.body));
+        assertTrue(body.has_client_cert, "server should have captured client certificate");
+    }
+
+    #! Test get_remote_certs without client cert — request should still succeed
+    testGetRemoteCertsNoClientCert() {
+        hash<auto> setup = createMtlsServer({
+            "get_remote_certs": True,
+        });
+        HttpServer server = setup.server;
+        int quic_port = setup.port;
+        on_exit delete server;
+
+        # Create client WITHOUT certificate — SSL_VERIFY_PEER alone should not
+        # require a client cert (only requests it)
+        Http3ClientConnectionManager mgr(<Http3ClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "logger": mLogger,
+        });
+        on_exit mgr.closeAll();
+
+        hash<auto> resp = mgr.request(sprintf("https://localhost:%d", quic_port), "GET", "/mtls");
+        assertEq(200, resp.status_code, "request without client cert should succeed with SSL_VERIFY_PEER");
+
+        hash<auto> body = parse_json(binary_to_string(resp.body));
+        assertFalse(body.has_client_cert, "server should NOT have a client certificate");
+    }
+
+    #! Test SSL_VERIFY_FAIL_IF_NO_PEER_CERT — client without cert should fail
+    testVerifyFailIfNoPeerCert() {
+        hash<auto> setup = createMtlsServer({
+            "ssl_verify_flags": SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT,
+            "get_remote_certs": True,
+        });
+        HttpServer server = setup.server;
+        int quic_port = setup.port;
+        on_exit delete server;
+
+        # Create client WITHOUT certificate — handshake should fail because
+        # SSL_VERIFY_FAIL_IF_NO_PEER_CERT requires a client cert
+        Http3ClientConnectionManager mgr(<Http3ClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "logger": mLogger,
+        });
+        on_exit mgr.closeAll();
+
+        bool caught_exception = False;
+        try {
+            mgr.request(sprintf("https://localhost:%d", quic_port), "GET", "/mtls");
+        } catch (hash<ExceptionInfo> ex) {
+            caught_exception = True;
+            # The connection should fail due to TLS handshake error
+            @debug(printf("Expected exception: %s: %s\n", ex.err, ex.desc));
+        }
+        assertTrue(caught_exception, "request without client cert should fail when FAIL_IF_NO_PEER_CERT is set");
+    }
+
+    #! Test client certificate subject information
+    testClientCertSubjectInfo() {
+        hash<auto> setup = createMtlsServer({
+            "get_remote_certs": True,
+        });
+        HttpServer server = setup.server;
+        int quic_port = setup.port;
+        on_exit delete server;
+
+        # Create client with certificate
+        Http3ClientConnectionManager mgr(<Http3ClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "client_cert": new SSLCertificate(CertPem),
+            "client_pk": new SSLPrivateKey(KeyPem),
+            "logger": mLogger,
+        });
+        on_exit mgr.closeAll();
+
+        hash<auto> resp = mgr.request(sprintf("https://localhost:%d", quic_port), "GET", "/mtls");
+        assertEq(200, resp.status_code, "mTLS request should succeed");
+
+        hash<auto> body = parse_json(binary_to_string(resp.body));
+        assertTrue(body.has_client_cert, "server should have captured client certificate");
+        # Verify the certificate subject contains "localhost" CN (from our self-signed cert)
+        # getInfo().subject returns a hash like {"CN": "localhost"}
+        assertEq("localhost", body.subject.commonName, "client cert CN should be 'localhost'");
+    }
+}

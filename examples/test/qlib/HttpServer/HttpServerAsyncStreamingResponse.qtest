@@ -1,0 +1,739 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Tests for non-blocking InputStream streaming responses across HTTP/1.x,
+    HTTP/2, and HTTP/3.
+
+    Tests cover:
+    - HTTP/1.x: InputStream response with Content-Length (fused keep-alive path)
+    - HTTP/1.x: InputStream response with Content-Length (close path)
+    - HTTP/1.x: multiple sequential keep-alive requests with InputStream response
+    - HTTP/2: InputStream streaming response (no Content-Length required)
+    - HTTP/2: concurrent multiplexed InputStream responses
+    - HTTP/3: InputStream streaming response
+    - HTTP/3: concurrent multiplexed InputStream responses
+*/
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/AsyncSocketIo
+%requires ../../../../qlib/HttpServerAsyncIo
+%requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/Http3ClientIo
+
+%exec-class HttpServerAsyncStreamingResponseTest
+
+#! Size of the large payload (>2MB to trigger InputStream response path)
+const LargePayloadSize = 3 * 1024 * 1024;  # 3 MB
+
+#! Size of a small payload for regression testing
+const SmallPayloadSize = 1024;  # 1 KB
+
+#! Generates a deterministic binary payload of the given size
+binary sub generatePayload(int size) {
+    # Use strmul to create a single repeating character string, then convert to binary
+    return binary(strmul("X", size));
+}
+
+#! Handler that returns a large InputStream with Content-Length
+#! (triggers the new non-blocking poll operation path for HTTP/1.x)
+class LargeStreamHandler inherits AbstractHttpRequestHandler {
+    private {
+        binary payload;
+    }
+
+    constructor(binary payload) {
+        self.payload = payload;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        # Return InputStream in body field with explicit Content-Length
+        # This triggers the non-blocking InputStream poll path for HTTP/1.x
+        # and the I/O-thread InputStream path for HTTP/2 and HTTP/3
+        return <HttpResponseInfo>{
+            "code": 200,
+            "body": new BinaryInputStream(payload),
+            "hdr": {
+                "Content-Type": "application/octet-stream",
+                "Content-Length": string(payload.size()),
+            },
+        };
+    }
+}
+
+#! Handler that returns a large InputStream via chunked transfer encoding (no Content-Length)
+class LargeChunkedHandler inherits AbstractHttpRequestHandler {
+    private {
+        binary payload;
+    }
+
+    constructor(binary payload) {
+        self.payload = payload;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, new BinaryInputStream(payload), {
+            "Content-Type": "application/octet-stream",
+        });
+    }
+}
+
+#! InputStream that returns fewer bytes than expected, then EOF
+class ShortInputStream inherits InputStream {
+    private {
+        int remaining;
+    }
+
+    constructor(int actual_bytes) {
+        remaining = actual_bytes;
+    }
+
+    int read(binary buf, int limit) {
+        if (remaining <= 0) {
+            return 0;
+        }
+        int to_read = min(limit, remaining);
+        # Fill with 'S' bytes
+        binary data = binary(strmul("S", to_read));
+        buf += data;
+        remaining -= to_read;
+        return to_read;
+    }
+
+    int peek() {
+        return remaining > 0 ? ord("S") : -1;
+    }
+}
+
+#! Handler that claims Content-Length of 10000 but InputStream only provides 100 bytes
+class ShortStreamHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        # Content-Length says 10000 but stream will EOF after 100 bytes
+        return <HttpResponseInfo>{
+            "code": 200,
+            "body": new BinaryInputStream(binary(strmul("S", 100))),
+            "hdr": {
+                "Content-Type": "application/octet-stream",
+                "Content-Length": "10000",
+            },
+        };
+    }
+}
+
+#! Handler where Content-Length exactly matches InputStream size (boundary test)
+class ExactStreamHandler inherits AbstractHttpRequestHandler {
+    private {
+        binary payload;
+    }
+
+    constructor(binary payload) {
+        self.payload = payload;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return <HttpResponseInfo>{
+            "code": 200,
+            "body": new BinaryInputStream(payload),
+            "hdr": {
+                "Content-Type": "application/octet-stream",
+                "Content-Length": string(payload.size()),
+            },
+        };
+    }
+}
+
+#! Handler that returns a small in-memory response
+class SmallHandler inherits AbstractHttpRequestHandler {
+    private {
+        binary payload;
+    }
+
+    constructor(binary payload) {
+        self.payload = payload;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, payload, {
+            "Content-Type": "application/octet-stream",
+            "Content-Length": string(payload.size()),
+        });
+    }
+}
+
+class HttpServerAsyncStreamingResponseTest inherits Test {
+    private {
+        *Logger mLogger;
+
+        # Pre-generated payloads
+        binary mLargePayload;
+        binary mSmallPayload;
+
+        # Time taken for a single 3MB transfer; used to skip concurrent tests
+        # that would exceed protocol timeouts under valgrind
+        timeout mLargeTransferTime;
+
+        # Self-signed test certificate (localhost, RSA 2048)
+        const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIUahuuRGDlubXWYmiPhjVeT66vtNYwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MDIyMjE5MjIwMVoXDTM2MDIy
+MDE5MjIwMVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEAjZNfLFUyyo02MjZjouaR11FybkZNwDWBG/bhkpTVyj/x
+QKlwKf20LbGSCmMIYHaFnODMg6u6E6sfRJVk+ofwVHBN/Ug+mvoL1zlNJanMdXLH
+7oUsUILY6bVUDPm1ACZmFJsAc9jfHfkluJ6vfYG+DOJbyB0nsMfO9/fvrwndQPUQ
+k9eMq2VfDohni4ijk5BWD/P9UmrciZUNOaNISay469Le5ZrtfGt9An1+Ye3TckJC
+tTF4q7+V+GC88w5QtLd1AMQGf/1ax5cwqQv9SSFvhnwj9o3V3Wkz1dq4XA/9rSA1
+ecPHh/tJeGuvbD11Hyr9LTYjQ+DIel0DV0ZDHdc5vwIDAQABo1MwUTAdBgNVHQ4E
+FgQUYBBsVylVinbbAzTbUt0jRM6mJvwwHwYDVR0jBBgwFoAUYBBsVylVinbbAzTb
+Ut0jRM6mJvwwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAfIAE
+EPvLO+gOnm366xJabLr2Sw3hfmvCq/zSTlPcrB9jdBlOLpMmKcdGiOOCNmzg9+BX
+YNX+I6+MNOGp0j3afWlVwEjiMD66ydSMPEQw0FTzvpIjFN3fHo/MJzFbingRLrk8
+LCo94GmjMBYG+50M8MCKE6EzqfmoYT9fiMJcyJwwdptOWf0URNYKKrG1wRlX4+o8
+uNjQ3VwynI95fAw9WcR/ZtP0pkmCor/hKaYgVRsSGjD78Fu0Uuhm/pCAOuObpEHj
+5eoTlaWC3pZzGA67piqlEDOWiRi9Mo2CzG0t5fmQ83KB51ImauKdYB21whxjkZ+5
+BjwMC4hqSD+bzO2B+A==
+-----END CERTIFICATE-----";
+
+        const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCNk18sVTLKjTYy
+NmOi5pHXUXJuRk3ANYEb9uGSlNXKP/FAqXAp/bQtsZIKYwhgdoWc4MyDq7oTqx9E
+lWT6h/BUcE39SD6a+gvXOU0lqcx1csfuhSxQgtjptVQM+bUAJmYUmwBz2N8d+SW4
+nq99gb4M4lvIHSewx8739++vCd1A9RCT14yrZV8OiGeLiKOTkFYP8/1SatyJlQ05
+o0hJrLjr0t7lmu18a30CfX5h7dNyQkK1MXirv5X4YLzzDlC0t3UAxAZ//VrHlzCp
+C/1JIW+GfCP2jdXdaTPV2rhcD/2tIDV5w8eH+0l4a69sPXUfKv0tNiND4Mh6XQNX
+RkMd1zm/AgMBAAECggEAATo1WYTgPK75DiS4PBR5UDS7DryvoN/LNOsGLUdQC9b+
+aEaacSrAvKKs9vJr2KuTtfahn0SbsjRKFZtL9aYRuHxZbhLfGWiF4MGflcOBQRq+
+eVFl6clwnaS+S/cq5rZD1/WODUhkisslqhI/cubvNwe2rvyduE510LgxYkLuIZ7a
++SCQz1XyPyhb8eVrWIZiprufjqXvDy01MC74l3ZYqaq1hr1oKi0ZDHI95Os7gtwQ
+4HQ3qdJsmYfbaf1223REp8gybnshsxkyjhKRU3nG7ZvgrRRMFkJvfHZ8VcS3cvsK
+ccKBJg7376+VDtc+RHUcBMyVZ881y4Rq2t6ssYVJVQKBgQDFq+N7ZGKOtQChSIXn
+ju/gP5WzSKJFaZhdkSggHi1K+PkuCZ1SXzKD3CPibreSUx9hzoZAAmTjzOfwhVZ7
+5HDqhrKfkWNeThAdXlglhNX5LVKhhmBsNGawANO8Pmq+pueWhK/76XgiGcOknyt6
+NH1ZE/QZpFeZB2binEhf6leYGwKBgQC3WgF2eaj2c4pugq13oZ9BHms5nsbYQgj8
+1H2C1wsgJNiz4tq6xFdvjiaw+r1OrCFrl9nz7npFc7uohtrRxXr7sq5nwMPO3QAP
+VxzyZ/TFP/FI70Avz6x+xX7HIlptpQ1mWacsdrvtoIG1c8veEJTyA4JgjoMhdDer
+JuPze+ZHLQKBgAzuLIhCzcul/W+Pberyx7A0mJdMtgiyWpwsRaKsNqxD0xD24gqk
+XYqQmOxT78Arnc7pEpEXVwArxDRQlJKwI87DluWnPgfKNXWmWT/DC7gsBc65Go+Z
+ceorc65JqvPjuRx4e4aQBCK+6rRXESICUvzDuGEBBhXljQ5fyMA1dRtnAoGAQSFH
+w74Ttvf0BK2G0SgoWglkLWOpXsiWSLlynDenTBPKppu+9vkn1gi41cU72eZrOL0I
+Pw5HgMRLtOGyeTGdLiuaqGBhLepzSv+22KT03dyI6U+TjWhH7gBZuIMLfEdVKzZN
+nA3RU+fgK4SmtotNXWrBtWrqScfuvm1iK+unMUECgYBrwc1rU/GI9tH4MWvBX99n
+pmFneeIUuXJajOsh7jUyTxcrHl+4kkgHDExuFMNPHfrIG8xCj43fjzxD/spz3xRS
++Ki3i3lYOFNhTUCREt5Xx23hkksK6j7SYlfY0IV2UruWt/UubpsfEqxC1Uk07NTo
+l50Xb2GWQesIt9k5jF5IOw==
+-----END PRIVATE KEY-----";
+    }
+
+    constructor() : Test("HttpServerAsyncStreamingResponseTest", "1.0") {
+        @debug {
+            set_signal_handler(SIGUSR1, sub (int sig) {
+                printf("=== SIGUSR1 Thread Stacks ===\n%Y\n=== End Thread Stacks ===\n",
+                    get_all_thread_call_stacks());
+            });
+        }
+
+        # Generate payloads once
+        mLargePayload = generatePayload(LargePayloadSize);
+        mSmallPayload = generatePayload(SmallPayloadSize);
+
+        addTestCase("HTTP/1.x small in-memory response (regression)", \testH1SmallResponse());
+        addTestCase("HTTP/1.x large InputStream response with Content-Length", \testH1LargeStreamResponse());
+        addTestCase("HTTP/1.x sequential keep-alive InputStream responses", \testH1SequentialKeepAlive());
+        addTestCase("HTTP/2 large InputStream response", \testH2LargeStreamResponse());
+        addTestCase("HTTP/2 concurrent multiplexed InputStream responses", \testH2ConcurrentStreams());
+        addTestCase("HTTP/1.x short InputStream Content-Length mismatch", \testH1ShortStream());
+        addTestCase("HTTP/2 short InputStream Content-Length mismatch", \testH2ShortStream());
+        addTestCase("HTTP/1.x exact Content-Length boundary", \testH1ExactStream());
+        addTestCase("HTTP/3 small in-memory response", \testH3SmallResponse());
+        addTestCase("HTTP/3 large InputStream response", \testH3LargeStreamResponse());
+        addTestCase("HTTP/3 concurrent multiplexed InputStream responses", \testH3ConcurrentStreams());
+
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        mLogger = new Logger("async-streaming-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            mLogger.addAppender(new StdoutAppender());
+        }
+    }
+
+    #! Creates a new async HTTP server with TLS and the streaming response handler
+    private hash<auto> createServer(*hash<auto> opts) {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": mLogger,
+            "debug": True,
+            "async_mode": True,
+        });
+        server.setHandler("large", "/large", NOTHING, new LargeStreamHandler(mLargePayload));
+        server.setHandler("large-chunked", "/large-chunked", NOTHING, new LargeChunkedHandler(mLargePayload));
+        server.setHandler("small", "/small", NOTHING, new SmallHandler(mSmallPayload));
+        server.setHandler("short-stream", "/short-stream", NOTHING, new ShortStreamHandler());
+        server.setHandler("exact-stream", "/exact-stream", NOTHING, new ExactStreamHandler(mSmallPayload));
+        server.waitForAsyncIo();
+
+        # Add H2-only TLS listener
+        hash<auto> h2info = server.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "enable_h3": opts.enable_h3 ?? False,
+        });
+        server.waitForAsyncIo();
+
+        return {
+            "server": server,
+            "port": h2info.port,
+        };
+    }
+
+    #! Creates an HTTP/2 client connected to the given port
+    private HTTPClient createH2Client(int port) {
+        HTTPClient client({
+            "url": sprintf("https://localhost:%d", port),
+            "ssl_verify_cert": False,
+        });
+        return client;
+    }
+
+    #! Creates an HTTP/3 client connection manager
+    private Http3ClientIo::Http3ClientConnectionManager createH3Manager() {
+        return new Http3ClientIo::Http3ClientConnectionManager(
+            <Http3ClientIo::Http3ClientConnectionManagerOptions>{
+                "logger": mLogger,
+                "request_timeout": 30s,
+                "connect_timeout": 15s,
+            },
+        );
+    }
+
+    # ---- HTTP/1.x Tests ----
+
+    #! Regression: small response should still work with in-memory path
+    testH1SmallResponse() {
+        hash<auto> setup = createServer();
+        HttpServer server = setup.server;
+        on_exit delete server;
+
+        HTTPClient client({
+            "url": sprintf("https://localhost:%d", setup.port),
+            "ssl_verify_cert": False,
+            "http_version": "1.1",
+        });
+        on_exit client.disconnect();
+
+        hash<auto> resp = client.send(NOTHING, "GET", "/small");
+        assertEq(200, resp.status_code, "H1 small response status");
+        binary resp_body;
+        if (resp.body.typeCode() == NT_BINARY) {
+            resp_body = resp.body;
+        } else {
+            resp_body = binary(resp.body);
+        }
+        assertEq(mSmallPayload.size(), resp_body.size(), "H1 small response body size");
+        assertEq(mSmallPayload, resp_body, "H1 small response body content");
+    }
+
+    #! Large InputStream response via the new non-blocking poll operation (with Content-Length)
+    testH1LargeStreamResponse() {
+        hash<auto> setup = createServer();
+        HttpServer server = setup.server;
+        on_exit delete server;
+
+        HTTPClient client({
+            "url": sprintf("https://localhost:%d", setup.port),
+            "ssl_verify_cert": False,
+            "http_version": "1.1",
+        });
+        on_exit client.disconnect();
+
+        date start = now_us();
+        hash<auto> resp = client.send(NOTHING, "GET", "/large");
+        mLargeTransferTime = now_us() - start;
+
+        assertEq(200, resp.status_code, "H1 large stream response status");
+        binary resp_body;
+        if (resp.body.typeCode() == NT_BINARY) {
+            resp_body = resp.body;
+        } else {
+            resp_body = binary(resp.body);
+        }
+        assertEq(LargePayloadSize, resp_body.size(), "H1 large stream response body size");
+        assertEq(mLargePayload, resp_body, "H1 large stream response body matches");
+
+        # Verify Content-Length was set (not chunked)
+        assertEq(string(LargePayloadSize), resp."content-length",
+            "H1 large stream response has Content-Length");
+    }
+
+    #! Sequential keep-alive requests: verifies the fused path (send stream + idle + read header)
+    testH1SequentialKeepAlive() {
+        if (mLargeTransferTime > 30s) {
+            testSkip(sprintf("skipping 3x 3MB sequential transfers (single transfer: %y)", mLargeTransferTime));
+        }
+        hash<auto> setup = createServer();
+        HttpServer server = setup.server;
+        on_exit delete server;
+
+        HTTPClient client({
+            "url": sprintf("https://localhost:%d", setup.port),
+            "ssl_verify_cert": False,
+            "http_version": "1.1",
+        });
+        on_exit client.disconnect();
+
+        # Send 3 sequential requests on the same keep-alive connection
+        for (int i = 0; i < 3; i++) {
+            hash<auto> resp = client.send(NOTHING, "GET", "/large");
+            assertEq(200, resp.status_code,
+                sprintf("H1 keep-alive request %d status", i + 1));
+            binary resp_body;
+            if (resp.body.typeCode() == NT_BINARY) {
+                resp_body = resp.body;
+            } else {
+                resp_body = binary(resp.body);
+            }
+            assertEq(LargePayloadSize, resp_body.size(),
+                sprintf("H1 keep-alive request %d body size", i + 1));
+            assertEq(mLargePayload, resp_body,
+                sprintf("H1 keep-alive request %d body matches", i + 1));
+        }
+    }
+
+    # ---- Content-Length Mismatch Tests ----
+
+    #! HTTP/1.x: InputStream provides fewer bytes than Content-Length → error or truncated
+    testH1ShortStream() {
+        hash<auto> setup = createServer();
+        HttpServer server = setup.server;
+        on_exit delete server;
+
+        HTTPClient client({
+            "url": sprintf("https://localhost:%d", setup.port),
+            "ssl_verify_cert": False,
+            "timeout": 10000,
+        });
+
+        # The server handler claims Content-Length: 10000 but InputStream only has 100 bytes
+        # The server should detect the mismatch and the client should get an error
+        bool got_error = False;
+        try {
+            hash<auto> resp = client.send(NOTHING, "GET", "/short-stream");
+            # If we get a response, the body should be shorter than Content-Length
+            # (connection may be closed early due to the server-side error)
+            *binary resp_body;
+            if (resp.body.typeCode() == NT_BINARY) {
+                resp_body = resp.body;
+            } else if (resp.body.typeCode() == NT_STRING) {
+                resp_body = binary(resp.body);
+            }
+            if (!resp_body || resp_body.size() < 10000) {
+                got_error = True;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            got_error = True;
+            if (m_options.verbose > 1) {
+                printf("H1 short stream caught: %s: %s\n", ex.err, ex.desc);
+            }
+            # The server detects the mismatch; the client sees a socket/HTTP read error
+            # because the server closes the connection after detecting the Content-Length
+            # vs actual bytes mismatch
+            assertRegex("SOCKET|HTTP", ex.err,
+                "H1 short stream: expected socket/HTTP error");
+        }
+        assertTrue(got_error, "H1 short stream: Content-Length mismatch detected");
+    }
+
+    #! HTTP/2: InputStream provides fewer bytes than Content-Length → error propagated
+    testH2ShortStream() {
+        hash<auto> setup = createServer();
+        HttpServer server = setup.server;
+        on_exit delete server;
+
+        HTTPClient client({
+            "url": sprintf("https://localhost:%d", setup.port),
+            "ssl_verify_cert": False,
+            "http_version": "2.0",
+            "timeout": 10000,
+        });
+
+        # The server handler claims Content-Length: 10000 but InputStream only has 100 bytes
+        # HTTP/2 should propagate this as a stream error (RST_STREAM or incomplete response)
+        bool got_error = False;
+        try {
+            hash<auto> resp = client.send(NOTHING, "GET", "/short-stream");
+            *binary resp_body;
+            if (resp.body.typeCode() == NT_BINARY) {
+                resp_body = resp.body;
+            } else if (resp.body.typeCode() == NT_STRING) {
+                resp_body = binary(resp.body);
+            }
+            if (!resp_body || resp_body.size() < 10000) {
+                got_error = True;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            got_error = True;
+            if (m_options.verbose > 1) {
+                printf("H2 short stream caught: %s: %s\n", ex.err, ex.desc);
+            }
+            # HTTP/2: the server detects the InputStream EOF and resets the stream;
+            # the client sees an HTTP2 stream error or socket error
+            assertRegex("HTTP2|SOCKET|HTTP", ex.err,
+                "H2 short stream: expected HTTP2/socket error");
+        }
+        assertTrue(got_error, "H2 short stream: Content-Length mismatch detected");
+    }
+
+    #! HTTP/1.x: InputStream provides exactly Content-Length bytes → success
+    testH1ExactStream() {
+        hash<auto> setup = createServer();
+        HttpServer server = setup.server;
+        on_exit delete server;
+
+        HTTPClient client({
+            "url": sprintf("https://localhost:%d", setup.port),
+            "ssl_verify_cert": False,
+            "timeout": 10000,
+        });
+
+        # Content-Length exactly matches InputStream size — should succeed
+        hash<auto> resp = client.send(NOTHING, "GET", "/exact-stream");
+        assertEq(200, resp.status_code);
+        binary resp_body;
+        if (resp.body.typeCode() == NT_BINARY) {
+            resp_body = resp.body;
+        } else if (resp.body.typeCode() == NT_STRING) {
+            resp_body = binary(resp.body);
+        }
+        assertEq(mSmallPayload.size(), resp_body.size(),
+            "exact stream: received full Content-Length payload");
+        assertEq(mSmallPayload, resp_body,
+            "exact stream: payload integrity");
+    }
+
+    # ---- HTTP/2 Tests ----
+
+    #! Large InputStream response over HTTP/2
+    testH2LargeStreamResponse() {
+        if (mLargeTransferTime > 60s) {
+            testSkip(sprintf("skipping 3MB H2 transfer (H1 transfer: %y)", mLargeTransferTime));
+        }
+        hash<auto> setup = createServer();
+        HttpServer server = setup.server;
+        on_exit delete server;
+
+        HTTPClient client = createH2Client(setup.port);
+        on_exit client.disconnect();
+
+        hash<auto> resp = client.send(NOTHING, "GET", "/large");
+        assertEq(200, resp.status_code, "H2 large stream response status");
+        binary resp_body;
+        if (resp.body.typeCode() == NT_BINARY) {
+            resp_body = resp.body;
+        } else {
+            resp_body = binary(resp.body);
+        }
+        assertEq(LargePayloadSize, resp_body.size(), "H2 large stream response body size");
+        assertEq(mLargePayload, resp_body, "H2 large stream response body matches");
+    }
+
+    #! Multiple concurrent requests over HTTP/2 (multiplexed streams)
+    testH2ConcurrentStreams() {
+        # Under valgrind (~20-50x slowdown), 4 concurrent 3MB transfers exceed
+        # the 300s HTTP/2 protocol timeout
+        if (mLargeTransferTime > 30s) {
+            testSkip(sprintf("skipping 4x 3MB concurrent H2 transfers (single transfer: %y)", mLargeTransferTime));
+        }
+        hash<auto> setup = createServer();
+        HttpServer server = setup.server;
+        on_exit delete server;
+
+        int num_requests = 4;
+        Counter cnt(num_requests);
+        Mutex m();
+        list<hash<auto>> results = ();
+
+        for (int i = 0; i < num_requests; i++) {
+            int idx = i;
+            background sub() {
+                on_exit cnt.dec();
+                try {
+                    # Each thread creates its own HTTP/2 connection
+                    HTTPClient client = createH2Client(setup.port);
+                    on_exit client.disconnect();
+
+                    hash<auto> resp = client.send(NOTHING, "GET", "/large");
+                    binary resp_body;
+                    if (resp.body.typeCode() == NT_BINARY) {
+                        resp_body = resp.body;
+                    } else {
+                        resp_body = binary(resp.body);
+                    }
+                    m.lock();
+                    on_exit m.unlock();
+                    push results, {
+                        "idx": idx,
+                        "status": resp.status_code,
+                        "size": resp_body.size(),
+                        "match": resp_body == mLargePayload,
+                    };
+                } catch (hash<ExceptionInfo> ex) {
+                    m.lock();
+                    on_exit m.unlock();
+                    push results, {
+                        "idx": idx,
+                        "error": sprintf("%s: %s", ex.err, ex.desc),
+                    };
+                }
+            }();
+        }
+        cnt.waitForZero();
+
+        assertEq(num_requests, results.size(), "H2 concurrent: all requests completed");
+        for (int i = 0; i < results.size(); i++) {
+            hash<auto> r = results[i];
+            if (r.error) {
+                assertTrue(False, sprintf("H2 concurrent request %d failed: %s", r.idx, r.error));
+                continue;
+            }
+            assertEq(200, r.status, sprintf("H2 concurrent request %d status", r.idx));
+            assertEq(LargePayloadSize, r.size, sprintf("H2 concurrent request %d body size", r.idx));
+            assertTrue(r.match, sprintf("H2 concurrent request %d body matches", r.idx));
+        }
+    }
+
+    # ---- HTTP/3 Tests ----
+
+    #! Large InputStream response over HTTP/3
+    testH3SmallResponse() {
+        hash<auto> setup = createServer({"enable_h3": True});
+        HttpServer server = setup.server;
+        on_exit delete server;
+
+        Http3ClientIo::Http3ClientConnectionManager mgr = createH3Manager();
+        on_exit delete mgr;
+
+        string url = sprintf("https://127.0.0.1:%d", setup.port);
+        hash<auto> resp = mgr.request(url, "GET", "/small");
+        assertEq(200, resp.status_code, "H3 small response status");
+        binary resp_body;
+        if (resp.body.typeCode() == NT_BINARY) {
+            resp_body = resp.body;
+        } else {
+            resp_body = binary(resp.body);
+        }
+        assertEq(SmallPayloadSize, resp_body.size(), "H3 small response body size");
+    }
+
+    testH3LargeStreamResponse() {
+        if (mLargeTransferTime > 60s) {
+            testSkip(sprintf("skipping 3MB H3 transfer (H1 transfer: %y)", mLargeTransferTime));
+        }
+        hash<auto> setup = createServer({"enable_h3": True});
+        HttpServer server = setup.server;
+        on_exit delete server;
+
+        Http3ClientIo::Http3ClientConnectionManager mgr = createH3Manager();
+        on_exit delete mgr;
+
+        string url = sprintf("https://127.0.0.1:%d", setup.port);
+        hash<auto> resp = mgr.request(url, "GET", "/large");
+        assertEq(200, resp.status_code, "H3 large stream response status");
+        binary resp_body;
+        if (resp.body.typeCode() == NT_BINARY) {
+            resp_body = resp.body;
+        } else {
+            resp_body = binary(resp.body);
+        }
+        assertEq(LargePayloadSize, resp_body.size(), "H3 large stream response body size");
+        assertEq(mLargePayload, resp_body, "H3 large stream response body matches");
+    }
+
+    #! Multiple concurrent HTTP/3 requests
+    testH3ConcurrentStreams() {
+        if (mLargeTransferTime > 30s) {
+            testSkip(sprintf("skipping 4x 3MB concurrent H3 transfers (single transfer: %y)", mLargeTransferTime));
+        }
+        hash<auto> setup = createServer({"enable_h3": True});
+        HttpServer server = setup.server;
+        on_exit delete server;
+
+        int num_requests = 4;
+        Counter cnt(num_requests);
+        Mutex m();
+        list<hash<auto>> results = ();
+        string url = sprintf("https://127.0.0.1:%d", setup.port);
+
+        for (int i = 0; i < num_requests; i++) {
+            int idx = i;
+            background sub() {
+                on_exit cnt.dec();
+                try {
+                    Http3ClientIo::Http3ClientConnectionManager mgr = createH3Manager();
+                    on_exit delete mgr;
+
+                    hash<auto> resp = mgr.request(url, "GET", "/large");
+                    binary resp_body;
+                    if (resp.body.typeCode() == NT_BINARY) {
+                        resp_body = resp.body;
+                    } else {
+                        resp_body = binary(resp.body);
+                    }
+                    m.lock();
+                    on_exit m.unlock();
+                    push results, {
+                        "idx": idx,
+                        "status": resp.status_code,
+                        "size": resp_body.size(),
+                        "match": resp_body == mLargePayload,
+                    };
+                } catch (hash<ExceptionInfo> ex) {
+                    m.lock();
+                    on_exit m.unlock();
+                    push results, {
+                        "idx": idx,
+                        "error": sprintf("%s: %s", ex.err, ex.desc),
+                    };
+                }
+            }();
+        }
+        cnt.waitForZero();
+
+        assertEq(num_requests, results.size(), "H3 concurrent: all requests completed");
+        for (int i = 0; i < results.size(); i++) {
+            hash<auto> r = results[i];
+            if (r.error) {
+                assertTrue(False, sprintf("H3 concurrent request %d failed: %s", r.idx, r.error));
+                continue;
+            }
+            assertEq(200, r.status, sprintf("H3 concurrent request %d status", r.idx));
+            assertEq(LargePayloadSize, r.size, sprintf("H3 concurrent request %d body size", r.idx));
+            assertTrue(r.match, sprintf("H3 concurrent request %d body matches", r.idx));
+        }
+    }
+}

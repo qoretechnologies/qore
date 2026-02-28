@@ -362,6 +362,12 @@ cargo install tree-sitter-cli@0.26.5
       - fixed I/O thread blocking on \c Socket::getPeerInfo() calls that could cause the server to become unresponsive
         by disabling DNS hostname lookups and moving calls to after SSL handshake completion
       - QUIC/HTTP/3 listener support via \c addQuicListener() for serving HTTP/3 over UDP
+      - InputStream streaming response support: handlers can return an \c InputStream as the response body
+        for memory-efficient streaming across HTTP/1.x, HTTP/2, and HTTP/3
+        - pollable InputStreams (e.g. \c FileInputStream) are read by the I/O thread using event-loop integration
+        - non-pollable InputStreams are read by the handler thread with backpressure-aware retry
+        - \c Content-Length mismatch detection raises \c HTTP-STREAM-ERROR if the InputStream provides fewer
+          bytes than declared
     - @ref httpserverasynciointro "HttpServerAsyncIo" module
       - new module providing async I/O support classes for the @ref httpserverintro "HttpServer" module
         (<a href="https://github.com/qoretechnologies/qore/issues/5019">issue 5019</a>)
@@ -518,6 +524,16 @@ cargo install tree-sitter-cli@0.26.5
       - static @ref Qore::Program::getAllDefines() "Program::getAllDefines()"
       - @ref Qore::Socket::startPollSendHttpResponse() "Socket::startPollSendHttpResponse()": sends an HTTP
         response in non-blocking mode with proper \c Content-Length header handling
+      - @ref Qore::Socket::startPollSendHttpResponseWithStream() "Socket::startPollSendHttpResponseWithStream()":
+        sends an HTTP response with an \c InputStream body in non-blocking mode for HTTP/1.x
+      - @ref Qore::Socket::startPollSendHttpResponseWithStreamAndReadHeader() "Socket::startPollSendHttpResponseWithStreamAndReadHeader()":
+        sends an HTTP response with an \c InputStream body and waits for the next request (keep-alive) in HTTP/1.x
+      - @ref Qore::Socket::startPollSendHttp2StreamingResponse() "Socket::startPollSendHttp2StreamingResponse()":
+        sends an HTTP/2 response with an \c InputStream body via the I/O thread
+      - @ref Qore::Socket::submitHttp2StreamingResponseWithStream() "Socket::submitHttp2StreamingResponseWithStream()":
+        hands off an \c InputStream to the HTTP/2 I/O thread for incremental DATA frame streaming
+      - @ref Qore::Socket::submitQuicStreamingResponseWithStream() "Socket::submitQuicStreamingResponseWithStream()":
+        hands off an \c InputStream to the HTTP/3 I/O thread for incremental DATA frame streaming
       - @ref Qore::Socket::setAlpnProtocols() "Socket::setAlpnProtocols()": sets ALPN protocols for TLS negotiation
       - @ref Qore::Socket::getAlpnProtocol() "Socket::getAlpnProtocol()": returns the negotiated ALPN protocol
       - @ref Qore::Socket::isHttp2() "Socket::isHttp2()": returns True if HTTP/2 was negotiated via ALPN

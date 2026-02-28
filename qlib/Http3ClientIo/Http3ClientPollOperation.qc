@@ -133,9 +133,12 @@ public class Http3ClientPollOperation inherits AbstractPollOperation {
         @param logger optional logger for debug output
         @param ssl_verify_mode optional SSL certificate verification mode
         @param accept_all_certs if True, accept all server certificates (sets SSL_VERIFY_NONE)
+        @param client_cert optional client certificate for mutual TLS (mTLS)
+        @param client_pk optional client private key for mutual TLS (mTLS)
     */
     constructor(hash<auto> url_info, timeout connect_timeout = DefaultConnectTimeout, *Logger logger,
-            *int ssl_verify_mode, bool accept_all_certs = False) {
+            *int ssl_verify_mode, bool accept_all_certs = False,
+            *SSLCertificate client_cert, *SSLPrivateKey client_pk) {
         self.url_info = url_info;
         self.connect_timeout = connect_timeout;
         self.logger = logger;
@@ -147,6 +150,14 @@ public class Http3ClientPollOperation inherits AbstractPollOperation {
             sock.setSslVerifyMode(SSL_VERIFY_NONE);
         } else if (exists ssl_verify_mode) {
             sock.setSslVerifyMode(ssl_verify_mode);
+        }
+
+        # Set client certificate and key for mTLS
+        if (client_cert) {
+            sock.setCertificate(client_cert);
+        }
+        if (client_pk) {
+            sock.setPrivateKey(client_pk);
         }
 
         # Resolve address family from hostname to support both IPv4 and IPv6

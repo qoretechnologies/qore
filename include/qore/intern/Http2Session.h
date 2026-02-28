@@ -37,6 +37,7 @@
 #include <nghttp2/nghttp2.h>
 
 #include <qore/Qore.h>
+#include <qore/InputStream.h>
 
 #include <cctype>
 #include <functional>
@@ -660,6 +661,54 @@ private:
     DLLLOCAL static ssize_t dataProviderReadCallback(nghttp2_session* session, int32_t stream_id,
         uint8_t* buf, size_t length, uint32_t* data_flags, nghttp2_data_source* source,
         void* user_data);
+
+    //! Info about an InputStream being streamed on an HTTP/2 response
+    /** @since %Qore 2.3
+    */
+    struct StreamInputStreamInfo {
+        SimpleRefHolder<InputStream> input_stream;
+        int stream_fd = -1;
+        bool is_pollable = false;
+        bool need_reassign = true;
+        bool eof = false;
+
+        StreamInputStreamInfo() = default;
+        StreamInputStreamInfo(InputStream* is)
+            : input_stream(is), stream_fd(is->getPollableDescriptor()),
+              is_pollable(stream_fd >= 0) {}
+    };
+    std::unordered_map<int32_t, StreamInputStreamInfo> stream_input_streams_;
+
+    //! Atomic flag for lock-free hasActiveStreamInputStreams() checks in the I/O hot path
+    std::atomic<bool> has_active_input_streams_{false};
+
+public:
+    //! Store an InputStream for a stream (I/O thread will read from it)
+    /** @since %Qore 2.3
+    */
+    DLLLOCAL void setStreamInputStream(int32_t stream_id, InputStream* is, ExceptionSink* xsink);
+
+    //! Returns true if there are active InputStreams being processed
+    /** @since %Qore 2.3
+    */
+    DLLLOCAL bool hasActiveStreamInputStreams() const {
+        return has_active_input_streams_.load(std::memory_order_acquire);
+    }
+
+    //! Process one chunk from each active InputStream (called by I/O thread)
+    /** @since %Qore 2.3
+    */
+    DLLLOCAL void processStreamInputStreams(ExceptionSink* xsink);
+
+    //! Clean up all InputStreams (called on session destruction)
+    /** @since %Qore 2.3
+    */
+    DLLLOCAL void cleanupStreamInputStreams(ExceptionSink* xsink);
+
+    //! Get extra fds for all active pollable InputStreams
+    /** @since %Qore 2.3
+    */
+    DLLLOCAL void getExtraFds(std::vector<std::pair<int, int>>& extra_fds) const;
 };
 
 //! Shared pointer type for Http2Session with thread-safe atomic reference counting

@@ -205,6 +205,7 @@ const TypedHashDecl* hashdeclStatInfo,
     * hashdeclListSerializationInfo,
     * hashdeclUrlInfo,
     * hashdeclFtpResponseInfo,
+    * hashdeclExtraPollFdInfo,
     * hashdeclSocketPollInfo,
     * hashdeclDatagramInfo,
     * hashdeclQuicGoawayStateInfo,
@@ -1219,6 +1220,7 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     hashdeclUrlInfo = init_hashdecl_UrlInfo(qns);
     hashdeclFtpResponseInfo = init_hashdecl_FtpResponseInfo(qns);
     preinitAbstractPollableIoObjectClass();
+    hashdeclExtraPollFdInfo = init_hashdecl_ExtraPollFdInfo(qns);
     hashdeclSocketPollInfo = init_hashdecl_SocketPollInfo(qns);
     hashdeclDatagramInfo = init_hashdecl_DatagramInfo(qns);
     hashdeclQuicGoawayStateInfo = init_hashdecl_QuicGoawayStateInfo(qns);

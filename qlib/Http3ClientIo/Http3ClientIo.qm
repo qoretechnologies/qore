@@ -50,7 +50,8 @@ module Http3ClientIo {
     HTTP/3 uses QUIC as its transport protocol, which provides:
     - No head-of-line blocking between streams (unlike HTTP/2 over TCP)
     - Built-in TLS 1.3 encryption in the transport layer
-    - Potential for connection migration (not yet implemented)
+    - Connection migration (RFC 9000 §9) via Http3ClientConnection.migrate() and
+      Http3ClientConnectionManager.migrateAll()
     - Faster connection establishment (0-RTT in some cases)
 
     This module leverages the @ref Qore::AbstractPollOperation pattern and integrates with
@@ -63,7 +64,8 @@ module Http3ClientIo {
     - **No head-of-line blocking**: Stream independence at the transport layer
     - **Connection pooling**: Shared connections across multiple clients
     - **Sync and async APIs**: Blocking and callback-based interfaces
-    - **Planned**: WebSocket and SSE over HTTP/3 (not yet implemented)
+    - **WebSocket over HTTP/3**: RFC 9220 extended CONNECT for WebSocket tunneling over QUIC
+    - **SSE over HTTP/3**: Server-Sent Events via QUIC streaming responses
 
     @section http3clientio_components Components
 
@@ -253,6 +255,12 @@ public namespace Http3ClientIo {
 
         #! If True, accept all server certificates (sets SSL_VERIFY_NONE)
         bool accept_all_certs = False;
+
+        #! Client certificate for mutual TLS (mTLS)
+        *SSLCertificate client_cert;
+
+        #! Client private key for mutual TLS (mTLS)
+        *SSLPrivateKey client_pk;
 
         #! Logger for connection manager
         *Logger logger;

@@ -116,13 +116,21 @@ public:
     virtual int getPollableDescriptor() const { return -1; }
 
     /**
-      * @brief Non-blocking read: returns bytes read, 0 if would block, -1 on error.
+      * @brief Non-blocking read from the stream.
+      *
+      * Return values:
+      * - &gt; 0: number of bytes successfully read into @a ptr
+      * - 0: end of stream (EOF) when the fd was previously reported as readable by poll()/select(),
+      *   or EAGAIN/EWOULDBLOCK for implementations that map would-block to 0
+      *   (e.g. FileInputStream). Callers should use an inline poll(fd, 0) before calling this
+      *   method to distinguish EOF from would-block.
+      * - &lt; 0: error (exception raised in @a xsink)
       *
       * Default implementation delegates to blocking read() (safe for memory-based streams).
       * @param ptr the destination buffer
       * @param limit the maximum number of bytes to read
       * @param xsink the exception sink
-      * @return the number of bytes read, 0 if would block
+      * @return the number of bytes read, 0 on EOF or would-block, negative on error
       *
       * @since %Qore 2.2
       */

@@ -27,11 +27,12 @@ public namespace HttpServerAsyncIo {
 
 #! Abstract interface for Server-Sent Events connections
 /** This abstract class provides a protocol-agnostic interface for SSE connections,
-    supporting both HTTP/1.x and HTTP/2 transports transparently.
+    supporting HTTP/1.x, HTTP/2, and HTTP/3 transports transparently.
 
     Implementations:
     - @ref HttpSseStreamPollOperation for HTTP/1.x
     - @ref Http2SseStream for HTTP/2
+    - @ref Http3SseStream for HTTP/3
 
 */
 public class AbstractSseConnection {

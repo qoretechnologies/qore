@@ -3077,7 +3077,8 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             return;
         }
 
-        bool chunked = rv.chunked_body || (rv.body && (rv.hdr."Transfer-Encoding" || rv.body instanceof InputStream));
+        bool chunked = rv.chunked_body || (rv.body && (rv.hdr."Transfer-Encoding"
+            || (rv.body instanceof InputStream && !rv.hdr."Content-Length")));
         auto body = rv.body;
 
         if (chunked) {

@@ -39,7 +39,7 @@
 %modern
 
 module WebSocketHandler {
-    version = "2.3";
+    version = "2.4";
     desc = "User module for providing WebSocket server services";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -58,13 +58,86 @@ module WebSocketHandler {
 
     To use this module, use \c "%requires WebSocketHandler" and \c "%requires HttpServer" in your code.
 
+    The module supports WebSocket connections over all HTTP protocol versions:
+    - <b>HTTP/1.1</b>: Standard WebSocket upgrade handshake (RFC 6455)
+    - <b>HTTP/2</b>: Extended CONNECT method (RFC 8441)
+    - <b>HTTP/3</b>: Extended CONNECT over QUIC (RFC 9220)
+
     All the public symbols in the module are defined in the WebSocketHandler namespace.
 
     The main classes provided in this module are:
     - @ref WebSocketHandler::WebSocketConnection
     - @ref WebSocketHandler::WebSocketHandler
 
+    @par HTTP/3 WebSocket Server Example
+    To accept WebSocket connections over HTTP/3, add a QUIC listener to the HttpServer
+    with \c enable_h3 set to \c True. The %WebSocketHandler automatically detects HTTP/3
+    extended CONNECT requests with \c :protocol=websocket (RFC 9220):
+    @code{.py}
+%requires HttpServer
+%requires WebSocketHandler
+
+# Subclass WebSocketConnection to handle incoming messages
+class EchoWsConnection inherits WebSocketConnection {
+    constructor(WebSocketHandler handler) : WebSocketConnection(handler) {}
+    gotMessage(string msg) { send(msg); }
+    gotMessage(binary msg) { send(msg); }
+}
+
+# Subclass WebSocketHandler to create connections
+class EchoWsHandler inherits WebSocketHandler {
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new EchoWsConnection(self);
+    }
+}
+
+# Create server in async mode (required for HTTP/3)
+EchoWsHandler ws_handler();
+HttpServer server(<HttpServerOptionInfo>{"async_mode": True});
+server.setHandler("ws", "", NOTHING, ws_handler);
+server.setDefaultHandler("ws", ws_handler);
+server.waitForAsyncIo();
+
+# Add QUIC listener with TLS cert (QUIC requires TLS 1.3)
+server.addListener(<HttpListenerOptionInfo>{
+    "service": 8443,
+    "cert": cert,      # SSLCertificate object
+    "key": key,         # SSLPrivateKey object
+    "enable_h3": True,
+});
+server.waitForAsyncIo();
+printf("HTTP/3 WebSocket server listening on port 8443\n");
+    @endcode
+
+    WebSocket clients connecting over HTTP/3 are handled identically to HTTP/1.1 and HTTP/2
+    clients — the same \c gotMessage() callbacks and
+    @ref WebSocketHandler::WebSocketHandler::sendOne() "sendOne()" /
+    @ref WebSocketHandler::WebSocketHandler::sendAll() "sendAll()" APIs work across all transports.
+
     @section websockethandler_relnotes WebSocketHandler Release History
+
+    @subsection websockethandler_v2_4 Version 2.4
+    - added support for WebSocket over HTTP/3 (RFC 9220 — Extended CONNECT over QUIC)
+      - server-side detection of HTTP/3 CONNECT requests with \c :protocol=websocket
+      - bidirectional WebSocket frame exchange over QUIC streams
+      - backpressure handling via QUIC flow control with I/O controller wake integration
+      - explicit QUIC stream close on WebSocket handler exit (essential for stream multiplexing)
+    - refactored to use @ref AsyncSocketIo::AbstractStreamContext "AbstractStreamContext" for
+      protocol-agnostic WebSocket I/O, eliminating per-protocol branching in \c handleRequest(),
+      \c startImpl(), and \c sendFrame()
+    - added @ref WebSocketHandler::WebSocketConnection::setStreamContext()
+      "WebSocketConnection::setStreamContext()" and
+      @ref WebSocketHandler::WebSocketConnection::getStreamContext()
+      "WebSocketConnection::getStreamContext()" methods for unified stream context management
+    - deprecated @ref WebSocketHandler::WebSocketConnection::setHttp2StreamContext()
+      "WebSocketConnection::setHttp2StreamContext()",
+      @ref WebSocketHandler::WebSocketConnection::getHttp2StreamContext()
+      "WebSocketConnection::getHttp2StreamContext()",
+      @ref WebSocketHandler::WebSocketConnection::setHttp3StreamContext()
+      "WebSocketConnection::setHttp3StreamContext()", and
+      @ref WebSocketHandler::WebSocketConnection::getHttp3StreamContext()
+      "WebSocketConnection::getHttp3StreamContext()" — use \c setStreamContext() /
+      \c getStreamContext() instead
 
     @subsection websockethandler_v2_3 Version 2.3
     - fixed @ref WebSocketHandler::WebSocketHandler::sendAll() "WebSocketHandler::sendAll()" to apply
@@ -219,7 +292,7 @@ public class WebSocketConnection {
 
         bool async_mode = False;
         *AsyncSocketIo::AsyncSocketIoController async_ctrl;
-        *AsyncSocketIo::Http2StreamContext h2_ctx;
+        *AsyncSocketIo::AbstractStreamContext stream_ctx;
 
         #! Listener ID this connection belongs to
         string lid;
@@ -249,12 +322,54 @@ public class WebSocketConnection {
         self.async_ctrl = async_ctrl;
     }
 
-    setHttp2StreamContext(*AsyncSocketIo::Http2StreamContext ctx) {
-        self.h2_ctx = ctx;
+    #! Sets the stream context for WebSocket over HTTP/2 or HTTP/3
+    /** @param ctx the stream context, or @ref nothing to clear
+
+        @since WebSocketHandler 2.4
+    */
+    setStreamContext(*AsyncSocketIo::AbstractStreamContext ctx) {
+        self.stream_ctx = ctx;
     }
 
-    *AsyncSocketIo::Http2StreamContext getHttp2StreamContext() {
-        return h2_ctx;
+    #! Returns the stream context for WebSocket over HTTP/2 or HTTP/3
+    /** @return the stream context, or @ref nothing if not using HTTP/2 or HTTP/3 WebSocket
+
+        @since WebSocketHandler 2.4
+    */
+    *AsyncSocketIo::AbstractStreamContext getStreamContext() {
+        return stream_ctx;
+    }
+
+    #! Sets the HTTP/2 stream context
+    /** @deprecated Use @ref setStreamContext() instead
+    */
+    deprecated setHttp2StreamContext(*AsyncSocketIo::Http2StreamContext ctx) {
+        self.stream_ctx = ctx;
+    }
+
+    #! Returns the HTTP/2 stream context
+    /** @deprecated Use @ref getStreamContext() instead
+    */
+    deprecated *AsyncSocketIo::Http2StreamContext getHttp2StreamContext() {
+        return stream_ctx instanceof AsyncSocketIo::Http2StreamContext
+            ? cast<AsyncSocketIo::Http2StreamContext>(stream_ctx)
+            : NOTHING;
+    }
+
+    #! Sets the HTTP/3 stream context for WebSocket over QUIC (RFC 9220)
+    /** @deprecated Use @ref setStreamContext() instead
+    */
+    deprecated setHttp3StreamContext(*AsyncSocketIo::Http3StreamContext ctx) {
+        self.stream_ctx = ctx;
+    }
+
+    #! Returns the HTTP/3 stream context for WebSocket over QUIC (RFC 9220)
+    /** @deprecated Use @ref getStreamContext() instead
+    */
+    deprecated *AsyncSocketIo::Http3StreamContext getHttp3StreamContext() {
+        return stream_ctx instanceof AsyncSocketIo::Http3StreamContext
+            ? cast<AsyncSocketIo::Http3StreamContext>(stream_ctx)
+            : NOTHING;
     }
 
     bool isAsyncMode() {
@@ -954,16 +1069,17 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         #logDebug("websocket request: cx: %N", cx);
         #logDebug("websocket request: hdr: %N", hdr);
 
-        # RFC 8441: HTTP/2 WebSocket uses CONNECT with :protocol=websocket
-        bool is_http2_ws = cx."header-info".http2
-            && (cx."header-info".is_websocket_connect
-                || (hdr.method == "CONNECT" && hdr.":protocol" == "websocket"));
-        if (is_http2_ws) {
-            logDebug("HTTP/2 WebSocket CONNECT request received");
+        # RFC 8441 / RFC 9220: HTTP/2 or HTTP/3 WebSocket uses CONNECT with :protocol=websocket
+        bool is_extended_connect = is_websocket_extended_connect(cx, hdr);
+        if (is_extended_connect) {
+            bool is_http3 = cx."header-info".http3 ?? False;
+            logDebug("%s WebSocket CONNECT request received (RFC %s)",
+                is_http3 ? "HTTP/3" : "HTTP/2",
+                is_http3 ? "9220" : "8441");
 
             # Negotiate extensions if supported
             *hash<auto> ext_result = negotiateExtensions(hdr."sec-websocket-extensions");
-            # HTTP/2 header field names must be lowercase
+            # HTTP/2 and HTTP/3 header field names must be lowercase
             hash<auto> rhdr = {};
             if (hdr."sec-websocket-key") {
                 rhdr."sec-websocket-accept" = ws_get_response_key(hdr."sec-websocket-key");
@@ -980,7 +1096,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                 };
             }
 
-            # RFC 8441: Return 200 OK for HTTP/2 WebSocket CONNECT
+            # RFC 8441/9220: Return 200 OK for HTTP/2 or HTTP/3 WebSocket CONNECT
             return {
                 "code": 200,
                 "hdr": rhdr,
@@ -1044,15 +1160,21 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
     */
     bool startImpl(softstring lid, hash<auto> cx, hash<auto> hdr, Qore::Socket sock) {
         softstring cid = cx.id;
-        bool is_http2_ws = cx."header-info".http2
-            && (cx."header-info".is_websocket_connect
-                || (hdr.method == "CONNECT" && hdr.":protocol" == "websocket"));
-        int h2_stream_id = is_http2_ws ? cx."header-info".stream_id : -1;
+        bool is_extended_connect = is_websocket_extended_connect(cx, hdr);
+        bool is_http3 = is_extended_connect && (cx."header-info".http3 ?? False);
+        bool is_http2 = is_extended_connect && (cx."header-info".http2 ?? False);
+        int h2_stream_id = is_http2 ? cx."header-info".stream_id : -1;
+        int h3_session_id = is_http3 ? cx."header-info".session_id : -1;
+        int h3_stream_id = is_http3 ? cx."header-info".stream_id : -1;
         softstring exit_reason = "unknown";
-        @debug(bool h2_ws_debug_handler = is_http2_ws && getenv("QORE_HTTP2_WS_DEBUG_HANDLER"));
+        @debug(bool h2_ws_debug_handler = is_http2 && getenv("QORE_HTTP2_WS_DEBUG_HANDLER"));
         @debug {
             if (h2_ws_debug_handler) {
                 log(LoggerLevel::INFO, "HTTP/2 WS handler start: cid=%y stream_id=%d from %s:%d", cx.id, h2_stream_id,
+                    cx."peer-info".hostname_desc, cx."peer-info".port);
+            } else if (is_http3) {
+                logDebug("HTTP/3 WS handler start: cid=%y session_id=%d stream_id=%d from %s:%d",
+                    cx.id, h3_session_id, h3_stream_id,
                     cx."peer-info".hostname_desc, cx."peer-info".port);
             } else {
                 logDebug("WebSocketHandler::startImpl() cid: %y from %s:%d", cx.id, cx."peer-info".hostname_desc,
@@ -1060,7 +1182,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
             }
         }
         # Debug helper for HTTP/2 WS frame headers
-        @debug(bool h2_ws_debug_frames = is_http2_ws && getenv("QORE_HTTP2_WS_DEBUG_FRAMES"));
+        @debug(bool h2_ws_debug_frames = is_http2 && getenv("QORE_HTTP2_WS_DEBUG_FRAMES"));
         bool async_mode = cx."async_mode" ?? False;
         *AsyncSocketIo::AsyncSocketIoController async_ctrl;
         if (async_mode) {
@@ -1072,11 +1194,23 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         wsc.setSocket(sock);
         wsc.setListenerId(lid);
         wsc.setAsyncIo(async_mode, async_ctrl);
-        if (is_http2_ws) {
+        if (is_http2) {
             @assert(h2_stream_id > 0, "missing HTTP/2 stream id for WebSocket");
             # The WebSocket handler thread owns the socket exclusively and must read
             # HTTP/2 frames directly (no I/O thread is polling this connection)
-            wsc.setHttp2StreamContext(new AsyncSocketIo::Http2StreamContext(sock, h2_stream_id, True));
+            wsc.setStreamContext(new AsyncSocketIo::Http2StreamContext(sock, h2_stream_id, True));
+        } else if (is_http3) {
+            @assert(h3_session_id > 0, "missing HTTP/3 session id for WebSocket");
+            @assert(h3_stream_id >= 0, "missing HTTP/3 stream id for WebSocket");
+            # CONNECT response was already sent by HttpServer.qm before calling start()
+            # Create HTTP/3 stream context for WebSocket frame I/O
+            code<nothing()> wake = sub () {
+                if (async_ctrl) {
+                    async_ctrl.wake();
+                }
+            };
+            wsc.setStreamContext(new AsyncSocketIo::Http3StreamContext(
+                sock, h3_session_id, h3_stream_id, wake));
         }
 
         # Set negotiated extensions on the connection (stored by handleRequest)
@@ -1101,6 +1235,15 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         on_exit {
             #logDebug("WebSocketHandler::startImpl(): close connection: cid: %y from %s:%d", cx.id,
             #    cx."peer-info".hostname_desc, cx."peer-info".port);
+            # Close the stream context (no-op for HTTP/2; sends END_STREAM for HTTP/3)
+            try {
+                *AsyncSocketIo::AbstractStreamContext ctx = wsc.getStreamContext();
+                if (ctx) {
+                    ctx.close();
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                logError("exception closing WebSocket stream: %s", get_exception_string(ex));
+            }
             try {
                 deregisterConnectionImpl(wsc);
                 wsc.connectionClosed();
@@ -1121,7 +1264,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         data buf;
         # RSV bits from first frame for fragmented messages (RFC 7692 Section 6.2.1)
         hash<auto> first_frame_rsv;
-        binary http2_buf;
+        binary stream_buf;
         while (True) {
             #logDebug("WebSocketHandler::startImpl() loop cid: %y", cx.id);
             if (stop || lsh{lid} || wsc.stop_flag) {
@@ -1160,28 +1303,30 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                 }
                 hash<WsMsgInfo> h;
                 bool have_frame = False;
-                if (is_http2_ws && async_mode) {
-                    *AsyncSocketIo::Http2StreamContext h2_ctx = wsc.getHttp2StreamContext();
-                    *binary incoming = h2_ctx ? h2_ctx.readData() : sock.readHttp2StreamData(h2_stream_id);
+                if (is_extended_connect && async_mode) {
+                    # HTTP/2 and HTTP/3 WebSocket: read from stream context
+                    *AsyncSocketIo::AbstractStreamContext ctx = wsc.getStreamContext();
+                    *binary incoming = ctx ? ctx.readData() : NOTHING;
                     if (incoming) {
-                        http2_buf = http2_buf ? http2_buf + incoming : incoming;
+                        stream_buf = stream_buf ? stream_buf + incoming : incoming;
                     }
-                    # Check HTTP/2 WebSocket buffer size against limit
-                    if (max_message_size > 0 && http2_buf.size() > max_message_size) {
-                        logError("HTTP/2 WebSocket buffer size %d exceeds maximum %d",
-                            http2_buf.size(), max_message_size);
+                    # Check WebSocket buffer size against limit
+                    if (max_message_size > 0 && stream_buf.size() > max_message_size) {
+                        logError("%s WebSocket buffer size %d exceeds maximum %d",
+                            is_http3 ? "HTTP/3" : "HTTP/2",
+                            stream_buf.size(), max_message_size);
                         sendClose(wsc, sock, WSCC_MessageTooBig,
                             sprintf("message size exceeds %d byte limit", max_message_size));
                         exit_reason = "message-too-large";
                         break;
                     }
-                    int frame_len = getWsFrameLength(http2_buf);
-                    if (frame_len > 0) {
-                        binary frame = http2_buf.substr(0, frame_len);
-                        if (frame_len == http2_buf.size()) {
-                            remove http2_buf;
+                    *int frame_len = stream_buf ? ws_get_frame_size(stream_buf) : NOTHING;
+                    if (frame_len) {
+                        binary frame = stream_buf.substr(0, frame_len);
+                        if (frame_len == stream_buf.size()) {
+                            remove stream_buf;
                         } else {
-                            http2_buf = http2_buf.substr(frame_len);
+                            stream_buf = stream_buf.substr(frame_len);
                         }
                         h = ws_parse_frame(frame, sock.getEncoding());
                         have_frame = True;
@@ -1284,14 +1429,15 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                     h.masked ? " masked" : "", h.fin ? " FIN" : "", WebSocketHandler::getDataString(h.msg));
 
                 if (!h.masked) {
-                    if (!is_http2_ws) {
+                    if (!is_extended_connect) {
                         logError("unmasked client frame received");
                         sendClose(wsc, sock, WSCC_ProtocolError);
                         exit_reason = "protocol-error-unmasked";
                         break;
                     }
-                    # HTTP/2 WebSocket frames are not masked (RFC 8441)
-                    logDebug("unmasked client frame received on HTTP/2 WebSocket");
+                    # HTTP/2 and HTTP/3 WebSocket frames are not masked (RFC 8441/9220)
+                    logDebug("unmasked client frame received on %s WebSocket",
+                        is_http3 ? "HTTP/3" : "HTTP/2");
                 }
 
                 # Validate RSV bits; control frames must not use RSV bits per RFC 6455 / RFC 7692
@@ -1667,58 +1813,25 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         sendFrame(wsc, sock, frame);
     }
 
-    private int getWsFrameLength(*binary buf) {
-        # Fast length-only parse to avoid ws_parse_frame() exceptions and decoding overhead
-        # when we just need to know if the buffer contains a complete frame.
-        if (!buf || buf.size() < 2) {
-            return 0;
-        }
-
-        int pos = 0;
-        pos += 1;
-        int b1 = buf[pos++];
-        bool masked = (b1 & 0x80) ? True : False;
-        int len = b1 & 0x7f;
-
-        if (len == 126) {
-            if (buf.size() < pos + 2) {
-                return 0;
-            }
-            len = (buf[pos] << 8) | buf[pos + 1];
-            pos += 2;
-        } else if (len == 127) {
-            if (buf.size() < pos + 8) {
-                return 0;
-            }
-            len = 0;
-            for (int i = 0; i < 8; ++i) {
-                len = (len << 8) | buf[pos++];
-            }
-        }
-
-        if (masked) {
-            if (buf.size() < pos + 4) {
-                return 0;
-            }
-            pos += 4;
-        }
-
-        int total = pos + len;
-        if (buf.size() < total) {
-            return 0;
-        }
-        return total;
-    }
-
     private sendFrame(WebSocketConnection wsc, Socket sock, binary frame) {
-        *AsyncSocketIo::Http2StreamContext h2_ctx = wsc.getHttp2StreamContext();
-        if (h2_ctx) {
+        # HTTP/2 or HTTP/3 WebSocket: send via stream context with backpressure handling
+        *AsyncSocketIo::AbstractStreamContext ctx = wsc.getStreamContext();
+        if (ctx) {
+            string proto = ctx.getProtocol();
             int flow_control_retry = 0;
             while (True) {
                 try {
-                    h2_ctx.sendData(frame, False);
+                    ctx.sendData(frame, False);
                     break;
                 } catch (hash<ExceptionInfo> ex) {
+                    if (ex.err == "SOCKET-NOT-OPEN" || ex.err == "QUIC-ERROR"
+                            || ex.err == "QUIC-HTTP3-ERROR") {
+                        # QUIC-HTTP3-ERROR: Http3StreamContext.sendData() handles backpressure
+                        # internally, so any error that escapes is fatal (e.g., session gone,
+                        # stream reset)
+                        wsc.stop();
+                        return;
+                    }
                     if (ex.err == "HTTP2-ERROR" && ex.desc =~ /no HTTP\/2 session active/) {
                         @debug {
                             logDebug("HTTP/2 WS sendFrame: stream session inactive; stopping connection");
@@ -1726,15 +1839,16 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                         wsc.stop();
                         return;
                     }
-                    if (ex.err == "SOCKET-NOT-OPEN") {
+                    if (ex.err == "SOCKET-SSL-ERROR") {
+                        logError("%s WS sendFrame: SSL error; stopping: %s", proto.upr(), ex.desc);
                         wsc.stop();
                         return;
                     }
                     if (ex.err == "HTTP2-FLOW-CONTROL") {
                         if (wsc.stop_flag || ++flow_control_retry > FlowControlMaxRetries) {
                             if (!wsc.stop_flag) {
-                                logWarn("HTTP/2 WS sendFrame: flow control backpressure after %d retries, "
-                                    "frame dropped (%d bytes)", FlowControlMaxRetries, frame.size());
+                                logWarn("HTTP/2 WS sendFrame: backpressure after %d retries, frame dropped (%d bytes)",
+                                    FlowControlMaxRetries, frame.size());
                             }
                             return;
                         }
@@ -1746,12 +1860,6 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                             # Socket error during I/O pump - next sendData() will detect and handle
                         }
                         continue;
-                    }
-                    if (ex.err == "SOCKET-SSL-ERROR") {
-                        # SSL connection dead - stop gracefully
-                        logError("HTTP/2 WS sendFrame: SSL error; stopping: %s", ex.desc);
-                        wsc.stop();
-                        return;
                     }
                     throw ex.err, ex.desc, ex.arg;
                 }

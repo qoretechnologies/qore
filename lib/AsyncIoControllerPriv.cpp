@@ -1112,6 +1112,8 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
 
                 if (result.ex_hash || result.timed_out || result.completed) {
                     // Operation finished (error, timeout, or completed)
+                    // Clean up extra fds before unregistering main socket
+                    unregisterExtraFds(result.key, xsink);
                     unregisterFromEventLoop(result.key, xsink);
 
                     // Build result hash (buildResultHash does refSelf on ex_hash)
@@ -1163,6 +1165,8 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                         if (!*xsink && poll_sock) {
                             updateEventLoopRegistration(result.key, poll_sock, sock_hash, events,
                                 xsink);
+                            // Update extra fd registrations
+                            updateExtraFds(result.key, poll_sock, result.new_poll_info, xsink);
                         }
 
                         // Update poll deadline
@@ -1781,6 +1785,61 @@ void AsyncIoControllerPriv::applyEventUnion(QoreObject* socket, const std::strin
             s->deref(xsink);
         }
         registered_events[sock_hash] = union_events;
+    }
+}
+
+void AsyncIoControllerPriv::updateExtraFds(const std::string& key, QoreObject* socket,
+        QoreHashNode* poll_info, ExceptionSink* xsink) {
+    std::unordered_set<int> new_fds;
+
+    // Parse extra_fds from poll_info
+    QoreValue v = poll_info->getKeyValue("extra_fds");
+    if (v.getType() == NT_LIST) {
+        QoreListNode* list = v.get<QoreListNode>();
+        ConstListIterator li(list);
+        while (li.next()) {
+            QoreHashNode* h = li.getValue().get<QoreHashNode>();
+            int fd = (int)h->getKeyValue("fd").getAsBigInt();
+            new_fds.insert(fd);
+        }
+    }
+
+    auto& prev_fds = key_extra_fds[key];
+
+    // Remove stale fds (were registered before, not in new set)
+    for (int fd : prev_fds) {
+        if (!new_fds.count(fd)) {
+            loop->remove(fd, xsink);
+        }
+    }
+
+    // Add new fds (not previously registered)
+    // Use the Socket QoreObject* as udata so the event dispatch code
+    // marks the same socket hash as ready, waking up continuePoll()
+    for (int fd : new_fds) {
+        if (!prev_fds.count(fd)) {
+            int ev_flags = QORE_EV_READ;  // InputStreams only need read
+            loop->add(fd, ev_flags, socket, xsink);
+            if (*xsink) {
+                return;
+            }
+        }
+    }
+
+    if (new_fds.empty()) {
+        key_extra_fds.erase(key);
+    } else {
+        prev_fds = std::move(new_fds);
+    }
+}
+
+void AsyncIoControllerPriv::unregisterExtraFds(const std::string& key, ExceptionSink* xsink) {
+    auto it = key_extra_fds.find(key);
+    if (it != key_extra_fds.end()) {
+        for (int fd : it->second) {
+            loop->remove(fd, xsink);
+        }
+        key_extra_fds.erase(it);
     }
 }
 

@@ -291,6 +291,21 @@ public:
     DLLEXPORT QoreHashNode* sendHttp2Connect(const char* path, const QoreHashNode* headers,
         const char* protocol, QoreHashNode* info, ExceptionSink* xsink);
 
+    //! Sends an HTTP/3 extended CONNECT request (RFC 9220) and waits for the response
+    /** @param path the request path
+        @param headers request headers
+        @param protocol the :protocol pseudo-header value (e.g., "websocket")
+        @param info optional reference to a hash to receive connection info
+        @param xsink if an error occurs, the Qore-language exception information will be added here
+        @return response hash with headers and stream_id, or nullptr on error
+
+        @note This method is used for WebSocket over HTTP/3 (RFC 9220)
+
+        @since %Qore 2.2
+    */
+    DLLEXPORT QoreHashNode* sendHttp3Connect(const char* path, const QoreHashNode* headers,
+        const char* protocol, QoreHashNode* info, ExceptionSink* xsink);
+
     //! Sends data on an HTTP/2 stream
     /** @param stream_id the stream ID to send data on
         @param data the data to send
@@ -347,6 +362,33 @@ public:
         @since %Qore 2.3
     */
     DLLEXPORT bool isHttp2DataAvailable(int32_t stream_id, int timeout_ms, ExceptionSink* xsink);
+
+    //! Sends data on an HTTP/3 extended CONNECT stream (bidirectional tunnel)
+    /** @param stream_id the stream ID (from sendHttp3Connect())
+        @param data the data to send (or nullptr for end-of-stream only)
+        @param end_stream if true, signals end of stream (no more data will be sent)
+        @param timeout_ms timeout in milliseconds
+        @param xsink if an error occurs, the Qore-language exception information will be added here
+        @return 0 on success, -1 on error
+
+        @note This is used for bidirectional streaming protocols like WebSocket over HTTP/3
+
+        @since %Qore 2.2
+    */
+    DLLEXPORT int sendHttp3StreamData(int64_t stream_id, const BinaryNode* data,
+        bool end_stream, int timeout_ms, ExceptionSink* xsink);
+
+    //! Reads data from an HTTP/3 extended CONNECT stream (bidirectional tunnel)
+    /** @param stream_id the stream ID (from sendHttp3Connect())
+        @param timeout_ms timeout in milliseconds for polling
+        @param xsink if an error occurs, the Qore-language exception information will be added here
+        @return binary data read, or nullptr if no data available or error
+
+        @note This is used for bidirectional streaming protocols like WebSocket over HTTP/3
+
+        @since %Qore 2.2
+    */
+    DLLEXPORT BinaryNode* readHttp3StreamData(int64_t stream_id, int timeout_ms, ExceptionSink* xsink);
 
     //! Sets the HTTP/3 protocol mode
     /** @param mode the HTTP/3 mode: HTTP3_MODE_DISABLED, HTTP3_MODE_AUTO, or HTTP3_MODE_REQUIRED

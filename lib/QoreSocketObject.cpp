@@ -32,10 +32,12 @@
 
 #include <qore/Qore.h>
 #include <qore/QoreSocketObject.h>
+#include <qore/InputStream.h>
 #include "qore/intern/qore_socket_private.h"
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/QC_SSLCertificate.h"
 #include "qore/intern/QC_SSLPrivateKey.h"
+#include "qore/intern/Http2Session.h"
 
 QoreSocketObject::QoreSocketObject(QoreSocket* s, QoreSSLCertificate* cert, QoreSSLPrivateKey* pk)
         : priv(new my_socket_priv(s, cert, pk)) {
@@ -786,6 +788,32 @@ int QoreSocketObject::submitHttp2StreamingResponseHeaders(int32_t stream_id, int
     return priv->socket->submitHttp2StreamingResponseHeaders(stream_id, status_code, headers, xsink);
 }
 
+int QoreSocketObject::submitHttp2StreamingResponseWithStream(int32_t stream_id, int status_code,
+        const QoreHashNode* headers, InputStream* body, ExceptionSink* xsink) {
+    AutoLocker al(priv->m);
+    Http2Session* session = priv->socket->priv->h2_session.get();
+    if (!session) {
+        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session available");
+        return -1;
+    }
+
+    // Submit response headers without END_STREAM
+    int rv = priv->socket->submitHttp2StreamingResponseHeaders(stream_id, status_code, headers, xsink);
+    if (rv) {
+        return rv;
+    }
+
+    // Transfer ownership of InputStream to the session for I/O thread reading
+    // The handler thread unassigns before calling; I/O thread will reassign on first read
+    body->unassignThread(xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    session->setStreamInputStream(stream_id, body, xsink);
+    return *xsink ? -1 : 0;
+}
+
 // NOTE: readHttp2StreamDataBlock does NOT acquire priv->m because it blocks
 // during I/O (waiting for HTTP/2 stream data with timeout).  Holding the
 // object mutex during a blocking wait would prevent other threads from
@@ -1257,6 +1285,24 @@ bool QoreSocketObject::isQuicGoawayReceived(int64_t session_id, ExceptionSink* x
     return session->isGoawayReceived();
 }
 
+QoreObject* QoreSocketObject::getQuicPeerCertificate(int64_t session_id, ExceptionSink* xsink) {
+    AutoLocker al(priv->m);
+    qore_socket_private* sp = qore_socket_private::get(*priv->socket);
+    std::shared_ptr<QuicSession> session = sp->getQuicSession(session_id);
+    if (!session) {
+        xsink->raiseException("QUIC-SESSION-ERROR",
+            "no QUIC session with id %lld on this socket", (long long)session_id);
+        return nullptr;
+    }
+    // getPeerCertificate() returns X509* with refcount incremented (SSL_get_peer_certificate);
+    // QoreSSLCertificate takes ownership
+    X509* cert = session->getPeerCertificate();
+    if (!cert) {
+        return nullptr;
+    }
+    return new QoreObject(QC_SSLCERTIFICATE, getProgram(), new QoreSSLCertificate(cert));
+}
+
 int QoreSocketObject::submitQuicResponseStreaming(int64_t session_id, int64_t stream_id,
         int status_code, const QoreHashNode* headers, ExceptionSink* xsink) {
     AutoLocker al(priv->m);
@@ -1295,6 +1341,26 @@ int QoreSocketObject::submitQuicStreamData(int64_t session_id, int64_t stream_id
     return session->sendStreamData(stream_id, data, len, end_stream, xsink);
 }
 
+void QoreSocketObject::setQuicStreamInputStream(int64_t session_id, int64_t stream_id,
+        InputStream* body, ExceptionSink* xsink) {
+    AutoLocker al(priv->m);
+    qore_socket_private* sp = qore_socket_private::get(*priv->socket);
+    std::shared_ptr<QuicSession> session = sp->getQuicSession(session_id);
+    if (!session) {
+        xsink->raiseException("QUIC-ERROR", "no QUIC session with id %lld on this socket",
+            (long long)session_id);
+        return;
+    }
+
+    // Unassign InputStream from handler thread so I/O thread can claim it
+    body->unassignThread(xsink);
+    if (*xsink) {
+        return;
+    }
+
+    session->setStreamInputStream(stream_id, body, xsink);
+}
+
 int QoreSocketObject::waitForQuicStreamDrain(int64_t session_id, int64_t stream_id,
         int timeout_ms, ExceptionSink* xsink) {
     // Look up the session with a brief lock, then release it before waiting.
@@ -1312,6 +1378,44 @@ int QoreSocketObject::waitForQuicStreamDrain(int64_t session_id, int64_t stream_
         return -1;
     }
     return session->waitForStreamDrain(stream_id, timeout_ms);
+}
+
+int QoreSocketObject::submitQuicConnectResponse(int64_t session_id, int64_t stream_id,
+        int status_code, const QoreHashNode* headers, ExceptionSink* xsink) {
+    AutoLocker al(priv->m);
+    qore_socket_private* sp = qore_socket_private::get(*priv->socket);
+    std::shared_ptr<QuicSession> session = sp->getQuicSession(session_id);
+    if (!session) {
+        xsink->raiseException("QUIC-ERROR", "no QUIC session with id %lld on this socket",
+            (long long)session_id);
+        return -1;
+    }
+
+    // Convert headers hash to std::map
+    strcase_str_map_t hdr_map;
+    if (headers) {
+        ConstHashIterator hi(headers);
+        while (hi.next()) {
+            QoreStringValueHelper val(hi.get());
+            hdr_map[hi.getKey()] = val->c_str();
+        }
+    }
+
+    return session->submitConnectResponse(stream_id, status_code, hdr_map, xsink);
+}
+
+QoreValue QoreSocketObject::readQuicConnectStreamData(int64_t session_id, int64_t stream_id,
+        ExceptionSink* xsink) {
+    AutoLocker al(priv->m);
+    qore_socket_private* sp = qore_socket_private::get(*priv->socket);
+    std::shared_ptr<QuicSession> session = sp->getQuicSession(session_id);
+    if (!session) {
+        xsink->raiseException("QUIC-ERROR", "no QUIC session with id %lld on this socket",
+            (long long)session_id);
+        return QoreValue();
+    }
+
+    return session->readConnectStreamData(stream_id, xsink);
 }
 
 bool my_socket_priv::hasQuicSession() const {

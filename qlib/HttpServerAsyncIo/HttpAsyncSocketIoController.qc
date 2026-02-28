@@ -51,6 +51,10 @@ public enum HttpConnectionState : string {
     Http3 = "http3",
     #! HTTP/3 sending response
     Http3Sending = "http3_sending",
+    #! Sending HTTP/1.x InputStream response + idle wait + read next header
+    SendStreamAndReadHeader = "send_stream_and_read_header",
+    #! Sending HTTP/1.x InputStream response (no keep-alive, close after send)
+    SendStreamResponse = "send_stream_response",
 }
 
 #! HTTP poll operation type
@@ -1146,41 +1150,54 @@ public class HttpAsyncSocketIoController {
 
         if (result.code && !result.streaming) {
             try {
-                if (result.input_stream) {
-                    # HTTP/3: stream InputStream incrementally via deferred data reader
+                # Pollable InputStream (e.g. FileInputStream): submit to I/O thread
+                if (result.input_stream && result.input_stream.supportsNonBlockingIo()) {
+                    hash<auto> resp_hdr = result.hdr ?? {};
+                    remove resp_hdr."Transfer-Encoding";
+                    cinfo.sock.submitQuicStreamingResponseWithStream(
+                        session_id, stream_id, result.code, resp_hdr, result.input_stream);
+                    controllers[cinfo.controller_idx].wake();
+                } else if (result.input_stream) {
+                    # Non-pollable InputStream: handler thread reads chunks and submits
+                    # them incrementally to the QUIC session with backpressure
+                    hash<auto> resp_hdr = result.hdr ?? {};
+                    remove resp_hdr."Transfer-Encoding";
+                    cinfo.sock.submitQuicResponseStreaming(
+                        session_id, stream_id, result.code, resp_hdr);
+                    controllers[cinfo.controller_idx].wake();
+
                     result.input_stream.reassignThread();
                     on_exit result.input_stream.unassignThread();
-                    cinfo.sock.submitQuicResponseStreaming(session_id, stream_id,
-                        result.code, result.hdr);
-                    controllers[cinfo.controller_idx].wake();
+                    bool stream_ok = True;
                     try {
-                        while (True) {
-                            *binary chunk = result.input_stream.read(65536);
-                            if (!chunk) {
-                                cinfo.sock.submitQuicStreamData(session_id, stream_id,
-                                    NOTHING, True);
+                        while (*binary chunk = result.input_stream.read(65536)) {
+                            int retries = 0;
+                            while (cinfo.sock.submitQuicStreamData(
+                                    session_id, stream_id, chunk) == 1) {
+                                if (++retries > 200) {
+                                    throw "HTTP3-FLOW-CONTROL", sprintf("stream %d: buffer "
+                                        "not draining after %d retries", stream_id, retries);
+                                }
                                 controllers[cinfo.controller_idx].wake();
-                                break;
-                            }
-                            # Handle backpressure: wait for the I/O thread to drain the
-                            # stream buffer via condition variable (no polling)
-                            while (cinfo.sock.submitQuicStreamData(session_id, stream_id,
-                                    chunk, False) == 1) {
-                                controllers[cinfo.controller_idx].wake();
-                                cinfo.sock.waitForQuicStreamDrain(session_id, stream_id, 5s);
+                                # CV-based wait: wakes immediately when I/O thread drains
+                                # the buffer, falls back to 50ms timeout otherwise
+                                cinfo.sock.waitForQuicStreamDrain(
+                                    session_id, stream_id, 50ms);
                             }
                             controllers[cinfo.controller_idx].wake();
                         }
+                        cinfo.sock.submitQuicStreamData(
+                            session_id, stream_id, NOTHING, True);
+                        controllers[cinfo.controller_idx].wake();
                     } catch (hash<ExceptionInfo> ex) {
+                        stream_ok = False;
                         log(LoggerLevel::ERROR,
-                            "Error reading InputStream for HTTP/3 session=%d stream=%d "
-                            "on %y: %s: %s",
-                            session_id, stream_id, uh, ex.err, ex.desc);
+                            "HTTP/3 non-pollable stream error session=%d stream=%d on "
+                            "%y: %s: %s", session_id, stream_id, uh, ex.err, ex.desc);
                         try {
                             cinfo.sock.cancelQuicStream(session_id, stream_id);
                             controllers[cinfo.controller_idx].wake();
                         } catch () {}
-                        return;
                     }
                 } else {
                     cinfo.sock.submitQuicResponse(session_id, stream_id, result.code,
@@ -1482,6 +1499,19 @@ public class HttpAsyncSocketIoController {
                 timeout = milliseconds(cinfo.ttl) + AsyncSocketIoController::DefaultIoOperationTimeout;
                 break;
             }
+            case HttpConnectionState::SendStreamAndReadHeader: {
+                if (!cinfo.stream_op) return;
+                op = cinfo.stream_op;
+                # TTL covers idle wait after stream send; safety margin covers send + header-read phases
+                timeout = milliseconds(cinfo.ttl) + AsyncSocketIoController::DefaultIoOperationTimeout;
+                break;
+            }
+            case HttpConnectionState::SendStreamResponse: {
+                if (!cinfo.stream_op) return;
+                op = cinfo.stream_op;
+                timeout = AsyncSocketIoController::DefaultIoOperationTimeout;
+                break;
+            }
             default:
                 log(LoggerLevel::ERROR, "Unknown connection state %y for %s", cinfo.state, uh);
                 return;
@@ -1694,6 +1724,40 @@ public class HttpAsyncSocketIoController {
                 }
                 break;
             }
+            case HttpConnectionState::SendStreamAndReadHeader: {
+                # Fused InputStream stream send + idle + read header operation
+                AbstractPollOperation fused_op = result.spop;
+                string state = fused_op.getState();
+                if (state == "stream-complete") {
+                    # Headers fully read — dispatch to handler
+                    hash<auto> output = fused_op.getOutput();
+                    handleHeaderComplete(uh, cinfo, output);
+                } else if (state == "timeout") {
+                    # Idle timeout expired
+                    handleIdleTimeout(uh, cinfo);
+                } else {
+                    # Error or unexpected state — close connection
+                    handleConnectionClosed(uh, cinfo);
+                }
+                break;
+            }
+            case HttpConnectionState::SendStreamResponse: {
+                # Non-fused InputStream stream send (close on completion)
+                AbstractPollOperation send_op = result.spop;
+                string state = send_op.getState();
+                if (state == "stream-complete") {
+                    # Send complete — close connection as requested
+                    try { cinfo.sock.close(); } catch () {}
+                    {
+                        AutoWriteLock al(m);
+                        remove connections{uh};
+                    }
+                } else {
+                    # Error or unexpected state — close connection
+                    handleConnectionClosed(uh, cinfo);
+                }
+                break;
+            }
             default: {
                 log(LoggerLevel::ERROR, "Unhandled connection state %y for %y", orig_state, uh);
                 handleConnectionClosed(uh, cinfo);
@@ -1815,6 +1879,72 @@ public class HttpAsyncSocketIoController {
         string uh = sock.uniqueHash();
         # Preserve the I/O thread assignment from the original connection
         int cidx = linfo.controller_idx ?? 0;
+
+        # Opt #3a: InputStream + keep-alive → fused stream send + idle + read header
+        if (result.code && !result.streaming && result.input_stream && !result.send_callback
+                && !result.close && result.return_to_idle && result.hdr."Content-Length") {
+            try {
+                string status_msg = result.status_message ?? "Unknown";
+                timeout ttl = result.ttl ?? DefaultIdleTimeout;
+                AbstractPollOperation fused_op =
+                    sock.startPollSendHttpResponseWithStreamAndReadHeader(
+                        result.code, status_msg, "1.1", result.hdr ?? {},
+                        result.input_stream, int(result.hdr."Content-Length"), ttl);
+                hash<HttpActiveConnectionInfo> new_cinfo = <HttpActiveConnectionInfo>{
+                    "sock": sock,
+                    "listener": linfo.listener,
+                    "cx": cx,
+                    "target": target,
+                    "state": HttpConnectionState::SendStreamAndReadHeader,
+                    "stream_op": fused_op,
+                    "ttl": ttl,
+                };
+                hash<HttpActiveConnectionInfo> cinfo;
+                {
+                    AutoWriteLock al(m);
+                    new_cinfo.controller_idx = cidx;
+                    cinfo = connections{uh} = new_cinfo;
+                }
+                submitConnectionOp(uh, cinfo);
+            } catch (hash<ExceptionInfo> ex) {
+                log(LoggerLevel::ERROR, "Error starting fused stream send+read for %y: %s: %s",
+                    uh, ex.err, ex.desc);
+                try { sock.close(); } catch () {}
+            }
+            return;
+        }
+
+        # Opt #3b: InputStream + close → non-fused stream send
+        if (result.code && !result.streaming && result.input_stream && !result.send_callback
+                && result.close && result.hdr."Content-Length") {
+            try {
+                string status_msg = result.status_message ?? "Unknown";
+                AbstractPollOperation send_op =
+                    sock.startPollSendHttpResponseWithStream(
+                        result.code, status_msg, "1.1", result.hdr ?? {},
+                        result.input_stream, int(result.hdr."Content-Length"));
+                hash<HttpActiveConnectionInfo> new_cinfo = <HttpActiveConnectionInfo>{
+                    "sock": sock,
+                    "listener": linfo.listener,
+                    "cx": cx,
+                    "target": target,
+                    "state": HttpConnectionState::SendStreamResponse,
+                    "stream_op": send_op,
+                };
+                hash<HttpActiveConnectionInfo> cinfo;
+                {
+                    AutoWriteLock al(m);
+                    new_cinfo.controller_idx = cidx;
+                    cinfo = connections{uh} = new_cinfo;
+                }
+                submitConnectionOp(uh, cinfo);
+            } catch (hash<ExceptionInfo> ex) {
+                log(LoggerLevel::ERROR, "Error starting stream send for %y: %s: %s",
+                    uh, ex.err, ex.desc);
+                try { sock.close(); } catch () {}
+            }
+            return;
+        }
 
         # Opt #3: Use fused send+idle+read operation when possible
         # This bypasses the blocking sendHTTPResponse() on the handler thread and
@@ -2294,45 +2424,57 @@ public class HttpAsyncSocketIoController {
         # send operation which would conflict with h2op's non-blocking mode management.
         if (result.code && !result.streaming) {
             try {
-                # For InputStream responses, read all data first (InputStream may have
-                # thread affinity, so we read it on the handler thread)
-                *data body = result.body;
+                # For pollable InputStream responses (e.g. FileInputStream): submit headers
+                # and let the I/O thread stream body non-blockingly
+                if (result.input_stream && result.input_stream.supportsNonBlockingIo()) {
+                    log(LoggerLevel::DEBUG, "HTTP/2 stream %d: submitting pollable InputStream response (CL=%y)",
+                        stream_id, result.hdr."Content-Length");
+                    hash<auto> resp_hdr = result.hdr ?? {};
+                    remove resp_hdr."Transfer-Encoding";
+                    cinfo.sock.submitHttp2StreamingResponseWithStream(
+                        stream_id, result.code, resp_hdr, result.input_stream);
+                    controllers[cinfo.controller_idx].wake();
+                    return;
+                }
+
+                # Non-pollable InputStream (e.g. CallbackInputStream): the handler thread
+                # reads chunks and submits them incrementally to the H2 session.
+                # These Qore-level InputStreams cannot be passed to the I/O thread
+                # because the QoreObject may be destroyed before the I/O thread reads.
                 if (result.input_stream) {
+                    hash<auto> resp_hdr = result.hdr ?? {};
+                    remove resp_hdr."Transfer-Encoding";
+                    cinfo.sock.submitHttp2StreamingResponseHeaders(
+                        stream_id, result.code, resp_hdr);
+                    controllers[cinfo.controller_idx].wake();
+
                     result.input_stream.reassignThread();
                     on_exit result.input_stream.unassignThread();
-                    # Read all chunks then build the body (binary += is amortized O(1))
-                    list<binary> chunks();
-                    try {
+                    while (*binary chunk = result.input_stream.read(65536)) {
+                        int retries = 0;
                         while (True) {
-                            *binary chunk = result.input_stream.read(65536);
-                            if (!chunk) {
+                            try {
+                                cinfo.sock.sendHttp2StreamData(stream_id, chunk);
+                                controllers[cinfo.controller_idx].wake();
                                 break;
+                            } catch (hash<ExceptionInfo> ex) {
+                                if (ex.err == "HTTP2-FLOW-CONTROL" && ++retries <= 200) {
+                                    # Buffer full — wake I/O thread to drain, wait briefly
+                                    controllers[cinfo.controller_idx].wake();
+                                    usleep(50ms);
+                                    continue;
+                                }
+                                rethrow;
                             }
-                            push chunks, chunk;
                         }
-                        if (chunks) {
-                            body = binary();
-                            map body += $1, chunks;
-                        }
-                    } catch (hash<ExceptionInfo> ex) {
-                        # InputStream read failed (e.g. callback error); send 500 error
-                        # response since no HEADERS have been submitted to nghttp2 yet
-                        log(LoggerLevel::ERROR,
-                            "Error reading InputStream for HTTP/2 stream=%d on %y: %s: %s",
-                            stream_id, uh, ex.err, ex.desc);
-                        try {
-                            cinfo.sock.submitHttp2Response(stream_id, 500,
-                                {"content-type": "text/plain"},
-                                sprintf("Internal Server Error: %s: %s", ex.err, ex.desc));
-                            controllers[cinfo.controller_idx].wake();
-                        } catch (hash<ExceptionInfo> ex2) {
-                            log(LoggerLevel::ERROR,
-                                "Error sending HTTP/2 error response for stream=%d on %y: %s: %s",
-                                stream_id, uh, ex2.err, ex2.desc);
-                        }
-                        return;
                     }
+                    cinfo.sock.sendHttp2StreamData(stream_id, NOTHING, True);
+                    controllers[cinfo.controller_idx].wake();
+                    return;
                 }
+
+                # In-memory response body
+                *data body = result.body;
 
                 # Submit response to nghttp2 session (thread-safe)
                 cinfo.sock.submitHttp2Response(stream_id, result.code, result.hdr, body);

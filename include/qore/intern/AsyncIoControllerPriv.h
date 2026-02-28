@@ -293,6 +293,11 @@ private:
     std::unordered_map<std::string, int> key_events;                 //!< key -> events for this key
     std::unordered_map<std::string, std::unordered_set<std::string>> sock_hash_to_keys; //!< reverse index
 
+    //! Extra fd tracking: operation key -> set of registered extra fds
+    /** @since %Qore 2.3
+    */
+    std::unordered_map<std::string, std::unordered_set<int>> key_extra_fds;
+
     // --- Internal methods ---
 
     //! Start the I/O thread (caller must hold lock)
@@ -324,6 +329,17 @@ private:
 
     //! Unregister an operation from the EventLoop
     DLLLOCAL void unregisterFromEventLoop(const std::string& key, ExceptionSink* xsink);
+
+    //! Update extra fd registrations for an operation
+    /** @since %Qore 2.3
+    */
+    DLLLOCAL void updateExtraFds(const std::string& key, QoreObject* socket,
+        QoreHashNode* poll_info, ExceptionSink* xsink);
+
+    //! Unregister extra fds for an operation
+    /** @since %Qore 2.3
+    */
+    DLLLOCAL void unregisterExtraFds(const std::string& key, ExceptionSink* xsink);
 
     //! Compute the event union for a socket
     DLLLOCAL int computeEventUnion(const std::string& sock_hash) const;

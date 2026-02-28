@@ -6096,6 +6096,346 @@ QoreValue SocketSendAndReadHeaderPollOperation::getOutput() const {
     return header_output.release();
 }
 
+SocketSendStreamAndReadHeaderPollOperation::SocketSendStreamAndReadHeaderPollOperation(ExceptionSink* xsink,
+        BinaryNode* hdr_data, QoreSocketObject* sock, InputStream* is, int64 content_length,
+        int64 idle_timeout_ms, bool fused)
+        : SocketPollSocketOperationBase(sock), header_data(hdr_data),
+          hdr_buf(reinterpret_cast<const char*>(hdr_data->getPtr())),
+          hdr_size(hdr_data->size()),
+          input_stream(is),
+          content_length(content_length),
+          fused(fused),
+          idle_timeout_ms(idle_timeout_ms), header_output(xsink) {
+
+    // Cache pollable descriptor info
+    stream_fd = is->getPollableDescriptor();
+    if (stream_fd < 0) {
+        is_pollable = false;
+    }
+
+    AutoLocker al(sock->priv->m);
+
+    // Throw an exception and exit if the object is no longer open or valid
+    if (sock->priv->checkOpen(xsink)) {
+        return;
+    }
+
+    if (!sock->priv->setNonBlock(xsink)) {
+        poll_state.reset(sock->priv->socket->startSend(xsink, hdr_buf, hdr_size));
+        if (!poll_state) {
+            sock->priv->clearNonBlock();
+        } else {
+            set_non_block = true;
+        }
+    }
+}
+
+const char* SocketSendStreamAndReadHeaderPollOperation::getStateImpl() const {
+    switch (phase) {
+        case Phase::SendHeaders: return "sending-headers";
+        case Phase::StreamBody: return "streaming-body";
+        case Phase::Idle: return "idle";
+        case Phase::ReadingHeader: return "reading-header";
+        case Phase::Complete: return "stream-complete";
+        case Phase::Timeout: return "timeout";
+        case Phase::Error: return "error";
+        default: return "unknown";
+    }
+}
+
+QoreHashNode* SocketSendStreamAndReadHeaderPollOperation::continuePoll(ExceptionSink* xsink) {
+    SafeLocker al(sock->priv->m);
+    if (sock->priv->checkOpen(xsink)) {
+        phase = Phase::Error;
+        return nullptr;
+    }
+
+    while (true) {
+        switch (phase) {
+            case Phase::SendHeaders: {
+                if (!poll_state) {
+                    phase = Phase::Error;
+                    return nullptr;
+                }
+                // Drive the send poll state
+                int rc = poll_state->continuePoll(xsink);
+                if (*xsink) {
+                    phase = Phase::Error;
+                    poll_state.reset();
+                    return nullptr;
+                }
+                if (rc) {
+                    // Need more I/O for sending
+                    return getSocketPollInfoHash(xsink, rc);
+                }
+                // Send complete — free send data and poll state, transition to StreamBody
+                poll_state.reset();
+                header_data.discard();
+                phase = Phase::StreamBody;
+                // If stream body has data to send, continue immediately
+                continue;
+            }
+
+            case Phase::StreamBody: {
+                // Handle InputStream thread reassignment (must be outside socket lock)
+                if (need_reassign) {
+                    need_reassign = false;
+                    al.unlock();
+                    if (input_stream) {
+                        input_stream->reassignThread(xsink);
+                        if (*xsink) {
+                            phase = Phase::Error;
+                            return nullptr;
+                        }
+                    }
+                    al.relock();
+                    if (sock->priv->checkOpen(xsink)) {
+                        phase = Phase::Error;
+                        return nullptr;
+                    }
+                }
+
+                // If we have a chunk currently being sent, drive the send
+                if (poll_state) {
+                    int rc = poll_state->continuePoll(xsink);
+                    if (*xsink) {
+                        phase = Phase::Error;
+                        poll_state.reset();
+                        return nullptr;
+                    }
+                    if (rc) {
+                        // Need more I/O for sending the current chunk
+                        if (is_pollable && stream_fd >= 0) {
+                            std::vector<std::pair<int, int>> extra_fds{{stream_fd, SOCK_POLLIN}};
+                            return getSocketPollInfoHash(xsink, rc, extra_fds);
+                        }
+                        return getSocketPollInfoHash(xsink, rc);
+                    }
+                    // Chunk sent successfully
+                    poll_state.reset();
+                    bytes_sent += current_chunk->size();
+                    current_chunk = nullptr;
+                }
+
+                // Check if we've sent all the data
+                if (bytes_sent >= content_length) {
+                    // All data sent; unassign InputStream thread
+                    if (input_stream) {
+                        input_stream->unassignThread(xsink);
+                        input_stream = nullptr;
+                    }
+                    if (fused) {
+                        phase = Phase::Idle;
+                        return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+                    }
+                    // Non-fused: complete
+                    sock->priv->clearNonBlock();
+                    set_non_block = false;
+                    phase = Phase::Complete;
+                    return nullptr;
+                }
+
+                // Read the next chunk from InputStream
+                int64 remaining = content_length - bytes_sent;
+                int64 chunk_size = remaining < 65536 ? remaining : 65536;
+
+                if (is_pollable) {
+                    // Non-blocking read for pollable streams.
+                    // Use inline poll(0) to check if data is available without blocking,
+                    // then readNonBlock() to get the data. This distinguishes:
+                    // - poll ready + readNonBlock returns 0 → true EOF
+                    // - poll not ready → would block, yield to event loop
+                    assert(stream_fd >= 0);
+                    struct pollfd pfd;
+                    pfd.fd = stream_fd;
+                    pfd.events = POLLIN;
+                    pfd.revents = 0;
+                    int poll_rv = ::poll(&pfd, 1, 0);
+                    if (poll_rv < 0) {
+                        xsink->raiseException("HTTP-STREAM-ERROR",
+                            "poll() on stream fd failed: %s", strerror(errno));
+                        phase = Phase::Error;
+                        return nullptr;
+                    }
+                    if (poll_rv == 0) {
+                        // Stream not ready — register fd with event loop
+                        std::vector<std::pair<int, int>> extra_fds{{stream_fd, SOCK_POLLIN}};
+                        return getSocketPollInfoHash(xsink, SOCK_POLLIN, extra_fds);
+                    }
+
+                    // Stream FD is readable — do non-blocking read
+                    SimpleRefHolder<BinaryNode> chunk(new BinaryNode);
+                    chunk->preallocate(chunk_size);
+                    int64 count = input_stream->readNonBlock(
+                        const_cast<void*>(chunk->getPtr()), chunk_size, xsink);
+                    if (*xsink) {
+                        phase = Phase::Error;
+                        return nullptr;
+                    }
+                    if (count <= 0) {
+                        // poll said readable but readNonBlock returned 0 → true EOF
+                        if (input_stream) {
+                            input_stream->unassignThread(xsink);
+                            input_stream = nullptr;
+                        }
+                        if (bytes_sent < content_length) {
+                            xsink->raiseException("HTTP-STREAM-ERROR",
+                                "InputStream EOF after " QLLD " bytes but Content-Length is " QLLD,
+                                bytes_sent, content_length);
+                            phase = Phase::Error;
+                            return nullptr;
+                        }
+                        // bytes_sent == content_length: normal completion
+                        if (fused) {
+                            phase = Phase::Idle;
+                            return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+                        }
+                        sock->priv->clearNonBlock();
+                        set_non_block = false;
+                        phase = Phase::Complete;
+                        return nullptr;
+                    }
+                    chunk->setSize(count);
+                    current_chunk = chunk.release();
+                } else {
+                    // Non-pollable (memory streams) — readHelper never blocks
+                    current_chunk = input_stream->readHelper(chunk_size, xsink);
+                    if (*xsink) {
+                        phase = Phase::Error;
+                        return nullptr;
+                    }
+                    if (!current_chunk) {
+                        // EOF from non-pollable InputStream
+                        if (input_stream) {
+                            input_stream->unassignThread(xsink);
+                            input_stream = nullptr;
+                        }
+                        if (bytes_sent < content_length) {
+                            xsink->raiseException("HTTP-STREAM-ERROR",
+                                "InputStream provided " QLLD " bytes but Content-Length is " QLLD,
+                                bytes_sent, content_length);
+                            phase = Phase::Error;
+                            return nullptr;
+                        }
+                        // bytes_sent == content_length: normal completion
+                        if (fused) {
+                            phase = Phase::Idle;
+                            return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+                        }
+                        sock->priv->clearNonBlock();
+                        set_non_block = false;
+                        phase = Phase::Complete;
+                        return nullptr;
+                    }
+                }
+
+                // Start sending the chunk
+                poll_state.reset(sock->priv->socket->startSend(xsink,
+                    reinterpret_cast<const char*>(current_chunk->getPtr()), current_chunk->size()));
+                if (*xsink || !poll_state) {
+                    phase = Phase::Error;
+                    return nullptr;
+                }
+                // Drive the send immediately
+                continue;
+            }
+
+            case Phase::Idle: {
+                // Check idle timeout
+                int us;
+                int64 now_s = q_epoch_us(us);
+                int64 now_ms = now_s * 1000 + us / 1000;
+                if (idle_timeout_ms > 0 && now_ms > idle_timeout_ms) {
+                    phase = Phase::Timeout;
+                    sock->priv->clearNonBlock();
+                    set_non_block = false;
+                    return nullptr;
+                }
+                // Data is available (we were woken by POLLIN) — transition to header reading
+                poll_state.reset(sock->priv->socket->startRecvUntilBytes(xsink, "\r\n\r\n", 4));
+                if (*xsink || !poll_state) {
+                    phase = Phase::Error;
+                    sock->priv->clearNonBlock();
+                    set_non_block = false;
+                    return nullptr;
+                }
+                phase = Phase::ReadingHeader;
+            }
+            // fall through to drive header read immediately
+
+            case Phase::ReadingHeader: {
+                if (!poll_state) {
+                    phase = Phase::Error;
+                    return nullptr;
+                }
+                int rc = poll_state->continuePoll(xsink);
+                if (*xsink) {
+                    phase = Phase::Error;
+                    poll_state.reset();
+                    sock->priv->clearNonBlock();
+                    set_non_block = false;
+                    return nullptr;
+                }
+                if (rc) {
+                    // Need more I/O for header reading
+                    return getSocketPollInfoHash(xsink, rc);
+                }
+                // Header read complete — parse it
+                SimpleRefHolder<BinaryNode> raw(poll_state->takeOutput().get<BinaryNode>());
+                poll_state.reset();
+
+                // Convert binary to string for HTTP header parsing
+                size_t len = raw->size();
+                char* buf = reinterpret_cast<char*>(raw->giveBuffer());
+                char* nbuf = reinterpret_cast<char*>(q_realloc(buf, len + 1));
+                if (!nbuf) {
+                    free(buf);
+                    xsink->outOfMemory();
+                    phase = Phase::Error;
+                    sock->priv->clearNonBlock();
+                    set_non_block = false;
+                    return nullptr;
+                }
+                nbuf[len] = '\0';
+                SimpleRefHolder<QoreStringNode> hdrstr(
+                    new QoreStringNode(nbuf, len, len + 1, sock->getEncoding()));
+
+                // Parse HTTP headers
+                ReferenceHolder<QoreHashNode> info(new QoreHashNode(autoTypeInfo), xsink);
+                ReferenceHolder<QoreHashNode> hdr(
+                    sock->priv->socket->priv->processHttpHeaderString(xsink, hdrstr,
+                        *info, QORE_SOURCE_SOCKET), xsink);
+                if (*xsink) {
+                    phase = Phase::Error;
+                    sock->priv->clearNonBlock();
+                    set_non_block = false;
+                    return nullptr;
+                }
+
+                // Store result for getOutput()
+                header_output = new QoreHashNode(autoTypeInfo);
+                header_output->setKeyValue("hdr", hdr.release(), xsink);
+                header_output->setKeyValue("info", info.release(), xsink);
+
+                // Clear non-block mode now that we're done
+                sock->priv->clearNonBlock();
+                set_non_block = false;
+
+                phase = Phase::Complete;
+                return nullptr;
+            }
+
+            default:
+                return nullptr;
+        }
+    }
+}
+
+QoreValue SocketSendStreamAndReadHeaderPollOperation::getOutput() const {
+    AutoLocker al(sock->priv->m);
+    return header_output.release();
+}
+
 #include "qore/intern/Http2Session.h"
 
 SocketHttp2ServerPollOperation::SocketHttp2ServerPollOperation(ExceptionSink* xsink, QoreSocketObject* sock)
@@ -6246,9 +6586,21 @@ QoreHashNode* SocketHttp2ServerPollOperation::continuePoll(ExceptionSink* xsink)
                 }
                 // Try to receive data
                 int rv = h2_session->receiveData(0, xsink);
+                printd(5, "H2S_READING: receiveData rv=%d hasActiveIS=%d\n",
+                    rv, h2_session->hasActiveStreamInputStreams());
                 if (*xsink) {
                     return nullptr;
                 }
+                // Read from any pending InputStreams and submit data to session
+                // (must happen regardless of receiveData result — handler threads
+                // may have registered InputStreams via submitHttp2StreamingResponseWithStream)
+                if (h2_session->hasActiveStreamInputStreams()) {
+                    h2_session->processStreamInputStreams(xsink);
+                    if (*xsink) {
+                        return nullptr;
+                    }
+                }
+
                 if (rv == -1) {
                     // Would block on recv - also try to send pending response data
                     // (responses may have been queued by handler threads via submitResponse)
@@ -6261,8 +6613,16 @@ QoreHashNode* SocketHttp2ServerPollOperation::continuePoll(ExceptionSink* xsink)
                     }
                     // Always read; add write if there are pending sends
                     int events = SOCK_POLLIN;
-                    if (h2_session->hasPendingData() || h2_session->wantWrite()) {
+                    if (h2_session->hasPendingData() || h2_session->wantWrite()
+                            || h2_session->hasActiveStreamInputStreams()) {
                         events |= SOCK_POLLOUT;
+                    }
+
+                    // Collect extra fds from active pollable InputStreams
+                    std::vector<std::pair<int, int>> extra_fds;
+                    h2_session->getExtraFds(extra_fds);
+                    if (!extra_fds.empty()) {
+                        return getSocketPollInfoHash(xsink, events, extra_fds);
                     }
                     return getSocketPollInfoHash(xsink, events);
                 }

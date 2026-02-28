@@ -34,6 +34,7 @@
 
 #include "qore/common.h"
 #include "qore/intern/QuicCommon.h"
+#include <qore/InputStream.h>
 
 #include <ngtcp2/ngtcp2.h>
 #include <ngtcp2/ngtcp2_crypto.h>
@@ -85,6 +86,14 @@ struct QuicStreamInfo {
     std::string error_message;  //!< non-empty if stream terminated with error
     //! true if stream received data in 0-RTT (for server-side logging/auditing)
     bool received_0rtt_data = false;
+
+    //! RFC 9220: Value of :protocol pseudo-header (e.g., "websocket")
+    std::string connect_protocol;
+    //! RFC 9220: True if this is a CONNECT request with :protocol
+    bool is_connect = false;
+    //! RFC 9220: True if this stream is a CONNECT tunnel that must stay in streams_
+    //! after being dispatched (so h3RecvDataCallback can route tunnel data)
+    bool connect_tunnel_active = false;
 };
 
 //! Per-stream body data for sending via nghttp3 data reader callback
@@ -99,10 +108,10 @@ struct QuicBodyData {
     available, and nghttp3_conn_resume_stream() is called when new data arrives.
 */
 struct QuicStreamingBodyData {
-    std::vector<uint8_t> data;   //!< buffered chunk data
-    size_t offset = 0;           //!< read offset into data
-    bool eof = false;            //!< InputStream signaled EOF
-    bool deferred = false;       //!< WOULDBLOCK returned, waiting for resume
+    std::vector<uint8_t> data;       //!< buffered chunk data (staging area)
+    std::vector<uint8_t> send_buf;   //!< data given to nghttp3 (stable pointer lifetime)
+    bool eof = false;                //!< InputStream signaled EOF
+    bool deferred = false;           //!< WOULDBLOCK returned, waiting for resume
 };
 
 class qore_socket_private;
@@ -171,6 +180,10 @@ public:
         @param local_addrlen length of local_addr
         @param remote_addr remote socket address (resolved)
         @param remote_addrlen length of remote_addr
+        @param ssl_verify_mode SSL verification mode for server certificate
+        @param enable_0rtt enable 0-RTT early data
+        @param client_cert optional client certificate for mutual TLS (mTLS)
+        @param client_pk optional client private key for mutual TLS (mTLS)
     */
     DLLLOCAL static std::shared_ptr<QuicSession> createClient(
         qore_socket_private* sock, ExceptionSink* xsink,
@@ -178,7 +191,9 @@ public:
         const struct sockaddr* local_addr, socklen_t local_addrlen,
         const struct sockaddr* remote_addr, socklen_t remote_addrlen,
         int ssl_verify_mode = SSL_VERIFY_NONE,
-        bool enable_0rtt = false);
+        bool enable_0rtt = false,
+        QoreSSLCertificate* client_cert = nullptr,
+        QoreSSLPrivateKey* client_pk = nullptr);
 
     //! Factory: create a server QUIC session
     /** @param sock the underlying socket
@@ -191,7 +206,11 @@ public:
         @param remote_addr remote socket address (from recvfrom)
         @param remote_addrlen length of remote_addr
         @param dispatcher optional datagram dispatcher for CID-based routing (multi-connection)
-        @param shared_ssl_ctx optional shared SSL_CTX for session ticket key continuity (0-RTT)
+        @param shared_ssl_ctx optional shared SSL_CTX for session ticket key continuity (0-RTT);
+            ignored when ssl_verify_mode != SSL_VERIFY_NONE (mTLS requires per-session context)
+        @param ssl_verify_mode SSL verification mode for client certificates (default: SSL_VERIFY_NONE);
+            set to SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT for mutual TLS
+        @param ssl_accept_all_certs if true, accept all client certificates including self-signed
     */
     DLLLOCAL static std::shared_ptr<QuicSession> createServer(
         qore_socket_private* sock, ExceptionSink* xsink,
@@ -200,7 +219,9 @@ public:
         const struct sockaddr* local_addr, socklen_t local_addrlen,
         const struct sockaddr* remote_addr, socklen_t remote_addrlen,
         QoreDatagramDispatcher* dispatcher = nullptr,
-        SSL_CTX* shared_ssl_ctx = nullptr);
+        SSL_CTX* shared_ssl_ctx = nullptr,
+        int ssl_verify_mode = SSL_VERIFY_NONE,
+        bool ssl_accept_all_certs = false);
 
     ~QuicSession();
 
@@ -261,6 +282,31 @@ public:
     DLLLOCAL int64_t submitRequest(const char* method, const char* path,
                           const strcase_str_map_t& headers,
                           const void* body, size_t body_len, ExceptionSink* xsink);
+
+    //! Submit an HTTP/3 streaming request (client side, headers only)
+    /** Opens a new bidirectional stream with a deferred data reader; body data is
+        fed incrementally via sendStreamData().
+
+        @param method HTTP method (e.g. "POST")
+        @param path request path
+        @param headers request headers (Host is converted to :authority)
+        @param xsink exception sink
+        @return stream ID on success, -1 on error
+    */
+    DLLLOCAL int64_t submitRequestStreaming(const char* method, const char* path,
+                          const strcase_str_map_t& headers, ExceptionSink* xsink);
+
+    //! Submit trailers on a streaming HTTP/3 request or response
+    /** Must be called after the last sendStreamData() call (with end_stream=false).
+        Signals EOF on the stream and sends trailers.
+
+        @param stream_id the HTTP/3 stream ID
+        @param trailers trailer header name/value pairs
+        @param xsink exception sink
+        @return 0 on success, -1 on error
+    */
+    DLLLOCAL int submitTrailers(int64_t stream_id, const strcase_str_map_t& trailers,
+                       ExceptionSink* xsink);
 
     //! Submit an HTTP/3 response (server side)
     DLLLOCAL int submitResponse(int64_t stream_id, int status_code,
@@ -457,11 +503,67 @@ public:
         const struct sockaddr* new_remote, socklen_t new_remote_len,
         ExceptionSink* xsink);
 
+    //! Get the peer (client) certificate after TLS handshake completes
+    /** Returns the peer's X.509 certificate (with incremented reference count).
+        Caller must call X509_free() on the returned certificate.
+        @return peer certificate, or nullptr if no peer certificate was presented
+    */
+    DLLLOCAL X509* getPeerCertificate() const;
+
     //! Get unique session ID (assigned at creation)
     DLLLOCAL int64_t getSessionId() const { return session_id_; }
 
     //! Get the server CID (only valid for server sessions)
     DLLLOCAL const ngtcp2_cid& getScid() const { return scid_; }
+
+    //! Submit a response for an extended CONNECT request (RFC 9220)
+    /** Used to accept WebSocket over HTTP/3 connections.  Sends response headers
+        without END_STREAM, keeping the stream open for bidirectional data transfer.
+
+        @param stream_id Stream ID for the CONNECT request
+        @param status_code HTTP status code (200 to accept, 4xx to reject)
+        @param headers Response headers
+        @param xsink Exception sink for error reporting
+        @return 0 on success, -1 on error
+    */
+    DLLLOCAL int submitConnectResponse(int64_t stream_id, int status_code,
+        const strcase_str_map_t& headers, ExceptionSink* xsink);
+
+    //! Read buffered data from an extended CONNECT stream (RFC 9220)
+    /** Returns data received on the bidirectional tunnel.
+
+        @param stream_id the HTTP/3 stream ID
+        @param xsink exception sink
+        @return binary data if available, or QoreValue() (NOTHING) if no data
+    */
+    DLLLOCAL QoreValue readConnectStreamData(int64_t stream_id, ExceptionSink* xsink);
+
+    //! Returns true if extended CONNECT protocol is enabled locally (server)
+    DLLLOCAL bool isExtendedConnectSupported() const {
+        return is_server_;  // Server always enables via setupHttp3()
+    }
+
+    //! Returns true if remote SETTINGS have been received and enable_connect_protocol was not set
+    /** Used by the client to detect servers that don't support extended CONNECT (RFC 9220).
+    */
+    DLLLOCAL bool isExtendedConnectRejected() const {
+        return remote_settings_received_.load(std::memory_order_acquire)
+            && !remote_enable_connect_protocol_.load(std::memory_order_acquire);
+    }
+
+    //! Submit a client-side extended CONNECT request (RFC 9220)
+    /** Opens a bidirectional stream and sends a CONNECT request with the :protocol
+        pseudo-header.  Uses a deferred data provider so the stream stays open for
+        bidirectional tunnel data (e.g., WebSocket frames).
+
+        @param path the request path (e.g., "/" or "/ws")
+        @param headers additional request headers
+        @param protocol the :protocol pseudo-header value (e.g., "websocket")
+        @param xsink exception sink
+        @return the stream ID on success, or -1 on error
+    */
+    DLLLOCAL int64_t submitConnectRequest(const char* path, const strcase_str_map_t& headers,
+        const char* protocol, ExceptionSink* xsink);
 
     //! Cancel a QUIC stream (send RESET_STREAM + STOP_SENDING)
     /** @param stream_id the stream to cancel
@@ -521,6 +623,47 @@ public:
         return goaway_max_stream_id_;
     }
 
+    //! Info about an InputStream being streamed on an HTTP/3 response
+    /** @since %Qore 2.3
+    */
+    struct StreamInputStreamInfo {
+        SimpleRefHolder<InputStream> input_stream;
+        int stream_fd = -1;
+        bool is_pollable = false;
+        bool need_reassign = true;
+        bool eof = false;
+
+        StreamInputStreamInfo() = default;
+        StreamInputStreamInfo(InputStream* is)
+            : input_stream(is), stream_fd(is->getPollableDescriptor()),
+              is_pollable(stream_fd >= 0) {}
+    };
+
+    //! Store an InputStream for a stream (I/O thread will read from it)
+    /** @since %Qore 2.3
+    */
+    DLLLOCAL void setStreamInputStream(int64_t stream_id, InputStream* is, ExceptionSink* xsink);
+
+    //! Returns true if there are active InputStreams being processed
+    /** @since %Qore 2.3
+    */
+    DLLLOCAL bool hasActiveStreamInputStreams() const;
+
+    //! Process one chunk from each active InputStream (called by I/O thread)
+    /** @since %Qore 2.3
+    */
+    DLLLOCAL void processStreamInputStreams(ExceptionSink* xsink);
+
+    //! Clean up all InputStreams (called on session destruction)
+    /** @since %Qore 2.3
+    */
+    DLLLOCAL void cleanupStreamInputStreams(ExceptionSink* xsink);
+
+    //! Get extra fds for all active pollable InputStreams
+    /** @since %Qore 2.3
+    */
+    DLLLOCAL void getExtraFds(std::vector<std::pair<int, int>>& extra_fds) const;
+
 private:
     DLLLOCAL QuicSession();
 
@@ -530,7 +673,9 @@ private:
                    const struct sockaddr* local_addr, socklen_t local_addrlen,
                    const struct sockaddr* remote_addr, socklen_t remote_addrlen,
                    int ssl_verify_mode = SSL_VERIFY_NONE,
-                   bool enable_0rtt = false);
+                   bool enable_0rtt = false,
+                   QoreSSLCertificate* client_cert = nullptr,
+                   QoreSSLPrivateKey* client_pk = nullptr);
 
     //! Initialize server-side connection
     DLLLOCAL int initServer(qore_socket_private* sock, ExceptionSink* xsink,
@@ -539,19 +684,33 @@ private:
                    const struct sockaddr* local_addr, socklen_t local_addrlen,
                    const struct sockaddr* remote_addr, socklen_t remote_addrlen,
                    QoreDatagramDispatcher* dispatcher,
-                   SSL_CTX* shared_ssl_ctx = nullptr);
+                   SSL_CTX* shared_ssl_ctx = nullptr,
+                   int ssl_verify_mode = SSL_VERIFY_NONE,
+                   bool ssl_accept_all_certs = false);
 
     //! Set up SSL_CTX for client
-    DLLLOCAL int setupClientSslCtx(const char* host, int ssl_verify_mode, ExceptionSink* xsink);
+    /** @param host remote hostname for TLS SNI
+        @param ssl_verify_mode SSL verification mode for server certificate
+        @param xsink exception sink
+        @param client_cert optional client certificate for mutual TLS (mTLS)
+        @param client_pk optional client private key for mutual TLS (mTLS)
+    */
+    DLLLOCAL int setupClientSslCtx(const char* host, int ssl_verify_mode, ExceptionSink* xsink,
+                          QoreSSLCertificate* client_cert = nullptr,
+                          QoreSSLPrivateKey* client_pk = nullptr);
 
     //! Set up SSL_CTX for server with certificate and private key
-    /** @param cert X.509 certificate (used only when shared_ssl_ctx is nullptr)
-        @param pk private key (used only when shared_ssl_ctx is nullptr)
+    /** @param cert X.509 certificate (used only when shared_ssl_ctx is nullptr or mTLS)
+        @param pk private key (used only when shared_ssl_ctx is nullptr or mTLS)
         @param xsink exception sink
-        @param shared_ssl_ctx optional shared SSL_CTX for session ticket key continuity
+        @param shared_ssl_ctx optional shared SSL_CTX for session ticket key continuity;
+            ignored when ssl_verify_mode != SSL_VERIFY_NONE (mTLS requires per-session context)
+        @param ssl_verify_mode SSL verification mode for client certificates
     */
     DLLLOCAL int setupServerSslCtx(QoreSSLCertificate* cert, QoreSSLPrivateKey* pk,
-                          ExceptionSink* xsink, SSL_CTX* shared_ssl_ctx = nullptr);
+                          ExceptionSink* xsink, SSL_CTX* shared_ssl_ctx = nullptr,
+                          int ssl_verify_mode = SSL_VERIFY_NONE,
+                          bool ssl_accept_all_certs = false);
 
     //! Get timer expiry without locking (caller must hold mtx_)
     DLLLOCAL ngtcp2_tstamp getExpiryLocked() const;
@@ -716,6 +875,11 @@ private:
                                          uint64_t datalen, void* conn_user_data,
                                          void* stream_user_data);
 
+    //! HTTP/3 SETTINGS received callback — detects enable_connect_protocol
+    DLLLOCAL static int h3RecvSettings2Callback(nghttp3_conn* conn,
+                                                const nghttp3_proto_settings* settings,
+                                                void* conn_user_data);
+
     //! HTTP/3 shutdown (GOAWAY) callback — invoked when remote sends GOAWAY
     DLLLOCAL static int h3ShutdownCallback(nghttp3_conn* conn, int64_t id,
                                            void* conn_user_data);
@@ -773,6 +937,25 @@ private:
 
     //! Streaming body data for incremental sending (used by data reader callback)
     std::unordered_map<int64_t, QuicStreamingBodyData> streaming_body_data_;
+
+    //! InputStream storage for I/O thread streaming (set by handler, read by I/O thread)
+    /** @since %Qore 2.3
+    */
+    std::unordered_map<int64_t, StreamInputStreamInfo> stream_input_streams_;
+
+    //! Atomic flag for lock-free hasActiveStreamInputStreams() checks in the I/O hot path
+    std::atomic<bool> has_active_input_streams_{false};
+
+    //! Per-stream receive buffer for extended CONNECT bidirectional tunnel data
+    /** WebSocket frames received from client, separate from normal request body.
+        Protected by connect_data_mutex_.
+    */
+    std::unordered_map<int64_t, std::vector<uint8_t>> connect_stream_data_;
+    std::mutex connect_data_mutex_;  //!< protects connect_stream_data_
+
+    //! Remote peer settings for extended CONNECT (RFC 9220)
+    std::atomic<bool> remote_enable_connect_protocol_{false};
+    std::atomic<bool> remote_settings_received_{false};
 
     //! Stream data received before HTTP/3 layer is initialized (buffered for replay)
     struct BufferedStreamData {

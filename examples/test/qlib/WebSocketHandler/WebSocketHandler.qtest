@@ -13,6 +13,7 @@
 %requires ../../../../qlib/WebSocketUtil.qm
 %requires ../../../../qlib/WebSocketHandler.qm
 %requires ../../../../qlib/WebSocketClient.qm
+%requires ../../../../qlib/AsyncSocketIo
 
 %exec-class WebSocketHandlerTest
 
@@ -232,6 +233,7 @@ class WebSocketHandlerTest inherits QUnit::Test {
         addTestCase("extension tests", \extensionTests());
         addTestCase("extension negative tests", \extensionNegativeTests());
         addTestCase("sendAll extension tests", \sendAllExtensionTests());
+        addTestCase("stream context API tests", \streamContextApiTests());
 
         logger = new Logger("test", m_options.verbose > 3 ? LoggerLevel::LevelDebug : LoggerLevel::LevelInfo);
         if (m_options.verbose > 2) {
@@ -685,6 +687,55 @@ class WebSocketHandlerTest inherits QUnit::Test {
             wsc1.send("ECHO " + large_msg);
             assertEq(" " + large_msg, msgs1.get(5s));
         }
+    }
+
+    streamContextApiTests() {
+        # Test the unified AbstractStreamContext API on WebSocketConnection
+        WebSocketConnection wsc(wsHandler);
+
+        # Initially, no stream context should be set
+        assertNothing(wsc.getStreamContext(), "no stream context initially");
+
+        # Test setStreamContext with NOTHING
+        wsc.setStreamContext(NOTHING);
+        assertNothing(wsc.getStreamContext(), "setStreamContext(NOTHING) clears context");
+
+        # Create a real HTTP/2 stream context to test the polymorphic API
+        # We need a connected TCP socket for Http2StreamContext
+        Socket server_sock();
+        server_sock.bind("localhost:0");
+        server_sock.listen();
+        int svr_port = server_sock.getSocketInfo().port;
+
+        Socket client_sock();
+        client_sock.connect("localhost:" + svr_port);
+        Socket accepted_sock = server_sock.accept();
+        on_exit {
+            try { client_sock.close(); } catch () {}
+            try { accepted_sock.close(); } catch () {}
+            try { server_sock.close(); } catch () {}
+        }
+
+        # Create Http2StreamContext with the connected socket
+        auto h2_ctx = new AsyncSocketIo::Http2StreamContext(accepted_sock, 1);
+        assertTrue(h2_ctx instanceof AsyncSocketIo::AbstractStreamContext,
+            "Http2StreamContext is an AbstractStreamContext");
+        assertEq("http2", h2_ctx.getProtocol(), "Http2StreamContext.getProtocol() returns 'http2'");
+        assertEq(1, h2_ctx.getStreamId(), "Http2StreamContext.getStreamId()");
+        assertTrue(h2_ctx.isOpen(), "Http2StreamContext.isOpen() on open socket");
+
+        # Test setStreamContext/getStreamContext with Http2StreamContext
+        wsc.setStreamContext(h2_ctx);
+        *AsyncSocketIo::AbstractStreamContext retrieved = wsc.getStreamContext();
+        assertEq(True, exists retrieved, "getStreamContext() returns the context");
+        assertEq("http2", retrieved.getProtocol(), "retrieved context protocol is http2");
+
+        # Test close() on Http2StreamContext (should be a no-op, not throw)
+        h2_ctx.close();
+
+        # Clear and verify
+        wsc.setStreamContext(NOTHING);
+        assertNothing(wsc.getStreamContext(), "context cleared after setStreamContext(NOTHING)");
     }
 
     private log(string str) {

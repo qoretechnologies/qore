@@ -1,0 +1,239 @@
+#!/usr/bin/env qore
+
+# @file websocket-h3-echo.qr WebSocket over HTTP/3 echo server and client example
+
+/*  websocket-h3-echo.qr Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# This example demonstrates WebSocket communication over HTTP/3 (RFC 9220).
+#
+# It starts a local HttpServer with a QUIC (HTTP/3) listener and a WebSocket
+# echo handler, then connects a WebSocketClient over HTTP/3 and exchanges
+# text and binary messages.
+#
+# Usage:
+#   qore websocket-h3-echo.qr
+#
+# The script uses a hardcoded self-signed certificate for TLS (required by QUIC).
+# No external services are needed.
+
+%requires HttpServer
+%requires WebSocketHandler
+%requires WebSocketClient
+
+# Self-signed test certificate (localhost, valid 10 years)
+const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIUahuuRGDlubXWYmiPhjVeT66vtNYwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MDIyMjE5MjIwMVoXDTM2MDIy
+MDE5MjIwMVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEAjZNfLFUyyo02MjZjouaR11FybkZNwDWBG/bhkpTVyj/x
+QKlwKf20LbGSCmMIYHaFnODMg6u6E6sfRJVk+ofwVHBN/Ug+mvoL1zlNJanMdXLH
+7oUsUILY6bVUDPm1ACZmFJsAc9jfHfkluJ6vfYG+DOJbyB0nsMfO9/fvrwndQPUQ
+k9eMq2VfDohni4ijk5BWD/P9UmrciZUNOaNISay469Le5ZrtfGt9An1+Ye3TckJC
+tTF4q7+V+GC88w5QtLd1AMQGf/1ax5cwqQv9SSFvhnwj9o3V3Wkz1dq4XA/9rSA1
+ecPHh/tJeGuvbD11Hyr9LTYjQ+DIel0DV0ZDHdc5vwIDAQABo1MwUTAdBgNVHQ4E
+FgQUYBBsVylVinbbAzTbUt0jRM6mJvwwHwYDVR0jBBgwFoAUYBBsVylVinbbAzTb
+Ut0jRM6mJvwwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAfIAE
+EPvLO+gOnm366xJabLr2Sw3hfmvCq/zSTlPcrB9jdBlOLpMmKcdGiOOCNmzg9+BX
+YNX+I6+MNOGp0j3afWlVwEjiMD66ydSMPEQw0FTzvpIjFN3fHo/MJzFbingRLrk8
+LCo94GmjMBYG+50M8MCKE6EzqfmoYT9fiMJcyJwwdptOWf0URNYKKrG1wRlX4+o8
+uNjQ3VwynI95fAw9WcR/ZtP0pkmCor/hKaYgVRsSGjD78Fu0Uuhm/pCAOuObpEHj
+5eoTlaWC3pZzGA67piqlEDOWiRi9Mo2CzG0t5fmQ83KB51ImauKdYB21whxjkZ+5
+BjwMC4hqSD+bzO2B+A==
+-----END CERTIFICATE-----";
+
+const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCNk18sVTLKjTYy
+NmOi5pHXUXJuRk3ANYEb9uGSlNXKP/FAqXAp/bQtsZIKYwhgdoWc4MyDq7oTqx9E
+lWT6h/BUcE39SD6a+gvXOU0lqcx1csfuhSxQgtjptVQM+bUAJmYUmwBz2N8d+SW4
+nq99gb4M4lvIHSewx8739++vCd1A9RCT14yrZV8OiGeLiKOTkFYP8/1SatyJlQ05
+o0hJrLjr0t7lmu18a30CfX5h7dNyQkK1MXirv5X4YLzzDlC0t3UAxAZ//VrHlzCp
+C/1JIW+GfCP2jdXdaTPV2rhcD/2tIDV5w8eH+0l4a69sPXUfKv0tNiND4Mh6XQNX
+RkMd1zm/AgMBAAECggEAATo1WYTgPK75DiS4PBR5UDS7DryvoN/LNOsGLUdQC9b+
+aEaacSrAvKKs9vJr2KuTtfahn0SbsjRKFZtL9aYRuHxZbhLfGWiF4MGflcOBQRq+
+eVFl6clwnaS+S/cq5rZD1/WODUhkisslqhI/cubvNwe2rvyduE510LgxYkLuIZ7a
++SCQz1XyPyhb8eVrWIZiprufjqXvDy01MC74l3ZYqaq1hr1oKi0ZDHI95Os7gtwQ
+4HQ3qdJsmYfbaf1223REp8gybnshsxkyjhKRU3nG7ZvgrRRMFkJvfHZ8VcS3cvsK
+ccKBJg7376+VDtc+RHUcBMyVZ881y4Rq2t6ssYVJVQKBgQDFq+N7ZGKOtQChSIXn
+ju/gP5WzSKJFaZhdkSggHi1K+PkuCZ1SXzKD3CPibreSUx9hzoZAAmTjzOfwhVZ7
+5HDqhrKfkWNeThAdXlglhNX5LVKhhmBsNGawANO8Pmq+pueWhK/76XgiGcOknyt6
+NH1ZE/QZpFeZB2binEhf6leYGwKBgQC3WgF2eaj2c4pugq13oZ9BHms5nsbYQgj8
+1H2C1wsgJNiz4tq6xFdvjiaw+r1OrCFrl9nz7npFc7uohtrRxXr7sq5nwMPO3QAP
+VxzyZ/TFP/FI70Avz6x+xX7HIlptpQ1mWacsdrvtoIG1c8veEJTyA4JgjoMhdDer
+JuPze+ZHLQKBgAzuLIhCzcul/W+Pberyx7A0mJdMtgiyWpwsRaKsNqxD0xD24gqk
+XYqQmOxT78Arnc7pEpEXVwArxDRQlJKwI87DluWnPgfKNXWmWT/DC7gsBc65Go+Z
+ceorc65JqvPjuRx4e4aQBCK+6rRXESICUvzDuGEBBhXljQ5fyMA1dRtnAoGAQSFH
+w74Ttvf0BK2G0SgoWglkLWOpXsiWSLlynDenTBPKppu+9vkn1gi41cU72eZrOL0I
+Pw5HgMRLtOGyeTGdLiuaqGBhLepzSv+22KT03dyI6U+TjWhH7gBZuIMLfEdVKzZN
+nA3RU+fgK4SmtotNXWrBtWrqScfuvm1iK+unMUECgYBrwc1rU/GI9tH4MWvBX99n
+pmFneeIUuXJajOsh7jUyTxcrHl+4kkgHDExuFMNPHfrIG8xCj43fjzxD/spz3xRS
++Ki3i3lYOFNhTUCREt5Xx23hkksK6j7SYlfY0IV2UruWt/UubpsfEqxC1Uk07NTo
+l50Xb2GWQesIt9k5jF5IOw==
+-----END PRIVATE KEY-----";
+
+# --- Echo WebSocket connection ------------------------------------------------
+
+class EchoWsConnection inherits WebSocketConnection {
+    constructor(WebSocketHandler handler) : WebSocketConnection(handler) {
+    }
+
+    gotMessage(string msg) {
+        send(msg);
+    }
+
+    gotMessage(binary msg) {
+        send(msg);
+    }
+}
+
+# --- Echo WebSocket handler ---------------------------------------------------
+
+class EchoWsHandler inherits WebSocketHandler {
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new EchoWsConnection(self);
+    }
+
+    logError(string fmt) {
+        vprintf("ERROR " + fmt + "\n", argv);
+    }
+
+    logInfo(string fmt) {
+        vprintf("INFO " + fmt + "\n", argv);
+    }
+
+    logDebug(string fmt) {
+        # uncomment for verbose debugging
+        #vprintf("DEBUG " + fmt + "\n", argv);
+    }
+
+    logWarn(string fmt) {
+        vprintf("WARN " + fmt + "\n", argv);
+    }
+}
+
+# --- Main program -------------------------------------------------------------
+
+sub main() {
+    # Create HTTP server with WebSocket echo handler in async mode
+    EchoWsHandler ws_handler();
+    HttpServer server(<HttpServerOptionInfo>{
+        "debug": True,
+        "async_mode": True,
+    });
+
+    server.setHandler("ws-handler", "", NOTHING, ws_handler);
+    server.setDefaultHandler("ws-handler", ws_handler);
+    server.waitForAsyncIo();
+
+    # Add a QUIC (HTTP/3) listener with TLS certificate
+    hash<auto> h3info = server.addListener(<HttpListenerOptionInfo>{
+        "service": 0,            # let the OS pick a port
+        "cert": new SSLCertificate(CertPem),
+        "key": new SSLPrivateKey(KeyPem),
+        "enable_h3": True,
+    });
+    server.waitForAsyncIo();
+    int port = h3info.port;
+    printf("HTTP/3 WebSocket echo server listening on port %d\n\n", port);
+
+    # --- Client side ---
+
+    # Set up message tracking
+    list<string> received_messages = ();
+    Mutex msg_lock();
+    Counter msg_counter(3);  # expecting 3 echo messages
+    bool counter_done = False;
+
+    code callback = sub (*data msg) {
+        if (!exists msg) {
+            return;
+        }
+        {
+            msg_lock.lock();
+            on_exit msg_lock.unlock();
+            received_messages += msg.typeCode() == NT_BINARY
+                ? sprintf("binary(%d bytes)", msg.size())
+                : string(msg);
+            if (!counter_done) {
+                msg_counter.dec();
+                if (msg_counter.getCount() == 0) {
+                    counter_done = True;
+                }
+            }
+        }
+    };
+
+    # Connect using HTTP/3 (http3_mode: "required" forces HTTP/3 via QUIC)
+    WebSocketClient ws(callback, {
+        "url": "wss://localhost:" + port,
+        "http3_mode": "required",
+        "ssl_verify_cert": False,
+    });
+
+    printf("Connecting WebSocket client over HTTP/3...\n");
+    ws.connect();
+
+    # Check which protocol is in use
+    *hash<auto> info = ws.getConnectionInfo();
+    if (info.http3) {
+        printf("Connected via HTTP/3 WebSocket (RFC 9220)\n\n");
+    } else if (info.http2) {
+        printf("Connected via HTTP/2 WebSocket (RFC 8441)\n\n");
+    } else {
+        printf("Connected via HTTP/1.1 WebSocket (RFC 6455)\n\n");
+    }
+
+    # Send text message
+    printf("Sending: Hello HTTP/3 WebSocket!\n");
+    ws.send("Hello HTTP/3 WebSocket!");
+
+    # Send another text message
+    printf("Sending: QUIC is fast\n");
+    ws.send("QUIC is fast");
+
+    # Send binary message (4 bytes)
+    binary bin_data = <DEADBEEF>;
+    printf("Sending: binary(%d bytes)\n", bin_data.size());
+    ws.send(bin_data);
+
+    # Wait for all echoes (with timeout)
+    int rc = msg_counter.waitForZero(10s);
+    if (rc) {
+        printf("\nWARNING: timed out waiting for echo messages\n");
+    }
+
+    # Print received messages
+    printf("\nReceived %d echo messages:\n", received_messages.size());
+    int i = 1;
+    foreach string m in (received_messages) {
+        printf("  %d. %s\n", i++, m);
+    }
+
+    # Disconnect and shut down
+    ws.disconnect();
+    printf("\nWebSocket disconnected.\n");
+
+    server.stop();
+    delete server;
+    printf("Server stopped.\n");
+}
+
+main();

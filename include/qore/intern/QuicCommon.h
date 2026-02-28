@@ -279,7 +279,8 @@ inline int sendQuicPacketsBatch(int fd, const QuicPacketBatch& batch,
                                 const struct sockaddr* local_addr = nullptr,
                                 socklen_t local_addrlen = 0) {
     // Build cmsg template once (shared by all packets in this batch)
-    uint8_t cmsg_template[QUIC_SEND_CMSG_BUF_SIZE];
+    // Zero-init to avoid valgrind warnings about CMSG_SPACE alignment padding
+    uint8_t cmsg_template[QUIC_SEND_CMSG_BUF_SIZE] = {};
     size_t cmsg_len = 0;
     bool use_cmsg = local_addr && buildSendCmsg(local_addr, local_addrlen,
                                                  cmsg_template, cmsg_len);

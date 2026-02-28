@@ -674,6 +674,9 @@ public:
             if (set_non_block) {
                 sock->clearNonBlock();
             }
+            if (input_stream && !need_reassign) {
+                input_stream->unassignThread(xsink);
+            }
             sock->deref(xsink);
             delete this;
         }
@@ -697,6 +700,9 @@ public:
     }
 
     DLLLOCAL virtual void abort(ExceptionSink* xsink) override {
+        if (input_stream && !need_reassign) {
+            input_stream->unassignThread(xsink);
+        }
         input_stream = nullptr;
         current_chunk = nullptr;
         // Send RST_STREAM to notify client that the stream is being cancelled
@@ -833,6 +839,79 @@ private:
     int64 idle_timeout_ms;
 
     // Header reading phase: parsed HTTP headers output
+    mutable ReferenceHolder<QoreHashNode> header_output;
+
+    DLLLOCAL virtual bool abortNeedsClose() const override {
+        return true;
+    }
+};
+
+//! Poll operation to send HTTP response headers + stream InputStream body + optionally idle+read next header
+/** State machine:
+    SendHeaders -> StreamBody -> [Idle -> ReadingHeader -> Complete | Timeout]  (fused=true)
+                              -> [Complete]                                     (fused=false)
+
+    @since %Qore 2.3
+*/
+class SocketSendStreamAndReadHeaderPollOperation : public SocketPollSocketOperationBase {
+public:
+    DLLLOCAL SocketSendStreamAndReadHeaderPollOperation(ExceptionSink* xsink, BinaryNode* header_data,
+        QoreSocketObject* sock, InputStream* input_stream, int64 content_length,
+        int64 idle_timeout_ms, bool fused);
+
+    DLLLOCAL void deref(ExceptionSink* xsink) {
+        if (ROdereference()) {
+            if (set_non_block) {
+                sock->clearNonBlock();
+            }
+            if (input_stream && !need_reassign) {
+                input_stream->unassignThread(xsink);
+            }
+            sock->deref(xsink);
+            delete this;
+        }
+    }
+
+    DLLLOCAL virtual bool goalReached() const override {
+        return phase == Phase::Complete || phase == Phase::Timeout;
+    }
+
+    DLLLOCAL virtual const char* getStateImpl() const override;
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override;
+    DLLLOCAL virtual QoreValue getOutput() const override;
+
+    DLLLOCAL virtual void abort(ExceptionSink* xsink) override {
+        header_data.discard();
+        if (input_stream && !need_reassign) {
+            input_stream->unassignThread(xsink);
+        }
+        input_stream = nullptr;
+        current_chunk = nullptr;
+        header_output = nullptr;
+        SocketPollSocketOperationBase::abort(xsink);
+    }
+
+private:
+    enum class Phase { SendHeaders, StreamBody, Idle, ReadingHeader, Complete, Timeout, Error };
+    Phase phase = Phase::SendHeaders;
+
+    // SendHeaders phase: pre-serialized HTTP response headers
+    SimpleRefHolder<SimpleValueQoreNode> header_data;
+    const char* hdr_buf;
+    size_t hdr_size;
+
+    // StreamBody phase: InputStream body source
+    SimpleRefHolder<InputStream> input_stream;
+    int64 content_length;
+    int64 bytes_sent = 0;
+    int stream_fd = -1;
+    bool is_pollable = true;
+    bool need_reassign = true;
+    SimpleRefHolder<BinaryNode> current_chunk;
+
+    // Idle + ReadHeader phases
+    bool fused;
+    int64 idle_timeout_ms;
     mutable ReferenceHolder<QoreHashNode> header_output;
 
     DLLLOCAL virtual bool abortNeedsClose() const override {
@@ -1425,6 +1504,9 @@ public:
 
     DLLLOCAL void deref(ExceptionSink* xsink) {
         if (ROdereference()) {
+            if (input_stream && !need_reassign) {
+                input_stream->unassignThread(xsink);
+            }
             // If destroyed without abort() (e.g. owner cancellation), clean up
             // the stream and restore socket state
             if (quic_session || set_non_block) {
@@ -1455,7 +1537,10 @@ public:
     DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override;
 
     DLLLOCAL virtual void abort(ExceptionSink* xsink) override {
-        // Release InputStream and chunk references
+        // Release InputStream thread affinity and references
+        if (input_stream && !need_reassign) {
+            input_stream->unassignThread(xsink);
+        }
         input_stream = nullptr;
         current_chunk = nullptr;
         // Cancel stream via QuicSession

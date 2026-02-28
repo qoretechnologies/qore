@@ -2139,4 +2139,119 @@ int Http2Session::submitConnectResponse(int32_t stream_id, int status_code,
     return 0;
 }
 
+void Http2Session::setStreamInputStream(int32_t stream_id, InputStream* is, ExceptionSink* xsink) {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    stream_input_streams_.emplace(stream_id, StreamInputStreamInfo(is));
+    has_active_input_streams_.store(true, std::memory_order_release);
+    printd(5, "Http2Session::setStreamInputStream() stream_id=%d pollable=%d fd=%d\n",
+        stream_id, stream_input_streams_[stream_id].is_pollable,
+        stream_input_streams_[stream_id].stream_fd);
+}
+
+void Http2Session::processStreamInputStreams(ExceptionSink* xsink) {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    constexpr size_t MAX_STREAM_BUFFER = 1024 * 1024;
+
+    printd(5, "Http2Session::processStreamInputStreams() count=%zu\n", stream_input_streams_.size());
+    for (auto& [stream_id, info] : stream_input_streams_) {
+        if (info.eof) {
+            continue;
+        }
+
+        // Backpressure: skip if buffer full
+        auto it = pending_body_data.find(stream_id);
+        if (it != pending_body_data.end()) {
+            size_t pending = it->second.data.size() - it->second.offset;
+            if (pending > MAX_STREAM_BUFFER) {
+                continue;
+            }
+        }
+
+        // Thread reassignment (first call only)
+        if (info.need_reassign) {
+            info.input_stream->reassignThread(xsink);
+            if (*xsink) {
+                return;
+            }
+            info.need_reassign = false;
+        }
+
+        // Read one chunk
+        if (info.is_pollable) {
+            SimpleRefHolder<BinaryNode> chunk(new BinaryNode);
+            chunk->preallocate(65536);
+            int64 count = info.input_stream->readNonBlock(
+                const_cast<void*>(chunk->getPtr()), 65536, xsink);
+            if (*xsink) {
+                info.eof = true;
+                continue;
+            }
+            if (count < 0) {
+                // EAGAIN — not ready yet, event loop will wake us
+                continue;
+            }
+            if (count == 0) {
+                // EOF
+                info.eof = true;
+                sendStreamData(stream_id, nullptr, 0, true, xsink);
+            } else {
+                chunk->setSize(count);
+                sendStreamData(stream_id, chunk->getPtr(), count, false, xsink);
+            }
+        } else {
+            // Non-pollable (memory streams) — readHelper never blocks
+            SimpleRefHolder<BinaryNode> chunk(info.input_stream->readHelper(65536, xsink));
+            if (*xsink) {
+                info.eof = true;
+                continue;
+            }
+            if (!chunk || !chunk->size()) {
+                info.eof = true;
+                sendStreamData(stream_id, nullptr, 0, true, xsink);
+            } else {
+                sendStreamData(stream_id, chunk->getPtr(), chunk->size(), false, xsink);
+            }
+        }
+        if (*xsink) {
+            return;
+        }
+    }
+
+    // Clean up completed streams (unassignThread + erase)
+    for (auto it = stream_input_streams_.begin(); it != stream_input_streams_.end(); ) {
+        if (it->second.eof) {
+            if (!it->second.need_reassign) {
+                ExceptionSink tmp;
+                it->second.input_stream->unassignThread(&tmp);
+            }
+            it = stream_input_streams_.erase(it);
+        } else {
+            ++it;
+        }
+    }
+    // Update atomic flag after cleanup
+    if (stream_input_streams_.empty()) {
+        has_active_input_streams_.store(false, std::memory_order_release);
+    }
+}
+
+void Http2Session::cleanupStreamInputStreams(ExceptionSink* xsink) {
+    for (auto& [stream_id, info] : stream_input_streams_) {
+        if (!info.need_reassign) {
+            info.input_stream->unassignThread(xsink);
+        }
+    }
+    stream_input_streams_.clear();
+    has_active_input_streams_.store(false, std::memory_order_release);
+}
+
+void Http2Session::getExtraFds(std::vector<std::pair<int, int>>& extra_fds) const {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    for (auto& [stream_id, info] : stream_input_streams_) {
+        if (!info.eof && info.is_pollable && info.stream_fd >= 0) {
+            extra_fds.push_back({info.stream_fd, SOCK_POLLIN});
+        }
+    }
+}
+
 // httpMultiHeadersToQoreHash is a template defined in Http2Session.h

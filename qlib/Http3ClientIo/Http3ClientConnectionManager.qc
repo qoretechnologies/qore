@@ -442,7 +442,8 @@ public class Http3ClientConnectionManager {
             # Create new QUIC connection
             log(LoggerLevel::DEBUG, "creating new QUIC connection to %s", key);
             Http3ClientConnection conn(url_info, opts.connect_timeout, logger,
-                opts.max_streams_per_connection, opts.ssl_verify_mode, opts.accept_all_certs);
+                opts.max_streams_per_connection, opts.ssl_verify_mode, opts.accept_all_certs,
+                opts.client_cert, opts.client_pk);
 
             if (!pool.hasKey(key)) {
                 pool{key} = ();

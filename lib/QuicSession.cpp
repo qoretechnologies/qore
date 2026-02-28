@@ -146,6 +146,16 @@ SSL_CTX* qore_socket_private::getOrCreateQuicServerSslCtx(QoreSSLCertificate* ce
     return ctx;
 }
 
+// ===== Peer Certificate =====
+
+X509* QuicSession::getPeerCertificate() const {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    if (!ssl_) {
+        return nullptr;
+    }
+    return SSL_get_peer_certificate(ssl_);
+}
+
 // ===== Timestamp helper =====
 
 ngtcp2_tstamp QuicSession::timestamp() {
@@ -223,7 +233,8 @@ std::shared_ptr<QuicSession> QuicSession::createClient(
     const char* host, uint16_t port,
     const struct sockaddr* local_addr, socklen_t local_addrlen,
     const struct sockaddr* remote_addr, socklen_t remote_addrlen,
-    int ssl_verify_mode, bool enable_0rtt) {
+    int ssl_verify_mode, bool enable_0rtt,
+    QoreSSLCertificate* client_cert, QoreSSLPrivateKey* client_pk) {
     assert(local_addr);
     assert(remote_addr);
 
@@ -233,7 +244,8 @@ std::shared_ptr<QuicSession> QuicSession::createClient(
     if (session->initClient(sock, xsink, host, port,
                             local_addr, local_addrlen,
                             remote_addr, remote_addrlen,
-                            ssl_verify_mode, enable_0rtt) != 0) {
+                            ssl_verify_mode, enable_0rtt,
+                            client_cert, client_pk) != 0) {
         return nullptr;
     }
     // Clear the temporary socket pointer; it was only needed during init
@@ -248,7 +260,9 @@ std::shared_ptr<QuicSession> QuicSession::createServer(
     const struct sockaddr* local_addr, socklen_t local_addrlen,
     const struct sockaddr* remote_addr, socklen_t remote_addrlen,
     QoreDatagramDispatcher* dispatcher,
-    SSL_CTX* shared_ssl_ctx) {
+    SSL_CTX* shared_ssl_ctx,
+    int ssl_verify_mode,
+    bool ssl_accept_all_certs) {
     assert(cert);
     assert(pk);
     assert(local_addr);
@@ -260,7 +274,8 @@ std::shared_ptr<QuicSession> QuicSession::createServer(
     if (session->initServer(sock, xsink, initial_hdr, cert, pk,
                             local_addr, local_addrlen,
                             remote_addr, remote_addrlen,
-                            dispatcher, shared_ssl_ctx) != 0) {
+                            dispatcher, shared_ssl_ctx,
+                            ssl_verify_mode, ssl_accept_all_certs) != 0) {
         return nullptr;
     }
     // Clear the temporary socket pointer; it was only needed during init
@@ -270,7 +285,8 @@ std::shared_ptr<QuicSession> QuicSession::createServer(
 
 // ===== SSL Context Setup =====
 
-int QuicSession::setupClientSslCtx(const char* host, int ssl_verify_mode, ExceptionSink* xsink) {
+int QuicSession::setupClientSslCtx(const char* host, int ssl_verify_mode, ExceptionSink* xsink,
+                                    QoreSSLCertificate* client_cert, QoreSSLPrivateKey* client_pk) {
     ssl_ctx_ = SSL_CTX_new(TLS_client_method());
     if (!ssl_ctx_) {
         xsink->raiseException("QUIC-SSL-ERROR", "failed to create SSL_CTX");
@@ -286,6 +302,28 @@ int QuicSession::setupClientSslCtx(const char* host, int ssl_verify_mode, Except
 
     // Enable certificate verification if requested
     SSL_CTX_set_verify(ssl_ctx_, ssl_verify_mode, nullptr);
+
+    // Load client certificate and private key for mTLS (mutual TLS)
+    if (client_cert && client_pk) {
+        if (SSL_CTX_use_certificate(ssl_ctx_, client_cert->getData()) != 1) {
+            xsink->raiseException("QUIC-SSL-ERROR", "failed to load client certificate into SSL_CTX");
+            return -1;
+        }
+        EVP_PKEY* pk_data = client_pk->getData();
+        if (!pk_data) {
+            xsink->raiseException("QUIC-SSL-ERROR", "client private key getData() returned null");
+            return -1;
+        }
+        if (SSL_CTX_use_PrivateKey(ssl_ctx_, pk_data) != 1) {
+            xsink->raiseException("QUIC-SSL-ERROR", "failed to load client private key into SSL_CTX");
+            return -1;
+        }
+        if (SSL_CTX_check_private_key(ssl_ctx_) != 1) {
+            xsink->raiseException("QUIC-SSL-ERROR", "client certificate and private key do not match");
+            return -1;
+        }
+        printd(3, "QuicSession::setupClientSslCtx(): client certificate loaded for mTLS\n");
+    }
 
     // Enable session caching for 0-RTT ticket capture
     // NO_INTERNAL_STORE: we manage our own cache (QuicSessionTicketCache)
@@ -329,9 +367,23 @@ int QuicSession::setupClientSslCtx(const char* host, int ssl_verify_mode, Except
     return 0;
 }
 
+// Permissive verify callback for mTLS with ssl_accept_all_certs=true.
+// Accepts all client certificates (including self-signed, expired, etc.)
+// while still extracting the certificate for inspection.
+static int quic_server_accept_all_verify_cb(int preverify_ok, X509_STORE_CTX* ctx) {
+    return 1;
+}
+
 int QuicSession::setupServerSslCtx(QoreSSLCertificate* cert, QoreSSLPrivateKey* pk,
-                                    ExceptionSink* xsink, SSL_CTX* shared_ssl_ctx) {
-    if (shared_ssl_ctx) {
+                                    ExceptionSink* xsink, SSL_CTX* shared_ssl_ctx,
+                                    int ssl_verify_mode,
+                                    bool ssl_accept_all_certs) {
+    // When mTLS is requested, we must create a per-session SSL_CTX with
+    // SSL_CTX_set_verify() — the shared context cannot be used because it
+    // was created without client certificate verification. This means 0-RTT
+    // session ticket continuity across sessions is not available for mTLS
+    // listeners, which is an acceptable trade-off.
+    if (shared_ssl_ctx && ssl_verify_mode == SSL_VERIFY_NONE) {
         // Use the shared SSL_CTX (for session ticket key continuity / 0-RTT).
         // Take an explicit reference so the destructor can always call SSL_CTX_free()
         // unconditionally. Without this, if setupServerSslCtx() fails between storing
@@ -394,6 +446,23 @@ int QuicSession::setupServerSslCtx(QoreSSLCertificate* cert, QoreSSLPrivateKey* 
                 }
                 return SSL_TLSEXT_ERR_OK;
             }, nullptr);
+
+        // Enable client certificate verification if requested (mTLS)
+        if (ssl_verify_mode != SSL_VERIFY_NONE) {
+            if (ssl_accept_all_certs) {
+                // Accept all client certificates (including self-signed) but still
+                // extract the cert for inspection via getPeerCertificate()
+                SSL_CTX_set_verify(ssl_ctx_, ssl_verify_mode, quic_server_accept_all_verify_cb);
+                printd(3, "QuicSession::setupServerSslCtx(): mTLS enabled "
+                    "(verify_mode=0x%x, accept_all_certs=true)\n", ssl_verify_mode);
+            } else {
+                SSL_CTX_set_verify(ssl_ctx_, ssl_verify_mode, nullptr);
+                // Load system default CA certificates for client cert validation
+                SSL_CTX_set_default_verify_paths(ssl_ctx_);
+                printd(3, "QuicSession::setupServerSslCtx(): mTLS enabled "
+                    "(verify_mode=0x%x, accept_all_certs=false)\n", ssl_verify_mode);
+            }
+        }
     }
 
     // Create SSL connection from the context
@@ -427,7 +496,8 @@ int QuicSession::initClient(qore_socket_private* sock, ExceptionSink* xsink,
                             const char* host, uint16_t port,
                             const struct sockaddr* local_addr, socklen_t local_addrlen,
                             const struct sockaddr* remote_addr, socklen_t remote_addrlen,
-                            int ssl_verify_mode, bool enable_0rtt) {
+                            int ssl_verify_mode, bool enable_0rtt,
+                            QoreSSLCertificate* client_cert, QoreSSLPrivateKey* client_pk) {
     sock_ = sock;
     is_server_ = false;
     host_ = host;
@@ -445,8 +515,8 @@ int QuicSession::initClient(qore_socket_private* sock, ExceptionSink* xsink,
     memcpy(&remote_addr_, remote_addr, remote_addrlen);
     remote_addrlen_ = remote_addrlen;
 
-    // Set up SSL with certificate verification
-    if (setupClientSslCtx(host, ssl_verify_mode, xsink) != 0) {
+    // Set up SSL with certificate verification and optional client cert for mTLS
+    if (setupClientSslCtx(host, ssl_verify_mode, xsink, client_cert, client_pk) != 0) {
         return -1;
     }
 
@@ -577,7 +647,9 @@ int QuicSession::initServer(qore_socket_private* sock, ExceptionSink* xsink,
                             const struct sockaddr* local_addr, socklen_t local_addrlen,
                             const struct sockaddr* remote_addr, socklen_t remote_addrlen,
                             QoreDatagramDispatcher* dispatcher,
-                            SSL_CTX* shared_ssl_ctx) {
+                            SSL_CTX* shared_ssl_ctx,
+                            int ssl_verify_mode,
+                            bool ssl_accept_all_certs) {
     sock_ = sock;
     is_server_ = true;
     dispatcher_ = dispatcher;
@@ -595,7 +667,9 @@ int QuicSession::initServer(qore_socket_private* sock, ExceptionSink* xsink,
     remote_addrlen_ = remote_addrlen;
 
     // Set up SSL with cert/key for TLS 1.3 (use shared SSL_CTX if provided)
-    if (setupServerSslCtx(cert, pk, xsink, shared_ssl_ctx) != 0) {
+    // When mTLS is requested (ssl_verify_mode != SSL_VERIFY_NONE), the shared context
+    // is bypassed and a per-session context with client certificate verification is created
+    if (setupServerSslCtx(cert, pk, xsink, shared_ssl_ctx, ssl_verify_mode, ssl_accept_all_certs) != 0) {
         return -1;
     }
 
@@ -770,12 +844,18 @@ int QuicSession::setupHttp3(ExceptionSink* xsink) {
     h3_cbs.reset_stream = h3ResetStreamCallback;
     h3_cbs.acked_stream_data = h3AckedStreamDataCallback;
     h3_cbs.shutdown = h3ShutdownCallback;
+    // RFC 9220: Detect remote peer's enable_connect_protocol setting
+    h3_cbs.recv_settings2 = h3RecvSettings2Callback;
 
     nghttp3_settings h3_settings;
     nghttp3_settings_default(&h3_settings);
     // Disable QPACK dynamic table — eliminates the need for deferred_consume
     h3_settings.qpack_max_dtable_capacity = 0;
     h3_settings.qpack_blocked_streams = 0;
+    // RFC 9220: Server advertises Extended CONNECT support for WebSocket over HTTP/3
+    if (is_server_) {
+        h3_settings.enable_connect_protocol = 1;
+    }
 
     auto* mem = nghttp3_mem_default();
 
@@ -1015,6 +1095,16 @@ int QuicSession::writePacketsLocked(QuicPacketBatch& packets, ExceptionSink* xsi
                     nghttp3_strerror(static_cast<int>(sveccnt)));
                 return -1;
             }
+            if (sveccnt > 0 || stream_id >= 0) {
+                size_t vec_total = 0;
+                for (nghttp3_ssize i = 0; i < sveccnt; ++i) {
+                    vec_total += vec[i].len;
+                }
+                printd(5, "writePacketsLocked() nghttp3_writev: stream_id=" QLLD " fin=%d sveccnt=%d vec_total=%d\n",
+                    stream_id, fin, (int)sveccnt, (int)vec_total);
+            }
+        } else if (h3_conn_) {
+            printd(5, "writePacketsLocked() max_data_left=0, skipping nghttp3_conn_writev_stream\n");
         }
 
         // Use MORE flag only when there's actual stream data to coalesce;
@@ -1039,18 +1129,22 @@ int QuicSession::writePacketsLocked(QuicPacketBatch& packets, ExceptionSink* xsi
             switch (nwrite) {
             case NGTCP2_ERR_STREAM_DATA_BLOCKED:
                 assert(ndatalen == -1);
+                printd(5, "writePacketsLocked() STREAM_DATA_BLOCKED stream_id=" QLLD "\n", stream_id);
                 if (h3_conn_) {
                     nghttp3_conn_block_stream(h3_conn_, stream_id);
                 }
                 continue;
             case NGTCP2_ERR_STREAM_SHUT_WR:
                 assert(ndatalen == -1);
+                printd(5, "writePacketsLocked() STREAM_SHUT_WR stream_id=" QLLD "\n", stream_id);
                 if (h3_conn_) {
                     nghttp3_conn_shutdown_stream_write(h3_conn_, stream_id);
                 }
                 continue;
             case NGTCP2_ERR_WRITE_MORE:
                 assert(ndatalen >= 0);
+                printd(5, "writePacketsLocked() WRITE_MORE stream_id=" QLLD " ndatalen=%d\n",
+                    stream_id, (int)ndatalen);
                 if (h3_conn_) {
                     nghttp3_conn_add_write_offset(h3_conn_, stream_id,
                                                    static_cast<uint64_t>(ndatalen));
@@ -1076,6 +1170,8 @@ int QuicSession::writePacketsLocked(QuicPacketBatch& packets, ExceptionSink* xsi
         }
 
         if (nwrite == 0) {
+            printd(5, "writePacketsLocked() nwrite=0 stream_id=" QLLD " total_packets=%d\n",
+                stream_id, total_packets);
             // Only clear pending_write_ when there is genuinely nothing more
             // to write.  When stream_id >= 0, nghttp3 has queued stream data
             // but ngtcp2 cannot write it right now (congestion or flow control);
@@ -1093,6 +1189,8 @@ int QuicSession::writePacketsLocked(QuicPacketBatch& packets, ExceptionSink* xsi
         // that must be sent as its own UDP datagram
         packets.addPacket(pkt_buf_, static_cast<size_t>(nwrite));
         ++total_packets;
+        printd(5, "writePacketsLocked() packet #%d: %d bytes, stream_id=" QLLD " ndatalen=%d\n",
+            total_packets, (int)nwrite, stream_id, (int)ndatalen);
 
         // Update stored addresses from ngtcp2's output path.  During migration,
         // ngtcp2 updates the active path and outputs packets for the new address;
@@ -1328,6 +1426,265 @@ int64_t QuicSession::submitRequest(const char* method, const char* path,
     return stream_id;
 }
 
+int64_t QuicSession::submitRequestStreaming(const char* method, const char* path,
+                                            const strcase_str_map_t& headers,
+                                            ExceptionSink* xsink) {
+    // Build header name-value pairs OUTSIDE the lock (same pattern as submitRequest)
+    std::vector<nghttp3_nv> nva;
+    nva.reserve(headers.size() + 4);
+    auto add_nv = [&nva](const char* name, size_t namelen,
+                          const char* value, size_t valuelen) {
+        nva.push_back({
+            const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(name)),
+            const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(value)),
+            namelen, valuelen, NGHTTP3_NV_FLAG_NONE
+        });
+    };
+
+    // Pseudo-headers
+    add_nv(":method", 7, method, strlen(method));
+    add_nv(":path", 5, path, strlen(path));
+    add_nv(":scheme", 7, "https", 5);
+
+    // Authority from headers or fallback to stored host:port
+    std::string authority;
+    auto auth_it = headers.find("host");
+    if (auth_it != headers.end()) {
+        authority = auth_it->second;
+    } else if (!host_.empty()) {
+        authority = host_;
+        if (port_ != 0 && port_ != 443) {
+            authority += ":" + std::to_string(port_);
+        }
+    }
+    if (!authority.empty()) {
+        add_nv(":authority", 10, authority.c_str(), authority.size());
+    }
+
+    // Regular headers (same filtering as submitRequest)
+    std::vector<std::string> lower_keys;
+    lower_keys.reserve(headers.size());
+    for (const auto& h : headers) {
+        if (h.first.empty() || h.first[0] == ':' || strcasecmp(h.first.c_str(), "host") == 0) {
+            continue;
+        }
+        std::string lower_key = h.first;
+        std::transform(lower_key.begin(), lower_key.end(), lower_key.begin(),
+                       [](unsigned char c) { return std::tolower(c); });
+        if (h3_forbidden_headers.count(lower_key)) {
+            continue;
+        }
+        lower_keys.push_back(std::move(lower_key));
+        add_nv(lower_keys.back().c_str(), lower_keys.back().size(),
+                h.second.c_str(), h.second.size());
+    }
+
+    // Always set up deferred data reader (body data will arrive via sendStreamData)
+    nghttp3_data_reader dr;
+    dr.read_data = h3ReadDataCallback;
+
+    // Lock only for ngtcp2/nghttp3 API calls and state mutations
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+
+    if (!h3_conn_) {
+        xsink->raiseException("QUIC-HTTP3-ERROR", "HTTP/3 layer not initialized");
+        return -1;
+    }
+
+    // Open a new bidirectional stream
+    int64_t stream_id;
+    int rv = ngtcp2_conn_open_bidi_stream(conn_, &stream_id, nullptr);
+    if (rv != 0) {
+        xsink->raiseException("QUIC-ERROR", "failed to open bidi stream: %s",
+                              ngtcp2_strerror(rv));
+        return -1;
+    }
+
+    // Set up empty streaming body data with deferred=true — the h3ReadDataCallback
+    // will return NGHTTP3_ERR_WOULDBLOCK until data is provided via sendStreamData()
+    streaming_body_data_[stream_id] = QuicStreamingBodyData{};
+    streaming_body_data_[stream_id].deferred = true;
+
+    rv = nghttp3_conn_submit_request(h3_conn_, stream_id, nva.data(), nva.size(),
+                                     &dr, nullptr);
+    if (rv != 0) {
+        xsink->raiseException("QUIC-HTTP3-ERROR", "nghttp3_conn_submit_request failed: %s",
+                              nghttp3_strerror(rv));
+        streaming_body_data_.erase(stream_id);
+        ngtcp2_conn_shutdown_stream_write(conn_, 0, stream_id, NGHTTP3_H3_INTERNAL_ERROR);
+        return -1;
+    }
+
+    // Create stream info
+    auto* stream = getOrCreateStream(stream_id);
+    stream->method = method;
+    stream->path = path;
+    stream->state = QuicStreamState::Open;
+
+    // Signal that there's data to write (headers)
+    pending_write_.store(true, std::memory_order_release);
+
+    return stream_id;
+}
+
+int64_t QuicSession::submitConnectRequest(const char* path, const strcase_str_map_t& headers,
+                                           const char* protocol, ExceptionSink* xsink) {
+    // Build header name-value pairs OUTSIDE the lock
+    // Reserve: 5 pseudo-headers (:method, :path, :scheme, :authority, :protocol) + user headers
+    std::vector<nghttp3_nv> nva;
+    nva.reserve(headers.size() + 5);
+    auto add_nv = [&nva](const char* name, size_t namelen,
+                          const char* value, size_t valuelen) {
+        nva.push_back({
+            const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(name)),
+            const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(value)),
+            namelen, valuelen, NGHTTP3_NV_FLAG_NONE
+        });
+    };
+
+    // Pseudo-headers — RFC 9220 Section 3: extended CONNECT includes all 5
+    add_nv(":method", 7, "CONNECT", 7);
+    add_nv(":path", 5, path, strlen(path));
+    add_nv(":scheme", 7, "https", 5);
+
+    // Authority from headers or fallback to stored host:port
+    std::string authority;
+    auto auth_it = headers.find("host");
+    if (auth_it != headers.end()) {
+        authority = auth_it->second;
+    } else if (!host_.empty()) {
+        authority = host_;
+        if (port_ != 0 && port_ != 443) {
+            authority += ":" + std::to_string(port_);
+        }
+    }
+    if (!authority.empty()) {
+        add_nv(":authority", 10, authority.c_str(), authority.size());
+    }
+
+    // RFC 9220: :protocol pseudo-header for extended CONNECT
+    add_nv(":protocol", 9, protocol, strlen(protocol));
+
+    // Regular headers (same filtering as submitRequest)
+    std::vector<std::string> lower_keys;
+    lower_keys.reserve(headers.size());
+    for (const auto& h : headers) {
+        if (h.first.empty() || h.first[0] == ':' || strcasecmp(h.first.c_str(), "host") == 0) {
+            continue;
+        }
+        std::string lower_key = h.first;
+        std::transform(lower_key.begin(), lower_key.end(), lower_key.begin(),
+                       [](unsigned char c) { return std::tolower(c); });
+        if (h3_forbidden_headers.count(lower_key)) {
+            continue;
+        }
+        lower_keys.push_back(std::move(lower_key));
+        add_nv(lower_keys.back().c_str(), lower_keys.back().size(),
+                h.second.c_str(), h.second.size());
+    }
+
+    // Deferred data reader — CONNECT tunnel keeps the stream open indefinitely
+    nghttp3_data_reader dr;
+    dr.read_data = h3ReadDataCallback;
+
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+
+    if (!h3_conn_) {
+        xsink->raiseException("QUIC-HTTP3-ERROR", "HTTP/3 layer not initialized");
+        return -1;
+    }
+
+    // Open a new bidirectional stream
+    int64_t stream_id;
+    int rv = ngtcp2_conn_open_bidi_stream(conn_, &stream_id, nullptr);
+    if (rv != 0) {
+        xsink->raiseException("QUIC-ERROR", "failed to open bidi stream: %s",
+                              ngtcp2_strerror(rv));
+        return -1;
+    }
+
+    // Set up deferred streaming body data — h3ReadDataCallback returns
+    // NGHTTP3_ERR_WOULDBLOCK until data is pushed via sendStreamData()
+    streaming_body_data_[stream_id] = QuicStreamingBodyData{};
+    streaming_body_data_[stream_id].deferred = true;
+
+    rv = nghttp3_conn_submit_request(h3_conn_, stream_id, nva.data(), nva.size(),
+                                     &dr, nullptr);
+    if (rv != 0) {
+        xsink->raiseException("QUIC-HTTP3-ERROR",
+            "nghttp3_conn_submit_request failed for CONNECT: %s",
+            nghttp3_strerror(rv));
+        streaming_body_data_.erase(stream_id);
+        ngtcp2_conn_shutdown_stream_write(conn_, 0, stream_id, NGHTTP3_H3_INTERNAL_ERROR);
+        return -1;
+    }
+
+    // Create stream info — mark as CONNECT so h3EndHeadersCallback and
+    // h3RecvDataCallback handle the bidirectional tunnel correctly
+    auto* stream = getOrCreateStream(stream_id);
+    stream->method = "CONNECT";
+    stream->path = path;
+    stream->connect_protocol = protocol;
+    stream->is_connect = true;
+    stream->connect_tunnel_active = true;
+    stream->state = QuicStreamState::Open;
+
+    pending_write_.store(true, std::memory_order_release);
+
+    return stream_id;
+}
+
+int QuicSession::submitTrailers(int64_t stream_id, const strcase_str_map_t& trailers,
+                                ExceptionSink* xsink) {
+    // Build trailer name-value pairs OUTSIDE the lock
+    std::vector<nghttp3_nv> nva;
+    nva.reserve(trailers.size());
+    std::vector<std::string> lower_keys;
+    lower_keys.reserve(trailers.size());
+    for (const auto& t : trailers) {
+        if (t.first.empty() || t.first[0] == ':') {
+            continue;
+        }
+        std::string lower_key = t.first;
+        std::transform(lower_key.begin(), lower_key.end(), lower_key.begin(),
+                       [](unsigned char c) { return std::tolower(c); });
+        lower_keys.push_back(std::move(lower_key));
+        nva.push_back({
+            const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(lower_keys.back().c_str())),
+            const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(t.second.c_str())),
+            lower_keys.back().size(), t.second.size(), NGHTTP3_NV_FLAG_NONE
+        });
+    }
+
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+
+    if (!h3_conn_) {
+        xsink->raiseException("QUIC-HTTP3-ERROR", "HTTP/3 layer not initialized");
+        return -1;
+    }
+
+    // Signal EOF on the streaming body data so the data reader callback
+    // returns 0 bytes with EOF flag, then submit trailers
+    auto it = streaming_body_data_.find(stream_id);
+    if (it != streaming_body_data_.end()) {
+        it->second.eof = true;
+        // Resume the data reader if it was deferred, so it can signal EOF
+        if (it->second.deferred) {
+            nghttp3_conn_resume_stream(h3_conn_, stream_id);
+        }
+    }
+
+    int rv = nghttp3_conn_submit_trailers(h3_conn_, stream_id, nva.data(), nva.size());
+    if (rv != 0) {
+        xsink->raiseException("QUIC-HTTP3-ERROR", "nghttp3_conn_submit_trailers failed: %s",
+                              nghttp3_strerror(rv));
+        return -1;
+    }
+
+    pending_write_.store(true, std::memory_order_release);
+    return 0;
+}
+
 int QuicSession::submitResponse(int64_t stream_id, int status_code,
                                 const strcase_str_map_t& headers,
                                 const void* body, size_t body_len, ExceptionSink* xsink) {
@@ -1488,6 +1845,8 @@ int QuicSession::submitResponseStreaming(int64_t stream_id, int status_code,
     // Signal that there's data to write (HEADERS frame)
     pending_write_.store(true, std::memory_order_release);
 
+    printd(5, "QuicSession::submitResponseStreaming() stream_id=" QLLD " status=%d - streaming_body_data_ entry created\n",
+        stream_id, status_code);
     return 0;
 }
 
@@ -1497,6 +1856,8 @@ int QuicSession::sendStreamData(int64_t stream_id, const void* data, size_t len,
 
     auto it = streaming_body_data_.find(stream_id);
     if (it == streaming_body_data_.end()) {
+        printd(1, "QuicSession::sendStreamData() stream_id=" QLLD " NOT FOUND in streaming_body_data_\n",
+            stream_id);
         xsink->raiseException("QUIC-HTTP3-ERROR",
             "no streaming response for stream %" PRId64, stream_id);
         return -1;
@@ -1504,18 +1865,18 @@ int QuicSession::sendStreamData(int64_t stream_id, const void* data, size_t len,
 
     auto& sbd = it->second;
 
-    // Check backpressure: if buffer > 1MB, signal caller to retry
-    if (sbd.data.size() - sbd.offset > QUIC_MAX_STREAM_BODY) {
+    // Check backpressure: if staging buffer > 1MB, signal caller to retry.
+    // Note: send_buf holds data already given to nghttp3 (not counted here
+    // because nghttp3 owns it and will drain it independently).
+    if (sbd.data.size() > QUIC_MAX_STREAM_BODY) {
+        printd(5, "QuicSession::sendStreamData() stream_id=" QLLD " BACKPRESSURE pending=%d\n",
+            stream_id, (int)sbd.data.size());
         return 1;
     }
 
-    // Compact buffer if consumed data exceeds half the buffer size
-    if (sbd.offset > 0 && sbd.offset > sbd.data.size() / 2) {
-        sbd.data.erase(sbd.data.begin(), sbd.data.begin() + sbd.offset);
-        sbd.offset = 0;
-    }
-
-    // Append new data
+    // Append new data to staging buffer.
+    // No compaction needed: h3ReadDataCallback swaps data into send_buf,
+    // leaving data empty for new appends.
     if (data && len > 0) {
         auto bp = static_cast<const uint8_t*>(data);
         sbd.data.insert(sbd.data.end(), bp, bp + len);
@@ -1527,6 +1888,8 @@ int QuicSession::sendStreamData(int64_t stream_id, const void* data, size_t len,
 
     // Resume the deferred data reader if it was waiting
     if (sbd.deferred && h3_conn_) {
+        printd(5, "QuicSession::sendStreamData() stream_id=" QLLD " resuming deferred stream\n",
+            stream_id);
         int rv = nghttp3_conn_resume_stream(h3_conn_, stream_id);
         if (rv != 0 && rv != NGHTTP3_ERR_STREAM_NOT_FOUND) {
             xsink->raiseException("QUIC-HTTP3-ERROR",
@@ -1536,6 +1899,8 @@ int QuicSession::sendStreamData(int64_t stream_id, const void* data, size_t len,
         sbd.deferred = false;
     }
 
+    printd(5, "QuicSession::sendStreamData() stream_id=" QLLD " len=%d eof=%d pending=%d deferred=%d\n",
+        stream_id, (int)len, end_stream, (int)sbd.data.size(), sbd.deferred);
     pending_write_.store(true, std::memory_order_release);
     return 0;
 }
@@ -1548,7 +1913,7 @@ int QuicSession::waitForStreamDrain(int64_t stream_id, int timeout_ms) {
         if (it == streaming_body_data_.end()) {
             return -1;  // stream not found
         }
-        if (it->second.data.size() - it->second.offset <= QUIC_MAX_STREAM_BODY) {
+        if (it->second.data.size() <= QUIC_MAX_STREAM_BODY) {
             return 0;  // buffer already below threshold
         }
     }
@@ -1587,7 +1952,7 @@ int QuicSession::waitForStreamDrain(int64_t stream_id, int timeout_ms) {
             if (it == streaming_body_data_.end()) {
                 return -1;  // stream removed
             }
-            if (it->second.data.size() - it->second.offset <= QUIC_MAX_STREAM_BODY) {
+            if (it->second.data.size() <= QUIC_MAX_STREAM_BODY) {
                 return 0;  // buffer drained
             }
         }
@@ -1600,6 +1965,111 @@ int QuicSession::waitForStreamDrain(int64_t stream_id, int timeout_ms) {
             return 1;  // timed out
         }
     }
+}
+
+// ===== Extended CONNECT (RFC 9220) =====
+
+int QuicSession::submitConnectResponse(int64_t stream_id, int status_code,
+        const strcase_str_map_t& headers, ExceptionSink* xsink) {
+    // Build header name-value pairs OUTSIDE the lock
+    std::vector<nghttp3_nv> nva;
+    nva.reserve(headers.size() + 1);
+    auto add_nv = [&nva](const char* name, size_t namelen,
+                          const char* value, size_t valuelen) {
+        nva.push_back({
+            const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(name)),
+            const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(value)),
+            namelen, valuelen, NGHTTP3_NV_FLAG_NONE
+        });
+    };
+
+    // Status pseudo-header
+    std::string status_str = std::to_string(status_code);
+    add_nv(":status", 7, status_str.c_str(), status_str.size());
+
+    // Regular headers (HTTP/3 requires lowercase, no hop-by-hop)
+    std::vector<std::string> lower_keys;
+    lower_keys.reserve(headers.size());
+    for (const auto& h : headers) {
+        if (h.first.empty() || h.first[0] == ':') {
+            continue;
+        }
+        std::string lower_key = h.first;
+        std::transform(lower_key.begin(), lower_key.end(), lower_key.begin(),
+                       [](unsigned char c) { return std::tolower(c); });
+        if (h3_forbidden_headers.count(lower_key)) {
+            continue;
+        }
+        lower_keys.push_back(std::move(lower_key));
+        add_nv(lower_keys.back().c_str(), lower_keys.back().size(),
+                h.second.c_str(), h.second.size());
+    }
+
+    // Always set up data reader — CONNECT response uses deferred streaming
+    // with no_end_stream semantics (stream stays open for bidirectional tunnel)
+    nghttp3_data_reader dr;
+    dr.read_data = h3ReadDataCallback;
+
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+
+    if (!h3_conn_) {
+        xsink->raiseException("QUIC-HTTP3-ERROR", "HTTP/3 layer not initialized");
+        return -1;
+    }
+
+    // Validate: stream must exist and be a CONNECT request
+    auto sit = streams_.find(stream_id);
+    if (sit == streams_.end()) {
+        xsink->raiseException("QUIC-HTTP3-ERROR",
+            "stream %" PRId64 " not found", stream_id);
+        return -1;
+    }
+    if (!sit->second->is_connect) {
+        xsink->raiseException("QUIC-HTTP3-ERROR",
+            "stream %" PRId64 " is not a CONNECT request", stream_id);
+        return -1;
+    }
+
+    // Guard against double submit
+    if (body_data_.count(stream_id) || streaming_body_data_.count(stream_id)) {
+        xsink->raiseException("QUIC-HTTP3-ERROR",
+            "response already submitted for stream %" PRId64, stream_id);
+        return -1;
+    }
+
+    // Create deferred streaming body data entry — the CONNECT tunnel keeps the
+    // stream open indefinitely; h3ReadDataCallback returns NGHTTP3_ERR_WOULDBLOCK
+    // until data is pushed via sendStreamData()
+    auto& sbd = streaming_body_data_[stream_id];
+    sbd = QuicStreamingBodyData{};
+    sbd.deferred = true;
+
+    int rv = nghttp3_conn_submit_response(h3_conn_, stream_id, nva.data(), nva.size(), &dr);
+    if (rv != 0) {
+        xsink->raiseException("QUIC-HTTP3-ERROR",
+            "nghttp3_conn_submit_response failed for CONNECT stream: %s",
+            nghttp3_strerror(rv));
+        streaming_body_data_.erase(stream_id);
+        return -1;
+    }
+
+    pending_write_.store(true, std::memory_order_release);
+    return 0;
+}
+
+QoreValue QuicSession::readConnectStreamData(int64_t stream_id, ExceptionSink* xsink) {
+    std::lock_guard<std::mutex> lg(connect_data_mutex_);
+    auto it = connect_stream_data_.find(stream_id);
+    if (it == connect_stream_data_.end() || it->second.empty()) {
+        return QoreValue();  // NOTHING
+    }
+
+    // Extract data with swap — avoids copy and releases vector memory
+    std::vector<uint8_t> data;
+    data.swap(it->second);
+    SimpleRefHolder<BinaryNode> bin(new BinaryNode());
+    bin->append(data.data(), data.size());
+    return bin.release();
 }
 
 // ===== Stream Management =====
@@ -1626,6 +2096,8 @@ QuicStreamInfo* QuicSession::getOrCreateStream(int64_t stream_id) {
 void QuicSession::markStreamComplete(int64_t stream_id) {
     auto it = streams_.find(stream_id);
     if (it != streams_.end() && !it->second->body_complete) {
+        printd(5, "QuicSession::markStreamComplete() stream_id=" QLLD " body_size=%d status=%d\n",
+            stream_id, (int)it->second->body.size(), it->second->status_code);
         it->second->state = QuicStreamState::Closed;
         it->second->body_complete = true;
         completed_streams_.push(stream_id);
@@ -1644,6 +2116,25 @@ std::unique_ptr<QuicStreamInfo> QuicSession::takeCompletedStream() {
         auto it = streams_.find(stream_id);
         if (it != streams_.end()) {
             has_completed_streams_.store(!completed_streams_.empty(), std::memory_order_release);
+            if (it->second->connect_tunnel_active) {
+                // RFC 9220: CONNECT tunnel streams must stay in streams_ so that
+                // h3RecvDataCallback can detect is_connect and route tunnel data
+                // to connect_stream_data_.  Clone essential fields for the caller.
+                auto result = std::make_unique<QuicStreamInfo>();
+                result->stream_id = it->second->stream_id;
+                result->method = it->second->method;
+                result->path = it->second->path;
+                result->authority = it->second->authority;
+                result->scheme = it->second->scheme;
+                result->status_code = it->second->status_code;
+                result->headers = it->second->headers;
+                result->state = it->second->state;
+                result->body_complete = it->second->body_complete;
+                result->connect_protocol = it->second->connect_protocol;
+                result->is_connect = it->second->is_connect;
+                result->connect_tunnel_active = true;
+                return result;
+            }
             auto result = std::move(it->second);
             streams_.erase(it);
             return result;
@@ -1846,6 +2337,8 @@ int QuicSession::recvStreamDataCallback(ngtcp2_conn* conn, uint32_t flags,
 
     // Forward to HTTP/3 layer if available
     if (session->h3_conn_) {
+        printd(5, "recvStreamDataCallback() stream_id=" QLLD " datalen=%d fin=%d\n",
+            stream_id, (int)datalen, fin);
         nghttp3_ssize nconsumed = nghttp3_conn_read_stream2(
             session->h3_conn_, stream_id, data, datalen,
             fin ? 1 : 0, ngtcp2_conn_get_timestamp(conn));
@@ -1909,6 +2402,8 @@ int QuicSession::streamCloseCallback(ngtcp2_conn* /* conn */, uint32_t flags,
                                       int64_t stream_id, uint64_t app_error_code,
                                       void* user_data, void* /* stream_user_data */) {
     auto* session = static_cast<QuicSession*>(user_data);
+    printd(5, "QuicSession::streamCloseCallback() stream_id=" QLLD " flags=0x%x error_code=%llu\n",
+        stream_id, flags, (unsigned long long)app_error_code);
 
     try {
         if (session->h3_conn_) {
@@ -1928,6 +2423,12 @@ int QuicSession::streamCloseCallback(ngtcp2_conn* /* conn */, uint32_t flags,
         // Clean up body data
         session->body_data_.erase(stream_id);
         session->streaming_body_data_.erase(stream_id);
+
+        // Clean up extended CONNECT tunnel data
+        {
+            std::lock_guard<std::mutex> lg(session->connect_data_mutex_);
+            session->connect_stream_data_.erase(stream_id);
+        }
 
         // Wake any handler threads blocked in waitForStreamDrain() for this stream
         session->drain_gen_.fetch_add(1, std::memory_order_release);
@@ -2390,12 +2891,24 @@ int QuicSession::h3RecvHeaderCallback(nghttp3_conn* /* conn */, int64_t stream_i
             stream->status_code = static_cast<int>(val);
         } else if (name_str == ":method") {
             stream->method = value_str;
+            // RFC 9220: Detect CONNECT request (may already have :protocol)
+            if (value_str == "CONNECT" && !stream->connect_protocol.empty()) {
+                stream->is_connect = true;
+                stream->connect_tunnel_active = true;
+            }
         } else if (name_str == ":path") {
             stream->path = value_str;
         } else if (name_str == ":authority") {
             stream->authority = value_str;
         } else if (name_str == ":scheme") {
             stream->scheme = value_str;
+        } else if (name_str == ":protocol") {
+            // RFC 9220: :protocol pseudo-header for extended CONNECT
+            stream->connect_protocol = value_str;
+            if (stream->method == "CONNECT") {
+                stream->is_connect = true;
+                stream->connect_tunnel_active = true;
+            }
         } else {
             stream->headers[name_str].push_back(value_str);
         }
@@ -2421,15 +2934,33 @@ int QuicSession::h3EndHeadersCallback(nghttp3_conn* /* conn */, int64_t stream_i
             if (cl_it != stream->headers.end() && !cl_it->second.empty()) {
                 char* end = nullptr;
                 long cl = strtol(cl_it->second[0].c_str(), &end, 10);
-                if (cl > 0 && cl <= static_cast<long>(QUIC_MAX_STREAM_BODY)) {
+                // Server: limit pre-alloc to QUIC_MAX_STREAM_BODY (DoS protection)
+                // Client: allow larger pre-alloc (up to 64MB) for response bodies
+                size_t max_reserve = session->is_server_
+                    ? QUIC_MAX_STREAM_BODY : (64 * 1024 * 1024);
+                if (cl > 0 && static_cast<size_t>(cl) <= max_reserve) {
                     stream->body.reserve(static_cast<size_t>(cl));
                 }
             }
         }
 
+        // RFC 9220: Extended CONNECT streams stay open for bidirectional tunnel
+        // (e.g., WebSocket framing) — do NOT mark complete even if fin is set
+        if (stream->is_connect && !stream->connect_protocol.empty()) {
+            // Mark headers complete so the stream is dispatched to the handler,
+            // but leave the stream open for data exchange
+            session->markStreamComplete(stream_id);
+            return 0;
+        }
+
         // If fin is set, the stream has no body — mark it complete now
         if (fin) {
+            printd(5, "QuicSession::h3EndHeadersCallback() stream_id=" QLLD " FIN set - marking complete (body=%d)\n",
+                stream_id, (int)stream->body.size());
             session->markStreamComplete(stream_id);
+        } else {
+            printd(5, "QuicSession::h3EndHeadersCallback() stream_id=" QLLD " no FIN - waiting for body\n",
+                stream_id);
         }
     } catch (...) {
         return NGHTTP3_ERR_CALLBACK_FAILURE;
@@ -2443,8 +2974,27 @@ int QuicSession::h3RecvDataCallback(nghttp3_conn* /* conn */, int64_t stream_id,
     try {
         auto* session = static_cast<QuicSession*>(conn_user_data);
         auto* stream = session->getOrCreateStream(stream_id);
-        // Guard against unbounded body accumulation — reset just this stream
-        if (stream->body.size() + datalen > QUIC_MAX_STREAM_BODY) {
+        printd(5, "h3RecvDataCallback() stream_id=" QLLD " datalen=%d body_total=%d\n",
+            stream_id, (int)datalen, (int)(stream->body.size() + datalen));
+
+        // RFC 9220: Extended CONNECT tunnel — buffer data separately for readConnectStreamData()
+        if (stream->is_connect) {
+            {
+                std::lock_guard<std::mutex> lg(session->connect_data_mutex_);
+                auto& buf = session->connect_stream_data_[stream_id];
+                buf.insert(buf.end(), data, data + datalen);
+            }
+            // Extend flow control
+            ngtcp2_conn_extend_max_stream_offset(session->conn_, stream_id,
+                                                  static_cast<uint64_t>(datalen));
+            ngtcp2_conn_extend_max_offset(session->conn_, static_cast<uint64_t>(datalen));
+            return 0;
+        }
+
+        // Guard against unbounded body accumulation — server side only
+        // Client side: the caller controls what it requests and can impose its
+        // own limits; the body size is bounded by Content-Length
+        if (session->is_server_ && stream->body.size() + datalen > QUIC_MAX_STREAM_BODY) {
             printd(1, "h3RecvDataCallback: body too large (%zu + %zu > %zu) stream %lld\n",
                 stream->body.size(), datalen, QUIC_MAX_STREAM_BODY, (long long)stream_id);
             stream->body.clear();
@@ -2487,6 +3037,7 @@ int QuicSession::h3RecvDataCallback(nghttp3_conn* /* conn */, int64_t stream_id,
 int QuicSession::h3EndStreamCallback(nghttp3_conn* /* conn */, int64_t stream_id,
                                       void* conn_user_data, void* /* stream_user_data */) {
     auto* session = static_cast<QuicSession*>(conn_user_data);
+    printd(5, "QuicSession::h3EndStreamCallback() stream_id=" QLLD " - marking complete\n", stream_id);
     session->markStreamComplete(stream_id);
     return 0;
 }
@@ -2563,14 +3114,23 @@ nghttp3_ssize QuicSession::h3ReadDataCallback(nghttp3_conn* /* conn */, int64_t 
     auto sit = session->streaming_body_data_.find(stream_id);
     if (sit != session->streaming_body_data_.end()) {
         auto& sbd = sit->second;
-        size_t remaining = sbd.data.size() - sbd.offset;
 
-        if (remaining > 0) {
+        if (!sbd.data.empty()) {
             if (veccnt > 0) {
-                // Data available: return vec pointing into buffer
-                vec[0].base = const_cast<uint8_t*>(sbd.data.data() + sbd.offset);
-                vec[0].len = remaining;
-                sbd.offset = sbd.data.size();  // mark all data as consumed
+                // Swap staging data into send_buf for stable pointer lifetime.
+                // nghttp3 caches the returned vec and may return it on subsequent
+                // writev_stream calls.  send_buf is only overwritten here (when
+                // nghttp3 calls read_data again, meaning all previous data was
+                // consumed via add_write_offset), so the pointer remains valid.
+                sbd.send_buf.swap(sbd.data);
+                // Clear data: after swap it holds old send_buf contents (already
+                // consumed by nghttp3).  clear() keeps the allocation for reuse.
+                sbd.data.clear();
+
+                vec[0].base = const_cast<uint8_t*>(sbd.send_buf.data());
+                vec[0].len = sbd.send_buf.size();
+                printd(5, "h3ReadDataCallback() stream_id=" QLLD " providing %d bytes eof=%d\n",
+                    stream_id, (int)sbd.send_buf.size(), sbd.eof);
 
                 // Notify waitForStreamDrain() that buffer space freed up
                 session->drain_gen_.fetch_add(1, std::memory_order_release);
@@ -2598,6 +3158,7 @@ nghttp3_ssize QuicSession::h3ReadDataCallback(nghttp3_conn* /* conn */, int64_t 
         }
 
         // No data available and not EOF: defer (WOULDBLOCK)
+        printd(5, "h3ReadDataCallback() stream_id=" QLLD " WOULDBLOCK (no data, not eof)\n", stream_id);
         sbd.deferred = true;
         return NGHTTP3_ERR_WOULDBLOCK;
     }
@@ -2616,6 +3177,17 @@ int QuicSession::h3AckedStreamDataCallback(nghttp3_conn* /* conn */, int64_t str
     return 0;
 }
 
+int QuicSession::h3RecvSettings2Callback(nghttp3_conn* /* conn */,
+                                          const nghttp3_proto_settings* settings,
+                                          void* conn_user_data) {
+    auto* session = static_cast<QuicSession*>(conn_user_data);
+    session->remote_settings_received_.store(true, std::memory_order_release);
+    if (settings->enable_connect_protocol) {
+        session->remote_enable_connect_protocol_.store(true, std::memory_order_release);
+    }
+    return 0;
+}
+
 int QuicSession::h3ShutdownCallback(nghttp3_conn* /* conn */, int64_t id,
                                      void* conn_user_data) {
     auto* session = static_cast<QuicSession*>(conn_user_data);
@@ -2627,4 +3199,127 @@ int QuicSession::h3ShutdownCallback(nghttp3_conn* /* conn */, int64_t id,
     session->goaway_received_.store(true, std::memory_order_release);
     session->goaway_max_stream_id_ = id;
     return 0;
+}
+
+void QuicSession::setStreamInputStream(int64_t stream_id, InputStream* is, ExceptionSink* xsink) {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    stream_input_streams_.emplace(stream_id, StreamInputStreamInfo(is));
+    has_active_input_streams_.store(true, std::memory_order_release);
+    printd(5, "QuicSession::setStreamInputStream() stream_id=" QLLD " pollable=%d fd=%d\n",
+        stream_id, stream_input_streams_[stream_id].is_pollable,
+        stream_input_streams_[stream_id].stream_fd);
+}
+
+bool QuicSession::hasActiveStreamInputStreams() const {
+    return has_active_input_streams_.load(std::memory_order_acquire);
+}
+
+void QuicSession::processStreamInputStreams(ExceptionSink* xsink) {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    printd(5, "QuicSession::processStreamInputStreams() stream_count=%d\n",
+        (int)stream_input_streams_.size());
+    for (auto& [stream_id, info] : stream_input_streams_) {
+        if (info.eof) {
+            continue;
+        }
+
+        // Backpressure: skip if staging buffer full
+        auto it = streaming_body_data_.find(stream_id);
+        if (it != streaming_body_data_.end()) {
+            if (it->second.data.size() > QUIC_MAX_STREAM_BODY) {
+                continue;
+            }
+        }
+
+        // Thread reassignment (first call only)
+        if (info.need_reassign) {
+            info.input_stream->reassignThread(xsink);
+            if (*xsink) {
+                return;
+            }
+            info.need_reassign = false;
+        }
+
+        // Read one chunk
+        if (info.is_pollable) {
+            SimpleRefHolder<BinaryNode> chunk(new BinaryNode);
+            chunk->preallocate(65536);
+            int64 count = info.input_stream->readNonBlock(
+                const_cast<void*>(chunk->getPtr()), 65536, xsink);
+            if (*xsink) {
+                info.eof = true;
+                continue;
+            }
+            if (count < 0) {
+                // EAGAIN — not ready yet, event loop will wake us
+                continue;
+            }
+            if (count == 0) {
+                // EOF
+                info.eof = true;
+                sendStreamData(stream_id, nullptr, 0, true, xsink);
+            } else {
+                chunk->setSize(count);
+                sendStreamData(stream_id, chunk->getPtr(), count, false, xsink);
+            }
+        } else {
+            // Non-pollable (memory streams) — readHelper never blocks
+            SimpleRefHolder<BinaryNode> chunk(info.input_stream->readHelper(65536, xsink));
+            if (*xsink) {
+                printd(1, "QuicSession::processStreamInputStreams() stream_id=" QLLD " readHelper exception\n",
+                    stream_id);
+                info.eof = true;
+                continue;
+            }
+            if (!chunk || !chunk->size()) {
+                printd(5, "QuicSession::processStreamInputStreams() stream_id=" QLLD " EOF\n",
+                    stream_id);
+                info.eof = true;
+                sendStreamData(stream_id, nullptr, 0, true, xsink);
+            } else {
+                printd(5, "QuicSession::processStreamInputStreams() stream_id=" QLLD
+                    " read %d bytes, calling sendStreamData\n",
+                    stream_id, (int)chunk->size());
+                sendStreamData(stream_id, chunk->getPtr(), chunk->size(), false, xsink);
+            }
+        }
+        if (*xsink) {
+            return;
+        }
+    }
+
+    // Clean up completed streams (unassignThread + erase)
+    for (auto it = stream_input_streams_.begin(); it != stream_input_streams_.end(); ) {
+        if (it->second.eof) {
+            if (!it->second.need_reassign) {
+                ExceptionSink tmp;
+                it->second.input_stream->unassignThread(&tmp);
+            }
+            it = stream_input_streams_.erase(it);
+        } else {
+            ++it;
+        }
+    }
+    if (stream_input_streams_.empty()) {
+        has_active_input_streams_.store(false, std::memory_order_release);
+    }
+}
+
+void QuicSession::cleanupStreamInputStreams(ExceptionSink* xsink) {
+    for (auto& [stream_id, info] : stream_input_streams_) {
+        if (!info.need_reassign) {
+            info.input_stream->unassignThread(xsink);
+        }
+    }
+    stream_input_streams_.clear();
+    has_active_input_streams_.store(false, std::memory_order_release);
+}
+
+void QuicSession::getExtraFds(std::vector<std::pair<int, int>>& extra_fds) const {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    for (auto& [stream_id, info] : stream_input_streams_) {
+        if (!info.eof && info.is_pollable && info.stream_fd >= 0) {
+            extra_fds.push_back({info.stream_fd, SOCK_POLLIN});
+        }
+    }
 }

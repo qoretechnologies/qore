@@ -93,10 +93,13 @@ public class Http3ClientConnection {
         @param max_streams maximum concurrent streams per connection
         @param ssl_verify_mode optional SSL certificate verification mode
         @param accept_all_certs if True, accept all server certificates (sets SSL_VERIFY_NONE)
+        @param client_cert optional client certificate for mutual TLS (mTLS)
+        @param client_pk optional client private key for mutual TLS (mTLS)
     */
     constructor(hash<auto> url_info, timeout connect_timeout = DefaultConnectTimeout,
             *Logger logger, int max_streams = DefaultMaxStreamsPerConnection,
-            *int ssl_verify_mode, bool accept_all_certs = False) {
+            *int ssl_verify_mode, bool accept_all_certs = False,
+            *SSLCertificate client_cert, *SSLPrivateKey client_pk) {
         self.url_info = url_info;
         self.connect_timeout = connect_timeout;
         self.logger = logger;
@@ -111,7 +114,8 @@ public class Http3ClientConnection {
         log(LoggerLevel::DEBUG, "creating QUIC connection to %s:%d (max_streams=%d)",
             url_info.host, url_info.port, max_streams);
 
-        poll_op = new Http3ClientPollOperation(url_info, connect_timeout, logger, ssl_verify_mode, accept_all_certs);
+        poll_op = new Http3ClientPollOperation(url_info, connect_timeout, logger, ssl_verify_mode,
+            accept_all_certs, client_cert, client_pk);
         poll_op.setReadyCallback(\onConnectionReady());
     }
 
