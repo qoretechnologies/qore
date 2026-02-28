@@ -44,14 +44,8 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 
-// macOS requires __APPLE_USE_RFC_3542 to expose IPV6_PKTINFO and in6_pktinfo
-// in <netinet/in.h>.  Must be defined before the first inclusion of the header.
-#if defined(__APPLE__)
-#  ifndef __APPLE_USE_RFC_3542
-#    define __APPLE_USE_RFC_3542
-#  endif
-#endif
-
+// macOS requires __APPLE_USE_RFC_3542 (set globally via CMakeLists.txt
+// compile definition) to expose IPV6_PKTINFO/in6_pktinfo in <netinet/in.h>.
 #include <netinet/in.h>
 
 //! Maximum packets per sendmmsg() batch for QUIC I/O

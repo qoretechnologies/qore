@@ -1420,6 +1420,12 @@ add_dependencies(QPP_GENERATED_FILES qpp)
 add_dependencies(libqore QPP_GENERATED_FILES BISON_GENERATED_FILES FLEX_GENERATED_FILES)
 
 target_compile_definitions(libqore PUBLIC _QORE_LIB_INTERN HAVE_UNIX_CONFIG_H)
+if (APPLE)
+    # Required to expose IPV6_PKTINFO and struct in6_pktinfo in <netinet/in.h>
+    # on macOS/Darwin.  Must be a global define so it takes effect before the
+    # first inclusion of <netinet/in.h> (critical for single-compilation-unit).
+    target_compile_definitions(libqore PRIVATE __APPLE_USE_RFC_3542)
+endif()
 target_compile_definitions(libqore PRIVATE MODULE_DIR="${MODULE_DIR}")
 target_compile_definitions(libqore PRIVATE MODULE_VER_DIR="${MODULE_VER_DIR}")
 target_compile_definitions(libqore PRIVATE USER_MODULE_DIR="${USER_MODULE_DIR}")
