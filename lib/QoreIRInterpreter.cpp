@@ -601,6 +601,63 @@ static void cleanupStoredValues(std::unordered_map<const void*, QoreValue>& valu
     values.clear();
 }
 
+// Diagnostic tracking for cache clearing operations (debug only)
+// Can be enabled with QORE_DIAG_CACHE_CLEAR environment variable
+// This uses thread-local storage, so each thread tracks its own statistics
+// At program exit, the main thread's diagnostics are printed
+struct CacheClearDiagnostics {
+    int64_t cleanup_count = 0;
+    int64_t total_locals_cleared = 0;
+    int64_t total_globals_cleared = 0;
+    int64_t total_threadlocals_cleared = 0;
+    int64_t total_closures_cleared = 0;
+    int64_t total_slot_cache_cleared = 0;
+
+    static CacheClearDiagnostics& instance() {
+        static thread_local CacheClearDiagnostics inst;
+        return inst;
+    }
+
+    static void printAtExit() {
+        CacheClearDiagnostics& inst = instance();
+        const char* diag_env = getenv("QORE_DIAG_CACHE_CLEAR");
+        if (!diag_env || !*diag_env) {
+            return;
+        }
+        if (inst.cleanup_count == 0) {
+            return;
+        }
+        fprintf(stderr, "\n=== Cache Clearing Diagnostics (main thread) ===\n");
+        fprintf(stderr, "Total cleanup calls: %ld\n", inst.cleanup_count);
+        fprintf(stderr, "Avg locals per cleanup: %.1f\n", (double)inst.total_locals_cleared / inst.cleanup_count);
+        fprintf(stderr, "Avg globals per cleanup: %.1f\n", (double)inst.total_globals_cleared / inst.cleanup_count);
+        fprintf(stderr, "Avg threadlocals per cleanup: %.1f\n", (double)inst.total_threadlocals_cleared / inst.cleanup_count);
+        fprintf(stderr, "Avg closures per cleanup: %.1f\n", (double)inst.total_closures_cleared / inst.cleanup_count);
+        fprintf(stderr, "Avg slot cache entries per cleanup: %.1f\n", (double)inst.total_slot_cache_cleared / inst.cleanup_count);
+        int64_t total_items = inst.total_locals_cleared + inst.total_globals_cleared + inst.total_threadlocals_cleared +
+            inst.total_closures_cleared + inst.total_slot_cache_cleared;
+        fprintf(stderr, "Total items cleared: %ld\n", total_items);
+    }
+
+    void recordCleanup(int locals_sz, int globals_sz, int threadlocals_sz, int closures_sz, int slot_cache_sz) {
+        cleanup_count++;
+        total_locals_cleared += locals_sz;
+        total_globals_cleared += globals_sz;
+        total_threadlocals_cleared += threadlocals_sz;
+        total_closures_cleared += closures_sz;
+        total_slot_cache_cleared += slot_cache_sz;
+    }
+};
+
+// Register diagnostics printer at program exit
+namespace {
+    struct CacheClearDiagInit {
+        CacheClearDiagInit() {
+            atexit(CacheClearDiagnostics::printAtExit);
+        }
+    } cache_clear_diag_init;
+}
+
 static void storeValue(std::unordered_map<const void*, QoreValue>& values, const void* key, const QoreValue& value,
         ExceptionSink* xsink) {
     auto it = values.find(key);
@@ -1505,6 +1562,13 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // after AST function/method calls. The calls may have modified any of these variable types,
     // so all caches must be invalidated to force re-read from the runtime stack on next access.
     auto cleanupLocalCaches = [&]() {
+        // Record diagnostics before clearing (for accurate cache size measurement)
+        int locals_sz = locals.size();
+        int globals_sz = globals.size();
+        int threadlocals_sz = threadlocals.size();
+        int closures_sz = closures.size();
+        int slot_cache_sz = locals_slot_cache.size();
+
         cleanupStoredValues(locals, xsink);
         cleanupStoredValues(globals, xsink);
         cleanupStoredValues(threadlocals, xsink);
@@ -1515,6 +1579,9 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             locals_slot_cache[i].discard(xsink);
             locals_slot_cache[i] = QoreValue();
         }
+
+        // Record diagnostics if enabled
+        CacheClearDiagnostics::instance().recordCleanup(locals_sz, globals_sz, threadlocals_sz, closures_sz, slot_cache_sz);
     };
 
     struct LocalInstantiationCleanup {
