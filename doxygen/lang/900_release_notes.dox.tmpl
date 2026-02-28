@@ -852,6 +852,20 @@ cargo install tree-sitter-cli@0.26.5
       - polling-based event triggers for contracts, timesheets, adjustments, and time-off requests
       - action catalog integration with 25 actions and 10 triggers
       - connection support with \c deel:// URL scheme
+    - @ref pdfcorestclientintro "PdfCoRestClient" module
+      - new module providing a REST client for PDF.co's document processing API
+      - supports API key authentication via \c x-api-key header
+      - provides PdfCoRestConnection for connection management with \c pdfco:// URL scheme
+    - @ref pdfcodataproviderintro "PdfCoDataProvider" module
+      - new module providing a data provider API for PDF.co document processing
+      - PDF conversion (PDF to CSV, JSON, Text, HTML, XML, Excel, Images and vice versa)
+      - document operations (merge, split, compress, add text/images, form creation and filling)
+      - data extraction (AI invoice parser, document parser, document classifier)
+      - barcode generation and reading (QR Code, Code 128, EAN, Datamatrix, and more)
+      - PDF security (add/remove password protection)
+      - text search, find and replace, email sending, and file upload
+      - action catalog integration with 27 actions
+      - connection support with \c pdfco:// URL scheme
     - @ref chargebeerestclientintro "ChargebeeRestClient" module
       - new module providing a REST client for Chargebee's subscription billing API
       - supports HTTP Basic Authentication with API Key as username
