@@ -14,21 +14,54 @@ for arg in "$@"; do
     fi
 done
 
-# Select the appropriate binary
+# Find QORE_SRC_DIR if not set
+if [ -z "$QORE_SRC_DIR" ]; then
+    cwd=$(pwd)
+    if [ -e "$cwd/qlib/SqlUtil.qm" ] || [ -e "$cwd/lib/QoreLib.cpp" ]; then
+        QORE_SRC_DIR="$cwd"
+    else
+        # Assume we're running from the source directory
+        QORE_SRC_DIR="."
+    fi
+fi
+
+# Select the appropriate binary from environment variable or search for it
 if [ "$use_release" = "true" ]; then
-    # Use Release binary for WebSocketH2PerfTest (performance-sensitive)
-    QORE="${QORE_RELEASE_BINARY}"
+    # Try environment variable first
+    if [ -n "$QORE_RELEASE_BINARY" ] && [ -x "$QORE_RELEASE_BINARY" ]; then
+        QORE="$QORE_RELEASE_BINARY"
+    # Search for Release binary in expected locations
+    elif [ -x "${QORE_SRC_DIR}/build-release/qore" ]; then
+        QORE="${QORE_SRC_DIR}/build-release/qore"
+    elif [ -x "${QORE_SRC_DIR}/build/qore" ]; then
+        # Fallback: use Debug if Release not found (will be slower but at least works)
+        QORE="${QORE_SRC_DIR}/build/qore"
+    else
+        # Last resort: use environment variable even if we couldn't verify it
+        QORE="${QORE_RELEASE_BINARY}"
+    fi
 else
-    # Use Debug binary for other tests
-    QORE="${QORE_DEBUG_BINARY}"
+    # Try environment variable first
+    if [ -n "$QORE_DEBUG_BINARY" ] && [ -x "$QORE_DEBUG_BINARY" ]; then
+        QORE="$QORE_DEBUG_BINARY"
+    # Search for Debug binary in expected locations
+    elif [ -x "${QORE_SRC_DIR}/build/qore" ]; then
+        QORE="${QORE_SRC_DIR}/build/qore"
+    else
+        # Last resort: use environment variable even if we couldn't verify it
+        QORE="${QORE_DEBUG_BINARY}"
+    fi
 fi
 
 # Verify the binary exists
 if [ -z "$QORE" ] || [ ! -x "$QORE" ]; then
     echo "Error: Qore binary not found or not executable: $QORE" >&2
     echo "  use_release=$use_release" >&2
+    echo "  QORE_SRC_DIR=${QORE_SRC_DIR}" >&2
     echo "  QORE_DEBUG_BINARY=${QORE_DEBUG_BINARY}" >&2
     echo "  QORE_RELEASE_BINARY=${QORE_RELEASE_BINARY}" >&2
+    echo "  Expected Release binary at: ${QORE_SRC_DIR}/build-release/qore" >&2
+    echo "  Expected Debug binary at: ${QORE_SRC_DIR}/build/qore" >&2
     exit 1
 fi
 
