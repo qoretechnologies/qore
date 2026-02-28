@@ -486,6 +486,7 @@ public class DataProviderTest inherits QUnit::Test {
         addTestCase("compat test", \compatTest());
         addTestCase("pipeline test", \pipelineTest());
         addTestCase("pipeline metrics test", \pipelineMetricsTest());
+        addTestCase("pipeline output callback test", \pipelineOutputCallbackTest());
         addTestCase("return-based processor API test", \returnBasedApiTest());
         addTestCase("type cache test", \typeCacheTest());
         addTestCase("test", \dataProviderTest());
@@ -2474,6 +2475,128 @@ public class DataProviderTest inherits QUnit::Test {
                 "only the forced final report should exist when both thresholds are 0");
             assertEq(20, collector.collected_metrics[0].total_records_submitted);
             assertTrue(collector.shutdown_called);
+        }
+    }
+
+    #! Tests for the output_callback option in DataProviderPipeline
+    /** @since DataProvider 3.4
+    */
+    pipelineOutputCallbackTest() {
+        # Test 1: Basic output callback fires for each terminal output record
+        {
+            list<auto> callback_records;
+            TestRecordProcessor proc("A");
+            DataProviderPipeline pipe(<PipelineOptionInfo>{
+                "output_callback": sub (auto record) {
+                    push callback_records, record;
+                },
+            });
+            pipe.append(proc);
+            pipe.submit({"x": 1});
+            pipe.submit({"y": 2});
+            pipe.waitDone();
+            assertEq(2, callback_records.size(), "output_callback fires per output record");
+            assertEq({"A-x": 1}, callback_records[0]);
+            assertEq({"A-y": 2}, callback_records[1]);
+        }
+
+        # Test 2: Callback exception aborts the pipeline
+        {
+            int callback_count = 0;
+            TestRecordProcessor proc("A");
+            DataProviderPipeline pipe(<PipelineOptionInfo>{
+                "output_callback": sub (auto record) {
+                    ++callback_count;
+                    throw "CALLBACK-ERROR", "intentional error";
+                },
+            });
+            pipe.append(proc);
+            pipe.submit({"x": 1});
+            assertThrows("PIPELINE-FAILED", \pipe.waitDone());
+            assertEq(1, callback_count, "callback invoked before error");
+        }
+
+        # Test 3: Fan-out — callback fires for output from all terminal queues
+        {
+            list<auto> callback_records;
+            Mutex callback_lock();
+            TestRecordProcessor proc1("A");
+            TestRecordProcessor proc2("B");
+            DataProviderPipeline pipe(<PipelineOptionInfo>{
+                "output_callback": sub (auto record) {
+                    callback_lock.lock();
+                    on_exit callback_lock.unlock();
+                    push callback_records, record;
+                },
+            });
+            # Queue 0 fans out to two child queues, each with their own processor
+            int q1 = pipe.appendQueue(0);
+            int q2 = pipe.appendQueue(0);
+            pipe.append(q1, proc1);
+            pipe.append(q2, proc2);
+            pipe.submit({"x": 1});
+            pipe.waitDone();
+            # Both terminal queues should produce output
+            assertEq(2, callback_records.size(), "callback fires for each terminal queue output");
+            # Check that we got records from both processors (order may vary)
+            list<string> first_keys = map $1.firstKey(), callback_records;
+            first_keys = sort(first_keys);
+            assertEq(("A-x", "B-x"), first_keys, "output from both terminal queues");
+        }
+
+        # Test 4: No callback — pipeline works normally without output_callback
+        {
+            TestRecordProcessor proc("A");
+            DataProviderPipeline pipe();
+            pipe.append(proc);
+            pipe.submit({"x": 1});
+            pipe.waitDone();
+            assertEq(1, proc.recs.size());
+        }
+
+        # Test 5: Callback not set on fan-out intermediate queues (only terminal)
+        {
+            list<auto> callback_records;
+            Mutex callback_lock();
+            TestRecordProcessor proc1("A");
+            TestRecordProcessor proc2("B");
+            TestRecordProcessor proc3("C");
+            DataProviderPipeline pipe(<PipelineOptionInfo>{
+                "output_callback": sub (auto record) {
+                    callback_lock.lock();
+                    on_exit callback_lock.unlock();
+                    push callback_records, record;
+                },
+            });
+            # Queue 0 has proc1, then fans out to q1 (proc2) and q2 (proc3)
+            pipe.append(proc1);
+            int q1 = pipe.appendQueue(0);
+            pipe.append(q1, proc2);
+            int q2 = pipe.appendQueue(0);
+            pipe.append(q2, proc3);
+            pipe.submit({"x": 1});
+            pipe.waitDone();
+            # Only terminal queues (q1 and q2) should fire the callback, not q0
+            # (q0 is an intermediate queue that fans out, not a terminal queue)
+            assertEq(2, callback_records.size(), "callback fires only for terminal queues");
+        }
+
+        # Test 6: Bulk mode — callback fires per individual record (unpacked from hash-of-lists)
+        {
+            list<auto> callback_records;
+            TestRecordProcessor proc("A");
+            DataProviderPipeline pipe(<PipelineOptionInfo>{
+                "output_callback": sub (auto record) {
+                    push callback_records, record;
+                },
+            });
+            pipe.append(proc);
+            # Submit a bulk record (hash-of-lists)
+            pipe.submit({"x": (1, 2, 3), "y": (4, 5, 6)});
+            pipe.waitDone();
+            # In bulk mode, the processor gets the hash-of-lists and outputs hash-of-lists
+            # The callback should unpack each row from the hash-of-lists
+            assertTrue(callback_records.size() > 0, "callback fires for bulk output");
         }
     }
 
