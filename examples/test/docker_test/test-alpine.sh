@@ -63,13 +63,21 @@ if ! command -v tree-sitter > /dev/null 2>&1; then
 fi
 
 # build Qore and install
-echo && echo "-- building Qore --"
+echo && echo "-- building Qore Debug --"
 cd ${QORE_SRC_DIR}
 mkdir build
 cd build
 cmake .. -DCMAKE_BUILD_TYPE=debug -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} -DCMAKE_POLICY_VERSION_MINIMUM=3.5
 make -j${MAKE_JOBS}
 make install
+
+# build Release version for performance-sensitive tests
+echo && echo "-- building Qore Release --"
+cd ${QORE_SRC_DIR}
+mkdir build-release
+cd build-release
+cmake .. -DCMAKE_BUILD_TYPE=release -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+make -j${MAKE_JOBS}
 
 # add Qore user and group
 if ! grep -q "^qore:x:${QORE_GID}" /etc/group; then
@@ -85,6 +93,15 @@ chown -R qore:qore ${QORE_SRC_DIR}
 # run the tests
 export QORE_MODULE_DIR=${QORE_SRC_DIR}/qlib:${QORE_MODULE_DIR}
 cd ${QORE_SRC_DIR}
+
+# Set up binary selector that uses Release for performance-sensitive tests
+chmod +x ./test/docker_test/qore_binary_selector.sh
+export QORE_DEBUG_BINARY="./build/qore"
+export QORE_RELEASE_BINARY="./build-release/qore"
+export QORE_BINARY="./test/docker_test/qore_binary_selector.sh"
+
+# Run tests with binary selector (Debug for most tests, Release for WebSocketH2PerfTest)
+echo && echo "-- running all tests (WebSocketH2PerfTest in Release mode, others in Debug) --"
 gosu qore:qore ./run_tests.sh
 
 if [ "${drop_pgsql_schema}" = "1" ]; then
