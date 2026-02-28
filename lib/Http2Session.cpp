@@ -2176,7 +2176,7 @@ void Http2Session::processStreamInputStreams(ExceptionSink* xsink) {
             info.need_reassign = false;
         }
 
-        // Read one chunk
+        // Read one chunk per stream per iteration
         if (info.is_pollable) {
             SimpleRefHolder<BinaryNode> chunk(new BinaryNode);
             chunk->preallocate(65536);
@@ -2248,7 +2248,8 @@ void Http2Session::cleanupStreamInputStreams(ExceptionSink* xsink) {
 void Http2Session::getExtraFds(std::vector<std::pair<int, int>>& extra_fds) const {
     std::lock_guard<std::recursive_mutex> lg(m);
     for (auto& [stream_id, info] : stream_input_streams_) {
-        if (!info.eof && info.is_pollable && info.stream_fd >= 0) {
+        if (!info.eof && info.is_pollable && info.stream_fd >= 0
+                && info.is_epoll_compatible) {
             extra_fds.push_back({info.stream_fd, SOCK_POLLIN});
         }
     }

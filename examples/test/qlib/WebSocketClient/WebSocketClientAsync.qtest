@@ -184,8 +184,11 @@ public class WebSocketClientAsyncTest inherits QUnit::Test {
         Queue response_queue();
         int msg_count = 5;
 
+        # Filter out close-event callbacks (called with no args → NOTHING)
         WebSocketClient wsc(sub (auto msg) {
-            response_queue.push(msg);
+            if (exists msg) {
+                response_queue.push(msg);
+            }
         }, {
             "url": "ws://127.0.0.1:" + linfo.port,
         });

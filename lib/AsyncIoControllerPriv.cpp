@@ -1258,7 +1258,10 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
         std::vector<QoreEventInfo> events;
         int count = loop->poll(events, timeout_ms, xsink);
         if (*xsink) {
-            log(QORE_LOG_LEVEL_ERROR, "EventLoop::poll() error");
+            const QoreStringNode* err = xsink->getExceptionErr().get<const QoreStringNode>();
+            const QoreStringNode* desc = xsink->getExceptionDesc().get<const QoreStringNode>();
+            log(QORE_LOG_LEVEL_ERROR, "EventLoop::poll() error: %s: %s",
+                err ? err->c_str() : "?", desc ? desc->c_str() : "?");
             xsink->clear();
             continue;
         }
@@ -1821,7 +1824,12 @@ void AsyncIoControllerPriv::updateExtraFds(const std::string& key, QoreObject* s
             int ev_flags = QORE_EV_READ;  // InputStreams only need read
             loop->add(fd, ev_flags, socket, xsink);
             if (*xsink) {
-                return;
+                // Non-fatal: the fd might not be epoll-compatible (e.g. regular file on Linux)
+                // The I/O loop still drives streaming via POLLOUT on the socket fd
+                printd(2, "updateExtraFds() failed to add fd %d to event loop; skipping\n", fd);
+                xsink->clear();
+                new_fds.erase(fd);
+                continue;
             }
         }
     }

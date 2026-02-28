@@ -66,6 +66,10 @@ public:
     DLLLOCAL SocketPollSocketOperationBase(QoreSocketObject* sock) : sock(sock) {
     }
 
+    DLLLOCAL SocketPollSocketOperationBase(QoreSocketObject* sock, unsigned direction)
+            : sock(sock), non_block_direction(direction) {
+    }
+
     DLLLOCAL ~SocketPollSocketOperationBase() {
     }
 
@@ -75,7 +79,7 @@ public:
         poll_state.reset();
         if (set_non_block) {
             AutoLocker al(sock->priv->m);
-            sock->priv->clearNonBlock();
+            sock->priv->clearNonBlock(non_block_direction);
             if (abortNeedsClose()) {
                 // avoid re-locking priv->m via QoreSocketObject::close()
                 // QoreSocketObject cleanup is handled by the owning code path.
@@ -93,6 +97,8 @@ protected:
     QoreSocketObject* sock = nullptr;
     int state = SPS_NONE;
     bool set_non_block = false;
+    //! Direction flags for this operation (NB_SEND, NB_RECV, or NB_ALL)
+    unsigned non_block_direction = NB_ALL;
 
     DLLLOCAL virtual bool abortNeedsClose() const {
         return true;
@@ -166,7 +172,7 @@ public:
     DLLLOCAL void deref(ExceptionSink* xsink) {
         if (ROdereference()) {
             if (set_non_block) {
-                sock->clearNonBlock();
+                sock->clearNonBlock(NB_SEND);
             }
             sock->deref(xsink);
             delete this;
@@ -195,13 +201,13 @@ private:
 class SocketRecvPollOperationBase : public SocketPollSocketOperationBase {
 public:
     DLLLOCAL SocketRecvPollOperationBase(QoreSocketObject* sock, bool to_string)
-            : SocketPollSocketOperationBase(sock), to_string(to_string) {
+            : SocketPollSocketOperationBase(sock, NB_RECV), to_string(to_string) {
     }
 
     DLLLOCAL virtual void deref(ExceptionSink* xsink) {
         if (ROdereference()) {
             if (set_non_block) {
-                sock->clearNonBlock();
+                sock->clearNonBlock(NB_RECV);
             }
             sock->deref(xsink);
             delete this;

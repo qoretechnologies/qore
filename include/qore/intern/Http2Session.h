@@ -46,6 +46,7 @@
 #include <mutex>
 #include <queue>
 #include <string>
+#include <sys/stat.h>
 #include <unordered_map>
 #include <vector>
 
@@ -669,13 +670,23 @@ private:
         SimpleRefHolder<InputStream> input_stream;
         int stream_fd = -1;
         bool is_pollable = false;
+        //! True if the fd can be monitored by epoll/kqueue (not a regular file)
+        bool is_epoll_compatible = false;
         bool need_reassign = true;
         bool eof = false;
 
         StreamInputStreamInfo() = default;
         StreamInputStreamInfo(InputStream* is)
             : input_stream(is), stream_fd(is->getPollableDescriptor()),
-              is_pollable(stream_fd >= 0) {}
+              is_pollable(stream_fd >= 0) {
+            if (is_pollable) {
+                // Regular files are always readable and cannot be monitored by
+                // epoll on Linux (EPERM) — only include truly async fds (sockets,
+                // pipes, etc.) in the event loop's extra fd set
+                struct stat st;
+                is_epoll_compatible = !(fstat(stream_fd, &st) == 0 && S_ISREG(st.st_mode));
+            }
+        }
     };
     std::unordered_map<int32_t, StreamInputStreamInfo> stream_input_streams_;
 

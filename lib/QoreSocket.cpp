@@ -5675,7 +5675,7 @@ QoreHashNode* SocketUpgradeServerSslPollOperation::continuePoll(ExceptionSink* x
 }
 
 SocketSendPollOperation::SocketSendPollOperation(ExceptionSink* xsink, QoreStringNode* data, QoreSocketObject* sock)
-        : SocketPollSocketOperationBase(sock), data(data), buf(data->c_str()), size(data->size()) {
+        : SocketPollSocketOperationBase(sock, NB_SEND), data(data), buf(data->c_str()), size(data->size()) {
     AutoLocker al(sock->priv->m);
 
     // throw an exception and exit if the object is no longer open or valid
@@ -5684,10 +5684,10 @@ SocketSendPollOperation::SocketSendPollOperation(ExceptionSink* xsink, QoreStrin
     }
 
     assert(data->getEncoding() == sock->getEncoding());
-    if (!sock->priv->setNonBlock(xsink)) {
+    if (!sock->priv->setNonBlock(xsink, NB_SEND)) {
         poll_state.reset(sock->priv->socket->startSend(xsink, buf, size));
         if (!poll_state) {
-            sock->priv->clearNonBlock();
+            sock->priv->clearNonBlock(NB_SEND);
         } else {
             set_non_block = true;
         }
@@ -5695,7 +5695,7 @@ SocketSendPollOperation::SocketSendPollOperation(ExceptionSink* xsink, QoreStrin
 }
 
 SocketSendPollOperation::SocketSendPollOperation(ExceptionSink* xsink, BinaryNode* data, QoreSocketObject* sock)
-        : SocketPollSocketOperationBase(sock), data(data), buf(reinterpret_cast<const char*>(data->getPtr())),
+        : SocketPollSocketOperationBase(sock, NB_SEND), data(data), buf(reinterpret_cast<const char*>(data->getPtr())),
         size(data->size()) {
     AutoLocker al(sock->priv->m);
 
@@ -5704,10 +5704,10 @@ SocketSendPollOperation::SocketSendPollOperation(ExceptionSink* xsink, BinaryNod
         return;
     }
 
-    if (!sock->priv->setNonBlock(xsink)) {
+    if (!sock->priv->setNonBlock(xsink, NB_SEND)) {
         poll_state.reset(sock->priv->socket->startSend(xsink, buf, size));
         if (!poll_state) {
-            sock->priv->clearNonBlock();
+            sock->priv->clearNonBlock(NB_SEND);
         } else {
             set_non_block = true;
         }
@@ -5741,7 +5741,7 @@ QoreHashNode* SocketSendPollOperation::continuePoll(ExceptionSink* xsink) {
     if (*xsink || !rc) {
         // release the AbstractPollState value
         poll_state.reset();
-        sock->priv->clearNonBlock();
+        sock->priv->clearNonBlock(NB_SEND);
         set_non_block = false;
         if (!*xsink) {
             sent = true;
@@ -5792,7 +5792,7 @@ QoreHashNode* SocketRecvPollOperationBase::continuePoll(ExceptionSink* xsink) {
     if (*xsink || !rc) {
         // release the AbstractPollState value
         poll_state.reset();
-        sock->priv->clearNonBlock();
+        sock->priv->clearNonBlock(NB_RECV);
         set_non_block = false;
         return nullptr;
     }
@@ -5807,7 +5807,7 @@ int SocketRecvPollOperationBase::initIntern(ExceptionSink* xsink) {
         return -1;
     }
 
-    if (sock->priv->setNonBlock(xsink)) {
+    if (sock->priv->setNonBlock(xsink, NB_RECV)) {
         return -1;
     }
 
@@ -5825,7 +5825,7 @@ SocketRecvDataPollOperation::SocketRecvDataPollOperation(ExceptionSink* xsink, Q
 
     poll_state.reset(sock->priv->socket->startRecvPacket(xsink));
     if (*xsink) {
-        sock->priv->clearNonBlock();
+        sock->priv->clearNonBlock(NB_RECV);
         set_non_block = false;
     }
 }
@@ -5848,7 +5848,7 @@ SocketRecvPollOperation::SocketRecvPollOperation(ExceptionSink* xsink, ssize_t s
 
     poll_state.reset(sock->priv->socket->startRecv(xsink, size));
     if (*xsink) {
-        sock->priv->clearNonBlock();
+        sock->priv->clearNonBlock(NB_RECV);
         set_non_block = false;
     }
 }
@@ -5872,7 +5872,7 @@ SocketRecvUntilBytesPollOperation::SocketRecvUntilBytesPollOperation(ExceptionSi
 
     poll_state.reset(sock->priv->socket->startRecvUntilBytes(xsink, pattern->c_str(), pattern->size()));
     if (*xsink) {
-        sock->priv->clearNonBlock();
+        sock->priv->clearNonBlock(NB_RECV);
         set_non_block = false;
     }
 }
@@ -5894,7 +5894,7 @@ SocketReadHttpHeaderPollOperation::SocketReadHttpHeaderPollOperation(ExceptionSi
 
     poll_state.reset(sock->priv->socket->startRecvUntilBytes(xsink, "\r\n\r\n", 4));
     if (*xsink) {
-        sock->priv->clearNonBlock();
+        sock->priv->clearNonBlock(NB_RECV);
         set_non_block = false;
     }
 }
@@ -6688,7 +6688,7 @@ QoreHashNode* SocketHttp2ServerPollOperation::continuePoll(ExceptionSink* xsink)
                 //   SOCK_POLLOUT: need to poll for write
                 //   -1: error (exception set)
                 if (rv == SOCK_POLLIN || rv == SOCK_POLLOUT) {
-                    return getSocketPollInfoHash(xsink, rv);
+                    return getSocketPollInfoHash(xsink, SOCK_POLLIN | rv);
                 }
 
                 // If we were receiving preface, move to reading state
@@ -6697,11 +6697,20 @@ QoreHashNode* SocketHttp2ServerPollOperation::continuePoll(ExceptionSink* xsink)
                 }
 
                 // Always include POLLIN to continue reading new requests.
-                // Add POLLOUT when there are pending response sends.
+                // Add POLLOUT when there are pending response sends or active
+                // InputStreams that need to be read and flushed.
                 {
                     int events = SOCK_POLLIN;
-                    if (h2_session->hasPendingData() || h2_session->wantWrite()) {
+                    if (h2_session->hasPendingData() || h2_session->wantWrite()
+                            || h2_session->hasActiveStreamInputStreams()) {
                         events |= SOCK_POLLOUT;
+                    }
+
+                    // Collect extra fds from active pollable InputStreams
+                    std::vector<std::pair<int, int>> extra_fds;
+                    h2_session->getExtraFds(extra_fds);
+                    if (!extra_fds.empty()) {
+                        return getSocketPollInfoHash(xsink, events, extra_fds);
                     }
                     return getSocketPollInfoHash(xsink, events);
                 }

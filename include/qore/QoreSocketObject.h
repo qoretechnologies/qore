@@ -44,6 +44,16 @@ class QoreSSLPrivateKey;
 class Queue;
 class my_socket_priv;
 
+//! Non-blocking operation direction flags for directional socket locking
+/** @since %Qore 2.3
+*/
+///@{
+constexpr unsigned NB_SEND    = (1 << 0);  //!< Send operation in progress
+constexpr unsigned NB_RECV    = (1 << 1);  //!< Receive operation in progress
+constexpr unsigned NB_CONNECT = (1 << 2);  //!< Connect operation in progress
+constexpr unsigned NB_ALL     = NB_SEND | NB_RECV | NB_CONNECT;  //!< Blocks everything
+///@}
+
 class QoreSocketObject : public AbstractPollableIoObjectBase {
     friend class my_socket_priv;
     friend struct qore_httpclient_priv;
@@ -498,11 +508,28 @@ public:
     //! Returns the maximum request body size for HTTP/2 streams
     DLLEXPORT int64 getHttp2MaxRequestBodySize() const;
 
-    //! Sets the non-blocking connection flag
+    //! Sets the non-blocking connection flag (blocks all directions)
     DLLEXPORT int setNonBlock(ExceptionSink* xsink);
 
-    //! Clears the non-blocking connection flag
+    //! Sets the non-blocking flag for a specific direction
+    /** @param xsink exception sink
+        @param direction bitmask of NB_SEND, NB_RECV, NB_CONNECT flags
+
+        @return 0 on success, -1 on error
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT int setNonBlock(ExceptionSink* xsink, unsigned direction);
+
+    //! Clears all non-blocking connection flags
     DLLEXPORT void clearNonBlock();
+
+    //! Clears the non-blocking flag for a specific direction
+    /** @param direction bitmask of NB_SEND, NB_RECV, NB_CONNECT flags to clear
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT void clearNonBlock(unsigned direction);
 
     //! Returns true if the socket has an active QUIC/HTTP/3 session
     /** @since %Qore 2.3

@@ -63,6 +63,7 @@
 #include <string>
 #include <unordered_map>
 
+#include <fcntl.h>
 #include <poll.h>
 #include <sys/socket.h>
 #include <netdb.h>
@@ -1221,7 +1222,9 @@ struct qore_httpclient_priv {
             ssize_t nwrite = quic_session->writeConnectionClose(close_buf, sizeof(close_buf));
             if (nwrite > 0) {
                 // Best-effort: ignore send errors (fd may already be invalid)
-                ::send(quic_fd, close_buf, static_cast<size_t>(nwrite), MSG_DONTWAIT | MSG_NOSIGNAL);
+                // MSG_DONTWAIT: non-blocking (available on Linux + macOS)
+                // SIGPIPE already ignored process-wide (QoreSignalManager::init)
+                ::send(quic_fd, close_buf, static_cast<size_t>(nwrite), MSG_DONTWAIT);
             }
         }
         quic_session.reset();
@@ -5675,12 +5678,19 @@ int qore_httpclient_priv::connectQuic(ExceptionSink* xsink, con_info& connection
     }
     ON_BLOCK_EXIT(freeaddrinfo, res);
 
-    // Create UDP socket with SOCK_CLOEXEC to prevent FD leak on fork/exec
+    // Create UDP socket; set close-on-exec to prevent FD leak on fork/exec
+#ifdef SOCK_CLOEXEC
     int fd = socket(res->ai_family, SOCK_DGRAM | SOCK_CLOEXEC, IPPROTO_UDP);
+#else
+    int fd = socket(res->ai_family, SOCK_DGRAM, IPPROTO_UDP);
+#endif
     if (fd < 0) {
         xsink->raiseException("HTTP3-CONNECT-ERROR", "failed to create UDP socket: %s", strerror(errno));
         return -1;
     }
+#ifndef SOCK_CLOEXEC
+    fcntl(fd, F_SETFD, FD_CLOEXEC);
+#endif
 
     // Bind to ephemeral port
     struct sockaddr_storage local_addr{};

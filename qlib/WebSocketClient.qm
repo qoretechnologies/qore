@@ -4081,7 +4081,10 @@ class QueuedObserver inherits DataProvider::Observer {
 #! Poll operation for non-blocking WebSocket sends
 /** Supports HTTP/1.1, HTTP/2, and HTTP/3 transports.
 
-    For HTTP/1.1, uses Socket.startPollSend() for true non-blocking I/O.
+    For HTTP/1.1, uses \c Socket.startPollSend() for true non-blocking I/O.
+    The socket's directional non-block flags allow the send poll operation
+    to coexist with the concurrent event loop receive thread.
+
     For HTTP/2 and HTTP/3, the stream data send is performed directly
     in the first continuePoll() call since stream multiplexing handles
     the I/O internally.
@@ -4147,32 +4150,21 @@ public class WebSocketSendPollOperation inherits Qore::AbstractPollOperation {
             return;
         }
 
-        # For HTTP/1.1: use non-blocking poll send
+        # For HTTP/1.1: use non-blocking send via startPollSend()
         if (transport == "http1") {
             if (!inner_poller) {
                 send_lock.lock();
                 lock_held = True;
-                on_error {
-                    send_lock.unlock();
-                    lock_held = False;
-                }
                 inner_poller = hc.startPollSend(frame_data);
             }
-            on_error {
-                if (lock_held) {
-                    send_lock.unlock();
-                    lock_held = False;
-                }
+            *hash<SocketPollInfo> rv = inner_poller.continuePoll();
+            if (inner_poller.goalReached()) {
+                inner_poller = NOTHING;
+                goal_reached = True;
+                lock_held = False;
+                send_lock.unlock();
             }
-            *hash<SocketPollInfo> info = inner_poller.continuePoll();
-            if (info) {
-                return info;
-            }
-            # send complete
-            goal_reached = True;
-            send_lock.unlock();
-            lock_held = False;
-            return;
+            return rv;
         }
 
         # For HTTP/2 and HTTP/3: blocking stream send in one call

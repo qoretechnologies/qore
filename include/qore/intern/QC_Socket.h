@@ -58,7 +58,7 @@ public:
     QoreSSLCertificate* cert = nullptr;
     QoreSSLPrivateKey* pk = nullptr;
     mutable QoreThreadLock m;
-    bool in_non_block = false;
+    unsigned non_block_flags = 0;
     int non_block_accept_count = 0;
     bool valid = true;
 
@@ -108,8 +108,23 @@ public:
         // must be called with the lock held
         assert(m.trylock());
 
-        if (in_non_block || non_block_accept_count > 0) {
+        if (non_block_flags || non_block_accept_count > 0) {
             xsink->raiseException("SOCKET-NON-BLOCK-ERROR", "a non-blocking operation is currently in progress");
+            return -1;
+        }
+
+        return checkValid(xsink);
+    }
+
+    //! Throws an exception if overlapping non-blocking operations are in progress
+    DLLLOCAL int checkNonBlock(ExceptionSink* xsink, unsigned direction) {
+        // must be called with the lock held
+        assert(m.trylock());
+
+        if ((non_block_flags & direction) || non_block_accept_count > 0) {
+            xsink->raiseException("SOCKET-NON-BLOCK-ERROR",
+                "a non-blocking %s operation is currently in progress",
+                direction == NB_SEND ? "send" : direction == NB_RECV ? "receive" : "connect");
             return -1;
         }
 
@@ -122,16 +137,25 @@ public:
     //! Throws an exception if the socket is not open or valid or if SSL is already connected
     DLLLOCAL int checkOpenAndNotSsl(ExceptionSink* xsink);
 
-    //! Sets the in_non_block flag
+    //! Sets all non-block flags (blocks everything)
     DLLLOCAL void setNonBlock() {
         // must be called with the lock held
         assert(m.trylock());
 
-        assert(!in_non_block);
-        in_non_block = true;
+        assert(!non_block_flags);
+        non_block_flags = NB_ALL;
     }
 
-    //! Sets the in_non_block flag
+    //! Sets specific direction non-block flags
+    DLLLOCAL void setNonBlock(unsigned direction) {
+        // must be called with the lock held
+        assert(m.trylock());
+
+        assert(!(non_block_flags & direction));
+        non_block_flags |= direction;
+    }
+
+    //! Checks and sets all non-block flags
     DLLLOCAL int setNonBlock(ExceptionSink* xsink) {
         // must be called with the lock held
         assert(m.trylock());
@@ -143,13 +167,30 @@ public:
         return -1;
     }
 
-    //! Clears the in_non_block flag
+    //! Checks and sets specific direction non-block flags
+    DLLLOCAL int setNonBlock(ExceptionSink* xsink, unsigned direction) {
+        // must be called with the lock held
+        assert(m.trylock());
+
+        if (!checkNonBlock(xsink, direction)) {
+            setNonBlock(direction);
+            return 0;
+        }
+        return -1;
+    }
+
+    //! Clears all non-block flags
     DLLLOCAL void clearNonBlock() {
         // must be called with the lock held
         assert(m.trylock());
-        if (in_non_block) {
-            in_non_block = false;
-        }
+        non_block_flags = 0;
+    }
+
+    //! Clears specific direction non-block flags
+    DLLLOCAL void clearNonBlock(unsigned direction) {
+        // must be called with the lock held
+        assert(m.trylock());
+        non_block_flags &= ~direction;
     }
 
     //! Increments accept refcount (concurrent accept ops allowed)
@@ -157,7 +198,7 @@ public:
         // must be called with the lock held
         assert(m.trylock());
 
-        if (in_non_block) {
+        if (non_block_flags) {
             xsink->raiseException("SOCKET-NON-BLOCK-ERROR", "a non-blocking operation is currently in progress");
             return -1;
         }

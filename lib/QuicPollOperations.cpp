@@ -840,12 +840,20 @@ int SocketQuicClientPollOperation::migrateConnection(ExceptionSink* xsink) {
     // so no session lock is needed.  The caller (Http3ClientConnection::migrate())
     // holds driving=True which prevents concurrent continuePoll() from modifying
     // poll operation state.
+    // Create UDP socket; set close-on-exec to prevent FD leak on fork/exec
+#ifdef SOCK_CLOEXEC
+    int new_fd = ::socket(remote_addr_.ss_family, SOCK_DGRAM | SOCK_CLOEXEC, 0);
+#else
     int new_fd = ::socket(remote_addr_.ss_family, SOCK_DGRAM, 0);
+#endif
     if (new_fd < 0) {
         xsink->raiseErrnoException("QUIC-MIGRATION-ERROR", errno,
             "failed to create new UDP socket for migration");
         return -1;
     }
+#ifndef SOCK_CLOEXEC
+    fcntl(new_fd, F_SETFD, FD_CLOEXEC);
+#endif
     FdGuard fd_guard(new_fd);
 
     // Connect the new socket to the same remote address (gives us a specific
