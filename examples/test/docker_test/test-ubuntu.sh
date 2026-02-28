@@ -122,8 +122,15 @@ elif [ -f "${QORE_SRC_DIR}/build/libqore.dylib" ]; then
 fi
 
 # Run tests with binary selector (Debug for most tests, Release for WebSocketH2PerfTest)
+# Pass environment variables explicitly to gosu to ensure they're available in the test process
 echo && echo "-- running all tests (WebSocketH2PerfTest in Release mode, others in Debug) --"
-gosu qore:qore ./run_tests.sh
+gosu qore:qore env \
+    QORE_DEBUG_BINARY="${QORE_DEBUG_BINARY}" \
+    QORE_RELEASE_BINARY="${QORE_RELEASE_BINARY}" \
+    QORE_BINARY="${QORE_BINARY}" \
+    QORE_MODULE_DIR="${QORE_MODULE_DIR}" \
+    LIBQORE_BINARY="${LIBQORE_BINARY}" \
+    ./run_tests.sh
 
 if [ "${drop_pgsql_schema}" = "1" ]; then
     cleanup_postgres_on_host
