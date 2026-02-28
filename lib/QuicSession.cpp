@@ -845,7 +845,11 @@ int QuicSession::setupHttp3(ExceptionSink* xsink) {
     h3_cbs.acked_stream_data = h3AckedStreamDataCallback;
     h3_cbs.shutdown = h3ShutdownCallback;
     // RFC 9220: Detect remote peer's enable_connect_protocol setting
+#if NGHTTP3_VERSION_NUM >= 0x010e00  // v1.14.0+
     h3_cbs.recv_settings2 = h3RecvSettings2Callback;
+#else
+    h3_cbs.recv_settings = h3RecvSettingsCallback;
+#endif
 
     nghttp3_settings h3_settings;
     nghttp3_settings_default(&h3_settings);
@@ -3177,6 +3181,7 @@ int QuicSession::h3AckedStreamDataCallback(nghttp3_conn* /* conn */, int64_t str
     return 0;
 }
 
+#if NGHTTP3_VERSION_NUM >= 0x010e00  // v1.14.0+: recv_settings2 with nghttp3_proto_settings
 int QuicSession::h3RecvSettings2Callback(nghttp3_conn* /* conn */,
                                           const nghttp3_proto_settings* settings,
                                           void* conn_user_data) {
@@ -3187,6 +3192,18 @@ int QuicSession::h3RecvSettings2Callback(nghttp3_conn* /* conn */,
     }
     return 0;
 }
+#else
+int QuicSession::h3RecvSettingsCallback(nghttp3_conn* /* conn */,
+                                         const nghttp3_settings* settings,
+                                         void* conn_user_data) {
+    auto* session = static_cast<QuicSession*>(conn_user_data);
+    session->remote_settings_received_.store(true, std::memory_order_release);
+    if (settings->enable_connect_protocol) {
+        session->remote_enable_connect_protocol_.store(true, std::memory_order_release);
+    }
+    return 0;
+}
+#endif
 
 int QuicSession::h3ShutdownCallback(nghttp3_conn* /* conn */, int64_t id,
                                      void* conn_user_data) {

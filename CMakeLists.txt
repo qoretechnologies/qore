@@ -512,7 +512,11 @@ else()
 endif()
 
 if (NOT QUIC_FOUND_SYSTEM)
-    # Build ngtcp2 and nghttp3 from source via FetchContent
+    # Build ngtcp2 and nghttp3 from source via FetchContent.
+    # We use FetchContent_Populate + manual add_subdirectory because both
+    # projects unconditionally create an add_custom_target(check) which
+    # causes a fatal CMake duplicate-target error when both are present.
+    # Patching the downloaded sources removes the conflicting target.
     message(STATUS "ngtcp2/nghttp3 not found on system; building from source (ngtcp2 ${NGTCP2_VERSION}, nghttp3 ${NGHTTP3_VERSION})")
     include(FetchContent)
 
@@ -520,14 +524,20 @@ if (NOT QUIC_FOUND_SYSTEM)
     set(_SAVE_BUILD_TESTING ${BUILD_TESTING})
     set(_SAVE_BUILD_SHARED_LIBS ${BUILD_SHARED_LIBS})
 
-    # --- nghttp3 (must be declared before ngtcp2 since ngtcp2 can find it) ---
-    FetchContent_Declare(nghttp3
-        URL "https://github.com/ngtcp2/nghttp3/releases/download/v${NGHTTP3_VERSION}/nghttp3-${NGHTTP3_VERSION}.tar.xz"
-    )
     set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
     set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
     set(ENABLE_LIB_ONLY ON CACHE BOOL "" FORCE)
-    FetchContent_MakeAvailable(nghttp3)
+
+    # --- nghttp3 (must come before ngtcp2) ---
+    FetchContent_Declare(nghttp3
+        URL "https://github.com/ngtcp2/nghttp3/releases/download/v${NGHTTP3_VERSION}/nghttp3-${NGHTTP3_VERSION}.tar.xz"
+    )
+    FetchContent_Populate(nghttp3)
+    # Patch out the unconditional 'check' target that conflicts in multi-FetchContent builds
+    file(READ "${nghttp3_SOURCE_DIR}/CMakeLists.txt" _fc_content)
+    string(REPLACE "add_custom_target(check" "# add_custom_target(check" _fc_content "${_fc_content}")
+    file(WRITE "${nghttp3_SOURCE_DIR}/CMakeLists.txt" "${_fc_content}")
+    add_subdirectory(${nghttp3_SOURCE_DIR} ${nghttp3_BINARY_DIR} EXCLUDE_FROM_ALL)
 
     # --- ngtcp2 (with OpenSSL crypto backend) ---
     FetchContent_Declare(ngtcp2
@@ -535,7 +545,12 @@ if (NOT QUIC_FOUND_SYSTEM)
     )
     set(ENABLE_OPENSSL ON CACHE BOOL "" FORCE)
     set(ENABLE_GNUTLS OFF CACHE BOOL "" FORCE)
-    FetchContent_MakeAvailable(ngtcp2)
+    FetchContent_Populate(ngtcp2)
+    # Patch out the unconditional 'check' target
+    file(READ "${ngtcp2_SOURCE_DIR}/CMakeLists.txt" _fc_content)
+    string(REPLACE "add_custom_target(check" "# add_custom_target(check" _fc_content "${_fc_content}")
+    file(WRITE "${ngtcp2_SOURCE_DIR}/CMakeLists.txt" "${_fc_content}")
+    add_subdirectory(${ngtcp2_SOURCE_DIR} ${ngtcp2_BINARY_DIR} EXCLUDE_FROM_ALL)
 
     # Restore cache variables
     if (DEFINED _SAVE_BUILD_TESTING)
@@ -551,8 +566,6 @@ if (NOT QUIC_FOUND_SYSTEM)
 
     # Link against the FetchContent-built targets
     list(APPEND LIBQORE_OPTIONAL_LIBS ngtcp2 ngtcp2_crypto_ossl nghttp3)
-    # Include dirs are handled automatically via INTERFACE_INCLUDE_DIRECTORIES
-    # on the FetchContent cmake targets
 endif()
 
 if (WIN32 OR MINGW OR MSYS)

@@ -40,6 +40,7 @@
 #include <ngtcp2/ngtcp2_crypto.h>
 #include <ngtcp2/ngtcp2_crypto_ossl.h>
 #include <nghttp3/nghttp3.h>
+#include <nghttp3/version.h>
 
 #include <openssl/ssl.h>
 
@@ -876,9 +877,15 @@ private:
                                          void* stream_user_data);
 
     //! HTTP/3 SETTINGS received callback — detects enable_connect_protocol
+#if NGHTTP3_VERSION_NUM >= 0x010e00  // v1.14.0+: recv_settings2 with nghttp3_proto_settings
     DLLLOCAL static int h3RecvSettings2Callback(nghttp3_conn* conn,
                                                 const nghttp3_proto_settings* settings,
                                                 void* conn_user_data);
+#else
+    DLLLOCAL static int h3RecvSettingsCallback(nghttp3_conn* conn,
+                                               const nghttp3_settings* settings,
+                                               void* conn_user_data);
+#endif
 
     //! HTTP/3 shutdown (GOAWAY) callback — invoked when remote sends GOAWAY
     DLLLOCAL static int h3ShutdownCallback(nghttp3_conn* conn, int64_t id,
