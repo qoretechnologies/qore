@@ -81,7 +81,6 @@ DEBUG_BUILD_PID=$!
     cd build-release
     cmake .. -DCMAKE_BUILD_TYPE=release -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX}
     make -j${MAKE_JOBS}
-    make install
     echo "Release build complete"
 ) &
 RELEASE_BUILD_PID=$!
