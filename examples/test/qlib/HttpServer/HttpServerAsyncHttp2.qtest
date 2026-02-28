@@ -407,7 +407,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         mServer.setHandler("no-response", "/no-response", NOTHING, new NoResponseHandler());
 
         # Create temporary file for FileInputStream streaming test (2MB)
-        mTempFile = tmp_location() + "/http2-stream-test.bin";
+        mTempFile = tmp_location() + "/http2-stream-test-" + getpid() + "-" + get_random_string(8) + ".bin";
         {
             File f();
             f.open2(mTempFile, O_CREAT | O_WRONLY | O_TRUNC);

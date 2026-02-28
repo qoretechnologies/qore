@@ -190,7 +190,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         on_exit delete server;
 
         # Create client with certificate for mTLS
-        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+        HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
             "protocol": "h3",
             "accept_all_certs": True,
             "client_cert": new SSLCertificate(CertPem),
@@ -217,7 +217,7 @@ l50Xb2GWQesIt9k5jF5IOw==
 
         # Create client WITHOUT certificate — SSL_VERIFY_PEER alone should not
         # require a client cert (only requests it)
-        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+        HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
             "protocol": "h3",
             "accept_all_certs": True,
             "logger": mLogger,
@@ -243,7 +243,7 @@ l50Xb2GWQesIt9k5jF5IOw==
 
         # Create client WITHOUT certificate — handshake should fail because
         # SSL_VERIFY_FAIL_IF_NO_PEER_CERT requires a client cert
-        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+        HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
             "protocol": "h3",
             "accept_all_certs": True,
             "logger": mLogger,
@@ -271,7 +271,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         on_exit delete server;
 
         # Create client with certificate
-        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+        HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
             "protocol": "h3",
             "accept_all_certs": True,
             "client_cert": new SSLCertificate(CertPem),

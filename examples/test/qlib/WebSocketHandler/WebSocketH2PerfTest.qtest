@@ -687,8 +687,18 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
             assertTrue(wsc.isHttp2(), "WebSocket should connect over HTTP/2");
 
-            # Wait for the flood to complete and buffered frames to drain
-            sleep(10s);
+            # Wait for the flood to complete (up to 10s), polling the receive
+            # counter instead of a fixed sleep to finish faster in most cases
+            date deadline = now_us() + 10s;
+            while (now_us() < deadline) {
+                m.lock();
+                int r = received;
+                m.unlock();
+                if (r >= flood_count) {
+                    break;
+                }
+                sleep(100ms);
+            }
         } catch (hash<ExceptionInfo> ex) {
             caught_ex = ex;
         }

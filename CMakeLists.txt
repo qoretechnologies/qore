@@ -534,6 +534,7 @@ if (NOT QUIC_FOUND_SYSTEM)
     # --- nghttp3 (must come before ngtcp2) ---
     FetchContent_Declare(nghttp3
         URL "https://github.com/ngtcp2/nghttp3/releases/download/v${NGHTTP3_VERSION}/nghttp3-${NGHTTP3_VERSION}.tar.xz"
+        URL_HASH SHA256=020836668c711d5c166969f8b165fbfd989e6967d0601947bf608f29e2158518
     )
     FetchContent_Populate(nghttp3)
     # Patch out the unconditional 'check' target that conflicts in multi-FetchContent builds
@@ -545,6 +546,7 @@ if (NOT QUIC_FOUND_SYSTEM)
     # --- ngtcp2 (with OpenSSL crypto backend) ---
     FetchContent_Declare(ngtcp2
         URL "https://github.com/ngtcp2/ngtcp2/releases/download/v${NGTCP2_VERSION}/ngtcp2-${NGTCP2_VERSION}.tar.xz"
+        URL_HASH SHA256=9c9a4e2e150e90bf77d4ffcbefe82f738ee375287e68aaa715fa83c04a12209c
     )
     set(ENABLE_OPENSSL ON CACHE BOOL "" FORCE)
     set(ENABLE_GNUTLS OFF CACHE BOOL "" FORCE)

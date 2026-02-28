@@ -204,6 +204,7 @@ class MyWsHandlerWithExtensions inherits WebSocketHandler {
 class MyWsClient inherits WebSocketClient {
     private {
         WaitGroup wg;
+        bool ping_signaled = False;
     }
 
     constructor(code cb, hash<auto> opts, WaitGroup wg) : WebSocketClient(cb, opts) {
@@ -212,7 +213,10 @@ class MyWsClient inherits WebSocketClient {
 
     private handlePing(hash<auto> h) {
         WebSocketClient::handlePing(h);
-        try { wg.done(); } catch () {}
+        if (!ping_signaled) {
+            ping_signaled = True;
+            wg.done();
+        }
     }
 }
 
@@ -806,8 +810,12 @@ class WebSocketHandlerTest inherits QUnit::Test {
             assertTrue(wsc.queuePendingSend(f), sprintf("queue frame %d", i));
             push frames, f;
         }
-        assertEq(20, wsc.getPendingSendBytes() / frames[0].size(),
-            "all 20 frames queued (equal size)");
+        int total_bytes = 0;
+        for (int i = 0; i < frames.size(); ++i) {
+            total_bytes += frames[i].size();
+        }
+        assertEq(total_bytes, wsc.getPendingSendBytes(),
+            "all 20 frames queued (total byte count matches)");
         for (int i = 0; i < 20; ++i) {
             assertEq(frames[i], wsc.peekPendingSend(), sprintf("peek order frame %d", i));
             assertEq(frames[i], wsc.dequeuePendingSend(), sprintf("dequeue order frame %d", i));
