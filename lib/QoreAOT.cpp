@@ -736,8 +736,15 @@ static bool emitObjectFile(llvm::Module& module, const std::string& path, std::s
         return false;
     }
 
+#if LLVM_VERSION_MAJOR >= 21
+    // LLVM 21+: createTargetMachine expects Triple object
     auto* tm = target->createTargetMachine(t, "generic", "",
         llvm::TargetOptions{}, llvm::Reloc::PIC_);
+#else
+    // LLVM 18-20: createTargetMachine expects StringRef
+    auto* tm = target->createTargetMachine(triple, "generic", "",
+        llvm::TargetOptions{}, llvm::Reloc::PIC_);
+#endif
     if (!tm) {
         error = "failed to create target machine for '" + triple + "'";
         return false;

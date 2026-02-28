@@ -111,8 +111,15 @@ static void optimizeModule(llvm::Module& module, int opt_level) {
     if (!target) {
         return;  // Fall back to unoptimized if target lookup fails
     }
+#if LLVM_VERSION_MAJOR >= 21
+    // LLVM 21+: createTargetMachine expects Triple object
     auto* tm = target->createTargetMachine(triple, "generic", "",
         llvm::TargetOptions{}, llvm::Reloc::PIC_);
+#else
+    // LLVM 18-20: createTargetMachine expects StringRef
+    auto* tm = target->createTargetMachine(triple_str, "generic", "",
+        llvm::TargetOptions{}, llvm::Reloc::PIC_);
+#endif
     if (!tm) {
         return;
     }
