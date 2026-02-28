@@ -63,7 +63,7 @@ class SseHandler inherits AbstractHttpRequestHandler {
     #! Override the 5-arg version to get the socket for HTTP/3 QUIC API access
     hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s,
             hash<auto> cx, hash<auto> hdr, *data body) {
-        if (hdr.method == "GET" && hdr.path == "/sse") {
+        if (hdr.method == "GET" && hdr.path == "sse") {
             if (cx."header-info".http3) {
                 return handleHttp3Sse(s, cx);
             }
@@ -75,6 +75,9 @@ class SseHandler inherits AbstractHttpRequestHandler {
     }
 
     private hash<HttpResponseInfo> handleHttp3Sse(Socket s, hash<auto> cx) {
+        # Ensure the counter is always decremented, even if send operations throw
+        on_exit event_sent_counter.dec();
+
         int session_id = cx."header-info".session_id;
         int stream_id = cx."header-info".stream_id;
 
@@ -98,9 +101,6 @@ class SseHandler inherits AbstractHttpRequestHandler {
 
         # Close the stream (sends END_STREAM)
         sse_stream.close();
-
-        # Signal that events were sent
-        event_sent_counter.dec();
 
         # Return streaming + reply_sent — controller will just wake and continue
         return cast<hash<HttpResponseInfo>>({
@@ -215,6 +215,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         HttpClientIo::HttpClientConnectionManager mgr(
             <HttpClientIo::HttpClientConnectionManagerOptions>{
                 "protocol": "h3",
+                "accept_all_certs": True,
                 "logger": mLogger,
                 "request_timeout": 30s,
                 "connect_timeout": 15s,

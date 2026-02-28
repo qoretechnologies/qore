@@ -300,7 +300,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),
         }).port;
-        mSslUrl = "https://localhost:" + mSslPort;
+        mSslUrl = "https://127.0.0.1:" + mSslPort;
 
         # Add QUIC listener for HTTP/3 tests
         try {
@@ -308,7 +308,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
                 "cert": new SSLCertificate(CertPem),
                 "key": new SSLPrivateKey(KeyPem),
             }).port;
-            mQuicUrl = "https://localhost:" + mQuicPort;
+            mQuicUrl = "https://127.0.0.1:" + mQuicPort;
         } catch (hash<ExceptionInfo> ex) {
             if (m_options.verbose > 0) {
                 printf("QUIC listener not available: %s: %s\n", ex.err, ex.desc);
@@ -1477,7 +1477,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertTrue(conn.driveToReady(30s), "connection should become ready");
 
         hash<HttpClientIo::HttpClientConnectionInfo> info = conn.getConnectionInfo();
-        assertEq("localhost", info.host, "host should be localhost");
+        assertEq("127.0.0.1", info.host, "host should be 127.0.0.1");
         assertEq(mSslPort, info.port, "port should match");
         assertEq(HttpClientIo::HttpClientConnectionState::Ready, info.state,
             "state should be Ready");

@@ -149,7 +149,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),
         }).port;
-        mSslUrl = "https://localhost:" + mSslPort;
+        mSslUrl = "https://127.0.0.1:" + mSslPort;
 
         mServer.waitForAsyncIo();
 
@@ -328,6 +328,15 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             "max_connections_per_host": max_connections,
             "logger": mLogger,
         });
+
+        # Warm up the pool: establish the first connection before bursting concurrent
+        # requests.  HTTP/2 multiplexing can only reduce connection count when a
+        # connection is already established and ready to accept new streams.
+        {
+            HttpClientIo::Http2ClientStreamHandle warmup = manager.acquireStream(mSslUrl);
+            hash<auto> warmup_resp = warmup.request("GET", "/simple");
+            assertEq(200, warmup_resp.status_code, "warmup request should succeed");
+        }
 
         Counter done(request_count);
         Mutex resp_m();
