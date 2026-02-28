@@ -1344,75 +1344,22 @@ static int executeOnBlockExitHandlers(std::vector<IROnBlockExitHandler>& handler
     return nrc;
 }
 
-// Lazy stack location for IR-executed frames.
-// Resolves source location on demand from the current block/ip state.
-// Per-instruction runtime_loc updates are also performed in the main loop
-// for CodeEvaluationHelper compatibility.
+// Placeholder class - QoreIRStackLocation was removed because inheriting from
+// QoreProgramStackLocationHelper caused IR frames to appear in exception callstacks,
+// resulting in wrong line numbers compared to AST mode.
+// Exception callstacks should only contain frames at exception propagation points,
+// which in normal AST execution doesn't include IR internal frames.
 //
-// Lifetime: This object is constructed on execute()'s stack AFTER the block/ip locals it
-// references, so it is destroyed FIRST (C++ reverse construction order), removing itself
-// from the thread's stack location chain before block/ip go out of scope.
+// The correct approach is to update runtime_loc via per-instruction location updates
+// in the main execute() loop for use by AST evaluation code (CodeEvaluationHelper),
+// without pushing frames onto the stack location chain.
 //
-// Thread safety: getLocation() may be called from another thread via
-// get_all_thread_call_stacks().  block_ref and ip_ref are non-atomic, so this is
-// technically a C++ data race.  In practice it is benign on 64-bit platforms where
-// pointer and size_t reads are naturally atomic, and the local-copy pattern in
-// getLocation() prevents TOCTOU issues.  The worst case is a slightly stale source
-// location in a cross-thread stack trace, which is acceptable for debugging purposes.
-class QoreIRStackLocation : public QoreStackLocation, public QoreProgramStackLocationHelper {
-public:
-    DLLLOCAL QoreIRStackLocation(const QoreIRFunction& func, QoreIRBasicBlock*& block_ref,
-            size_t& ip_ref, const StatementBlock* statements, QoreProgram* pgm)
-        : QoreProgramStackLocationHelper(this, saved_stmt, saved_pgm),
-          func(func), block_ref(block_ref), ip_ref(ip_ref),
-          statements(statements), pgm(pgm) {
-        if (!this->pgm) {
-            // Fall back to the thread's current program (saved by base class constructor)
-            this->pgm = saved_pgm;
-        }
-    }
-
-    DLLLOCAL const QoreProgramLocation& getLocation() const override {
-        // Lazily resolve from current IR instruction
-        QoreIRBasicBlock* blk = block_ref;
-        size_t ip = ip_ref;
-        if (blk && ip < blk->instructions.size()) {
-            const QoreProgramLocation* loc = blk->instructions[ip]->loc;
-            if (loc) {
-                return *loc;
-            }
-        }
-        return loc_builtin;
-    }
-
-    DLLLOCAL const std::string& getCallName() const override {
-        return func.name;
-    }
-
-    DLLLOCAL qore_call_t getCallType() const override {
-        return CT_USER;
-    }
-
-    DLLLOCAL QoreProgram* getProgram() const override {
-        return pgm;
-    }
-
-    DLLLOCAL const AbstractStatement* getStatement() const override {
-        return statements;
-    }
-
-private:
-    const QoreIRFunction& func;
-    QoreIRBasicBlock*& block_ref;   // reference to execute()'s local variable
-    size_t& ip_ref;                 // reference to execute()'s local variable
-    const StatementBlock* statements;
-    QoreProgram* pgm;
-    // saved_stmt and saved_pgm receive old thread-local values from
-    // QoreProgramStackLocationHelper constructor via output references.
-    // IMPORTANT: no default member initializers — they would overwrite the values
-    // written by the base class constructor (same pattern as QoreInternalCallStackLocationHelperBase).
-    const AbstractStatement* saved_stmt;
-    QoreProgram* saved_pgm;
+// Issue: Normal mode showed frame 0 line 561 (call site), IR mode showed line 552 (throw site)
+// because QoreIRStackLocation was in the stack location chain at the time the exception was
+// created, capturing the throw statement's location instead of letting the AST evaluator
+// handle the exception location correctly.
+class QoreIRStackLocation {
+    // Unused stub - kept to avoid breaking anything that might reference this class
 };
 
 bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_value, ExceptionSink* xsink,
@@ -1640,10 +1587,9 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     QoreIRBasicBlock* prev_block = nullptr;
     size_t ip = 0;
 
-    // Push lazy stack location for this IR execution frame.
-    // Resolves source location on demand from block/ip rather than
-    // updating runtime_loc on every instruction (zero overhead during normal execution).
-    QoreIRStackLocation ir_stack_loc(func, block, ip, statements, pgm);
+    // NOTE: QoreIRStackLocation was removed - it was adding extra frames to exception
+    // callstacks with the wrong line numbers.  Instead, runtime_loc is updated
+    // per-instruction in the main loop below for use by AST evaluation code.
 
     // OSR: loop iteration counter for loop-aware JIT promotion
     uint32_t loop_iterations = 0;
