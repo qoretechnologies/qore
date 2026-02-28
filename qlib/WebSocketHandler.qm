@@ -39,7 +39,7 @@
 %modern
 
 module WebSocketHandler {
-    version = "2.4";
+    version = "2.5";
     desc = "User module for providing WebSocket server services";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -115,6 +115,20 @@ printf("HTTP/3 WebSocket server listening on port 8443\n");
     @ref WebSocketHandler::WebSocketHandler::sendAll() "sendAll()" APIs work across all transports.
 
     @section websockethandler_relnotes WebSocketHandler Release History
+
+    @subsection websockethandler_v2_5 Version 2.5
+    - replaced frame-dropping behavior on transport backpressure with a per-connection pending
+      send buffer that retains frames and drains them at each handler loop iteration
+      - HTTP/2 flow control (\c HTTP2-FLOW-CONTROL) and HTTP/1.1 async contention
+        (\c SOCKET-NON-BLOCK-ERROR) now queue frames instead of dropping them
+      - natural backpressure to the application layer: the Channel is not polled while the
+        pending send buffer has data, so @ref WebSocketHandler::WebSocketConnection::send()
+        "WebSocketConnection::send()" blocks when the Channel fills up
+      - heartbeat pings are suppressed during backpressure to avoid growing the buffer
+    - added @ref WebSocketHandler::WebSocketHandler::MaxPendingSendBytes
+      "MaxPendingSendBytes" constant (4 MB safety limit)
+    - added @ref WebSocketHandler::WebSocketHandler::MaxDrainFramesPerIteration
+      "MaxDrainFramesPerIteration" constant to cap drain time per loop iteration
 
     @subsection websockethandler_v2_4 Version 2.4
     - added support for WebSocket over HTTP/3 (RFC 9220 — Extended CONNECT over QUIC)
@@ -301,6 +315,16 @@ public class WebSocketConnection {
     private:internal {
         #! The socket used by the server for this connection
         Socket sock;
+
+        #! Frames that couldn't be sent due to backpressure, awaiting retry
+        /** @since WebSocketHandler 2.5
+        */
+        list<binary> pending_sends;
+
+        #! Total bytes in pending_sends for memory limit enforcement
+        /** @since WebSocketHandler 2.5
+        */
+        int pending_send_bytes = 0;
     }
 
     #! the constructor is called when a new connection is made by a websocket client
@@ -569,7 +593,7 @@ public class WebSocketConnection {
     */
     flush() {
         if (gettid() != tid) {
-            while (!stop_flag && !channel.empty()) {
+            while (!stop_flag && (!channel.empty() || hasPendingSends())) {
                 usleep(DefaultQueuePollingInterval);
             }
         } else {
@@ -582,6 +606,80 @@ public class WebSocketConnection {
         stop_flag = True;
         # closing the channel wakes up the polling thread immediately
         channel.close();
+    }
+
+    #! Returns True if there are buffered frames awaiting send
+    /** @return True if frames are pending, False otherwise
+
+        @note Internal API — called by @ref WebSocketHandler from the handler (I/O) thread.
+        Not intended for use by subclasses.
+
+        @since WebSocketHandler 2.5
+    */
+    bool hasPendingSends() {
+        return pending_send_bytes > 0;
+    }
+
+    #! Returns the total bytes currently buffered in the pending send queue
+    /** @return the number of bytes buffered
+
+        @note Internal API — called by @ref WebSocketHandler from the handler (I/O) thread.
+        Not intended for use by subclasses.
+
+        @since WebSocketHandler 2.5
+    */
+    int getPendingSendBytes() {
+        return pending_send_bytes;
+    }
+
+    #! Peeks at the first pending frame without removing it
+    /** @return the first pending frame
+
+        @pre @ref hasPendingSends() must return True
+
+        @note Internal API — called by @ref WebSocketHandler from the handler (I/O) thread.
+        Not intended for use by subclasses.
+
+        @since WebSocketHandler 2.5
+    */
+    binary peekPendingSend() {
+        return pending_sends[0];
+    }
+
+    #! Removes and returns the first pending frame
+    /** @return the dequeued frame
+
+        @pre @ref hasPendingSends() must return True
+
+        @note Internal API — called by @ref WebSocketHandler from the handler (I/O) thread.
+        Not intended for use by subclasses.
+
+        @since WebSocketHandler 2.5
+    */
+    binary dequeuePendingSend() {
+        binary frame = shift pending_sends;
+        pending_send_bytes -= frame.size();
+        return frame;
+    }
+
+    #! Appends a frame to the pending send buffer; returns False if over limit
+    /** @param frame the frame to queue
+        @return True if the frame was queued successfully, False if the pending send buffer is full
+
+        @note Internal API — called by @ref WebSocketHandler from the handler (I/O) thread.
+        Not intended for use by subclasses.  A single frame larger than
+        @ref WebSocketHandler::MaxPendingSendBytes "MaxPendingSendBytes" can never be buffered
+        and will always be dropped.
+
+        @since WebSocketHandler 2.5
+    */
+    bool queuePendingSend(binary frame) {
+        if (pending_send_bytes + frame.size() > WebSocketHandler::MaxPendingSendBytes) {
+            return False;
+        }
+        push pending_sends, frame;
+        pending_send_bytes += frame.size();
+        return True;
     }
 
 %ifndef NoAsyncApi
@@ -794,9 +892,9 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         const DefaultHeartbeatMsg = "heartbeat";
 
         #! Maximum retries when HTTP/2 flow control backpressure is detected
-        /** When sendFrame() encounters \c HTTP2-FLOW-CONTROL (per-stream buffer > 1MB),
+        /** When @ref trySendDirect() encounters \c HTTP2-FLOW-CONTROL (per-stream buffer > 1MB),
             it pumps I/O to drain the buffer and retries up to this many times before
-            dropping the frame.
+            returning \c False to signal backpressure to the caller.
         */
         const FlowControlMaxRetries = 10;
 
@@ -806,6 +904,27 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
             (including \c WINDOW_UPDATE) from the peer.
         */
         const FlowControlRetryMs = 50ms;
+
+        #! Maximum bytes buffered in pending_sends before dropping frames
+        /** When transport backpressure prevents immediate delivery, frames are buffered in
+            a per-connection pending send list and drained at each handler loop iteration.
+            If the total buffered bytes would exceed this limit, new frames are dropped
+            with a warning log.
+
+            @since WebSocketHandler 2.5
+        */
+        const MaxPendingSendBytes = 4 * 1024 * 1024;
+
+        #! Maximum frames to drain from the pending send buffer per handler loop iteration
+        /** Caps the time spent in @ref drainPendingSends() so that incoming data is not
+            starved while flushing a large backlog.  Each frame may incur up to
+            @ref FlowControlMaxRetries retries of @ref FlowControlRetryMs each, so the
+            worst-case drain time per iteration is roughly
+            \c MaxDrainFramesPerIteration * \c FlowControlMaxRetries * \c FlowControlRetryMs.
+
+            @since WebSocketHandler 2.5
+        */
+        const MaxDrainFramesPerIteration = 10;
 
         #! known constructor options
         const Options = (
@@ -1293,21 +1412,39 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
 
             try {
                 bool update = False;
-                # send any and all messages on the channel
-                *binary d = wsc.pollData();
-                if (d) {
-                    @debug {
-                        if (h2_ws_debug_frames && d.size() >= 2) {
-                            int b0 = d[0];
-                            int b1 = d[1];
-                            log(LoggerLevel::INFO,
-                                "HTTP/2 WS send frame: b0=0x%02x b1=0x%02x fin=%y op=%d masked=%y", b0, b1,
-                                (b0 & WS_FIN) != 0, b0 & 0x0f, (b1 & 0x80) != 0);
+
+                # Drain any buffered frames from previous iterations
+                drainPendingSends(wsc, sock);
+
+                # Only poll the Channel for new messages if no pending sends remain;
+                # this creates natural backpressure to the application thread — when
+                # we stop dequeuing, the Channel fills up and send() blocks
+                if (!wsc.hasPendingSends()) {
+                    # send any and all messages on the channel
+                    *binary d = wsc.pollData();
+                    if (d) {
+                        @debug {
+                            if (h2_ws_debug_frames && d.size() >= 2) {
+                                int b0 = d[0];
+                                int b1 = d[1];
+                                log(LoggerLevel::INFO,
+                                    "HTTP/2 WS send frame: b0=0x%02x b1=0x%02x fin=%y op=%d masked=%y", b0, b1,
+                                    (b0 & WS_FIN) != 0, b0 & 0x0f, (b1 & 0x80) != 0);
+                            }
                         }
+                        sendFrame(wsc, sock, d);
+                        update = True;
+                        flushIoIntern(wsc, sock, False);
                     }
-                    sendFrame(wsc, sock, d);
-                    update = True;
-                    flushIoIntern(wsc, sock, False);
+                } else {
+                    # Still backpressured after drain — pump I/O to give the peer a
+                    # chance to send WINDOW_UPDATE / drain its receive buffer, and
+                    # avoid busy-looping
+                    try {
+                        sock.isDataAvailable(FlowControlRetryMs);
+                    } catch () {
+                        # Socket error — next drain iteration will detect
+                    }
                 }
 
                 if (wsc.stop_flag) {
@@ -1345,7 +1482,10 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                     } else {
                         int now = clock_getmillis() / 1000;
                         if (!update) {
-                            if ((now - timestamp) >= heartbeat) {
+                            # Skip heartbeats when backpressured — the pending data activity
+                            # keeps the connection "warm", and adding heartbeats to the pending
+                            # buffer just wastes memory.  Heartbeats resume when the backlog drains.
+                            if (!wsc.hasPendingSends() && (now - timestamp) >= heartbeat) {
                                 binary frame = ws_encode_message(heartbeat_msg, WSOP_Ping);
                                 @debug {
                                     if (h2_ws_debug_frames && frame.size() >= 2) {
@@ -1368,7 +1508,8 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                     if (!sock.isDataAvailable(0ms)) {
                         int now = clock_getmillis() / 1000;
                         if (!update) {
-                            if ((now - timestamp) >= heartbeat) {
+                            # Skip heartbeats when backpressured — see comment above
+                            if (!wsc.hasPendingSends() && (now - timestamp) >= heartbeat) {
                                 binary frame = ws_encode_message(heartbeat_msg, WSOP_Ping);
                                 @debug {
                                     if (h2_ws_debug_frames && frame.size() >= 2) {
@@ -1618,6 +1759,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
     }
 
     private:internal bool flushIoIntern(WebSocketConnection wsc, Socket sock, bool update_tld) {
+        drainPendingSends(wsc, sock);
         bool rv;
         while (!wsc.stop_flag && exists (*binary d = wsc.pollDataImmediate())) {
             sendFrame(wsc, sock, d);
@@ -1822,10 +1964,24 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                     b0, b1, (b0 & WS_FIN) != 0, b0 & 0x0f, (b1 & 0x80) != 0);
             }
         }
-        sendFrame(wsc, sock, frame);
+        # Close frames bypass the pending send buffer for prompt delivery
+        trySendDirect(wsc, sock, frame);
     }
 
-    private sendFrame(WebSocketConnection wsc, Socket sock, binary frame) {
+    #! Attempts to send a frame directly; returns True on success, False on backpressure
+    /** Fatal errors call @ref WebSocketConnection::stop() "wsc.stop()" and return True
+        (frame "handled" — connection dead).
+
+        @param wsc the WebSocket connection
+        @param sock the socket to send on
+        @param frame the binary frame data to send
+
+        @return True if the frame was sent (or the connection was killed due to a fatal error),
+        False if transport backpressure prevented sending
+
+        @since WebSocketHandler 2.5
+    */
+    private bool trySendDirect(WebSocketConnection wsc, Socket sock, binary frame) {
         # HTTP/2 or HTTP/3 WebSocket: send via stream context with backpressure handling
         *AsyncSocketIo::AbstractStreamContext ctx = wsc.getStreamContext();
         if (ctx) {
@@ -1842,27 +1998,23 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                         # internally, so any error that escapes is fatal (e.g., session gone,
                         # stream reset)
                         wsc.stop();
-                        return;
+                        return True;
                     }
                     if (ex.err == "HTTP2-ERROR" && ex.desc =~ /no HTTP\/2 session active/) {
                         @debug {
-                            logDebug("HTTP/2 WS sendFrame: stream session inactive; stopping connection");
+                            logDebug("HTTP/2 WS trySendDirect: stream session inactive; stopping connection");
                         }
                         wsc.stop();
-                        return;
+                        return True;
                     }
                     if (ex.err == "SOCKET-SSL-ERROR") {
-                        logError("%s WS sendFrame: SSL error; stopping: %s", proto.upr(), ex.desc);
+                        logError("%s WS trySendDirect: SSL error; stopping: %s", proto.upr(), ex.desc);
                         wsc.stop();
-                        return;
+                        return True;
                     }
                     if (ex.err == "HTTP2-FLOW-CONTROL") {
                         if (wsc.stop_flag || ++flow_control_retry > FlowControlMaxRetries) {
-                            if (!wsc.stop_flag) {
-                                logWarn("HTTP/2 WS sendFrame: backpressure after %d retries, frame dropped (%d bytes)",
-                                    FlowControlMaxRetries, frame.size());
-                            }
-                            return;
+                            return False;
                         }
                         # Pump I/O: flush outgoing buffer to TCP and read incoming HTTP/2 frames
                         # (including WINDOW_UPDATE) from the peer to free flow control window
@@ -1879,7 +2031,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
             if (wsc.isAsyncMode() && wsc.getAsyncCtrl()) {
                 wsc.getAsyncCtrl().wake();
             }
-            return;
+            return True;
         }
         if (wsc.isAsyncMode()) {
             @assert(wsc.getAsyncCtrl(), "missing async controller for async mode WebSocket send");
@@ -1888,25 +2040,8 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                 op = sock.startPollSend(frame);
             } catch (hash<ExceptionInfo> ex) {
                 if (ex.err == "SOCKET-NON-BLOCK-ERROR") {
-                    # Another async send is already in progress on this socket.
-                    # This can happen in HTTP/1.1 async mode when multiple threads or callbacks
-                    # try to send frames concurrently (e.g., application message + control frame).
-                    #
-                    # WARNING: Dropping frames can cause protocol issues, especially for control frames
-                    # (ping/pong/close). WebSocket clients may timeout waiting for pong responses or
-                    # close acknowledgments.
-                    #
-                    # NOTE: HTTP/2 WebSocket doesn't have this issue since it uses a different code path
-                    # (Http2StreamContext.sendData()) that handles multiplexing at the protocol level.
-                    #
-                    # A proper fix would require implementing a per-connection send queue and ensuring
-                    # frames are sent in order after the current async operation completes. This is
-                    # complex because exec() blocks waiting for the operation, so queued frames would
-                    # need to be sent from the main I/O loop, not from within sendFrame().
-                    log(LoggerLevel::WARN,
-                        "WebSocketHandler::sendFrame(): async send already in progress; dropping frame "
-                        "(size=%d bytes)", frame.size());
-                    return;
+                    # Another async send is already in progress on this socket — backpressure
+                    return False;
                 }
                 throw ex.err, ex.desc, ex.arg;
             }
@@ -1920,9 +2055,63 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
             if (result.ex) {
                 throw result.ex.err, result.ex.desc, result.ex.arg;
             }
-            return;
+            return True;
         }
         sock.send2(frame, send_timeout);
+        return True;
+    }
+
+    #! Sends a WebSocket frame, buffering if transport backpressure is detected
+    /** If there are already pending frames for this connection, the new frame is queued behind them
+        to maintain ordering. If the transport accepts the frame immediately, it is sent directly.
+        If backpressure prevents sending and the pending buffer is full, the frame is dropped with
+        a warning.
+
+        @param wsc the WebSocket connection
+        @param sock the socket to send on
+        @param frame the binary frame data to send
+
+        @since WebSocketHandler 2.5
+    */
+    private sendFrame(WebSocketConnection wsc, Socket sock, binary frame) {
+        if (wsc.hasPendingSends()) {
+            # Maintain ordering: queue behind existing pending frames
+            if (!wsc.queuePendingSend(frame)) {
+                log(LoggerLevel::WARN, "WebSocket pending send buffer full (%d bytes); "
+                    "dropping frame (%d bytes)", wsc.getPendingSendBytes(), frame.size());
+            }
+            return;
+        }
+        if (!trySendDirect(wsc, sock, frame)) {
+            if (!wsc.queuePendingSend(frame)) {
+                log(LoggerLevel::WARN, "WebSocket pending send buffer full; "
+                    "dropping frame (%d bytes)", frame.size());
+            }
+        }
+    }
+
+    #! Drains pending send buffer in order; stops at first backpressure or frame cap
+    /** Sends buffered frames one at a time until the buffer is empty, the transport
+        pushes back again, or @ref MaxDrainFramesPerIteration frames have been sent.
+        Uses peek+dequeue to ensure frames are not lost on failure.
+
+        The frame cap prevents starving incoming data when a large backlog has accumulated;
+        remaining frames will be drained in subsequent handler loop iterations.
+
+        @param wsc the WebSocket connection
+        @param sock the socket to send on
+
+        @since WebSocketHandler 2.5
+    */
+    private drainPendingSends(WebSocketConnection wsc, Socket sock) {
+        int drained = 0;
+        while (!wsc.stop_flag && wsc.hasPendingSends() && drained < MaxDrainFramesPerIteration) {
+            if (!trySendDirect(wsc, sock, wsc.peekPendingSend())) {
+                break;
+            }
+            wsc.dequeuePendingSend();
+            ++drained;
+        }
     }
 
     static string getDataString(*data d) {

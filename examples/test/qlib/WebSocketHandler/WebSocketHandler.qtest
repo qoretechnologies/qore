@@ -203,19 +203,16 @@ class MyWsHandlerWithExtensions inherits WebSocketHandler {
 
 class MyWsClient inherits WebSocketClient {
     private {
-        Counter cnt;
+        WaitGroup wg;
     }
 
-    constructor(code cb, hash<auto> opts, Counter c) : WebSocketClient(cb, opts) {
-        cnt = c;
+    constructor(code cb, hash<auto> opts, WaitGroup wg) : WebSocketClient(cb, opts) {
+        self.wg = wg;
     }
 
     private handlePing(hash<auto> h) {
         WebSocketClient::handlePing(h);
-        # in case of a race condition; only decrement once
-        if (cnt.getCount()) {
-            cnt.dec();
-        }
+        try { wg.done(); } catch () {}
     }
 }
 
@@ -234,6 +231,7 @@ class WebSocketHandlerTest inherits QUnit::Test {
         addTestCase("extension negative tests", \extensionNegativeTests());
         addTestCase("sendAll extension tests", \sendAllExtensionTests());
         addTestCase("stream context API tests", \streamContextApiTests());
+        addTestCase("pending send buffer tests", \pendingSendBufferTests());
 
         logger = new Logger("test", m_options.verbose > 3 ? LoggerLevel::LevelDebug : LoggerLevel::LevelInfo);
         if (m_options.verbose > 2) {
@@ -312,10 +310,11 @@ class WebSocketHandlerTest inherits QUnit::Test {
         assertEq("test", wsHandler.getHeartbeatMessage());
 
         {
-            Counter c(1);
-            MyWsClient wsc(sub (*data msg) {}, {"url": "ws://localhost:" + port}, c);
+            WaitGroup wg();
+            wg.add();
+            MyWsClient wsc(sub (*data msg) {}, {"url": "ws://localhost:" + port}, wg);
             wsc.connect();
-            c.waitForZero();
+            wg.wait();
             assertTrue(wsc.isOpen());
         }
 
@@ -328,18 +327,21 @@ class WebSocketHandlerTest inherits QUnit::Test {
 
         # check close connection from server side
         {
-            Counter c(1);
-            wsHandler.setHeartbeat(20);  # to not decrement counter
-            MyWsClient wsc(sub (*data msg) {c.dec(); }, {"url": "ws://localhost:" + port}, c);
+            WaitGroup wg();
+            wg.add();
+            wsHandler.setHeartbeat(20);  # to not trigger handlePing
+            MyWsClient wsc(sub (*data msg) { try { wg.done(); } catch () {} },
+                {"url": "ws://localhost:" + port}, wg);
             wsc.connect();
             assertTrue(wsc.isOpen());
             wsc.send("STOP");
-            c.waitForZero();
+            wg.wait();
         }
 
         # check fragmented messaging and flushing I/O
         {
-            Counter c(1);
+            WaitGroup wg();
+            wg.add();
             Queue msgs();
             code callback = sub (*data msg) {
                 msgs.push(msg);
@@ -353,7 +355,7 @@ class WebSocketHandlerTest inherits QUnit::Test {
                 "url": "ws://localhost:" + port,
                 "raw_callback": raw_callback,
                 "logger": logger,
-            }, c);
+            }, wg);
             wsc.connect();
             assertTrue(wsc.isOpen());
             wsc.send("ECHO😀");
@@ -365,7 +367,7 @@ class WebSocketHandlerTest inherits QUnit::Test {
             assertEq("flushing", msgs.get(5s));
             wsc.send("PING");
             # wait for ping
-            c.waitForZero();
+            wg.wait();
             assertEq(WSOP_Text, raw_msgs[0].op);
             assertEq(False, raw_msgs[1].fin);
             assertEq(WSOP_Continuation, raw_msgs[2].op);
@@ -736,6 +738,81 @@ class WebSocketHandlerTest inherits QUnit::Test {
         # Clear and verify
         wsc.setStreamContext(NOTHING);
         assertNothing(wsc.getStreamContext(), "context cleared after setStreamContext(NOTHING)");
+    }
+
+    pendingSendBufferTests() {
+        WebSocketConnection wsc(wsHandler);
+
+        # --- initially empty ---
+        assertFalse(wsc.hasPendingSends(), "empty buffer: hasPendingSends");
+        assertEq(0, wsc.getPendingSendBytes(), "empty buffer: getPendingSendBytes");
+
+        # --- queue a single frame ---
+        binary frame1 = <0102030405>;
+        assertTrue(wsc.queuePendingSend(frame1), "queue first frame succeeds");
+        assertTrue(wsc.hasPendingSends(), "non-empty after first queue");
+        assertEq(frame1.size(), wsc.getPendingSendBytes(), "byte count after first queue");
+
+        # --- peek is idempotent ---
+        assertEq(frame1, wsc.peekPendingSend(), "peek returns first frame");
+        assertEq(frame1, wsc.peekPendingSend(), "peek again returns same frame");
+        assertEq(frame1.size(), wsc.getPendingSendBytes(), "byte count unchanged after peeks");
+
+        # --- queue a second frame, verify FIFO order ---
+        binary frame2 = <0a0b0c>;
+        assertTrue(wsc.queuePendingSend(frame2), "queue second frame succeeds");
+        assertEq(frame1.size() + frame2.size(), wsc.getPendingSendBytes(),
+            "byte count after two queues");
+        # peek still returns first frame (FIFO)
+        assertEq(frame1, wsc.peekPendingSend(), "peek still returns first frame");
+
+        # --- dequeue first, then second ---
+        binary got1 = wsc.dequeuePendingSend();
+        assertEq(frame1, got1, "dequeue returns first frame");
+        assertEq(frame2.size(), wsc.getPendingSendBytes(), "byte count after first dequeue");
+        assertTrue(wsc.hasPendingSends(), "still has sends after first dequeue");
+
+        binary got2 = wsc.dequeuePendingSend();
+        assertEq(frame2, got2, "dequeue returns second frame");
+        assertEq(0, wsc.getPendingSendBytes(), "byte count zero after both dequeued");
+        assertFalse(wsc.hasPendingSends(), "empty after both dequeued");
+
+        # --- buffer limit enforcement ---
+        # Create a frame that is exactly at the limit
+        int limit = WebSocketHandler::MaxPendingSendBytes;
+        binary big_frame = binary(strmul("x", limit));
+        assertTrue(wsc.queuePendingSend(big_frame), "frame at exact limit queues");
+        assertEq(limit, wsc.getPendingSendBytes(), "byte count at limit");
+
+        # Any additional frame should be rejected
+        binary tiny = <ff>;
+        assertFalse(wsc.queuePendingSend(tiny), "frame rejected when buffer full");
+        assertEq(limit, wsc.getPendingSendBytes(), "byte count unchanged after rejection");
+
+        # Drain and verify
+        wsc.dequeuePendingSend();
+        assertFalse(wsc.hasPendingSends(), "empty after draining big frame");
+        assertEq(0, wsc.getPendingSendBytes(), "byte count zero after big frame drained");
+
+        # --- frame larger than limit can never be buffered ---
+        binary oversized = binary(strmul("y", limit + 1));
+        assertFalse(wsc.queuePendingSend(oversized), "oversized frame rejected on empty buffer");
+        assertFalse(wsc.hasPendingSends(), "still empty after oversized rejection");
+
+        # --- ordering with many frames ---
+        list<binary> frames;
+        for (int i = 0; i < 20; ++i) {
+            binary f = binary(sprintf("frame-%03d", i));
+            assertTrue(wsc.queuePendingSend(f), sprintf("queue frame %d", i));
+            push frames, f;
+        }
+        assertEq(20, wsc.getPendingSendBytes() / frames[0].size(),
+            "all 20 frames queued (equal size)");
+        for (int i = 0; i < 20; ++i) {
+            assertEq(frames[i], wsc.peekPendingSend(), sprintf("peek order frame %d", i));
+            assertEq(frames[i], wsc.dequeuePendingSend(), sprintf("dequeue order frame %d", i));
+        }
+        assertFalse(wsc.hasPendingSends(), "empty after draining all 20 frames");
     }
 
     private log(string str) {
