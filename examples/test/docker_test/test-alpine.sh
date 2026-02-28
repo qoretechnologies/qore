@@ -131,6 +131,7 @@ fi
 
 # Run tests with binary selector (Debug for most tests, Release for WebSocketH2PerfTest)
 # Pass environment variables explicitly to gosu to ensure they're available in the test process
+# Set LD_LIBRARY_PATH to ensure binaries use the correct libqore.so from build directory
 echo && echo "-- running all tests (WebSocketH2PerfTest in Release mode, others in Debug) --"
 gosu qore:qore env \
     QORE_DEBUG_BINARY="${QORE_DEBUG_BINARY}" \
@@ -138,6 +139,7 @@ gosu qore:qore env \
     QORE_BINARY="${QORE_BINARY}" \
     QORE_MODULE_DIR="${QORE_MODULE_DIR}" \
     LIBQORE_BINARY="${LIBQORE_BINARY}" \
+    LD_LIBRARY_PATH="${QORE_SRC_DIR}/build/lib:${QORE_SRC_DIR}/build-release/lib:${QORE_SRC_DIR}/build/lib/.libs:${QORE_SRC_DIR}/build-release/lib/.libs:${LD_LIBRARY_PATH}" \
     QORE_SELECTOR_DEBUG=1 \
     ./run_tests.sh
 
