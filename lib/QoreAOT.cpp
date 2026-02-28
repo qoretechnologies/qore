@@ -729,13 +729,14 @@ static bool emitObjectFile(llvm::Module& module, const std::string& path, std::s
 #endif
 
     std::string target_error;
+    llvm::Triple t(triple);
     auto* target = llvm::TargetRegistry::lookupTarget(triple, target_error);
     if (!target) {
         error = "failed to look up target '" + triple + "': " + target_error;
         return false;
     }
 
-    auto* tm = target->createTargetMachine(triple, "generic", "",
+    auto* tm = target->createTargetMachine(t, "generic", "",
         llvm::TargetOptions{}, llvm::Reloc::PIC_);
     if (!tm) {
         error = "failed to create target machine for '" + triple + "'";

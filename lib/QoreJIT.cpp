@@ -43,6 +43,7 @@
 #include <llvm/Target/TargetMachine.h>
 #include <llvm/MC/TargetRegistry.h>
 #include <llvm/TargetParser/Host.h>
+#include <llvm/TargetParser/Triple.h>
 #include "qore/intern/QoreIRToLLVM.h"
 #include "qore/intern/JITRuntime.h"
 
@@ -104,12 +105,13 @@ static void optimizeModule(llvm::Module& module, int opt_level) {
 
     // Create a target machine for the native target (needed by PassBuilder for target-specific opts)
     std::string triple_str = llvm::sys::getDefaultTargetTriple();
+    llvm::Triple triple(triple_str);
     std::string target_error;
     auto* target = llvm::TargetRegistry::lookupTarget(triple_str, target_error);
     if (!target) {
         return;  // Fall back to unoptimized if target lookup fails
     }
-    auto* tm = target->createTargetMachine(triple_str, "generic", "",
+    auto* tm = target->createTargetMachine(triple, "generic", "",
         llvm::TargetOptions{}, llvm::Reloc::PIC_);
     if (!tm) {
         return;
