@@ -1487,9 +1487,33 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 }
                 on_block_exit_handlers.resize(scope_start);
                 // Invalidate caches after handler execution (both AST and compiled handlers
-                // can modify locals via the thread-local variable stack)
+                // can modify any variable type on the thread-local variable stack)
                 cleanupStoredValues(locals, xsink);
+                cleanupStoredValues(globals, xsink);
+                cleanupStoredValues(threadlocals, xsink);
+                cleanupStoredValues(closures, xsink);
+                // Also clear slot cache without a separate lambda call
+                for (size_t i = 0; i < locals_slot_cache.size(); ++i) {
+                    locals_slot_cache[i].discard(xsink);
+                    locals_slot_cache[i] = QoreValue();
+                }
             }
+        }
+    };
+
+    // Helper to clear all variable caches (locals, globals, threadlocals, closures, and slot cache)
+    // after AST function/method calls. The calls may have modified any of these variable types,
+    // so all caches must be invalidated to force re-read from the runtime stack on next access.
+    auto cleanupLocalCaches = [&]() {
+        cleanupStoredValues(locals, xsink);
+        cleanupStoredValues(globals, xsink);
+        cleanupStoredValues(threadlocals, xsink);
+        cleanupStoredValues(closures, xsink);
+        // Clear the fast-path slot cache as well — without this, stale slot cache hits
+        // would return pre-call values instead of live values modified by the call.
+        for (size_t i = 0; i < locals_slot_cache.size(); ++i) {
+            locals_slot_cache[i].discard(xsink);
+            locals_slot_cache[i] = QoreValue();
         }
     };
 
@@ -2086,10 +2110,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     xsink->raiseException("CALL-REFERENCE-ERROR",
                         "cannot call a NOTHING value as a closure/call reference");
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, xsink);
-                    cleanupStoredValues(globals, xsink);
-                    cleanupStoredValues(threadlocals, xsink);
-                    cleanupStoredValues(closures, xsink);
+                    cleanupLocalCaches();
                     return false;
                 }
 
@@ -2099,10 +2120,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     xsink->raiseException("CALL-REFERENCE-ERROR",
                         "value is not a call reference or closure");
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, xsink);
-                    cleanupStoredValues(globals, xsink);
-                    cleanupStoredValues(threadlocals, xsink);
-                    cleanupStoredValues(closures, xsink);
+                    cleanupLocalCaches();
                     return false;
                 }
 
@@ -2130,18 +2148,12 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 }
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, xsink);
-                    cleanupStoredValues(globals, xsink);
-                    cleanupStoredValues(threadlocals, xsink);
-                    cleanupStoredValues(closures, xsink);
+                    cleanupLocalCaches();
                     return false;
                 }
                 // Closure/callref execution can run arbitrary code that may modify
-                // globals, thread-locals, or other cached state
-                cleanupStoredValues(locals, xsink);
-                cleanupStoredValues(globals, xsink);
-                cleanupStoredValues(threadlocals, xsink);
-                cleanupStoredValues(closures, xsink);
+                // globals, thread-locals, or other cached state, so clear all caches
+                cleanupLocalCaches();
                 setValueSlot(values, inst->result.id, result, xsink);
                 if (result.hasNode()) {
                     cleanup.push_back(inst->result.id);
@@ -2319,11 +2331,8 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 }
                 QoreValue res = evalInvoke(inv, values, xsink);
                 // Invalidate all variable caches after Invoke - the AST call may have modified
-                // globals, thread-locals, or closure variables
-                cleanupStoredValues(locals, xsink);
-                cleanupStoredValues(globals, xsink);
-                cleanupStoredValues(threadlocals, xsink);
-                cleanupStoredValues(closures, xsink);
+                // globals, thread-locals, or closure variables, and the slot cache must be cleared
+                cleanupLocalCaches();
                 if (xsink && *xsink) {
                     if (debug_active) {
                         tlpd->dbgException(nullptr, xsink);
@@ -4345,10 +4354,11 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         }
                         // Remove executed handlers
                         on_block_exit_handlers.resize(scope_start);
-                        // Handler execution (both AST and compiled IR) can modify any local
-                        // variable on the thread-local stack.  Clear the locals cache so
-                        // subsequent LoadLocal re-reads from the runtime.
-                        cleanupStoredValues(locals, xsink);
+                        // Handler execution (both AST and compiled IR) can modify any local,
+                        // global, thread-local, or closure variable on the thread-local stack.
+                        // Clear all caches (including slot cache) so subsequent variable reads
+                        // re-fetch from the runtime.
+                        cleanupLocalCaches();
                     }
                 }
                 ++ip;
@@ -5081,16 +5091,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 }
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, xsink);
-                    cleanupStoredValues(globals, xsink);
-                    cleanupStoredValues(threadlocals, xsink);
-                    cleanupStoredValues(closures, xsink);
+                    cleanupLocalCaches();
                     return false;
                 }
-                cleanupStoredValues(locals, xsink);
-                cleanupStoredValues(globals, xsink);
-                cleanupStoredValues(threadlocals, xsink);
-                cleanupStoredValues(closures, xsink);
+                cleanupLocalCaches();
                 setValueSlot(values, inst->result.id, res, xsink);
                 if (res.hasNode()) {
                     cleanup.push_back(inst->result.id);
@@ -5136,10 +5140,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
 
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, xsink);
-                    cleanupStoredValues(globals, xsink);
-                    cleanupStoredValues(threadlocals, xsink);
-                    cleanupStoredValues(closures, xsink);
+                    cleanupLocalCaches();
                     return false;
                 }
                 setValueSlot(values, direct_inst->result.id, res, xsink);
@@ -5186,11 +5187,8 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 QoreValue res = qore_method_private::eval(*method, xsink, rc, self, *arg_list);
 
                 // Invalidate all variable caches after method call - the call may have modified
-                // globals, thread-locals, or closure variables
-                cleanupStoredValues(locals, xsink);
-                cleanupStoredValues(globals, xsink);
-                cleanupStoredValues(threadlocals, xsink);
-                cleanupStoredValues(closures, xsink);
+                // globals, thread-locals, or closure variables, and the slot cache must be cleared
+                cleanupLocalCaches();
 
                 if (xsink && *xsink) {
                     // On exception, branch to exception target
