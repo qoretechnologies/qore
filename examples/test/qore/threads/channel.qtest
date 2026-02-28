@@ -1,0 +1,313 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%requires ../../../../qlib/QUnit.qm
+
+%exec-class ChannelTest
+
+class ChannelTest inherits QUnit::Test {
+    constructor() : QUnit::Test("Channel", "1.0", \ARGV) {
+        addTestCase("Buffered send/recv roundtrip", \testBufferedRoundtrip());
+        addTestCase("Unbuffered synchronous handoff", \testUnbufferedHandoff());
+        addTestCase("Close + drain remaining values", \testCloseDrain());
+        addTestCase("Send after close throws", \testSendAfterClose());
+        addTestCase("Recv after close + drain returns NOTHING", \testRecvAfterCloseDrain());
+        addTestCase("Backpressure (send blocks when full)", \testBackpressure());
+        addTestCase("foreach iteration until close", \testForeachIteration());
+        addTestCase("Multiple producers / multiple consumers", \testMultiProducerConsumer());
+        addTestCase("Timeout on recv", \testRecvTimeout());
+        addTestCase("Timeout on send", \testSendTimeout());
+        addTestCase("trySend/tryRecv", \testTrySendTryRecv());
+        addTestCase("Channel cannot be copied", \testCopy());
+        addTestCase("size/capacity/empty", \testSizeCapacityEmpty());
+        addTestCase("Negative capacity throws", \testNegativeCapacity());
+        addTestCase("ChannelIterator cannot be copied", \testIteratorCopy());
+        addTestCase("NOTHING value through channel", \testNothingValue());
+        addTestCase("NOTHING value through iterator", \testNothingValueIterator());
+        addTestCase("Channel isClosed", \testIsClosed());
+        addTestCase("Unlimited channel", \testUnlimitedChannel());
+        set_return_value(main());
+    }
+
+    testBufferedRoundtrip() {
+        Channel ch(10);
+        ch.send(1);
+        ch.send(2);
+        ch.send(3);
+        assertEq(1, ch.recv());
+        assertEq(2, ch.recv());
+        assertEq(3, ch.recv());
+    }
+
+    testUnbufferedHandoff() {
+        Channel ch(0);
+        Counter done(1);
+        auto received;
+        background sub() {
+            received = ch.recv();
+            done.dec();
+        }();
+        ch.send(42);
+        done.waitForZero();
+        assertEq(42, received);
+    }
+
+    testCloseDrain() {
+        Channel ch(10);
+        ch.send(1);
+        ch.send(2);
+        ch.send(3);
+        ch.close();
+        # Can still recv buffered values after close
+        assertEq(1, ch.recv());
+        assertEq(2, ch.recv());
+        assertEq(3, ch.recv());
+        # After drain, recv returns NOTHING
+        assertNothing(ch.recv());
+    }
+
+    testSendAfterClose() {
+        Channel ch(10);
+        ch.close();
+        assertThrows("CHANNEL-CLOSED", sub() { ch.send(1); });
+    }
+
+    testRecvAfterCloseDrain() {
+        Channel ch(10);
+        ch.close();
+        assertNothing(ch.recv());
+    }
+
+    testBackpressure() {
+        Channel ch(2);
+        ch.send(1);
+        ch.send(2);
+        # Channel is full - trySend should fail
+        assertFalse(ch.trySend(3));
+        # Drain one to make room
+        assertEq(1, ch.recv());
+        assertTrue(ch.trySend(3));
+        assertEq(2, ch.recv());
+        assertEq(3, ch.recv());
+    }
+
+    testForeachIteration() {
+        Channel ch(10);
+        background sub() {
+            for (int i = 0; i < 5; ++i) {
+                ch.send(i);
+            }
+            ch.close();
+        }();
+        list<auto> results = ();
+        foreach auto val in (ch.iterator()) {
+            push results, val;
+        }
+        assertEq(5, results.size());
+        for (int i = 0; i < 5; ++i) {
+            assertEq(i, results[i]);
+        }
+    }
+
+    testMultiProducerConsumer() {
+        Channel ch(20);
+        int num_producers = 3;
+        int items_per_producer = 10;
+        Counter producer_done(num_producers);
+
+        # Start producers
+        for (int p = 0; p < num_producers; ++p) {
+            background sub(int id) {
+                for (int i = 0; i < items_per_producer; ++i) {
+                    ch.send(id * 100 + i);
+                }
+                producer_done.dec();
+            }(p);
+        }
+
+        # Close channel when all producers done
+        background sub() {
+            producer_done.waitForZero();
+            ch.close();
+        }();
+
+        # Consume all values
+        list<auto> received = ();
+        foreach auto val in (ch.iterator()) {
+            push received, val;
+        }
+
+        assertEq(num_producers * items_per_producer, received.size());
+    }
+
+    testRecvTimeout() {
+        Channel ch(10);
+        assertThrows("CHANNEL-TIMEOUT", sub() { ch.recv(100ms); });
+    }
+
+    testSendTimeout() {
+        Channel ch(1);
+        ch.send(1);
+        # Channel full, should timeout
+        assertThrows("CHANNEL-TIMEOUT", sub() { ch.send(2, 100ms); });
+        ch.recv();
+    }
+
+    testTrySendTryRecv() {
+        Channel ch(1);
+        # tryRecv on empty returns NOTHING
+        assertNothing(ch.tryRecv());
+        # trySend succeeds
+        assertTrue(ch.trySend(42));
+        # trySend fails when full
+        assertFalse(ch.trySend(43));
+        # tryRecv returns hash with value and has_value keys
+        auto result = ch.tryRecv();
+        assertEq(True, result.has_value);
+        assertEq(42, result.value);
+        # tryRecv on empty again
+        assertNothing(ch.tryRecv());
+        # Test tryRecv with NOTHING value — can distinguish from empty channel
+        assertTrue(ch.trySend(NOTHING));
+        auto result2 = ch.tryRecv();
+        assertEq(True, result2.has_value);
+        assertNothing(result2.value);
+    }
+
+    testCopy() {
+        Channel ch(10);
+        assertThrows("CHANNEL-COPY-ERROR", sub() { Channel ch2 = ch.copy(); });
+    }
+
+    testSizeCapacityEmpty() {
+        Channel ch(5);
+        assertEq(5, ch.capacity());
+        assertEq(0, ch.size());
+        assertTrue(ch.empty());
+        ch.send(1);
+        assertEq(1, ch.size());
+        assertFalse(ch.empty());
+        ch.recv();
+        assertEq(0, ch.size());
+        assertTrue(ch.empty());
+    }
+
+    testNegativeCapacity() {
+        # -1 is valid (unlimited), -2 and below are invalid
+        assertThrows("CHANNEL-ERROR", sub() { Channel ch(-2); });
+
+        # Verify -1 creates an unlimited channel
+        Channel ch(-1);
+        assertEq(-1, ch.capacity());
+    }
+
+    testIteratorCopy() {
+        Channel ch(10);
+        ChannelIterator it(ch);
+        assertThrows("CHANNELITERATOR-COPY-ERROR", sub() { ChannelIterator it2 = it.copy(); });
+    }
+
+    testNothingValue() {
+        # Test that NOTHING can be sent and received as a distinct value
+        Channel ch(10);
+        ch.send(NOTHING);
+        ch.send(42);
+        ch.close();
+
+        # recv() should return NOTHING (the value), not signaling end-of-stream
+        auto val1 = ch.recv();
+        assertNothing(val1);
+
+        # Next recv should return 42
+        auto val2 = ch.recv();
+        assertEq(42, val2);
+
+        # After drain, recv returns NOTHING (end-of-stream)
+        auto val3 = ch.recv();
+        assertNothing(val3);
+    }
+
+    testNothingValueIterator() {
+        # Test that ChannelIterator handles NOTHING values correctly
+        Channel ch(10);
+        ch.send(1);
+        ch.send(NOTHING);
+        ch.send(3);
+        ch.close();
+
+        list<auto> results = ();
+        foreach auto val in (ch.iterator()) {
+            push results, val;
+        }
+        assertEq(3, results.size());
+        assertEq(1, results[0]);
+        assertNothing(results[1]);
+        assertEq(3, results[2]);
+    }
+
+    testIsClosed() {
+        Channel ch(10);
+        assertFalse(ch.isClosed());
+        ch.close();
+        assertTrue(ch.isClosed());
+    }
+
+    testUnlimitedChannel() {
+        # Unlimited channel: send never blocks
+        Channel ch(-1);
+        assertEq(-1, ch.capacity());
+        assertTrue(ch.empty());
+
+        # Send many values without blocking
+        int count = 1000;
+        for (int i = 0; i < count; ++i) {
+            ch.send(i);
+        }
+        assertEq(count, ch.size());
+        assertFalse(ch.empty());
+
+        # Receive all values in order
+        for (int i = 0; i < count; ++i) {
+            assertEq(i, ch.recv());
+        }
+        assertTrue(ch.empty());
+
+        # trySend always succeeds on unlimited channel
+        assertTrue(ch.trySend(42));
+        assertTrue(ch.trySend(43));
+        assertEq(2, ch.size());
+
+        # tryRecv works
+        auto result = ch.tryRecv();
+        assertTrue(exists result);
+        assertEq(42, result.value);
+        result = ch.tryRecv();
+        assertTrue(exists result);
+        assertEq(43, result.value);
+
+        # Close + drain works
+        ch.send("a");
+        ch.send("b");
+        ch.close();
+        assertThrows("CHANNEL-CLOSED", sub() { ch.send("c"); });
+        assertEq("a", ch.recv());
+        assertEq("b", ch.recv());
+        # After drain, recv returns NOTHING (no exception)
+        assertNothing(ch.recv());
+
+        # Iterator works on unlimited channel
+        Channel ch2(-1);
+        ch2.send(10);
+        ch2.send(20);
+        ch2.send(30);
+        ch2.close();
+        list<auto> results = ();
+        foreach auto val in (ch2.iterator()) {
+            push results, val;
+        }
+        assertEq((10, 20, 30), results);
+    }
+}

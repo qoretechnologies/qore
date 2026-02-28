@@ -1,0 +1,131 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_ChannelIterator.qpp
+
+    Qore Programming Language
+
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Note that the Qore library is released under a choice of three open-source
+    licenses: MIT (as above), LGPL 2+, or GPL 2+; see README-LICENSE for more
+    information.
+*/
+
+#include <qore/Qore.h>
+#include "qore/intern/QC_ChannelIterator.h"
+
+//! An iterator for @ref Qore::Thread::Channel "Channel" objects that enables @ref foreach iteration
+/** This iterator calls @ref Qore::Thread::Channel::recv() "Channel::recv()" in each call to @ref next().
+    When the channel is closed and all values are drained, @ref next() returns @ref False.
+
+    @par Example: Using foreach
+    @code{.py}
+Channel ch(10);
+background sub() {
+    for (int i = 0; i < 5; ++i) {
+        ch.send(i);
+    }
+    ch.close();
+}();
+foreach auto val in (ch.iterator()) {
+    printf("received: %y\n", val);
+}
+    @endcode
+
+    @par Example: Using while loop
+    @code{.py}
+ChannelIterator it(ch);
+while (it.next()) {
+    printf("value: %y\n", it.getValue());
+}
+    @endcode
+
+    @see @ref Qore::Thread::Channel "Channel"
+
+    @note This class is not available with the @ref PO_NO_THREAD_CLASSES parse option.
+
+    @since %Qore 2.3
+ */
+qclass ChannelIterator [dom=THREAD_CLASS; arg=QoreChannelIterator* i; ns=Qore::Thread; vparent=AbstractIterator];
+
+//! Creates the ChannelIterator for the given Channel
+/** @param channel the @ref Qore::Thread::Channel "Channel" to iterate
+
+    @par Example:
+    @code{.py}
+ChannelIterator it(channel);
+    @endcode
+ */
+ChannelIterator::constructor(Channel[QoreChannel] channel) {
+    self->setPrivate(CID_CHANNELITERATOR, new QoreChannelIterator(channel.release(), true));
+}
+
+//! Throws an exception; ChannelIterator objects cannot be copied
+/** @throw CHANNELITERATOR-COPY-ERROR Objects of this class cannot be copied
+ */
+ChannelIterator::copy() {
+    xsink->raiseException("CHANNELITERATOR-COPY-ERROR", "objects of this class cannot be copied");
+}
+
+//! Moves the iterator to the next value; blocks until a value is available or the channel is closed
+/** @return @ref True if a value was received, @ref False if the channel is closed and drained
+
+    @par Example:
+    @code{.py}
+while (it.next()) {
+    printf("value: %y\n", it.getValue());
+}
+    @endcode
+ */
+bool ChannelIterator::next() {
+    return i->next(xsink);
+}
+
+//! Returns the current value
+/** @return the current value
+
+    @par Example:
+    @code{.py}
+auto val = it.getValue();
+    @endcode
+
+    @throw INVALID-ITERATOR iterator is not pointing at a valid element
+ */
+auto ChannelIterator::getValue() [flags=RET_VALUE_ONLY] {
+    if (i->checkValid(xsink)) {
+        return QoreValue();
+    }
+    return i->getValue();
+}
+
+//! Returns @ref True if the iterator is pointing at a valid element
+/** @return @ref True if valid
+
+    @par Example:
+    @code{.py}
+if (it.valid()) {
+    printf("current value: %y\n", it.getValue());
+}
+    @endcode
+ */
+bool ChannelIterator::valid() [flags=CONSTANT] {
+    return i->valid();
+}

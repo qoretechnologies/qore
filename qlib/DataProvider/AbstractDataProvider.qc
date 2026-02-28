@@ -118,6 +118,11 @@ public hashdecl BaseOptionInfo inherits DisplayDescInfo {
     /** @since %DataProvider 3.3
     */
     *softlist<softstring> on_change;
+
+    #! Will any expression specified by this option be handled by the server?
+    /** @since %DataProvider 3.3
+    */
+    bool server_expression_handling = False;
 }
 
 #! Data provider option info

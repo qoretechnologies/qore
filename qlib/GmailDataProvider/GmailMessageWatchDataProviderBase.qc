@@ -26,7 +26,7 @@
 public namespace GmailDataProvider {
 #! The parent class for Gmail REST APIs
 public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::GoogleDataProviderBase,
-        DataProvider::DelayedObservable {
+        DataProvider::AbstractWatchDataProviderBase {
     public {
         #! Constructor options
         const ConstructorOptions = {
@@ -88,21 +88,6 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
     }
 
     private {
-        # I/O lock
-        Mutex lck();
-
-        #! I/O Condition
-        Condition cond();
-
-        #! Number of threads waiting on the I/O condition
-        int waiting;
-
-        #! I/O TID
-        int io_tid;
-
-        #! I/O stop flag
-        bool stop;
-
         #! Poll interval in seconds
         int poll_secs;
 
@@ -117,12 +102,16 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
 
         #! Match query
         string q;
+
+        #! Setup info for polling (initialized on first poll)
+        hash<auto> setup_info;
     }
 
     #! Creates the object from a REST connection
     constructor(GoogleRestClient::GoogleRestClient rest,
             hash<string, hash<DataProviderOptionInfo>> constructor_options, *hash<auto> options)
-            : GoogleDataProviderBase(rest) {
+            : GoogleDataProviderBase(rest),
+              AbstractWatchDataProviderBase(max(options.poll_interval ?? 120, MinPollInterval)) {
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", constructor_options,
             DataProviderDataContextHelper::getHash(){keys constructor_options} + options);
         processOptions(copts);
@@ -130,47 +119,7 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
 
     #! Stops observing and deletes the object
     destructor() {
-        stopIntern();
-    }
-
-    #! Called when all observers have been added to the object
-    /** This method is meant to trigger event generation
-    */
-    observersReady() {
-        lck.lock();
-        on_exit lck.unlock();
-
-        # I/O thread already running
-        if (io_tid) {
-            return;
-        }
-
-        # start the I/O thread
-        io_tid = background pollThread();
-    }
-
-    #! Called to stop generating events
-    /** Stops polling for new events
-    */
-    stopEvents() {
-        stopIntern();
-    }
-
-    #! Stops polling
-    private stopIntern() {
-        lck.lock();
-        on_exit lck.unlock();
-
-        if (io_tid) {
-            # set the stop flag
-            stop = True;
-            # signal the I/O thread to wake up
-            cond.signal();
-            # wait for the thread to terminate
-            while (io_tid) {
-                cond.wait(lck);
-            }
-        }
+        stopEventsIntern();
     }
 
     #! Process constructor options
@@ -194,31 +143,6 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
         q = copts.q;
     }
 
-    #! I/O polling thread
-    private pollThread() {
-        on_exit {
-            lck.lock();
-            on_exit lck.unlock();
-
-            remove io_tid;
-
-            cond.broadcast();
-        }
-
-        hash<auto> info = setup();
-
-        while (!stop) {
-            pollOnce(\info);
-
-            # wait until next poll; check stop first to avoid sleeping after a signal was already sent
-            lck.lock();
-            on_exit lck.unlock();
-            if (!stop) {
-                cond.wait(lck, poll_secs * 1000);
-            }
-        }
-    }
-
     #! Setup for a poll operation
     private hash<auto> setup() {
         string uri = "gmail/v1/users/me/messages?q=" + q;
@@ -235,8 +159,16 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
         };
     }
 
+    #! Performs a single polling operation
+    private pollOnce() {
+        if (!setup_info) {
+            setup_info = setup();
+        }
+        pollOnceIntern(\setup_info);
+    }
+
     #! Perform one poll
-    private *hash<auto> pollOnce(reference<hash<auto>> setup) {
+    private *hash<auto> pollOnceIntern(reference<hash<auto>> setup) {
         # check for matching mail
         hash<auto> info;
         try {
@@ -252,7 +184,7 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
             int match;
             foreach hash<auto> minfo in (res.messages) {
                 # check for shutdown between REST calls
-                if (stop) {
+                if (isStopping()) {
                     break;
                 }
                 # skip messages already processed

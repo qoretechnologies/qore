@@ -63,7 +63,7 @@ public class Cin7CoreSaleTrackingWatchDataProvider inherits Cin7CoreWatchDataPro
     }
 
     #! Poll for tracking changes
-    list<hash<auto>> pollOnce() {
+    list<hash<auto>> pollOnceImpl() {
         hash<auto> params = {
             "ModifiedSince": since,
             "Page": 1,

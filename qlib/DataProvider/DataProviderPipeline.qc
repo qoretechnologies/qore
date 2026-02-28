@@ -286,8 +286,8 @@ class PipelineQueue {
         #! Parent lock
         Mutex lck;
 
-        #! Parent counter
-        Counter cnt;
+        #! Parent WaitGroup
+        WaitGroup cnt;
 
         #! Queue condition variable
         Condition cond();
@@ -376,22 +376,23 @@ class PipelineQueue {
     }
 
     #! Creates the object
-    constructor(DataProviderPipeline parent, Mutex lck, Counter cnt, int id, int size) {
+    constructor(DataProviderPipeline parent, Mutex lck, WaitGroup cnt, int id, int size) {
         self.size = size;
         self.parent := parent;
         self.lck = lck;
         self.cnt = cnt;
 
-        cnt.inc();
+        cnt.add();
         on_error {
-            cnt.dec();
+            cnt.done();
         }
         self.id = id;
         self.id_str = id.toString();
-        Counter run_cnt(1);
+        WaitGroup run_cnt();
+        run_cnt.add();
         tid = background run(run_cnt);
         # do not return until the background thread is running
-        run_cnt.waitForZero();
+        run_cnt.wait();
     }
 
     #! Returns the pipeline ID
@@ -455,8 +456,8 @@ class PipelineQueue {
     }
 
     #! Processing thread
-    run(Counter run_cnt) {
-        run_cnt.dec();
+    run(WaitGroup run_cnt) {
+        run_cnt.done();
 
         parent.registerThread(self);
 
@@ -513,7 +514,7 @@ class PipelineQueue {
         # destructor in this thread.  The destructor calls
         # cnt.waitForZero(), so cnt must already be decremented to avoid
         # self-deadlock.
-        on_exit cnt.dec();
+        on_exit cnt.done();
 
         # Metrics batch state — flushed at threshold or when the queue goes idle
         int batch_count = 0;
@@ -910,7 +911,7 @@ public class PipelineMetricsCollector {
         #! Previous element metrics snapshot (internal key → field values)
         hash<string, hash<auto>> prev_element_snap;
 
-        #! Optional source element ID; when set, recordPipelineSubmit() also updates source element metrics
+        #! Optional source element ID; when set, recordBatchFlush() also updates source element metrics
         *string source_element_id;
 
         #! Abstract metrics collector
@@ -1504,7 +1505,11 @@ public class PipelineMetricsCollector {
     private hash<PipelineMetricsSnapshot> getSnapshotIntern() {
         date now = now_us();
         float duration_secs = (now - collection_start).durationSecondsFloat();
-        float throughput = duration_secs > 0 ? (total_completed / duration_secs) : 0.0;
+        # Use total_submitted (input rate) for throughput, not total_completed.
+        # In fan-out pipelines, total_completed sums completions from ALL branches
+        # (e.g. 2 branches × 100 records = 200 completed), which inflates the throughput
+        # relative to the actual data generation/submission rate (100 records).
+        float throughput = duration_secs > 0 ? (total_submitted / duration_secs) : 0.0;
 
         # Build output element metrics: remap aliases and filter out queue and mapper elements.
         # Internal element_metrics keys are auto-generated "queue_id:elem_index" IDs.
@@ -1554,7 +1559,8 @@ public class PipelineMetricsCollector {
         int delta_submitted = total_submitted - prev_submitted;
         int delta_completed = total_completed - prev_completed;
         float delta_secs = interval_ms / 1000.0;
-        float delta_throughput = (delta_secs > 0.0) ? (delta_completed / delta_secs) : 0.0;
+        # Use delta_submitted for consistency with pipeline-level throughput (input rate)
+        float delta_throughput = (delta_secs > 0.0) ? (delta_submitted / delta_secs) : 0.0;
 
         hash<string, hash<PipelineElementDelta>> delta_elements();
         foreach string k in (keys element_metrics) {
@@ -1697,8 +1703,8 @@ public class DataProviderPipeline {
         #! Abort flag
         bool abort_flag;
 
-        #! Thread counter
-        Counter cnt();
+        #! Thread WaitGroup
+        WaitGroup cnt();
 
         #! Metrics collector for real-time metrics reporting
         /** @since DataProvider 3.3
@@ -1737,7 +1743,7 @@ public class DataProviderPipeline {
         # create new synchronization objects
         lck = new Mutex();
         seq = new Sequence();
-        cnt = new Counter();
+        cnt = new WaitGroup();
 
         # ensure the copy is reset
         resetIntern();
@@ -1758,7 +1764,7 @@ public class DataProviderPipeline {
     */
     destructor() {
         stopIntern();
-        cnt.waitForZero();
+        cnt.wait();
         if (metrics_collector && !metrics_collector.isShutDown()) {
             metrics_collector.forceCallback();
             metrics_collector.shutdown();

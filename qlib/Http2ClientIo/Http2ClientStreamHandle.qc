@@ -106,8 +106,8 @@ public class Http2ClientStreamHandle {
         #! Logger
         *Logger logger;
 
-        #! Data queue for streaming mode
-        *Queue data_queue;
+        #! Data channel for streaming mode
+        *Channel data_channel;
 
         #! Whether this stream is in streaming mode
         bool streaming = False;
@@ -326,7 +326,7 @@ public class Http2ClientStreamHandle {
             }
             state = Http2ClientStreamState::Open;
             streaming = True;
-            data_queue = new Queue();
+            data_channel = new Channel(-1);
         }
 
         # Wait for connection to become ready if not already
@@ -339,7 +339,7 @@ public class Http2ClientStreamHandle {
                     AutoLock al(lock);
                     state = Http2ClientStreamState::Pending;
                     streaming = False;
-                    delete data_queue;
+                    delete data_channel;
                 }
                 throw "HTTP2-TIMEOUT", "connection establishment timed out";
             }
@@ -356,7 +356,7 @@ public class Http2ClientStreamHandle {
                 AutoLock al(lock);
                 state = Http2ClientStreamState::Pending;
                 streaming = False;
-                delete data_queue;
+                delete data_channel;
             }
             rethrow;
         }
@@ -385,18 +385,18 @@ public class Http2ClientStreamHandle {
             if (state == Http2ClientStreamState::Complete
                     || state == Http2ClientStreamState::Error
                     || state == Http2ClientStreamState::Cancelled) {
-                if (data_queue.empty()) {
+                if (data_channel.empty()) {
                     throw "HTTP2-STREAM-CLOSED", "stream is closed";
                 }
             }
         }
 
         if (controller_mode) {
-            # Controller drives I/O; just wait on the queue
+            # Controller drives I/O; just wait on the channel
             try {
-                return data_queue.get(wait_timeout);
+                return data_channel.recv(wait_timeout);
             } catch (hash<ExceptionInfo> ex) {
-                if (ex.err == "QUEUE-TIMEOUT") {
+                if (ex.err == "CHANNEL-TIMEOUT") {
                     return NOTHING;
                 }
                 rethrow;
@@ -406,15 +406,12 @@ public class Http2ClientStreamHandle {
         # Non-controller mode: drive the poll while waiting for data
         date end_time = now_us() + wait_timeout;
         while (True) {
-            # Check queue with short timeout
-            try {
-                return data_queue.get(0);
-            } catch (hash<ExceptionInfo> ex) {
-                if (ex.err != "QUEUE-TIMEOUT") {
-                    rethrow;
-                }
-                # Queue empty — drive poll
+            # Check channel non-blocking
+            auto result = data_channel.tryRecv();
+            if (exists result) {
+                return result.value;
             }
+            # Channel empty — drive poll
 
             date remaining = end_time - now_us();
             if (remaining <= 0us) {
@@ -523,8 +520,15 @@ public class Http2ClientStreamHandle {
                 error_info = err;
                 state = Http2ClientStreamState::Error;
             }
-            # Push error to queue to unblock readers
-            data_queue.push({"error": err});
+            # Push error to channel to unblock readers, then close
+            try {
+                data_channel.send({"error": err});
+            } catch (hash<ExceptionInfo> ex2) {
+                if (ex2.err != "CHANNEL-CLOSED") {
+                    rethrow;
+                }
+            }
+            data_channel.close();
             return;
         }
 
@@ -549,12 +553,25 @@ public class Http2ClientStreamHandle {
         }
 
         if (resp.body) {
-            data_queue.push(resp.body);
+            try {
+                data_channel.send(resp.body);
+            } catch (hash<ExceptionInfo> ex2) {
+                if (ex2.err != "CHANNEL-CLOSED") {
+                    rethrow;
+                }
+            }
         }
 
         if (is_end) {
-            # Use explicit sentinel to distinguish from timeout (which returns NOTHING)
-            data_queue.push({"end_stream": True});
+            # Push sentinel to distinguish from timeout, then close channel
+            try {
+                data_channel.send({"end_stream": True});
+            } catch (hash<ExceptionInfo> ex2) {
+                if (ex2.err != "CHANNEL-CLOSED") {
+                    rethrow;
+                }
+            }
+            data_channel.close();
         }
     }
 

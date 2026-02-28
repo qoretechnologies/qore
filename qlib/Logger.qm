@@ -385,7 +385,7 @@ public class LoggerAppenderQueueThreadPool inherits LoggerAppenderQueue {
         #! worker thread pool
         ThreadPool threadPool;
         #! number of running worker threads
-        Counter runningCounter(0);
+        WaitGroup runningCounter();
         #! max.number of worker threads
         int maxThreads;
         #! events removed from queue but not passed to worker thread
@@ -409,8 +409,8 @@ public class LoggerAppenderQueueThreadPool inherits LoggerAppenderQueue {
     private:internal worker(string id, LoggerAppender appender, list<auto> events) {
         #printf("start worker(), id: %y, tid: %d\n", id, gettid());
         #printf("<S:%y, tid: %d> ", id, gettid());
-        runningCounter.inc();
-        on_exit runningCounter.dec();
+        runningCounter.add();
+        on_exit runningCounter.done();
         try {
             map appender.processEvent($1.type, $1.params), events;
         } catch (hash<ExceptionInfo> ex) {
@@ -450,7 +450,7 @@ public class LoggerAppenderQueueThreadPool inherits LoggerAppenderQueue {
     }
 
     destructor() {
-        runningCounter.waitForZero();
+        runningCounter.wait();
         threadPool.stopWait();
     }
 

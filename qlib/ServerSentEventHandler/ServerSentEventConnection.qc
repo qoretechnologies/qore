@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file ServerSentEventConnection.qc Qore handler definition for the HttpServer module for providing SSE connections
 
-/*  ServerSentEventConnection.qc Copyright 2025 Qore Technologies, s.r.o.
+/*  ServerSentEventConnection.qc Copyright 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -56,8 +56,8 @@ public class ServerSentEventConnection {
     }
 
     private {
-        #! the @ref Qore::Thread::Queue "Queue" object stores messages to be sent to the server
-        Qore::Thread::Queue queue();
+        #! the @ref Qore::Thread::Channel "Channel" object stores messages to be sent to the server
+        Qore::Thread::Channel channel(-1);
 
         #! The TID of the I/O thread
         int tid = gettid();
@@ -86,10 +86,11 @@ public class ServerSentEventConnection {
     */
     *string pollData() {
         try {
-            return queue.get(DefaultQueuePollingInterval);
+            return channel.recv(DefaultQueuePollingInterval);
         } catch (hash<ExceptionInfo> ex) {
-            if (ex.err != "QUEUE-TIMEOUT")
+            if (ex.err != "CHANNEL-TIMEOUT") {
                 rethrow;
+            }
         }
     }
 
@@ -97,26 +98,32 @@ public class ServerSentEventConnection {
     /** Called by the @ref ServerSentEventHandler::ServerSentEventHandler "ServerSentEventHandler"
     */
     *string pollDataImmediate() {
+        auto result = channel.tryRecv();
+        return exists result ? result.value : NOTHING;
+    }
+
+    #! Pushes an already-encoded message on the connection's message channel
+    sendEncoded(string msg) {
         try {
-            # negative timeout values mean timeout immediately
-            return queue.get(-1);
+            channel.send(msg);
         } catch (hash<ExceptionInfo> ex) {
-            if (ex.err != "QUEUE-TIMEOUT") {
+            if (ex.err != "CHANNEL-CLOSED") {
                 rethrow;
             }
         }
     }
 
-    #! Pushes an already-encoded message on the connection's message queue
-    sendEncoded(string msg) {
-        queue.push(msg);
-    }
-
-    #! Pushes an unencoded message on the connection's message queue
+    #! Pushes an unencoded message on the connection's message channel
     /** The message will be encoded with \c ServerSentEventUtil::ws_encode_message() before sending
     */
     send(hash<SseMessageInfo> msg) {
-        queue.push(handler.encodeMessage(msg));
+        try {
+            channel.send(handler.encodeMessage(msg));
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "CHANNEL-CLOSED") {
+                rethrow;
+            }
+        }
     }
 
     #! This method is called when the connection is closed
@@ -136,7 +143,7 @@ public class ServerSentEventConnection {
     #! Flush all output data
     flush() {
         if (gettid() != tid) {
-            while (!stop_flag && !queue.empty()) {
+            while (!stop_flag && !channel.empty()) {
                 usleep(DefaultQueuePollingInterval);
             }
         } else {
@@ -147,9 +154,8 @@ public class ServerSentEventConnection {
     #! force closing socket related to connection
     stop() {
         stop_flag = True;
-        # to get dummy data in polling thread immediately (unless stop called from the
-        # ServerSentEventHandler::startImpl() thread)
-        queue.push();
+        # closing the channel wakes up the polling thread immediately
+        channel.close();
     }
 }
 }

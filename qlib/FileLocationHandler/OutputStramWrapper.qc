@@ -33,12 +33,12 @@ public class OutputStreamWrapper inherits Qore::OutputStream {
         #! The output stream object
         Qore::OutputStream stream;
 
-        #! The synchronization Counter
-        Qore::Thread::Counter cnt;
+        #! The synchronization WaitGroup
+        Qore::Thread::WaitGroup cnt;
     }
 
     #! Creates the output stream wrapper object
-    constructor(Qore::OutputStream stream, Qore::Thread::Counter cnt) {
+    constructor(Qore::OutputStream stream, Qore::Thread::WaitGroup cnt) {
         self.stream = stream;
         self.cnt = cnt;
     }
@@ -50,7 +50,7 @@ public class OutputStreamWrapper inherits Qore::OutputStream {
 
     #! Wait for any background I/O to complete
     waitForIo() {
-        cnt.waitForZero();
+        cnt.wait();
     }
 
     #! Flushes any buffered (unwritten) bytes, closes the output stream and releases all resources.

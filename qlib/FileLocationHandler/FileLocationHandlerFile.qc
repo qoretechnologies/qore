@@ -179,7 +179,7 @@ class FileLocationHandlerFile inherits AbstractFileLocationHandler {
     */
     private OutputStreamWrapper getOutputStreamImpl(string scheme, string location, *hash<auto> opts) {
         return new OutputStreamWrapper(new FileOutputStream(substitute_env_vars(location), opts.append,
-            opts.file_permissions, opts.encoding), new Counter());
+            opts.file_permissions, opts.encoding), new WaitGroup());
     }
 
     #! Gets supported read options

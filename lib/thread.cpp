@@ -53,6 +53,13 @@
 #include "qore/intern/QC_Gate.h"
 #include "qore/intern/QC_Sequence.h"
 #include "qore/intern/QC_Counter.h"
+#include "qore/intern/QC_Channel.h"
+#include "qore/intern/QC_ChannelIterator.h"
+#include "qore/intern/QC_Future.h"
+#include "qore/intern/QC_Promise.h"
+#include "qore/intern/QC_WaitGroup.h"
+#include "qore/intern/QC_Semaphore.h"
+#include "qore/intern/QC_AutoSemaphore.h"
 #include "qore/intern/QC_AutoLock.h"
 #include "qore/intern/QC_AutoGate.h"
 #include "qore/intern/QC_AutoReadLock.h"
@@ -3218,6 +3225,14 @@ QoreNamespace* get_thread_ns(QoreNamespace &qorens) {
     Thread->addSystemClass(initThreadPoolClass(*Thread));
 
     Thread->addSystemClass(initAbstractThreadResourceClass(*Thread));
+
+    Thread->addSystemClass(initFutureClass(*Thread));
+    Thread->addSystemClass(initPromiseClass(*Thread));
+    Thread->addSystemClass(initWaitGroupClass(*Thread));
+    Thread->addSystemClass(initSemaphoreClass(*Thread));
+    Thread->addSystemClass(initAutoSemaphoreClass(*Thread));
+    // NOTE: ChannelIterator + Channel are registered later in QoreNamespace.cpp
+    // after AbstractIterator is available (ChannelIterator depends on vparent=AbstractIterator)
 
     return Thread;
 }

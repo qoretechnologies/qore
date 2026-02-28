@@ -1,0 +1,213 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_WaitGroup.qpp
+
+    Qore Programming Language
+
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Note that the Qore library is released under a choice of three open-source
+    licenses: MIT (as above), LGPL 2+, or GPL 2+; see README-LICENSE for more
+    information.
+*/
+
+#include <qore/Qore.h>
+#include <qore/QoreSandboxManager.h>
+#include "qore/intern/QC_WaitGroup.h"
+
+//! A fork-join coordination primitive that waits for a collection of tasks to complete
+/** WaitGroup provides a simple way to wait for multiple background tasks to finish.
+    The typical pattern is:
+    - Call @ref add() before starting each task
+    - Call @ref done() when each task completes
+    - Call @ref wait() to block until all tasks are done
+
+    @par Example: Basic fork-join
+    @code{.py}
+WaitGroup wg();
+wg.add(3);
+for (int i = 0; i < 3; ++i) {
+    background sub() {
+        on_exit wg.done();
+        # ... do work ...
+    }();
+}
+wg.wait();  # blocks until all 3 tasks call done()
+    @endcode
+
+    @par Example: Exception-safe with on_exit
+    @code{.py}
+WaitGroup wg();
+int num_urls = urls.size();
+wg.add(num_urls);
+Mutex m();
+list<auto> results = ();
+
+for (int i = 0; i < num_urls; ++i) {
+    background sub(string url) {
+        on_exit wg.done();
+        auto data = fetch_url(url);
+        {
+            AutoLock al(m);
+            push results, data;
+        }
+    }(urls[i]);
+}
+
+if (wg.wait(30s)) {
+    throw "TIMEOUT", "not all URLs fetched within 30 seconds";
+}
+printf("fetched %d results\n", results.size());
+    @endcode
+
+    @par Example: Multi-stage pipeline
+    @code{.py}
+# Stage 1: Download
+WaitGroup download_wg();
+download_wg.add(files.size());
+for (int i = 0; i < files.size(); ++i) {
+    background sub(string file) {
+        on_exit download_wg.done();
+        download(file);
+    }(files[i]);
+}
+download_wg.wait();
+
+# Stage 2: Process (only starts after all downloads complete)
+WaitGroup process_wg();
+process_wg.add(files.size());
+for (int i = 0; i < files.size(); ++i) {
+    background sub(string file) {
+        on_exit process_wg.done();
+        process(file);
+    }(files[i]);
+}
+process_wg.wait();
+    @endcode
+
+    @par Example: Add tasks incrementally
+    @code{.py}
+WaitGroup wg();
+while (auto item = get_next_work_item()) {
+    wg.add(1);
+    background sub(auto item) {
+        on_exit wg.done();
+        process(item);
+    }(item);
+}
+wg.wait();  # wait for all dynamically added tasks
+    @endcode
+
+    @see @ref Qore::Thread::Counter "Counter"
+
+    @note This class is not available with the @ref PO_NO_THREAD_CLASSES parse option.
+
+    @since %Qore 2.3
+ */
+qclass WaitGroup [dom=THREAD_CLASS; arg=QoreWaitGroup* wg; ns=Qore::Thread];
+
+//! Creates the WaitGroup with an initial count of 0
+/** @par Example:
+    @code{.py}
+WaitGroup wg();
+    @endcode
+ */
+WaitGroup::constructor() {
+    self->setPrivate(CID_WAITGROUP, new QoreWaitGroup());
+}
+
+//! Destroys the WaitGroup object
+/** Note that it is a programming error to delete this object while other threads are blocked on it; in this case an exception is thrown in the deleting thread.
+
+    @throw WAITGROUP-ERROR Object deleted while other threads blocked on it
+ */
+WaitGroup::destructor() {
+    wg->destructor(xsink);
+    wg->deref(xsink);
+}
+
+//! Creates a new WaitGroup with an initial count of 0
+/** @par Example:
+    @code{.py}
+WaitGroup new_wg = wg.copy();
+    @endcode
+ */
+WaitGroup::copy() {
+    self->setPrivate(CID_WAITGROUP, new QoreWaitGroup());
+}
+
+//! Atomically increments the counter
+/** @param n the number of tasks to add; must be >= 1
+
+    @par Example:
+    @code{.py}
+wg.add(3);
+    @endcode
+
+    @throw WAITGROUP-ERROR n < 1 or count was already 0 with waiting threads
+ */
+nothing WaitGroup::add(int n = 1) {
+    wg->add(n, xsink);
+}
+
+//! Decrements the counter by 1 and wakes waiting threads if the count reaches 0
+/** @par Example:
+    @code{.py}
+wg.done();
+    @endcode
+
+    @throw WAITGROUP-ERROR count is already 0
+ */
+nothing WaitGroup::done() {
+    wg->done(xsink);
+}
+
+//! Blocks the calling thread until the counter reaches 0
+/** @param timeout_ms a @ref timeout_type "timeout" value to wait; integers are interpreted as milliseconds; @ref relative_dates "relative date/time values" are interpreted literally (with a resolution of milliseconds); 0 (the default) means wait indefinitely
+
+    @return 0 on success, or -1 if a timeout occurred
+
+    @par Example:
+    @code{.py}
+if (wg.wait(5000))
+    throw "TIMEOUT", "tasks did not complete in 5 seconds";
+    @endcode
+
+    @throw WAITGROUP-ERROR WaitGroup has been deleted in another thread
+    @throw PROGRAM-INTERRUPTED this exception is thrown if the program has a @ref Qore::SandboxManager "SandboxManager" attached and @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()" is called while the method is blocked
+
+    @since %Qore 2.3
+ */
+int WaitGroup::wait(timeout timeout_ms = 0) {
+    return wg->wait(timeout_ms, xsink);
+}
+
+//! Returns the current counter value
+/** @return the current counter value
+
+    @par Example:
+    @code{.py}
+int c = wg.getCount();
+    @endcode
+ */
+int WaitGroup::getCount() [flags=CONSTANT] {
+    return wg->getCount();
+}

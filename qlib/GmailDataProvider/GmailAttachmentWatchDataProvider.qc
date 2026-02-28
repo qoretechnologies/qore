@@ -162,7 +162,7 @@ public class GmailAttachmentWatchDataProvider inherits GmailMessageWatchDataProv
     */
     private auto getExampleEventDataImpl(string event_id) {
         hash<auto> info = setup() + {"test_mode": True};
-        *hash<auto> msg = pollOnce(\info);
+        *hash<auto> msg = pollOnceIntern(\info);
         if (msg.attachments) {
             return msg.attachments[0];
         }

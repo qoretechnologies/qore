@@ -38,9 +38,77 @@
 #include "qore/intern/QC_AbstractThreadResource.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QC_TimeZone.h"
+#include "qore/intern/QC_Future.h"
+#include "qore/intern/QC_Promise.h"
+#include "qore/intern/QC_Channel.h"
 
 #include <pthread.h>
 #include <thread>
+#include <random>
+#include <algorithm>
+#include <numeric>
+#include <atomic>
+
+// internal struct for call_async thread parameters
+struct CallAsyncParams {
+    ResolvedCallReferenceNode* code;
+    QoreListNode* args;
+    qore_future_private* priv;
+
+    DLLLOCAL CallAsyncParams(ResolvedCallReferenceNode* c, QoreListNode* a, qore_future_private* p)
+        : code(c), args(a), priv(p) {
+        priv->ref();
+    }
+
+    DLLLOCAL ~CallAsyncParams() {
+        assert(!code);
+        assert(!args);
+        priv->deref();
+    }
+
+    DLLLOCAL void del(ExceptionSink* xsink) {
+        code->deref(xsink);
+        code = nullptr;
+        if (args) {
+            args->deref(xsink);
+            args = nullptr;
+        } else {
+            args = nullptr;
+        }
+    }
+};
+
+// thread function for call_async
+static void call_async_thread(ExceptionSink* xsink, void* arg) {
+    CallAsyncParams* params = static_cast<CallAsyncParams*>(arg);
+
+    // Set up program context for the call reference
+    QoreProgram* pgm = params->code->getProgram();
+    if (pgm) {
+        QoreExternalProgramContextHelper pch(xsink, pgm);
+        if (!*xsink) {
+            QoreValue rv = params->code->execValue(params->args, xsink);
+            if (*xsink) {
+                // Capture exception info from the sink
+                ExceptionSink xs;
+                xs.assimilate(*xsink);
+                params->priv->setException(xs);
+            } else {
+                params->priv->set(rv, xsink);
+            }
+        } else {
+            ExceptionSink xs;
+            xs.assimilate(*xsink);
+            params->priv->setException(xs);
+        }
+    } else {
+        params->priv->setError("PROMISE-ERROR", "cannot execute code reference without a Program context",
+            QoreValue(), xsink);
+    }
+
+    params->del(xsink);
+    delete params;
+}
 
 extern QoreClass* QC_TIMEZONE;
 
@@ -1059,5 +1127,856 @@ bool thread_cancelled() [dom=THREAD_INFO;flags=CONSTANT] {
 */
 nothing clear_thread_cancel() [dom=THREAD_CONTROL] {
     qore_clear_thread_cancel();
+}
+
+//! Calls the given code in a background thread and returns a Future for the result
+/** This function creates a Promise, spawns a background thread that calls the given function
+    with the given arguments, and returns the associated Future. If the function throws an exception,
+    the exception is captured and re-thrown when @ref Qore::Thread::Future::get() "Future::get()" is called.
+
+    @param callable the code to execute in a background thread
+    @param ... optional arguments to pass to the callable
+
+    @return a @ref Qore::Thread::Future "Future" that will contain the result of the callable
+
+    @par Example: Simple async computation
+    @code{.py}
+Future f = call_async(sub() { return 42; });
+auto result = f.get();  # returns 42
+    @endcode
+
+    @par Example: With arguments
+    @code{.py}
+Future f = call_async(int sub(int x, int y) { return x + y; }, 20, 22);
+assertEq(42, f.get());
+    @endcode
+
+    @par Example: Async I/O with error handling
+    @code{.py}
+Future f = call_async(auto sub(string url) {
+    return HttpClient({"url": url}).get("");
+}, "https://example.com/api/data");
+
+try {
+    auto response = f.get(30s);  # wait up to 30 seconds
+    printf("response: %y\n", response.body);
+} catch (hash<ExceptionInfo> ex) {
+    if (ex.err == "FUTURE-TIMEOUT") {
+        printf("request timed out\n");
+    } else {
+        printf("request failed: %s\n", ex.desc);
+    }
+}
+    @endcode
+
+    @par Example: Fan-out multiple async tasks
+    @code{.py}
+list<Future> futures = map call_async(auto sub(auto item) {
+    return process_item(item);
+}, $1), items;
+
+# Wait for all results
+list<auto> results = map $1.get(), futures;
+    @endcode
+
+    @throw THREAD-CREATION-FAILURE the thread could not be created
+
+    @see @ref Qore::Thread::Future "Future"
+    @see @ref Qore::Thread::Promise "Promise"
+    @see @ref parallel_map()
+
+    @since %Qore 2.3
+*/
+Future call_async(code callable, ...) [dom=THREAD_CLASS,THREAD_CONTROL] {
+    // Get the code reference (callable is const ResolvedCallReferenceNode* from QPP)
+    ResolvedCallReferenceNode* code = const_cast<ResolvedCallReferenceNode*>(callable);
+    code->ref();
+
+    // Get the arguments (everything after the first arg)
+    ReferenceHolder<QoreListNode> call_args(xsink);
+    if (args && args->size() > 1) {
+        call_args = new QoreListNode(autoTypeInfo);
+        for (size_t i = 1; i < args->size(); ++i) {
+            call_args->push(args->getReferencedEntry(i), xsink);
+        }
+    }
+
+    // Create Promise and get Future
+    QorePromise* promise = new QorePromise();
+    qore_future_private* priv = promise->getPriv();
+
+    QoreFuture* future = promise->getFuture(xsink);
+    if (!future) {
+        promise->deref(xsink);
+        return QoreValue();
+    }
+
+    // Create thread params
+    CallAsyncParams* params = new CallAsyncParams(code, call_args.release(), priv);
+
+    // Start background thread
+    int tid = q_start_thread(xsink, call_async_thread, params);
+    if (tid == -1) {
+        params->del(xsink);
+        delete params;
+        promise->deref(xsink);
+        future->deref(xsink);
+        return QoreValue();
+    }
+
+    // We no longer need the promise reference from here - the thread owns it via priv
+    promise->deref(xsink);
+
+    return new QoreObject(QC_FUTURE, getProgram(), future);
+}
+
+// ===== parallel_map / parallel_foreach internal implementation =====
+
+// Shared state for parallel execution workers
+struct ParallelExecState {
+    QoreThreadLock lock;                     // protects error_info
+    const ResolvedCallReferenceNode* func;   // borrowed ref (not owned)
+    const QoreListNode* items;               // borrowed ref
+    std::vector<QoreValue> results;
+    std::atomic<int> next_index{0};
+    int total;
+    std::atomic<bool> has_error{false};
+    QoreHashNode* error_info{nullptr};       // exception info from first failing worker
+    QoreCounter counter;
+    bool collect_results;
+
+    DLLLOCAL ParallelExecState(const ResolvedCallReferenceNode* f, const QoreListNode* l,
+                                int n, int num_threads, bool collect)
+        : func(f), items(l), total(n),
+          counter(num_threads), collect_results(collect) {
+        if (collect) {
+            results.resize(n);
+        }
+    }
+
+    DLLLOCAL ~ParallelExecState() {
+        if (error_info) {
+            error_info->deref(nullptr);
+        }
+    }
+};
+
+// Helper: capture the first exception from a worker thread
+// Uses getExceptionInfo() which properly decrements active_exceptions via catchException()
+static void parallel_capture_exception(ParallelExecState* state, ExceptionSink* xsink) {
+    AutoLocker al(&state->lock);
+    if (!state->has_error.load(std::memory_order_acquire)) {
+        state->has_error.store(true, std::memory_order_release);
+        state->error_info = xsink->getExceptionInfo();
+    } else {
+        xsink->clear();
+    }
+}
+
+static void parallel_exec_worker(ExceptionSink* xsink, void* arg) {
+    ParallelExecState* state = static_cast<ParallelExecState*>(arg);
+
+    QoreProgram* pgm = state->func->getProgram();
+    if (!pgm) {
+        xsink->raiseException("PARALLEL-ERROR",
+            "cannot execute code reference without a Program context");
+        parallel_capture_exception(state, xsink);
+        state->counter.dec(xsink);
+        return;
+    }
+
+    QoreExternalProgramContextHelper pch(xsink, pgm);
+    if (*xsink) {
+        parallel_capture_exception(state, xsink);
+        state->counter.dec(xsink);
+        return;
+    }
+
+    while (true) {
+        // Lock-free work distribution
+        if (state->has_error.load(std::memory_order_acquire)) {
+            break;
+        }
+        int index = state->next_index.fetch_add(1, std::memory_order_relaxed);
+        if (index >= state->total) {
+            break;
+        }
+
+        // Get item value (referenced)
+        QoreValue item = state->items->getReferencedEntry(index);
+
+        // Create single-element arg list
+        ReferenceHolder<QoreListNode> call_args(new QoreListNode(autoTypeInfo), xsink);
+        call_args->push(item, xsink);
+
+        // Execute function
+        QoreValue rv = const_cast<ResolvedCallReferenceNode*>(state->func)->execValue(*call_args, xsink);
+        if (*xsink) {
+            parallel_capture_exception(state, xsink);
+            rv.discard(xsink);
+            break;
+        }
+
+        if (state->collect_results) {
+            // Store result at correct index (no lock needed - unique indices per thread)
+            state->results[index] = rv;
+        } else {
+            rv.discard(xsink);
+        }
+    }
+
+    state->counter.dec(xsink);
+}
+
+// Helper: wait for all workers to complete, signal them to stop on error/cancel
+static void parallel_wait_for_workers(ParallelExecState& state, ExceptionSink* xsink) {
+    int wrc = state.counter.waitForZero(xsink, 0);
+    if (wrc != 0 || *xsink) {
+        // Cancelled or error - signal workers to stop
+        state.has_error.store(true, std::memory_order_release);
+        // Wait for workers to finish deterministically using the non-interruptible
+        // waitForZero() overload.  The ExceptionSink overload cannot be used here
+        // because it calls waitWithInterrupt(), which checks the cancel flag before
+        // waiting — if we got here due to thread cancellation, the flag is still set,
+        // causing immediate return and a tight CPU loop.  The void overload uses plain
+        // cond.wait(), blocking until workers call dec() and the count reaches zero.
+        state.counter.waitForZero();
+    }
+}
+
+//! Applies a function to each element of a list in parallel, returning results in order
+/** The function is applied to each element concurrently using the specified number of threads.
+    Results are returned in the same order as the input list, regardless of completion order.
+
+    If any invocation throws an exception, remaining work is cancelled and the exception
+    is propagated to the caller.
+
+    @param callable the function to apply to each element; takes one argument and returns a value
+    @param items the list of items to process
+    @param threads the number of worker threads; 0 (default) = auto (hardware concurrency)
+
+    @return a list of results in the same order as the input
+
+    @par Example: Basic transform
+    @code{.py}
+list<auto> results = parallel_map(auto sub(auto x) { return x * 2; }, (1, 2, 3, 4, 5));
+# results = (2, 4, 6, 8, 10)
+    @endcode
+
+    @par Example: Parallel HTTP requests
+    @code{.py}
+list<string> urls = ("https://api.example.com/a", "https://api.example.com/b", ...);
+list<auto> responses = parallel_map(auto sub(auto url) {
+    return HttpClient({"url": url}).get("");
+}, urls, 8);  # use 8 worker threads
+    @endcode
+
+    @par Example: Error handling
+    @code{.py}
+try {
+    list<auto> results = parallel_map(auto sub(auto item) {
+        if (!item.valid) {
+            throw "INVALID-ITEM", sprintf("item %y is invalid", item);
+        }
+        return process(item);
+    }, items);
+} catch (hash<ExceptionInfo> ex) {
+    # first exception cancels remaining work and is propagated here
+    printf("parallel processing failed: %s: %s\n", ex.err, ex.desc);
+}
+    @endcode
+
+    @par Example: CPU-bound computation with explicit thread count
+    @code{.py}
+# Hash a large list of passwords with 4 threads
+list<auto> hashes = parallel_map(auto sub(auto pw) {
+    return hash_password(pw);
+}, passwords, 4);
+    @endcode
+
+    @throw PARALLEL-ERROR error starting worker threads or executing function
+    @throw THREAD-CREATION-FAILURE unable to create worker thread
+
+    @see @ref parallel_foreach()
+    @see @ref call_async()
+
+    @since %Qore 2.3
+*/
+list<auto> parallel_map(code callable, list<auto> items, int threads = 0) [dom=THREAD_CLASS,THREAD_CONTROL] {
+    const QoreListNode* l = items;
+    if (!l || l->empty()) {
+        return new QoreListNode(autoTypeInfo);
+    }
+
+    int total = (int)l->size();
+    int num_threads = threads > 0 ? threads : (int)std::thread::hardware_concurrency();
+    if (num_threads <= 0) {
+        num_threads = 4;
+    }
+    if (num_threads > total) {
+        num_threads = total;
+    }
+
+    // Sequential execution for single thread
+    if (num_threads == 1) {
+        ReferenceHolder<QoreListNode> result(new QoreListNode(autoTypeInfo), xsink);
+        for (int i = 0; i < total; ++i) {
+            QoreValue item = l->getReferencedEntry(i);
+            ReferenceHolder<QoreListNode> call_args(new QoreListNode(autoTypeInfo), xsink);
+            call_args->push(item, xsink);
+            QoreValue rv = const_cast<ResolvedCallReferenceNode*>(callable)->execValue(*call_args, xsink);
+            if (*xsink) {
+                rv.discard(xsink);
+                return QoreValue();
+            }
+            result->push(rv, xsink);
+        }
+        return result.release();
+    }
+
+    // Parallel execution
+    ParallelExecState state(callable, l, total, num_threads, true);
+
+    // Spawn worker threads
+    int spawned = 0;
+    for (int i = 0; i < num_threads; ++i) {
+        int tid = q_start_thread(xsink, parallel_exec_worker, &state);
+        if (tid == -1) {
+            break;
+        }
+        ++spawned;
+    }
+
+    if (spawned == 0) {
+        return QoreValue();
+    }
+
+    // Adjust counter if fewer threads were spawned
+    for (int i = spawned; i < num_threads; ++i) {
+        ExceptionSink xs;
+        state.counter.dec(&xs);
+    }
+
+    // Wait for all threads to complete
+    parallel_wait_for_workers(state, xsink);
+
+    // Check for errors
+    if (state.has_error) {
+        // Discard any collected results
+        for (auto& v : state.results) {
+            v.discard(xsink);
+        }
+        // Re-raise the captured exception in the calling thread
+        if (state.error_info) {
+            QoreValue err = state.error_info->getKeyValue("err");
+            QoreValue desc = state.error_info->getKeyValue("desc");
+            QoreValue arg = state.error_info->getKeyValue("arg");
+            xsink->raiseExceptionArg(
+                err.getType() == NT_STRING ? err.get<const QoreStringNode>()->c_str() : "PARALLEL-ERROR",
+                arg.refSelf(),
+                "%s",
+                desc.getType() == NT_STRING ? desc.get<const QoreStringNode>()->c_str()
+                    : "unknown error in parallel execution");
+        } else {
+            xsink->raiseException("PARALLEL-ERROR", "unknown error in parallel execution");
+        }
+        return QoreValue();
+    }
+
+    // Build result list preserving order
+    ReferenceHolder<QoreListNode> result(new QoreListNode(autoTypeInfo), xsink);
+    for (int i = 0; i < total; ++i) {
+        result->push(state.results[i], xsink);
+        state.results[i] = QoreValue();
+    }
+    return result.release();
+}
+
+//! Applies a function to each element of a list in parallel with no return value
+/** The function is applied to each element concurrently. If any invocation throws an exception,
+    remaining work is cancelled and the exception is propagated to the caller.
+
+    @param callable the function to apply to each element; takes one argument
+    @param items the list of items to process
+    @param threads the number of worker threads; 0 (default) = auto (hardware concurrency)
+
+    @par Example: Basic parallel execution
+    @code{.py}
+parallel_foreach(sub(auto x) { printf("processing: %y\n", x); }, (1, 2, 3, 4, 5));
+    @endcode
+
+    @par Example: Parallel file processing
+    @code{.py}
+list<string> files = glob("data/*.csv");
+parallel_foreach(sub(auto file) {
+    auto data = parse_csv(file);
+    write_to_database(data);
+}, files, 4);  # process with 4 threads
+    @endcode
+
+    @par Example: Parallel cleanup with error handling
+    @code{.py}
+try {
+    parallel_foreach(sub(auto resource) {
+        resource.cleanup();
+    }, resources);
+} catch (hash<ExceptionInfo> ex) {
+    printf("cleanup failed: %s\n", ex.desc);
+}
+    @endcode
+
+    @throw PARALLEL-ERROR error starting worker threads or executing function
+    @throw THREAD-CREATION-FAILURE unable to create worker thread
+
+    @see @ref parallel_map()
+    @see @ref call_async()
+
+    @since %Qore 2.3
+*/
+nothing parallel_foreach(code callable, list<auto> items, int threads = 0) [dom=THREAD_CLASS,THREAD_CONTROL] {
+    const QoreListNode* l = items;
+    if (!l || l->empty()) {
+        return QoreValue();
+    }
+
+    int total = (int)l->size();
+    int num_threads = threads > 0 ? threads : (int)std::thread::hardware_concurrency();
+    if (num_threads <= 0) {
+        num_threads = 4;
+    }
+    if (num_threads > total) {
+        num_threads = total;
+    }
+
+    // Sequential execution for single thread
+    if (num_threads == 1) {
+        for (int i = 0; i < total; ++i) {
+            QoreValue item = l->getReferencedEntry(i);
+            ReferenceHolder<QoreListNode> call_args(new QoreListNode(autoTypeInfo), xsink);
+            call_args->push(item, xsink);
+            QoreValue rv = const_cast<ResolvedCallReferenceNode*>(callable)->execValue(*call_args, xsink);
+            rv.discard(xsink);
+            if (*xsink) {
+                return QoreValue();
+            }
+        }
+        return QoreValue();
+    }
+
+    // Parallel execution
+    ParallelExecState state(callable, l, total, num_threads, false);
+
+    // Spawn worker threads
+    int spawned = 0;
+    for (int i = 0; i < num_threads; ++i) {
+        int tid = q_start_thread(xsink, parallel_exec_worker, &state);
+        if (tid == -1) {
+            break;
+        }
+        ++spawned;
+    }
+
+    if (spawned == 0) {
+        return QoreValue();
+    }
+
+    // Adjust counter if fewer threads were spawned
+    for (int i = spawned; i < num_threads; ++i) {
+        ExceptionSink xs;
+        state.counter.dec(&xs);
+    }
+
+    // Wait for all threads to complete
+    parallel_wait_for_workers(state, xsink);
+
+    // Propagate errors
+    if (state.has_error) {
+        if (state.error_info) {
+            QoreValue err = state.error_info->getKeyValue("err");
+            QoreValue desc = state.error_info->getKeyValue("desc");
+            QoreValue arg = state.error_info->getKeyValue("arg");
+            xsink->raiseExceptionArg(
+                err.getType() == NT_STRING ? err.get<const QoreStringNode>()->c_str() : "PARALLEL-ERROR",
+                arg.refSelf(),
+                "%s",
+                desc.getType() == NT_STRING ? desc.get<const QoreStringNode>()->c_str()
+                    : "unknown error in parallel execution");
+        } else {
+            xsink->raiseException("PARALLEL-ERROR", "unknown error in parallel execution");
+        }
+    }
+}
+
+// ===== channel_select internal implementation =====
+
+// Internal case info for channel_select
+struct ChannelSelectCase {
+    QoreChannel* channel;
+    bool is_send;
+    QoreValue send_value;
+};
+
+//! Waits on multiple Channel operations, returning when one succeeds
+/** Selects the first ready operation from a list of Channel send/recv cases.
+    If multiple cases are ready simultaneously, one is chosen at random (fairness).
+    If no case is ready, blocks until one becomes available or the timeout expires.
+
+    If all channels in the cases are closed (and empty for recv cases), the function
+    returns @ref NOTHING immediately rather than blocking forever.
+
+    Each case is a hash with the following keys:
+    - \c "channel": a @ref Qore::Thread::Channel "Channel" object
+    - \c "op": \c "send" or \c "recv"
+    - \c "value": (required for \c "send" operations) the value to send
+
+    @param cases a list of case hashes
+    @param timeout_ms a @ref timeout_type "timeout" value; 0 (default) means wait indefinitely
+
+    @return a hash with \c "index" (int, the 0-based case index) and \c "value" (the received value
+    for recv operations, @ref NOTHING for send operations), or @ref NOTHING on timeout or if all
+    channels are dead
+
+    @par Example: Multiplexed receiver
+    @code{.py}
+Channel ch1(10);
+Channel ch2(10);
+
+auto result = channel_select((
+    {"channel": ch1, "op": "recv"},
+    {"channel": ch2, "op": "recv"},
+));
+if (exists result) {
+    printf("received from channel %d: %y\n", result.index, result.value);
+}
+    @endcode
+
+    @par Example: First-available send
+    @code{.py}
+# Send to whichever channel has space first
+Channel fast_ch(1);
+Channel slow_ch(1);
+
+auto result = channel_select((
+    {"channel": fast_ch, "op": "send", "value": data},
+    {"channel": slow_ch, "op": "send", "value": data},
+));
+if (exists result) {
+    printf("sent via channel %d\n", result.index);
+}
+    @endcode
+
+    @par Example: Timeout handling
+    @code{.py}
+Channel work_ch(10);
+Channel cancel_ch(1);
+
+while (True) {
+    auto result = channel_select((
+        {"channel": work_ch, "op": "recv"},
+        {"channel": cancel_ch, "op": "recv"},
+    ), 5s);
+
+    if (!exists result) {
+        printf("no activity for 5 seconds\n");
+        continue;
+    }
+
+    if (result.index == 0) {
+        process_work(result.value);
+    } else {
+        printf("cancellation received\n");
+        break;
+    }
+}
+    @endcode
+
+    @par Example: Mixed send and recv
+    @code{.py}
+Channel input_ch(10);
+Channel output_ch(10);
+auto pending_result = process(input_ch.recv());
+
+# Try to either send our result or receive more input
+auto result = channel_select((
+    {"channel": output_ch, "op": "send", "value": pending_result},
+    {"channel": input_ch, "op": "recv"},
+));
+    @endcode
+
+    @throw CHANNEL-SELECT-ERROR invalid case specification
+    @throw PROGRAM-INTERRUPTED interrupted by SandboxManager
+
+    @see @ref Qore::Thread::Channel "Channel"
+
+    @since %Qore 2.3
+*/
+auto channel_select(list<auto> cases, timeout timeout_ms = 0) [dom=THREAD_CLASS,THREAD_CONTROL] {
+    const QoreListNode* case_list = cases;
+    if (!case_list || case_list->empty()) {
+        xsink->raiseException("CHANNEL-SELECT-ERROR", "channel_select() called with empty cases list");
+        return QoreValue();
+    }
+
+    int num_cases = (int)case_list->size();
+
+    // Parse cases
+    std::vector<ChannelSelectCase> case_info;
+    case_info.reserve(num_cases);
+
+    for (int i = 0; i < num_cases; ++i) {
+        QoreValue entry = case_list->retrieveEntry(i);
+        if (entry.getType() != NT_HASH) {
+            // Clean up already-parsed cases
+            for (auto& ci : case_info) {
+                ci.channel->deref(xsink);
+                if (ci.is_send) {
+                    ci.send_value.discard(xsink);
+                }
+            }
+            xsink->raiseException("CHANNEL-SELECT-ERROR",
+                "channel_select() case %d is not a hash", i);
+            return QoreValue();
+        }
+        const QoreHashNode* h = entry.get<const QoreHashNode>();
+
+        // Get channel
+        QoreValue ch_val = h->getKeyValue("channel");
+        if (ch_val.getType() != NT_OBJECT) {
+            for (auto& ci : case_info) {
+                ci.channel->deref(xsink);
+                if (ci.is_send) {
+                    ci.send_value.discard(xsink);
+                }
+            }
+            xsink->raiseException("CHANNEL-SELECT-ERROR",
+                "channel_select() case %d: 'channel' is not an object", i);
+            return QoreValue();
+        }
+        QoreObject* ch_obj = const_cast<QoreObject*>(ch_val.get<const QoreObject>());
+        QoreChannel* channel = static_cast<QoreChannel*>(
+            ch_obj->getReferencedPrivateData(CID_CHANNEL, xsink));
+        if (*xsink) {
+            for (auto& ci : case_info) {
+                ci.channel->deref(xsink);
+                if (ci.is_send) {
+                    ci.send_value.discard(xsink);
+                }
+            }
+            return QoreValue();
+        }
+
+        // Get operation
+        QoreValue op_val = h->getKeyValue("op");
+        if (op_val.getType() != NT_STRING) {
+            channel->deref(xsink);
+            for (auto& ci : case_info) {
+                ci.channel->deref(xsink);
+                if (ci.is_send) {
+                    ci.send_value.discard(xsink);
+                }
+            }
+            xsink->raiseException("CHANNEL-SELECT-ERROR",
+                "channel_select() case %d: 'op' is not a string", i);
+            return QoreValue();
+        }
+        const QoreStringNode* op_str = op_val.get<const QoreStringNode>();
+        bool is_send = !strcmp(op_str->c_str(), "send");
+        if (!is_send && strcmp(op_str->c_str(), "recv")) {
+            channel->deref(xsink);
+            for (auto& ci : case_info) {
+                ci.channel->deref(xsink);
+                if (ci.is_send) {
+                    ci.send_value.discard(xsink);
+                }
+            }
+            xsink->raiseException("CHANNEL-SELECT-ERROR",
+                "channel_select() case %d: 'op' must be 'send' or 'recv', got '%s'",
+                i, op_str->c_str());
+            return QoreValue();
+        }
+
+        QoreValue send_val;
+        if (is_send) {
+            send_val = h->getKeyValue("value").refSelf();
+        }
+
+        case_info.push_back({channel, is_send, send_val});
+    }
+
+    // Create randomized index order for fairness
+    std::vector<int> indices(num_cases);
+    std::iota(indices.begin(), indices.end(), 0);
+    static thread_local std::mt19937 rng(std::random_device{}());
+
+    // Helper lambda: try all cases non-blocking, return result hash or nullptr
+    // Sets all_dead to true if all channels are in a terminal state (no case can ever succeed)
+    bool all_dead = false;
+    auto try_cases = [&](ExceptionSink* xs) -> QoreHashNode* {
+        std::shuffle(indices.begin(), indices.end(), rng);
+        bool any_alive = false;
+        for (int idx : indices) {
+            auto& ci = case_info[idx];
+            if (ci.is_send) {
+                if (ci.channel->isClosed()) {
+                    continue;  // send to closed channel can never succeed
+                }
+                any_alive = true;
+                QoreValue ref_val = ci.send_value.refSelf();
+                if (ci.channel->trySend(ref_val)) {
+                    QoreHashNode* result = new QoreHashNode(autoTypeInfo);
+                    result->setKeyValue("index", idx, xs);
+                    result->setKeyValue("value", QoreValue(), xs);
+                    return result;
+                }
+                ref_val.discard(xs);
+            } else {
+                bool has_value = false;
+                QoreValue rv = ci.channel->tryRecv(has_value);
+                if (has_value) {
+                    QoreHashNode* result = new QoreHashNode(autoTypeInfo);
+                    result->setKeyValue("index", idx, xs);
+                    result->setKeyValue("value", rv, xs);
+                    return result;
+                }
+                // A recv on a non-closed channel might still succeed later
+                if (!ci.channel->isClosed()) {
+                    any_alive = true;
+                }
+            }
+        }
+        all_dead = !any_alive;
+        return nullptr;
+    };
+
+    // Try non-blocking first
+    QoreHashNode* result = try_cases(xsink);
+    if (result || *xsink || all_dead) {
+        // Clean up
+        for (auto& ci : case_info) {
+            ci.channel->deref(xsink);
+            if (ci.is_send) {
+                ci.send_value.discard(xsink);
+            }
+        }
+        return result ? (QoreValue)result : QoreValue();
+    }
+
+    // None ready — create a heap-allocated SelectWaiter and register with all channels.
+    // The waiter has its own lock + condvar + notified flag.  Channel operations
+    // copy the waiter pointer (bumping its refcount) under the channel lock, then
+    // signal the waiter under the waiter's own lock *after* releasing the channel
+    // lock (via the WaiterNotifyHelper RAII pattern).  This eliminates the two-lock
+    // gap that caused lost wakeups in the old polling approach.
+    SelectWaiter* waiter = new SelectWaiter();
+
+    for (auto& ci : case_info) {
+        ci.channel->registerExternalWaiter(waiter);
+    }
+
+    // Helper to get current time in milliseconds since epoch
+    auto now_ms = []() -> int64 {
+        int us;
+        int64 secs = q_epoch_us(us);
+        return secs * 1000 + us / 1000;
+    };
+
+    // Track user timeout via deadline
+    bool has_deadline = (timeout_ms > 0);
+    int64 deadline_ms = has_deadline ? (now_ms() + (int64)timeout_ms) : 0;
+    QoreValue result_val;
+
+    // Deterministic wait loop.
+    //
+    // NOTE: try_cases() is called WITHOUT holding waiter->lock to avoid
+    // self-deadlock: trySend()/tryRecv() use WaiterNotifyHelper which tries
+    // to lock each external waiter — including ours.  Instead, we use the
+    // notified flag to detect signals in the gap between try_cases() and
+    // the condvar wait:
+    //
+    // 1. Clear notified under waiter lock
+    // 2. Release waiter lock
+    // 3. Call try_cases (may acquire channel locks internally)
+    // 4. If success: done
+    // 5. Acquire waiter lock
+    // 6. If notified was set (channel op happened in step 3-5): loop back
+    // 7. Otherwise: wait on condvar (atomically releases waiter lock)
+    //
+    // Lost-wakeup proof: any channel operation between step 1 and step 5
+    // sets notified=true under waiter->lock, so step 6 catches it.
+    while (true) {
+        // Step 1: clear notified flag
+        {
+            AutoLocker al(&waiter->lock);
+            waiter->notified = false;
+        }
+
+        // Step 3: try all cases (no waiter lock held)
+        result = try_cases(xsink);
+        if (result || *xsink || all_dead) {
+            result_val = result ? (QoreValue)result : QoreValue();
+            break;
+        }
+
+        // Step 5-7: check notified flag, wait if needed
+        {
+            AutoLocker al(&waiter->lock);
+            if (!waiter->notified) {
+                // Check for cancellation before waiting
+                if (xsink && qore_check_cancel(xsink, "channel_select")) {
+                    break;
+                }
+
+                // Use wait2 directly instead of waitWithInterrupt to avoid the
+                // 500ms polling wrapper.  waitWithInterrupt chunks the wait into
+                // QORE_IO_POLL_INTERVAL_MS sub-waits with its own internal loop;
+                // on macOS, pthread_cond_timedwait_relative_np can fail to deliver
+                // broadcasts promptly through the sub-wait boundaries, causing
+                // significant latency (observed 168ms for a 20ms expected wakeup).
+                //
+                // By calling wait2 with the exact remaining timeout, the condvar
+                // wait covers the full period and wakes deterministically on
+                // broadcast.  Interrupt responsiveness is maintained by capping
+                // individual waits at QORE_IO_POLL_INTERVAL_MS for the infinite-
+                // timeout case and by checking qore_check_cancel in the outer loop.
+                if (has_deadline) {
+                    int64 remaining_ms = deadline_ms - now_ms();
+                    if (remaining_ms <= 0) {
+                        break;  // user timeout expired
+                    }
+                    waiter->cond.wait2(&waiter->lock, remaining_ms);
+                } else {
+                    // Infinite timeout — wait for one poll interval then re-check
+                    waiter->cond.wait2(&waiter->lock, QORE_IO_POLL_INTERVAL_MS);
+                }
+            }
+            // If notified or woken by condvar/timeout: loop back and try_cases again
+        }
+
+        if (*xsink) {
+            break;
+        }
+
+        // Check for cancellation after wakeup
+        if (xsink && qore_check_cancel(xsink, "channel_select")) {
+            break;
+        }
+
+        // Check deadline after wakeup (condvar wait may have returned on timeout)
+        if (has_deadline && now_ms() >= deadline_ms) {
+            break;
+        }
+    }
+
+    // Deregister from all channels and release waiter
+    for (auto& ci : case_info) {
+        ci.channel->deregisterExternalWaiter(waiter);
+        ci.channel->deref(xsink);
+        if (ci.is_send) {
+            ci.send_value.discard(xsink);
+        }
+    }
+    waiter->deref();
+
+    return result_val;
 }
 ///@}

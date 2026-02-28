@@ -480,6 +480,11 @@ cargo install tree-sitter-cli@0.26.5
         @ref Qore::Thread::AutoReadLock "AutoReadLock" / @ref Qore::Thread::AutoWriteLock "AutoWriteLock"
         constructors,
         @ref Qore::Thread::Queue "Queue" get/pop,
+        @ref Qore::Thread::Future "Future" get,
+        @ref Qore::Thread::WaitGroup "WaitGroup" wait,
+        @ref Qore::Thread::Semaphore "Semaphore" acquire,
+        @ref Qore::Thread::Channel "Channel" send/recv,
+        @ref Qore::channel_select() "channel_select()",
         pipe I/O, file locking, and backquote operations
       - integrates with the @ref Qore::SandboxManager "SandboxManager" interrupt mechanism via a unified
         internal check (\c qore_check_cancel()) that polls for both thread-level cancellation and
@@ -492,6 +497,50 @@ cargo install tree-sitter-cli@0.26.5
       - cancelling an already-cancelled thread updates the reason string
       - cancelling a thread that has already exited returns @ref False
       - attempting to cancel the current thread raises \c THREAD-CANCEL-ERROR
+    - <b>Modern threading primitives</b>
+      - new @ref Qore::Thread::Future "Future" / @ref Qore::Thread::Promise "Promise" classes for cross-thread
+        result delivery: @ref Qore::Thread::Promise "Promise" is the producer side (set a value or error),
+        @ref Qore::Thread::Future "Future" is the consumer side (block until result is available); multiple
+        threads can call @ref Qore::Thread::Future::get() "Future::get()"; the Future is created via
+        @ref Qore::Thread::Promise::getFuture() "Promise::getFuture()" (one Future per Promise)
+      - new @ref Qore::call_async() "call_async()" convenience function that spawns a background thread,
+        wraps the callable's result (or exception) into a @ref Qore::Thread::Promise "Promise", and returns
+        the associated @ref Qore::Thread::Future "Future" — provides a simple way to get return values from
+        background threads
+      - new @ref Qore::Thread::WaitGroup "WaitGroup" class for fork-join coordination: call
+        @ref Qore::Thread::WaitGroup::add() "add()" to register work, @ref Qore::Thread::WaitGroup::done() "done()"
+        to signal completion, and @ref Qore::Thread::WaitGroup::wait() "wait()" to block until all work
+        finishes; similar to @ref Qore::Thread::Counter "Counter" but with forward-counting semantics and
+        misuse protection
+      - new @ref Qore::Thread::Semaphore "Semaphore" class providing an N-permit concurrency limiter:
+        @ref Qore::Thread::Semaphore::acquire() "acquire()" blocks until a permit is available,
+        @ref Qore::Thread::Semaphore::release() "release()" returns permits; supports timed acquire and
+        non-blocking @ref Qore::Thread::Semaphore::tryAcquire() "tryAcquire()"
+      - new @ref Qore::Thread::AutoSemaphore "AutoSemaphore" RAII class for exception-safe permit management:
+        acquires a permit in the constructor and releases it in the destructor (like
+        @ref Qore::Thread::AutoLock "AutoLock" for @ref Qore::Thread::Mutex "Mutex")
+      - new @ref Qore::Thread::Channel "Channel" class for Go-style inter-thread communication with close
+        semantics: supports buffered (fixed capacity) and unbuffered (synchronous handoff) modes;
+        @ref Qore::Thread::Channel::send() "send()" blocks when full,
+        @ref Qore::Thread::Channel::recv() "recv()" blocks when empty;
+        @ref Qore::Thread::Channel::close() "close()" signals completion while allowing buffered values to be
+        drained; supports @ref Qore::Thread::Channel::trySend() "trySend()" /
+        @ref Qore::Thread::Channel::tryRecv() "tryRecv()" for non-blocking operations and timeout-based
+        operations; @ref Qore::Thread::Channel::send() "send()" and @ref Qore::Thread::Channel::recv() "recv()"
+        can send and receive @ref nothing "NOTHING" as a distinct value
+      - new @ref Qore::Thread::ChannelIterator "ChannelIterator" class enabling @ref foreach "foreach" iteration
+        over a @ref Qore::Thread::Channel "Channel" until it is closed and drained
+      - new @ref Qore::parallel_map() "parallel_map()" function: maps a function over a list using multiple
+        threads; preserves input order in output; propagates exceptions from worker threads; auto-detects
+        thread count from hardware concurrency; supports sequential mode with \c threads=1
+      - new @ref Qore::parallel_foreach() "parallel_foreach()" function: executes a function for each element
+        in a list using multiple threads; same semantics as @ref Qore::parallel_map() "parallel_map()" but
+        without collecting results
+      - new @ref Qore::channel_select() "channel_select()" function: waits on multiple
+        @ref Qore::Thread::Channel "Channel" objects simultaneously for the first ready send or recv operation;
+        supports random selection among ready channels for fairness; returns immediately when all channels are
+        closed; supports timeout
+      - all new threading primitives integrate with cooperative cancellation (checked at 500ms polling intervals)
     - new @ref Qore::ParseOptions "ParseOptions" class providing an opaque container for parse option flags
       supporting more than 64 option bits
       (<a href="https://github.com/qoretechnologies/qore/issues/5145">issue 5145</a>)
@@ -550,7 +599,11 @@ cargo install tree-sitter-cli@0.26.5
         connection string from a @ref datasource_hash "datasource hash" (the inverse of
         @ref Qore::SQL::parse_datasource() "parse_datasource()")
     - new functions:
+      - @ref Qore::call_async() "call_async()": spawns a background thread to execute a callable and returns a
+        @ref Qore::Thread::Future "Future" for the result
       - @ref Qore::cancel_thread() "cancel_thread()": requests cooperative cancellation of another thread
+      - @ref Qore::channel_select() "channel_select()": waits on multiple @ref Qore::Thread::Channel "Channel"
+        objects for the first ready operation (send or recv)
       - @ref Qore::clear_thread_cancel() "clear_thread_cancel()": clears the cancellation flag for the current thread
       - @ref Qore::clock_getseconds() "clock_getseconds()"
       - @ref Qore::deflate_raw() "deflate_raw()": raw DEFLATE compression (RFC 1951) without zlib/gzip headers
@@ -564,6 +617,8 @@ cargo install tree-sitter-cli@0.26.5
       - @ref Qore::SQL::make_datasource_string() "make_datasource_string()": builds a datasource connection string
         from a @ref datasource_hash "datasource hash" (the inverse of
         @ref Qore::SQL::parse_datasource() "parse_datasource()")
+      - @ref Qore::parallel_foreach() "parallel_foreach()": executes a function over list elements in parallel
+      - @ref Qore::parallel_map() "parallel_map()": maps a function over list elements in parallel, preserving order
       - @ref Qore::thread_cancelled() "thread_cancelled()": returns @ref True if cancellation has been requested
         for the current thread
     - new @ref string_formatting "printf format specifier":

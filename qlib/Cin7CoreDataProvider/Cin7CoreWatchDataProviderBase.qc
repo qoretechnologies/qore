@@ -45,44 +45,39 @@ public const WatchConstructorOptions = Cin7CoreDataProviderBase::BaseConstructor
 
 #! Base class for Cin7Core watch/trigger data providers
 public class Cin7CoreWatchDataProviderBase inherits Cin7CoreDataProviderBase,
-        DataProvider::DelayedObservable {
+        DataProvider::AbstractWatchDataProviderBase {
     public {
         #! Constructor options for watch providers
         const WatchProviderConstructorOptions = WatchConstructorOptions;
     }
 
     private {
-        #! Poll interval in seconds
-        int poll_interval;
-
         #! Last poll time for filtering
         date since;
 
         #! Set of seen IDs for deduplication
         hash<string, bool> seen_ids = {};
-
-        #! Whether the observable is running
-        bool running = False;
-
-        #! Background polling thread counter
-        Counter thread_counter();
     }
 
     #! Creates the object with a REST client
     constructor(Cin7CoreRestClient::Cin7CoreRestClient rest, *hash<auto> options)
-            : Cin7CoreDataProviderBase(rest) {
-        initOptions(options);
+            : Cin7CoreDataProviderBase(rest),
+              AbstractWatchDataProviderBase(max(options.poll_interval ?? DefaultPollInterval, MinPollInterval)) {
+        since = options.since ?? now_us();
     }
 
     #! Creates the object with a connection
     constructor(Cin7CoreRestClient::Cin7CoreRestConnection conn, *hash<auto> options)
-            : Cin7CoreDataProviderBase(conn) {
-        initOptions(options);
+            : Cin7CoreDataProviderBase(conn),
+              AbstractWatchDataProviderBase(max(options.poll_interval ?? DefaultPollInterval, MinPollInterval)) {
+        since = options.since ?? now_us();
     }
 
     #! Creates the object with options
-    constructor(*hash<auto> options) : Cin7CoreDataProviderBase(options) {
-        initOptions(options);
+    constructor(*hash<auto> options)
+            : Cin7CoreDataProviderBase(options),
+              AbstractWatchDataProviderBase(max(options.poll_interval ?? DefaultPollInterval, MinPollInterval)) {
+        since = options.since ?? now_us();
     }
 
     #! Destructor
@@ -90,89 +85,46 @@ public class Cin7CoreWatchDataProviderBase inherits Cin7CoreDataProviderBase,
         stopEventsIntern();
     }
 
-    #! Stops event generation
-    stopEvents() {
-        stopEventsIntern();
-    }
+    #! Performs a single polling operation
+    private pollOnce() {
+        date poll_start = now_us();
+        list<hash<auto>> records = pollOnceImpl();
 
-    #! Returns True if events are still being generated
-    bool isActive() {
-        return running;
-    }
-
-    #! Initialize poll options
-    private initOptions(*hash<auto> options) {
-        poll_interval = options.poll_interval ?? DefaultPollInterval;
-        if (poll_interval < MinPollInterval) {
-            poll_interval = MinPollInterval;
-        }
-        since = options.since ?? now_us();
-    }
-
-    #! Start the observer/polling
-    observersReady() {
-        if (running) {
-            return;
-        }
-        running = True;
-        thread_counter.inc();
-        background pollLoop();
-    }
-
-    #! Internal method to stop events
-    private stopEventsIntern() {
-        running = False;
-        thread_counter.waitForZero();
-    }
-
-    #! Main polling loop
-    private pollLoop() {
-        on_exit thread_counter.dec();
-
-        while (running) {
-            try {
-                date poll_start = now_us();
-                list<hash<auto>> records = pollOnce();
-
-                foreach hash<auto> record in (records) {
-                    string id = getRecordId(record);
-                    if (!seen_ids{id}) {
-                        seen_ids{id} = True;
-                        notifyObservers(getEventName(), record);
-                    }
-                }
-
-                # Update since time for next poll
-                since = poll_start;
-
-                # Clean up old seen_ids periodically (keep last 10000)
-                if (seen_ids.size() > 10000) {
-                    # Remove oldest half
-                    int count = 0;
-                    foreach string key in (keys seen_ids) {
-                        if (count++ < 5000) {
-                            remove seen_ids{key};
-                        } else {
-                            break;
-                        }
-                    }
-                }
-            } catch (hash<ExceptionInfo> ex) {
-                @debug(log(LoggerLevel::ERROR, "pollLoop error: %s: %s", ex.err, ex.desc));
+        foreach hash<auto> record in (records) {
+            if (isStopping()) {
+                break;
             }
-
-            # Sleep for poll interval
-            int sleep_ms = poll_interval * 1000;
-            while (running && sleep_ms > 0) {
-                int sleep_chunk = min(1000, sleep_ms);
-                usleep(sleep_chunk * 1000);
-                sleep_ms -= sleep_chunk;
+            string id = getRecordId(record);
+            if (!seen_ids{id}) {
+                seen_ids{id} = True;
+                notifyObservers(getEventName(), record);
             }
         }
+
+        # Update since time for next poll
+        since = poll_start;
+
+        # Clean up old seen_ids periodically (keep last 10000)
+        if (seen_ids.size() > 10000) {
+            # Remove oldest half
+            int count = 0;
+            foreach string key in (keys seen_ids) {
+                if (count++ < 5000) {
+                    remove seen_ids{key};
+                } else {
+                    break;
+                }
+            }
+        }
+    }
+
+    #! Called when a polling error occurs
+    private logPollError(hash<ExceptionInfo> ex) {
+        @debug(log(LoggerLevel::ERROR, "pollLoop error: %s: %s", ex.err, ex.desc));
     }
 
     #! Poll once and return any new records - override in subclasses
-    abstract list<hash<auto>> pollOnce();
+    abstract list<hash<auto>> pollOnceImpl();
 
     #! Get the unique ID from a record - override in subclasses
     abstract string getRecordId(hash<auto> record);
@@ -197,7 +149,7 @@ public class Cin7CoreWatchDataProviderBase inherits Cin7CoreDataProviderBase,
     private auto getExampleEventDataImpl(string event_id) {
         # Try to get real data from the API first
         try {
-            list<hash<auto>> records = pollOnce();
+            list<hash<auto>> records = pollOnceImpl();
             if (records.size() > 0) {
                 return records[0];
             }

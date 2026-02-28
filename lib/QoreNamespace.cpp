@@ -76,6 +76,8 @@
 #include "qore/intern/QC_FilePollOperation.h"
 #include "qore/intern/QC_SandboxManager.h"
 #include "qore/intern/QC_QoreParseOptions.h"
+#include "qore/intern/QC_Channel.h"
+#include "qore/intern/QC_ChannelIterator.h"
 
 #include "qore/intern/QC_Datasource.h"
 #include "qore/intern/QC_DatasourcePool.h"
@@ -1237,7 +1239,9 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     enumHTTP2Mode = init_enum_HTTP2Mode(qns);
     enumHTTP3Mode = init_enum_HTTP3Mode(qns);
 
-    qore_ns_private::addNamespace(qns, get_thread_ns(qns));
+    // add Thread namespace (save pointer for late-bound classes that depend on AbstractIterator)
+    QoreNamespace* thread_ns = get_thread_ns(qns);
+    qore_ns_private::addNamespace(qns, thread_ns);
 
     // pre-init classes
     // serializable class
@@ -1351,6 +1355,12 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     qns.addSystemClass(initRangeIteratorClass(qns));
     qns.addSystemClass(initTreeMapClass(qns));
     qns.addSystemClass(initSerializableClass(qns));
+
+    // add ChannelIterator + Channel to Thread namespace now that AbstractIterator is available
+    // preinit Channel first so QC_CHANNEL is available for ChannelIterator's constructor parameter
+    preinitChannelClass();
+    thread_ns->addSystemClass(initChannelIteratorClass(*thread_ns));
+    thread_ns->addSystemClass(initChannelClass(*thread_ns));
 
     init_qore_constants(qns);
 
