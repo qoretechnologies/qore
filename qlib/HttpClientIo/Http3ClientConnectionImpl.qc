@@ -145,13 +145,11 @@ public class Http3ClientConnection inherits HttpClientConnection {
         }
     }
 
-    #! Handles poll result from AsyncSocketIoController
-    /** Overrides base to add GOAWAY check after standard state transitions.
+    #! Protocol-specific poll result hook, called under lock
+    /** Checks for GOAWAY received from server atomically with the base state update.
+        @note Called while \c lock is held — do not re-acquire.
     */
-    handlePollResult() {
-        HttpClientConnection::handlePollResult();
-        # Check for GOAWAY received from server
-        AutoLock al(lock);
+    private handlePollResultImpl() {
         if (poll_op.isGoawayReceived() && state == HttpClientConnectionState::Ready) {
             state = HttpClientConnectionState::Draining;
             log(LoggerLevel::DEBUG, "GOAWAY detected, transitioning to Draining");

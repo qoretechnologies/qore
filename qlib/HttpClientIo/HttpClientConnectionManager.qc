@@ -79,6 +79,9 @@ public class HttpClientConnectionManager {
     public {
         #! Interval before re-probing HTTP/3 for hosts that fell back to HTTP/2
         const H3_REPROBE_INTERVAL = 5m;
+
+        #! Maximum number of entries in the protocol cache before eviction
+        const MAX_PROTOCOL_CACHE_SIZE = 1000;
     }
 
     private {
@@ -452,7 +455,10 @@ public class HttpClientConnectionManager {
             }
         }
 
-        # Need to create a new connection
+        # Need to create a new connection — resolve protocol and check capacity
+        # under the write lock, then release it before creating the connection
+        # (constructor may call getaddrinfo() which can block)
+        string protocol;
         {
             AutoWriteLock al(pool_lock);
             if (shutdown) {
@@ -460,7 +466,7 @@ public class HttpClientConnectionManager {
             }
 
             # Resolve protocol under WriteLock to ensure thread-safe access to protocol_cache
-            string protocol = resolveProtocol(url_info, key);
+            protocol = resolveProtocol(url_info, key);
 
             # Evict dead connections
             if (pool.hasKey(key)) {
@@ -489,7 +495,7 @@ public class HttpClientConnectionManager {
                 }
             }
 
-            # Check capacity
+            # Check capacity (but don't create connection under lock)
             int current_count = pool.hasKey(key) ? pool{key}.size() : 0;
             if (current_count >= opts.max_connections_per_host) {
                 # Pick connection with fewest streams
@@ -519,9 +525,20 @@ public class HttpClientConnectionManager {
                     sprintf("all %d connections to %s have reached the concurrent stream limit",
                         current_count, key);
             }
+        }
 
-            # Create new connection with protocol selection
-            HttpClientConnection conn = createConnection(url_info, key, protocol);
+        # Create connection outside the write lock — constructor may do DNS
+        # resolution (getaddrinfo) which can block and would stall all pool
+        # operations if done under the lock
+        HttpClientConnection conn = createConnection(url_info, key, protocol);
+
+        {
+            AutoWriteLock al(pool_lock);
+            if (shutdown) {
+                # Manager shut down while we were creating the connection
+                try { conn.close(); } catch () {}
+                throw "HTTPCLIENT-SHUTDOWN", "connection manager is shutting down";
+            }
 
             if (!pool.hasKey(key)) {
                 pool{key} = ();
@@ -550,7 +567,7 @@ public class HttpClientConnectionManager {
                 Http3ClientConnection conn(url_info, opts.connect_timeout, logger,
                     opts.max_streams_per_connection, opts.ssl_verify_mode, opts.accept_all_certs,
                     opts.client_cert, opts.client_pk);
-                protocol_cache{key} = "h3";
+                cacheProtocol(key, "h3");
                 return conn;
             } catch (hash<ExceptionInfo> ex) {
                 if (opts.protocol == "h3") {
@@ -560,7 +577,7 @@ public class HttpClientConnectionManager {
                 # Auto mode — fall back to H2
                 log(LoggerLevel::DEBUG, "HTTP/3 connection to %s failed (%s: %s), falling back to HTTP/2",
                     key, ex.err, ex.desc);
-                protocol_cache{key} = "h2";
+                cacheProtocol(key, "h2");
             }
         }
 
@@ -658,6 +675,22 @@ public class HttpClientConnectionManager {
             pool{key} = keep;
         } else {
             remove pool{key};
+        }
+    }
+
+    #! Internal: caches the protocol for a host:port key, evicting oldest entries if full
+    /** @note Called under pool_lock write lock
+    */
+    private cacheProtocol(string key, string protocol) {
+        protocol_cache{key} = protocol;
+        if (protocol_cache.size() > MAX_PROTOCOL_CACHE_SIZE) {
+            # Evict oldest entries (Qore hashes maintain insertion order)
+            int to_evict = protocol_cache.size() - MAX_PROTOCOL_CACHE_SIZE;
+            list<string> evict_keys = keys protocol_cache;
+            for (int i = 0; i < to_evict; ++i) {
+                remove protocol_cache{evict_keys[i]};
+                remove h3_probe_times{evict_keys[i]};
+            }
         }
     }
 

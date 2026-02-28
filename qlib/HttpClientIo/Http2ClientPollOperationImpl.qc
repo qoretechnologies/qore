@@ -88,6 +88,11 @@ public class Http2ClientPollOperation inherits HttpClientPollOperation {
         startConnect();
     }
 
+    #! Prevent copying — shared socket/mutex/callbacks would corrupt state
+    private copy() {
+        throw "COPY-ERROR", "Http2ClientPollOperation cannot be copied";
+    }
+
     #! Returns the goal of the operation
     string getGoal() {
         return "http2_client_multiplex";
@@ -451,6 +456,9 @@ public class Http2ClientPollOperation inherits HttpClientPollOperation {
             }
 
             if (poll_info) {
+                # Valid I/O activity (e.g., WINDOW_UPDATE, PING) even if no
+                # response output — reset the empty read counter
+                empty_read_count = 0;
                 return poll_info;
             }
 

@@ -225,13 +225,16 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
                             retries, backoff_val);
                         delete al;
                         if (!controller_driven) {
-                            # Check state before calling continuePoll() — abort()
-                            # could have deleted current_op concurrently
+                            # Pump I/O at the C++ level to process incoming QUIC
+                            # packets (e.g., MAX_STREAMS frames) that may free
+                            # stream IDs.  We must NOT call continuePoll() here
+                            # because it dispatches callbacks which could re-enter
+                            # submitRequest() and deadlock on stream_lock.
                             string retry_state = state;
                             if (retry_state == STATE_READING
                                     || retry_state == STATE_WAIT_READ) {
                                 try {
-                                    continuePoll();
+                                    current_op.continuePoll();
                                 } catch () {
                                 }
                             }
@@ -291,6 +294,10 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
             remove stream_callbacks{sid};
             remove stream_ctxs{sid};
             --active_stream_count;
+            # Wake threads waiting in STREAM_ID_BLOCKED retry — a stream slot freed
+            if (stream_blocked_waiters > 0) {
+                stream_capacity_cond.broadcast();
+            }
         }
 
         if (cb) {
@@ -484,6 +491,8 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
             }
 
             if (poll_info) {
+                # Valid I/O activity even if no response output — reset counter
+                empty_read_count = 0;
                 return poll_info;
             }
 

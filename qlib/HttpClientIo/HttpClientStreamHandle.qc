@@ -199,7 +199,7 @@ public class HttpClientStreamHandle {
                 if (ex.err == "FUTURE-TIMEOUT") {
                     cancel();
                     throw "HTTPCLIENT-TIMEOUT",
-                        sprintf("request timed out after %d ms", int(wait_timeout));
+                        sprintf("request timed out after %d ms", wait_timeout);
                 }
                 if (ex.err == "HTTPCLIENT-CANCELLED") {
                     throw "HTTPCLIENT-CANCELLED", "request was cancelled";
@@ -212,7 +212,7 @@ public class HttpClientStreamHandle {
                 if (remaining <= 0us) {
                     cancel();
                     throw "HTTPCLIENT-TIMEOUT",
-                        sprintf("request timed out after %d ms", int(wait_timeout));
+                        sprintf("request timed out after %d ms", wait_timeout);
                 }
                 conn.drivePoll(min(remaining,
                     conn.getActiveStreamCount() > 1 ? 100ms : 1s));
@@ -280,7 +280,11 @@ public class HttpClientStreamHandle {
         } catch (hash<ExceptionInfo> ex) {
             {
                 AutoLock al(lock);
-                # Only reset to Pending if still Open — cancel() may have set Cancelled
+                # Only reset to Pending if still Open — cancel() may have set Cancelled.
+                # Note: if submitAsyncImpl() throws, the poll operation's
+                # submitRequest() is atomic — the callback was never registered
+                # and active_stream_count was never incremented, so no cleanup
+                # of the poll operation is needed here.
                 if (state == HttpClientStreamState::Open) {
                     state = HttpClientStreamState::Pending;
                 }

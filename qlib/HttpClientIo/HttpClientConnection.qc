@@ -226,7 +226,8 @@ public class HttpClientConnection {
     }
 
     #! Handles poll result from AsyncSocketIoController
-    /** Subclasses may override to add protocol-specific handling (e.g. GOAWAY check).
+    /** Updates state under lock, then calls handlePollResultImpl() for
+        protocol-specific handling (e.g. GOAWAY check) while still holding the lock.
     */
     handlePollResult() {
         AutoLock al(lock);
@@ -239,6 +240,16 @@ public class HttpClientConnection {
             state = HttpClientConnectionState::Ready;
             ready_cond.broadcast();
         }
+
+        # Protocol-specific hook called under lock — no gap for concurrent state changes
+        handlePollResultImpl();
+    }
+
+    #! Protocol-specific poll result hook, called under lock
+    /** Default no-op; override for protocol-specific handling (e.g. GOAWAY check).
+        @note Called while \c lock is held — do not attempt to re-acquire it.
+    */
+    private handlePollResultImpl() {
     }
 
     #! Waits for the connection to become ready
