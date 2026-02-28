@@ -122,6 +122,13 @@ export QORE_DEBUG_BINARY="${QORE_SRC_DIR}/build/qore"
 export QORE_RELEASE_BINARY="${QORE_SRC_DIR}/build-release/qore"
 export QORE_BINARY="${QORE_SRC_DIR}/test/docker_test/qore_binary_selector.sh"
 
+# Set up LIBQORE path for run_tests.sh (installed from Debug build)
+if [ -f "${QORE_SRC_DIR}/build/libqore.so" ]; then
+    export LIBQORE_BINARY="${QORE_SRC_DIR}/build/libqore.so"
+elif [ -f "${QORE_SRC_DIR}/build/libqore.dylib" ]; then
+    export LIBQORE_BINARY="${QORE_SRC_DIR}/build/libqore.dylib"
+fi
+
 # Run tests with binary selector (Debug for most tests, Release for WebSocketH2PerfTest)
 echo && echo "-- running all tests (WebSocketH2PerfTest in Release mode, others in Debug) --"
 gosu qore:qore ./run_tests.sh
