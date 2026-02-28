@@ -11,7 +11,7 @@
 %requires ../../../../qlib/AsyncSocketIo
 %requires ../../../../qlib/HttpServerAsyncIo
 %requires ../../../../qlib/HttpServer.qm
-%requires ../../../../qlib/Http3ClientIo
+%requires ../../../../qlib/HttpClientIo
 
 %exec-class Http3LocalBenchmark
 
@@ -212,8 +212,9 @@ MlNjZ7VLniPrDSAVQq1L/dPuFA8V4OG6JQg9hsdS5fIsAorZEiybG2Fj4OBlOT0e
 
         # HTTP/3 warmup
         try {
-            Http3ClientIo::Http3ClientConnectionManager mgr(
-                <Http3ClientIo::Http3ClientConnectionManagerOptions>{
+            HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+                    "protocol": "h3",
                     "connect_timeout": 15s,
                     "request_timeout": 30s,
                 });
@@ -276,8 +277,9 @@ MlNjZ7VLniPrDSAVQq1L/dPuFA8V4OG6JQg9hsdS5fIsAorZEiybG2Fj4OBlOT0e
 
         # HTTP/3
         try {
-            Http3ClientIo::Http3ClientConnectionManager mgr(
-                <Http3ClientIo::Http3ClientConnectionManagerOptions>{
+            HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+                    "protocol": "h3",
                     "connect_timeout": 15s,
                     "request_timeout": 30s,
                     "max_connections_per_host": 1,
@@ -353,8 +355,9 @@ MlNjZ7VLniPrDSAVQq1L/dPuFA8V4OG6JQg9hsdS5fIsAorZEiybG2Fj4OBlOT0e
             for (int i = 0; i < connect_iters; ++i) {
                 try {
                     date start = now_us();
-                    Http3ClientIo::Http3ClientConnectionManager mgr(
-                        <Http3ClientIo::Http3ClientConnectionManagerOptions>{
+                    HttpClientIo::HttpClientConnectionManager mgr(
+                        <HttpClientIo::HttpClientConnectionManagerOptions>{
+                            "protocol": "h3",
                             "connect_timeout": 15s,
                             "request_timeout": 30s,
                         });
@@ -450,8 +453,9 @@ MlNjZ7VLniPrDSAVQq1L/dPuFA8V4OG6JQg9hsdS5fIsAorZEiybG2Fj4OBlOT0e
 
         # HTTP/3 - single QUIC connection, multiplexed streams
         try {
-            Http3ClientIo::Http3ClientConnectionManager mgr(
-                <Http3ClientIo::Http3ClientConnectionManagerOptions>{
+            HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+                    "protocol": "h3",
                     "connect_timeout": 15s,
                     "request_timeout": 30s,
                     "max_connections_per_host": 1,
@@ -543,8 +547,9 @@ MlNjZ7VLniPrDSAVQq1L/dPuFA8V4OG6JQg9hsdS5fIsAorZEiybG2Fj4OBlOT0e
 
             # HTTP/3
             try {
-                Http3ClientIo::Http3ClientConnectionManager mgr(
-                    <Http3ClientIo::Http3ClientConnectionManagerOptions>{
+                HttpClientIo::HttpClientConnectionManager mgr(
+                    <HttpClientIo::HttpClientConnectionManagerOptions>{
+                        "protocol": "h3",
                         "connect_timeout": 15s,
                         "request_timeout": 60s,
                     });
@@ -669,8 +674,9 @@ MlNjZ7VLniPrDSAVQq1L/dPuFA8V4OG6JQg9hsdS5fIsAorZEiybG2Fj4OBlOT0e
 
         # HTTP/3 - single QUIC connection
         try {
-            Http3ClientIo::Http3ClientConnectionManager mgr(
-                <Http3ClientIo::Http3ClientConnectionManagerOptions>{
+            HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+                    "protocol": "h3",
                     "connect_timeout": 15s,
                     "request_timeout": 30s,
                     "max_connections_per_host": 1,

@@ -36,7 +36,7 @@
 %requires ../../../../qlib/AsyncSocketIo
 %requires ../../../../qlib/HttpServerAsyncIo
 %requires ../../../../qlib/HttpServer.qm
-%requires ../../../../qlib/Http3ClientIo
+%requires ../../../../qlib/HttpClientIo
 
 %exec-class HttpServerQuic0RttTest
 
@@ -166,8 +166,9 @@ l50Xb2GWQesIt9k5jF5IOw==
 
         # Connection 1: establishes TLS session, receives session ticket
         {
-            Http3ClientIo::Http3ClientConnectionManager mgr(
-                <Http3ClientIo::Http3ClientConnectionManagerOptions>{
+            HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+                    "protocol": "h3",
                     "logger": mLogger,
                     "request_timeout": 15s,
                     "connect_timeout": 10s,
@@ -186,8 +187,9 @@ l50Xb2GWQesIt9k5jF5IOw==
 
         # Connection 2: should attempt 0-RTT with cached session ticket
         {
-            Http3ClientIo::Http3ClientConnectionManager mgr2(
-                <Http3ClientIo::Http3ClientConnectionManagerOptions>{
+            HttpClientIo::HttpClientConnectionManager mgr2(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+                    "protocol": "h3",
                     "logger": mLogger,
                     "request_timeout": 15s,
                     "connect_timeout": 10s,
@@ -228,8 +230,9 @@ l50Xb2GWQesIt9k5jF5IOw==
             saved_port = h3info1.port;
             string url1 = "https://127.0.0.1:" + saved_port;
 
-            Http3ClientIo::Http3ClientConnectionManager mgr1(
-                <Http3ClientIo::Http3ClientConnectionManagerOptions>{
+            HttpClientIo::HttpClientConnectionManager mgr1(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+                    "protocol": "h3",
                     "logger": mLogger,
                     "request_timeout": 15s,
                     "connect_timeout": 10s,
@@ -265,8 +268,9 @@ l50Xb2GWQesIt9k5jF5IOw==
             assertEq(saved_port, h3info2.port, "server2 should bind to the same port");
             string url2 = "https://127.0.0.1:" + saved_port;
 
-            Http3ClientIo::Http3ClientConnectionManager mgr2(
-                <Http3ClientIo::Http3ClientConnectionManagerOptions>{
+            HttpClientIo::HttpClientConnectionManager mgr2(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+                    "protocol": "h3",
                     "logger": mLogger,
                     "request_timeout": 15s,
                     "connect_timeout": 10s,
@@ -298,8 +302,9 @@ l50Xb2GWQesIt9k5jF5IOw==
         hash<auto> h3info = addQuicListener(server);
         string url = "https://127.0.0.1:" + h3info.port;
 
-        Http3ClientIo::Http3ClientConnectionManager mgr(
-            <Http3ClientIo::Http3ClientConnectionManagerOptions>{
+        HttpClientIo::HttpClientConnectionManager mgr(
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "protocol": "h3",
                 "logger": mLogger,
                 "request_timeout": 15s,
                 "connect_timeout": 10s,
@@ -347,8 +352,9 @@ l50Xb2GWQesIt9k5jF5IOw==
         string url1 = "https://127.0.0.1:" + h3info1.port;
         string url2 = "https://127.0.0.1:" + h3info2.port;
 
-        Http3ClientIo::Http3ClientConnectionManager mgr(
-            <Http3ClientIo::Http3ClientConnectionManagerOptions>{
+        HttpClientIo::HttpClientConnectionManager mgr(
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "protocol": "h3",
                 "logger": mLogger,
                 "request_timeout": 15s,
                 "connect_timeout": 10s,
@@ -391,8 +397,9 @@ l50Xb2GWQesIt9k5jF5IOw==
 
         # First, establish a connection to cache a session ticket
         {
-            Http3ClientIo::Http3ClientConnectionManager mgr_init(
-                <Http3ClientIo::Http3ClientConnectionManagerOptions>{
+            HttpClientIo::HttpClientConnectionManager mgr_init(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+                    "protocol": "h3",
                     "logger": mLogger,
                     "request_timeout": 15s,
                     "connect_timeout": 10s,
@@ -414,8 +421,9 @@ l50Xb2GWQesIt9k5jF5IOw==
             background sub () {
                 on_exit cnt.dec();
                 try {
-                    Http3ClientIo::Http3ClientConnectionManager mgr(
-                        <Http3ClientIo::Http3ClientConnectionManagerOptions>{
+                    HttpClientIo::HttpClientConnectionManager mgr(
+                        <HttpClientIo::HttpClientConnectionManagerOptions>{
+                            "protocol": "h3",
                             "logger": mLogger,
                             "request_timeout": 15s,
                             "connect_timeout": 10s,

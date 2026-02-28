@@ -45,7 +45,7 @@
 %requires ../../../../qlib/AsyncSocketIo
 %requires ../../../../qlib/HttpServerAsyncIo
 %requires ../../../../qlib/HttpServer.qm
-%requires ../../../../qlib/Http3ClientIo
+%requires ../../../../qlib/HttpClientIo
 
 %exec-class HttpServerAsyncStreamingResponseTest
 
@@ -322,9 +322,10 @@ l50Xb2GWQesIt9k5jF5IOw==
     }
 
     #! Creates an HTTP/3 client connection manager
-    private Http3ClientIo::Http3ClientConnectionManager createH3Manager() {
-        return new Http3ClientIo::Http3ClientConnectionManager(
-            <Http3ClientIo::Http3ClientConnectionManagerOptions>{
+    private HttpClientIo::HttpClientConnectionManager createH3Manager() {
+        return new HttpClientIo::HttpClientConnectionManager(
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "protocol": "h3",
                 "logger": mLogger,
                 "request_timeout": 30s,
                 "connect_timeout": 15s,
@@ -574,56 +575,28 @@ l50Xb2GWQesIt9k5jF5IOw==
         on_exit delete server;
 
         int num_requests = 4;
-        Counter cnt(num_requests);
-        Mutex m();
-        list<hash<auto>> results = ();
-
-        for (int i = 0; i < num_requests; i++) {
-            int idx = i;
-            background sub() {
-                on_exit cnt.dec();
-                try {
-                    # Each thread creates its own HTTP/2 connection
-                    HTTPClient client = createH2Client(setup.port);
-                    on_exit client.disconnect();
-
-                    hash<auto> resp = client.send(NOTHING, "GET", "/large");
-                    binary resp_body;
-                    if (resp.body.typeCode() == NT_BINARY) {
-                        resp_body = resp.body;
-                    } else {
-                        resp_body = binary(resp.body);
-                    }
-                    m.lock();
-                    on_exit m.unlock();
-                    push results, {
-                        "idx": idx,
-                        "status": resp.status_code,
-                        "size": resp_body.size(),
-                        "match": resp_body == mLargePayload,
-                    };
-                } catch (hash<ExceptionInfo> ex) {
-                    m.lock();
-                    on_exit m.unlock();
-                    push results, {
-                        "idx": idx,
-                        "error": sprintf("%s: %s", ex.err, ex.desc),
-                    };
-                }
-            }();
-        }
-        cnt.waitForZero();
+        list<auto> results = parallel_map(auto sub (int idx) {
+            HTTPClient client = createH2Client(setup.port);
+            on_exit client.disconnect();
+            hash<auto> resp = client.send(NOTHING, "GET", "/large");
+            binary resp_body = resp.body.typeCode() == NT_BINARY
+                ? resp.body : binary(resp.body);
+            return {
+                "idx": idx,
+                "status": resp.status_code,
+                "size": resp_body.size(),
+                "match": resp_body == mLargePayload,
+            };
+        }, range(num_requests), num_requests);
 
         assertEq(num_requests, results.size(), "H2 concurrent: all requests completed");
         for (int i = 0; i < results.size(); i++) {
-            hash<auto> r = results[i];
-            if (r.error) {
-                assertTrue(False, sprintf("H2 concurrent request %d failed: %s", r.idx, r.error));
-                continue;
-            }
-            assertEq(200, r.status, sprintf("H2 concurrent request %d status", r.idx));
-            assertEq(LargePayloadSize, r.size, sprintf("H2 concurrent request %d body size", r.idx));
-            assertTrue(r.match, sprintf("H2 concurrent request %d body matches", r.idx));
+            assertEq(200, results[i].status,
+                sprintf("H2 concurrent request %d status", results[i].idx));
+            assertEq(LargePayloadSize, results[i].size,
+                sprintf("H2 concurrent request %d body size", results[i].idx));
+            assertTrue(results[i].match,
+                sprintf("H2 concurrent request %d body matches", results[i].idx));
         }
     }
 
@@ -635,7 +608,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         HttpServer server = setup.server;
         on_exit delete server;
 
-        Http3ClientIo::Http3ClientConnectionManager mgr = createH3Manager();
+        HttpClientIo::HttpClientConnectionManager mgr = createH3Manager();
         on_exit delete mgr;
 
         string url = sprintf("https://127.0.0.1:%d", setup.port);
@@ -658,7 +631,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         HttpServer server = setup.server;
         on_exit delete server;
 
-        Http3ClientIo::Http3ClientConnectionManager mgr = createH3Manager();
+        HttpClientIo::HttpClientConnectionManager mgr = createH3Manager();
         on_exit delete mgr;
 
         string url = sprintf("https://127.0.0.1:%d", setup.port);
@@ -684,56 +657,29 @@ l50Xb2GWQesIt9k5jF5IOw==
         on_exit delete server;
 
         int num_requests = 4;
-        Counter cnt(num_requests);
-        Mutex m();
-        list<hash<auto>> results = ();
         string url = sprintf("https://127.0.0.1:%d", setup.port);
-
-        for (int i = 0; i < num_requests; i++) {
-            int idx = i;
-            background sub() {
-                on_exit cnt.dec();
-                try {
-                    Http3ClientIo::Http3ClientConnectionManager mgr = createH3Manager();
-                    on_exit delete mgr;
-
-                    hash<auto> resp = mgr.request(url, "GET", "/large");
-                    binary resp_body;
-                    if (resp.body.typeCode() == NT_BINARY) {
-                        resp_body = resp.body;
-                    } else {
-                        resp_body = binary(resp.body);
-                    }
-                    m.lock();
-                    on_exit m.unlock();
-                    push results, {
-                        "idx": idx,
-                        "status": resp.status_code,
-                        "size": resp_body.size(),
-                        "match": resp_body == mLargePayload,
-                    };
-                } catch (hash<ExceptionInfo> ex) {
-                    m.lock();
-                    on_exit m.unlock();
-                    push results, {
-                        "idx": idx,
-                        "error": sprintf("%s: %s", ex.err, ex.desc),
-                    };
-                }
-            }();
-        }
-        cnt.waitForZero();
+        list<auto> results = parallel_map(auto sub (int idx) {
+            HttpClientIo::HttpClientConnectionManager mgr = createH3Manager();
+            on_exit delete mgr;
+            hash<auto> resp = mgr.request(url, "GET", "/large");
+            binary resp_body = resp.body.typeCode() == NT_BINARY
+                ? resp.body : binary(resp.body);
+            return {
+                "idx": idx,
+                "status": resp.status_code,
+                "size": resp_body.size(),
+                "match": resp_body == mLargePayload,
+            };
+        }, range(num_requests), num_requests);
 
         assertEq(num_requests, results.size(), "H3 concurrent: all requests completed");
         for (int i = 0; i < results.size(); i++) {
-            hash<auto> r = results[i];
-            if (r.error) {
-                assertTrue(False, sprintf("H3 concurrent request %d failed: %s", r.idx, r.error));
-                continue;
-            }
-            assertEq(200, r.status, sprintf("H3 concurrent request %d status", r.idx));
-            assertEq(LargePayloadSize, r.size, sprintf("H3 concurrent request %d body size", r.idx));
-            assertTrue(r.match, sprintf("H3 concurrent request %d body matches", r.idx));
+            assertEq(200, results[i].status,
+                sprintf("H3 concurrent request %d status", results[i].idx));
+            assertEq(LargePayloadSize, results[i].size,
+                sprintf("H3 concurrent request %d body size", results[i].idx));
+            assertTrue(results[i].match,
+                sprintf("H3 concurrent request %d body matches", results[i].idx));
         }
     }
 }

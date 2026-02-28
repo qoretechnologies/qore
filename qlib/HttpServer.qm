@@ -1098,8 +1098,8 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         });
         # Increment listener counter; decremented by HttpListener::listenerStopped()
         # when the listener is stopped/deleted (on_error handles setup failures)
-        c.inc();
-        on_error c.dec();
+        c.add();
+        on_error c.done();
 
         # Register with the async I/O controller
         if (!asyncIo) {

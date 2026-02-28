@@ -772,20 +772,8 @@ public class FileHandler inherits public HttpServer::AbstractUrlHandler, private
         #! the default target if a URL cannot be satisfied
         *string default_target;
 
-        #! minimum size in bytes for plain files to use streaming instead of in-memory response
-        /** Files at or below this threshold are read entirely into memory and returned as a monolithic response
-            body with \c Content-Length set. This enables the non-blocking fused send+read path in the async I/O
-            controller. Files above this threshold are returned as a \c FileInputStream with \c Content-Length.
-
-            The default is 2MB, which keeps most typical web content (HTML, CSS, JS, images, fonts) on the fast
-            non-blocking path.
-
-            @see Defaults
-        */
-        softint chunked_threshold = Defaults.ChunkedThreshold;
-
         #! HTTP chunk size in bytes for streaming file transfers
-        /** Used as the read buffer size when reading files into memory for in-memory responses.
+        /** Used as the read buffer size for file I/O.
 
             The default is 64KB to reduce syscalls and context switches compared to smaller buffer sizes.
 
@@ -814,10 +802,7 @@ public class FileHandler inherits public HttpServer::AbstractUrlHandler, private
         const DirSep = Qore::DirSep;
 
         #! default configuration values
-        /** - \c ChunkedThreshold: 2MB — files up to this size are served as in-memory responses with
-              \c Content-Length, enabling the non-blocking fused send+read path in the async I/O controller;
-              files larger than this are served via \c FileInputStream with \c Content-Length
-            - \c ChunkSize: 64KB — read buffer size for file I/O; reduces syscalls vs smaller buffers
+        /** - \c ChunkSize: 64KB — read buffer size for file I/O; reduces syscalls vs smaller buffers
         */
         const Defaults = {
             # default index file
@@ -826,7 +811,6 @@ public class FileHandler inherits public HttpServer::AbstractUrlHandler, private
             "TemplateExtensions": {
                 "qhtml": True,
             },
-            "ChunkedThreshold": 2 * 1024 * 1024,
             "ChunkSize": 65536,
         };
 
@@ -896,8 +880,6 @@ public class FileHandler inherits public HttpServer::AbstractUrlHandler, private
             HttpServer::AbstractAuthenticator); if no HttpServer::AbstractAuthenticator object is passed, then by
             default no authentication will be required
         - \c error_level: the level of error reporting (0, 1, or 2)
-        - \c chunked_threshold: the minimum size in bytes for streaming file responses; files at or below this
-          size are served as in-memory responses (default: 2MB)
         - \c chunk_size: the read buffer size in bytes for file I/O (default: 64KB)
     */
     constructor(string new_file_root, string url_root = "/", *hash<auto> opt)
@@ -910,9 +892,6 @@ public class FileHandler inherits public HttpServer::AbstractUrlHandler, private
         default_target = opt.default_target;
         if (opt.error_level) {
             error_level = opt.error_level;
-        }
-        if (opt.chunked_threshold) {
-            chunked_threshold = opt.chunked_threshold;
         }
         if (opt.chunk_size) {
             chunk_size = opt.chunk_size;
@@ -1149,12 +1128,9 @@ public class FileHandler inherits public HttpServer::AbstractUrlHandler, private
         if (!respHdr."Content-Type") {
             respHdr."Content-Type" = get_mime_type_from_ext(path);
         }
-        if (stat_hash.size <= chunked_threshold) {
-            return sendFile(stream, respHdr);
-        }
 
-        # Large file: return FileInputStream directly with Content-Length
-        # Avoids CallbackInputStream wrapping; lets the transport layer handle streaming
+        # Return FileInputStream with Content-Length; the transport layer (HTTP/1.x,
+        # HTTP/2, HTTP/3) handles async streaming I/O natively
         stream.unassignThread();
         respHdr."Content-Length" = string(stat_hash.size);
         return <HttpResponseInfo>{
@@ -1193,31 +1169,6 @@ public class FileHandler inherits public HttpServer::AbstractUrlHandler, private
         return {
             "Content-Type": get_mime_type_from_ext(path),
         };
-    }
-
-    #! returns a handler hash response with the data to be sent in a monolithic message
-    private hash<HttpResponseInfo> sendFile(InputStream stream, *hash<auto> respHdr) {
-        binary rv;
-        while (*binary bin = stream.read(65536)) {
-            rv += bin;
-        }
-        respHdr."Content-Length" = string(rv.size());
-        return <HttpResponseInfo>{
-            "code": 200,
-            "body": rv,
-            "hdr": respHdr,
-        };
-    }
-
-    #! returns a handler hash response with the file's data to be sent in a HTTP message with chunked transfer encoding
-    private hash<HttpResponseInfo> sendFileChunked(HttpServer::HttpListenerInterface listener, Qore::Socket s,
-            hash<auto> cx, hash<auto> hdr, *data body, InputStream stream, *hash<auto> respHdr) {
-        AbstractStreamRequest fsr = getStreamRequestImpl(listener, s, cx, hdr, body, stream, respHdr);
-        hash<auto> rv = fsr.handleRequest();
-        if (exists rv."raw_response") {
-            delete rv."raw_response";
-        }
-        return cast<hash<HttpResponseInfo>>(rv);
     }
 
     #! this method is called when a directory should be rendered

@@ -263,7 +263,7 @@ cargo install tree-sitter-cli@0.26.5
       - new @ref Qore::Socket::startPollQuicAccept() "Socket::startPollQuicAccept()" for non-blocking QUIC server connection acceptance
       - new @ref Qore::Socket::startPollQuicSendResponse() "Socket::startPollQuicSendResponse()" for non-blocking HTTP/3 response sending
       - new @ref Qore::Option::HAVE_HTTP3 "Option::HAVE_HTTP3" constant (always \c True as ngtcp2/nghttp3 are now required)
-      - new \c Http3ClientIo user module for HTTP/3 client I/O with connection management
+      - new @ref httpclientiointro "HttpClientIo" user module providing unified HTTP/2 and HTTP/3 client I/O
       - WebSocket over HTTP/3 support (RFC 9220 extended CONNECT over QUIC)
       - Server-Sent Events (SSE) over HTTP/3 support
       - QUIC connection migration support (RFC 9000 §9)
@@ -374,13 +374,20 @@ cargo install tree-sitter-cli@0.26.5
       - new @ref HttpServerAsyncIo::Http2PollOperation "Http2PollOperation" class for HTTP/2 server connection handling
       - new \c Http3ServerPollOperation class for QUIC/HTTP/3 server connection handling
       - \c HttpAsyncSocketIoController supports HTTP/2 and HTTP/3 via \c http_version option
-    - @ref http2clientiointro "Http2ClientIo" module
-      - new module providing HTTP/2 multiplexed client I/O support
-      - enables multiple concurrent streams on a single TCP connection
-      - new @ref Http2ClientIo::Http2ClientConnectionManager "Http2ClientConnectionManager" class for connection pooling
-      - new @ref Http2ClientIo::Http2ClientConnection "Http2ClientConnection" class for single TCP connections with multiple streams
-      - new @ref Http2ClientIo::Http2ClientStreamHandle "Http2ClientStreamHandle" class for per-request handles with sync/async API
-      - new @ref Http2ClientIo::Http2ClientPollOperation "Http2ClientPollOperation" class for continuous frame reading
+    - @ref httpclientiointro "HttpClientIo" module
+      - new unified module providing HTTP/2 and HTTP/3 multiplexed client I/O support
+      - protocol auto-selection: attempts HTTP/3 first, falls back to HTTP/2 with caching
+      - new @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager" class for unified connection pooling
+      - new @ref HttpClientIo::HttpClientConnection "HttpClientConnection" abstract base class for protocol connections
+      - new @ref HttpClientIo::HttpClientStreamHandle "HttpClientStreamHandle" abstract base class for stream handles
+      - new @ref HttpClientIo::HttpClientPollOperation "HttpClientPollOperation" abstract base class for poll operations
+      - new @ref HttpClientIo::Http2ClientConnection "Http2ClientConnection" class for HTTP/2 connections
+      - new @ref HttpClientIo::Http3ClientConnection "Http3ClientConnection" class for HTTP/3 connections
+      - new @ref HttpClientIo::Http2ClientStreamHandle "Http2ClientStreamHandle" class with HTTP/2 streaming support
+      - new @ref HttpClientIo::Http3ClientStreamHandle "Http3ClientStreamHandle" class for HTTP/3 stream handles
+    - @ref httpclientiointro "HttpClientIo" module
+      - new @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager" class with unified connection
+        pooling and protocol auto-selection (\c "auto", \c "h2", or \c "h3")
     - @ref httpserverutilintro "HttpServerUtil" module
       - added functionality to support setting cookies
       - refactored authentication methods to provide a more extensible and clear design

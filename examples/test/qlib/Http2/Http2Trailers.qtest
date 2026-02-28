@@ -14,7 +14,7 @@
 %requires ../../../../qlib/QUnit.qm
 %requires ../../../../qlib/Mime.qm
 %requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/Http2ClientIo
+%requires ../../../../qlib/HttpClientIo
 %requires ../../../../qlib/AsyncSocketIo
 
 %exec-class Http2TrailersTest
@@ -129,9 +129,10 @@ class Http2TrailersTest inherits QUnit::Test {
     }
 
     #! Helper: create client connection manager with accept_all_certs
-    private Http2ClientIo::Http2ClientConnectionManager createClientMgr() {
-        return new Http2ClientIo::Http2ClientConnectionManager(
-            <Http2ClientIo::Http2ClientConnectionManagerOptions>{
+    private HttpClientIo::HttpClientConnectionManager createClientMgr() {
+        return new HttpClientIo::HttpClientConnectionManager(
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "protocol": "h2",
                 "accept_all_certs": True,
             });
     }
@@ -188,10 +189,10 @@ class Http2TrailersTest inherits QUnit::Test {
         # Client thread: connect, send request, read response with trailers
         background sub() {
             try {
-                Http2ClientIo::Http2ClientConnectionManager mgr = createClientMgr();
+                HttpClientIo::HttpClientConnectionManager mgr = createClientMgr();
 
                 string url = sprintf("https://localhost:%d", port);
-                Http2ClientIo::Http2ClientStreamHandle stream = mgr.acquireStream(url);
+                HttpClientIo::Http2ClientStreamHandle stream = mgr.acquireStream(url);
                 hash<auto> response = stream.request("POST", "/test.Service/Method",
                     {"content-type": "application/grpc+proto", "te": "trailers"},
                     binary("request-data"));
@@ -274,10 +275,10 @@ class Http2TrailersTest inherits QUnit::Test {
         # Client
         background sub() {
             try {
-                Http2ClientIo::Http2ClientConnectionManager mgr = createClientMgr();
+                HttpClientIo::HttpClientConnectionManager mgr = createClientMgr();
 
                 string url = sprintf("https://localhost:%d", port);
-                Http2ClientIo::Http2ClientStreamHandle stream = mgr.acquireStream(url);
+                HttpClientIo::Http2ClientStreamHandle stream = mgr.acquireStream(url);
                 hash<auto> response = stream.request("GET", "/data");
 
                 {
@@ -348,10 +349,10 @@ class Http2TrailersTest inherits QUnit::Test {
         # Client
         background sub() {
             try {
-                Http2ClientIo::Http2ClientConnectionManager mgr = createClientMgr();
+                HttpClientIo::HttpClientConnectionManager mgr = createClientMgr();
 
                 string url = sprintf("https://localhost:%d", port);
-                Http2ClientIo::Http2ClientStreamHandle stream = mgr.acquireStream(url);
+                HttpClientIo::Http2ClientStreamHandle stream = mgr.acquireStream(url);
                 hash<auto> response = stream.request("GET", "/no-trailers");
 
                 {
@@ -423,10 +424,10 @@ class Http2TrailersTest inherits QUnit::Test {
 
         background sub() {
             try {
-                Http2ClientIo::Http2ClientConnectionManager mgr = createClientMgr();
+                HttpClientIo::HttpClientConnectionManager mgr = createClientMgr();
 
                 string url = sprintf("https://localhost:%d", port);
-                Http2ClientIo::Http2ClientStreamHandle stream = mgr.acquireStream(url);
+                HttpClientIo::Http2ClientStreamHandle stream = mgr.acquireStream(url);
                 hash<auto> response = stream.request("POST", "/test.Service/Method",
                     {"content-type": "application/grpc+proto", "te": "trailers"});
 
@@ -501,10 +502,10 @@ class Http2TrailersTest inherits QUnit::Test {
 
         background sub() {
             try {
-                Http2ClientIo::Http2ClientConnectionManager mgr = createClientMgr();
+                HttpClientIo::HttpClientConnectionManager mgr = createClientMgr();
 
                 string url = sprintf("https://localhost:%d", port);
-                Http2ClientIo::Http2ClientStreamHandle stream = mgr.acquireStream(url);
+                HttpClientIo::Http2ClientStreamHandle stream = mgr.acquireStream(url);
                 hash<auto> response = stream.request("GET", "/case-test");
 
                 {
@@ -580,10 +581,10 @@ class Http2TrailersTest inherits QUnit::Test {
         # Client: use request() then verify getTrailers() returns the same trailers
         background sub() {
             try {
-                Http2ClientIo::Http2ClientConnectionManager mgr = createClientMgr();
+                HttpClientIo::HttpClientConnectionManager mgr = createClientMgr();
 
                 string url = sprintf("https://localhost:%d", port);
-                Http2ClientIo::Http2ClientStreamHandle stream = mgr.acquireStream(url);
+                HttpClientIo::Http2ClientStreamHandle stream = mgr.acquireStream(url);
                 hash<auto> response = stream.request("POST", "/test.Service/StreamMethod",
                     {"content-type": "application/grpc+proto", "te": "trailers"},
                     binary("request-data"));
@@ -675,10 +676,10 @@ class Http2TrailersTest inherits QUnit::Test {
         # Client
         background sub() {
             try {
-                Http2ClientIo::Http2ClientConnectionManager mgr = createClientMgr();
+                HttpClientIo::HttpClientConnectionManager mgr = createClientMgr();
 
                 string url = sprintf("https://localhost:%d", port);
-                Http2ClientIo::Http2ClientStreamHandle stream = mgr.acquireStream(url);
+                HttpClientIo::Http2ClientStreamHandle stream = mgr.acquireStream(url);
                 hash<auto> response = stream.request("POST", "/test.Service/ContextMethod",
                     {"content-type": "application/grpc+proto", "te": "trailers"},
                     binary("request-data"));
@@ -754,10 +755,10 @@ class Http2TrailersTest inherits QUnit::Test {
         # Client: use streaming + getTrailers to verify NOTHING
         background sub() {
             try {
-                Http2ClientIo::Http2ClientConnectionManager mgr = createClientMgr();
+                HttpClientIo::HttpClientConnectionManager mgr = createClientMgr();
 
                 string url = sprintf("https://localhost:%d", port);
-                Http2ClientIo::Http2ClientStreamHandle stream = mgr.acquireStream(url);
+                HttpClientIo::Http2ClientStreamHandle stream = mgr.acquireStream(url);
                 hash<auto> response = stream.request("GET", "/no-trailers-get");
 
                 # getTrailers() should return NOTHING

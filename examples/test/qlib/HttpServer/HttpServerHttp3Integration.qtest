@@ -22,7 +22,7 @@
     FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
     DEALINGS IN THE SOFTWARE.
 
-    HTTP/3 module-level integration tests - exercises HttpServer + Http3ClientIo
+    HTTP/3 module-level integration tests - exercises HttpServer + HttpClientIo
     end-to-end over QUIC/HTTP/3.
 
     Tests cover:
@@ -42,7 +42,7 @@
 %requires ../../../../qlib/AsyncSocketIo
 %requires ../../../../qlib/HttpServerAsyncIo
 %requires ../../../../qlib/HttpServer.qm
-%requires ../../../../qlib/Http3ClientIo
+%requires ../../../../qlib/HttpClientIo
 
 %exec-class HttpServerHttp3IntegrationTest
 
@@ -191,7 +191,7 @@ class HttpServerHttp3IntegrationTest inherits QUnit::Test {
         int mH3Port;
         string mH3Url;
         Logger mLogger;
-        Http3ClientIo::Http3ClientConnectionManager mMgr;
+        HttpClientIo::HttpClientConnectionManager mMgr;
 
         # Self-signed test certificate (RSA 2048-bit, CN=localhost, valid 10 years)
         const CertPem = "-----BEGIN CERTIFICATE-----
@@ -336,8 +336,9 @@ l50Xb2GWQesIt9k5jF5IOw==
         mH3Url = "https://127.0.0.1:" + mH3Port;
 
         # Create shared client connection manager
-        mMgr = new Http3ClientIo::Http3ClientConnectionManager(
-            <Http3ClientIo::Http3ClientConnectionManagerOptions>{
+        mMgr = new HttpClientIo::HttpClientConnectionManager(
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "protocol": "h3",
                 "logger": mLogger,
                 "request_timeout": 30s,
                 "connect_timeout": 15s,
@@ -496,8 +497,9 @@ l50Xb2GWQesIt9k5jF5IOw==
         # Test that closeAll properly sets shutdown state and prevents new requests.
         # Uses a manager that gets a working connection FIRST (via the already-tested
         # shared server), then verifies shutdown behavior.
-        auto mgr = new Http3ClientIo::Http3ClientConnectionManager(
-            <Http3ClientIo::Http3ClientConnectionManagerOptions>{
+        auto mgr = new HttpClientIo::HttpClientConnectionManager(
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "protocol": "h3",
                 "logger": mLogger,
                 "request_timeout": 30s,
                 "connect_timeout": 15s,
@@ -507,12 +509,12 @@ l50Xb2GWQesIt9k5jF5IOw==
         # Close the manager immediately (without any connections)
         mgr.closeAll();
 
-        # After closeAll, acquireStream should throw HTTP3-SHUTDOWN
-        assertThrows("HTTP3-SHUTDOWN", \mgr.acquireStream(), (mH3Url,),
+        # After closeAll, acquireStream should throw HTTPCLIENT-SHUTDOWN
+        assertThrows("HTTPCLIENT-SHUTDOWN", \mgr.acquireStream(), (mH3Url,),
             "acquireStream after closeAll should throw");
 
         # Also verify that request() throws after closeAll
-        assertThrows("HTTP3-SHUTDOWN", \mgr.request(), (mH3Url, "GET", "/hello"),
+        assertThrows("HTTPCLIENT-SHUTDOWN", \mgr.request(), (mH3Url, "GET", "/hello"),
             "request after closeAll should throw");
     }
 
@@ -686,8 +688,9 @@ l50Xb2GWQesIt9k5jF5IOw==
 
     testConnectionTimeout() {
         # Create a separate manager with a very short timeout
-        auto mgr = new Http3ClientIo::Http3ClientConnectionManager(
-            <Http3ClientIo::Http3ClientConnectionManagerOptions>{
+        auto mgr = new HttpClientIo::HttpClientConnectionManager(
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "protocol": "h3",
                 "logger": mLogger,
                 "connect_timeout": 2s,
                 "request_timeout": 3s,
@@ -710,7 +713,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         } catch (hash<ExceptionInfo> ex) {
             got_error = True;
             # Verify the exception is a known HTTP/3 or QUIC error type
-            assertRegex("^(HTTP3-CONNECT-ERROR|HTTP3-TIMEOUT|QUIC-ERROR)$", ex.err,
+            assertRegex("^(HTTP3-CONNECT-ERROR|HTTP3-TIMEOUT|HTTPCLIENT-TIMEOUT|QUIC-ERROR)$", ex.err,
                 "expected HTTP/3 or QUIC error type, got: " + ex.err);
             if (m_options.verbose > 1) {
                 printf("testConnectionTimeout: got expected error: %s: %s\n", ex.err, ex.desc);
@@ -751,8 +754,9 @@ l50Xb2GWQesIt9k5jF5IOw==
         int port = h3info.port;
         string url = "https://localhost:" + port;
 
-        auto mgr = new Http3ClientIo::Http3ClientConnectionManager(
-            <Http3ClientIo::Http3ClientConnectionManagerOptions>{
+        auto mgr = new HttpClientIo::HttpClientConnectionManager(
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "protocol": "h3",
                 "logger": logger,
                 "request_timeout": 10s,
                 "connect_timeout": 5s,
@@ -803,8 +807,9 @@ l50Xb2GWQesIt9k5jF5IOw==
         int port = h3info.port;
         string url = "https://localhost:" + port;
 
-        auto mgr = new Http3ClientIo::Http3ClientConnectionManager(
-            <Http3ClientIo::Http3ClientConnectionManagerOptions>{
+        auto mgr = new HttpClientIo::HttpClientConnectionManager(
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "protocol": "h3",
                 "logger": logger,
                 "request_timeout": 10s,
                 "connect_timeout": 5s,
@@ -857,8 +862,9 @@ l50Xb2GWQesIt9k5jF5IOw==
         int port = h3info.port;
         string url = "https://localhost:" + port;
 
-        auto mgr = new Http3ClientIo::Http3ClientConnectionManager(
-            <Http3ClientIo::Http3ClientConnectionManagerOptions>{
+        auto mgr = new HttpClientIo::HttpClientConnectionManager(
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "protocol": "h3",
                 "logger": logger,
                 "request_timeout": 10s,
                 "connect_timeout": 5s,

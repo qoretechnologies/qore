@@ -233,8 +233,8 @@ l50Xb2GWQesIt9k5jF5IOw==
         }
 
         # Set up message tracking
-        Counter done(1);
-        bool done_signaled = False;
+        WaitGroup wg();
+        wg.add();
         *data received_msg;
 
         code cb = sub (*data msg) {
@@ -242,10 +242,7 @@ l50Xb2GWQesIt9k5jF5IOw==
                 return;
             }
             received_msg = msg;
-            if (!done_signaled) {
-                done_signaled = True;
-                done.dec();
-            }
+            try { wg.done(); } catch () {}
         };
 
         WebSocketClient wsc = createH3Client(cb, setup.port);
@@ -261,7 +258,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         wsc.send(test_msg);
 
         # Wait for echo
-        int rv = done.waitForZero(30s);
+        int rv = wg.wait(30s);
         assertEq(0, rv, "should receive echo within timeout");
         assertEq(test_msg, received_msg, "echoed message should match sent message");
     }
@@ -280,8 +277,8 @@ l50Xb2GWQesIt9k5jF5IOw==
             delete server;
         }
 
-        Counter done(1);
-        bool done_signaled = False;
+        WaitGroup wg();
+        wg.add();
         *data received_msg;
 
         code cb = sub (*data msg) {
@@ -289,10 +286,7 @@ l50Xb2GWQesIt9k5jF5IOw==
                 return;
             }
             received_msg = msg;
-            if (!done_signaled) {
-                done_signaled = True;
-                done.dec();
-            }
+            try { wg.done(); } catch () {}
         };
 
         WebSocketClient wsc = createH3Client(cb, setup.port);
@@ -308,7 +302,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         wsc.send(test_data);
 
         # Wait for echo
-        int rv = done.waitForZero(30s);
+        int rv = wg.wait(30s);
         assertEq(0, rv, "should receive echo within timeout");
         assertEq(test_data, received_msg, "echoed binary should match sent data");
     }
@@ -327,24 +321,18 @@ l50Xb2GWQesIt9k5jF5IOw==
             delete server;
         }
 
-        Counter msg_done(1);
-        bool msg_signaled = False;
-        Counter close_done(1);
-        bool close_signaled = False;
+        WaitGroup msg_wg();
+        msg_wg.add();
+        WaitGroup close_wg();
+        close_wg.add();
 
         code cb = sub (*data msg) {
             if (!exists msg) {
                 # Connection closed
-                if (!close_signaled) {
-                    close_signaled = True;
-                    close_done.dec();
-                }
+                try { close_wg.done(); } catch () {}
                 return;
             }
-            if (!msg_signaled) {
-                msg_signaled = True;
-                msg_done.dec();
-            }
+            try { msg_wg.done(); } catch () {}
         };
 
         WebSocketClient wsc = createH3Client(cb, setup.port);
@@ -357,14 +345,14 @@ l50Xb2GWQesIt9k5jF5IOw==
 
         # Confirm connection works
         wsc.send("pre-close-test");
-        int rv = msg_done.waitForZero(30s);
+        int rv = msg_wg.wait(30s);
         assertEq(0, rv, "should receive echo before disconnect");
 
         # Disconnect cleanly
         wsc.disconnect();
 
         # The callback should be called with NOTHING to signal close
-        rv = close_done.waitForZero(10s);
+        rv = close_wg.wait(10s);
         assertEq(0, rv, "close callback should be triggered");
     }
 
@@ -385,8 +373,8 @@ l50Xb2GWQesIt9k5jF5IOw==
         int msg_count = 20;
         Mutex m();
         int received = 0;
-        Counter done(1);
-        bool done_signaled = False;
+        WaitGroup wg();
+        wg.add();
         list<string> received_msgs();
 
         code cb = sub (*data msg) {
@@ -401,9 +389,8 @@ l50Xb2GWQesIt9k5jF5IOw==
             } else {
                 received_msgs += msg.toString("UTF-8");
             }
-            if (received >= msg_count && !done_signaled) {
-                done_signaled = True;
-                done.dec();
+            if (received >= msg_count) {
+                try { wg.done(); } catch () {}
             }
         };
 
@@ -426,7 +413,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         }
 
         # Wait for all echoes
-        int rv = done.waitForZero(30s);
+        int rv = wg.wait(30s);
         assertEq(0, rv, "should receive all echoes within timeout");
 
         m.lock();
@@ -550,17 +537,14 @@ l50Xb2GWQesIt9k5jF5IOw==
         }
 
         # Track that the server-side handler eventually cleans up
-        Counter msg_done(1);
-        bool msg_signaled = False;
+        WaitGroup msg_wg();
+        msg_wg.add();
 
         code cb = sub (*data msg) {
             if (!exists msg) {
                 return;
             }
-            if (!msg_signaled) {
-                msg_signaled = True;
-                msg_done.dec();
-            }
+            try { msg_wg.done(); } catch () {}
         };
 
         WebSocketClient wsc = createH3Client(cb, setup.port);
@@ -568,7 +552,7 @@ l50Xb2GWQesIt9k5jF5IOw==
 
         # Confirm connection works
         wsc.send("pre-abort-test");
-        int rv = msg_done.waitForZero(30s);
+        int rv = msg_wg.wait(30s);
         assertEq(0, rv, "should receive echo before abort");
 
         # Force-delete the client without sending a close frame
@@ -576,8 +560,8 @@ l50Xb2GWQesIt9k5jF5IOw==
         delete wsc;
 
         # Verify server is still operational — connect a new client and echo
-        Counter done2(1);
-        bool done2_signaled = False;
+        WaitGroup wg2();
+        wg2.add();
         *data received2;
 
         code cb2 = sub (*data msg) {
@@ -585,10 +569,7 @@ l50Xb2GWQesIt9k5jF5IOw==
                 return;
             }
             received2 = msg;
-            if (!done2_signaled) {
-                done2_signaled = True;
-                done2.dec();
-            }
+            try { wg2.done(); } catch () {}
         };
 
         WebSocketClient wsc2 = createH3Client(cb2, setup.port);
@@ -599,7 +580,7 @@ l50Xb2GWQesIt9k5jF5IOw==
 
         assertTrue(wsc2.isHttp3(), "second client should connect over HTTP/3");
         wsc2.send("post-abort-test");
-        rv = done2.waitForZero(30s);
+        rv = wg2.wait(30s);
         assertEq(0, rv, "server should still work after abnormal disconnect");
         assertEq("post-abort-test", received2, "echo should match after abnormal disconnect");
     }
@@ -618,8 +599,8 @@ l50Xb2GWQesIt9k5jF5IOw==
             delete server;
         }
 
-        Counter done(1);
-        bool done_signaled = False;
+        WaitGroup wg();
+        wg.add();
         *data received_msg;
 
         code cb = sub (*data msg) {
@@ -627,10 +608,7 @@ l50Xb2GWQesIt9k5jF5IOw==
                 return;
             }
             received_msg = msg;
-            if (!done_signaled) {
-                done_signaled = True;
-                done.dec();
-            }
+            try { wg.done(); } catch () {}
         };
 
         WebSocketClient wsc = createH3Client(cb, setup.port);
@@ -655,7 +633,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         wsc.send(large_data);
 
         # Wait for the large echo — use longer timeout for valgrind
-        int rv = done.waitForZero(60s);
+        int rv = wg.wait(60s);
         assertEq(0, rv, "should receive large echo within timeout");
         assertEq(large_size, received_msg.size(), "echoed large message size should match");
         assertEq(large_data, received_msg, "echoed large message content should match");

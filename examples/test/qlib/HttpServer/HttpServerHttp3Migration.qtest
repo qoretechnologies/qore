@@ -47,7 +47,7 @@
 %requires ../../../../qlib/AsyncSocketIo
 %requires ../../../../qlib/HttpServerAsyncIo
 %requires ../../../../qlib/HttpServer.qm
-%requires ../../../../qlib/Http3ClientIo
+%requires ../../../../qlib/HttpClientIo
 
 %exec-class HttpServerHttp3MigrationTest
 
@@ -198,7 +198,7 @@ l50Xb2GWQesIt9k5jF5IOw==
             "port": mH3Port,
             "protocol": "https",
         };
-        Http3ClientConnection conn(url_info, 15s, mLogger, Http3ClientIo::DefaultMaxStreamsPerConnection,
+        Http3ClientConnection conn(url_info, 15s, mLogger, HttpClientIo::DefaultMaxStreamsPerConnection,
             NOTHING, True);
         assertTrue(conn.driveToReady(15s), "connection should become ready");
         return conn;
@@ -435,8 +435,9 @@ l50Xb2GWQesIt9k5jF5IOw==
 
     #! Test: Http3ClientConnectionManager.migrateAll()
     testMigrateAll() {
-        Http3ClientIo::Http3ClientConnectionManager mgr(
-            <Http3ClientIo::Http3ClientConnectionManagerOptions>{
+        HttpClientIo::HttpClientConnectionManager mgr(
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "protocol": "h3",
                 "logger": mLogger,
                 "request_timeout": 15s,
                 "connect_timeout": 15s,
@@ -470,7 +471,7 @@ l50Xb2GWQesIt9k5jF5IOw==
             "port": mH3Port,
             "protocol": "https",
         };
-        Http3ClientConnection conn(url_info, 15s, mLogger, Http3ClientIo::DefaultMaxStreamsPerConnection,
+        Http3ClientConnection conn(url_info, 15s, mLogger, HttpClientIo::DefaultMaxStreamsPerConnection,
             NOTHING, True);
         on_exit { try { conn.close(); } catch () {} }
 

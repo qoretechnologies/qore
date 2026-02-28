@@ -42,7 +42,7 @@
 %requires ../../../../qlib/AsyncSocketIo
 %requires ../../../../qlib/HttpServerAsyncIo
 %requires ../../../../qlib/HttpServer.qm
-%requires ../../../../qlib/Http3ClientIo
+%requires ../../../../qlib/HttpClientIo
 
 %try-module json >= 1.5
 %define NoJson
@@ -190,7 +190,8 @@ l50Xb2GWQesIt9k5jF5IOw==
         on_exit delete server;
 
         # Create client with certificate for mTLS
-        Http3ClientConnectionManager mgr(<Http3ClientConnectionManagerOptions>{
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+            "protocol": "h3",
             "accept_all_certs": True,
             "client_cert": new SSLCertificate(CertPem),
             "client_pk": new SSLPrivateKey(KeyPem),
@@ -216,7 +217,8 @@ l50Xb2GWQesIt9k5jF5IOw==
 
         # Create client WITHOUT certificate — SSL_VERIFY_PEER alone should not
         # require a client cert (only requests it)
-        Http3ClientConnectionManager mgr(<Http3ClientConnectionManagerOptions>{
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+            "protocol": "h3",
             "accept_all_certs": True,
             "logger": mLogger,
         });
@@ -241,7 +243,8 @@ l50Xb2GWQesIt9k5jF5IOw==
 
         # Create client WITHOUT certificate — handshake should fail because
         # SSL_VERIFY_FAIL_IF_NO_PEER_CERT requires a client cert
-        Http3ClientConnectionManager mgr(<Http3ClientConnectionManagerOptions>{
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+            "protocol": "h3",
             "accept_all_certs": True,
             "logger": mLogger,
         });
@@ -268,7 +271,8 @@ l50Xb2GWQesIt9k5jF5IOw==
         on_exit delete server;
 
         # Create client with certificate
-        Http3ClientConnectionManager mgr(<Http3ClientConnectionManagerOptions>{
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+            "protocol": "h3",
             "accept_all_certs": True,
             "client_cert": new SSLCertificate(CertPem),
             "client_pk": new SSLPrivateKey(KeyPem),

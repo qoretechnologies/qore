@@ -45,7 +45,7 @@
 %requires ../../../../qlib/AsyncSocketIo
 %requires ../../../../qlib/HttpServerAsyncIo
 %requires ../../../../qlib/HttpServer.qm
-%requires ../../../../qlib/Http3ClientIo
+%requires ../../../../qlib/HttpClientIo
 
 %exec-class HttpServerHttp3StressTest
 
@@ -222,9 +222,10 @@ l50Xb2GWQesIt9k5jF5IOw==
     }
 
     #! Creates a new Http3ClientConnectionManager for independent test usage
-    private Http3ClientIo::Http3ClientConnectionManager newManager(*timeout req_timeout) {
-        return new Http3ClientIo::Http3ClientConnectionManager(
-            <Http3ClientIo::Http3ClientConnectionManagerOptions>{
+    private HttpClientIo::HttpClientConnectionManager newManager(*timeout req_timeout) {
+        return new HttpClientIo::HttpClientConnectionManager(
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "protocol": "h3",
                 "logger": mLogger,
                 "request_timeout": req_timeout ?? 30s,
                 "connect_timeout": 15s,
@@ -391,7 +392,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         Mutex m();
 
         # Each manager gets its own connection to the server
-        list<Http3ClientIo::Http3ClientConnectionManager> managers = ();
+        list<HttpClientIo::HttpClientConnectionManager> managers = ();
         for (int i = 0; i < num_managers; i++) {
             push managers, newManager(60s);
         }

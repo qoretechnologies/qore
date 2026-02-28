@@ -40,7 +40,7 @@
 %requires ../../../../qlib/AsyncSocketIo
 %requires ../../../../qlib/HttpServerAsyncIo
 %requires ../../../../qlib/HttpServer.qm
-%requires ../../../../qlib/Http3ClientIo
+%requires ../../../../qlib/HttpClientIo
 
 %exec-class HttpServerQuicSseTest
 
@@ -212,8 +212,9 @@ l50Xb2GWQesIt9k5jF5IOw==
         string h3_url = "https://localhost:" + h3info.port;
 
         # Use Http3ClientConnectionManager for HTTP/3 requests
-        Http3ClientIo::Http3ClientConnectionManager mgr(
-            <Http3ClientIo::Http3ClientConnectionManagerOptions>{
+        HttpClientIo::HttpClientConnectionManager mgr(
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "protocol": "h3",
                 "logger": mLogger,
                 "request_timeout": 30s,
                 "connect_timeout": 15s,
