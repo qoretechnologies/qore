@@ -478,6 +478,12 @@ else()
 endif()
 
 # QUIC/HTTP/3 support via ngtcp2 + nghttp3
+# Try system packages first (pkg-config, then cmake find); fall back to
+# building from source via FetchContent when not installed.
+set(NGTCP2_VERSION "1.17.0")
+set(NGHTTP3_VERSION "1.13.1")
+
+set(QUIC_FOUND_SYSTEM FALSE)
 pkg_check_modules(NGTCP2_PKG QUIET libngtcp2)
 pkg_check_modules(NGTCP2_CRYPTO_OSSL_PKG QUIET libngtcp2_crypto_ossl)
 pkg_check_modules(NGHTTP3_PKG QUIET libnghttp3)
@@ -487,6 +493,7 @@ if (NGTCP2_PKG_FOUND AND NGTCP2_CRYPTO_OSSL_PKG_FOUND AND NGHTTP3_PKG_FOUND)
     message(STATUS "Found nghttp3: ${NGHTTP3_PKG_VERSION}")
     list(APPEND LIBQORE_OPTIONAL_INCLUDE_DIRS ${NGTCP2_PKG_INCLUDE_DIRS} ${NGTCP2_CRYPTO_OSSL_PKG_INCLUDE_DIRS} ${NGHTTP3_PKG_INCLUDE_DIRS})
     list(APPEND LIBQORE_OPTIONAL_LIBS ${NGTCP2_PKG_LIBRARIES} ${NGTCP2_CRYPTO_OSSL_PKG_LIBRARIES} ${NGHTTP3_PKG_LIBRARIES})
+    set(QUIC_FOUND_SYSTEM TRUE)
 else()
     # Try to find ngtcp2/nghttp3 without pkg-config
     find_path(NGTCP2_INCLUDE_DIR ngtcp2/ngtcp2.h)
@@ -500,10 +507,52 @@ else()
         message(STATUS "Found nghttp3: ${NGHTTP3_LIBRARY}")
         list(APPEND LIBQORE_OPTIONAL_INCLUDE_DIRS ${NGTCP2_INCLUDE_DIR} ${NGHTTP3_INCLUDE_DIR})
         list(APPEND LIBQORE_OPTIONAL_LIBS ${NGTCP2_LIBRARY} ${NGTCP2_CRYPTO_OSSL_LIBRARY} ${NGHTTP3_LIBRARY})
-    else()
-        message(FATAL_ERROR "ngtcp2 and nghttp3 are required for QUIC/HTTP/3 support. "
-            "Install libngtcp2-dev, libngtcp2-crypto-ossl-dev, and libnghttp3-dev")
+        set(QUIC_FOUND_SYSTEM TRUE)
     endif()
+endif()
+
+if (NOT QUIC_FOUND_SYSTEM)
+    # Build ngtcp2 and nghttp3 from source via FetchContent
+    message(STATUS "ngtcp2/nghttp3 not found on system; building from source (ngtcp2 ${NGTCP2_VERSION}, nghttp3 ${NGHTTP3_VERSION})")
+    include(FetchContent)
+
+    # Save cache variables that we override for subproject builds
+    set(_SAVE_BUILD_TESTING ${BUILD_TESTING})
+    set(_SAVE_BUILD_SHARED_LIBS ${BUILD_SHARED_LIBS})
+
+    # --- nghttp3 (must be declared before ngtcp2 since ngtcp2 can find it) ---
+    FetchContent_Declare(nghttp3
+        URL "https://github.com/ngtcp2/nghttp3/releases/download/v${NGHTTP3_VERSION}/nghttp3-${NGHTTP3_VERSION}.tar.xz"
+    )
+    set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
+    set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+    set(ENABLE_LIB_ONLY ON CACHE BOOL "" FORCE)
+    FetchContent_MakeAvailable(nghttp3)
+
+    # --- ngtcp2 (with OpenSSL crypto backend) ---
+    FetchContent_Declare(ngtcp2
+        URL "https://github.com/ngtcp2/ngtcp2/releases/download/v${NGTCP2_VERSION}/ngtcp2-${NGTCP2_VERSION}.tar.xz"
+    )
+    set(ENABLE_OPENSSL ON CACHE BOOL "" FORCE)
+    set(ENABLE_GNUTLS OFF CACHE BOOL "" FORCE)
+    FetchContent_MakeAvailable(ngtcp2)
+
+    # Restore cache variables
+    if (DEFINED _SAVE_BUILD_TESTING)
+        set(BUILD_TESTING ${_SAVE_BUILD_TESTING} CACHE BOOL "" FORCE)
+    else()
+        unset(BUILD_TESTING CACHE)
+    endif()
+    if (DEFINED _SAVE_BUILD_SHARED_LIBS)
+        set(BUILD_SHARED_LIBS ${_SAVE_BUILD_SHARED_LIBS} CACHE BOOL "" FORCE)
+    else()
+        unset(BUILD_SHARED_LIBS CACHE)
+    endif()
+
+    # Link against the FetchContent-built targets
+    list(APPEND LIBQORE_OPTIONAL_LIBS ngtcp2 ngtcp2_crypto_ossl nghttp3)
+    # Include dirs are handled automatically via INTERFACE_INCLUDE_DIRECTORIES
+    # on the FetchContent cmake targets
 endif()
 
 if (WIN32 OR MINGW OR MSYS)

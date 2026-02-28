@@ -4664,11 +4664,11 @@ public class RestRequestPollOperation inherits Qore::AbstractPollOperation {
             }
 
             if (state == SPS_AUTH_REFRESH) {
-                # Auth token refresh completed; update headers with new token and retry
-                hash<auto> resp = poller.getOutput();
 %ifdef NoJson
                 throw "REST-ASYNC-ERROR", "cannot process OAuth2 token without the json module";
 %else
+                # Auth token refresh completed; update headers with new token and retry
+                hash<auto> resp = poller.getOutput();
                 if ((resp."code" / 100) == 2) {
                     string rbody = resp."response-body"
                         ? resp."response-body".toString(resp.info.charset ?? "ISO-8859-1")
@@ -4692,11 +4692,11 @@ public class RestRequestPollOperation inherits Qore::AbstractPollOperation {
                     throw "REST-ASYNC-ERROR", sprintf("OAuth2 token refresh failed: %d %y returned",
                         resp."code", resp.info."response-uri");
                 }
-%endif
                 # update authorization header from new token
                 hdr.Authorization = rc.getDefaultHeaders().Authorization;
                 doStartSendRequest();
                 continue;
+%endif
             }
 
             if (state == SPS_SEND_REQUEST || state == SPS_AUTH_RETRY) {
