@@ -1273,7 +1273,13 @@ int SocketQuicServerPollOperation::recvAndProcessPacket(ExceptionSink* xsink, Qu
     if (*xsink) {
         // A single session's packet read failure (e.g., TLS handshake error when
         // client cert is required but not provided) should not abort the entire
-        // server listener.  Log the error, clean up the failed session, and continue.
+        // server listener.  Log the error and let the session be cleaned up by
+        // cleanupClosedSessions() — the failed session enters the ngtcp2 closing
+        // state, so isClosed() returns true.  We must NOT erase the session from
+        // sessions_ here because:
+        //   1. The caller may hold a raw QuicSession* via target_out
+        //   2. Other iteration loops in continuePoll() may reference the session
+        // Deferring removal to cleanupClosedSessions() avoids use-after-free.
         const QoreStringNode* err_str = xsink->getExceptionErr().get<const QoreStringNode>();
         const QoreStringNode* desc_str = xsink->getExceptionDesc().get<const QoreStringNode>();
         qore_async_io_log(QORE_LOG_LEVEL_WARN,
@@ -1283,10 +1289,10 @@ int SocketQuicServerPollOperation::recvAndProcessPacket(ExceptionSink* xsink, Qu
             desc_str ? desc_str->c_str() : "unknown");
         xsink->clear();
 
-        // Remove the failed session from both the local and authoritative maps
-        int64 sid = target_session->getSessionId();
-        sessions_.erase(sid);
-        sock->priv->socket->priv->removeQuicSession(sid);
+        // Clear target_out so the caller does not use this failed session
+        if (target_out) {
+            *target_out = nullptr;
+        }
         return 0;
     }
 

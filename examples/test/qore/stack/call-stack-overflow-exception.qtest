@@ -52,7 +52,20 @@ public class StackGuardTest inherits QUnit::Test {
     }
 
     testRecurseWithBackground() {
-        background testInfiniteRecurse();
+        Promise p();
+        Future f = p.getFuture();
+        background sub () {
+            try {
+                testInfiniteRecurse();
+                p.set(NOTHING);
+            } catch (hash<ExceptionInfo> ex) {
+                p.set(ex);
+            }
+        }();
         testInfiniteRecurse();
+        auto bg_result = f.get();
+        if (bg_result instanceof hash<ExceptionInfo>) {
+            throw bg_result.err, bg_result.desc, bg_result.arg;
+        }
     }
 }

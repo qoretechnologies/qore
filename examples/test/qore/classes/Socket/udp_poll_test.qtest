@@ -41,7 +41,7 @@ class UdpPollTest inherits QUnit::Test {
         while (!op.goalReached()) {
             *hash<SocketPollInfo> pi = op.continuePoll();
             if (pi) {
-                Socket::poll(list(pi), 5s);
+                Socket::poll((list<hash<SocketPollInfo>>)list(pi), 5s);
             }
         }
     }
