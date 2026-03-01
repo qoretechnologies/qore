@@ -540,6 +540,7 @@ if (NOT QUIC_FOUND_SYSTEM)
     set(_SAVE_ENABLE_STATIC_LIB ${ENABLE_STATIC_LIB})
     set(_SAVE_ENABLE_OPENSSL ${ENABLE_OPENSSL})
     set(_SAVE_ENABLE_GNUTLS ${ENABLE_GNUTLS})
+    set(_SAVE_CMAKE_POSITION_INDEPENDENT_CODE ${CMAKE_POSITION_INDEPENDENT_CODE})
 
     set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
     set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
@@ -548,6 +549,8 @@ if (NOT QUIC_FOUND_SYSTEM)
     # with older system-installed shared libraries
     set(ENABLE_SHARED_LIB OFF CACHE BOOL "" FORCE)
     set(ENABLE_STATIC_LIB ON CACHE BOOL "" FORCE)
+    # Static libraries linked into libqore.so need -fPIC
+    set(CMAKE_POSITION_INDEPENDENT_CODE ON CACHE BOOL "" FORCE)
 
     # --- nghttp3 (must come before ngtcp2) ---
     FetchContent_Declare(nghttp3
@@ -610,6 +613,11 @@ if (NOT QUIC_FOUND_SYSTEM)
         set(ENABLE_GNUTLS ${_SAVE_ENABLE_GNUTLS} CACHE BOOL "" FORCE)
     else()
         unset(ENABLE_GNUTLS CACHE)
+    endif()
+    if (DEFINED _SAVE_CMAKE_POSITION_INDEPENDENT_CODE)
+        set(CMAKE_POSITION_INDEPENDENT_CODE ${_SAVE_CMAKE_POSITION_INDEPENDENT_CODE} CACHE BOOL "" FORCE)
+    else()
+        unset(CMAKE_POSITION_INDEPENDENT_CODE CACHE)
     endif()
 
     # Add FetchContent include directories explicitly.
