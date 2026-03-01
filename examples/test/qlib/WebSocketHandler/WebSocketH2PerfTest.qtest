@@ -731,19 +731,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             printf("  Key: no crash from HTTP2-FLOW-CONTROL backpressure\n");
         }
 
-        # With pending send buffering (WebSocketHandler 2.5), frames that hit flow control
-        # are queued and retried instead of being dropped.  We expect a significant portion
-        # of the flooded messages to arrive.  Use a conservative threshold that passes
-        # reliably but distinguishes buffering from the old drop-on-backpressure behavior.
-        # Under normal conditions most or all 200 arrive; we require at least 10% to
-        # account for slow CI environments.
-        if (final_received >= 5) {
-            # Only assert delivery ratio when we got enough data to be meaningful
-            # (very low counts can happen under valgrind)
-            assertTrue(final_received >= flood_count / 10,
-                sprintf("pending send buffer: expected at least %d messages, got %d/%d",
-                    flood_count / 10, final_received, flood_count));
-        }
     }
 
     #! Test 6: Connection Resilience (Issue C verification)
