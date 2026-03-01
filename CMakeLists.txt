@@ -536,12 +536,18 @@ if (NOT QUIC_FOUND_SYSTEM)
     set(_SAVE_BUILD_TESTING ${BUILD_TESTING})
     set(_SAVE_BUILD_SHARED_LIBS ${BUILD_SHARED_LIBS})
     set(_SAVE_ENABLE_LIB_ONLY ${ENABLE_LIB_ONLY})
+    set(_SAVE_ENABLE_SHARED_LIB ${ENABLE_SHARED_LIB})
+    set(_SAVE_ENABLE_STATIC_LIB ${ENABLE_STATIC_LIB})
     set(_SAVE_ENABLE_OPENSSL ${ENABLE_OPENSSL})
     set(_SAVE_ENABLE_GNUTLS ${ENABLE_GNUTLS})
 
     set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
     set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
     set(ENABLE_LIB_ONLY ON CACHE BOOL "" FORCE)
+    # Force static libraries for nghttp3/ngtcp2 to avoid runtime conflicts
+    # with older system-installed shared libraries
+    set(ENABLE_SHARED_LIB OFF CACHE BOOL "" FORCE)
+    set(ENABLE_STATIC_LIB ON CACHE BOOL "" FORCE)
 
     # --- nghttp3 (must come before ngtcp2) ---
     FetchContent_Declare(nghttp3
@@ -585,6 +591,16 @@ if (NOT QUIC_FOUND_SYSTEM)
     else()
         unset(ENABLE_LIB_ONLY CACHE)
     endif()
+    if (DEFINED _SAVE_ENABLE_SHARED_LIB)
+        set(ENABLE_SHARED_LIB ${_SAVE_ENABLE_SHARED_LIB} CACHE BOOL "" FORCE)
+    else()
+        unset(ENABLE_SHARED_LIB CACHE)
+    endif()
+    if (DEFINED _SAVE_ENABLE_STATIC_LIB)
+        set(ENABLE_STATIC_LIB ${_SAVE_ENABLE_STATIC_LIB} CACHE BOOL "" FORCE)
+    else()
+        unset(ENABLE_STATIC_LIB CACHE)
+    endif()
     if (DEFINED _SAVE_ENABLE_OPENSSL)
         set(ENABLE_OPENSSL ${_SAVE_ENABLE_OPENSSL} CACHE BOOL "" FORCE)
     else()
@@ -609,8 +625,10 @@ if (NOT QUIC_FOUND_SYSTEM)
         "${ngtcp2_BINARY_DIR}/crypto/includes"
     )
 
-    # Link against the FetchContent-built targets
-    list(APPEND LIBQORE_OPTIONAL_LIBS ngtcp2 ngtcp2_crypto_ossl nghttp3)
+    # Link against the FetchContent-built static library targets.
+    # nghttp3/ngtcp2 use "_static" suffix for static targets when
+    # ENABLE_STATIC_LIB=ON and ENABLE_SHARED_LIB=OFF.
+    list(APPEND LIBQORE_OPTIONAL_LIBS ngtcp2_static ngtcp2_crypto_ossl_static nghttp3_static)
 endif()
 
 if (WIN32 OR MINGW OR MSYS)

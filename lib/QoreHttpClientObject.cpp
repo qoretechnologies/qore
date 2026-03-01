@@ -5905,19 +5905,14 @@ int qore_httpclient_priv::connectQuic(ExceptionSink* xsink, con_info& connection
                     break;
                 }
 
-                // Extract per-packet destination IP from pktinfo.
-                // NOTE: Safe here because this socket is connect()ed, so
-                // getsockname() returns a specific address that pktinfo will match.
-                // This is distinct from the poll-op client path (SocketQuicClientPollOperation)
-                // where the socket is unconnected/wildcard-bound — there, pktinfo must NOT
-                // be used (see MEMORY.md "Client pktinfo rule").
+                // Use the cached getsockname() address directly — the client socket
+                // is connect()ed, so the local address is always quic_local_addr.
+                // Do NOT call extractPktinfoAddr(): on macOS, IP_RECVDSTADDR on
+                // connected UDP sockets returns 0.0.0.0, causing ngtcp2 path
+                // validation failures.
                 assert(quic_fd >= 0);
-                struct sockaddr_storage pkt_local;
-                memcpy(&pkt_local, &quic_local_addr, quic_local_addrlen);
-                extractPktinfoAddr(cmsg_buf, cmsg_len, quic_local_addr.ss_family, &pkt_local);
-
                 ngtcp2_path path;
-                path.local.addr = reinterpret_cast<ngtcp2_sockaddr*>(&pkt_local);
+                path.local.addr = reinterpret_cast<ngtcp2_sockaddr*>(&quic_local_addr);
                 path.local.addrlen = quic_local_addrlen;
                 path.remote.addr = reinterpret_cast<ngtcp2_sockaddr*>(&peer_addr);
                 path.remote.addrlen = peer_addrlen;
@@ -6070,16 +6065,15 @@ static int driveQuicIo(QuicSession* session, int fd,
                 break;
             }
 
-            // Extract per-packet destination IP from pktinfo — since the
-            // client socket is connect()ed, getsockname() returns a specific
-            // address and pktinfo will match it.
+            // Use the cached getsockname() address directly — the client
+            // socket is connect()ed, so the local address is always local_addr.
+            // Do NOT call extractPktinfoAddr(): on macOS, IP_RECVDSTADDR on
+            // connected UDP sockets returns 0.0.0.0, causing ngtcp2 path
+            // validation failures.
             assert(fd >= 0);
-            struct sockaddr_storage pkt_local;
-            memcpy(&pkt_local, &local_addr, local_addrlen);
-            extractPktinfoAddr(cmsg_buf, cmsg_len, local_addr.ss_family, &pkt_local);
-
             ngtcp2_path path;
-            path.local.addr = reinterpret_cast<ngtcp2_sockaddr*>(&pkt_local);
+            path.local.addr = reinterpret_cast<ngtcp2_sockaddr*>(
+                const_cast<struct sockaddr_storage*>(&local_addr));
             path.local.addrlen = local_addrlen;
             path.remote.addr = reinterpret_cast<ngtcp2_sockaddr*>(&peer_addr);
             path.remote.addrlen = peer_addrlen;

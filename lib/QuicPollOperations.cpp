@@ -520,15 +520,13 @@ int SocketQuicClientPollOperation::recvAndProcessPacket(ExceptionSink* xsink) {
         return 0;
     }
 
-    // Extract per-packet destination IP from pktinfo — since the client
-    // socket is connect()ed, getsockname() returns a specific address and
-    // pktinfo will return the same address, so the path matches.
-    struct sockaddr_storage pkt_local;
-    memcpy(&pkt_local, &local_addr_, local_addrlen_);
-    extractPktinfoAddr(cmsg_buf, cmsg_len, local_addr_.ss_family, &pkt_local);
-
+    // Use the cached getsockname() address directly — the client socket is
+    // connect()ed, so the local address is always local_addr_.  Do NOT call
+    // extractPktinfoAddr(): on macOS, IP_RECVDSTADDR on connected UDP sockets
+    // returns 0.0.0.0 instead of the actual bound address, causing ngtcp2 path
+    // validation to fail with "ignore packet from unknown path".
     ngtcp2_path path;
-    path.local.addr = reinterpret_cast<ngtcp2_sockaddr*>(&pkt_local);
+    path.local.addr = reinterpret_cast<ngtcp2_sockaddr*>(&local_addr_);
     path.local.addrlen = local_addrlen_;
     path.remote.addr = reinterpret_cast<ngtcp2_sockaddr*>(&src_addr);
     path.remote.addrlen = src_addrlen;
@@ -1087,6 +1085,13 @@ int SocketQuicServerPollOperation::processTimersAndSendAll(
     for (auto& entry : sessions_) {
         auto& session = entry.second;
         if (session->isClosed()) {
+            // Clear stale pending_write flag to prevent POLLOUT spin.
+            // A closed session won't generate any more packets, but
+            // pending_write_ may still be set from the last successful
+            // ngtcp2_conn_read_pkt() call before the session closed.
+            // Without this, hasPendingWrite() returns true, events include
+            // POLLOUT, and UDP (always writable) causes a busy-loop.
+            session->clearPendingWrite();
             continue;
         }
 
@@ -1266,7 +1271,23 @@ int SocketQuicServerPollOperation::recvAndProcessPacket(ExceptionSink* xsink, Qu
 
     int rv = target_session->readPacket(recv_buf_, static_cast<size_t>(nread), path, xsink);
     if (*xsink) {
-        return -1;
+        // A single session's packet read failure (e.g., TLS handshake error when
+        // client cert is required but not provided) should not abort the entire
+        // server listener.  Log the error, clean up the failed session, and continue.
+        const QoreStringNode* err_str = xsink->getExceptionErr().get<const QoreStringNode>();
+        const QoreStringNode* desc_str = xsink->getExceptionDesc().get<const QoreStringNode>();
+        qore_async_io_log(QORE_LOG_LEVEL_WARN,
+            "QUIC: readPacket() failed for session %lld: %s: %s",
+            (long long)target_session->getSessionId(),
+            err_str ? err_str->c_str() : "unknown",
+            desc_str ? desc_str->c_str() : "unknown");
+        xsink->clear();
+
+        // Remove the failed session from both the local and authoritative maps
+        int64 sid = target_session->getSessionId();
+        sessions_.erase(sid);
+        sock->priv->socket->priv->removeQuicSession(sid);
+        return 0;
     }
 
     // If handshake just completed and HTTP/3 not yet set up, do it now
