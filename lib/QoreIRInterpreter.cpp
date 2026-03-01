@@ -2451,9 +2451,9 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                             }
                         }
                         on_block_exit_handlers.resize(scope_start);
-                        // Invalidate caches after handler execution (both AST and compiled
-                        // handlers can modify locals via the thread-local variable stack)
-                        cleanupStoredValues(locals, xsink);
+                        // Invalidate all caches after handler execution (both AST and compiled
+                        // handlers can modify any variable type on the thread-local variable stack)
+                        cleanupLocalCaches();
                     }
                 }
                 ++ip;
@@ -3431,11 +3431,11 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 }
 
                 // If the variable holds a reference, assignLocalVarValue wrote through
-                // the reference to another variable.  Clear the locals cache to prevent
-                // stale reads from that target variable.
+                // the reference to another variable.  Clear all caches to prevent
+                // stale reads from that target variable and the slot cache.
                 if (local_inst->local
                         && QoreTypeInfo::isReference(local_inst->local->getTypeInfo())) {
-                    cleanupStoredValues(locals, xsink);
+                    cleanupLocalCaches();
                 }
                 // Track the operand slot for cleanup when this local is uninstantiated
                 if (operand.isValid()) {
@@ -3573,15 +3573,15 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                                 lvar->del(xsink);
                             }
                         }
-                        // Destructor may have modified globals via AST code
-                        cleanupStoredValues(globals, xsink);
+                        // Destructor may have modified globals and other locals via AST code
+                        cleanupLocalCaches();
                     } else {
                         // Non-pre-instantiated: full uninstantiate (pop + destructor)
                         // Clean up value slots (init + load) BEFORE uninstantiating
                         cleanupLocalSlots(local_inst->local);
                         local_inst->local->uninstantiate(xsink);
-                        // Destructor may have modified globals via AST code
-                        cleanupStoredValues(globals, xsink);
+                        // Destructor may have modified globals and other locals via AST code
+                        cleanupLocalCaches();
                     }
                 }
                 ++ip;
