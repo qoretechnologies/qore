@@ -598,10 +598,10 @@ int QuicSession::initClient(qore_socket_private* sock, ExceptionSink* xsink,
     ngtcp2_transport_params_default(&params);
     params.initial_max_streams_uni = QUIC_INITIAL_MAX_STREAMS_UNI;
     params.initial_max_streams_bidi = QUIC_INITIAL_MAX_STREAMS_BIDI;
-    params.initial_max_stream_data_bidi_local = QUIC_INITIAL_MAX_STREAM_DATA;
-    params.initial_max_stream_data_bidi_remote = QUIC_INITIAL_MAX_STREAM_DATA;
-    params.initial_max_stream_data_uni = QUIC_INITIAL_MAX_STREAM_DATA;
-    params.initial_max_data = QUIC_INITIAL_MAX_DATA;
+    params.initial_max_stream_data_bidi_local = QUIC_CLIENT_INITIAL_MAX_STREAM_DATA;
+    params.initial_max_stream_data_bidi_remote = QUIC_CLIENT_INITIAL_MAX_STREAM_DATA;
+    params.initial_max_stream_data_uni = QUIC_CLIENT_INITIAL_MAX_STREAM_DATA;
+    params.initial_max_data = QUIC_CLIENT_INITIAL_MAX_DATA;
     // Idle timeout: ngtcp2 default is 0 (no timeout), which prevents cleanup of
     // lost connections and enables resource exhaustion.  30s is standard for clients.
     params.max_idle_timeout = QUIC_IDLE_TIMEOUT_NS;
@@ -727,10 +727,10 @@ int QuicSession::initServer(qore_socket_private* sock, ExceptionSink* xsink,
     ngtcp2_transport_params_default(&params);
     params.initial_max_streams_uni = QUIC_INITIAL_MAX_STREAMS_UNI;
     params.initial_max_streams_bidi = QUIC_INITIAL_MAX_STREAMS_BIDI;
-    params.initial_max_stream_data_bidi_local = QUIC_INITIAL_MAX_STREAM_DATA;
-    params.initial_max_stream_data_bidi_remote = QUIC_INITIAL_MAX_STREAM_DATA;
-    params.initial_max_stream_data_uni = QUIC_INITIAL_MAX_STREAM_DATA;
-    params.initial_max_data = QUIC_INITIAL_MAX_DATA;
+    params.initial_max_stream_data_bidi_local = QUIC_SERVER_INITIAL_MAX_STREAM_DATA;
+    params.initial_max_stream_data_bidi_remote = QUIC_SERVER_INITIAL_MAX_STREAM_DATA;
+    params.initial_max_stream_data_uni = QUIC_SERVER_INITIAL_MAX_STREAM_DATA;
+    params.initial_max_data = QUIC_SERVER_INITIAL_MAX_DATA;
     // Idle timeout: ngtcp2 default is 0 (no timeout), which allows malicious clients
     // to hold server sessions open indefinitely.  30s matches the client setting.
     params.max_idle_timeout = QUIC_IDLE_TIMEOUT_NS;

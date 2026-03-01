@@ -4031,9 +4031,11 @@ int QoreHttpClientObject::setHTTPVersion(const char* version, ExceptionSink* xsi
     if (!strcmp(version, "1.0")) {
         http_priv->http11 = false;
         http_priv->http2_mode = HTTP2_MODE_DISABLED;
+        http_priv->http3_mode = HTTP3_MODE_DISABLED;
     } else if (!strcmp(version, "1.1")) {
         http_priv->http11 = true;
         http_priv->http2_mode = HTTP2_MODE_DISABLED;
+        http_priv->http3_mode = HTTP3_MODE_DISABLED;
     } else if (!strcasecmp(version, "auto")) {
         http_priv->http11 = true;
         http_priv->http2_mode = HTTP2_MODE_AUTO;
@@ -6500,41 +6502,12 @@ QoreHashNode* qore_httpclient_priv::sendHttp3MessageAndGetResponse(const char* m
         parseAltSvc(alt_svc_it->second[0].c_str(), connection.host.c_str(), connection.port);
     }
 
-    // Add body if present, with content-encoding decompression
+    // Add body if present — do NOT decompress here; send_internal() handles
+    // Content-Encoding decompression uniformly for HTTP/2 and HTTP/3
     if (!stream->body.empty()) {
-        SimpleRefHolder<BinaryNode> resp_body(new BinaryNode());
+        BinaryNode* resp_body = new BinaryNode();
         resp_body->append(stream->body.data(), stream->body.size());
-
-        // Process Content-Encoding (decompression) — matches HTTP/2 path
-        std::string content_encoding;
-        auto ce_it = stream->headers.find("content-encoding");
-        if (ce_it != stream->headers.end() && !ce_it->second.empty()) {
-            content_encoding = ce_it->second[0];
-        }
-        if (!content_encoding.empty()) {
-            // Check for misuse of this header by including a character encoding value
-            if (!strncasecmp(content_encoding.c_str(), "iso", 3)
-                    || !strncasecmp(content_encoding.c_str(), "utf-", 4)) {
-                msock->socket->setEncoding(QEM.findCreate(content_encoding.c_str()));
-            } else {
-                qore_uncompress_to_binary_t dec = get_binary_decoder_for_content_encoding(
-                    content_encoding.c_str(), xsink);
-                if (*xsink) {
-                    return nullptr;
-                }
-                if (dec) {
-                    int64 body_size = resp_body->size();
-                    resp_body = dec(*resp_body, xsink);
-                    if (*xsink) {
-                        xsink->appendLastDescription(
-                            ": while decompressing '%s' Content-Encoding with size " QLLD,
-                            content_encoding.c_str(), body_size);
-                        return nullptr;
-                    }
-                }
-            }
-        }
-        response->setKeyValue("body", resp_body.release(), xsink);
+        response->setKeyValue("body", resp_body, xsink);
     }
 
     if (info) {

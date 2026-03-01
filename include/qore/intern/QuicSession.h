@@ -135,14 +135,18 @@ class QuicSession {
 public:
     //! Named constants for QUIC transport parameters
     static constexpr int QUIC_INITIAL_MAX_STREAMS_UNI = 3;
-    //! NOTE: with QUIC_MAX_STREAM_BODY = 1MB, the theoretical per-peer maximum is
-    //! ~100MB.  This is acceptable because: (a) flow control limits actual inflight
-    //! data via QUIC_INITIAL_MAX_DATA (1MB aggregate), and (b) real peers don't open
-    //! 100 concurrent streams with max-size bodies.  A per-session aggregate limit
-    //! can be added if abuse scenarios arise.
     static constexpr int QUIC_INITIAL_MAX_STREAMS_BIDI = 100;
-    static constexpr size_t QUIC_INITIAL_MAX_STREAM_DATA = 256 * 1024;
-    static constexpr size_t QUIC_INITIAL_MAX_DATA = 1024 * 1024;
+
+    //! Server-side flow control: limits how much data the client can send (request bodies)
+    static constexpr size_t QUIC_SERVER_INITIAL_MAX_STREAM_DATA = 256 * 1024;
+    static constexpr size_t QUIC_SERVER_INITIAL_MAX_DATA = 1024 * 1024;
+
+    //! Client-side flow control: limits how much data the server can send (response bodies)
+    /** Larger windows avoid flow-control round-trips for typical HTTP responses.
+        Values match ngtcp2 reference client (16MB per stream, 16MB aggregate).
+    */
+    static constexpr size_t QUIC_CLIENT_INITIAL_MAX_STREAM_DATA = 16 * 1024 * 1024;
+    static constexpr size_t QUIC_CLIENT_INITIAL_MAX_DATA = 16 * 1024 * 1024;
 
     //! Idle timeout in nanoseconds (ngtcp2 uses ngtcp2_tstamp units)
     /** 30 seconds prevents resource exhaustion from lost or malicious connections.

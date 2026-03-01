@@ -1733,7 +1733,9 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                 try {
                     sendClose(wsc, sock, close_code, err);
                 } catch (hash<ExceptionInfo> ex2) {
-                    logError("failed to send close frame: %s: %s", ex2.err, ex2.desc);
+                    # Log at debug level: close frame failure is expected when the connection
+                    # already has a fatal error (the primary error was logged above)
+                    logDebug("failed to send close frame: %s: %s", ex2.err, ex2.desc);
                 }
                 exit_reason = ex.err == "WEBSOCKET-FRAME-TOO-LARGE"
                     ? "message-too-large"

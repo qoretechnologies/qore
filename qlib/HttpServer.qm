@@ -2835,9 +2835,9 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                     rv.body = bzip2(rv.body);
                 }
                 if (rv.hdr."Content-Encoding") {
-                    listener.log("cid %d: %s compressed %s: %d -> %d bytes", cx.id,
+                    listener.log("cid %d: %s compressed %s: %d -> %d bytes (type: %s)", cx.id,
                         cx."header-info".http3 ? "HTTP/3" : cx."header-info".http2 ? "HTTP/2" : "HTTP/1.x",
-                        rv.hdr."Content-Encoding", orig_size, rv.body.size());
+                        rv.hdr."Content-Encoding", orig_size, rv.body.size(), rv.body.type());
                 }
             }
 
@@ -4576,7 +4576,6 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             if (async_response.body && !hdr."Content-Length" && !hdr."Transfer-Encoding") {
                 hdr."Content-Length" = string(async_response.body.size());
             }
-
             # Log the response
             logResponse(cx, async_response);
 
