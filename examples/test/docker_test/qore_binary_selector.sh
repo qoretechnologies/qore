@@ -5,25 +5,14 @@
 #
 # WebSocketH2PerfTest is too slow in Debug mode, so it always runs with Release.
 
-# Check if WebSocketH2PerfTest is mentioned in any argument AND running in IR mode
-# AST mode should use Debug (same as develop branch) - only use Release for IR mode
+# Check if WebSocketH2PerfTest is mentioned in any argument
 use_release=false
-has_websocket_test=false
-has_ir_mode=false
-
 for arg in "$@"; do
     if echo "$arg" | grep -q "WebSocketH2PerfTest"; then
-        has_websocket_test=true
-    fi
-    if echo "$arg" | grep -q "\-\-exec-mode=ir"; then
-        has_ir_mode=true
+        use_release=true
+        break
     fi
 done
-
-# Only use Release for WebSocketH2PerfTest if explicitly running in IR mode
-if [ "$has_websocket_test" = "true" ] && [ "$has_ir_mode" = "true" ]; then
-    use_release=true
-fi
 
 # Find QORE_SRC_DIR if not set
 if [ -z "$QORE_SRC_DIR" ]; then
