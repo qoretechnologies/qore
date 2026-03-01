@@ -46,11 +46,11 @@ class RuntimeConfig;
 
 // the values here are subject to change and come from purely empirical testing
 #ifndef QORE_STACK_GUARD
-// Must be large enough to cover the maximum C++ stack frame between two
-// consecutive check_stack() calls.  Increased from 8KB after QoreParseOptions
-// grew from int64 (8 bytes) to two int64s (16 bytes), enlarging every
-// QoreProgramLocationHelper frame on the call stack.
-#define QORE_STACK_GUARD (1024 * 64)
+// Fallback only; platform-specific headers (macros-x86_64.h, macros-aarch64.h,
+// etc.) should define QORE_STACK_GUARD before this header is included.
+// The guard must be larger than the thread startup overhead (stack consumed
+// between the actual thread stack top and ThreadData::stack_start initialization).
+#define QORE_STACK_GUARD (1024 * 8)
 #endif // QORE_STACK_GUARD
 
 class Operator;
