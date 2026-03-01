@@ -50,6 +50,7 @@
 #include <cassert>
 #include <condition_variable>
 #include <cstdint>
+#include <deque>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -110,7 +111,14 @@ struct QuicBodyData {
 */
 struct QuicStreamingBodyData {
     std::vector<uint8_t> data;       //!< buffered chunk data (staging area)
-    std::vector<uint8_t> send_buf;   //!< data given to nghttp3 (stable pointer lifetime)
+    //! Sent buffers awaiting acknowledgment from the peer.
+    /** ngtcp2 retains raw pointers to stream data in frame chain entries for
+        retransmission.  These pointers must remain valid until
+        acked_stream_data fires or the stream is closed.  Each entry is a
+        buffer that was moved from @ref data in h3ReadDataCallback().
+    */
+    std::deque<std::vector<uint8_t>> sent_bufs;
+    size_t front_acked = 0;          //!< bytes of sent_bufs.front() already acknowledged
     bool eof = false;                //!< InputStream signaled EOF
     bool deferred = false;           //!< WOULDBLOCK returned, waiting for resume
 };

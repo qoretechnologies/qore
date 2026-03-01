@@ -1870,8 +1870,8 @@ int QuicSession::sendStreamData(int64_t stream_id, const void* data, size_t len,
     auto& sbd = it->second;
 
     // Check backpressure: if staging buffer > 1MB, signal caller to retry.
-    // Note: send_buf holds data already given to nghttp3 (not counted here
-    // because nghttp3 owns it and will drain it independently).
+    // sent_bufs holds data already given to nghttp3/ngtcp2 (not counted here
+    // because it will be freed via h3AckedStreamDataCallback).
     if (sbd.data.size() > QUIC_MAX_STREAM_BODY) {
         printd(5, "QuicSession::sendStreamData() stream_id=" QLLD " BACKPRESSURE pending=%d\n",
             stream_id, (int)sbd.data.size());
@@ -1879,7 +1879,7 @@ int QuicSession::sendStreamData(int64_t stream_id, const void* data, size_t len,
     }
 
     // Append new data to staging buffer.
-    // No compaction needed: h3ReadDataCallback swaps data into send_buf,
+    // h3ReadDataCallback moves data into sent_bufs via std::move,
     // leaving data empty for new appends.
     if (data && len > 0) {
         auto bp = static_cast<const uint8_t*>(data);
@@ -3121,20 +3121,18 @@ nghttp3_ssize QuicSession::h3ReadDataCallback(nghttp3_conn* /* conn */, int64_t 
 
         if (!sbd.data.empty()) {
             if (veccnt > 0) {
-                // Swap staging data into send_buf for stable pointer lifetime.
-                // nghttp3 caches the returned vec and may return it on subsequent
-                // writev_stream calls.  send_buf is only overwritten here (when
-                // nghttp3 calls read_data again, meaning all previous data was
-                // consumed via add_write_offset), so the pointer remains valid.
-                sbd.send_buf.swap(sbd.data);
-                // Clear data: after swap it holds old send_buf contents (already
-                // consumed by nghttp3).  clear() keeps the allocation for reuse.
-                sbd.data.clear();
+                // Move staging data into sent_bufs for stable pointer lifetime.
+                // ngtcp2 retains raw pointers to stream data in frame chain
+                // entries for retransmission — the buffer must remain valid
+                // until acked_stream_data fires or the stream is closed.
+                sbd.sent_bufs.emplace_back(std::move(sbd.data));
+                // data is now moved-from (empty), ready for new appends
+                auto& buf = sbd.sent_bufs.back();
 
-                vec[0].base = const_cast<uint8_t*>(sbd.send_buf.data());
-                vec[0].len = sbd.send_buf.size();
-                printd(5, "h3ReadDataCallback() stream_id=" QLLD " providing %d bytes eof=%d\n",
-                    stream_id, (int)sbd.send_buf.size(), sbd.eof);
+                vec[0].base = const_cast<uint8_t*>(buf.data());
+                vec[0].len = buf.size();
+                printd(5, "h3ReadDataCallback() stream_id=" QLLD " providing %d bytes eof=%d sent_bufs=%d\n",
+                    stream_id, (int)buf.size(), sbd.eof, (int)sbd.sent_bufs.size());
 
                 // Notify waitForStreamDrain() that buffer space freed up
                 session->drain_gen_.fetch_add(1, std::memory_order_release);
@@ -3173,11 +3171,28 @@ nghttp3_ssize QuicSession::h3ReadDataCallback(nghttp3_conn* /* conn */, int64_t 
 }
 
 int QuicSession::h3AckedStreamDataCallback(nghttp3_conn* /* conn */, int64_t stream_id,
-                                            uint64_t /* datalen */, void* /* conn_user_data */,
+                                            uint64_t datalen, void* conn_user_data,
                                             void* /* stream_user_data */) {
     // Do NOT erase body_data_ here: nghttp3 may still hold a cached vec pointing
     // to the body data buffer.  Cleanup happens in streamCloseCallback after
     // nghttp3_conn_close_stream releases all internal references.
+
+    // For streaming body data, free acknowledged sent buffers.  ngtcp2 retains
+    // raw pointers to stream data in frame chain entries for retransmission, so
+    // sent_bufs must stay alive until acknowledged here.
+    auto* session = static_cast<QuicSession*>(conn_user_data);
+    auto sit = session->streaming_body_data_.find(stream_id);
+    if (sit != session->streaming_body_data_.end()) {
+        auto& sbd = sit->second;
+        sbd.front_acked += datalen;
+        while (!sbd.sent_bufs.empty() && sbd.front_acked >= sbd.sent_bufs.front().size()) {
+            sbd.front_acked -= sbd.sent_bufs.front().size();
+            sbd.sent_bufs.pop_front();
+        }
+        printd(5, "h3AckedStreamDataCallback() stream_id=" QLLD " datalen=%d remaining_bufs=%d\n",
+            stream_id, (int)datalen, (int)sbd.sent_bufs.size());
+    }
+
     return 0;
 }
 
