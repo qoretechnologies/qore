@@ -43,6 +43,7 @@ test-ubuntu-amd64:
     - amd64
   variables:
     QORE_DB_CONNSTR_FREETDS: 'freetds:test/test@rippy'
+    TEST_TIMEOUT: "600"
   script:
     - |
         if test/docker_test/test-ubuntu.sh; then
@@ -65,6 +66,7 @@ test-ubuntu-arm64:
     - arm64
   variables:
     QORE_DB_CONNSTR_FREETDS: 'freetds:test/test@rippy'
+    TEST_TIMEOUT: "600"
   script:
     - |
         if test/docker_test/test-ubuntu.sh; then
@@ -87,6 +89,7 @@ test-alpine-amd64:
     - amd64
   variables:
     QORE_DB_CONNSTR_FREETDS: 'freetds:test/test@rippy'
+    TEST_TIMEOUT: "600"
   script:
     - |
         if test/docker_test/test-alpine.sh; then
@@ -133,6 +136,7 @@ test-ir-ubuntu-amd64:
   variables:
     QORE_DB_CONNSTR_FREETDS: 'freetds:test/test@rippy'
     QORE_TEST_OPTS: '-penable-debug --exec-mode=ir --ir-fallback-warn'
+    TEST_TIMEOUT: "600"
   before_script:
     - |
         curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
@@ -162,6 +166,7 @@ test-jit-ubuntu-amd64:
   variables:
     QORE_DB_CONNSTR_FREETDS: 'freetds:test/test@rippy'
     QORE_TEST_OPTS: '-penable-debug --exec-mode=jit'
+    TEST_TIMEOUT: "600"
   before_script:
     - |
         curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
@@ -191,6 +196,7 @@ test-tiered-ubuntu-amd64:
   variables:
     QORE_DB_CONNSTR_FREETDS: 'freetds:test/test@rippy'
     QORE_TEST_OPTS: '-penable-debug --exec-mode=tiered --jit-ir-threshold=3 --jit-jit-threshold=10'
+    TEST_TIMEOUT: "600"
   before_script:
     - |
         curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \

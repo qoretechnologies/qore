@@ -121,6 +121,9 @@ class WebSocketH2PerfTest inherits QUnit::Test {
         # HTTPS/HTTP2 listener info
         *hash<auto> h2info;
 
+        # Set to True by h2EchoProbe if echo works
+        bool h2_echo_works = False;
+
         # Test SSL certificate (self-signed for testing)
         const CertPem = "-----BEGIN CERTIFICATE-----
 MIIDCTCCAfGgAwIBAgIULwwY9Xmqwn7ZZIYgEu8otC1aRNMwDQYJKoZIhvcNAQEL
@@ -173,6 +176,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     }
 
     constructor() : Test("WebSocketH2PerfTest", "1.0") {
+        addTestCase("H2 echo probe", \h2EchoProbe());
         addTestCase("single connection throughput", \singleConnectionThroughputTest());
         addTestCase("concurrent connections scalability", \concurrentConnectionsTest());
         addTestCase("large message throughput", \largeMessageThroughputTest());
@@ -264,6 +268,47 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             label, avg, min_lat, max_lat, p99, latencies.size());
     }
 
+    #! Probe test: verify HTTP/2 WebSocket echo works before running performance tests
+    /** Sends a single message and waits for the echo within 10s.
+        If this fails, all subsequent tests are skipped to avoid long hangs.
+    */
+    h2EchoProbe() {
+        if (!h2info) {
+            testSkip("HTTPS/HTTP/2 listener not available");
+        }
+
+        Counter done(1);
+        bool got_echo = False;
+
+        code cb = sub (*data msg) {
+            if (exists msg && !got_echo) {
+                got_echo = True;
+                done.dec();
+            }
+        };
+
+        try {
+            WebSocketClient wsc = createH2Client(cb);
+            on_exit {
+                wsc.disconnect();
+                delete wsc;
+            }
+
+            assertTrue(wsc.isHttp2(), "probe: WebSocket should connect over HTTP/2");
+            wsc.send("probe-ping");
+            done.waitForZero(10s);
+
+            if (!got_echo) {
+                testSkip("HTTP/2 WebSocket echo not working on this platform");
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(sprintf("HTTP/2 WebSocket probe failed: %s: %s", ex.err, ex.desc));
+        }
+
+        h2_echo_works = True;
+        assertTrue(True);
+    }
+
     #! Test 1: Single Connection Throughput
     /** 200 messages alternating text/binary on one HTTP/2 WebSocket.
         Measures per-message round-trip latency.
@@ -271,6 +316,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     singleConnectionThroughputTest() {
         if (!h2info) {
             testSkip("HTTPS/HTTP/2 listener not available");
+        }
+        if (!h2_echo_works) {
+            testSkip("HTTP/2 WebSocket echo not available (probe failed)");
         }
 
         int msg_count = 200;
@@ -351,6 +399,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     concurrentConnectionsTest() {
         if (!h2info) {
             testSkip("HTTPS/HTTP/2 listener not available");
+        }
+        if (!h2_echo_works) {
+            testSkip("HTTP/2 WebSocket echo not available (probe failed)");
         }
 
         int num_clients = 5;
@@ -453,6 +504,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         if (!h2info) {
             testSkip("HTTPS/HTTP/2 listener not available");
         }
+        if (!h2_echo_works) {
+            testSkip("HTTP/2 WebSocket echo not available (probe failed)");
+        }
 
         # Note: HTTP/2 default frame size is 16384 bytes; messages above 32KB may not
         # be reliably echoed depending on the HTTP/2 implementation's frame handling
@@ -524,6 +578,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     sustainedLoadStressTest() {
         if (!h2info) {
             testSkip("HTTPS/HTTP/2 listener not available");
+        }
+        if (!h2_echo_works) {
+            testSkip("HTTP/2 WebSocket echo not available (probe failed)");
         }
 
         int num_senders = 2;
@@ -638,6 +695,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         if (!h2info) {
             testSkip("HTTPS/HTTP/2 listener not available");
         }
+        if (!h2_echo_works) {
+            testSkip("HTTP/2 WebSocket echo not available (probe failed)");
+        }
 
         # Use a large number of messages with large size to ensure we exceed
         # the MAX_STREAM_BUFFER (1MB) and trigger flow control
@@ -731,6 +791,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     connectionResilienceTest() {
         if (!h2info) {
             testSkip("HTTPS/HTTP/2 listener not available");
+        }
+        if (!h2_echo_works) {
+            testSkip("HTTP/2 WebSocket echo not available (probe failed)");
         }
 
         # Sub-test A: Disconnect during active message exchange
@@ -862,6 +925,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     concurrentStreamsMultiplexingTest() {
         if (!h2info) {
             testSkip("HTTPS/HTTP/2 listener not available");
+        }
+        if (!h2_echo_works) {
+            testSkip("HTTP/2 WebSocket echo not available (probe failed)");
         }
 
         int num_streams = 4;

@@ -240,7 +240,8 @@ for test in $TESTS; do
     fi
     test_exit=$?
 
-    if [ $test_exit -eq 124 ]; then
+    # GNU timeout returns 124; busybox timeout (Alpine) returns 143 (128+SIGTERM)
+    if [ $test_exit -eq 124 ] || [ $test_exit -eq 143 ]; then
         echo "TIMEOUT: test exceeded ${TEST_TIMEOUT}s limit"
     fi
 
