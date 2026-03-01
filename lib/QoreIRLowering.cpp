@@ -362,25 +362,16 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                         loc = dot->loc;
                         invoked = true;
                     } else {
-                        if (auto* ternary = dynamic_cast<const QoreQuestionMarkOperatorNode*>(node)) {
-                            QoreIRValue cond = lowerExpression(ternary->get(0), error);
-                            if (!cond.isValid()) {
-                                return false;
-                            }
-                            QoreIRValue left = lowerExpression(ternary->get(1), error);
-                            if (!left.isValid()) {
-                                return false;
-                            }
-                            QoreIRValue right = lowerExpression(ternary->get(2), error);
-                            if (!right.isValid()) {
-                                return false;
-                            }
-                            operands.push_back(cond);
-                            operands.push_back(left);
-                            operands.push_back(right);
-                            loc = ternary->loc;
-                            invoked = true;
-                        } else if (auto* binary = dynamic_cast<const QoreBinaryOperatorNode<>*>(node)) {
+                        // NOTE: QoreQuestionMarkOperatorNode (ternary ?:) is intentionally
+                        // NOT pre-evaluated here.  Pre-evaluating all three operands eagerly
+                        // breaks short-circuit semantics — both the "then" and "else" branches
+                        // would be executed regardless of the condition, causing side effects
+                        // (e.g. calling a NOTHING closure reference).  Ternary expressions
+                        // are correctly lowered by lowerQuestionMark() via lowerExpression(),
+                        // which creates proper branching with BranchIf so only the selected
+                        // branch is evaluated.  Sub-expressions inside each branch will still
+                        // get their own Invoke instructions for exception handling.
+                        if (auto* binary = dynamic_cast<const QoreBinaryOperatorNode<>*>(node)) {
                             // map, select, foldl, foldr operators use implicit arguments
                             // ($1, $#) set up during operator evaluation — their child
                             // expressions must NOT be pre-evaluated outside that context.
