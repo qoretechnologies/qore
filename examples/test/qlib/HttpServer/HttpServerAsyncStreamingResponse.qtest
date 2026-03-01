@@ -315,7 +315,7 @@ l50Xb2GWQesIt9k5jF5IOw==
     #! Creates an HTTP/2 client connected to the given port
     private HTTPClient createH2Client(int port) {
         HTTPClient client({
-            "url": sprintf("https://localhost:%d", port),
+            "url": sprintf("https://127.0.0.1:%d", port),
             "ssl_verify_cert": False,
         });
         return client;
@@ -326,6 +326,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         return new HttpClientIo::HttpClientConnectionManager(
             <HttpClientIo::HttpClientConnectionManagerOptions>{
                 "protocol": "h3",
+                "accept_all_certs": True,
                 "logger": mLogger,
                 "request_timeout": 30s,
                 "connect_timeout": 15s,
@@ -342,7 +343,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         on_exit delete server;
 
         HTTPClient client({
-            "url": sprintf("https://localhost:%d", setup.port),
+            "url": sprintf("https://127.0.0.1:%d", setup.port),
             "ssl_verify_cert": False,
             "http_version": "1.1",
         });
@@ -367,7 +368,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         on_exit delete server;
 
         HTTPClient client({
-            "url": sprintf("https://localhost:%d", setup.port),
+            "url": sprintf("https://127.0.0.1:%d", setup.port),
             "ssl_verify_cert": False,
             "http_version": "1.1",
         });
@@ -402,7 +403,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         on_exit delete server;
 
         HTTPClient client({
-            "url": sprintf("https://localhost:%d", setup.port),
+            "url": sprintf("https://127.0.0.1:%d", setup.port),
             "ssl_verify_cert": False,
             "http_version": "1.1",
         });
@@ -435,7 +436,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         on_exit delete server;
 
         HTTPClient client({
-            "url": sprintf("https://localhost:%d", setup.port),
+            "url": sprintf("https://127.0.0.1:%d", setup.port),
             "ssl_verify_cert": False,
             "timeout": 10000,
         });
@@ -477,7 +478,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         on_exit delete server;
 
         HTTPClient client({
-            "url": sprintf("https://localhost:%d", setup.port),
+            "url": sprintf("https://127.0.0.1:%d", setup.port),
             "ssl_verify_cert": False,
             "http_version": "2.0",
             "timeout": 10000,
@@ -517,7 +518,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         on_exit delete server;
 
         HTTPClient client({
-            "url": sprintf("https://localhost:%d", setup.port),
+            "url": sprintf("https://127.0.0.1:%d", setup.port),
             "ssl_verify_cert": False,
             "timeout": 10000,
         });

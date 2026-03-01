@@ -481,7 +481,7 @@ endif()
 # Try system packages first (pkg-config, then cmake find); fall back to
 # building from source via FetchContent when not installed.
 set(NGTCP2_VERSION "1.17.0")
-set(NGHTTP3_VERSION "1.13.1")
+set(NGHTTP3_VERSION "1.14.0")
 
 set(QUIC_FOUND_SYSTEM FALSE)
 pkg_check_modules(NGTCP2_PKG QUIET libngtcp2)
@@ -534,7 +534,7 @@ if (NOT QUIC_FOUND_SYSTEM)
     # --- nghttp3 (must come before ngtcp2) ---
     FetchContent_Declare(nghttp3
         URL "https://github.com/ngtcp2/nghttp3/releases/download/v${NGHTTP3_VERSION}/nghttp3-${NGHTTP3_VERSION}.tar.xz"
-        URL_HASH SHA256=020836668c711d5c166969f8b165fbfd989e6967d0601947bf608f29e2158518
+        URL_HASH SHA256=b3083dae2ff30cf00d24d5fedd432479532c7b17d993d384103527b36c1ec82d
     )
     FetchContent_Populate(nghttp3)
     # Patch out the unconditional 'check' target that conflicts in multi-FetchContent builds
