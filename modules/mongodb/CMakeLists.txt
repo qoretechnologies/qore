@@ -1,6 +1,6 @@
 # MongoDB module CMake configuration
 #
-# Copyright (C) 2025 Qore Technologies, s.r.o.
+# Copyright (C) 2025 - 2026 Qore Technologies, s.r.o.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a
 # copy of this software and associated documentation files (the "Software"),
@@ -23,10 +23,18 @@
 # Find libmongoc and libbson
 # Prefer pkg-config as it works reliably with shared libs only (Alpine's cmake
 # config references static libs that may not be installed)
+# mongo-c-driver 2.x renamed pkg-config files:
+#   libmongoc-1.0 -> mongoc2, libbson-1.0 -> bson2
 find_package(PkgConfig QUIET)
 if (PkgConfig_FOUND)
-    pkg_check_modules(MONGOC libmongoc-1.0)
-    pkg_check_modules(BSON libbson-1.0)
+    # Try 2.x names first
+    pkg_check_modules(MONGOC mongoc2)
+    pkg_check_modules(BSON bson2)
+    if (NOT MONGOC_FOUND OR NOT BSON_FOUND)
+        # Fall back to 1.x names
+        pkg_check_modules(MONGOC libmongoc-1.0)
+        pkg_check_modules(BSON libbson-1.0)
+    endif()
 endif()
 
 if (MONGOC_FOUND AND BSON_FOUND)
@@ -35,13 +43,21 @@ if (MONGOC_FOUND AND BSON_FOUND)
     set(MONGODB_LIBRARIES ${MONGOC_LIBRARIES} ${BSON_LIBRARIES})
 else()
     # Fall back to cmake config
-    find_package(mongoc-1.0 QUIET)
-    if (mongoc-1.0_FOUND)
+    # mongo-c-driver 2.x: package "mongoc" with target mongoc::mongoc
+    # mongo-c-driver 1.x: package "mongoc-1.0" with target mongo::mongoc_shared
+    find_package(mongoc QUIET)
+    if (mongoc_FOUND)
         set(MONGODB_INCLUDE_DIRS)
-        set(MONGODB_LIBRARIES mongo::mongoc_shared)
+        set(MONGODB_LIBRARIES mongoc::mongoc)
     else()
-        message(STATUS "MongoDB C driver not found - mongodb module will not be built")
-        return()
+        find_package(mongoc-1.0 QUIET)
+        if (mongoc-1.0_FOUND)
+            set(MONGODB_INCLUDE_DIRS)
+            set(MONGODB_LIBRARIES mongo::mongoc_shared)
+        else()
+            message(STATUS "MongoDB C driver not found - mongodb module will not be built")
+            return()
+        endif()
     endif()
 endif()
 
