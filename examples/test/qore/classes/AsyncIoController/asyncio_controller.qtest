@@ -198,41 +198,36 @@ class AsyncIoControllerTest inherits QUnit::Test {
     }
 
     testSubmitSharedQueue() {
-        Socket listener();
-        listener.bind("localhost:0");
-        listener.listen();
-        int port = listener.getSocketInfo().port;
+        # Use blocking recv operations so they stay in-flight until we send data
+        hash<auto> setup1 = setupBlockingRecvOp();
+        hash<auto> setup2 = setupBlockingRecvOp();
 
-        Socket client1();
-        AbstractPollOperation spop1 = client1.startPollConnect("localhost:" + port);
-
-        Socket client2();
-        AbstractPollOperation spop2 = client2.startPollConnect("localhost:" + port);
-
-        AsyncIoController ctrl();
+        AsyncIoController ctrl(False);
         Queue shared_q();
 
         ctrl.submit(<SocketPollOperationInfo>{
-            "sock": client1,
-            "spop": spop1,
+            "sock": setup1.server,
+            "spop": setup1.spop,
             "owner": "test",
-            "to": ConnectTimeout,
+            "to": -1,
             "resultQueue": shared_q,
         });
 
         ctrl.submit(<SocketPollOperationInfo>{
-            "sock": client2,
-            "spop": spop2,
+            "sock": setup2.server,
+            "spop": setup2.spop,
             "owner": "test",
-            "to": ConnectTimeout,
+            "to": -1,
             "resultQueue": shared_q,
         });
 
+        assertTrue(ctrl.waitReady(ShortTimeout));
         assertEq(2, ctrl.getCacheSize());
 
-        # Accept both connections
-        Socket accepted1 = listener.accept(ConnectTimeout);
-        Socket accepted2 = listener.accept(ConnectTimeout);
+        # Send 1024 bytes to complete each recv operation (startPollRecvString(1024))
+        string fill = strmul("x", 1024);
+        setup1.client.send(fill);
+        setup2.client.send(fill);
 
         # Both results arrive in the shared queue
         hash<SocketPollResultInfo> result1 = shared_q.get(ConnectTimeout);
@@ -242,6 +237,8 @@ class AsyncIoControllerTest inherits QUnit::Test {
         hash<SocketPollResultInfo> result2 = shared_q.get(ConnectTimeout);
         assertEq(True, exists result2);
         assertFalse(result2.canceled ?? False);
+
+        ctrl.stop();
     }
 
     testExec() {
@@ -428,40 +425,35 @@ class AsyncIoControllerTest inherits QUnit::Test {
     }
 
     testSubmitCustomKey() {
-        Socket listener();
-        listener.bind("localhost:0");
-        listener.listen();
-        int port = listener.getSocketInfo().port;
+        # Use blocking recv operations so they stay in-flight until we send data
+        hash<auto> setup1 = setupBlockingRecvOp();
+        hash<auto> setup2 = setupBlockingRecvOp();
 
-        Socket client1();
-        AbstractPollOperation spop1 = client1.startPollConnect("localhost:" + port);
-
-        Socket client2();
-        AbstractPollOperation spop2 = client2.startPollConnect("localhost:" + port);
-
-        AsyncIoController ctrl();
+        AsyncIoController ctrl(False);
 
         Queue q1 = ctrl.submit(<SocketPollOperationInfo>{
-            "sock": client1,
-            "spop": spop1,
+            "sock": setup1.server,
+            "spop": setup1.spop,
             "owner": "test",
-            "to": ConnectTimeout,
+            "to": -1,
             "key": "connect:1",
         });
 
         Queue q2 = ctrl.submit(<SocketPollOperationInfo>{
-            "sock": client2,
-            "spop": spop2,
+            "sock": setup2.server,
+            "spop": setup2.spop,
             "owner": "test",
-            "to": ConnectTimeout,
+            "to": -1,
             "key": "connect:2",
         });
 
+        assertTrue(ctrl.waitReady(ShortTimeout));
         assertEq(2, ctrl.getCacheSize());
 
-        # Accept both connections
-        Socket accepted1 = listener.accept(ConnectTimeout);
-        Socket accepted2 = listener.accept(ConnectTimeout);
+        # Send 1024 bytes to complete each recv operation (startPollRecvString(1024))
+        string fill = strmul("x", 1024);
+        setup1.client.send(fill);
+        setup2.client.send(fill);
 
         # Both should complete
         hash<SocketPollResultInfo> result1 = q1.get(ConnectTimeout);
@@ -471,6 +463,8 @@ class AsyncIoControllerTest inherits QUnit::Test {
         hash<SocketPollResultInfo> result2 = q2.get(ConnectTimeout);
         assertFalse(result2.canceled ?? False);
         assertNothing(result2.ex);
+
+        ctrl.stop();
     }
 
     testAutostopBehavior() {
