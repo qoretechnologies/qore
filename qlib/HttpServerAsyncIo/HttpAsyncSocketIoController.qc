@@ -1150,15 +1150,15 @@ public class HttpAsyncSocketIoController {
 
         if (result.code && !result.streaming) {
             try {
-                # Pollable InputStream (e.g. FileInputStream): submit to I/O thread
-                if (result.input_stream && result.input_stream.supportsNonBlockingIo()) {
+                # I/O-thread-safe InputStream (e.g. FileInputStream, BinaryInputStream): submit to I/O thread
+                if (result.input_stream && result.input_stream.isIoThreadSafe()) {
                     hash<auto> resp_hdr = result.hdr ?? {};
                     remove resp_hdr."Transfer-Encoding";
                     cinfo.sock.submitQuicStreamingResponseWithStream(
                         session_id, stream_id, result.code, resp_hdr, result.input_stream);
                     controllers[cinfo.controller_idx].wake();
                 } else if (result.input_stream) {
-                    # Non-pollable InputStream: handler thread reads chunks and submits
+                    # Non-I/O-thread-safe InputStream: handler thread reads chunks and submits
                     # them incrementally to the QUIC session with backpressure
                     hash<auto> resp_hdr = result.hdr ?? {};
                     remove resp_hdr."Transfer-Encoding";
@@ -2424,10 +2424,10 @@ public class HttpAsyncSocketIoController {
         # send operation which would conflict with h2op's non-blocking mode management.
         if (result.code && !result.streaming) {
             try {
-                # For pollable InputStream responses (e.g. FileInputStream): submit headers
-                # and let the I/O thread stream body non-blockingly
-                if (result.input_stream && result.input_stream.supportsNonBlockingIo()) {
-                    log(LoggerLevel::DEBUG, "HTTP/2 stream %d: submitting pollable InputStream response (CL=%y)",
+                # I/O-thread-safe InputStream (e.g. FileInputStream, BinaryInputStream): submit
+                # headers and let the I/O thread stream body non-blockingly
+                if (result.input_stream && result.input_stream.isIoThreadSafe()) {
+                    log(LoggerLevel::DEBUG, "HTTP/2 stream %d: submitting I/O-thread-safe InputStream response (CL=%y)",
                         stream_id, result.hdr."Content-Length");
                     hash<auto> resp_hdr = result.hdr ?? {};
                     remove resp_hdr."Transfer-Encoding";
@@ -2437,7 +2437,7 @@ public class HttpAsyncSocketIoController {
                     return;
                 }
 
-                # Non-pollable InputStream (e.g. CallbackInputStream): the handler thread
+                # Non-I/O-thread-safe InputStream (e.g. CallbackInputStream): the handler thread
                 # reads chunks and submits them incrementally to the H2 session.
                 # These Qore-level InputStreams cannot be passed to the I/O thread
                 # because the QoreObject may be destroyed before the I/O thread reads.

@@ -4,7 +4,7 @@
 
   Qore Programming Language
 
-  Copyright (C) 2016 - 2024 Qore Technologies, s.r.o.
+  Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -128,6 +128,17 @@ public:
       * @since %Qore 2.2
       */
     virtual bool supportsNonBlockingIo() const { return false; }
+
+    /**
+      * @brief Returns true if this stream's write() will never block.
+      *
+      * @see InputStream::isIoThreadSafe() for full documentation.
+      *
+      * @return true if write() will never block
+      *
+      * @since %Qore 2.3
+      */
+    virtual bool isIoThreadSafe() const { return supportsNonBlockingIo(); }
 
     /**
       * @brief Returns the pollable file descriptor for this stream, or -1 if not pollable.

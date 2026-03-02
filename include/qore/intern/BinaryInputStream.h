@@ -60,8 +60,8 @@ public:
         return "BinaryInputStream";
     }
 
-    //! BinaryInputStream is memory-backed and never blocks; safe for I/O-thread-driven streaming
-    DLLLOCAL bool supportsNonBlockingIo() const override { return true; }
+    //! BinaryInputStream is memory-backed and read() never blocks; safe for I/O-thread-driven streaming
+    DLLLOCAL bool isIoThreadSafe() const override { return true; }
 
     DLLLOCAL int64 read(void* ptr, int64 limit, ExceptionSink* xsink) override {
         assert(limit > 0);

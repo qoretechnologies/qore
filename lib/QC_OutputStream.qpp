@@ -3,7 +3,7 @@
 /*
   Qore Programming Language
 
-  Copyright (C) 2023 - 2024 Qore Technologies, s.r.o.
+  Copyright (C) 2023 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -79,6 +79,18 @@ abstract nothing OutputStream::write(binary data);
 */
 bool OutputStream::supportsNonBlockingIo() [flags=CONSTANT] {
     return os->supportsNonBlockingIo();
+}
+
+//! Returns @ref True if this stream's write() will never block
+/**
+    @return @ref True if write() will never block
+
+    @see @ref Qore::InputStream::isIoThreadSafe() "InputStream::isIoThreadSafe()"
+
+    @since %Qore 2.3
+*/
+bool OutputStream::isIoThreadSafe() [flags=CONSTANT] {
+    return os->isIoThreadSafe();
 }
 
 //! Returns the pollable file descriptor for this stream, or -1 if not pollable

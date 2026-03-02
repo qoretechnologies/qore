@@ -4,7 +4,7 @@
 
   Qore Programming Language
 
-  Copyright (C) 2016 - 2024 Qore Technologies, s.r.o.
+  Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -106,6 +106,22 @@ public:
       * @since %Qore 2.2
       */
     virtual bool supportsNonBlockingIo() const { return false; }
+
+    /**
+      * @brief Returns true if this stream's read() will never block.
+      *
+      * This is used to determine if a stream can be safely read from an I/O thread without
+      * blocking. Memory-backed streams (like BinaryInputStream) override this to return true
+      * even though they don't have a pollable file descriptor.
+      *
+      * The default implementation returns supportsNonBlockingIo(), since fd-backed streams
+      * with non-blocking I/O support are also safe for I/O thread use.
+      *
+      * @return true if read() will never block
+      *
+      * @since %Qore 2.3
+      */
+    virtual bool isIoThreadSafe() const { return supportsNonBlockingIo(); }
 
     /**
       * @brief Returns the pollable file descriptor for this stream, or -1 if not pollable.
