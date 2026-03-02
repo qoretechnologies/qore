@@ -138,12 +138,17 @@ class QoreSocket {
     friend class SocketAcceptPollOperation;
     friend class SocketReadHttpHeaderPollOperation;
     friend class SocketSendAndReadHeaderPollOperation;
+    friend class SocketSendStreamAndReadHeaderPollOperation;
     friend class my_socket_priv;
     friend class SocketHttp2ServerPollOperation;
     friend class SocketHttp2SendResponsePollOperation;
     friend class SocketHttp2SendStreamingResponsePollOperation;
     friend class SocketHttp2FlushPollOperation;
     friend class SocketHttp2ClientMultiplexPollOperation;
+    friend class SocketQuicClientPollOperation;
+    friend class SocketQuicServerPollOperation;
+    friend class SocketQuicSendResponsePollOperation;
+    friend class SocketQuicSendStreamingResponsePollOperation;
 
 public:
     //! creates an empty, unconnected socket
@@ -247,6 +252,29 @@ public:
         @since %Qore 2.0
     */
     DLLEXPORT AbstractPollState* startRecvPacket(ExceptionSink* xsink);
+
+    //! Starts a non-blocking recvfrom operation for UDP datagram sockets
+    /** @param xsink if an error occurs, the Qore-language exception information will be added here
+        @param max_size maximum datagram size to receive
+
+        @return a socket poll state object or nullptr in case of an exception
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT AbstractPollState* startRecvFrom(ExceptionSink* xsink, size_t max_size);
+
+    //! Starts a non-blocking sendto operation for UDP datagram sockets
+    /** @param xsink if an error occurs, the Qore-language exception information will be added here
+        @param bin the data to send; must be passed already referenced, this method takes ownership
+        @param dest_addr the destination address
+        @param dest_addr_len the size of the destination address structure
+
+        @return a socket poll state object or nullptr in case of an exception
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT AbstractPollState* startSendTo(ExceptionSink* xsink, BinaryNode* bin,
+        const struct sockaddr* dest_addr, socklen_t dest_addr_len);
 
 #if 0
     //! Starts a non-blocking accept operation on the socket

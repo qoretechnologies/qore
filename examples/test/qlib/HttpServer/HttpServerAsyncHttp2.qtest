@@ -57,6 +57,25 @@ class LargeResponseHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! Handler that returns large FileInputStream-based responses (pollable InputStream path)
+class FileStreamHandler inherits AbstractHttpRequestHandler {
+    public {
+        string file_path;
+    }
+
+    constructor(string file_path) {
+        self.file_path = file_path;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        hash<StatInfo> info = hstat(file_path);
+        return makeResponse(200, new FileInputStream(file_path), {
+            "Content-Type": "application/octet-stream",
+            "Content-Length": string(info.size),
+        });
+    }
+}
+
 #! Handler that delays before responding (simulates slow processing)
 class SlowHandler inherits AbstractHttpRequestHandler {
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
@@ -262,6 +281,7 @@ class HttpServerAsyncHttp2Test inherits QUnit::Test {
         HttpServer mServer;
         int mSslPort;
         string mSslUrl;
+        string mTempFile;
 
         const CertPem = "-----BEGIN CERTIFICATE-----
 MIIFNjCCBB6gAwIBAgISA1ELHYM0GFfi2BdvZfzLGJMLMA0GCSqGSIb3DQEBCwUA
@@ -340,6 +360,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         addTestCase("HTTP/2 request header lowercase normalization", \testHttp2RequestHeaderLowercase());
         addTestCase("multiple separate connections", \testMultipleSeparateConnections());
         addTestCase("large HTTP/2 async response", \testLargeHttp2Response());
+        addTestCase("large HTTP/2 FileInputStream streaming", \testLargeFileStreamResponse());
         addTestCase("concurrent HTTP/2 async responses", \testConcurrentHttp2Responses());
         addTestCase("HTTP/2 status message mapping", \testHttp2StatusMessage());
         # POST test has encoding issues - skip for now
@@ -385,6 +406,21 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         mServer.setHandler("empty-error", "/empty-error", NOTHING, new EmptyErrorHandler());
         mServer.setHandler("no-response", "/no-response", NOTHING, new NoResponseHandler());
 
+        # Create temporary file for FileInputStream streaming test (2MB)
+        mTempFile = tmp_location() + "/http2-stream-test-" + getpid() + "-" + get_random_string(8) + ".bin";
+        {
+            File f();
+            f.open2(mTempFile, O_CREAT | O_WRONLY | O_TRUNC);
+            # Write 2MB of known pattern data
+            binary chunk = binary(strmul("ABCDEFGHIJKLMNOP", 4096));
+            @assert(chunk.size() == 65536);
+            for (int i = 0; i < 32; ++i) {
+                f.write(chunk);
+            }
+        }
+        mServer.setHandler("file-stream", "/file-stream", NOTHING,
+            new FileStreamHandler(mTempFile));
+
         # Add HTTPS listener for HTTP/2 (HTTP/2 requires HTTPS via ALPN)
         mSslPort = mServer.addListener(<HttpListenerOptionInfo>{
             "service": 0,
@@ -404,6 +440,9 @@ OKKqgBjNAlYDdPhOy8O8Agk=
 
     globalTearDown() {
         delete mServer;
+        if (mTempFile && is_file(mTempFile)) {
+            unlink(mTempFile);
+        }
     }
 
     #! Create a RestClient for HTTP/2 testing
@@ -714,6 +753,63 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         if (m_options.verbose) {
             printf("Multiple separate connections: %d requests from %d different connections succeeded\n",
                 num_connections, num_connections);
+        }
+    }
+
+    testLargeFileStreamResponse() {
+        # Test the FileInputStream streaming path - this is the path used by Qorus
+        # for serving static files like JS/CSS bundles.
+        # The temp file is 2MB (32 x 64KB chunks of "ABCDEFGHIJKLMNOP" repeated)
+        int expected_size = 2 * 1024 * 1024;
+
+        RestClient rc = getClient(30000);
+        hash<auto> resp = rc.get("/file-stream");
+        assertEq(200, resp.status_code, "FileInputStream response should return 200");
+        assertEq(expected_size, resp.body.size(),
+            sprintf("FileInputStream response body should be %d bytes (got %d)", expected_size,
+                resp.body.size()));
+
+        if (m_options.verbose > 1) {
+            printf("FileInputStream streaming response (%d bytes): OK\n", resp.body.size());
+        }
+
+        # Test concurrent file stream requests (exercises I/O loop with multiple active
+        # InputStreams and client WINDOW_UPDATE timing)
+        int num_requests = 3;
+        Counter cnt(num_requests);
+        list<hash<auto>> results = ();
+        Mutex mtx();
+
+        for (int i = 0; i < num_requests; ++i) {
+            int idx = i;
+            background sub() {
+                on_exit cnt.dec();
+                try {
+                    RestClient rc2 = getClient(30000);
+                    hash<auto> r = rc2.get("/file-stream");
+                    mtx.lock();
+                    on_exit mtx.unlock();
+                    results += {"idx": idx, "status": r.status_code, "size": r.body.size(),
+                        "success": True};
+                } catch (hash<ExceptionInfo> ex) {
+                    mtx.lock();
+                    on_exit mtx.unlock();
+                    results += {"idx": idx, "error": ex.err, "desc": ex.desc, "success": False};
+                }
+            }();
+        }
+
+        int wait_rc = cnt.waitForZero(60s);
+        assertEq(0, wait_rc, "background file stream requests should complete within 60 seconds");
+
+        foreach hash<auto> r in (results) {
+            assertTrue(r.success, sprintf("Concurrent file stream request %d should succeed (error: %y: %y)",
+                r.idx, r.error, r.desc));
+            if (r.success) {
+                assertEq(200, r.status, sprintf("Concurrent file stream request %d status", r.idx));
+                assertEq(expected_size, r.size,
+                    sprintf("Concurrent file stream request %d body size", r.idx));
+            }
         }
     }
 

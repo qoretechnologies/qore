@@ -194,9 +194,10 @@ public class ConnectionProviderTest inherits QUnit::Test {
             assertThrows("CONNECTION-OPTION-ERROR", sub () {
                 new HttpConnection("test", "desc", "http://localhost:8080", {}, {"http_version": "invalid"});
             });
-            assertThrows("CONNECTION-OPTION-ERROR", sub () {
-                new HttpConnection("test", "desc", "http://localhost:8080", {}, {"http_version": "3.0"});
-            });
+
+            # Test HTTP/3.0 is valid (QUIC support)
+            HttpConnection hc_30("test", "desc", "http://localhost:8080", {}, {"http_version": "3.0"});
+            assertEq("3.0", hc_30.getConnectionOptions().http_version, "http_version 3.0");
         }
 
         # Test 4: Verify http_version is in allowed_values of ConnectionScheme
@@ -206,13 +207,14 @@ public class ConnectionProviderTest inherits QUnit::Test {
             assertTrue(exists scheme.options.http_version, "http_version option should exist");
             assertEq("auto", scheme.options.http_version.default_value, "default should be 'auto'");
             list<auto> allowed = scheme.options.http_version.allowed_values;
-            assertEq(4, allowed.size(), "should have 4 allowed values");
+            assertEq(5, allowed.size(), "should have 5 allowed values");
             # Check all allowed values are present
             list<string> values = map $1.value, allowed;
             assertTrue(inlist("auto", values), "auto should be allowed");
             assertTrue(inlist("1.0", values), "1.0 should be allowed");
             assertTrue(inlist("1.1", values), "1.1 should be allowed");
             assertTrue(inlist("2.0", values), "2.0 should be allowed");
+            assertTrue(inlist("3.0", values), "3.0 should be allowed");
         }
 
         # Test 5: Connection serialization preserves http_version

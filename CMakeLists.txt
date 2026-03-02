@@ -259,6 +259,8 @@ set(LIBQORE_QPP_SRC
     lib/QC_FilePollOperation.qpp
     lib/QC_EventLoop.qpp
     lib/QC_EventNotifier.qpp
+    lib/QC_LoggerInterfaceBase.qpp
+    lib/QC_AsyncIoController.qpp
     lib/ql_misc.qpp
     lib/ql_compression.qpp
     lib/ql_thread.qpp
@@ -444,7 +446,7 @@ else()
     find_library(BROTLI_DEC_LIBRARY NAMES brotlidec)
     if(BROTLI_INCLUDE_DIR AND BROTLI_ENC_LIBRARY AND BROTLI_DEC_LIBRARY)
         message(STATUS "Found Brotli: ${BROTLI_ENC_LIBRARY}")
-        list(APPEND LIBQORE_OPTIONAL_INCLUDES ${BROTLI_INCLUDE_DIR})
+        list(APPEND LIBQORE_OPTIONAL_INCLUDE_DIRS ${BROTLI_INCLUDE_DIR})
         list(APPEND LIBQORE_OPTIONAL_LIBS ${BROTLI_ENC_LIBRARY} ${BROTLI_DEC_LIBRARY})
     else()
         message(FATAL_ERROR "Brotli is required for compression support. Please install libbrotli-dev (Debian/Ubuntu) or brotli-devel (Fedora/RHEL)")
@@ -465,7 +467,7 @@ else()
     find_library(ZSTD_LIBRARY NAMES zstd)
     if(ZSTD_INCLUDE_DIR AND ZSTD_LIBRARY)
         message(STATUS "Found Zstandard: ${ZSTD_LIBRARY}")
-        list(APPEND LIBQORE_OPTIONAL_INCLUDES ${ZSTD_INCLUDE_DIR})
+        list(APPEND LIBQORE_OPTIONAL_INCLUDE_DIRS ${ZSTD_INCLUDE_DIR})
         list(APPEND LIBQORE_OPTIONAL_LIBS ${ZSTD_LIBRARY})
     else()
         message(FATAL_ERROR "Zstandard is required for compression support. Please install libzstd-dev (Debian/Ubuntu) or libzstd-devel (Fedora/RHEL)")
@@ -486,7 +488,7 @@ else()
     find_library(LZ4_LIBRARY NAMES lz4)
     if(LZ4_INCLUDE_DIR AND LZ4_LIBRARY)
         message(STATUS "Found LZ4: ${LZ4_LIBRARY}")
-        list(APPEND LIBQORE_OPTIONAL_INCLUDES ${LZ4_INCLUDE_DIR})
+        list(APPEND LIBQORE_OPTIONAL_INCLUDE_DIRS ${LZ4_INCLUDE_DIR})
         list(APPEND LIBQORE_OPTIONAL_LIBS ${LZ4_LIBRARY})
     else()
         message(FATAL_ERROR "LZ4 is required for compression support. Please install liblz4-dev (Debian/Ubuntu) or lz4-devel (Fedora/RHEL)")
@@ -498,7 +500,7 @@ set(HAVE_LZ4 TRUE)
 if (NOT (WIN32 OR MINGW OR MSYS))
     find_package(Backtrace)
     if (Backtrace_FOUND)
-        list(APPEND LIBQORE_OPTIONAL_INCLUDES ${Backtrace_INCLUDE_DIRS})
+        list(APPEND LIBQORE_OPTIONAL_INCLUDE_DIRS ${Backtrace_INCLUDE_DIRS})
         list(APPEND LIBQORE_OPTIONAL_LIBS ${Backtrace_LIBRARIES})
     endif (Backtrace_FOUND)
 endif (NOT (WIN32 OR MINGW OR MSYS))
@@ -507,7 +509,7 @@ endif (NOT (WIN32 OR MINGW OR MSYS))
 pkg_check_modules(NGHTTP2 QUIET libnghttp2)
 if (NGHTTP2_FOUND)
     message(STATUS "Found nghttp2: ${NGHTTP2_VERSION}")
-    list(APPEND LIBQORE_OPTIONAL_INCLUDES ${NGHTTP2_INCLUDE_DIRS})
+    list(APPEND LIBQORE_OPTIONAL_INCLUDE_DIRS ${NGHTTP2_INCLUDE_DIRS})
     list(APPEND LIBQORE_OPTIONAL_LIBS ${NGHTTP2_LIBRARIES})
 else()
     # Try to find nghttp2 without pkg-config
@@ -515,11 +517,173 @@ else()
     find_library(NGHTTP2_LIBRARY NAMES nghttp2)
     if (NGHTTP2_INCLUDE_DIR AND NGHTTP2_LIBRARY)
         message(STATUS "Found nghttp2: ${NGHTTP2_LIBRARY}")
-        list(APPEND LIBQORE_OPTIONAL_INCLUDES ${NGHTTP2_INCLUDE_DIR})
+        list(APPEND LIBQORE_OPTIONAL_INCLUDE_DIRS ${NGHTTP2_INCLUDE_DIR})
         list(APPEND LIBQORE_OPTIONAL_LIBS ${NGHTTP2_LIBRARY})
     else()
         message(FATAL_ERROR "nghttp2 is required for HTTP/2 support. Please install libnghttp2-dev (Debian/Ubuntu) or libnghttp2-devel (Fedora/RHEL)")
     endif()
+endif()
+
+# QUIC/HTTP/3 support via ngtcp2 + nghttp3
+# Try system packages first (pkg-config, then cmake find); fall back to
+# building from source via FetchContent when not installed.
+set(NGTCP2_VERSION "1.17.0")
+set(NGHTTP3_VERSION "1.14.0")
+
+set(QUIC_FOUND_SYSTEM FALSE)
+pkg_check_modules(NGTCP2_PKG QUIET libngtcp2)
+pkg_check_modules(NGTCP2_CRYPTO_OSSL_PKG QUIET libngtcp2_crypto_ossl)
+pkg_check_modules(NGHTTP3_PKG QUIET libnghttp3>=1.14.0)
+if (NGTCP2_PKG_FOUND AND NGTCP2_CRYPTO_OSSL_PKG_FOUND AND NGHTTP3_PKG_FOUND)
+    message(STATUS "Found ngtcp2: ${NGTCP2_PKG_VERSION}")
+    message(STATUS "Found ngtcp2_crypto_ossl: ${NGTCP2_CRYPTO_OSSL_PKG_VERSION}")
+    message(STATUS "Found nghttp3: ${NGHTTP3_PKG_VERSION}")
+    list(APPEND LIBQORE_OPTIONAL_INCLUDE_DIRS ${NGTCP2_PKG_INCLUDE_DIRS} ${NGTCP2_CRYPTO_OSSL_PKG_INCLUDE_DIRS} ${NGHTTP3_PKG_INCLUDE_DIRS})
+    list(APPEND LIBQORE_OPTIONAL_LIBS ${NGTCP2_PKG_LIBRARIES} ${NGTCP2_CRYPTO_OSSL_PKG_LIBRARIES} ${NGHTTP3_PKG_LIBRARIES})
+    set(QUIC_FOUND_SYSTEM TRUE)
+else()
+    # Try to find ngtcp2/nghttp3 without pkg-config
+    find_path(NGTCP2_INCLUDE_DIR ngtcp2/ngtcp2.h)
+    find_library(NGTCP2_LIBRARY NAMES ngtcp2)
+    find_library(NGTCP2_CRYPTO_OSSL_LIBRARY NAMES ngtcp2_crypto_ossl)
+    find_path(NGHTTP3_INCLUDE_DIR nghttp3/nghttp3.h)
+    find_library(NGHTTP3_LIBRARY NAMES nghttp3)
+    if (NGTCP2_INCLUDE_DIR AND NGTCP2_LIBRARY AND NGTCP2_CRYPTO_OSSL_LIBRARY AND NGHTTP3_INCLUDE_DIR AND NGHTTP3_LIBRARY)
+        # Verify nghttp3 >= 1.14.0 (0x010e00): v1.13.x has a bug where the
+        # client-side SETTINGS decoder skips enable_connect_protocol
+        file(STRINGS "${NGHTTP3_INCLUDE_DIR}/nghttp3/version.h" _nghttp3_ver
+             REGEX "^#define NGHTTP3_VERSION_NUM 0x")
+        if (_nghttp3_ver MATCHES "0x([0-9a-fA-F]+)")
+            math(EXPR _nghttp3_ver_num "0x${CMAKE_MATCH_1}" OUTPUT_FORMAT DECIMAL)
+            # 0x010e00 = 69120 decimal (v1.14.0)
+            if (_nghttp3_ver_num LESS 69120)
+                message(STATUS "nghttp3 version too old (need >= 1.14.0); will build from source")
+            else()
+                message(STATUS "Found ngtcp2: ${NGTCP2_LIBRARY}")
+                message(STATUS "Found ngtcp2_crypto_ossl: ${NGTCP2_CRYPTO_OSSL_LIBRARY}")
+                message(STATUS "Found nghttp3: ${NGHTTP3_LIBRARY}")
+                list(APPEND LIBQORE_OPTIONAL_INCLUDE_DIRS ${NGTCP2_INCLUDE_DIR} ${NGHTTP3_INCLUDE_DIR})
+                list(APPEND LIBQORE_OPTIONAL_LIBS ${NGTCP2_LIBRARY} ${NGTCP2_CRYPTO_OSSL_LIBRARY} ${NGHTTP3_LIBRARY})
+                set(QUIC_FOUND_SYSTEM TRUE)
+            endif()
+        endif()
+    endif()
+endif()
+
+if (NOT QUIC_FOUND_SYSTEM)
+    # Build ngtcp2 and nghttp3 from source via FetchContent.
+    # We use FetchContent_Populate + manual add_subdirectory because both
+    # projects unconditionally create an add_custom_target(check) which
+    # causes a fatal CMake duplicate-target error when both are present.
+    # Patching the downloaded sources removes the conflicting target.
+    message(STATUS "ngtcp2/nghttp3 not found on system; building from source (ngtcp2 ${NGTCP2_VERSION}, nghttp3 ${NGHTTP3_VERSION})")
+    include(FetchContent)
+
+    # Save cache variables that we override for subproject builds
+    set(_SAVE_BUILD_TESTING ${BUILD_TESTING})
+    set(_SAVE_BUILD_SHARED_LIBS ${BUILD_SHARED_LIBS})
+    set(_SAVE_ENABLE_LIB_ONLY ${ENABLE_LIB_ONLY})
+    set(_SAVE_ENABLE_SHARED_LIB ${ENABLE_SHARED_LIB})
+    set(_SAVE_ENABLE_STATIC_LIB ${ENABLE_STATIC_LIB})
+    set(_SAVE_ENABLE_OPENSSL ${ENABLE_OPENSSL})
+    set(_SAVE_ENABLE_GNUTLS ${ENABLE_GNUTLS})
+    set(_SAVE_CMAKE_POSITION_INDEPENDENT_CODE ${CMAKE_POSITION_INDEPENDENT_CODE})
+
+    set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
+    set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+    set(ENABLE_LIB_ONLY ON CACHE BOOL "" FORCE)
+    # Force static libraries for nghttp3/ngtcp2 to avoid runtime conflicts
+    # with older system-installed shared libraries
+    set(ENABLE_SHARED_LIB OFF CACHE BOOL "" FORCE)
+    set(ENABLE_STATIC_LIB ON CACHE BOOL "" FORCE)
+    # Static libraries linked into libqore.so need -fPIC
+    set(CMAKE_POSITION_INDEPENDENT_CODE ON CACHE BOOL "" FORCE)
+
+    # --- nghttp3 (must come before ngtcp2) ---
+    FetchContent_Declare(nghttp3
+        URL "https://github.com/ngtcp2/nghttp3/releases/download/v${NGHTTP3_VERSION}/nghttp3-${NGHTTP3_VERSION}.tar.xz"
+        URL_HASH SHA256=b3083dae2ff30cf00d24d5fedd432479532c7b17d993d384103527b36c1ec82d
+    )
+    FetchContent_Populate(nghttp3)
+    # Patch out the unconditional 'check' target that conflicts in multi-FetchContent builds
+    file(READ "${nghttp3_SOURCE_DIR}/CMakeLists.txt" _fc_content)
+    string(REPLACE "add_custom_target(check" "# add_custom_target(check" _fc_content "${_fc_content}")
+    file(WRITE "${nghttp3_SOURCE_DIR}/CMakeLists.txt" "${_fc_content}")
+    add_subdirectory(${nghttp3_SOURCE_DIR} ${nghttp3_BINARY_DIR} EXCLUDE_FROM_ALL)
+
+    # --- ngtcp2 (with OpenSSL crypto backend) ---
+    FetchContent_Declare(ngtcp2
+        URL "https://github.com/ngtcp2/ngtcp2/releases/download/v${NGTCP2_VERSION}/ngtcp2-${NGTCP2_VERSION}.tar.xz"
+        URL_HASH SHA256=9c9a4e2e150e90bf77d4ffcbefe82f738ee375287e68aaa715fa83c04a12209c
+    )
+    set(ENABLE_OPENSSL ON CACHE BOOL "" FORCE)
+    set(ENABLE_GNUTLS OFF CACHE BOOL "" FORCE)
+    FetchContent_Populate(ngtcp2)
+    # Patch out the unconditional 'check' target
+    file(READ "${ngtcp2_SOURCE_DIR}/CMakeLists.txt" _fc_content)
+    string(REPLACE "add_custom_target(check" "# add_custom_target(check" _fc_content "${_fc_content}")
+    file(WRITE "${ngtcp2_SOURCE_DIR}/CMakeLists.txt" "${_fc_content}")
+    add_subdirectory(${ngtcp2_SOURCE_DIR} ${ngtcp2_BINARY_DIR} EXCLUDE_FROM_ALL)
+
+    # Restore cache variables
+    if (DEFINED _SAVE_BUILD_TESTING)
+        set(BUILD_TESTING ${_SAVE_BUILD_TESTING} CACHE BOOL "" FORCE)
+    else()
+        unset(BUILD_TESTING CACHE)
+    endif()
+    if (DEFINED _SAVE_BUILD_SHARED_LIBS)
+        set(BUILD_SHARED_LIBS ${_SAVE_BUILD_SHARED_LIBS} CACHE BOOL "" FORCE)
+    else()
+        unset(BUILD_SHARED_LIBS CACHE)
+    endif()
+    if (DEFINED _SAVE_ENABLE_LIB_ONLY)
+        set(ENABLE_LIB_ONLY ${_SAVE_ENABLE_LIB_ONLY} CACHE BOOL "" FORCE)
+    else()
+        unset(ENABLE_LIB_ONLY CACHE)
+    endif()
+    if (DEFINED _SAVE_ENABLE_SHARED_LIB)
+        set(ENABLE_SHARED_LIB ${_SAVE_ENABLE_SHARED_LIB} CACHE BOOL "" FORCE)
+    else()
+        unset(ENABLE_SHARED_LIB CACHE)
+    endif()
+    if (DEFINED _SAVE_ENABLE_STATIC_LIB)
+        set(ENABLE_STATIC_LIB ${_SAVE_ENABLE_STATIC_LIB} CACHE BOOL "" FORCE)
+    else()
+        unset(ENABLE_STATIC_LIB CACHE)
+    endif()
+    if (DEFINED _SAVE_ENABLE_OPENSSL)
+        set(ENABLE_OPENSSL ${_SAVE_ENABLE_OPENSSL} CACHE BOOL "" FORCE)
+    else()
+        unset(ENABLE_OPENSSL CACHE)
+    endif()
+    if (DEFINED _SAVE_ENABLE_GNUTLS)
+        set(ENABLE_GNUTLS ${_SAVE_ENABLE_GNUTLS} CACHE BOOL "" FORCE)
+    else()
+        unset(ENABLE_GNUTLS CACHE)
+    endif()
+    if (DEFINED _SAVE_CMAKE_POSITION_INDEPENDENT_CODE)
+        set(CMAKE_POSITION_INDEPENDENT_CODE ${_SAVE_CMAKE_POSITION_INDEPENDENT_CODE} CACHE BOOL "" FORCE)
+    else()
+        unset(CMAKE_POSITION_INDEPENDENT_CODE CACHE)
+    endif()
+
+    # Add FetchContent include directories explicitly.
+    # Target-based include propagation via INTERFACE_INCLUDE_DIRECTORIES can fail
+    # when cmake targets are mixed into the QORE_LIBS list variable, so we add
+    # the source/build include paths directly.
+    list(APPEND LIBQORE_OPTIONAL_INCLUDE_DIRS
+        "${nghttp3_SOURCE_DIR}/lib/includes"
+        "${nghttp3_BINARY_DIR}/lib/includes"
+        "${ngtcp2_SOURCE_DIR}/lib/includes"
+        "${ngtcp2_BINARY_DIR}/lib/includes"
+        "${ngtcp2_SOURCE_DIR}/crypto/includes"
+        "${ngtcp2_BINARY_DIR}/crypto/includes"
+    )
+
+    # Link against the FetchContent-built static library targets.
+    # nghttp3/ngtcp2 use "_static" suffix for static targets when
+    # ENABLE_STATIC_LIB=ON and ENABLE_SHARED_LIB=OFF.
+    list(APPEND LIBQORE_OPTIONAL_LIBS ngtcp2_static ngtcp2_crypto_ossl_static nghttp3_static)
 endif()
 
 if (WIN32 OR MINGW OR MSYS)
@@ -734,6 +898,9 @@ set(LIBQORE_CPP_SRC
     lib/QoreSocket.cpp
     lib/QoreEventLoop.cpp
     lib/QoreEventNotifier.cpp
+    lib/QoreLoggerBridge.cpp
+    lib/QoreAsyncIoLogger.cpp
+    lib/AsyncIoControllerPriv.cpp
     lib/QoreSandboxManager.cpp
     lib/DateTime.cpp
     lib/QoreLib.cpp
@@ -919,6 +1086,13 @@ set(LIBQORE_CPP_SRC ${LIBQORE_CPP_SRC}
     lib/Http2Session.cpp
 )
 
+# QUIC/HTTP/3 support via ngtcp2 + nghttp3
+set(LIBQORE_CPP_SRC ${LIBQORE_CPP_SRC}
+    lib/QuicSession.cpp
+    lib/QuicSessionTicketCache.cpp
+    lib/QuicPollOperations.cpp
+)
+
 # get list of header files
 file(GLOB LIBQORE_SOURCE_HEADERS "include/qore/*.h" "include/qore/intern/*.h")
 set(LIBQORE_SOURCE_HEADERS ${LIBQORE_SOURCE_HEADERS} include/qore/qlist include/qore/safe_dslist include/qore/vector_map include/qore/vector_set)
@@ -1018,6 +1192,9 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreSocket.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreEventLoop.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreEventNotifier.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreLoggerBridge.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreAsyncIoLogger.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/AsyncIoControllerPriv.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreSandboxManager.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/DateTime.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreLib.cpp\"
@@ -1295,6 +1472,8 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_BINARY_DIR}/QC_FilePollOperation.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_EventNotifier.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_EventLoop.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_LoggerInterfaceBase.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_AsyncIoController.cpp\"
 
 #include \"${CMAKE_SOURCE_DIR}/lib/QorePseudoMethods.cpp\"
 
@@ -1317,6 +1496,10 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/OutputStream.cpp\"
 // HTTP/2 support is always enabled (nghttp2 is required)
 #include \"${CMAKE_SOURCE_DIR}/lib/Http2Session.cpp\"
+// QUIC/HTTP/3 support via ngtcp2 + nghttp3
+#include \"${CMAKE_SOURCE_DIR}/lib/QuicSession.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QuicSessionTicketCache.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QuicPollOperations.cpp\"
 // JIT/IR/AOT compilation support
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreJIT.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/JITRuntime.cpp\"
@@ -1341,6 +1524,12 @@ add_dependencies(QPP_GENERATED_FILES qpp)
 add_dependencies(libqore QPP_GENERATED_FILES BISON_GENERATED_FILES FLEX_GENERATED_FILES)
 
 target_compile_definitions(libqore PUBLIC _QORE_LIB_INTERN HAVE_UNIX_CONFIG_H)
+if (APPLE)
+    # Required to expose IPV6_PKTINFO and struct in6_pktinfo in <netinet/in.h>
+    # on macOS/Darwin.  Must be a global define so it takes effect before the
+    # first inclusion of <netinet/in.h> (critical for single-compilation-unit).
+    target_compile_definitions(libqore PRIVATE __APPLE_USE_RFC_3542)
+endif()
 target_compile_definitions(libqore PRIVATE MODULE_DIR="${MODULE_DIR}")
 target_compile_definitions(libqore PRIVATE MODULE_VER_DIR="${MODULE_VER_DIR}")
 target_compile_definitions(libqore PRIVATE USER_MODULE_DIR="${USER_MODULE_DIR}")
@@ -1677,7 +1866,7 @@ qore_user_module("qlib/DebugCmdLine.qm" "ConnectionProvider;DebugUtil;DebugProgr
 qore_user_module("qlib/DiscordWebSocketClient.qm" "ConnectionProvider;Util;WebSocketUtil;WebSocketClient")
 qore_user_module("qlib/HttpServer.qm" "HttpServerUtil;Mime;Util")
 qore_user_module("qlib/HttpServerAsyncIo" "HttpServer")
-qore_user_module("qlib/Http2ClientIo" "Logger")
+qore_user_module("qlib/HttpClientIo" "Logger;AsyncSocketIo")
 qore_user_module("qlib/Pop3Client.qm" "ConnectionProvider;MailMessage;Mime")
 qore_user_module("qlib/RestSchemaValidator.qm" "HttpServerUtil;Logger")
 qore_user_module("qlib/SewioWebSocketClient.qm" "ConnectionProvider;Util;WebSocketUtil;WebSocketClient")

@@ -1,0 +1,469 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    QUIC 0-RTT (Early Data) tests - verifies TLS 1.3 session ticket caching,
+    0-RTT connection resumption, rejection fallback, and idempotent method safety.
+*/
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/AsyncSocketIo
+%requires ../../../../qlib/HttpServerAsyncIo
+%requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/HttpClientIo
+
+%exec-class HttpServerQuic0RttTest
+
+#! Simple handler for GET tests
+class SimpleHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, "Hello World", {"Content-Type": "text/plain"});
+    }
+}
+
+#! Echo handler that returns the request body
+class EchoHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, body ?? "", {
+            "Content-Type": hdr."content-type" ?? "text/plain",
+        });
+    }
+}
+
+class HttpServerQuic0RttTest inherits QUnit::Test {
+    private {
+        Logger mLogger;
+
+        # Self-signed test certificate (RSA 2048-bit, CN=localhost, valid 10 years)
+        const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIUahuuRGDlubXWYmiPhjVeT66vtNYwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MDIyMjE5MjIwMVoXDTM2MDIy
+MDE5MjIwMVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEAjZNfLFUyyo02MjZjouaR11FybkZNwDWBG/bhkpTVyj/x
+QKlwKf20LbGSCmMIYHaFnODMg6u6E6sfRJVk+ofwVHBN/Ug+mvoL1zlNJanMdXLH
+7oUsUILY6bVUDPm1ACZmFJsAc9jfHfkluJ6vfYG+DOJbyB0nsMfO9/fvrwndQPUQ
+k9eMq2VfDohni4ijk5BWD/P9UmrciZUNOaNISay469Le5ZrtfGt9An1+Ye3TckJC
+tTF4q7+V+GC88w5QtLd1AMQGf/1ax5cwqQv9SSFvhnwj9o3V3Wkz1dq4XA/9rSA1
+ecPHh/tJeGuvbD11Hyr9LTYjQ+DIel0DV0ZDHdc5vwIDAQABo1MwUTAdBgNVHQ4E
+FgQUYBBsVylVinbbAzTbUt0jRM6mJvwwHwYDVR0jBBgwFoAUYBBsVylVinbbAzTb
+Ut0jRM6mJvwwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAfIAE
+EPvLO+gOnm366xJabLr2Sw3hfmvCq/zSTlPcrB9jdBlOLpMmKcdGiOOCNmzg9+BX
+YNX+I6+MNOGp0j3afWlVwEjiMD66ydSMPEQw0FTzvpIjFN3fHo/MJzFbingRLrk8
+LCo94GmjMBYG+50M8MCKE6EzqfmoYT9fiMJcyJwwdptOWf0URNYKKrG1wRlX4+o8
+uNjQ3VwynI95fAw9WcR/ZtP0pkmCor/hKaYgVRsSGjD78Fu0Uuhm/pCAOuObpEHj
+5eoTlaWC3pZzGA67piqlEDOWiRi9Mo2CzG0t5fmQ83KB51ImauKdYB21whxjkZ+5
+BjwMC4hqSD+bzO2B+A==
+-----END CERTIFICATE-----";
+
+        const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCNk18sVTLKjTYy
+NmOi5pHXUXJuRk3ANYEb9uGSlNXKP/FAqXAp/bQtsZIKYwhgdoWc4MyDq7oTqx9E
+lWT6h/BUcE39SD6a+gvXOU0lqcx1csfuhSxQgtjptVQM+bUAJmYUmwBz2N8d+SW4
+nq99gb4M4lvIHSewx8739++vCd1A9RCT14yrZV8OiGeLiKOTkFYP8/1SatyJlQ05
+o0hJrLjr0t7lmu18a30CfX5h7dNyQkK1MXirv5X4YLzzDlC0t3UAxAZ//VrHlzCp
+C/1JIW+GfCP2jdXdaTPV2rhcD/2tIDV5w8eH+0l4a69sPXUfKv0tNiND4Mh6XQNX
+RkMd1zm/AgMBAAECggEAATo1WYTgPK75DiS4PBR5UDS7DryvoN/LNOsGLUdQC9b+
+aEaacSrAvKKs9vJr2KuTtfahn0SbsjRKFZtL9aYRuHxZbhLfGWiF4MGflcOBQRq+
+eVFl6clwnaS+S/cq5rZD1/WODUhkisslqhI/cubvNwe2rvyduE510LgxYkLuIZ7a
++SCQz1XyPyhb8eVrWIZiprufjqXvDy01MC74l3ZYqaq1hr1oKi0ZDHI95Os7gtwQ
+4HQ3qdJsmYfbaf1223REp8gybnshsxkyjhKRU3nG7ZvgrRRMFkJvfHZ8VcS3cvsK
+ccKBJg7376+VDtc+RHUcBMyVZ881y4Rq2t6ssYVJVQKBgQDFq+N7ZGKOtQChSIXn
+ju/gP5WzSKJFaZhdkSggHi1K+PkuCZ1SXzKD3CPibreSUx9hzoZAAmTjzOfwhVZ7
+5HDqhrKfkWNeThAdXlglhNX5LVKhhmBsNGawANO8Pmq+pueWhK/76XgiGcOknyt6
+NH1ZE/QZpFeZB2binEhf6leYGwKBgQC3WgF2eaj2c4pugq13oZ9BHms5nsbYQgj8
+1H2C1wsgJNiz4tq6xFdvjiaw+r1OrCFrl9nz7npFc7uohtrRxXr7sq5nwMPO3QAP
+VxzyZ/TFP/FI70Avz6x+xX7HIlptpQ1mWacsdrvtoIG1c8veEJTyA4JgjoMhdDer
+JuPze+ZHLQKBgAzuLIhCzcul/W+Pberyx7A0mJdMtgiyWpwsRaKsNqxD0xD24gqk
+XYqQmOxT78Arnc7pEpEXVwArxDRQlJKwI87DluWnPgfKNXWmWT/DC7gsBc65Go+Z
+ceorc65JqvPjuRx4e4aQBCK+6rRXESICUvzDuGEBBhXljQ5fyMA1dRtnAoGAQSFH
+w74Ttvf0BK2G0SgoWglkLWOpXsiWSLlynDenTBPKppu+9vkn1gi41cU72eZrOL0I
+Pw5HgMRLtOGyeTGdLiuaqGBhLepzSv+22KT03dyI6U+TjWhH7gBZuIMLfEdVKzZN
+nA3RU+fgK4SmtotNXWrBtWrqScfuvm1iK+unMUECgYBrwc1rU/GI9tH4MWvBX99n
+pmFneeIUuXJajOsh7jUyTxcrHl+4kkgHDExuFMNPHfrIG8xCj43fjzxD/spz3xRS
++Ki3i3lYOFNhTUCREt5Xx23hkksK6j7SYlfY0IV2UruWt/UubpsfEqxC1Uk07NTo
+l50Xb2GWQesIt9k5jF5IOw==
+-----END PRIVATE KEY-----";
+    }
+
+    constructor() : Test("HttpServerQuic0RttTest", "1.0") {
+        # Set up SIGUSR1 handler to dump thread stacks for debugging hangs
+        @debug {
+            set_signal_handler(SIGUSR1, sub (int sig) {
+                printf("=== SIGUSR1 Thread Stacks ===\n%Y\n=== End Thread Stacks ===\n",
+                    get_all_thread_call_stacks());
+            });
+        }
+
+        mLogger = new Logger("quic-0rtt-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            mLogger.addAppender(new StdoutAppender());
+        }
+
+        # 0-RTT Core Tests
+        addTestCase("basic 0-RTT session ticket caching", \testBasic0RttTicketCaching());
+        addTestCase("0-RTT rejection fallback", \testRejectionFallback());
+        addTestCase("sequential requests reuse connection", \testSequentialRequestsReuseConnection());
+        addTestCase("multiple origins cache isolation", \testMultipleOriginsIsolation());
+        addTestCase("concurrent connections same origin", \testConcurrentSameOrigin());
+
+        set_return_value(main());
+    }
+
+    private HttpServer createServer() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": mLogger,
+            "debug": True,
+            "async_mode": True,
+        });
+        server.setHandler("simple", "/hello", NOTHING, new SimpleHandler());
+        server.setHandler("echo", "/echo", NOTHING, new EchoHandler());
+        server.waitForAsyncIo();
+        return server;
+    }
+
+    private hash<auto> addQuicListener(HttpServer server, int port = 0) {
+        return server.addQuicListener(<HttpListenerOptionInfo>{
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        }, port);
+    }
+
+    #! Test that session tickets are cached after first connection and reused on reconnect
+    testBasic0RttTicketCaching() {
+        HttpServer server = createServer();
+        on_exit {
+            delete server;
+        }
+        hash<auto> h3info = addQuicListener(server);
+        int port = h3info.port;
+        string url = "https://127.0.0.1:" + port;
+
+        # Connection 1: establishes TLS session, receives session ticket
+        {
+            HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+                    "protocol": "h3",
+                    "logger": mLogger,
+                    "request_timeout": 15s,
+                    "connect_timeout": 10s,
+                },
+            );
+            on_exit {
+                mgr.closeAll();
+            }
+
+            hash<auto> resp1 = mgr.request(url, "GET", "/hello");
+            assertEq(200, resp1.status_code, "first connection GET should return 200");
+            string body = resp1.body.typeCode() == NT_BINARY
+                ? resp1.body.toString("UTF-8") : resp1.body;
+            assertEq("Hello World", body, "first connection body should match");
+        }
+
+        # Connection 2: should attempt 0-RTT with cached session ticket
+        {
+            HttpClientIo::HttpClientConnectionManager mgr2(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+                    "protocol": "h3",
+                    "logger": mLogger,
+                    "request_timeout": 15s,
+                    "connect_timeout": 10s,
+                },
+            );
+            on_exit {
+                mgr2.closeAll();
+            }
+
+            hash<auto> resp2 = mgr2.request(url, "GET", "/hello");
+            assertEq(200, resp2.status_code, "second connection GET should return 200");
+            string body2 = resp2.body.typeCode() == NT_BINARY
+                ? resp2.body.toString("UTF-8") : resp2.body;
+            assertEq("Hello World", body2, "second connection body should match");
+        }
+
+        if (m_options.verbose > 1) {
+            printf("testBasic0RttTicketCaching: both connections succeeded\n");
+        }
+    }
+
+    #! Test that 0-RTT rejection (server restart with new SSL_CTX) falls back to 1-RTT
+    /** Starts server1, caches a session ticket, destroys server1, then starts
+        server2 on the SAME port. The new server has a fresh SSL_CTX with a
+        different ticket encryption key, so the cached ticket is invalid.
+        The client should fall back to a full 1-RTT handshake transparently.
+    */
+    testRejectionFallback() {
+        int saved_port;
+
+        # Phase 1: establish connection and cache session ticket
+        {
+            HttpServer server1 = createServer();
+            on_exit {
+                delete server1;
+            }
+            hash<auto> h3info1 = addQuicListener(server1);
+            saved_port = h3info1.port;
+            string url1 = "https://127.0.0.1:" + saved_port;
+
+            HttpClientIo::HttpClientConnectionManager mgr1(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+                    "protocol": "h3",
+                    "logger": mLogger,
+                    "request_timeout": 15s,
+                    "connect_timeout": 10s,
+                },
+            );
+            on_exit {
+                mgr1.closeAll();
+            }
+
+            hash<auto> resp1 = mgr1.request(url1, "GET", "/hello");
+            assertEq(200, resp1.status_code, "first server connection should succeed");
+        }
+        # server1 is now destroyed — its port is free
+
+        # Phase 2: start a new server on the SAME port (new SSL_CTX = different ticket key)
+        # The client has a cached ticket for 127.0.0.1:<saved_port> that the new
+        # server cannot decrypt, triggering 0-RTT rejection → 1-RTT fallback.
+        # Note: between server1 destruction and server2 bind, another process could
+        # grab the port; skip the test if that happens (SO_REUSEADDR mitigates but
+        # doesn't eliminate this race).
+        {
+            HttpServer server2 = createServer();
+            on_exit {
+                delete server2;
+            }
+            hash<auto> h3info2;
+            try {
+                h3info2 = addQuicListener(server2, saved_port);
+            } catch (hash<ExceptionInfo> ex) {
+                testSkip(sprintf("could not rebind port %d: %s: %s", saved_port,
+                    ex.err, ex.desc));
+            }
+            assertEq(saved_port, h3info2.port, "server2 should bind to the same port");
+            string url2 = "https://127.0.0.1:" + saved_port;
+
+            HttpClientIo::HttpClientConnectionManager mgr2(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+                    "protocol": "h3",
+                    "logger": mLogger,
+                    "request_timeout": 15s,
+                    "connect_timeout": 10s,
+                },
+            );
+            on_exit {
+                mgr2.closeAll();
+            }
+
+            hash<auto> resp2 = mgr2.request(url2, "GET", "/hello");
+            assertEq(200, resp2.status_code,
+                "connection to restarted server should succeed (1-RTT fallback)");
+            string body2 = resp2.body.typeCode() == NT_BINARY
+                ? resp2.body.toString("UTF-8") : resp2.body;
+            assertEq("Hello World", body2, "response body should match after fallback");
+        }
+
+        if (m_options.verbose > 1) {
+            printf("testRejectionFallback: OK (port=%d)\n", saved_port);
+        }
+    }
+
+    #! Test that sequential requests on the same connection work correctly
+    testSequentialRequestsReuseConnection() {
+        HttpServer server = createServer();
+        on_exit {
+            delete server;
+        }
+        hash<auto> h3info = addQuicListener(server);
+        string url = "https://127.0.0.1:" + h3info.port;
+
+        HttpClientIo::HttpClientConnectionManager mgr(
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "protocol": "h3",
+                "logger": mLogger,
+                "request_timeout": 15s,
+                "connect_timeout": 10s,
+            },
+        );
+        on_exit {
+            mgr.closeAll();
+        }
+
+        # Multiple requests on the same connection — the first caches a ticket,
+        # all subsequent requests reuse the same QUIC connection
+        for (int i = 0; i < 5; ++i) {
+            hash<auto> resp = mgr.request(url, "GET", "/hello");
+            assertEq(200, resp.status_code,
+                sprintf("request %d should return 200", i + 1));
+        }
+
+        # POST request (not safe for 0-RTT, but works over 1-RTT connection)
+        hash<auto> resp_post = mgr.request(url, "POST", "/echo",
+            {"content-type": "text/plain"}, "test body");
+        assertEq(200, resp_post.status_code, "POST should return 200");
+        string post_body = resp_post.body.typeCode() == NT_BINARY
+            ? resp_post.body.toString("UTF-8") : resp_post.body;
+        assertEq("test body", post_body, "POST echo body should match");
+
+        if (m_options.verbose > 1) {
+            printf("testSequentialRequestsReuseConnection: OK\n");
+        }
+    }
+
+    #! Test that session tickets are isolated per origin (host:port)
+    testMultipleOriginsIsolation() {
+        # Create two servers on different ports
+        HttpServer server1 = createServer();
+        on_exit {
+            delete server1;
+        }
+        HttpServer server2 = createServer();
+        on_exit {
+            delete server2;
+        }
+
+        hash<auto> h3info1 = addQuicListener(server1);
+        hash<auto> h3info2 = addQuicListener(server2);
+        string url1 = "https://127.0.0.1:" + h3info1.port;
+        string url2 = "https://127.0.0.1:" + h3info2.port;
+
+        HttpClientIo::HttpClientConnectionManager mgr(
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "protocol": "h3",
+                "logger": mLogger,
+                "request_timeout": 15s,
+                "connect_timeout": 10s,
+            },
+        );
+        on_exit {
+            mgr.closeAll();
+        }
+
+        # Request to server 1
+        hash<auto> resp1 = mgr.request(url1, "GET", "/hello");
+        assertEq(200, resp1.status_code, "server 1 should return 200");
+
+        # Request to server 2
+        hash<auto> resp2 = mgr.request(url2, "GET", "/hello");
+        assertEq(200, resp2.status_code, "server 2 should return 200");
+
+        # Both should have cached independent session tickets.
+        # Verify both servers still work.
+        hash<auto> resp1b = mgr.request(url1, "GET", "/hello");
+        assertEq(200, resp1b.status_code, "server 1 second request should return 200");
+
+        hash<auto> resp2b = mgr.request(url2, "GET", "/hello");
+        assertEq(200, resp2b.status_code, "server 2 second request should return 200");
+
+        if (m_options.verbose > 1) {
+            printf("testMultipleOriginsIsolation: OK (port1=%d, port2=%d)\n",
+                h3info1.port, h3info2.port);
+        }
+    }
+
+    #! Test concurrent connections to the same origin
+    testConcurrentSameOrigin() {
+        HttpServer server = createServer();
+        on_exit {
+            delete server;
+        }
+        hash<auto> h3info = addQuicListener(server);
+        string url = "https://127.0.0.1:" + h3info.port;
+
+        # First, establish a connection to cache a session ticket
+        {
+            HttpClientIo::HttpClientConnectionManager mgr_init(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+                    "protocol": "h3",
+                    "logger": mLogger,
+                    "request_timeout": 15s,
+                    "connect_timeout": 10s,
+                },
+            );
+            on_exit {
+                mgr_init.closeAll();
+            }
+            hash<auto> resp = mgr_init.request(url, "GET", "/hello");
+            assertEq(200, resp.status_code, "initial connection should succeed");
+        }
+
+        # Now spawn multiple threads connecting concurrently (all may attempt 0-RTT)
+        Counter cnt(4);
+        list<bool> results = ();
+        Mutex result_lock();
+
+        for (int i = 0; i < 4; ++i) {
+            background sub () {
+                on_exit cnt.dec();
+                try {
+                    HttpClientIo::HttpClientConnectionManager mgr(
+                        <HttpClientIo::HttpClientConnectionManagerOptions>{
+                            "protocol": "h3",
+                            "logger": mLogger,
+                            "request_timeout": 15s,
+                            "connect_timeout": 10s,
+                        },
+                    );
+                    on_exit {
+                        mgr.closeAll();
+                    }
+                    hash<auto> resp = mgr.request(url, "GET", "/hello");
+                    {
+                        AutoLock al(result_lock);
+                        results += (resp.status_code == 200);
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    if (m_options.verbose > 1) {
+                        printf("testConcurrentSameOrigin: thread error: %s: %s\n",
+                            ex.err, ex.desc);
+                    }
+                    {
+                        AutoLock al(result_lock);
+                        results += False;
+                    }
+                }
+            }();
+        }
+
+        int rc = cnt.waitForZero(30s);
+        assertEq(0, rc, "all concurrent threads should complete");
+        assertEq(4, results.size(), "should have 4 results");
+        int success_count = 0;
+        foreach bool r in (results) {
+            if (r) {
+                ++success_count;
+            }
+        }
+        assertEq(4, success_count,
+            sprintf("all concurrent connections must succeed (got %d/4)", success_count));
+
+        if (m_options.verbose > 1) {
+            printf("testConcurrentSameOrigin: %d/4 succeeded\n", success_count);
+        }
+    }
+}

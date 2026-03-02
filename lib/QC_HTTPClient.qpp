@@ -39,6 +39,7 @@
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/QC_Serializable.h"
 #include "qore/intern/ssl_constants.h"
+#include "qore/intern/QoreHttpClientObjectIntern.h"
 
 /** @defgroup http_url_codes HTTP URL Codes
 
@@ -167,21 +168,24 @@ static void HTTPClient_deserializer(QoreObject& self, const QoreHashNode* sdata,
 
     @section httpclient_http2 HTTP/2 Support
 
-    The %Qore HTTPClient class supports HTTP/2 over TLS via ALPN (Application-Layer Protocol Negotiation).
+    The %Qore HTTPClient class supports HTTP/2 over TLS via ALPN (Application-Layer Protocol Negotiation)
+    and HTTP/3 (QUIC) with automatic Alt-Svc-based upgrade.
     By default, HTTP/2 mode is \c "auto", meaning HTTP/2 will be used if the server supports it, with
     automatic fallback to HTTP/1.1 otherwise.
 
-    HTTP/2 modes:
-    - \c "auto" (default): Use HTTP/2 if available via ALPN, fallback to HTTP/1.1
-    - \c "disabled": Use HTTP/1.x only, never attempt HTTP/2
-    - \c "required": Require HTTP/2, fail if the server doesn't support it
+    HTTP version modes (via the \c http_version constructor option):
+    - \c "auto" (default): Use HTTP/2 if available via ALPN, fallback to HTTP/1.1; upgrade to HTTP/3 if
+      advertised via Alt-Svc
+    - \c "1.0": HTTP/1.0 only
+    - \c "1.1": HTTP/1.1 only
+    - \c "2.0": Require HTTP/2, fail if the server doesn't support it
+    - \c "3.0": Require HTTP/3 (QUIC), fail if unavailable (TLS required)
 
     Use @ref setHttp2Mode() to control the HTTP/2 mode, or set the \c http_version constructor option.
 
     @note
     - HTTP/2 requires TLS; non-TLS connections will always use HTTP/1.x
-    - <b>Limitations:</b> WebSocket over HTTP/2 (RFC 8441) and Server-Sent Events (SSE) over HTTP/2 are
-      not currently supported. WebSocket and SSE connections will use HTTP/1.x regardless of the HTTP/2 mode
+    - HTTP/3 requires TLS and uses QUIC as the transport protocol
 
     @see
     - @ref setHttp2Mode()
@@ -190,6 +194,34 @@ static void HTTPClient_deserializer(QoreObject& self, const QoreHashNode* sdata,
     - @ref isHttp2Enabled()
 
     @since %Qore 2.2
+
+    @section httpclient_http3 HTTP/3 Support
+
+    The %Qore HTTPClient class supports HTTP/3 (QUIC) with automatic Alt-Svc-based upgrade.
+    By default, HTTP/3 mode is \c "auto", meaning the client will use HTTP/3 if the server advertises it
+    via an \c Alt-Svc response header, with automatic fallback to TCP (HTTP/1.x or HTTP/2) if the QUIC
+    connection fails.
+
+    HTTP/3 modes:
+    - \c "auto" (default): Use HTTP/3 if advertised via Alt-Svc, fallback to TCP
+    - \c "disabled": Never use HTTP/3, even if the server advertises it
+    - \c "required": Require HTTP/3, fail if unavailable
+
+    Use @ref setHttp3Mode() to control the HTTP/3 mode, or set the \c http3_mode constructor option.
+
+    @note
+    - HTTP/3 requires TLS; non-TLS connections will never attempt HTTP/3
+    - An active HTTP/2 connection takes priority over an HTTP/3 upgrade attempt; HTTP/3 upgrade
+      is only attempted for new connections that are not yet using HTTP/2
+    - Streaming callbacks (send_callback, InputStream, trailer_callback) are supported with HTTP/2 and
+      HTTP/3 connections via sendWithSendCallback(), sendChunked(), and sendWithCallbacks()
+
+    @see
+    - @ref setHttp3Mode()
+    - @ref getHttp3Mode()
+    - @ref isHttp3Active()
+
+    @since %Qore 2.3
 
     @section httpclient_get_with_body HTTP GET Requests With a Message Body
 
@@ -265,8 +297,10 @@ HTTPClient httpclient(("url":"http://hostname:8080/path"));
       \c HTTP-CLIENT-RECEIVE-ERROR exception to be raised, rather such responses will be passed through to the caller
       like any other response
     - \c headers: A hash of headers to send in every outgoing request
-    - \c http_version: Either \c "1.0" or \c "1.1" for the claimed HTTP protocol version compliancy in outgoing
-      message headers
+    - \c http3_mode: The HTTP/3 mode for QUIC connections; valid values are: \c "disabled" (never use HTTP/3),
+      \c "auto" (use HTTP/3 if advertised via Alt-Svc, default), or \c "required" (require HTTP/3, fail if
+      unavailable); @ref HTTP3Mode enum values are also accepted
+    - \c http_version: The HTTP version to use: \c "auto" (default), \c "1.0", \c "1.1", \c "2.0", or \c "3.0"
     - \c max_redirects: The maximum number of redirects before throwing an exception (the default is 5)
     - \c password: The password for HTTP basic authentication; only used if no username or password is set in the URL
       and if the \c username option is also used
@@ -341,6 +375,8 @@ HTTPClient httpclient(("url":"http://hostname:8080/path"));
     - %Qore 2.0 added the following options:
       - \c username
       - \c password
+    - %Qore 2.3 added the following option:
+      - \c http3_mode
 */
 HTTPClient::constructor(hash<auto> opts) {
     ReferenceHolder<QoreHttpClientObject> client(new QoreHttpClientObject, xsink);
@@ -674,6 +710,49 @@ if (resp.status_code == 200) {
     return *xsink ? nullptr : rv.release();
 }
 
+//! Sends an HTTP/3 extended CONNECT request (RFC 9220) and waits for the response
+/** Submits a CONNECT request with the \c :protocol pseudo-header over the active HTTP/3
+    connection and drives QUIC I/O until the server responds.
+
+    @param path the request path (e.g., "/" or "/chat")
+    @param headers optional request headers
+    @param protocol the :protocol pseudo-header value (e.g., "websocket")
+    @param info optional reference to receive connection info
+
+    @return a hash with response information:
+    - \c status_code: HTTP status code (200 for success)
+    - \c stream_id: the HTTP/3 stream ID for subsequent data transfer
+    - \c http_version: "3"
+    - \c headers: response headers
+
+    @throw HTTP3-ERROR if HTTP/3 is not available
+    @throw HTTP3-CONNECT-ERROR if the CONNECT request fails or server doesn't support extended CONNECT
+
+    @par Example:
+    @code{.py}
+# WebSocket over HTTP/3 connection
+hash<auto> info;
+hash<auto> resp = httpclient.sendHttp3Connect("/chat", {"Sec-WebSocket-Protocol": "chat"},
+    "websocket", \info);
+if (resp.status_code == 200) {
+    int stream_id = resp.stream_id;
+    # Now use submitQuicStreamData/readQuicConnectStreamData for WebSocket frames
+}
+    @endcode
+
+    @note This method is used for WebSocket over HTTP/3 (RFC 9220) and other protocols
+    that use extended CONNECT with the :protocol pseudo-header
+
+    @since %Qore 2.2
+*/
+*hash<auto> HTTPClient::sendHttp3Connect(string path, *hash<auto> headers, string protocol,
+        *reference<hash<auto>> info) {
+    OptHashRefHelper ohrh(info, xsink);
+    ReferenceHolder<QoreHashNode> rv(client->sendHttp3Connect(path->c_str(), headers,
+        protocol->c_str(), *ohrh, xsink), xsink);
+    return *xsink ? nullptr : rv.release();
+}
+
 //! Sends data on an HTTP/2 stream
 /** @param stream_id the stream ID to send data on (from sendHttp2Connect())
     @param data binary data to send
@@ -724,6 +803,58 @@ if (data) {
 *binary HTTPClient::readHttp2StreamData(int stream_id, *int timeout_ms) {
     int timeout = timeout_ms ? (int)timeout_ms : client->getTimeout();
     return client->readHttp2StreamData(stream_id, timeout, xsink);
+}
+
+//! Sends data on an HTTP/3 extended CONNECT stream (bidirectional tunnel)
+/** @param stream_id the stream ID to send data on (from sendHttp3Connect())
+    @param data binary data to send (or @ref NOTHING for end-of-stream only)
+    @param end_stream if @ref True, signals end of stream (no more data will be sent)
+    @param timeout_ms timeout in milliseconds (default: connection timeout)
+
+    @throw HTTP3-ERROR if HTTP/3 is not active or the operation fails
+
+    @par Example:
+    @code{.py}
+# Send a WebSocket text frame over HTTP/3
+binary frame = ws_encode_frame(WS_OP_TEXT, "Hello, WebSocket!");
+httpclient.sendHttp3StreamData(stream_id, frame);
+    @endcode
+
+    @note This method is used for bidirectional streaming protocols like WebSocket over HTTP/3
+
+    @since %Qore 2.2
+*/
+nothing HTTPClient::sendHttp3StreamData(int stream_id, *binary data, softbool end_stream = False,
+        *int timeout_ms) {
+    int timeout = timeout_ms ? (int)timeout_ms : client->getTimeout();
+    client->sendHttp3StreamData(stream_id, data, (bool)end_stream, timeout, xsink);
+}
+
+//! Reads data from an HTTP/3 extended CONNECT stream (bidirectional tunnel)
+/** @param stream_id the stream ID to read data from (from sendHttp3Connect())
+    @param timeout_ms timeout in milliseconds (default: connection timeout)
+
+    @return binary data read from the stream, or @ref NOTHING if no data available
+
+    @throw HTTP3-ERROR if HTTP/3 is not active or the operation fails
+
+    @par Example:
+    @code{.py}
+# Read WebSocket data over HTTP/3
+*binary data = httpclient.readHttp3StreamData(stream_id, 5000);
+if (data) {
+    hash<auto> frame = ws_decode_frame(data);
+    # Process WebSocket frame
+}
+    @endcode
+
+    @note This method is used for bidirectional streaming protocols like WebSocket over HTTP/3
+
+    @since %Qore 2.2
+*/
+*binary HTTPClient::readHttp3StreamData(int stream_id, *int timeout_ms) {
+    int timeout = timeout_ms ? (int)timeout_ms : client->getTimeout();
+    return client->readHttp3StreamData(stream_id, timeout, xsink);
 }
 
 //! Returns the current HTTP/2 stream ID
@@ -800,6 +931,100 @@ printf("Using protocol: %s\n", proto);
 */
 string HTTPClient::getHttpVersion() [flags=CONSTANT] {
     return client->getHttpVersion();
+}
+
+//! Sets the HTTP/3 protocol mode
+/** The HTTP/3 mode controls how HTTP/3 (QUIC) is used:
+    - \c "disabled" or 0: Never use HTTP/3, even if the server advertises it
+    - \c "auto" or 1: Use HTTP/3 if advertised via Alt-Svc, fall back to TCP (default)
+    - \c "required" or 2: Require HTTP/3, fail if unavailable
+
+    @param mode the HTTP/3 mode string: "disabled", "auto", "required" (or 0-2)
+
+    @par Example:
+    @code{.py}
+httpclient.setHttp3Mode("auto");
+# or
+httpclient.setHttp3Mode(HTTP3Mode::Auto);
+    @endcode
+
+    @note HTTP/3 requires TLS; non-TLS connections will never attempt HTTP/3
+
+    @throw HTTP3-MODE-ERROR invalid mode value
+
+    @since %Qore 2.3
+
+    @see getHttp3Mode()
+*/
+nothing HTTPClient::setHttp3Mode(string mode) {
+    const char* str = mode->c_str();
+    int mode_int = parseHttp3ModeString(str);
+    if (mode_int < 0) {
+        xsink->raiseException("HTTP3-MODE-ERROR", "invalid value '%s' for HTTP/3 mode; "
+            "valid values are: \"disabled\", \"auto\", \"required\" (or 0-2)", str);
+        return QoreValue();
+    }
+    client->setHttp3Mode(mode_int, xsink);
+}
+
+//! Sets the HTTP/3 protocol mode
+/** @param mode the HTTP/3 mode as an enum
+
+    @throw HTTP3-MODE-ERROR if the mode value is invalid
+
+    @since %Qore 2.3
+
+    @see getHttp3Mode()
+*/
+nothing HTTPClient::setHttp3Mode(enum<HTTP3Mode> mode) {
+    int64 mode_int = mode.getAsBigInt();
+    if (mode_int < HTTP3_MODE_DISABLED || mode_int > HTTP3_MODE_REQUIRED) {
+        xsink->raiseException("HTTP3-MODE-ERROR", "invalid mode value %d; valid values are: 0-2", (int)mode_int);
+        return QoreValue();
+    }
+    client->setHttp3Mode((int)mode_int, xsink);
+}
+
+//! Returns the current HTTP/3 protocol mode
+/** @return the current HTTP/3 mode as a string: "disabled", "auto", or "required"
+
+    @par Example:
+    @code{.py}
+string mode = httpclient.getHttp3Mode();
+printf("HTTP/3 mode: %s\n", mode);
+    @endcode
+
+    @since %Qore 2.3
+
+    @see setHttp3Mode()
+*/
+string HTTPClient::getHttp3Mode() [flags=CONSTANT] {
+    int mode = client->getHttp3Mode();
+    switch (mode) {
+        case HTTP3_MODE_DISABLED:
+            return new QoreStringNode("disabled");
+        case HTTP3_MODE_REQUIRED:
+            return new QoreStringNode("required");
+        case HTTP3_MODE_AUTO:
+        default:
+            return new QoreStringNode("auto");
+    }
+}
+
+//! Returns @ref True if the connection is currently using HTTP/3 (QUIC)
+/** @return @ref True if HTTP/3 is active on the current connection
+
+    @par Example:
+    @code{.py}
+if (httpclient.isHttp3Active()) {
+    printf("Using HTTP/3 (QUIC)\n");
+}
+    @endcode
+
+    @since %Qore 2.3
+*/
+bool HTTPClient::isHttp3Active() [flags=CONSTANT] {
+    return client->isHttp3Active();
 }
 
 //! Sets the object to make a secure SSL/TLS connection on the next connect if the passed argument is @ref True, or an unencrypted cleartext connection if it is @ref False

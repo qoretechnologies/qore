@@ -65,7 +65,7 @@ Layout:
 Rules:
 
 - Register with `qore_user_module("qlib/<ModuleName>.qm" "...")`.
-- Add to the flat module list in `Makefile.am`.
+- Register with `qore_user_module()` in `CMakeLists.txt`.
 
 ## Documentation and Dependencies
 
@@ -216,7 +216,7 @@ Current usages to migrate:
 - [ ] all parse directives in the main .qm file for separated modules
 - [ ] `%modern` used / redundant parse directives (`%new-style`, `%require-types`, `%strict-args`, `%enable-all-warnings`) removed
 - [ ] `CMakeLists.txt` module registration updated
-- [ ] `Makefile.am` module lists updated
+- [ ] `CMakeLists.txt` module lists updated
 - [ ] Docs module list (`doxygen/lang/120_modules.dox.tmpl`) updated when applicable
 - [ ] entry in `doxygen/lang/900_release_notes.dox.tmpl` for new modules or updates
 - [ ] Tests added/updated for the module

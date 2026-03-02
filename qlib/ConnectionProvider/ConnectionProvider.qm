@@ -115,6 +115,12 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
     @section connectionproviderrelnotes Release Notes
 
     @subsection connectionprovider_2_3 ConnectionProvider 2.3
+    - added @ref ConnectionProvider::AbstractConnection::supportsAsyncRequestApi()
+      "AbstractConnection::supportsAsyncRequestApi()" and
+      @ref ConnectionProvider::AbstractConnection::startPollRequest()
+      "AbstractConnection::startPollRequest()" for async HTTP request support
+    - added @ref ConnectionProvider::HttpRequestPollOperation "HttpRequestPollOperation" for async HTTP
+      requests via non-blocking I/O
     - refactored @ref ConnectionProvider::PollingConnectionMonitor "PollingConnectionMonitor" to delegate I/O to
       an \c AsyncSocketIoController; the internal \c Socket::poll() event loop and pipe-based signaling have been
       removed in favor of a lightweight timer thread

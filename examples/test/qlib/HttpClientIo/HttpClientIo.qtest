@@ -1,0 +1,1801 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Unified HttpClientIo module unit tests - tests unified API, protocol selection,
+    HTTP/2 and HTTP/3 end-to-end, C++ layer validation, and controller mode.
+*/
+
+%modern
+
+# Set up SIGUSR1 handler to dump thread stacks for debugging
+@debug {
+    set_signal_handler(SIGUSR1, sub (int sig) {
+        printf("=== SIGUSR1 Thread Stacks ===\n%Y\n=== End Thread Stacks ===\n",
+            get_all_thread_call_stacks());
+    });
+}
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/HttpClientIo
+%requires ../../../../qlib/AsyncSocketIo
+
+%exec-class HttpClientIoTest
+
+#! Simple handler for GET requests
+class SimpleGetHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, "OK", {"Content-Type": "text/plain"});
+    }
+}
+
+#! Handler that returns a large response body
+class LargeResponseHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        int size = 1000;
+        *list<*string> m = (hdr.path =~ x/large\/(\d+)/);
+        if (m) {
+            size = int(m[0]);
+        }
+        return makeResponse(200, strmul("X", size), {"Content-Type": "text/plain"});
+    }
+}
+
+#! Echo handler that returns the request body and method
+class EchoHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        string resp_body = sprintf("method=%s path=%s", hdr.method, hdr.path);
+        if (body) {
+            if (body.typeCode() == NT_BINARY) {
+                resp_body += sprintf(" body_size=%d body=%s", body.size(), body.toString());
+            } else {
+                resp_body += sprintf(" body_size=%d body=%s", body.length(), body);
+            }
+        }
+        return makeResponse(200, resp_body, {"Content-Type": "text/plain"});
+    }
+}
+
+#! Handler that delays before responding
+class SlowHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        int delay_ms = 100;
+        *list<*string> m = (hdr.path =~ x/slow\/(\d+)/);
+        if (m) {
+            delay_ms = int(m[0]);
+        }
+        usleep(delay_ms * 1000);
+        return makeResponse(200, sprintf("delayed %d ms", delay_ms), {"Content-Type": "text/plain"});
+    }
+}
+
+#! Handler that returns an error
+class ErrorHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        int code = 500;
+        *list<*string> m = (hdr.path =~ x/error\/(\d+)/);
+        if (m) {
+            code = int(m[0]);
+        }
+        return makeResponse(code, sprintf("Error %d", code), {"Content-Type": "text/plain"});
+    }
+}
+
+#! Handler that returns a streaming InputStream response
+class StreamingHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        # Build a payload in 3 chunks: "chunk1|chunk2|chunk3"
+        string payload = "chunk1|chunk2|chunk3";
+        return <HttpResponseInfo>{
+            "code": 200,
+            "body": new StringInputStream(payload),
+            "hdr": {
+                "Content-Type": "text/plain",
+                "Content-Length": string(payload.size()),
+            },
+        };
+    }
+}
+
+class HttpClientIoTest inherits QUnit::Test {
+    private {
+        HttpServer mServer;
+        int mSslPort;
+        string mSslUrl;
+        *int mQuicPort;
+        *string mQuicUrl;
+        Logger mLogger;
+
+        const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIULwwY9Xmqwn7ZZIYgEu8otC1aRNMwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI1MTIzMTE4MjIyOVoXDTI2MTIz
+MTE4MjIyOVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEA0r/nka21DXdApKWXg6yoM64+RXZ/j2afHJjnnL7IGt87
+wOow8iZDyn3+S9h/J6FP5dGKCmqItq/OKmZxpL61sfUwpcYe3axnoAjKshkfbwSi
+ZKL0oFJcmXYSk9H/qIIbxdHbBre9ztoJsPaBLHWbcoc/too/o4wDW3FUSZaCzgy2
+Lpphnwi/gXNoD2qxQodv+pfkAzn2+nN0J7Yt+cWs15E2DZCxekhISrhT1ull+Afr
+UbHlcqA08AXyyzx61nENtcWpFyuVmfwhvcSPMTgRpoZ+/P+QrcgbmCe2hjZJtgiL
+aQqtsakV7KxvHpR8AgnFeshfnjZY+w8oRMlaMIb6IwIDAQABo1MwUTAdBgNVHQ4E
+FgQUWOgm+lMoLNS8ReH7mvffWJfreREwHwYDVR0jBBgwFoAUWOgm+lMoLNS8ReH7
+mvffWJfreREwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAxBG0
+3X0YIeNaf+3XDnoiZBtgMxpsRkxMtRy+lLoQZ3XO5f58eFjDmTq9InplX4IEW0Nx
+TpWr7suU4cFwgZfe6+cHfiU0PQ/pCA7XIetZb2n3GFrQkU4U1K7DgHeZ8HZ7vQ1T
+tVaefxRR3Y8CoIWmI9kYhXs0I0imKOopzpj2iScwGYKmFuasSGyfbkEQgRvg+hAl
+8oL2f4hCFLynTLkA8bWcd3cyBbGIhPzTffuSBjfNHLRqrI4hGPvTM8Xl4WcqmrmZ
+CP3wt6EiYaxJ2zRR2kUtxdm4xntxjc+nr5sjj1pVJvoN7AVmeihS7y4Awy156UCN
+cnhHffwhNhKl6MTonQ==
+-----END CERTIFICATE-----";
+
+        const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDSv+eRrbUNd0Ck
+pZeDrKgzrj5Fdn+PZp8cmOecvsga3zvA6jDyJkPKff5L2H8noU/l0YoKaoi2r84q
+ZnGkvrWx9TClxh7drGegCMqyGR9vBKJkovSgUlyZdhKT0f+oghvF0dsGt73O2gmw
+9oEsdZtyhz+2ij+jjANbcVRJloLODLYummGfCL+Bc2gParFCh2/6l+QDOfb6c3Qn
+ti35xazXkTYNkLF6SEhKuFPW6WX4B+tRseVyoDTwBfLLPHrWcQ21xakXK5WZ/CG9
+xI8xOBGmhn78/5CtyBuYJ7aGNkm2CItpCq2xqRXsrG8elHwCCcV6yF+eNlj7DyhE
+yVowhvojAgMBAAECggEAMLi64VvmQnGyWR4LNB7DWAdNUCPAA7f2ytaynPMiMcwv
+9T5vCFw+Sd7s3j3zz4akgP37SsMsTgfAwt6iITMRsE197KUr15WW81F1As16DeFl
+ZZyirzm7PKMmUlQ3JY7Guun0F858rAiOOwISBOQ/hq+r1BiL89RXpllB4i1Qmi+8
+Y7Y4mF9j3BDfdUCY+nG8aJ9zhZHZK2/cV40G9qrafFYwQEp86mM2BhtlRr24FCFe
+nWUboADvEAiOhlj7TQl5eMnfKuOPPU9oAZX1yTRkjTPQnBSqZbLaFkcnRKkZcgyg
+dC78RDl2iOB8JclXdLu/R9Dg8SQQ8M5clcKprR+4IQKBgQD7ubtmrFpRzvVMYiGJ
++JXf5AfSRB6OeXUMDaEw31XGZU9zZALqrh/98D4GVWGPSvXVbgH8KdxEc5GN5OJj
+HKxBldRZ0sw2gJLAE6UKH/qDNmp+2qWEdrDE8YcAeCQxo6rk+Ns5qqsvmn2SR14Y
+mvtgHHS1D+9lsqea5jUTSXrc0wKBgQDWVAwsZOtah2CHvsonqOyQXotnRtBool0u
+6rtGrRXoDFvwrjRsicBv6L1kf/npD+QhkaRe3ZkOBZxPsjv9Kfc974czLBAf1zeD
+rW931aSp1YiHyBo8+PmjTvbbiOK7K/8n79CN8W+zwr9plaU+HE1nLwwp/UmaCYtM
+fArq1jHbcQKBgFWnUVkSdHk5zsX67iaga38PfInTnAIm2ekMCjkzBWDIwEwnT8bD
+ESe7Q5+sFdJIU3YYRJylMcoo+PIrW80VyJdYgDVAQTSac1TgWlwjnX5gWcRoacG1
+EVkyRhmmx8oMQu4+r3nj1PQRwYCwwBfnRHnjtOKXVYJpVBalFpJFgoT5AoGAGTUx
+aVdFRxR9CfoqlJeNmz1DcBYoFOZjx0zcUeexl+U8OwaCK/HXrFHXVKaoofy4fCpB
+BtdRVRDb3ZO88n2pEqPFZwNbsiMB6H7RiWqbP05aDH5Ad8NguRBkgFWNNS5riCrw
+gIFQ/fd9w9FR6ggyIlyqNZYQvgk5VPmR3yTqIEECgYEA0akqJwH4M2aQb3mP6FGX
+MbQ5aconCeXHrT2u80LEhF4KzwQz8k8XX2K2XRZ+4LgWq3tOfeVnkEivkJBzFEao
+/g5l2ZjftRO2yAdYhP4Sbcws88pP+cr64tWDI6qK6tlGXI93EyfCVT1FSX5CC1aq
+Do+Sl1gfqlpgpszQaOMjR4M=
+-----END PRIVATE KEY-----";
+    }
+
+    constructor() : Test("HttpClientIoTest", "1.0") {
+        # Module and definition tests
+        addTestCase("module load test", \testModuleLoad());
+        addTestCase("unified hashdecl and enum definitions", \testUnifiedDefinitions());
+        addTestCase("unified connection manager creation", \testUnifiedConnectionManagerCreation());
+
+        # Unified manager basic functionality
+        addTestCase("unified manager stats", \testUnifiedManagerStats());
+
+        # Negative tests
+        addTestCase("invalid URL handling", \testInvalidUrl());
+        addTestCase("unified manager shutdown", \testUnifiedManagerShutdown());
+        addTestCase("H3 requires HTTPS", \testH3RequiresHttps());
+        addTestCase("close all is idempotent", \testCloseAllIdempotent());
+        addTestCase("cleanup idle no connections", \testCleanupIdleNoConnections());
+        addTestCase("migrateAll with no connections", \testMigrateAllNoConnections());
+
+        # Protocol selection tests
+        addTestCase("protocol selection constants", \testProtocolSelectionConstants());
+
+        # State tests
+        addTestCase("stream state transitions", \testStreamStateTransitions());
+        addTestCase("connection state transitions", \testConnectionStateTransitions());
+
+        # C++ layer tests
+        addTestCase("submitHttp2Request missing headers", \testSubmitHttp2RequestMissingHeaders());
+
+        # End-to-end tests via unified API (forced H2 protocol)
+        addTestCase("unified basic GET request", \testUnifiedBasicGet());
+        addTestCase("unified POST request with body", \testUnifiedPostWithBody());
+        addTestCase("unified error response", \testUnifiedErrorResponse());
+        addTestCase("unified large response", \testUnifiedLargeResponse());
+        addTestCase("unified concurrent multiplexed", \testUnifiedConcurrentRequests());
+        addTestCase("unified connection pooling", \testUnifiedConnectionPooling());
+        addTestCase("unified async callback", \testUnifiedAsyncCallback());
+
+        # Controller mode tests
+        addTestCase("controller mode setup", \testControllerModeSetup());
+        addTestCase("controller mode basic request", \testControllerModeBasicRequest());
+        addTestCase("controller mode concurrent", \testControllerModeConcurrent());
+        addTestCase("controller mode callback", \testControllerModeCallback());
+        addTestCase("controller mode timeout", \testControllerModeTimeout());
+
+        # Auto protocol selection (against HTTP/2-only server)
+        addTestCase("auto protocol fallback to H2", \testAutoProtocolFallback());
+
+        # H3 end-to-end tests
+        addTestCase("H3 end-to-end basic request", \testH3EndToEndBasic());
+        addTestCase("H3 end-to-end concurrent", \testH3EndToEndConcurrent());
+
+        # Streaming tests (HTTP/2 only)
+        addTestCase("H2 streaming basic", \testH2StreamingBasic());
+        addTestCase("H2 streaming state error", \testH2StreamingStateError());
+
+        # Cancellation tests
+        addTestCase("stream cancel before response", \testStreamCancelBeforeResponse());
+        addTestCase("stream cancel after completion", \testStreamCancelAfterCompletion());
+
+        # Capacity and idle cleanup tests
+        addTestCase("capacity error", \testCapacityError());
+        addTestCase("cleanup idle with connections", \testCleanupIdleWithConnections());
+
+        # Additional coverage tests
+        addTestCase("invalid protocol option", \testInvalidProtocolOption());
+        addTestCase("invalid max connections option", \testInvalidMaxConnectionsOption());
+        addTestCase("invalid max streams option", \testInvalidMaxStreamsOption());
+        addTestCase("double startStreaming error", \testDoubleStartStreaming());
+        addTestCase("getConnectionInfo", \testGetConnectionInfo());
+        addTestCase("stream cancel during readiness", \testStreamCancelDuringReadiness());
+        addTestCase("connection reuse", \testConnectionReuse());
+        addTestCase("readData not in streaming mode", \testH2StreamingReadDataNotInStreamingMode());
+        addTestCase("sendData not in streaming mode", \testH2StreamingSendDataNotInStreamingMode());
+
+        # Connection failure and timeout tests
+        addTestCase("connection failure unreachable", \testConnectionFailureUnreachable());
+        addTestCase("non-controller mode timeout", \testNonControllerModeTimeout());
+
+        # Concurrent closeAll test
+        addTestCase("closeAll during requests", \testCloseAllDuringRequests());
+
+        # Pool scaling test
+        addTestCase("pool creates second connection", \testPoolCreatesSecondConnection());
+
+        # Cancel callback verification
+        addTestCase("cancel callback invoked", \testCancelCallbackInvoked());
+
+        # Connection draining test
+        addTestCase("connection draining", \testConnectionDraining());
+
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        mLogger = new Logger("httpclientio-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            mLogger.addAppender(new StdoutAppender());
+        }
+
+        hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
+            "logger": mLogger,
+            "debug": True,
+            "async_mode": True,
+        };
+        mServer = new HttpServer(opts);
+
+        # Register handlers
+        mServer.setHandler("simple", "/simple", NOTHING, new SimpleGetHandler());
+        mServer.setHandler("large", "/large", NOTHING, new LargeResponseHandler());
+        mServer.setHandler("echo", "/echo", NOTHING, new EchoHandler());
+        mServer.setHandler("slow", "/slow", NOTHING, new SlowHandler());
+        mServer.setHandler("error", "/error", NOTHING, new ErrorHandler());
+        mServer.setHandler("streaming", "/streaming", NOTHING, new StreamingHandler());
+
+        # Add HTTPS listener
+        mSslPort = mServer.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        }).port;
+        mSslUrl = "https://127.0.0.1:" + mSslPort;
+
+        # Add QUIC listener for HTTP/3 tests
+        try {
+            mQuicPort = mServer.addQuicListener(<HttpListenerOptionInfo>{
+                "cert": new SSLCertificate(CertPem),
+                "key": new SSLPrivateKey(KeyPem),
+            }).port;
+            mQuicUrl = "https://127.0.0.1:" + mQuicPort;
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose > 0) {
+                printf("QUIC listener not available: %s: %s\n", ex.err, ex.desc);
+            }
+        }
+
+        mServer.waitForAsyncIo();
+
+        if (m_options.verbose > 1) {
+            printf("HTTPS test server on port %d\n", mSslPort);
+            if (mQuicPort) {
+                printf("QUIC test server on port %d\n", mQuicPort);
+            }
+        }
+    }
+
+    globalTearDown() {
+        delete mServer;
+    }
+
+    # ---- Module and Type Tests ----
+
+    testModuleLoad() {
+        assertEq("HttpClientConnectionManager",
+            get_class_name(new HttpClientIo::HttpClientConnectionManager()),
+            "HttpClientIo module loaded");
+    }
+
+    testUnifiedDefinitions() {
+        # Unified stream state enums
+        assertEq(0, HttpClientIo::HttpClientStreamState::Pending, "unified stream state Pending");
+        assertEq(1, HttpClientIo::HttpClientStreamState::Open, "unified stream state Open");
+        assertEq(2, HttpClientIo::HttpClientStreamState::HeadersReceived, "unified stream state HeadersReceived");
+        assertEq(3, HttpClientIo::HttpClientStreamState::ReceivingBody, "unified stream state ReceivingBody");
+        assertEq(4, HttpClientIo::HttpClientStreamState::Complete, "unified stream state Complete");
+        assertEq(5, HttpClientIo::HttpClientStreamState::Cancelled, "unified stream state Cancelled");
+        assertEq(6, HttpClientIo::HttpClientStreamState::Error, "unified stream state Error");
+
+        # Unified connection state enums
+        assertEq(0, HttpClientIo::HttpClientConnectionState::Connecting, "unified conn state Connecting");
+        assertEq(1, HttpClientIo::HttpClientConnectionState::Ready, "unified conn state Ready");
+        assertEq(2, HttpClientIo::HttpClientConnectionState::Draining, "unified conn state Draining");
+        assertEq(3, HttpClientIo::HttpClientConnectionState::Closed, "unified conn state Closed");
+
+        # Unified constants
+        assertEq(6, HttpClientIo::DefaultMaxConnectionsPerHost, "unified default max connections per host");
+        assertEq(100, HttpClientIo::DefaultMaxStreamsPerConnection, "unified default max streams per connection");
+        assertTrue(HttpClientIo::DefaultConnectionIdleTimeout > 0, "unified default idle timeout > 0");
+        assertTrue(HttpClientIo::DefaultConnectTimeout > 0, "unified default connect timeout > 0");
+        assertTrue(HttpClientIo::DefaultRequestTimeout > 0, "unified default request timeout > 0");
+
+        # Unified manager options hashdecl
+        hash<HttpClientIo::HttpClientConnectionManagerOptions> mgr_opts =
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "max_connections_per_host": 4,
+            "max_streams_per_connection": 50,
+            "idle_timeout": 30s,
+            "connect_timeout": 15s,
+            "request_timeout": 45s,
+            "accept_all_certs": True,
+            "protocol": "h2",
+        };
+        assertEq(4, mgr_opts.max_connections_per_host, "unified mgr opts max_connections_per_host");
+        assertEq(50, mgr_opts.max_streams_per_connection, "unified mgr opts max_streams_per_connection");
+        assertEq(30000, int(mgr_opts.idle_timeout), "unified mgr opts idle_timeout");
+        assertEq(15000, int(mgr_opts.connect_timeout), "unified mgr opts connect_timeout");
+        assertEq(45000, int(mgr_opts.request_timeout), "unified mgr opts request_timeout");
+        assertEq(True, mgr_opts.accept_all_certs, "unified mgr opts accept_all_certs");
+        assertEq("h2", mgr_opts.protocol, "unified mgr opts protocol");
+
+        # Default protocol is "auto"
+        hash<HttpClientIo::HttpClientConnectionManagerOptions> default_opts =
+                <HttpClientIo::HttpClientConnectionManagerOptions>{};
+        assertEq("auto", default_opts.protocol, "default protocol is auto");
+
+        # Unified request options hashdecl
+        hash<HttpClientIo::HttpClientRequestOptions> req_opts =
+                <HttpClientIo::HttpClientRequestOptions>{
+            "timeout": 5s,
+            "priority_weight": 128,
+        };
+        assertEq(5000, int(req_opts.timeout), "unified req opts timeout");
+        assertEq(128, req_opts.priority_weight, "unified req opts priority_weight");
+
+        # Unified response info hashdecl
+        hash<HttpClientIo::HttpClientResponseInfo> resp = <HttpClientIo::HttpClientResponseInfo>{
+            "status_code": 200,
+            "headers": {"content-type": "text/plain"},
+            "body": "test",
+            "stream_id": 1,
+            "protocol": "h2",
+        };
+        assertEq(200, resp.status_code, "unified resp status_code");
+        assertEq("text/plain", resp.headers."content-type", "unified resp headers");
+        assertEq("test", resp.body, "unified resp body");
+        assertEq(1, resp.stream_id, "unified resp stream_id");
+        assertEq("h2", resp.protocol, "unified resp protocol");
+
+        # Unified error info hashdecl
+        hash<HttpClientIo::HttpClientErrorInfo> err = <HttpClientIo::HttpClientErrorInfo>{
+            "err": "HTTP-ERROR",
+            "desc": "test error",
+            "stream_id": 3,
+            "h2_error_code": 1,
+        };
+        assertEq("HTTP-ERROR", err.err, "unified err err");
+        assertEq("test error", err.desc, "unified err desc");
+        assertEq(3, err.stream_id, "unified err stream_id");
+        assertEq(1, err.h2_error_code, "unified err h2_error_code");
+
+        # Unified connection info hashdecl
+        hash<HttpClientIo::HttpClientConnectionInfo> conn_info =
+                <HttpClientIo::HttpClientConnectionInfo>{
+            "host": "example.com",
+            "port": 443,
+            "active_streams": 5,
+            "max_concurrent_streams": 100,
+            "connection_id": 1,
+            "protocol": "h2",
+            "ssl": True,
+        };
+        conn_info.state = HttpClientIo::HttpClientConnectionState::Ready;
+        assertEq("example.com", conn_info.host, "unified conn_info host");
+        assertEq(443, conn_info.port, "unified conn_info port");
+        assertEq(HttpClientIo::HttpClientConnectionState::Ready, conn_info.state, "unified conn_info state");
+        assertEq(5, conn_info.active_streams, "unified conn_info active_streams");
+        assertEq(100, conn_info.max_concurrent_streams, "unified conn_info max_concurrent_streams");
+        assertEq(1, conn_info.connection_id, "unified conn_info connection_id");
+        assertEq("h2", conn_info.protocol, "unified conn_info protocol");
+        assertEq(True, conn_info.ssl, "unified conn_info ssl");
+    }
+
+    testUnifiedConnectionManagerCreation() {
+        # Default options
+        HttpClientIo::HttpClientConnectionManager mgr1();
+        hash<auto> stats1 = mgr1.getStats();
+        assertEq(0, stats1.total_connections, "default unified mgr initial connections");
+        assertEq(0, stats1.total_active_streams, "default unified mgr initial streams");
+        assertEq(0, stats1.hosts, "default unified mgr initial hosts");
+        assertEq("auto", stats1.protocol, "default unified mgr protocol is auto");
+
+        # Custom options with forced H2
+        HttpClientIo::HttpClientConnectionManager mgr2(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "max_connections_per_host": 4,
+            "max_streams_per_connection": 50,
+            "protocol": "h2",
+            "logger": mLogger,
+        });
+        hash<auto> stats2 = mgr2.getStats();
+        assertEq(0, stats2.total_connections, "custom unified mgr initial connections");
+        assertEq("h2", stats2.protocol, "custom unified mgr protocol is h2");
+
+        # H3 forced options
+        HttpClientIo::HttpClientConnectionManager mgr3(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h3",
+        });
+        hash<auto> stats3 = mgr3.getStats();
+        assertEq("h3", stats3.protocol, "h3 unified mgr protocol");
+
+        # With SSL options
+        HttpClientIo::HttpClientConnectionManager mgr4(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "ssl_verify_mode": 0,
+        });
+        hash<auto> stats4 = mgr4.getStats();
+        assertEq(0, stats4.total_connections, "ssl unified mgr initial connections");
+    }
+
+    # ---- Basic Functionality Tests ----
+
+    testUnifiedManagerStats() {
+        HttpClientIo::HttpClientConnectionManager mgr();
+        hash<auto> stats = mgr.getStats();
+        assertEq(0, stats.total_connections, "initial total_connections");
+        assertEq(0, stats.total_active_streams, "initial total_active_streams");
+        assertEq(0, stats.hosts, "initial hosts");
+        assertEq({}, stats.per_host, "initial per_host empty");
+
+        # Cleanup with no connections
+        mgr.cleanupIdleConnections();
+        stats = mgr.getStats();
+        assertEq(0, stats.total_connections, "after cleanup total_connections");
+    }
+
+    # ---- Negative Tests ----
+
+    testInvalidUrl() {
+        HttpClientIo::HttpClientConnectionManager mgr();
+
+        # URL without host
+        assertThrows("HTTPCLIENT-URL-ERROR", \mgr.acquireStream(), ("https:///path",),
+            "URL without host should throw");
+
+        # Empty URL
+        assertThrows("HTTPCLIENT-URL-ERROR", \mgr.acquireStream(), ("",),
+            "empty URL should throw");
+
+        # URL with only scheme
+        assertThrows("HTTPCLIENT-URL-ERROR", \mgr.acquireStream(), ("https://",),
+            "URL with only scheme should throw");
+    }
+
+    testUnifiedManagerShutdown() {
+        HttpClientIo::HttpClientConnectionManager mgr();
+        mgr.closeAll();
+
+        assertThrows("HTTPCLIENT-SHUTDOWN", \mgr.acquireStream(), (mSslUrl,),
+            "acquireStream after shutdown should throw");
+
+        hash<auto> stats = mgr.getStats();
+        assertEq(0, stats.total_connections, "after shutdown total_connections");
+    }
+
+    testH3RequiresHttps() {
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h3",
+        });
+
+        assertThrows("HTTPCLIENT-URL-ERROR", "HTTPS",
+            \mgr.acquireStream(), ("http://example.com",),
+            "H3 with http:// URL should throw");
+    }
+
+    testCloseAllIdempotent() {
+        HttpClientIo::HttpClientConnectionManager mgr();
+        mgr.closeAll();
+        mgr.closeAll();
+        mgr.closeAll();
+
+        assertThrows("HTTPCLIENT-SHUTDOWN", \mgr.acquireStream(), ("https://example.com",),
+            "still shutdown after multiple closeAll");
+    }
+
+    testCleanupIdleNoConnections() {
+        HttpClientIo::HttpClientConnectionManager mgr();
+        mgr.cleanupIdleConnections();
+        hash<auto> stats = mgr.getStats();
+        assertEq(0, stats.total_connections, "cleanup idle no connections");
+    }
+
+    testMigrateAllNoConnections() {
+        HttpClientIo::HttpClientConnectionManager mgr();
+        int migrated = mgr.migrateAll();
+        assertEq(0, migrated, "migrateAll with no connections returns 0");
+    }
+
+    # ---- Protocol Selection Tests ----
+
+    testProtocolSelectionConstants() {
+        # Verify protocol selection-related constants exist
+        assertEq(5m, HttpClientIo::HttpClientConnectionManager::H3_REPROBE_INTERVAL,
+            "H3 reprobe interval");
+    }
+
+    # ---- State Tests ----
+
+    testStreamStateTransitions() {
+        list<int> states = (
+            HttpClientIo::HttpClientStreamState::Pending,
+            HttpClientIo::HttpClientStreamState::Open,
+            HttpClientIo::HttpClientStreamState::HeadersReceived,
+            HttpClientIo::HttpClientStreamState::ReceivingBody,
+            HttpClientIo::HttpClientStreamState::Complete,
+            HttpClientIo::HttpClientStreamState::Cancelled,
+            HttpClientIo::HttpClientStreamState::Error,
+        );
+
+        # All states should be unique
+        hash<string, bool> seen;
+        foreach int state in (states) {
+            string key = string(state);
+            assertFalse(seen{key} ?? False, sprintf("stream state %d should be unique", state));
+            seen{key} = True;
+        }
+        assertEq(7, seen.size(), "should have 7 unique stream states");
+
+        # Terminal states are >= 4
+        assertTrue(HttpClientIo::HttpClientStreamState::Complete >= 4, "Complete is terminal");
+        assertTrue(HttpClientIo::HttpClientStreamState::Cancelled >= 4, "Cancelled is terminal");
+        assertTrue(HttpClientIo::HttpClientStreamState::Error >= 4, "Error is terminal");
+    }
+
+    testConnectionStateTransitions() {
+        list<int> states = (
+            HttpClientIo::HttpClientConnectionState::Connecting,
+            HttpClientIo::HttpClientConnectionState::Ready,
+            HttpClientIo::HttpClientConnectionState::Draining,
+            HttpClientIo::HttpClientConnectionState::Closed,
+        );
+
+        hash<string, bool> seen;
+        foreach int state in (states) {
+            string key = string(state);
+            assertFalse(seen{key} ?? False, sprintf("conn state %d should be unique", state));
+            seen{key} = True;
+        }
+        assertEq(4, seen.size(), "should have 4 unique connection states");
+    }
+
+    # ---- C++ Layer Tests ----
+
+    #! Test Socket::submitHttp2Request with missing required headers
+    testSubmitHttp2RequestMissingHeaders() {
+        Socket sock();
+        if (!sock.hasCallableMethod("startPollHttp2ClientMultiplex")) {
+            testSkip("Socket::startPollHttp2ClientMultiplex() not available - rebuild qore required");
+            return;
+        }
+
+        sock.connect("localhost:" + mSslPort);
+        sock.setAlpnProtocols(("h2",));
+        sock.upgradeClientToSSL(30s);
+
+        AbstractPollOperation poll_op = sock.startPollHttp2ClientMultiplex();
+
+        date start = now_us();
+        date timeout = 10s;
+        while (True) {
+            string state = poll_op.getState();
+            if (state == "reading-frames") {
+                break;
+            }
+            if (state == "closed") {
+                testSkip("HTTP/2 connection closed during establishment");
+                return;
+            }
+            if (now_us() - start > timeout) {
+                testSkip("HTTP/2 connection establishment timed out");
+                return;
+            }
+            *hash<SocketPollInfo> info = poll_op.continuePoll();
+            if (info) {
+                Socket::poll((info,), 1s);
+            }
+        }
+
+        # Missing headers entirely
+        assertThrows("HTTP2-ERROR", ":method.*missing",
+            sub () { sock.submitHttp2Request({}); },
+            NOTHING, "submitHttp2Request with empty headers should throw");
+
+        # Without :method
+        assertThrows("HTTP2-ERROR", ":method.*missing",
+            sub () {
+                sock.submitHttp2Request({
+                    ":path": "/test",
+                    ":scheme": "https",
+                    ":authority": "localhost",
+                });
+            },
+            NOTHING, "submitHttp2Request without :method should throw");
+
+        # Without :path
+        assertThrows("HTTP2-ERROR", ":path.*missing",
+            sub () {
+                sock.submitHttp2Request({
+                    ":method": "GET",
+                    ":scheme": "https",
+                    ":authority": "localhost",
+                });
+            },
+            NOTHING, "submitHttp2Request without :path should throw");
+
+        # Empty :method
+        assertThrows("HTTP2-ERROR", ":method.*missing",
+            sub () {
+                sock.submitHttp2Request({
+                    ":method": "",
+                    ":path": "/test",
+                    ":scheme": "https",
+                    ":authority": "localhost",
+                });
+            },
+            NOTHING, "submitHttp2Request with empty :method should throw");
+
+        # Empty :path
+        assertThrows("HTTP2-ERROR", ":path.*missing",
+            sub () {
+                sock.submitHttp2Request({
+                    ":method": "GET",
+                    ":path": "",
+                    ":scheme": "https",
+                    ":authority": "localhost",
+                });
+            },
+            NOTHING, "submitHttp2Request with empty :path should throw");
+
+        # Valid headers should succeed
+        int stream_id = sock.submitHttp2Request({
+            ":method": "GET",
+            ":path": "/simple",
+            ":scheme": "https",
+            ":authority": "localhost:" + mSslPort,
+        });
+        assertTrue(stream_id > 0, "valid submitHttp2Request should return positive stream ID");
+    }
+
+    # ---- End-to-End Tests via Unified API (forced H2) ----
+
+    testUnifiedBasicGet() {
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "protocol": "h2",
+            "logger": mLogger,
+        });
+
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(mSslUrl);
+        hash<auto> response = stream.request("GET", "/simple");
+
+        assertEq(200, response.status_code, "unified GET /simple status code");
+        assertEq("OK", response.body, "unified GET /simple body");
+    }
+
+    testUnifiedPostWithBody() {
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "protocol": "h2",
+            "logger": mLogger,
+        });
+
+        # String body
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(mSslUrl);
+        hash<auto> response = stream.request("POST", "/echo", NOTHING, "test-body-content");
+        assertEq(200, response.status_code, "unified POST status code");
+        assertRegex("method=POST", response.body, "unified POST method in response");
+        assertRegex("body=test-body-content", response.body, "unified POST body in response");
+
+        # Binary body
+        stream = mgr.acquireStream(mSslUrl);
+        response = stream.request("POST", "/echo", {"content-type": "application/octet-stream"}, <48656c6c6f>);
+        assertEq(200, response.status_code, "unified POST binary status code");
+        assertRegex("body=Hello", response.body, "unified POST binary body content");
+    }
+
+    testUnifiedErrorResponse() {
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "protocol": "h2",
+            "logger": mLogger,
+        });
+
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(mSslUrl);
+        hash<auto> response = stream.request("GET", "/error/404");
+        assertEq(404, response.status_code, "unified GET /error/404 status code");
+        assertEq("Error 404", response.body, "unified GET /error/404 body");
+
+        stream = mgr.acquireStream(mSslUrl);
+        response = stream.request("GET", "/error/500");
+        assertEq(500, response.status_code, "unified GET /error/500 status code");
+    }
+
+    testUnifiedLargeResponse() {
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "protocol": "h2",
+            "logger": mLogger,
+        });
+
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(mSslUrl);
+        hash<auto> response = stream.request("GET", "/large/50000");
+        assertEq(200, response.status_code, "unified large response status code");
+        assertEq(50000, response.body.size(), "unified large response body size");
+        assertTrue(response.body =~ /^X+$/, "unified large response body content");
+    }
+
+    testUnifiedConcurrentRequests() {
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "protocol": "h2",
+            "max_connections_per_host": 1,
+            "logger": mLogger,
+        });
+
+        list<HttpClientIo::HttpClientStreamHandle> streams = ();
+        for (int i = 0; i < 5; i++) {
+            push streams, mgr.acquireStream(mSslUrl);
+        }
+
+        Counter counter(5);
+        list<hash<auto>> responses = ();
+        Mutex resp_lock();
+
+        for (int i = 0; i < 5; i++) {
+            HttpClientIo::HttpClientStreamHandle stream = streams[i];
+            string path = sprintf("/simple?idx=%d", i);
+            background sub () {
+                on_exit counter.dec();
+                try {
+                    hash<auto> resp = stream.request("GET", path);
+                    {
+                        AutoLock al(resp_lock);
+                        push responses, resp;
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    AutoLock al(resp_lock);
+                    push responses, {"error": ex.err, "desc": ex.desc};
+                }
+            }();
+        }
+
+        int remaining = counter.waitForZero(30s);
+        if (remaining > 0) {
+            fail(sprintf("%d requests did not complete within timeout", remaining));
+        }
+
+        assertEq(5, responses.size(), "all 5 concurrent responses received");
+        foreach hash<auto> resp in (responses) {
+            if (resp.hasKey("error")) {
+                fail(sprintf("concurrent request failed: %s: %s", resp.error, resp.desc));
+            }
+            assertEq(200, resp.status_code, "concurrent request status code");
+        }
+
+        hash<auto> stats = mgr.getStats();
+        assertEq(1, stats.total_connections, "should have 1 multiplexed connection");
+    }
+
+    testUnifiedConnectionPooling() {
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "protocol": "h2",
+            "max_connections_per_host": 3,
+            "logger": mLogger,
+        });
+
+        for (int i = 0; i < 5; i++) {
+            HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(mSslUrl);
+            hash<auto> response = stream.request("GET", "/simple");
+            assertEq(200, response.status_code, sprintf("pooling request %d status", i));
+        }
+
+        hash<auto> stats = mgr.getStats();
+        assertTrue(stats.total_connections <= 3, "should reuse connections (max 3)");
+        assertTrue(stats.total_connections >= 1, "should have at least 1 connection");
+    }
+
+    testUnifiedAsyncCallback() {
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "protocol": "h2",
+            "logger": mLogger,
+        });
+
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(mSslUrl);
+        HttpClientIo::HttpClientConnection conn = stream.getConnection();
+
+        assertTrue(conn.driveToReady(30s), "connection should become ready");
+
+        Counter counter(1);
+        *hash<auto> callback_response;
+        *hash<auto> callback_error;
+
+        stream.submitAsync("GET", "/simple", NOTHING, NOTHING,
+            sub (hash<auto> resp, *hash<auto> err) {
+                callback_response = resp;
+                callback_error = err;
+                counter.dec();
+            });
+
+        date end_time = now_us() + 30s;
+        while (counter.getCount() > 0 && now_us() < end_time) {
+            conn.drivePoll(100ms);
+        }
+
+        assertEq(0, counter.getCount(), "async callback should complete");
+        assertNothing(callback_error, "async callback should not have error");
+        assertEq(200, callback_response.status_code, "async callback status code");
+    }
+
+    # ---- Controller Mode Tests ----
+
+    testControllerModeSetup() {
+        AsyncSocketIo::AsyncSocketIoController controller(False);
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "logger": mLogger,
+        });
+
+        assertFalse(mgr.isControllerMode(), "not in controller mode initially");
+        assertNothing(mgr.getController(), "no controller initially");
+
+        mgr.setController(controller);
+        assertTrue(mgr.isControllerMode(), "in controller mode after setController");
+        assertTrue(exists mgr.getController(), "controller set");
+
+        controller.start();
+        on_exit {
+            controller.stop();
+            mgr.closeAll();
+        }
+
+        hash<auto> stats = mgr.getStats();
+        assertEq(0, stats.total_connections, "controller mode initial connections");
+    }
+
+    testControllerModeBasicRequest() {
+        AsyncSocketIo::AsyncSocketIoController controller(False);
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "protocol": "h2",
+            "logger": mLogger,
+        });
+        mgr.setController(controller);
+        controller.start();
+
+        on_exit {
+            controller.stop();
+            mgr.closeAll();
+        }
+
+        hash<auto> response = mgr.request(mSslUrl, "GET", "/simple");
+        assertEq(200, response.status_code, "controller mode GET /simple status code");
+        assertEq("OK", response.body, "controller mode GET /simple body");
+    }
+
+    testControllerModeConcurrent() {
+        AsyncSocketIo::AsyncSocketIoController controller(False);
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "protocol": "h2",
+            "logger": mLogger,
+        });
+        mgr.setController(controller);
+        controller.start();
+
+        on_exit {
+            controller.stop();
+            mgr.closeAll();
+        }
+
+        list<HttpClientIo::HttpClientStreamHandle> streams = ();
+        for (int i = 0; i < 5; i++) {
+            push streams, mgr.acquireStream(mSslUrl);
+        }
+
+        Counter counter(5);
+        Mutex resp_lock();
+        list<hash<auto>> responses = ();
+
+        for (int i = 0; i < 5; i++) {
+            HttpClientIo::HttpClientStreamHandle stream = streams[i];
+            string path = sprintf("/simple?idx=%d", i);
+            background sub () {
+                on_exit counter.dec();
+                try {
+                    hash<auto> resp = stream.request("GET", path);
+                    {
+                        AutoLock al(resp_lock);
+                        push responses, resp;
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    AutoLock al(resp_lock);
+                    push responses, {"error": ex.err, "desc": ex.desc};
+                }
+            }();
+        }
+
+        if (counter.waitForZero(30s)) {
+            fail(sprintf("controller concurrent: %d requests did not complete",
+                counter.getCount()));
+        }
+
+        assertEq(5, responses.size(), "controller concurrent: all 5 responses");
+        foreach hash<auto> resp in (responses) {
+            if (resp.hasKey("error")) {
+                fail(sprintf("controller concurrent: %s: %s", resp.error, resp.desc));
+            }
+            assertEq(200, resp.status_code, "controller concurrent request status code");
+        }
+    }
+
+    testControllerModeCallback() {
+        AsyncSocketIo::AsyncSocketIoController controller(False);
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "protocol": "h2",
+            "logger": mLogger,
+        });
+        mgr.setController(controller);
+        controller.start();
+
+        on_exit {
+            controller.stop();
+            mgr.closeAll();
+        }
+
+        Counter counter(1);
+        *hash<auto> callback_response;
+        *hash<auto> callback_error;
+
+        HttpClientIo::HttpClientStreamHandle stream = mgr.submitRequestAsync(
+            mSslUrl, "GET", "/simple", NOTHING, NOTHING,
+            sub (hash<auto> resp, *hash<auto> err) {
+                callback_response = resp;
+                callback_error = err;
+                counter.dec();
+            });
+
+        counter.waitForZero(30s);
+
+        assertNothing(callback_error, "controller callback should not have error");
+        assertEq(200, callback_response.status_code, "controller callback status code");
+    }
+
+    testControllerModeTimeout() {
+        AsyncSocketIo::AsyncSocketIoController controller(False);
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "protocol": "h2",
+            "logger": mLogger,
+        });
+        mgr.setController(controller);
+        controller.start();
+
+        on_exit {
+            controller.stop();
+            mgr.closeAll();
+        }
+
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(mSslUrl);
+        bool timed_out = False;
+        try {
+            # /slow/5000 waits 5 seconds, we timeout after 500ms
+            stream.request("GET", "/slow/5000", NOTHING, NOTHING, 500ms);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "HTTPCLIENT-TIMEOUT") {
+                timed_out = True;
+            }
+        }
+        assertTrue(timed_out, "controller mode: request should timeout");
+    }
+
+    # ---- Auto Protocol Selection Tests ----
+
+    testAutoProtocolFallback() {
+        # With auto protocol, the manager will try H3 first then fall back to H2 if needed.
+        # Against our test server (which supports both protocols), H3 may succeed.
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "protocol": "auto",
+            "logger": mLogger,
+        });
+
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(mSslUrl);
+        hash<auto> response = stream.request("GET", "/simple");
+        assertEq(200, response.status_code, "auto protocol GET /simple status code");
+
+        # Body may be string (H2) or binary (H3) depending on which protocol was selected
+        string body_str;
+        if (response.body.typeCode() == NT_BINARY) {
+            body_str = response.body.toString();
+        } else {
+            body_str = response.body;
+        }
+        assertEq("OK", body_str, "auto protocol GET /simple body");
+
+        # Verify connection was created
+        hash<auto> stats = mgr.getStats();
+        assertTrue(stats.total_connections >= 1, "auto protocol created at least one connection");
+
+        # Test second request uses cached protocol (reuses connection)
+        stream = mgr.acquireStream(mSslUrl);
+        response = stream.request("GET", "/simple");
+        assertEq(200, response.status_code, "auto protocol cached request status code");
+    }
+
+    # ---- H3 End-to-End Tests ----
+
+    testH3EndToEndBasic() {
+        if (!mQuicUrl) {
+            testSkip("QUIC listener not available");
+        }
+
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "protocol": "h3",
+            "logger": mLogger,
+        });
+
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(mQuicUrl);
+        hash<auto> response = stream.request("GET", "/simple");
+        assertEq(200, response.status_code, "H3 GET /simple status code");
+        # H3 bodies are binary
+        string body_str = response.body.typeCode() == NT_BINARY
+            ? response.body.toString() : response.body;
+        assertEq("OK", body_str, "H3 GET /simple body");
+
+        # POST with body
+        stream = mgr.acquireStream(mQuicUrl);
+        response = stream.request("POST", "/echo", NOTHING, "h3-body");
+        assertEq(200, response.status_code, "H3 POST status code");
+        body_str = response.body.typeCode() == NT_BINARY
+            ? response.body.toString() : response.body;
+        assertRegex("body=h3-body", body_str, "H3 POST body in response");
+
+        # Error response
+        stream = mgr.acquireStream(mQuicUrl);
+        response = stream.request("GET", "/error/404");
+        assertEq(404, response.status_code, "H3 error status code");
+    }
+
+    testH3EndToEndConcurrent() {
+        if (!mQuicUrl) {
+            testSkip("QUIC listener not available");
+        }
+
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "protocol": "h3",
+            "max_connections_per_host": 1,
+            "logger": mLogger,
+        });
+
+        list<HttpClientIo::HttpClientStreamHandle> streams = ();
+        for (int i = 0; i < 3; i++) {
+            push streams, mgr.acquireStream(mQuicUrl);
+        }
+
+        Counter counter(3);
+        list<hash<auto>> responses = ();
+        Mutex resp_lock();
+
+        for (int i = 0; i < 3; i++) {
+            HttpClientIo::HttpClientStreamHandle stream = streams[i];
+            string path = sprintf("/simple?idx=%d", i);
+            background sub () {
+                on_exit counter.dec();
+                try {
+                    hash<auto> resp = stream.request("GET", path);
+                    {
+                        AutoLock al(resp_lock);
+                        push responses, resp;
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    AutoLock al(resp_lock);
+                    push responses, {"error": ex.err, "desc": ex.desc};
+                }
+            }();
+        }
+
+        int remaining = counter.waitForZero(30s);
+        if (remaining > 0) {
+            fail(sprintf("H3 concurrent: %d requests did not complete", remaining));
+        }
+
+        assertEq(3, responses.size(), "H3 concurrent: all 3 responses received");
+        foreach hash<auto> resp in (responses) {
+            if (resp.hasKey("error")) {
+                fail(sprintf("H3 concurrent request failed: %s: %s", resp.error, resp.desc));
+            }
+            assertEq(200, resp.status_code, "H3 concurrent request status code");
+        }
+    }
+
+    # ---- Streaming Tests (HTTP/2 only) ----
+
+    testH2StreamingBasic() {
+        # Use controller mode for reliable streaming delivery
+        AsyncSocketIo::AsyncSocketIoController controller(False);
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "protocol": "h2",
+            "logger": mLogger,
+        });
+        mgr.setController(controller);
+        controller.start();
+        on_exit {
+            controller.stop();
+            mgr.closeAll();
+        }
+
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(mSslUrl);
+        assertTrue(stream instanceof HttpClientIo::Http2ClientStreamHandle,
+            "H2 stream should be Http2ClientStreamHandle");
+
+        HttpClientIo::Http2ClientStreamHandle h2stream =
+            cast<HttpClientIo::Http2ClientStreamHandle>(stream);
+
+        int stream_id = h2stream.startStreaming("GET", "/streaming",
+            {"accept": "text/plain"});
+        assertTrue(stream_id > 0, "streaming stream_id should be positive");
+
+        # Read all data from the streaming response
+        string received = "";
+        date end_time = now_us() + 30s;
+        while (now_us() < end_time) {
+            auto data = h2stream.readData(5s);
+            if (!exists data) {
+                continue;
+            }
+            if (data.typeCode() == NT_HASH && data.end_stream) {
+                break;
+            }
+            if (data.typeCode() == NT_HASH && data.error) {
+                fail(sprintf("streaming error: %y", data.error));
+                break;
+            }
+            if (data.typeCode() == NT_BINARY) {
+                received += data.toString();
+            } else if (data.typeCode() == NT_STRING) {
+                received += data;
+            }
+        }
+
+        assertEq("chunk1|chunk2|chunk3", received, "streaming received full payload");
+        assertTrue(h2stream.isDone(), "streaming should be done");
+    }
+
+    testH2StreamingStateError() {
+        AsyncSocketIo::AsyncSocketIoController controller(False);
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "protocol": "h2",
+            "logger": mLogger,
+        });
+        mgr.setController(controller);
+        controller.start();
+        on_exit {
+            controller.stop();
+            mgr.closeAll();
+        }
+
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(mSslUrl);
+        HttpClientIo::Http2ClientStreamHandle h2stream =
+            cast<HttpClientIo::Http2ClientStreamHandle>(stream);
+
+        # readData before startStreaming should throw
+        assertThrows("HTTPCLIENT-STATE-ERROR", "not in streaming mode",
+            \h2stream.readData(), (1s,),
+            "readData before streaming should throw");
+
+        # sendData before startStreaming should throw
+        assertThrows("HTTPCLIENT-STATE-ERROR", "not in streaming mode",
+            \h2stream.sendData(), ("data",),
+            "sendData before streaming should throw");
+
+        # startStreaming and read to completion so we don't leave an orphaned stream
+        h2stream.startStreaming("GET", "/streaming");
+        date end_time = now_us() + 10s;
+        while (now_us() < end_time && !h2stream.isDone()) {
+            auto data = h2stream.readData(1s);
+            if (exists data && data.typeCode() == NT_HASH && data.end_stream) {
+                break;
+            }
+        }
+    }
+
+    # ---- Cancellation Tests ----
+
+    testStreamCancelBeforeResponse() {
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "protocol": "h2",
+            "logger": mLogger,
+        });
+
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(mSslUrl);
+        HttpClientIo::HttpClientConnection conn = stream.getConnection();
+
+        # Drive connection to ready
+        assertTrue(conn.driveToReady(30s), "connection should become ready");
+
+        # Submit async request to slow handler (takes 2s)
+        Counter counter(1);
+        *hash<auto> callback_response;
+        *hash<auto> callback_error;
+
+        stream.submitAsync("GET", "/slow/2000", NOTHING, NOTHING,
+            sub (hash<auto> resp, *hash<auto> err) {
+                callback_response = resp;
+                callback_error = err;
+                counter.dec();
+            });
+
+        # Cancel immediately before response arrives — this synchronously fires
+        # the cancellation callback via cancelRequest(), which calls handleResponse()
+        # with an error, transitioning state from Cancelled to Error
+        stream.cancel();
+
+        # Verify state — stream is done (either Cancelled or Error depending on
+        # whether the callback fired and set Error via handleResponse)
+        assertTrue(stream.isDone(), "cancelled stream should be done");
+        HttpClientIo::HttpClientStreamState final_state = stream.getState();
+        assertTrue(final_state == HttpClientIo::HttpClientStreamState::Cancelled
+            || final_state == HttpClientIo::HttpClientStreamState::Error,
+            sprintf("stream should be in Cancelled or Error state, got: %y", final_state));
+    }
+
+    testStreamCancelAfterCompletion() {
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "protocol": "h2",
+            "logger": mLogger,
+        });
+
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(mSslUrl);
+        hash<auto> response = stream.request("GET", "/simple");
+        assertEq(200, response.status_code, "request completed successfully");
+
+        # Cancel after completion should be a no-op (no exception)
+        stream.cancel();
+        assertTrue(stream.isDone(), "stream should still be done after cancel");
+    }
+
+    # ---- Capacity and Idle Cleanup Tests ----
+
+    testCapacityError() {
+        # Create manager with very tight limits: 1 connection, 1 stream max
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "protocol": "h2",
+            "max_connections_per_host": 1,
+            "max_streams_per_connection": 1,
+            "logger": mLogger,
+        });
+
+        # Acquire first stream and start a slow request in the background
+        HttpClientIo::HttpClientStreamHandle stream1 = mgr.acquireStream(mSslUrl);
+        HttpClientIo::HttpClientConnection conn = stream1.getConnection();
+        assertTrue(conn.driveToReady(30s), "connection should become ready");
+
+        Counter counter(1);
+        stream1.submitAsync("GET", "/slow/3000", NOTHING, NOTHING,
+            sub (hash<auto> resp, *hash<auto> err) {
+                counter.dec();
+            });
+
+        # Now the single connection has 1 active stream (at its max of 1),
+        # and we're at the connection limit (1). Acquiring another stream should fail.
+        assertThrows("HTTPCLIENT-CAPACITY-ERROR", \mgr.acquireStream(), (mSslUrl,),
+            "should throw capacity error when all connections at stream limit");
+
+        # Wait for the slow request to complete
+        date end_time = now_us() + 10s;
+        while (counter.getCount() > 0 && now_us() < end_time) {
+            conn.drivePoll(100ms);
+        }
+    }
+
+    testCleanupIdleWithConnections() {
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "protocol": "h2",
+            "idle_timeout": 0s,  # Zero timeout: any past last_activity is idle
+            "logger": mLogger,
+        });
+
+        # Create a connection by making a request
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(mSslUrl);
+        hash<auto> response = stream.request("GET", "/simple");
+        assertEq(200, response.status_code, "initial request succeeded");
+
+        hash<auto> stats = mgr.getStats();
+        assertTrue(stats.total_connections >= 1, "should have at least 1 connection");
+
+        # Cleanup should remove idle connections (last_activity < now_us() is always
+        # true since the request completed in the past)
+        mgr.cleanupIdleConnections();
+
+        stats = mgr.getStats();
+        assertEq(0, stats.total_connections, "idle connections should be cleaned up");
+    }
+
+    # ---- Additional Coverage Tests ----
+
+    testInvalidProtocolOption() {
+        assertThrows("HTTPCLIENT-OPTION-ERROR",
+            sub () {
+                new HttpClientIo::HttpClientConnectionManager(
+                    <HttpClientIo::HttpClientConnectionManagerOptions>{
+                    "protocol": "h4",
+                });
+            }, NOTHING, "invalid protocol should throw");
+    }
+
+    testInvalidMaxConnectionsOption() {
+        assertThrows("HTTPCLIENT-OPTION-ERROR",
+            sub () {
+                new HttpClientIo::HttpClientConnectionManager(
+                    <HttpClientIo::HttpClientConnectionManagerOptions>{
+                    "max_connections_per_host": 0,
+                });
+            }, NOTHING, "zero max_connections should throw");
+    }
+
+    testInvalidMaxStreamsOption() {
+        assertThrows("HTTPCLIENT-OPTION-ERROR",
+            sub () {
+                new HttpClientIo::HttpClientConnectionManager(
+                    <HttpClientIo::HttpClientConnectionManagerOptions>{
+                    "max_streams_per_connection": -1,
+                });
+            }, NOTHING, "negative max_streams should throw");
+    }
+
+    testDoubleStartStreaming() {
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "protocol": "h2",
+            "logger": mLogger,
+        });
+
+        auto stream = mgr.acquireStream(mSslUrl);
+        assertEq(True, stream instanceof HttpClientIo::Http2ClientStreamHandle,
+            "should be Http2ClientStreamHandle");
+        HttpClientIo::Http2ClientStreamHandle h2stream =
+            cast<HttpClientIo::Http2ClientStreamHandle>(stream);
+
+        # Start streaming
+        h2stream.startStreaming("GET", "/streaming", {"accept": "text/event-stream"});
+
+        # Second startStreaming should throw (stream already in use)
+        assertThrows("HTTPCLIENT-STATE-ERROR",
+            \h2stream.startStreaming(), ("GET", "/streaming"),
+            "double startStreaming should throw");
+
+        # Read to completion to clean up
+        while (True) {
+            auto data = h2stream.readData(5s);
+            if (!exists data) {
+                break;
+            }
+            if (data.typeCode() == NT_HASH && data.end_stream) {
+                break;
+            }
+        }
+    }
+
+    testGetConnectionInfo() {
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "protocol": "h2",
+            "logger": mLogger,
+        });
+
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(mSslUrl);
+        HttpClientIo::HttpClientConnection conn = stream.getConnection();
+
+        # Drive connection to ready
+        assertTrue(conn.driveToReady(30s), "connection should become ready");
+
+        hash<HttpClientIo::HttpClientConnectionInfo> info = conn.getConnectionInfo();
+        assertEq("127.0.0.1", info.host, "host should be 127.0.0.1");
+        assertEq(mSslPort, info.port, "port should match");
+        assertEq(HttpClientIo::HttpClientConnectionState::Ready, info.state,
+            "state should be Ready");
+        assertEq("h2", info.protocol, "protocol should be h2");
+        assertTrue(info.ssl, "ssl should be True");
+        assertTrue(info.connection_id > 0, "connection_id should be positive");
+        assertEq(0, info.active_streams, "no active streams yet");
+    }
+
+    testStreamCancelDuringReadiness() {
+        # Test that cancel() before request submission is handled correctly
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "protocol": "h2",
+            "logger": mLogger,
+        });
+
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(mSslUrl);
+
+        # Cancel immediately (before any request is submitted)
+        stream.cancel();
+        assertEq(HttpClientIo::HttpClientStreamState::Cancelled, stream.getState(),
+            "stream should be in Cancelled state");
+
+        # Trying to submit after cancel should throw (state is Cancelled, not Pending)
+        assertThrows("HTTPCLIENT-STATE-ERROR",
+            \stream.request(), ("GET", "/simple"),
+            "request after cancel should throw");
+    }
+
+    testConnectionReuse() {
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "protocol": "h2",
+            "max_connections_per_host": 1,
+            "logger": mLogger,
+        });
+
+        # Make two sequential requests — should reuse the same connection
+        hash<auto> resp1 = mgr.request(mSslUrl, "GET", "/simple");
+        assertEq(200, resp1.status_code, "first request");
+        hash<auto> resp2 = mgr.request(mSslUrl, "GET", "/simple");
+        assertEq(200, resp2.status_code, "second request");
+
+        hash<auto> stats = mgr.getStats();
+        assertEq(1, stats.total_connections, "should reuse single connection");
+    }
+
+    testH2StreamingReadDataNotInStreamingMode() {
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "protocol": "h2",
+            "logger": mLogger,
+        });
+
+        auto stream = mgr.acquireStream(mSslUrl);
+        HttpClientIo::Http2ClientStreamHandle h2stream =
+            cast<HttpClientIo::Http2ClientStreamHandle>(stream);
+
+        # readData without starting streaming should throw
+        assertThrows("HTTPCLIENT-STATE-ERROR", \h2stream.readData(), NOTHING,
+            "readData without streaming should throw");
+    }
+
+    testH2StreamingSendDataNotInStreamingMode() {
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "protocol": "h2",
+            "logger": mLogger,
+        });
+
+        auto stream = mgr.acquireStream(mSslUrl);
+        HttpClientIo::Http2ClientStreamHandle h2stream =
+            cast<HttpClientIo::Http2ClientStreamHandle>(stream);
+
+        # sendData without starting streaming should throw
+        assertThrows("HTTPCLIENT-STATE-ERROR",
+            \h2stream.sendData(), ("test", False),
+            "sendData without streaming should throw");
+    }
+
+    # ---- Connection Failure Tests ----
+
+    testConnectionFailureUnreachable() {
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "protocol": "h2",
+            "connect_timeout": 2s,
+            "request_timeout": 3s,
+            "logger": mLogger,
+        });
+
+        # Try to connect to a port that nothing is listening on
+        bool got_error = False;
+        try {
+            mgr.request("https://localhost:1", "GET", "/simple");
+        } catch (hash<ExceptionInfo> ex) {
+            got_error = True;
+            # Should get a connect error or timeout
+            assertTrue(ex.err == "HTTPCLIENT-CONNECT-ERROR"
+                || ex.err == "HTTPCLIENT-TIMEOUT"
+                || ex.err == "SOCKET-CONNECT-ERROR",
+                sprintf("expected connect/timeout error, got: %s: %s", ex.err, ex.desc));
+        }
+        assertTrue(got_error, "connection to unreachable host should throw");
+
+        # Pool should have no live connections after failure
+        hash<auto> stats = mgr.getStats();
+        # The failed connection may or may not be in the pool depending on timing,
+        # but no active streams should remain
+        assertEq(0, stats.total_active_streams, "no active streams after failure");
+    }
+
+    # ---- Non-Controller Mode Timeout Test ----
+
+    testNonControllerModeTimeout() {
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "protocol": "h2",
+            "logger": mLogger,
+        });
+
+        # Request with short timeout to a slow endpoint
+        assertThrows("HTTPCLIENT-TIMEOUT",
+            \mgr.request(), (mSslUrl, "GET", "/slow/5000", NOTHING, NOTHING, 500ms),
+            "non-controller mode request should timeout");
+    }
+
+    # ---- Concurrent closeAll Test ----
+
+    testCloseAllDuringRequests() {
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "protocol": "h2",
+            "logger": mLogger,
+        });
+
+        # Start several concurrent slow requests via background threads
+        Counter counter(3);
+        list<hash<auto>> results = ();
+        Mutex results_lock();
+
+        code make_request = sub () {
+            hash<auto> result;
+            try {
+                hash<auto> resp = mgr.request(mSslUrl, "GET", "/slow/3000", NOTHING, NOTHING, 10s);
+                result = {"status": "ok", "code": resp.status_code};
+            } catch (hash<ExceptionInfo> ex) {
+                result = {"status": "error", "err": ex.err};
+            }
+            {
+                AutoLock al(results_lock);
+                push results, result;
+            }
+            counter.dec();
+        };
+
+        background make_request();
+        background make_request();
+        background make_request();
+
+        # Give threads a moment to start and submit requests
+        usleep(200000);
+
+        # Close all connections while requests are in flight
+        mgr.closeAll();
+
+        # Wait for all threads to complete
+        int rc = counter.waitForZero(15s);
+        assertEq(0, rc, "all background threads should complete");
+        assertEq(3, results.size(), "should have 3 results");
+
+        # Each thread should have either completed or gotten an error — no hangs
+        foreach hash<auto> r in (results) {
+            assertTrue(r.status == "ok" || r.status == "error",
+                sprintf("thread result should be ok or error, got: %y", r));
+        }
+    }
+
+    # ---- Pool Creates Second Connection Test ----
+
+    testPoolCreatesSecondConnection() {
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "protocol": "h2",
+            "max_connections_per_host": 2,
+            "max_streams_per_connection": 1,
+            "logger": mLogger,
+        });
+
+        # Use concurrent mgr.request() calls from background threads.
+        # Each call acquires a stream and submits; with max_streams=1,
+        # the second request should get a second connection.
+        Counter counter(2);
+        bool signaled1 = False;
+        bool signaled2 = False;
+        *hash<auto> resp1;
+        *hash<auto> resp2;
+
+        background sub () {
+            try {
+                resp1 = mgr.request(mSslUrl, "GET", "/slow/500");
+            } catch (hash<ExceptionInfo> ex) {
+                resp1 = {"status_code": -1, "err": ex.err, "desc": ex.desc};
+            }
+            if (!signaled1) {
+                signaled1 = True;
+                counter.dec();
+            }
+        }();
+
+        # Small delay so first request starts first and occupies the first connection
+        usleep(100000);
+
+        background sub () {
+            try {
+                resp2 = mgr.request(mSslUrl, "GET", "/slow/500");
+            } catch (hash<ExceptionInfo> ex) {
+                resp2 = {"status_code": -1, "err": ex.err, "desc": ex.desc};
+            }
+            if (!signaled2) {
+                signaled2 = True;
+                counter.dec();
+            }
+        }();
+
+        int rc = counter.waitForZero(15s);
+        assertEq(0, rc, "both requests should complete");
+
+        # Both should have succeeded (on separate connections since max_streams=1)
+        assertEq(200, resp1.status_code,
+            sprintf("first request should succeed: %y", resp1));
+        assertEq(200, resp2.status_code,
+            sprintf("second request should succeed: %y", resp2));
+
+        # Verify 2 connections were created
+        hash<auto> stats = mgr.getStats();
+        assertEq(2, stats.total_connections,
+            "pool should have created 2 connections (max_streams=1)");
+    }
+
+    # ---- Cancel Callback Verification ----
+
+    testCancelCallbackInvoked() {
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "protocol": "h2",
+            "logger": mLogger,
+        });
+
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(mSslUrl);
+        HttpClientIo::HttpClientConnection conn = stream.getConnection();
+
+        # Drive connection to ready
+        assertTrue(conn.driveToReady(30s), "connection should become ready");
+
+        # Submit async request to slow handler
+        *hash<auto> callback_error;
+        bool callback_fired = False;
+
+        stream.submitAsync("GET", "/slow/5000", NOTHING, NOTHING,
+            sub (hash<auto> resp, *hash<auto> err) {
+                callback_error = err;
+                callback_fired = True;
+            });
+
+        # Cancel — this synchronously invokes cancelRequest() on the poll operation,
+        # which fires the callback with a cancellation error
+        stream.cancel();
+
+        # Verify the callback was invoked synchronously with a cancellation error
+        assertTrue(callback_fired, "cancellation callback should have been invoked");
+        assertTrue(exists callback_error, "callback should have received an error");
+        assertTrue(callback_error.err == "HTTP2-CANCELLED"
+            || callback_error.err == "HTTPCLIENT-CANCELLED",
+            sprintf("expected cancellation error, got: %y", callback_error.err));
+    }
+
+    # ---- Connection Draining Test ----
+
+    testConnectionDraining() {
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "protocol": "h2",
+            "max_connections_per_host": 2,
+            "logger": mLogger,
+        });
+
+        # Make a request to establish a connection
+        hash<auto> resp = mgr.request(mSslUrl, "GET", "/simple");
+        assertEq(200, resp.status_code, "initial request");
+
+        hash<auto> stats = mgr.getStats();
+        assertEq(1, stats.total_connections, "one connection exists");
+
+        # Get the connection and set it to draining
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(mSslUrl);
+        HttpClientIo::HttpClientConnection conn = stream.getConnection();
+        conn.setDraining();
+
+        assertTrue(conn.isDraining(), "connection should be draining");
+
+        # Next acquireStream should create a new connection (draining is skipped)
+        HttpClientIo::HttpClientStreamHandle stream2 = mgr.acquireStream(mSslUrl);
+        hash<auto> resp2 = stream2.request("GET", "/simple");
+        assertEq(200, resp2.status_code, "request on new connection");
+
+        stats = mgr.getStats();
+        assertEq(2, stats.total_connections, "second connection created because first is draining");
+    }
+}

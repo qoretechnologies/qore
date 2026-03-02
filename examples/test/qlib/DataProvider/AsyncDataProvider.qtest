@@ -1,0 +1,521 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%enable-all-warnings
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/DataProvider
+
+%requires reflection
+
+%exec-class AsyncDataProviderTest
+
+#! In-memory data provider supporting CRUD for testing async methods
+class MockCrudDataProvider inherits AbstractDataProvider {
+    private {
+        #! In-memory record store
+        list<hash<auto>> records = ();
+        #! Simulated processing delay in milliseconds (0 = no delay)
+        int delay_ms = 0;
+        #! Record counter for IDs
+        int id_seq = 0;
+        #! Mutex for thread-safe access to records and id_seq
+        Mutex data_lock();
+    }
+
+    constructor(*int delay_ms) {
+        if (delay_ms) {
+            self.delay_ms = delay_ms;
+        }
+    }
+
+    string getName() {
+        return "MockCrudDataProvider";
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return <DataProviderInfo>{
+            "type": "MockCrudDataProvider",
+            "supports_create": True,
+            "supports_read": True,
+            "supports_update": True,
+            "supports_delete": True,
+            "supports_upsert": True,
+        };
+    }
+
+    #! No record type constraints — required so processFieldValues() / getSearchExpression() work
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+    }
+
+    private *hash<auto> createRecordImpl(hash<auto> rec, *hash<auto> create_options) {
+        if (delay_ms) {
+            usleep(delay_ms * 1000);
+        }
+        AutoLock al(data_lock);
+        hash<auto> new_rec = rec + {"id": ++id_seq};
+        records += new_rec;
+        return new_rec;
+    }
+
+    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+            *hash<auto> search_options) {
+        if (delay_ms) {
+            usleep(delay_ms * 1000);
+        }
+        AutoLock al(data_lock);
+        list<hash<auto>> results;
+        if (!where_cond) {
+            results = records;
+        } else {
+            foreach hash<auto> rec in (records) {
+                bool match = True;
+                foreach string key in (keys where_cond) {
+                    if (rec{key} != where_cond{key}) {
+                        match = False;
+                        break;
+                    }
+                }
+                if (match) {
+                    results += rec;
+                }
+            }
+        }
+        return new MockRecordIterator(results);
+    }
+
+    private int updateRecordsImpl(hash<auto> set, *hash<auto> where_cond,
+            *hash<auto> search_options) {
+        if (delay_ms) {
+            usleep(delay_ms * 1000);
+        }
+        AutoLock al(data_lock);
+        int count = 0;
+        for (int i = 0; i < records.size(); ++i) {
+            bool match = True;
+            if (where_cond) {
+                foreach string key in (keys where_cond) {
+                    if (records[i]{key} != where_cond{key}) {
+                        match = False;
+                        break;
+                    }
+                }
+            }
+            if (match) {
+                records[i] += set;
+                ++count;
+            }
+        }
+        return count;
+    }
+
+    private int deleteRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+        if (delay_ms) {
+            usleep(delay_ms * 1000);
+        }
+        AutoLock al(data_lock);
+        if (!where_cond) {
+            int count = records.size();
+            records = ();
+            return count;
+        }
+        int count = 0;
+        list<hash<auto>> remaining;
+        foreach hash<auto> rec in (records) {
+            bool match = True;
+            foreach string key in (keys where_cond) {
+                if (rec{key} != where_cond{key}) {
+                    match = False;
+                    break;
+                }
+            }
+            if (match) {
+                ++count;
+            } else {
+                remaining += rec;
+            }
+        }
+        records = remaining;
+        return count;
+    }
+
+    private string upsertRecordImpl(hash<auto> rec, *hash<auto> upsert_options) {
+        if (delay_ms) {
+            usleep(delay_ms * 1000);
+        }
+        AutoLock al(data_lock);
+        # Try to find by "name" field
+        if (rec.hasKey("name")) {
+            for (int i = 0; i < records.size(); ++i) {
+                if (records[i].name == rec.name) {
+                    records[i] += rec;
+                    return UpsertResultUpdated;
+                }
+            }
+        }
+        hash<auto> new_rec = rec + {"id": ++id_seq};
+        records += new_rec;
+        return UpsertResultInserted;
+    }
+
+    #! Returns the current records for verification
+    list<hash<auto>> getRecords() {
+        AutoLock al(data_lock);
+        return records;
+    }
+}
+
+#! Mock data provider that supports the request API
+class MockRequestDataProvider inherits AbstractDataProvider {
+    private {
+        int delay_ms = 0;
+    }
+
+    constructor(*int delay_ms) {
+        if (delay_ms) {
+            self.delay_ms = delay_ms;
+        }
+    }
+
+    string getName() {
+        return "MockRequestDataProvider";
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return <DataProviderInfo>{
+            "type": "MockRequestDataProvider",
+            "supports_request": True,
+        };
+    }
+
+    #! No request type constraints — required so doRequest() can proceed without type validation
+    private *AbstractDataProviderType getRequestTypeImpl() {
+    }
+
+    private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        if (delay_ms) {
+            usleep(delay_ms * 1000);
+        }
+        return {"echo": req, "status": "ok"};
+    }
+}
+
+#! Mock data provider that raises errors
+class MockErrorDataProvider inherits AbstractDataProvider {
+    string getName() {
+        return "MockErrorDataProvider";
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return <DataProviderInfo>{
+            "type": "MockErrorDataProvider",
+            "supports_create": True,
+            "supports_read": True,
+            "supports_update": True,
+            "supports_delete": True,
+            "supports_upsert": True,
+            "supports_request": True,
+        };
+    }
+
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+    }
+
+    private *AbstractDataProviderType getRequestTypeImpl() {
+    }
+
+    private *hash<auto> createRecordImpl(hash<auto> rec, *hash<auto> create_options) {
+        throw "CREATE-ERROR", "simulated create failure";
+    }
+
+    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+            *hash<auto> search_options) {
+        throw "SEARCH-ERROR", "simulated search failure";
+    }
+
+    private int updateRecordsImpl(hash<auto> set, *hash<auto> where_cond,
+            *hash<auto> search_options) {
+        throw "UPDATE-ERROR", "simulated update failure";
+    }
+
+    private int deleteRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+        throw "DELETE-ERROR", "simulated delete failure";
+    }
+
+    private string upsertRecordImpl(hash<auto> rec, *hash<auto> upsert_options) {
+        throw "UPSERT-ERROR", "simulated upsert failure";
+    }
+
+    private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        throw "REQUEST-ERROR", "simulated request failure";
+    }
+}
+
+#! Mock data provider that doesn't support any operations
+class MockUnsupportedDataProvider inherits AbstractDataProvider {
+    string getName() {
+        return "MockUnsupportedDataProvider";
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return <DataProviderInfo>{
+            "type": "MockUnsupportedDataProvider",
+        };
+    }
+}
+
+#! Simple iterator over a list of record hashes
+class MockRecordIterator inherits AbstractDataProviderRecordIterator {
+    private {
+        list<hash<auto>> data = ();
+        int pos = -1;
+    }
+
+    constructor(*list<hash<auto>> data) {
+        self.data = data ?? ();
+    }
+
+    bool valid() {
+        return pos >= 0 && pos < data.size();
+    }
+
+    hash<auto> getValue() {
+        if (!valid()) {
+            throw "INVALID-ITERATOR", "iterator not at a valid position";
+        }
+        return data[pos];
+    }
+
+    private bool nextImpl() {
+        return ++pos < data.size();
+    }
+}
+
+public class AsyncDataProviderTest inherits QUnit::Test {
+    constructor() : Test("AsyncDataProvider Test", "1.0") {
+        addTestCase("async create test", \asyncCreateTest());
+        addTestCase("async search test", \asyncSearchTest());
+        addTestCase("async update test", \asyncUpdateTest());
+        addTestCase("async delete test", \asyncDeleteTest());
+        addTestCase("async upsert test", \asyncUpsertTest());
+        addTestCase("async request test", \asyncRequestTest());
+        addTestCase("async error propagation test", \asyncErrorPropagationTest());
+        addTestCase("async unsupported operations test", \asyncUnsupportedTest());
+        addTestCase("async concurrent operations test", \asyncConcurrentTest());
+
+        set_return_value(main());
+    }
+
+    asyncCreateTest() {
+        MockCrudDataProvider dp();
+
+        # Create a record asynchronously
+        Future f = dp.createRecordAsync({"name": "Alice", "age": 30});
+        auto result = f.get();
+        assertEq("Alice", result.name);
+        assertEq(30, result.age);
+        assertEq(1, result.id);
+
+        # Verify the record was actually stored
+        list<hash<auto>> recs = dp.getRecords();
+        assertEq(1, recs.size());
+        assertEq("Alice", recs[0].name);
+
+        # Create another record
+        f = dp.createRecordAsync({"name": "Bob", "age": 25});
+        result = f.get();
+        assertEq("Bob", result.name);
+        assertEq(2, result.id);
+        assertEq(2, dp.getRecords().size());
+    }
+
+    asyncSearchTest() {
+        MockCrudDataProvider dp();
+
+        # Add some records
+        dp.createRecordAsync({"name": "Alice", "age": 30}).get();
+        dp.createRecordAsync({"name": "Bob", "age": 25}).get();
+        dp.createRecordAsync({"name": "Charlie", "age": 30}).get();
+
+        # Search all records
+        Future f = dp.searchRecordsAsync();
+        auto result = f.get();
+        assertEq(3, result.size());
+
+        # Search with where condition
+        f = dp.searchRecordsAsync({"age": 30});
+        result = f.get();
+        assertEq(2, result.size());
+        assertEq("Alice", result[0].name);
+        assertEq("Charlie", result[1].name);
+
+        # Search with no matches
+        f = dp.searchRecordsAsync({"age": 99});
+        result = f.get();
+        assertEq(0, result.size());
+    }
+
+    asyncUpdateTest() {
+        MockCrudDataProvider dp();
+
+        # Add records
+        dp.createRecordAsync({"name": "Alice", "age": 30}).get();
+        dp.createRecordAsync({"name": "Bob", "age": 25}).get();
+
+        # Update matching records
+        Future f = dp.updateRecordsAsync({"age": 35}, {"name": "Alice"});
+        int count = f.get();
+        assertEq(1, count);
+
+        # Verify update
+        list<hash<auto>> recs = dp.getRecords();
+        assertEq(35, recs[0].age);
+        assertEq(25, recs[1].age);
+
+        # Update all records
+        f = dp.updateRecordsAsync({"status": "active"});
+        count = f.get();
+        assertEq(2, count);
+
+        # Update with no matches
+        f = dp.updateRecordsAsync({"age": 0}, {"name": "Nobody"});
+        count = f.get();
+        assertEq(0, count);
+    }
+
+    asyncDeleteTest() {
+        MockCrudDataProvider dp();
+
+        # Add records
+        dp.createRecordAsync({"name": "Alice", "age": 30}).get();
+        dp.createRecordAsync({"name": "Bob", "age": 25}).get();
+        dp.createRecordAsync({"name": "Charlie", "age": 30}).get();
+
+        # Delete matching records
+        Future f = dp.deleteRecordsAsync({"age": 30});
+        int count = f.get();
+        assertEq(2, count);
+        assertEq(1, dp.getRecords().size());
+        assertEq("Bob", dp.getRecords()[0].name);
+
+        # Delete all remaining
+        f = dp.deleteRecordsAsync();
+        count = f.get();
+        assertEq(1, count);
+        assertEq(0, dp.getRecords().size());
+    }
+
+    asyncUpsertTest() {
+        MockCrudDataProvider dp();
+
+        # Insert new record via upsert
+        Future f = dp.upsertRecordAsync({"name": "Alice", "age": 30});
+        string result = f.get();
+        assertEq(UpsertResultInserted, result);
+        assertEq(1, dp.getRecords().size());
+
+        # Update existing record via upsert
+        f = dp.upsertRecordAsync({"name": "Alice", "age": 35});
+        result = f.get();
+        assertEq(UpsertResultUpdated, result);
+        assertEq(1, dp.getRecords().size());
+        assertEq(35, dp.getRecords()[0].age);
+
+        # Insert another new record
+        f = dp.upsertRecordAsync({"name": "Bob", "age": 25});
+        result = f.get();
+        assertEq(UpsertResultInserted, result);
+        assertEq(2, dp.getRecords().size());
+    }
+
+    asyncRequestTest() {
+        MockRequestDataProvider dp();
+
+        # Make an async request
+        Future f = dp.doRequestAsync({"query": "test"});
+        auto result = f.get();
+        assertEq("ok", result.status);
+        assertEq({"query": "test"}, result.echo);
+
+        # Request with string body
+        f = dp.doRequestAsync("hello");
+        result = f.get();
+        assertEq("hello", result.echo);
+    }
+
+    asyncErrorPropagationTest() {
+        MockErrorDataProvider dp();
+
+        # Verify errors propagate through Future for each operation
+        # Note: createRecord, updateRecords, deleteRecords wrap errors with on_error rethrow
+        Future f = dp.createRecordAsync({"name": "test"});
+        assertThrows("CREATE-RECORD-ERROR", "CREATE-ERROR", \f.get());
+
+        f = dp.searchRecordsAsync();
+        assertThrows("SEARCH-ERROR", "simulated search failure", \f.get());
+
+        f = dp.updateRecordsAsync({"x": 1});
+        assertThrows("UPDATE-RECORDS-ERROR", "UPDATE-ERROR", \f.get());
+
+        f = dp.deleteRecordsAsync();
+        assertThrows("DELETE-RECORDS-ERROR", "DELETE-ERROR", \f.get());
+
+        f = dp.upsertRecordAsync({"name": "test"});
+        assertThrows("UPSERT-ERROR", "simulated upsert failure", \f.get());
+
+        f = dp.doRequestAsync("test");
+        assertThrows("REQUEST-ERROR", "simulated request failure", \f.get());
+    }
+
+    asyncUnsupportedTest() {
+        MockUnsupportedDataProvider dp();
+
+        # Verify that unsupported operations throw INVALID-OPERATION synchronously
+        assertThrows("INVALID-OPERATION", \dp.createRecordAsync(), ({"name": "test"},));
+        assertThrows("INVALID-OPERATION", \dp.searchRecordsAsync());
+        assertThrows("INVALID-OPERATION", \dp.updateRecordsAsync(), ({"x": 1},));
+        assertThrows("INVALID-OPERATION", \dp.deleteRecordsAsync());
+        assertThrows("INVALID-OPERATION", \dp.upsertRecordAsync(), ({"name": "test"},));
+        assertThrows("INVALID-OPERATION", \dp.doRequestAsync(), ("test",));
+    }
+
+    asyncConcurrentTest() {
+        # Use a small delay to ensure async operations overlap
+        MockCrudDataProvider dp(5);
+
+        # Launch multiple async creates concurrently
+        list<Future> futures;
+        for (int i = 0; i < 10; ++i) {
+            futures += dp.createRecordAsync({"name": sprintf("user_%d", i), "idx": i});
+        }
+
+        # Collect all results
+        list<hash<auto>> results;
+        foreach Future f in (futures) {
+            results += f.get();
+        }
+
+        # All 10 records should have been created
+        assertEq(10, results.size());
+        assertEq(10, dp.getRecords().size());
+
+        # All IDs should be unique
+        list<int> ids = map $1.id, results;
+        hash<auto> id_set = map {$1.toString(): True}, ids;
+        assertEq(10, id_set.size());
+
+        # Launch concurrent search + update operations
+        Future sf = dp.searchRecordsAsync();
+        Future uf = dp.updateRecordsAsync({"status": "active"});
+
+        auto search_result = sf.get();
+        int update_count = uf.get();
+
+        assertEq(10, search_result.size());
+        assertEq(10, update_count);
+    }
+}

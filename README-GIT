@@ -1,20 +1,19 @@
-To (re)build qore from git, the following tools are required:
-* automake 1.9 (or better)
-* autoconf 2.59 (or better)
-* libtool 1.5.10 or better (possibly earlier versions of libtool will work depending on your platform - I cannot get qore to build on Darwin with libtool versions earlier than 1.5.10 from fink)
+To build qore from git, the following tools are required:
+* CMake 3.14 or later
+* A C++ compiler with C++17 support
+* flex 2.5.31+
+* bison 1.85+
 
-** NOTE that you may need GNU m4 1.4.4 or better; this may be dependent on automake or autoconf; I was not able to build qore from subversion on Darwin with the supplied m4 1.4.2
+See the BUILDING file for the full list of required and optional dependencies.
 
-If these dependencies are met, then execute ./reconf.sh in the current directory, which will build the configure file
-Then you can execute following:
-./configure
-make
-make install
+Building from git:
 
-As usual...
+    mkdir build; cd build
+    cmake .. -DCMAKE_INSTALL_PREFIX=/usr
+    make
+    make install
 
 ** NOTE: now that qore has stable API and ABIs, modules have been moved to separate git repos; you can find module source here:
    * https://github.com/qorelanguage
 
 For any problems or questions send an email at: david <at> qore dot org
-

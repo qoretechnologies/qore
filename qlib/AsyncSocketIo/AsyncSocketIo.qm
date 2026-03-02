@@ -23,17 +23,16 @@
 */
 
 # minimum required Qore module
-%requires qore >= 2.0
+%requires qore >= 2.3
 
 %modern
 
 %requires(reexport) Util
 %requires Logger
 %requires(reexport) HttpServerUtil
-%requires reflection
 
 module AsyncSocketIo {
-    version = "1.0";
+    version = "3.1";
     desc    = "API for async socket I/O";
     author  = "David Nichols <david@qore.org>";
     url     = "http://qore.org";
@@ -58,25 +57,43 @@ module AsyncSocketIo {
 
     @section asyncsocketiorelnotes Release Notes
 
+    @subsection asyncsocketio_3_1 AsyncSocketIo 3.1
+    - added @ref AsyncSocketIo::AbstractStreamContext "AbstractStreamContext" abstract base class providing a
+      protocol-agnostic stream I/O interface for WebSocket over HTTP/2 (RFC 8441) and HTTP/3 (RFC 9220)
+    - @ref AsyncSocketIo::Http2StreamContext "Http2StreamContext" and
+      @ref AsyncSocketIo::Http3StreamContext "Http3StreamContext" now inherit
+      @ref AsyncSocketIo::AbstractStreamContext "AbstractStreamContext"
+
+    @subsection asyncsocketio_3_0 AsyncSocketIo 3.0
+    - added @ref AsyncSocketIo::Http2StreamContext "Http2StreamContext" stream-scoped send/receive helper
+      for HTTP/2 sockets with direct I/O mode for handler-thread-driven frame reading
+    - added @ref AsyncSocketIo::Http3StreamContext "Http3StreamContext" stream-scoped send/receive helper
+      for HTTP/3 QUIC streams with backpressure handling and I/O controller wake integration
+    - migrated to thin wrapper around Qore::AsyncIoController (C++ implementation in libqore)
+    - SocketPollOperationInfo and SocketPollResultInfo hashdecls moved to Qore:: namespace
+    - requires Qore 2.3+
+
+    @subsection asyncsocketio_2_0 AsyncSocketIo 2.0
+    - added cancelByKey() for operations with custom keys
+    - added custom key support in SocketPollOperationInfo
+
     @subsection asyncsocketio_1_0 AsyncSocketIo 1.0
     - the initial version of the AsyncSocketIo module
 
     @section asyncsocketiointernals Internal Design
 
-    This module provides a shared async socket I/O controller used by HttpServerAsyncIo and other components.
-    The controller owns an I/O thread that blocks in Socket::poll() over a list of socket poll items. A pipe is
-    used as a control signal to wake the poll loop when commands are enqueued. Commands are queued under a
-    controller lock and processed in the I/O thread; completed operations are reported back to a coordinator
-    thread for higher-level handling.
+    This module provides a thin wrapper around the native C++ @ref Qore::AsyncIoController class,
+    which implements a high-performance event loop for managing multiple concurrent socket operations.
+    The C++ controller uses the most efficient I/O mechanism available on each platform (epoll on Linux,
+    kqueue on macOS/BSD) via the @ref Qore::EventLoop class.
 
-    Key concepts:
-    - The controller manages SocketPollOperation instances representing accepts and I/O work.
-    - A control pipe is always pollable so the I/O thread can be woken for new commands or shutdown.
-    - The command queue and control pipe are coordinated to avoid lost wakeups.
-    - Results are pushed to a result queue processed by the coordinator thread.
+    The controller runs a dedicated I/O thread that processes socket events using a three-phase polling cycle:
+    - Phase 1 (Snapshot under lock): collect operations needing continuePoll()
+    - Phase 2 (continuePoll outside lock): drive operations, collect results
+    - Phase 3 (Update under lock + deferred delivery): update cache/EventLoop, deliver callbacks
 
-    Consumers should not touch internal queues directly. All interaction must go through the controller API
-    and must respect the documented locking requirements.
+    This module adds backward-compatible wrapper methods and the global controller singleton on top
+    of the C++ implementation.
 */
 
 #! The AsyncSocketIo namespace

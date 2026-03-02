@@ -1,0 +1,870 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# http3_local_benchmark.qr - HTTP/3 vs HTTP/2 vs HTTP/1.1 Local Performance Benchmark
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/AsyncSocketIo
+%requires ../../../../qlib/HttpServerAsyncIo
+%requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/HttpClientIo
+
+%exec-class Http3LocalBenchmark
+
+#! HTTP/3 vs HTTP/2 vs HTTP/1.1 Local Performance Benchmark
+/** Runs benchmarks against a local HttpServer to measure protocol-level performance.
+    Compares:
+    - Sequential request throughput (req/s)
+    - Connection establishment overhead
+    - Concurrent request throughput (multiplexing)
+    - Large body transfer throughput (MB/s)
+    - Latency distribution (P50/P95/P99)
+    - curl --http3 external reference
+
+    Usage:
+      qore http3_local_benchmark.qr [iterations] [concurrent] [-v]
+
+    @since Qore 2.2
+*/
+public class Http3LocalBenchmark {
+    public {
+        const DefaultIterations = 100;
+        const DefaultConcurrent = 10;
+
+        # Self-signed test certificate (RSA 2048-bit, CN=localhost, valid 10 years)
+        const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIUf/3cpoky5I//0WoWm94h6ZbsZ9UwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MDIyNjEwMDQ1NVoXDTM2MDIy
+NDEwMDQ1NVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEAsJOozPOHvY10Giw/xgSA7Bc4WPn0oDtPS1q2dvsRcXGA
+ws+iM041pTXLpbqCdUy2IFIEi0fVB+czOD4Ng4lRoQz9Ql0MI0U5Vebr/xjXg8gs
+u+OBKfl7MM9z3i0rib9tY/06dCQVG8YbHpm/uSQylVS3edUK/TS3iDQGEFmGtpIH
+SdgpwFoGp/orEJ9alhjPi59PBSPoxgnDp7bQFvZ0p7MXfNuc7p++GI9I4glOfIOF
+E7Jc2vkeLG/uyqON/RHKL/Hms3WXg2HPD7L6P7cz15RIPCP6AHiJf/ijMdY2LuNm
+WdFEPnvaZ65rlGDtklD3rfqd3pcIJb/MPADgCK+yOQIDAQABo1MwUTAdBgNVHQ4E
+FgQURg9olW9AHMtGWkrD2o0mJpsrYEYwHwYDVR0jBBgwFoAURg9olW9AHMtGWkrD
+2o0mJpsrYEYwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAXxSh
+yRzF1qkMzj/FcbhNMb9wueMv+85j78L1gfXwshPdqvx9ruBbfcR5miTBXd8AinR5
+sAatZ1k2ZEIYZIfJkfaN2YPPEVQ7x7VoaiITI9dwi7o+1YupsLqc4lLyo4gzO7Os
+XNYqQzv6CNK/ZGIbKVS3H8ufCyOwAZc3Wk75h4vHVU/XWYsAm2AsDPs1cwyj2Vx8
+FrCWeHx7qGCdWYrQAzKKTbbOmDdR/P1WoZTMXPKrQCVbhsv+w/TtgsKyFw58+az4
+d94popmIZa4rq4JIGu2SvrX+g5b2Tico3iDa3Gn2SVpaqi5uf0xodpNMG4Yo/qii
+r6kqgDmL8cIa2jYxUQ==
+-----END CERTIFICATE-----";
+
+        const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCwk6jM84e9jXQa
+LD/GBIDsFzhY+fSgO09LWrZ2+xFxcYDCz6IzTjWlNculuoJ1TLYgUgSLR9UH5zM4
+Pg2DiVGhDP1CXQwjRTlV5uv/GNeDyCy744Ep+Xswz3PeLSuJv21j/Tp0JBUbxhse
+mb+5JDKVVLd51Qr9NLeINAYQWYa2kgdJ2CnAWgan+isQn1qWGM+Ln08FI+jGCcOn
+ttAW9nSnsxd825zun74Yj0jiCU58g4UTslza+R4sb+7Ko439Ecov8eazdZeDYc8P
+svo/tzPXlEg8I/oAeIl/+KMx1jYu42ZZ0UQ+e9pnrmuUYO2SUPet+p3elwglv8w8
+AOAIr7I5AgMBAAECggEABE4OLF83IjTQNLTszKlQVf9nXvIucJtlHp4UcEvvlrXH
+66Kf0/FGaRkpxIgnFveues3opnPBbkhW7uT7ggc7BcxeYhSzi/F54iaz/quz7khX
+EmoLvI1Z34VvQbvcoaam4sGfgBgJ/0LnZz8j57AQ5k6tjDtKU4St8wZcVpjRDb+4
+EXhIFFTIxxJKaurt32WKhQnHU6mskZ8Yp/QQiYzENbP6FAoyvyBEDJPOw2U4m6QJ
+/ctJzHPY8YkToOLhcfirhS322HyrzD0C57kuX11yvBu5/n49hMtqpKMvh5r6eJnm
+q7V4AE0LTE5ORJjc8jsvX5EJ4lonxzYHME2zeuegcQKBgQD2vN1iaVlkw30X83Zx
+6wybWv4wjyetYUtu5tAlTD6kqVs5m8B64B0fqDdI2Ialw/A6cVhhwzbdvZhyRObn
+IvpenGffx+FMbmlHMbHxis64NprPWrClrSBq8YNsc+n4jzz121R3HBBawt0RHzsR
+0ka+s3JSsnVeQTieAh7t8B/X/wKBgQC3NI1LVhStqlEc9f38KcDFMAMLpOUNOEp2
+qMmtYbAf7DnZ443VSzJtGP30M5kW9VszjaNSOWQaHTI8MKqMAvuxtOmWOrMnHhk2
+ABmM7WgKJ87WKouuax7049SbxNsH/6cgMjMAw1RZMA+tTueojYfvnmRQU27euaex
+8nV0z8k1xwKBgBwjedPpU8qMCM4cc9uWBMAK5oY/LTU2rVWeeQpn4ZUBw2eUfaUF
+vgyIMJXcK67n45OmrX+ota8gGiyd8v9VG9yCVc5Ni0IeLV9zKWn0fJLBl3IiU5bx
+YYsQs/5AUeSI4VjghId46dyP8IotV502r967tEP+Gih/o6dRcpmMEvWdAoGAIyfS
+dUJvdWPZbNVHh7v7Ydt0uidKTN8gauS4zqyQP4/1CfrAnM1xP74r/VBpcB5lAd+M
+F5srulcf7KzqDTQFWHR+3nUlK7x62gHq5UApVsmMx0wiwbWMmzGc+scrwL0uNN9t
+KhhRd0vhtkAN9Co0i6a5WTCpddPqehssrt2wnsECgYBtyrjZQyreBqK/DBbX9uqZ
+Od2bLKlz2cB0LvlUrwEVoJZ46QIr1EncgvypUj8Mdo+UJuzD8muuq6y5b2xO7zcR
+MlNjZ7VLniPrDSAVQq1L/dPuFA8V4OG6JQg9hsdS5fIsAorZEiybG2Fj4OBlOT0e
+73WHbzmBfdCAdm94Y0hXnQ==
+-----END PRIVATE KEY-----";
+    }
+
+    private {
+        int iterations;
+        int concurrent;
+        bool verbose = False;
+        HttpServer server;
+        int https_port;
+        int h3_port;
+        string https_url;
+        string h3_url;
+        Logger logger;
+    }
+
+    constructor() {
+        processArgs();
+        startServer();
+        on_exit stopServer();
+
+        printf("=== HTTP/3 vs HTTP/2 vs HTTP/1.1 Local Benchmark ===\n\n");
+        printf("Iterations: %d, Concurrent: %d\n", iterations, concurrent);
+        printf("HTTPS (TCP) port: %d, QUIC (UDP) port: %d\n\n", https_port, h3_port);
+
+        runBenchmarks();
+    }
+
+    private processArgs() {
+        iterations = (shift ARGV ?? string(DefaultIterations)).toInt();
+        concurrent = (shift ARGV ?? string(DefaultConcurrent)).toInt();
+        foreach string arg in (ARGV) {
+            if (arg == "-v") {
+                verbose = True;
+            }
+        }
+    }
+
+    private startServer() {
+        logger = new Logger("benchmark", LoggerLevel::getLevelInfo());
+
+        server = new HttpServer(<HttpServerOptionInfo>{
+            "logger": logger,
+            "async_mode": True,
+        });
+
+        SSLCertificate cert(CertPem);
+        SSLPrivateKey key(KeyPem);
+
+        # Handlers
+        server.setHandler("simple", "/simple", NOTHING, new BenchSimpleHandler());
+        server.setHandler("large", "/large", NOTHING, new BenchLargeHandler());
+        server.setHandler("echo", "/echo", NOTHING, new BenchEchoHandler());
+        server.setHandler("bytes", "/bytes", NOTHING, new BenchBytesHandler());
+
+        server.waitForAsyncIo();
+
+        # HTTPS listener for HTTP/1.1 and HTTP/2
+        hash<auto> linfo = server.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
+            "service": 0,
+            "cert": cert,
+            "key": key,
+        });
+        https_port = linfo.port;
+        https_url = "https://localhost:" + https_port;
+
+        # QUIC/HTTP3 listener
+        hash<auto> h3info = server.addQuicListener(<HttpListenerOptionInfo>{
+            "cert": cert,
+            "key": key,
+        });
+        h3_port = h3info.port;
+        h3_url = "https://127.0.0.1:" + h3_port;
+    }
+
+    private stopServer() {
+        server.stop();
+    }
+
+    private runBenchmarks() {
+        # Warm-up: establish connections before measuring
+        printf("Warming up connections...\n");
+        warmUp();
+        printf("\n");
+
+        # Test 1: Sequential request throughput
+        benchmarkSequential();
+
+        # Test 2: Connection establishment overhead
+        benchmarkConnectionEstablishment();
+
+        # Test 3: Concurrent requests
+        benchmarkConcurrent();
+
+        # Test 4: Large body transfer throughput
+        benchmarkLargeBody();
+
+        # Test 5: Latency distribution under load
+        benchmarkLatencyDistribution();
+
+        # Test 6: curl reference
+        benchmarkCurlReference();
+
+        printf("=== Benchmark Complete ===\n");
+    }
+
+    private warmUp() {
+        # HTTP/1.1 warmup
+        try {
+            HTTPClient h1({"url": https_url, "http_version": "1.1", "timeout": 30s});
+            h1.acceptAllCertificates(True);
+            h1.send("", "GET", "/simple", NOTHING, True);
+            printf("  HTTP/1.1: OK\n");
+        } catch (hash<ExceptionInfo> ex) {
+            printf("  HTTP/1.1: FAILED (%s: %s)\n", ex.err, ex.desc);
+        }
+
+        # HTTP/2 warmup
+        try {
+            HTTPClient h2({"url": https_url, "http_version": "2.0", "timeout": 30s});
+            h2.acceptAllCertificates(True);
+            h2.send("", "GET", "/simple", NOTHING, True);
+            printf("  HTTP/2:   OK (active: %s)\n", h2.isHttp2Active() ? "yes" : "no");
+        } catch (hash<ExceptionInfo> ex) {
+            printf("  HTTP/2:   FAILED (%s: %s)\n", ex.err, ex.desc);
+        }
+
+        # HTTP/3 warmup
+        try {
+            HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+                    "protocol": "h3",
+                    "connect_timeout": 15s,
+                    "request_timeout": 30s,
+                });
+            hash<auto> resp = mgr.request(h3_url, "GET", "/simple");
+            printf("  HTTP/3:   OK (status: %d)\n", resp.status_code);
+            mgr.closeAll();
+        } catch (hash<ExceptionInfo> ex) {
+            printf("  HTTP/3:   FAILED (%s: %s)\n", ex.err, ex.desc);
+        }
+    }
+
+    # ---- Test 1: Sequential Request Throughput ----
+    private benchmarkSequential() {
+        printf("Test 1: Sequential Requests (%d iterations)\n", iterations);
+        printf("  Measures per-request overhead on a single connection.\n\n");
+
+        # HTTP/1.1 - new connections each iteration (reuse has known issue in async mode)
+        try {
+            list<float> latencies = ();
+            date start = now_us();
+            for (int i = 0; i < iterations; ++i) {
+                date req_start = now_us();
+                HTTPClient h1({"url": https_url, "http_version": "1.1", "timeout": 5s});
+                h1.acceptAllCertificates(True);
+                h1.send("", "GET", "/simple", NOTHING, True);
+                latencies += elapsedMs(req_start);
+            }
+            float total_ms = elapsedMs(start);
+
+            printf("  HTTP/1.1 (new conn per request):\n");
+            printLatencyStats(latencies);
+            printf("    Total: %.1f ms, Throughput: %.0f req/s\n\n", total_ms,
+                iterations * 1000.0 / total_ms);
+        } catch (hash<ExceptionInfo> ex) {
+            printf("  HTTP/1.1: FAILED (%s: %s)\n\n", ex.err, ex.desc);
+        }
+
+        # HTTP/2
+        try {
+            HTTPClient h2({"url": https_url, "http_version": "2.0", "timeout": 30s});
+            h2.acceptAllCertificates(True);
+            h2.send("", "GET", "/simple", NOTHING, True);  # warmup
+
+            list<float> latencies = ();
+            date start = now_us();
+            for (int i = 0; i < iterations; ++i) {
+                date req_start = now_us();
+                h2.send("", "GET", "/simple", NOTHING, True);
+                latencies += elapsedMs(req_start);
+            }
+            float total_ms = elapsedMs(start);
+
+            printf("  HTTP/2:\n");
+            printLatencyStats(latencies);
+            printf("    Total: %.1f ms, Throughput: %.0f req/s\n\n", total_ms,
+                iterations * 1000.0 / total_ms);
+        } catch (hash<ExceptionInfo> ex) {
+            printf("  HTTP/2:   FAILED (%s: %s)\n\n", ex.err, ex.desc);
+        }
+
+        # HTTP/3
+        try {
+            HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+                    "protocol": "h3",
+                    "connect_timeout": 15s,
+                    "request_timeout": 30s,
+                    "max_connections_per_host": 1,
+                });
+            on_exit mgr.closeAll();
+            mgr.request(h3_url, "GET", "/simple");  # warmup
+
+            list<float> latencies = ();
+            date start = now_us();
+            for (int i = 0; i < iterations; ++i) {
+                date req_start = now_us();
+                mgr.request(h3_url, "GET", "/simple");
+                latencies += elapsedMs(req_start);
+            }
+            float total_ms = elapsedMs(start);
+
+            printf("  HTTP/3:\n");
+            printLatencyStats(latencies);
+            printf("    Total: %.1f ms, Throughput: %.0f req/s\n\n", total_ms,
+                iterations * 1000.0 / total_ms);
+        } catch (hash<ExceptionInfo> ex) {
+            printf("  HTTP/3:   FAILED (%s: %s)\n\n", ex.err, ex.desc);
+        }
+    }
+
+    # ---- Test 2: Connection Establishment Overhead ----
+    private benchmarkConnectionEstablishment() {
+        int connect_iters = min(iterations, 20);
+        printf("Test 2: Connection Establishment (%d iterations)\n", connect_iters);
+        printf("  Measures time for new connection + first request.\n\n");
+
+        # HTTP/1.1 - new connection each time
+        {
+            list<float> latencies = ();
+            for (int i = 0; i < connect_iters; ++i) {
+                try {
+                    date start = now_us();
+                    HTTPClient h1({"url": https_url, "http_version": "1.1", "timeout": 30s});
+                    h1.acceptAllCertificates(True);
+                    h1.send("", "GET", "/simple", NOTHING, True);
+                    latencies += elapsedMs(start);
+                } catch () {}
+            }
+            if (latencies) {
+                printf("  HTTP/1.1 (new conn + request):\n");
+                printLatencyStats(latencies);
+                printf("\n");
+            }
+        }
+
+        # HTTP/2 - new connection each time
+        {
+            list<float> latencies = ();
+            for (int i = 0; i < connect_iters; ++i) {
+                try {
+                    date start = now_us();
+                    HTTPClient h2({"url": https_url, "http_version": "2.0", "timeout": 30s});
+                    h2.acceptAllCertificates(True);
+                    h2.send("", "GET", "/simple", NOTHING, True);
+                    latencies += elapsedMs(start);
+                } catch () {}
+            }
+            if (latencies) {
+                printf("  HTTP/2 (new conn + request):\n");
+                printLatencyStats(latencies);
+                printf("\n");
+            }
+        }
+
+        # HTTP/3 - new manager/connection each time
+        {
+            list<float> latencies = ();
+            for (int i = 0; i < connect_iters; ++i) {
+                try {
+                    date start = now_us();
+                    HttpClientIo::HttpClientConnectionManager mgr(
+                        <HttpClientIo::HttpClientConnectionManagerOptions>{
+                            "protocol": "h3",
+                            "connect_timeout": 15s,
+                            "request_timeout": 30s,
+                        });
+                    mgr.request(h3_url, "GET", "/simple");
+                    latencies += elapsedMs(start);
+                    mgr.closeAll();
+                } catch () {}
+            }
+            if (latencies) {
+                printf("  HTTP/3 (new conn + request, includes QUIC handshake):\n");
+                printLatencyStats(latencies);
+                printf("\n");
+            }
+        }
+    }
+
+    # ---- Test 3: Concurrent Requests ----
+    private benchmarkConcurrent() {
+        printf("Test 3: Concurrent Requests (%d concurrent)\n", concurrent);
+        printf("  Measures multiplexing efficiency.\n\n");
+
+        # HTTP/1.1 - separate connection per concurrent request
+        try {
+            date start = now_us();
+            Counter cnt(concurrent);
+            list<float> latencies = ();
+            Mutex m();
+            int successes = 0;
+
+            for (int i = 0; i < concurrent; ++i) {
+                background sub() {
+                    on_exit cnt.dec();
+                    try {
+                        HTTPClient h1({"url": https_url, "http_version": "1.1", "timeout": 30s});
+                        h1.acceptAllCertificates(True);
+                        date req_start = now_us();
+                        h1.send("", "GET", "/simple", NOTHING, True);
+                        float lat = elapsedMs(req_start);
+                        m.lock();
+                        on_exit m.unlock();
+                        latencies += lat;
+                        ++successes;
+                    } catch () {}
+                }();
+            }
+            cnt.waitForZero(60s);
+            float total_ms = elapsedMs(start);
+
+            printf("  HTTP/1.1 (%d separate connections):\n", concurrent);
+            printLatencyStats(latencies);
+            printf("    Wall time: %.1f ms, Effective: %.0f req/s, Successes: %d/%d\n\n",
+                total_ms, successes * 1000.0 / total_ms, successes, concurrent);
+        } catch (hash<ExceptionInfo> ex) {
+            printf("  HTTP/1.1: FAILED (%s: %s)\n\n", ex.err, ex.desc);
+        }
+
+        # HTTP/2 - single connection, multiplexed
+        try {
+            HTTPClient h2({"url": https_url, "http_version": "2.0", "timeout": 30s});
+            h2.acceptAllCertificates(True);
+            h2.send("", "GET", "/simple", NOTHING, True);  # establish connection
+
+            date start = now_us();
+            Counter cnt(concurrent);
+            list<float> latencies = ();
+            Mutex m();
+            int successes = 0;
+
+            for (int i = 0; i < concurrent; ++i) {
+                background sub() {
+                    on_exit cnt.dec();
+                    try {
+                        date req_start = now_us();
+                        h2.send("", "GET", "/simple", NOTHING, True);
+                        float lat = elapsedMs(req_start);
+                        m.lock();
+                        on_exit m.unlock();
+                        latencies += lat;
+                        ++successes;
+                    } catch () {}
+                }();
+            }
+            cnt.waitForZero(60s);
+            float total_ms = elapsedMs(start);
+
+            printf("  HTTP/2 (single connection, multiplexed):\n");
+            printLatencyStats(latencies);
+            printf("    Wall time: %.1f ms, Effective: %.0f req/s, Successes: %d/%d\n\n",
+                total_ms, successes * 1000.0 / total_ms, successes, concurrent);
+        } catch (hash<ExceptionInfo> ex) {
+            printf("  HTTP/2:   FAILED (%s: %s)\n\n", ex.err, ex.desc);
+        }
+
+        # HTTP/3 - single QUIC connection, multiplexed streams
+        try {
+            HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+                    "protocol": "h3",
+                    "connect_timeout": 15s,
+                    "request_timeout": 30s,
+                    "max_connections_per_host": 1,
+                });
+            on_exit mgr.closeAll();
+            mgr.request(h3_url, "GET", "/simple");  # establish connection
+
+            date start = now_us();
+            Counter cnt(concurrent);
+            list<float> latencies = ();
+            Mutex m();
+            int successes = 0;
+
+            for (int i = 0; i < concurrent; ++i) {
+                background sub() {
+                    on_exit cnt.dec();
+                    try {
+                        date req_start = now_us();
+                        mgr.request(h3_url, "GET", "/simple");
+                        float lat = elapsedMs(req_start);
+                        m.lock();
+                        on_exit m.unlock();
+                        latencies += lat;
+                        ++successes;
+                    } catch () {}
+                }();
+            }
+            cnt.waitForZero(60s);
+            float total_ms = elapsedMs(start);
+
+            printf("  HTTP/3 (single QUIC connection, multiplexed):\n");
+            printLatencyStats(latencies);
+            printf("    Wall time: %.1f ms, Effective: %.0f req/s, Successes: %d/%d\n\n",
+                total_ms, successes * 1000.0 / total_ms, successes, concurrent);
+        } catch (hash<ExceptionInfo> ex) {
+            printf("  HTTP/3:   FAILED (%s: %s)\n\n", ex.err, ex.desc);
+        }
+    }
+
+    # ---- Test 4: Large Body Transfer Throughput ----
+    private benchmarkLargeBody() {
+        list<int> sizes = (1024, 10240, 102400, 524288);
+        printf("Test 4: Large Body Transfer\n");
+        printf("  Measures data throughput for various response sizes.\n\n");
+
+        printf("  %-10s  %-18s  %-18s  %-18s\n", "Size", "HTTP/1.1", "HTTP/2", "HTTP/3");
+        printf("  %-10s  %-18s  %-18s  %-18s\n", "----", "--------", "------", "------");
+
+        foreach int size in (sizes) {
+            string h1_result = "---";
+            string h2_result = "---";
+            string h3_result = "---";
+
+            # HTTP/1.1 (new connection per request to avoid reuse issue)
+            try {
+                list<float> latencies = ();
+                int download_iters = max(3, min(20, iterations / 10));
+                for (int i = 0; i < download_iters; ++i) {
+                    HTTPClient h1({"url": https_url, "http_version": "1.1", "timeout": 5s});
+                    h1.acceptAllCertificates(True);
+                    date req_start = now_us();
+                    h1.send("", "GET", sprintf("/large/%d", size), NOTHING, True);
+                    latencies += elapsedMs(req_start);
+                }
+                if (latencies) {
+                    float avg_ms = listAvg(latencies);
+                    float mbps = (size / 1048576.0) / (avg_ms / 1000.0);
+                    h1_result = sprintf("%.1f ms, %.1f MB/s", avg_ms, mbps);
+                }
+            } catch () {}
+
+            # HTTP/2
+            try {
+                HTTPClient h2({"url": https_url, "http_version": "2.0", "timeout": 60s});
+                h2.acceptAllCertificates(True);
+                h2.send("", "GET", sprintf("/large/%d", size), NOTHING, True);  # warmup
+
+                list<float> latencies = ();
+                int download_iters = max(3, min(20, iterations / 10));
+                for (int i = 0; i < download_iters; ++i) {
+                    date req_start = now_us();
+                    h2.send("", "GET", sprintf("/large/%d", size), NOTHING, True);
+                    latencies += elapsedMs(req_start);
+                }
+                float avg_ms = listAvg(latencies);
+                float mbps = (size / 1048576.0) / (avg_ms / 1000.0);
+                h2_result = sprintf("%.1f ms, %.1f MB/s", avg_ms, mbps);
+            } catch () {}
+
+            # HTTP/3
+            try {
+                HttpClientIo::HttpClientConnectionManager mgr(
+                    <HttpClientIo::HttpClientConnectionManagerOptions>{
+                        "protocol": "h3",
+                        "connect_timeout": 15s,
+                        "request_timeout": 60s,
+                    });
+                on_exit mgr.closeAll();
+                mgr.request(h3_url, "GET", sprintf("/large/%d", size));  # warmup
+
+                list<float> latencies = ();
+                int download_iters = max(3, min(20, iterations / 10));
+                for (int i = 0; i < download_iters; ++i) {
+                    date req_start = now_us();
+                    mgr.request(h3_url, "GET", sprintf("/large/%d", size));
+                    latencies += elapsedMs(req_start);
+                }
+                float avg_ms = listAvg(latencies);
+                float mbps = (size / 1048576.0) / (avg_ms / 1000.0);
+                h3_result = sprintf("%.1f ms, %.1f MB/s", avg_ms, mbps);
+            } catch () {}
+
+            string size_label;
+            if (size >= 1048576) {
+                size_label = sprintf("%dMB", size / 1048576);
+            } else if (size >= 1024) {
+                size_label = sprintf("%dKB", size / 1024);
+            } else {
+                size_label = sprintf("%dB", size);
+            }
+            printf("  %-10s  %-18s  %-18s  %-18s\n", size_label, h1_result, h2_result, h3_result);
+        }
+        printf("\n");
+    }
+
+    # ---- Test 5: Latency Distribution Under Load ----
+    private benchmarkLatencyDistribution() {
+        int request_count = iterations;
+        int flight_limit = concurrent;
+        printf("Test 5: Latency Distribution (%d requests, %d in-flight)\n", request_count, flight_limit);
+        printf("  Measures P50/P95/P99 under sustained concurrent load.\n\n");
+
+        # HTTP/1.1 - pool of connections (new conn per request)
+        try {
+            list<float> latencies = ();
+            Counter done(request_count);
+            Counter inflight(0);
+            Mutex m();
+
+            date start = now_us();
+            for (int i = 0; i < request_count; ++i) {
+                while (inflight.getCount() >= flight_limit) {
+                    usleep(100us);
+                }
+                inflight.inc();
+                background sub() {
+                    on_exit {
+                        inflight.dec();
+                        done.dec();
+                    }
+                    try {
+                        HTTPClient h1({"url": https_url, "http_version": "1.1", "timeout": 5s});
+                        h1.acceptAllCertificates(True);
+                        date req_start = now_us();
+                        h1.send("", "GET", "/simple", NOTHING, True);
+                        float lat = elapsedMs(req_start);
+                        m.lock();
+                        on_exit m.unlock();
+                        latencies += lat;
+                    } catch () {}
+                }();
+            }
+            done.waitForZero(120s);
+            float total_ms = elapsedMs(start);
+
+            printf("  HTTP/1.1 (new conn per request, %d in-flight):\n", flight_limit);
+            printLatencyStats(latencies);
+            printf("    Total: %.1f ms, Throughput: %.0f req/s (%d succeeded)\n\n",
+                total_ms, latencies.size() * 1000.0 / total_ms, latencies.size());
+        } catch (hash<ExceptionInfo> ex) {
+            printf("  HTTP/1.1: FAILED (%s: %s)\n\n", ex.err, ex.desc);
+        }
+
+        # HTTP/2 - single connection
+        try {
+            HTTPClient h2({"url": https_url, "http_version": "2.0", "timeout": 30s});
+            h2.acceptAllCertificates(True);
+            h2.send("", "GET", "/simple", NOTHING, True);
+
+            list<float> latencies = ();
+            Counter done(request_count);
+            Counter inflight(0);
+            Mutex m();
+
+            date start = now_us();
+            for (int i = 0; i < request_count; ++i) {
+                while (inflight.getCount() >= flight_limit) {
+                    usleep(100us);
+                }
+                inflight.inc();
+                background sub() {
+                    on_exit {
+                        inflight.dec();
+                        done.dec();
+                    }
+                    try {
+                        date req_start = now_us();
+                        h2.send("", "GET", "/simple", NOTHING, True);
+                        float lat = elapsedMs(req_start);
+                        m.lock();
+                        on_exit m.unlock();
+                        latencies += lat;
+                    } catch () {}
+                }();
+            }
+            done.waitForZero(120s);
+            float total_ms = elapsedMs(start);
+
+            printf("  HTTP/2 (single connection, multiplexed):\n");
+            printLatencyStats(latencies);
+            printf("    Total: %.1f ms, Throughput: %.0f req/s (%d succeeded)\n\n",
+                total_ms, latencies.size() * 1000.0 / total_ms, latencies.size());
+        } catch (hash<ExceptionInfo> ex) {
+            printf("  HTTP/2:   FAILED (%s: %s)\n\n", ex.err, ex.desc);
+        }
+
+        # HTTP/3 - single QUIC connection
+        try {
+            HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+                    "protocol": "h3",
+                    "connect_timeout": 15s,
+                    "request_timeout": 30s,
+                    "max_connections_per_host": 1,
+                });
+            on_exit mgr.closeAll();
+            mgr.request(h3_url, "GET", "/simple");
+
+            list<float> latencies = ();
+            Counter done(request_count);
+            Counter inflight(0);
+            Mutex m();
+
+            date start = now_us();
+            for (int i = 0; i < request_count; ++i) {
+                while (inflight.getCount() >= flight_limit) {
+                    usleep(100us);
+                }
+                inflight.inc();
+                background sub() {
+                    on_exit {
+                        inflight.dec();
+                        done.dec();
+                    }
+                    try {
+                        date req_start = now_us();
+                        mgr.request(h3_url, "GET", "/simple");
+                        float lat = elapsedMs(req_start);
+                        m.lock();
+                        on_exit m.unlock();
+                        latencies += lat;
+                    } catch () {}
+                }();
+            }
+            done.waitForZero(120s);
+            float total_ms = elapsedMs(start);
+
+            printf("  HTTP/3 (single QUIC connection, multiplexed):\n");
+            printLatencyStats(latencies);
+            printf("    Total: %.1f ms, Throughput: %.0f req/s (%d succeeded)\n\n",
+                total_ms, latencies.size() * 1000.0 / total_ms, latencies.size());
+        } catch (hash<ExceptionInfo> ex) {
+            printf("  HTTP/3:   FAILED (%s: %s)\n\n", ex.err, ex.desc);
+        }
+    }
+
+    # ---- Test 6: curl External Reference ----
+    private benchmarkCurlReference() {
+        printf("Test 6: curl External Reference\n");
+        printf("  Validates HTTP/3 server with well-tested client (curl w/ ngtcp2+nghttp3).\n\n");
+
+        # curl sequential requests against our server
+        list<string> protocols = ("--http1.1", "--http2", "--http3-only");
+        list<string> labels = ("HTTP/1.1", "HTTP/2", "HTTP/3");
+        list<int> ports = (https_port, https_port, h3_port);
+
+        int curl_iters = min(iterations, 20);
+
+        for (int p = 0; p < protocols.size(); ++p) {
+            string proto = protocols[p];
+            string label = labels[p];
+            int port = ports[p];
+
+            list<float> latencies = ();
+            int successes = 0;
+
+            for (int i = 0; i < curl_iters; ++i) {
+                try {
+                    string url = sprintf("https://127.0.0.1:%d/simple", port);
+                    string cmd = sprintf(
+                        "curl -s -k %s -o /dev/null -w '%%{time_total}' '%s' 2>/dev/null",
+                        proto, url);
+                    string result = backquote(cmd);
+                    result = trim(result);
+                    if (result.length() > 0) {
+                        float time_sec = result.toFloat();
+                        if (time_sec > 0) {
+                            latencies += time_sec * 1000.0;
+                            ++successes;
+                        }
+                    }
+                } catch () {}
+            }
+
+            if (latencies) {
+                printf("  curl %s (%d requests):\n", label, curl_iters);
+                printLatencyStats(latencies);
+                float total_est = listSum(latencies);
+                printf("    Successes: %d/%d, Sequential throughput: %.0f req/s\n\n",
+                    successes, curl_iters, successes * 1000.0 / total_est);
+            } else {
+                printf("  curl %s: no successful requests\n\n", label);
+            }
+        }
+    }
+
+    # ---- Utility Methods ----
+
+    private float elapsedMs(date start) {
+        return (now_us() - start).durationMicroseconds() / 1000.0;
+    }
+
+    private printLatencyStats(list<float> latencies) {
+        if (!latencies) {
+            printf("    No data\n");
+            return;
+        }
+
+        float sum = 0.0;
+        float min_lat = latencies[0];
+        float max_lat = latencies[0];
+        foreach float lat in (latencies) {
+            sum += lat;
+            if (lat < min_lat) {
+                min_lat = lat;
+            }
+            if (lat > max_lat) {
+                max_lat = lat;
+            }
+        }
+        float avg = sum / latencies.size();
+
+        list<float> sorted = sort(latencies);
+        int n = sorted.size();
+        float p50 = sorted[max(0, (n * 50 / 100) - 1)];
+        float p95 = sorted[max(0, (n * 95 / 100) - 1)];
+        float p99 = sorted[max(0, (n * 99 / 100) - 1)];
+
+        printf("    Avg: %.2f ms, Min: %.2f ms, Max: %.2f ms\n", avg, min_lat, max_lat);
+        printf("    P50: %.2f ms, P95: %.2f ms, P99: %.2f ms (%d samples)\n",
+            p50, p95, p99, n);
+    }
+
+    private float listAvg(list<float> values) {
+        if (!values) {
+            return 0.0;
+        }
+        float sum = 0.0;
+        foreach float v in (values) {
+            sum += v;
+        }
+        return sum / values.size();
+    }
+
+    private float listSum(list<float> values) {
+        float sum = 0.0;
+        foreach float v in (values) {
+            sum += v;
+        }
+        return sum;
+    }
+}
+
+#! Simple handler returning "OK"
+class BenchSimpleHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, "OK", {"Content-Type": "text/plain"});
+    }
+}
+
+#! Handler returning N bytes from /large/N
+class BenchLargeHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        int size = 1000;
+        *list<*string> m = (hdr.path =~ x/large\/(\d+)/);
+        if (m) {
+            size = int(m[0]);
+        }
+        return makeResponse(200, strmul("X", size), {"Content-Type": "text/plain"});
+    }
+}
+
+#! Echo handler
+class BenchEchoHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, body ?? "", {
+            "Content-Type": hdr."content-type" ?? "text/plain",
+        });
+    }
+}
+
+#! Binary data handler returning N bytes from /bytes/N
+class BenchBytesHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        int size = 1024;
+        *list<*string> m = (hdr.path =~ x/bytes\/(\d+)/);
+        if (m) {
+            size = int(m[0]);
+        }
+        return makeResponse(200, strmul("X", size), {"Content-Type": MimeTypeOctetStream});
+    }
+}

@@ -42,7 +42,7 @@
 %endtry
 
 module DataProvider {
-    version = "3.4.0";
+    version = "3.3.0";
     desc = "user module for data integration patterns and data and API introspection";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -1112,6 +1112,14 @@ if (errors) {
     - moved @c ConnectionOptionInfo from the @c ConnectionProvider module to the @c DataProvider module to
       resolve circular dependency; the hashdecl remains in the @c ConnectionProvider namespace for backward
       compatibility
+    - added async CRUD API to @ref DataProvider::AbstractDataProvider "AbstractDataProvider" using
+      Promise/Future with background thread fallback:
+      - @ref DataProvider::AbstractDataProvider::createRecordAsync() "createRecordAsync()"
+      - @ref DataProvider::AbstractDataProvider::searchRecordsAsync() "searchRecordsAsync()"
+      - @ref DataProvider::AbstractDataProvider::updateRecordsAsync() "updateRecordsAsync()"
+      - @ref DataProvider::AbstractDataProvider::deleteRecordsAsync() "deleteRecordsAsync()"
+      - @ref DataProvider::AbstractDataProvider::upsertRecordAsync() "upsertRecordAsync()"
+      - @ref DataProvider::AbstractDataProvider::doRequestAsync() "doRequestAsync()"
 
     @subsection dataprovider_v3_2_2 DataProvider v3.2.2
     - fixed setting the mandatory flag for hashes with dynamic fields

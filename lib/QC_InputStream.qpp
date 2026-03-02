@@ -3,7 +3,7 @@
 /*
     Qore Programming Language
 
-    Copyright (C) 2016 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -92,6 +92,28 @@ abstract int InputStream::peek();
 */
 bool InputStream::supportsNonBlockingIo() [flags=CONSTANT] {
     return is->supportsNonBlockingIo();
+}
+
+//! Returns @ref True if this stream's read() will never block
+/**
+    This is a read-only informational method. The C++ vtable value of
+    @ref InputStream::isIoThreadSafe() is the sole authority on whether a stream can be
+    submitted to the I/O thread for non-blocking streaming. Overriding this method in a
+    Qore subclass has no effect on I/O thread eligibility — the C++ enforcement gate in
+    the submit methods checks the C++ vtable directly.
+
+    Memory-backed streams (like @ref BinaryInputStream) return @ref True even though
+    they don't have a pollable file descriptor.
+
+    The default implementation returns supportsNonBlockingIo(), since fd-backed streams
+    with non-blocking I/O support are also safe for I/O thread use.
+
+    @return @ref True if read() will never block
+
+    @since %Qore 2.3
+*/
+bool InputStream::isIoThreadSafe() [flags=CONSTANT] {
+    return is->isIoThreadSafe();
 }
 
 //! Returns the pollable file descriptor for this stream, or -1 if not pollable

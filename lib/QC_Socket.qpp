@@ -80,6 +80,28 @@ static int check_response_code(int status_code, ExceptionSink* xsink) {
     return 0;
 }
 
+static int extractQuicBodyPtrLen(const AbstractQoreNode* body, const void*& ptr, size_t& len, ExceptionSink* xsink) {
+    ptr = nullptr;
+    len = 0;
+    if (!body) {
+        return 0;
+    }
+    qore_type_t t = body->getType();
+    if (t == NT_BINARY) {
+        const BinaryNode* b = static_cast<const BinaryNode*>(body);
+        ptr = b->getPtr();
+        len = b->size();
+    } else if (t == NT_STRING) {
+        const QoreStringNode* s = static_cast<const QoreStringNode*>(body);
+        ptr = s->c_str();
+        len = s->size();
+    } else {
+        xsink->raiseException("QUIC-ERROR", "body must be string or binary, got type '%s'", body->getTypeName());
+        return -1;
+    }
+    return 0;
+}
+
 //! Server-sent event hash
 /**
 */
@@ -102,6 +124,20 @@ hashdecl Qore::SseMessageInfo {
     string comment;
 }
 
+//! Extra file descriptor to monitor alongside the main socket
+/** Used by poll operations that need to monitor additional fds
+    (e.g., InputStream fds for streaming responses).
+
+    @since %Qore 2.3
+*/
+hashdecl Qore::ExtraPollFdInfo {
+    //! The file descriptor to monitor
+    int fd;
+
+    //! The poll events; see @ref socket_poll_constants
+    int events;
+}
+
 //! Socket or other pollable object poll info hash
 /** for use with @ref Qore::Socket::poll() "Socket::poll()""
 */
@@ -113,6 +149,72 @@ hashdecl Qore::SocketPollInfo {
 
     //! the pollable object to monitor
     Qore::AbstractPollableIoObject socket;
+
+    //! Optional poll timeout hint in milliseconds for protocol-level timers (e.g., QUIC retransmission)
+    /** When set, the I/O controller should wake up no later than this many milliseconds from now,
+        even if no socket events occur, to allow protocol timer processing.
+
+        @since %Qore 2.3
+    */
+    *int poll_timeout_ms;
+
+    //! Optional extra file descriptors to monitor alongside the main socket
+    /** When set, the I/O controller registers these fds with its event loop.
+        When any extra fd becomes ready, the operation's continuePoll() is called.
+        Used for InputStream fds during streaming responses.
+
+        @since %Qore 2.3
+    */
+    *list<hash<ExtraPollFdInfo>> extra_fds;
+}
+
+//! UDP datagram receive result info
+/** Contains the data and source address information from a recvfrom() operation.
+
+    @since %Qore 2.3
+*/
+hashdecl Qore::DatagramInfo {
+    //! The received datagram data
+    binary data;
+
+    //! The source IP address as a string
+    *string address;
+
+    //! The source port number
+    *int port;
+
+    //! The address family (e.g. AF_INET, AF_INET6)
+    *int family;
+
+    //! The address family as a string (e.g. "ipv4", "ipv6")
+    *string familystr;
+}
+
+//! QUIC session GOAWAY state information
+/** Contains the GOAWAY state for a QUIC session, as returned by
+    @ref Qore::Socket::getQuicSessionGoawayState() "Socket::getQuicSessionGoawayState()".
+
+    @since %Qore 2.3
+*/
+hashdecl Qore::QuicGoawayStateInfo {
+    //! True if the final GOAWAY has been queued via @ref Qore::Socket::submitQuicShutdown() "submitQuicShutdown()"
+    /** This is \c False during the notice phase (@ref Qore::Socket::submitQuicShutdownNotice()
+        "submitQuicShutdownNotice()") and only becomes \c True when the final GOAWAY — which
+        carries the actual last stream ID — is submitted.
+
+        @note Set eagerly when the frame is queued in the HTTP/3 layer, before it is
+        flushed to the wire.  The next I/O cycle flushes the frame.
+    */
+    bool goaway_sent = False;
+
+    //! True if a GOAWAY frame has been received from the peer
+    bool goaway_received = False;
+
+    //! The maximum stream ID from a received GOAWAY frame, or -1 if no GOAWAY has been received
+    /** Streams with IDs above this value were not processed by the peer and
+        should be retried on a new connection.
+    */
+    int goaway_max_stream_id = -1;
 }
 
 /** @defgroup socket_poll_constants Socket Poll Constants
@@ -126,6 +228,11 @@ const SOCK_POLLOUT = SOCK_POLLOUT;
 
 //! (output only) indicates that the socket or connection is closed
 const SOCK_POLLERR = SOCK_POLLERR;
+
+//! (output only) indicates a timer event
+/** @since %Qore 2.3
+*/
+const SOCK_POLLTIMER = SOCK_POLLTIMER;
 ///@}
 
 /** @defgroup ssl_mode_constants SSL Verification Mode Constants
@@ -702,11 +809,11 @@ AbstractPollOperation Socket::startPollSendHttpResponse(int status_code, string 
     size_t body_size = 0;
     if (body) {
         if (body->getType() == NT_BINARY) {
-            const BinaryNode* b = reinterpret_cast<const BinaryNode*>(body);
+            const BinaryNode* b = static_cast<const BinaryNode*>(body);
             body_ptr = b->getPtr();
             body_size = b->size();
         } else if (body->getType() == NT_STRING) {
-            const QoreStringNode* str = reinterpret_cast<const QoreStringNode*>(body);
+            const QoreStringNode* str = static_cast<const QoreStringNode*>(body);
             body_ptr = str->c_str();
             body_size = str->size();
         } else {
@@ -787,11 +894,11 @@ AbstractPollOperation Socket::startPollSendHttpResponseAndReadHeader(int status_
     size_t body_size = 0;
     if (body) {
         if (body->getType() == NT_BINARY) {
-            const BinaryNode* b = reinterpret_cast<const BinaryNode*>(body);
+            const BinaryNode* b = static_cast<const BinaryNode*>(body);
             body_ptr = b->getPtr();
             body_size = b->size();
         } else if (body->getType() == NT_STRING) {
-            const QoreStringNode* str = reinterpret_cast<const QoreStringNode*>(body);
+            const QoreStringNode* str = static_cast<const QoreStringNode*>(body);
             body_ptr = str->c_str();
             body_size = str->size();
         } else {
@@ -829,6 +936,172 @@ AbstractPollOperation Socket::startPollSendHttpResponseAndReadHeader(int status_
     if (!*xsink) {
         rv->setValue("sock", self->objectRefSelf(), xsink);
         rv->setValue("goal", new QoreStringNode("send-and-read-header"), xsink);
+    }
+    return rv.release();
+}
+
+//! Starts a fused poll operation to send HTTP response with InputStream body, then idle+read next header
+/** Sends HTTP response headers + streams InputStream body to the client, then waits for the next
+    HTTP request header (keep-alive). The handler thread returns immediately; all I/O happens on the
+    I/O thread.
+
+    @param status_code the HTTP status code (e.g. 200, 404, 500); must be between 100 and 599
+    @param status_desc the HTTP status description (e.g. "OK", "Not Found")
+    @param http_version the HTTP version string (e.g. "1.1")
+    @param headers optional HTTP headers to include in the response; must include Content-Length
+    @param body the InputStream to read the response body from
+    @param content_length the total number of bytes to stream from the InputStream
+    @param idle_timeout idle timeout for waiting for the next request
+
+    @return an @ref AbstractPollOperation object; when goal is reached:
+    - If \c getState() returns \c "stream-complete": \c getOutput() returns a hash with \c "hdr" and \c "info" keys
+    - If \c getState() returns \c "timeout": the idle timeout expired
+
+    @throw SOCKET-STARTPOLLSENDHTTPRESPONSEWITHSTREAMANDREADHEADER-ERROR invalid status code
+    @throw HTTP-STREAM-ERROR raised during polling if the InputStream provides fewer bytes than
+    Content-Length (truncated stream), or if poll() on a pollable InputStream fd fails
+
+    @since %Qore 2.3
+*/
+AbstractPollOperation Socket::startPollSendHttpResponseWithStreamAndReadHeader(int status_code,
+        string status_desc, string http_version, *hash<auto> headers,
+        InputStream[InputStream] body, softint content_length, timeout idle_timeout) {
+    // Validate status code (must be between 100 and 599)
+    if (status_code < 100 || status_code >= 600) {
+        xsink->raiseException("SOCKET-STARTPOLLSENDHTTPRESPONSEWITHSTREAMANDREADHEADER-ERROR",
+            "expecting valid HTTP status code between 100 and 599, got value %d instead", status_code);
+        return QoreValue();
+    }
+
+    // Build the HTTP response headers in a buffer
+    QoreString hdr(s->getEncoding());
+    hdr.sprintf("HTTP/%s %03d %s", http_version->c_str(), status_code, status_desc->c_str());
+    hdr.concat("\r\n");
+
+    // Add headers (body size is set from Content-Length header, not body itself)
+    qore_socket_private::do_headers(hdr, headers, content_length);
+
+    // Create binary result with just headers (body comes from InputStream)
+    SimpleRefHolder<BinaryNode> result(new BinaryNode);
+    result->append(hdr.c_str(), hdr.size());
+
+    // Compute idle deadline in milliseconds from epoch
+    int us;
+    int64 now_s = q_epoch_us(us);
+    int64 now_ms = now_s * 1000 + us / 1000;
+    int64 deadline_ms = now_ms + idle_timeout;
+
+    // Take ownership of InputStream
+    InputStream* body_ptr = body.release();
+    s->ref();
+
+    // The InputStream may already be unassigned (from doResponse async capture);
+    // reassign it to this thread so the constructor can access it (e.g. getPollableDescriptor)
+    body_ptr->reassignThread(xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    // Create the fused poll operation
+    ReferenceHolder<SocketPollOperationBase> poller(
+        new SocketSendStreamAndReadHeaderPollOperation(xsink, result.release(), s,
+            body_ptr, content_length, deadline_ms, true),
+        xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    // Unassign InputStream from handler thread so I/O thread can claim it
+    body_ptr->unassignThread(xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
+    poller->setSelf(*rv);
+    poller.release();
+
+    if (!*xsink) {
+        rv->setValue("sock", self->objectRefSelf(), xsink);
+        rv->setValue("goal", new QoreStringNode("send-stream-and-read-header"), xsink);
+    }
+    return rv.release();
+}
+
+//! Starts a poll operation to send HTTP response with InputStream body (no keep-alive)
+/** Sends HTTP response headers + streams InputStream body to the client, then completes.
+    The handler thread returns immediately; all I/O happens on the I/O thread.
+
+    @param status_code the HTTP status code (e.g. 200, 404, 500); must be between 100 and 599
+    @param status_desc the HTTP status description (e.g. "OK", "Not Found")
+    @param http_version the HTTP version string (e.g. "1.1")
+    @param headers optional HTTP headers to include in the response; must include Content-Length
+    @param body the InputStream to read the response body from
+    @param content_length the total number of bytes to stream from the InputStream
+
+    @return an @ref AbstractPollOperation object; when goal is reached, getState() returns "stream-complete"
+
+    @throw SOCKET-STARTPOLLSENDHTTPRESPONSEWITHSTREAM-ERROR invalid status code
+    @throw HTTP-STREAM-ERROR raised during polling if the InputStream provides fewer bytes than
+    Content-Length (truncated stream), or if poll() on a pollable InputStream fd fails
+
+    @since %Qore 2.3
+*/
+AbstractPollOperation Socket::startPollSendHttpResponseWithStream(int status_code,
+        string status_desc, string http_version, *hash<auto> headers,
+        InputStream[InputStream] body, softint content_length) {
+    // Validate status code (must be between 100 and 599)
+    if (status_code < 100 || status_code >= 600) {
+        xsink->raiseException("SOCKET-STARTPOLLSENDHTTPRESPONSEWITHSTREAM-ERROR",
+            "expecting valid HTTP status code between 100 and 599, got value %d instead", status_code);
+        return QoreValue();
+    }
+
+    // Build the HTTP response headers in a buffer
+    QoreString hdr(s->getEncoding());
+    hdr.sprintf("HTTP/%s %03d %s", http_version->c_str(), status_code, status_desc->c_str());
+    hdr.concat("\r\n");
+
+    // Add headers
+    qore_socket_private::do_headers(hdr, headers, content_length);
+
+    // Create binary result with just headers
+    SimpleRefHolder<BinaryNode> result(new BinaryNode);
+    result->append(hdr.c_str(), hdr.size());
+
+    // Take ownership of InputStream
+    InputStream* body_ptr = body.release();
+    s->ref();
+
+    // The InputStream may already be unassigned (from doResponse async capture);
+    // reassign it to this thread so the constructor can access it (e.g. getPollableDescriptor)
+    body_ptr->reassignThread(xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    // Create the non-fused poll operation
+    ReferenceHolder<SocketPollOperationBase> poller(
+        new SocketSendStreamAndReadHeaderPollOperation(xsink, result.release(), s,
+            body_ptr, content_length, 0, false),
+        xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    // Unassign InputStream from handler thread so I/O thread can claim it
+    body_ptr->unassignThread(xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
+    poller->setSelf(*rv);
+    poller.release();
+
+    if (!*xsink) {
+        rv->setValue("sock", self->objectRefSelf(), xsink);
+        rv->setValue("goal", new QoreStringNode("send-stream"), xsink);
     }
     return rv.release();
 }
@@ -973,6 +1246,77 @@ AbstractPollOperation Socket::startPollRecvUntilBytesBinary(string pattern) {
     if (!*xsink) {
         rv->setValue("sock", self->objectRefSelf(), xsink);
         rv->setValue("goal", new QoreStringNode("received"), xsink);
+    }
+    return rv.release();
+}
+
+//! Returns an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to receive a UDP datagram in non-blocking mode
+/** @param max_size the maximum datagram size to receive; default is 65535 (max UDP datagram size)
+
+    @return an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to receive a UDP datagram in
+    non-blocking mode
+
+    The @ref Qore::AbstractPollOperation::getOutput() "AbstractPollOperation::getOutput()" call will return a hash
+    with the following keys after a successful receive:
+    - \c data: the received datagram data as @ref binary
+    - \c address: the source IP address as a string
+    - \c port: the source port number
+    - \c family: the address family (e.g. @ref AF_INET, @ref AF_INET6)
+    - \c familystr: the address family as a string (e.g. \c "ipv4", \c "ipv6")
+
+    @throw SOCKET-RECVFROM-ERROR socket is not a UDP (SOCK_DGRAM) socket
+
+    @note The socket must be bound to a local address with @ref bindINET() before calling this method
+
+    @since %Qore 2.3
+*/
+AbstractPollOperation Socket::startPollRecvFrom(*int max_size) [dom=NETWORK] {
+    size_t ms = max_size ? (size_t)max_size : 65535;
+    if (ms == 0 || ms > 65535) {
+        ms = 65535;
+    }
+
+    s->ref();
+    ReferenceHolder<SocketPollOperationBase> poller(new SocketRecvFromPollOperation(xsink, ms, s), xsink);
+    ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
+    poller->setSelf(*rv);
+    poller.release();
+
+    if (!*xsink) {
+        rv->setValue("sock", self->objectRefSelf(), xsink);
+        rv->setValue("goal", new QoreStringNode("received"), xsink);
+    }
+    return rv.release();
+}
+
+//! Returns an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to send a UDP datagram in non-blocking mode
+/** @param host the destination host name or IP address
+    @param port the destination port number
+    @param data the data to send as @ref binary
+    @param family the address family to use for name resolution; default is @ref AF_UNSPEC
+
+    @return an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to send a UDP datagram in
+    non-blocking mode
+
+    @throw SOCKET-SENDTO-ERROR socket is not a UDP (SOCK_DGRAM) socket or address resolution failed
+
+    @note The socket must be bound to a local address with @ref bindINET() before calling this method
+
+    @since %Qore 2.3
+*/
+AbstractPollOperation Socket::startPollSendTo(string host, int port, binary data, *int family) [dom=NETWORK] {
+    int fam = family ? (int)family : AF_UNSPEC;
+
+    s->ref();
+    ReferenceHolder<SocketPollOperationBase> poller(new SocketSendToPollOperation(xsink,
+        host->c_str(), port, fam, data->binRefSelf(), s), xsink);
+    ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
+    poller->setSelf(*rv);
+    poller.release();
+
+    if (!*xsink) {
+        rv->setValue("sock", self->objectRefSelf(), xsink);
+        rv->setValue("goal", new QoreStringNode("sent"), xsink);
     }
     return rv.release();
 }
@@ -4276,9 +4620,9 @@ AbstractPollOperation Socket::startPollSendHttp2Response(int stream_id, int stat
     if (body) {
         qore_type_t body_type = body->getType();
         if (body_type == NT_BINARY) {
-            body_bin = reinterpret_cast<const BinaryNode*>(body);
+            body_bin = static_cast<const BinaryNode*>(body);
         } else if (body_type == NT_STRING) {
-            const QoreStringNode* str = reinterpret_cast<const QoreStringNode*>(body);
+            const QoreStringNode* str = static_cast<const QoreStringNode*>(body);
             // Create a binary node from the string's raw bytes
             size_t size = str->size();
             void* copy = malloc(size);
@@ -4417,11 +4761,11 @@ nothing Socket::submitHttp2Response(int stream_id, int status_code, *hash<auto> 
     if (body) {
         qore_type_t body_type = body->getType();
         if (body_type == NT_BINARY) {
-            const BinaryNode* bin = reinterpret_cast<const BinaryNode*>(body);
+            const BinaryNode* bin = static_cast<const BinaryNode*>(body);
             body_ptr = bin->getPtr();
             body_len = bin->size();
         } else if (body_type == NT_STRING) {
-            const QoreStringNode* str = reinterpret_cast<const QoreStringNode*>(body);
+            const QoreStringNode* str = static_cast<const QoreStringNode*>(body);
             body_ptr = str->c_str();
             body_len = str->size();
         }
@@ -4559,6 +4903,9 @@ int Socket::getHttp2ActiveStream() {
 /** @param stream_id the HTTP/2 stream ID to send on
     @param data the binary data to send
     @param end_stream set to @ref True "True" to end the stream after sending
+
+    @throw HTTP2-FLOW-CONTROL raised when the stream's send buffer is full; the caller should
+    pump I/O (e.g. via @ref isDataAvailable()) to drain the buffer and retry
 
     @since %Qore 2.3
 */
@@ -4715,6 +5062,39 @@ nothing Socket::submitHttp2StreamingResponseHeaders(int stream_id, int status_co
     return QoreValue();
 }
 
+//! Submit HTTP/2 streaming response with InputStream body (non-blocking)
+/** Handler thread calls this and returns immediately. The I/O thread reads from the
+    InputStream and sends DATA frames incrementally.
+
+    The C++ vtable is the sole authority on I/O thread eligibility. If the stream's C++
+    @ref InputStream::isIoThreadSafe() "isIoThreadSafe()" returns @ref False, this method
+    returns @ref 1 without submitting headers, so the caller can fall back to handler-thread
+    streaming.
+
+    @param stream_id the HTTP/2 stream ID
+    @param status_code the HTTP status code
+    @param headers optional response headers
+    @param body the InputStream to read the response body from
+
+    @return 0 = accepted for I/O thread streaming; 1 = not I/O-thread-safe, caller should
+    use handler-thread fallback
+
+    @throw HTTP2-ERROR if no HTTP/2 session is available or submission fails
+
+    @since %Qore 2.3
+*/
+int Socket::submitHttp2StreamingResponseWithStream(int stream_id, int status_code,
+        *hash<auto> headers, InputStream[InputStream] body) {
+    // Pass raw pointer; only release from SimpleRefHolder if C++ takes ownership (rv == 0).
+    // If rv == 1 (not I/O-thread-safe), the SimpleRefHolder destructor will deref the body.
+    int rv = s->submitHttp2StreamingResponseWithStream((int32_t)stream_id, status_code, headers,
+        *body, xsink);
+    if (!rv) {
+        body.release();
+    }
+    return rv;
+}
+
 //! Returns a poll operation for flushing pending HTTP/2 data
 /** This poll operation flushes all pending HTTP/2 data that has been queued
     via @ref submitHttp2StreamingResponseHeaders(), @ref sendHttp2StreamData(),
@@ -4838,13 +5218,13 @@ int Socket::submitHttp2Request(hash<auto> headers, *data body, bool streaming = 
     if (body) {
         switch (body->getType()) {
             case NT_BINARY: {
-                const BinaryNode* b = reinterpret_cast<const BinaryNode*>(body);
+                const BinaryNode* b = static_cast<const BinaryNode*>(body);
                 body_ptr = b->getPtr();
                 body_len = b->size();
                 break;
             }
             case NT_STRING: {
-                const QoreStringNode* str = reinterpret_cast<const QoreStringNode*>(body);
+                const QoreStringNode* str = static_cast<const QoreStringNode*>(body);
                 body_ptr = str->c_str();
                 body_len = str->size();
                 break;
@@ -4873,4 +5253,738 @@ int Socket::submitHttp2Request(hash<auto> headers, *data body, bool streaming = 
 */
 nothing Socket::cancelHttp2Stream(int stream_id) {
     s->cancelHttp2Stream(stream_id, xsink);
+}
+
+//! Returns a poll operation for a QUIC client: performs QUIC handshake, sets up HTTP/3, and reads responses
+/** @par Example:
+    @code{.py}
+    # Bind a UDP socket and start a QUIC client connection
+    Socket sock();
+    sock.bindINET("0.0.0.0", 0, True, AF_INET);
+    AbstractPollOperation op = sock.startPollQuicConnect("example.com", 443);
+    @endcode
+
+    @param host the remote host to connect to
+    @param port the remote port to connect to
+    @param family the address family to use; default is @ref AF_INET
+
+    @return an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to perform the QUIC
+    handshake and read HTTP/3 responses
+
+    The @ref Qore::AbstractPollOperation::getOutput() "AbstractPollOperation::getOutput()" call will return a hash
+    with the following keys after a successful response:
+    - \c status_code: the HTTP/3 response status code
+    - \c method: the request method
+    - \c path: the request path
+    - \c stream_id: the HTTP/3 stream ID
+    - \c headers: response headers hash
+    - \c body: response body (binary)
+    - \c session_id: the QUIC session ID
+
+    @throw QUIC-ERROR if QUIC/HTTP/3 support is not available or address resolution fails
+    @throw SOCKET-NOT-OPEN if the socket is not open
+
+    @note Requires a UDP socket bound with @ref bindINET() before calling this method
+
+    @since %Qore 2.3
+*/
+AbstractPollOperation Socket::startPollQuicConnect(string host, int port, int family = AF_INET) {
+    if (port < 1 || port > 65535) {
+        xsink->raiseException("QUIC-ERROR", "port %d is out of range (1-65535)", (int)port);
+        return QoreValue();
+    }
+    s->ref();
+    ReferenceHolder<SocketPollOperationBase> poller(
+        new SocketQuicClientPollOperation(xsink, s, host->c_str(), static_cast<uint16_t>(port), family),
+        xsink
+    );
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
+    poller->setSelf(*rv);
+    poller.release();
+
+    if (!*xsink) {
+        rv->setValue("sock", self->objectRefSelf(), xsink);
+        rv->setValue("goal", new QoreStringNode("quic-connect"), xsink);
+    }
+    return rv.release();
+}
+
+//! Returns a poll operation for a QUIC server: accepts a QUIC connection and reads HTTP/3 requests
+/** @par Example:
+    @code{.py}
+    # Bind a UDP socket and accept QUIC connections
+    Socket sock();
+    sock.bindINET("0.0.0.0", 8443, True, AF_INET);
+    AbstractPollOperation op = sock.startPollQuicAccept();
+    @endcode
+
+    @return an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to accept a QUIC connection
+    and read the first HTTP/3 request
+
+    The @ref Qore::AbstractPollOperation::getOutput() "AbstractPollOperation::getOutput()" call will return a hash
+    with the following keys after a successful request:
+    - \c method: the HTTP/3 request method
+    - \c path: the request path
+    - \c stream_id: the HTTP/3 stream ID
+    - \c authority: the request authority (host)
+    - \c scheme: the request scheme
+    - \c headers: request headers hash
+    - \c body: request body (binary), if present
+    - \c session_id: the QUIC session ID
+    - \c peer_address: the remote peer IP address
+    - \c peer_port: the remote peer port
+
+    @throw QUIC-ERROR if QUIC/HTTP/3 support is not available
+    @throw SOCKET-NOT-OPEN if the socket is not open
+
+    @note Requires a UDP socket bound with @ref bindINET() before calling this method
+
+    @since %Qore 2.3
+*/
+AbstractPollOperation Socket::startPollQuicAccept() {
+    s->ref();
+    ReferenceHolder<SocketPollOperationBase> poller(new SocketQuicServerPollOperation(xsink, s), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
+    poller->setSelf(*rv);
+    poller.release();
+
+    if (!*xsink) {
+        rv->setValue("sock", self->objectRefSelf(), xsink);
+        rv->setValue("goal", new QoreStringNode("quic-accept"), xsink);
+    }
+    return rv.release();
+}
+
+//! Returns a poll operation to send an HTTP/3 response over QUIC
+/** @par Example:
+    @code{.py}
+    # After receiving an HTTP/3 request via startPollQuicAccept()
+    AbstractPollOperation op = sock.startPollQuicSendResponse(session_id, stream_id, 200, headers, body);
+    @endcode
+
+    @param session_id the QUIC session ID from the request
+    @param stream_id the HTTP/3 stream ID from the request
+    @param status_code the HTTP/3 response status code
+    @param headers response headers
+    @param body optional response body
+
+    @return an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to send the HTTP/3 response
+
+    @throw QUIC-ERROR if QUIC/HTTP/3 support is not available or no session with the given ID exists
+    @throw SOCKET-NOT-OPEN if the socket is not open
+
+    @since %Qore 2.3
+*/
+AbstractPollOperation Socket::startPollQuicSendResponse(int session_id, int stream_id, int status_code,
+        *hash<auto> headers, *data body) {
+    if (session_id <= 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
+        return QoreValue();
+    }
+    if (stream_id < 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid stream_id %lld: must be >= 0", (long long)stream_id);
+        return QoreValue();
+    }
+    if (status_code < 100 || status_code >= 600) {
+        xsink->raiseException("QUIC-ERROR", "invalid status_code %d: must be 100-599", (int)status_code);
+        return QoreValue();
+    }
+    s->ref();
+    ReferenceHolder<SocketPollOperationBase> poller(
+        new SocketQuicSendResponsePollOperation(xsink, s, session_id, stream_id, status_code, headers, body),
+        xsink
+    );
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
+    poller->setSelf(*rv);
+    poller.release();
+
+    if (!*xsink) {
+        rv->setValue("sock", self->objectRefSelf(), xsink);
+        rv->setValue("goal", new QoreStringNode("quic-response"), xsink);
+    }
+    return rv.release();
+}
+
+//! Returns @ref True if the socket has an active QUIC/HTTP/3 session
+/** @par Example:
+    @code{.py}
+    if (sock.isQuic()) {
+        printf("Socket is using QUIC/HTTP/3\n");
+    }
+    @endcode
+
+    @return @ref True if the socket has an active QUIC session
+
+    @since %Qore 2.3
+*/
+bool Socket::isQuic() [flags=CONSTANT] {
+    return s->isQuic();
+}
+
+//! Submits an HTTP/3 request on an active QUIC client connection
+/** @par Example:
+    @code{.py}
+    int stream_id = sock.submitQuicRequest("GET", "/api/resource");
+    @endcode
+
+    @param method HTTP method (GET, POST, etc.)
+    @param path request path
+    @param headers optional request headers
+    @param body optional request body
+
+    @return the stream ID assigned to this request
+
+    @throw QUIC-ERROR if no QUIC session is active or an error occurs
+
+    @note This method requires an active QUIC session, typically established via
+    @ref startPollQuicConnect()
+
+    @since %Qore 2.3
+*/
+int Socket::submitQuicRequest(string method, string path, *hash<auto> headers, *data body) {
+    const void* body_ptr = nullptr;
+    size_t body_len = 0;
+    if (extractQuicBodyPtrLen(body, body_ptr, body_len, xsink)) {
+        return -1;
+    }
+    return s->submitQuicRequest(method->c_str(), path->c_str(), headers, body_ptr, body_len, xsink);
+}
+
+//! Returns the first QUIC session ID for this socket
+/** @par Example:
+    @code{.py}
+    int session_id = sock.getQuicSessionId();
+    @endcode
+
+    This is useful for client connections which have a single QUIC session.
+    Returns 0 if no QUIC session is active.
+
+    @return the session ID of the first (or only) QUIC session
+
+    @since %Qore 2.3
+*/
+int Socket::getQuicSessionId() {
+    return s->getFirstQuicSessionId(xsink);
+}
+
+//! Cancels a pending HTTP/3 stream on an active QUIC connection
+/** @par Example:
+    @code{.py}
+    sock.cancelQuicStream(session_id, stream_id);
+    @endcode
+
+    @param session_id the QUIC session ID
+    @param stream_id the stream ID to cancel
+
+    @throw QUIC-ERROR if no QUIC session with the given ID is active
+
+    @since %Qore 2.3
+*/
+nothing Socket::cancelQuicStream(int session_id, int stream_id) {
+    if (session_id <= 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
+        return QoreValue();
+    }
+    if (stream_id < 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid stream_id %lld: must be >= 0", (long long)stream_id);
+        return QoreValue();
+    }
+    s->cancelQuicStream(session_id, stream_id, xsink);
+}
+
+//! Submits an HTTP/3 response on an active QUIC server connection
+/** @par Example:
+    @code{.py}
+    sock.submitQuicResponse(session_id, stream_id, 200, {"content-type": "text/plain"}, "OK");
+    @endcode
+
+    @param session_id the QUIC session ID
+    @param stream_id the HTTP/3 stream ID to respond on
+    @param status_code the HTTP status code
+    @param headers optional response headers
+    @param body optional response body
+
+    @throw QUIC-ERROR if no QUIC session with the given ID is active or submission fails
+
+    @note This method requires an active QUIC server session, typically established via
+    @ref startPollQuicAccept()
+
+    @since %Qore 2.3
+*/
+nothing Socket::submitQuicResponse(int session_id, int stream_id, int status_code, *hash<auto> headers, *data body) {
+    if (session_id <= 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
+        return QoreValue();
+    }
+    if (stream_id < 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid stream_id %lld: must be >= 0", (long long)stream_id);
+        return QoreValue();
+    }
+    if (status_code < 100 || status_code >= 600) {
+        xsink->raiseException("QUIC-ERROR", "invalid status_code %d: must be 100-599", (int)status_code);
+        return QoreValue();
+    }
+    const void* body_ptr = nullptr;
+    size_t body_len = 0;
+    if (extractQuicBodyPtrLen(body, body_ptr, body_len, xsink)) {
+        return QoreValue();
+    }
+    s->submitQuicResponse(session_id, stream_id, status_code, headers, body_ptr, body_len, xsink);
+}
+
+//! Sends an HTTP/3 GOAWAY shutdown notice on a QUIC session
+/** @par Example:
+    @code{.py}
+    sock.submitQuicShutdownNotice(session_id);
+    @endcode
+
+    Sends a GOAWAY frame with the maximum stream ID (shutdown notice phase),
+    indicating that the server intends to shut down.
+
+    @param session_id the QUIC session ID
+
+    @throw QUIC-ERROR if the session_id is invalid (<= 0)
+    @throw QUIC-SESSION-ERROR if no QUIC session with the given ID is active
+    @throw QUIC-HTTP3-ERROR if the HTTP/3 layer is not initialized or submission fails
+
+    @since %Qore 2.3
+*/
+nothing Socket::submitQuicShutdownNotice(int session_id) {
+    if (session_id <= 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
+        return QoreValue();
+    }
+    s->submitQuicShutdownNotice(session_id, xsink);
+}
+
+//! Sends an HTTP/3 GOAWAY shutdown on a QUIC session
+/** @par Example:
+    @code{.py}
+    sock.submitQuicShutdown(session_id);
+    @endcode
+
+    Sends a GOAWAY frame with the actual last stream ID that the server will
+    process.  After this, no new streams will be accepted.
+
+    @param session_id the QUIC session ID
+
+    @throw QUIC-ERROR if the session_id is invalid (<= 0)
+    @throw QUIC-SESSION-ERROR if no QUIC session with the given ID is active
+    @throw QUIC-HTTP3-ERROR if the HTTP/3 layer is not initialized or submission fails
+
+    @since %Qore 2.3
+*/
+nothing Socket::submitQuicShutdown(int session_id) {
+    if (session_id <= 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
+        return QoreValue();
+    }
+    s->submitQuicShutdown(session_id, xsink);
+}
+
+//! Returns GOAWAY state for a QUIC session
+/** @par Example:
+    @code{.py}
+    hash<QuicGoawayStateInfo> state = sock.getQuicSessionGoawayState(session_id);
+    if (state.goaway_received) {
+        # connection is draining — streams above goaway_max_stream_id were not processed
+    }
+    @endcode
+
+    @param session_id the QUIC session ID
+
+    @return a @ref QuicGoawayStateInfo hash with the session's GOAWAY state
+
+    @throw QUIC-ERROR if the session_id is invalid (<= 0)
+    @throw QUIC-SESSION-ERROR if no QUIC session with the given ID is active
+
+    @since %Qore 2.3
+*/
+hash<QuicGoawayStateInfo> Socket::getQuicSessionGoawayState(int session_id) {
+    if (session_id <= 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
+        return QoreValue();
+    }
+    return s->getQuicSessionGoawayState(session_id, xsink);
+}
+
+//! Returns True if a GOAWAY has been received from the peer on a QUIC session
+/** @par Example:
+    @code{.py}
+    if (sock.isQuicGoawayReceived(session_id)) {
+        # connection is draining
+    }
+    @endcode
+
+    Lightweight check suitable for calling on every I/O cycle — avoids hash
+    allocation.  Returns False (without raising an exception) if the session
+    does not exist.
+
+    @param session_id the QUIC session ID
+
+    @return True if a GOAWAY has been received, False otherwise
+
+    @since %Qore 2.3
+*/
+bool Socket::isQuicGoawayReceived(int session_id) {
+    if (session_id <= 0) {
+        return false;
+    }
+    return s->isQuicGoawayReceived(session_id, xsink);
+}
+
+//! Returns the peer (client) certificate from a QUIC session after TLS handshake
+/** @par Example:
+    @code{.py}
+    *SSLCertificate cert = sock.getQuicPeerCertificate(session_id);
+    if (cert) {
+        string subject = cert.getSubjectHash();
+    }
+    @endcode
+
+    For mutual TLS (mTLS) — returns the client's X.509 certificate presented during
+    the QUIC/TLS 1.3 handshake. The server must have been configured with
+    @ref SSL_VERIFY_PEER to request client certificates.
+
+    @param session_id the QUIC session ID
+
+    @return the peer's @ref Qore::SSLCertificate "SSLCertificate" object, or @ref nothing
+    if no client certificate was presented
+
+    @throw QUIC-ERROR if the session_id is invalid (<= 0)
+    @throw QUIC-SESSION-ERROR if no QUIC session with the given ID is active
+
+    @since %Qore 2.3
+*/
+*SSLCertificate Socket::getQuicPeerCertificate(int session_id) {
+    if (session_id <= 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
+        return QoreValue();
+    }
+    return s->getQuicPeerCertificate(session_id, xsink);
+}
+
+//! Creates a poll operation for sending an HTTP/3 streaming response via InputStream
+/** @par Example:
+    @code{.py}
+    AbstractPollOperation op = sock.startPollQuicSendStreamingResponse(
+        session_id, stream_id, 200, headers, input_stream);
+    @endcode
+
+    Reads chunks from the InputStream incrementally and sends them over the QUIC
+    stream using the deferred data reader mechanism. This avoids buffering the
+    entire response body in memory.
+
+    @param session_id the QUIC session ID from the request
+    @param stream_id the HTTP/3 stream ID from the request
+    @param status_code the HTTP/3 response status code
+    @param headers response headers
+    @param body the InputStream providing the response body
+    @param chunk_size optional chunk size for reading from the InputStream (default 16384)
+
+    @return an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to send the
+    streaming HTTP/3 response
+
+    @throw QUIC-ERROR if QUIC/HTTP/3 support is not available or no session with the given
+    ID exists
+    @throw SOCKET-NOT-OPEN if the socket is not open
+
+    @since %Qore 2.3
+*/
+AbstractPollOperation Socket::startPollQuicSendStreamingResponse(int session_id, int stream_id,
+        int status_code, *hash<auto> headers, InputStream[InputStream] body, *int chunk_size) {
+    if (session_id <= 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
+        return QoreValue();
+    }
+    if (stream_id < 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid stream_id %lld: must be >= 0", (long long)stream_id);
+        return QoreValue();
+    }
+    if (status_code < 100 || status_code >= 600) {
+        xsink->raiseException("QUIC-ERROR", "invalid status_code %d: must be 100-599", (int)status_code);
+        return QoreValue();
+    }
+    // body ref is owned by QPP ReferenceHolder; poll operation takes ownership via release()
+    InputStream* body_ptr = body.release();
+    s->ref();
+
+    ReferenceHolder<SocketPollOperationBase> poller(
+        new SocketQuicSendStreamingResponsePollOperation(xsink, s, session_id, stream_id,
+            status_code, headers, body_ptr, chunk_size ? chunk_size : 16384),
+        xsink
+    );
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    // Unassign the stream from the current thread so that the worker thread
+    // calling continuePoll() can reassign it to itself
+    body_ptr->unassignThread(xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
+    poller->setSelf(*rv);
+    poller.release();
+
+    if (!*xsink) {
+        rv->setValue("sock", self->objectRefSelf(), xsink);
+        rv->setValue("goal", new QoreStringNode("quic-streaming-response"), xsink);
+    }
+    return rv.release();
+}
+
+//! Submits a streaming HTTP/3 response (headers only) on a QUIC session
+/** @par Example:
+    @code{.py}
+    sock.submitQuicResponseStreaming(session_id, stream_id, 200, {"content-type": "text/plain"});
+    # Then send data incrementally:
+    sock.submitQuicStreamData(session_id, stream_id, chunk1);
+    sock.submitQuicStreamData(session_id, stream_id, chunk2);
+    sock.submitQuicStreamData(session_id, stream_id, NOTHING, True); # end stream
+    @endcode
+
+    Submits the response headers with a deferred body. Data is provided incrementally
+    via @ref submitQuicStreamData(). The I/O thread must call writePackets() to flush
+    the data to the network.
+
+    @param session_id the QUIC session ID
+    @param stream_id the HTTP/3 stream ID to respond on
+    @param status_code the HTTP status code
+    @param headers optional response headers
+
+    @throw QUIC-ERROR if no QUIC session with the given ID is active
+    @throw QUIC-HTTP3-ERROR if the HTTP/3 layer is not initialized or submission fails
+
+    @since %Qore 2.3
+*/
+nothing Socket::submitQuicResponseStreaming(int session_id, int stream_id, int status_code,
+        *hash<auto> headers) {
+    if (session_id <= 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
+        return QoreValue();
+    }
+    if (stream_id < 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid stream_id %lld: must be >= 0", (long long)stream_id);
+        return QoreValue();
+    }
+    if (status_code < 100 || status_code >= 600) {
+        xsink->raiseException("QUIC-ERROR", "invalid status_code %d: must be 100-599", (int)status_code);
+        return QoreValue();
+    }
+    s->submitQuicResponseStreaming(session_id, stream_id, status_code, headers, xsink);
+}
+
+//! Sends body data on a streaming HTTP/3 response
+/** @par Example:
+    @code{.py}
+    int rv = sock.submitQuicStreamData(session_id, stream_id, chunk_data);
+    if (rv == 1) {
+        # buffer full — wait for ACKs before retrying
+    }
+    sock.submitQuicStreamData(session_id, stream_id, NOTHING, True); # end stream
+    @endcode
+
+    Appends data to the stream's buffer and resumes the nghttp3 deferred data reader
+    if it was waiting. The I/O thread must call writePackets() to flush.
+
+    @param session_id the QUIC session ID
+    @param stream_id the HTTP/3 stream ID
+    @param body optional body data to send
+    @param end_stream set to True to signal the end of the response body
+
+    @return 0 on success, 1 if buffer full (backpressure)
+
+    @throw QUIC-ERROR if no QUIC session with the given ID is active
+    @throw QUIC-HTTP3-ERROR if no streaming response for the given stream
+
+    @since %Qore 2.3
+*/
+int Socket::submitQuicStreamData(int session_id, int stream_id, *data body,
+        softbool end_stream = False) {
+    if (session_id <= 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
+        return -1;
+    }
+    if (stream_id < 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid stream_id %lld: must be >= 0", (long long)stream_id);
+        return -1;
+    }
+    const void* body_ptr = nullptr;
+    size_t body_len = 0;
+    if (extractQuicBodyPtrLen(body, body_ptr, body_len, xsink)) {
+        return -1;
+    }
+    return s->submitQuicStreamData(session_id, stream_id, body_ptr, body_len,
+        (bool)end_stream, xsink);
+}
+
+//! Submit HTTP/3 streaming response with InputStream body (non-blocking)
+/** Handler thread calls this and returns immediately. The I/O thread reads from the
+    InputStream and sends HTTP/3 DATA frames incrementally via the QUIC server poll operation.
+
+    The C++ vtable is the sole authority on I/O thread eligibility. If the stream's C++
+    @ref InputStream::isIoThreadSafe() "isIoThreadSafe()" returns @ref False, this method
+    returns @ref 1 without submitting headers, so the caller can fall back to handler-thread
+    streaming.
+
+    @param session_id the QUIC session ID
+    @param stream_id the HTTP/3 stream ID
+    @param status_code the HTTP status code
+    @param headers optional response headers
+    @param body the InputStream to read the response body from
+
+    @return 0 = accepted for I/O thread streaming; 1 = not I/O-thread-safe, caller should
+    use handler-thread fallback
+
+    @throw QUIC-ERROR if the session or stream is not found or submission fails
+
+    @since %Qore 2.3
+*/
+int Socket::submitQuicStreamingResponseWithStream(int session_id, int stream_id,
+        int status_code, *hash<auto> headers, InputStream[InputStream] body) {
+    if (session_id <= 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0",
+            (long long)session_id);
+        return -1;
+    }
+    if (stream_id < 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid stream_id %lld: must be >= 0",
+            (long long)stream_id);
+        return -1;
+    }
+
+    // C++ vtable is the sole authority on I/O thread eligibility.
+    // Return 1 (not accepted) so the caller can fall back to handler-thread streaming.
+    // Check BEFORE submitting headers — no partial response on rejection.
+    if (!body->isIoThreadSafe()) {
+        return 1;
+    }
+
+    // Submit response headers without closing the stream
+    s->submitQuicResponseStreaming(session_id, stream_id, status_code, headers, xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    // Transfer InputStream ownership to the session for I/O thread reading
+    InputStream* body_ptr = body.release();
+    s->setQuicStreamInputStream(session_id, stream_id, body_ptr, xsink);
+    return *xsink ? -1 : 0;
+}
+
+//! Waits for a streaming HTTP/3 body buffer to drain below the backpressure threshold
+/** @par Example:
+    @code{.py}
+    while (sock.submitQuicStreamData(session_id, stream_id, chunk, False) == 1) {
+        controllers[idx].wake();
+        # Deterministic wait — blocks until buffer drains or timeout expires
+        sock.waitForQuicStreamDrain(session_id, stream_id, 5s);
+    }
+    @endcode
+
+    Blocks the calling thread until the stream's internal buffer drops below the
+    backpressure threshold (1 MB), the stream is closed, or the timeout expires.
+
+    Unlike polling with usleep(), this method uses a condition variable signaled by
+    the I/O thread when buffer space is freed, providing deterministic wakeup with
+    no wasted CPU cycles.
+
+    @note This method does NOT acquire the socket lock, so it is safe to call from
+    a handler thread while the I/O thread is running. The I/O thread is free to
+    call continuePoll() concurrently.
+
+    @param session_id the QUIC session ID
+    @param stream_id the HTTP/3 stream ID
+    @param timeout_ms maximum wait time in milliseconds (0 = no wait, -1 = infinite)
+
+    @return 0 if buffer drained, 1 if timed out, -1 if stream not found or closed
+
+    @throw QUIC-ERROR if no QUIC session with the given ID is active
+
+    @since %Qore 2.3
+*/
+int Socket::waitForQuicStreamDrain(int session_id, int stream_id,
+        timeout timeout_ms = 5s) {
+    if (session_id <= 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
+        return -1;
+    }
+    if (stream_id < 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid stream_id %lld: must be >= 0", (long long)stream_id);
+        return -1;
+    }
+    return s->waitForQuicStreamDrain(session_id, stream_id, (int)timeout_ms, xsink);
+}
+
+//! Submits an HTTP/3 extended CONNECT response (RFC 9220)
+/** Sends response headers without END_STREAM, keeping the stream open for
+    bidirectional data transfer (WebSocket over HTTP/3). Subsequent data is sent
+    via @ref submitQuicStreamData() and read via @ref readQuicConnectStreamData().
+
+    @param session_id the QUIC session ID
+    @param stream_id the HTTP/3 stream ID from the CONNECT request
+    @param status_code the HTTP status code to send (200 to accept, 4xx to reject)
+    @param headers optional response headers
+
+    @throw QUIC-ERROR if no QUIC session with the given ID is active
+    @throw QUIC-HTTP3-ERROR if the HTTP/3 layer is not initialized, stream is not a CONNECT request,
+        or submission fails
+
+    @since %Qore 2.3
+*/
+nothing Socket::submitQuicConnectResponse(int session_id, int stream_id, int status_code,
+        *hash<auto> headers) {
+    if (session_id <= 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
+        return QoreValue();
+    }
+    if (stream_id < 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid stream_id %lld: must be >= 0", (long long)stream_id);
+        return QoreValue();
+    }
+    if (status_code < 100 || status_code >= 600) {
+        xsink->raiseException("QUIC-ERROR", "invalid status_code %d: must be 100-599", (int)status_code);
+        return QoreValue();
+    }
+    s->submitQuicConnectResponse(session_id, stream_id, status_code, headers, xsink);
+}
+
+//! Reads data from an HTTP/3 extended CONNECT stream (RFC 9220)
+/** Returns buffered data received on the bidirectional tunnel for the given stream.
+    Used to read WebSocket frames from the client on an extended CONNECT stream.
+
+    @param session_id the QUIC session ID
+    @param stream_id the HTTP/3 stream ID
+
+    @return binary data if available, or @ref nothing if no data is buffered
+
+    @throw QUIC-ERROR if no QUIC session with the given ID is active
+
+    @since %Qore 2.3
+*/
+*binary Socket::readQuicConnectStreamData(int session_id, int stream_id) {
+    if (session_id <= 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
+        return QoreValue();
+    }
+    if (stream_id < 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid stream_id %lld: must be >= 0", (long long)stream_id);
+        return QoreValue();
+    }
+    return s->readQuicConnectStreamData(session_id, stream_id, xsink);
 }

@@ -109,6 +109,11 @@ if ! grep -q "^qore:x:${QORE_UID}" /etc/passwd; then
     adduser -u ${QORE_UID} -D -G qore -h /home/qore -s /bin/bash qore
 fi
 
+# install gdb for crash diagnostics (captures backtraces on segfault)
+if ! command -v gdb > /dev/null 2>&1; then
+    apk add --no-cache gdb
+fi
+
 # own everything by the qore user
 chown -R qore:qore ${QORE_SRC_DIR}
 

@@ -1,8 +1,8 @@
-prefix=@prefix@
-exec_prefix=@exec_prefix@
-libdir=@libdir@
-includedir=@includedir@
-datarootdir=@datarootdir@
+prefix=@CMAKE_INSTALL_PREFIX@
+exec_prefix=${prefix}
+libdir=@CMAKE_INSTALL_FULL_LIBDIR@
+includedir=@CMAKE_INSTALL_FULL_INCLUDEDIR@
+datarootdir=@CMAKE_INSTALL_FULL_DATAROOTDIR@
 moduledir=${libdir}/qore-modules
 usermoddir=${datarootdir}/qore-modules
 usermodverdir=${usermoddir}/@VERSION@

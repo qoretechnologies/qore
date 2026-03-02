@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file AwsRestClient.qm Qore user module for calling AWS REST services
 
-/*  AwsRestClient.qm Copyright (C) 2019 - 2024 Qore Technologies, s.r.o.
+/*  AwsRestClient.qm Copyright (C) 2019 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -39,7 +39,7 @@
 %requires(reexport) ConnectionProvider >= 1.4
 
 module AwsRestClient {
-    version = "1.2";
+    version = "1.3";
     desc = "user module for calling AWS REST services";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -89,6 +89,9 @@ printf("%N\n", ans.body);
     @endcode
 
     @section Awsrestclientrelnotes Release Notes
+
+    @subsection awsrestclientv1_3 AwsRestClient v1.3
+    - added \c prepareAsyncSend() override for AWS Signature V4 signing in async REST requests
 
     @subsection awsrestclientv2_0 AwsRestClient v1.2
     - added support for the DataProvider API
@@ -283,6 +286,29 @@ AwsRestClient rest({
 
         return RestClient::sendAndDecodeResponse(body, m, path, hdr, \info, decode_errors, assume_content_type, shdr,
             signer);
+    }
+
+    #! Signs the request with AWS Signature V4 for async operations
+    /** @since AwsRestClient 1.3
+    */
+    private prepareAsyncSend(string method, string path, *data body, reference<hash<auto>> hdr) {
+        # get request time
+        date gmtime = Qore::gmtime();
+        # get credential scope
+        string scope = sprintf("%s/%s", gmtime.format("YYYYMMDD"), credential_scope_suffix);
+
+        # get signature and signed header string
+        string signed_headers;
+
+        # add configured headers without overriding
+        hdr = headers + hdr;
+
+        # get signature
+        string sig = getSignature(method, path, \hdr, body, gmtime, scope, \signed_headers);
+
+        # add authorization header
+        hdr.Authorization = sprintf("%s Credential=%s/%s, SignedHeaders=%s, Signature=%s",
+            AwsSignatureAlgorithm, aws_keyid, scope, signed_headers, sig);
     }
 
     string getSignature(string http_method, string path, reference<hash<auto>> hdr, *data body, date gmtime,

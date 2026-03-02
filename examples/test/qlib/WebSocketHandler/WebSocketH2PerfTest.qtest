@@ -747,8 +747,18 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
             assertTrue(wsc.isHttp2(), "WebSocket should connect over HTTP/2");
 
-            # Wait for the flood to complete and any messages to arrive
-            sleep(5s);
+            # Wait for the flood to complete (up to 10s), polling the receive
+            # counter instead of a fixed sleep to finish faster in most cases
+            date deadline = now_us() + 10s;
+            while (now_us() < deadline) {
+                m.lock();
+                int r = received;
+                m.unlock();
+                if (r >= flood_count) {
+                    break;
+                }
+                sleep(100ms);
+            }
         } catch (hash<ExceptionInfo> ex) {
             caught_ex = ex;
         }
@@ -769,18 +779,18 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             sprintf("flow control backpressure should not cause unhandled exception (got: %s: %s)",
                 caught_ex.err ?? "N/A", caught_ex.desc ?? "N/A"));
 
-        # Some messages may or may not get through depending on timing;
-        # the critical test is that the server doesn't crash
+        m.lock();
+        int final_received = received;
+        m.unlock();
+
         if (m_options.verbose > 1) {
-            m.lock();
-            int final_received = received;
-            m.unlock();
             printf("  Flood: %d x %dKB = %.1fMB, received: %d/%d\n",
                 flood_count, msg_size / 1024,
                 (flood_count * msg_size) / 1048576.0,
                 final_received, flood_count);
             printf("  Key: no crash from HTTP2-FLOW-CONTROL backpressure\n");
         }
+
     }
 
     #! Test 6: Connection Resilience (Issue C verification)

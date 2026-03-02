@@ -52,7 +52,7 @@ public hashdecl SocketPollOperationInfo {
     *hash<SocketPollInfo> poll_info;
 
     #! I/O timeout; use a negative value to disable timeout (operation will wait indefinitely)
-    date to = AsyncSocketIoController::DefaultIoOperationTimeout;
+    timeout to = AsyncSocketIoController::DefaultIoOperationTimeout;
 
     #! Owner identifier for cancellation; required for proper cleanup during shutdown via cancelByOwner()
     string owner;
@@ -1487,6 +1487,11 @@ public class AsyncSocketIoController inherits LoggerWrapper {
             }
         }
     }
+
+    #! Sets the logger for the controller
+    setLogger(*LoggerInterface logger) {
+        LoggerWrapper::setLogger(logger);
+    }
 }
 
 #! Returns the global async I/O controller singleton
@@ -1516,7 +1521,7 @@ hashdecl PollInfo {
     *hash<SocketPollInfo> poll_info;
 
     #! I/O timeout; negative means no timeout
-    date to = AsyncSocketIoController::DefaultIoOperationTimeout;
+    timeout to = AsyncSocketIoController::DefaultIoOperationTimeout;
 
     #! Owner identifier for cancellation
     string owner;

@@ -465,6 +465,36 @@ enum HTTP2Mode : int {
     H2cUpgrade = 4,
 };
 
+/** @defgroup http3_mode_constants HTTP/3 Mode Constants
+    These constants can be used with HTTPClient::setHttp3Mode() to control HTTP/3 behavior
+
+    @since %Qore 2.3
+ */
+///@{
+//! HTTP/3 disabled mode - never use HTTP/3
+const HTTP3_MODE_DISABLED = HTTP3_MODE_DISABLED;
+
+//! HTTP/3 auto mode - use HTTP/3 if advertised via Alt-Svc, fall back to TCP (default)
+const HTTP3_MODE_AUTO = HTTP3_MODE_AUTO;
+
+//! HTTP/3 required mode - require HTTP/3, fail if unavailable
+const HTTP3_MODE_REQUIRED = HTTP3_MODE_REQUIRED;
+///@}
+
+//! HTTP/3 mode enum for type-safe use with HTTPClient::setHttp3Mode()
+/** The enum values match the HTTP3_MODE_* constants.
+
+    @since %Qore 2.3
+*/
+enum HTTP3Mode : int {
+    //! HTTP/3 disabled mode - never use HTTP/3
+    Disabled = 0,
+    //! HTTP/3 auto mode - use HTTP/3 if advertised via Alt-Svc, fall back to TCP (default)
+    Auto = 1,
+    //! HTTP/3 required mode - require HTTP/3, fail if unavailable
+    Required = 2,
+};
+
 /** @defgroup io_constants I/O Constants
     These constants are all instantiations of the @ref File "File class"
 

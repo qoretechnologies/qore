@@ -53,6 +53,12 @@ public:
     // Reverse map of QoreObject* -> fd for removal after socket/file is closed
     std::unordered_map<QoreObject*, int> reverse_map;
 
+    //! Timer user data storage (Qore values are ref-counted)
+    struct TimerData {
+        QoreValue udata;  //!< Referenced Qore value
+    };
+    std::unordered_map<int64_t, TimerData> timer_data_map;
+
 #ifdef DARWIN
     // Map of EventNotifier* -> QoreObject* for optimized user event tracking
     std::unordered_map<QoreEventNotifier*, QoreObject*> notifier_map;
@@ -155,6 +161,36 @@ public:
     }
 };
 
+//! Event poll info hash with timer support
+/** Contains event information from EventLoop::poll(), including both I/O and timer events
+
+    @since %Qore 2.3
+*/
+hashdecl Qore::EventPollInfo {
+    //! Bitmask of events: SOCK_POLLIN, SOCK_POLLOUT, SOCK_POLLERR, SOCK_POLLTIMER
+    int events;
+
+    //! The I/O object that has events (NOTHING for timer events)
+    *Qore::AbstractPollableIoObject socket;
+
+    //! Timer ID (only set for timer events where events & SOCK_POLLTIMER)
+    *int timer_id;
+
+    //! Timer user data (only set for timer events)
+    auto timer_udata;
+}
+
+//! Timer event info hash for AsyncIoController timer callbacks
+/** @since %Qore 2.3
+*/
+hashdecl Qore::TimerEventInfo {
+    //! Timer ID
+    int id;
+
+    //! User data provided when the timer was added
+    auto udata;
+}
+
 //! Persistent event loop for efficient async I/O
 /** The EventLoop class provides a persistent event loop using the most efficient
     mechanism available on each platform:
@@ -209,6 +245,12 @@ EventLoop::destructor() {
     }
     el->notifier_map.clear();
 #endif
+
+    // Clean up timer user data
+    for (auto& [id, td] : el->timer_data_map) {
+        td.udata.discard(xsink);
+    }
+    el->timer_data_map.clear();
 
     el->deref(xsink);
 }
@@ -392,13 +434,16 @@ nothing EventLoop::del(EventNotifier[QoreEventNotifier] notifier) {
 #endif
 }
 
-//! Polls for events on registered sockets/files
+//! Polls for events on registered sockets/files and timers
 /** @par Example:
     @code{.py}
-*list<hash<EventInfo>> events = loop.poll(5s);
+*list<hash<EventPollInfo>> events = loop.poll(5s);
 if (events) {
-    for (hash<EventInfo> ev in events) {
-        if (ev.events & SOCK_POLLIN) {
+    for (hash<EventPollInfo> ev in events) {
+        if (ev.events & SOCK_POLLTIMER) {
+            # handle timer event
+            printf("timer %d fired with udata: %y\n", ev.timer_id, ev.timer_udata);
+        } else if (ev.events & SOCK_POLLIN) {
             # handle read event
         }
     }
@@ -408,15 +453,19 @@ if (events) {
     @param timeout_ms Timeout for the poll operation; a negative value waits indefinitely,
            0 returns immediately, positive values wait up to that duration
 
-    @return A list of hash<EventInfo> for sockets/files with events, or NOTHING on timeout
+    @return A list of hash<EventPollInfo> for sockets/files/timers with events, or NOTHING on timeout
 
     @throw EVENT-LOOP-ERROR Poll operation failed
 
     Each hash in the returned list has:
-    - \c socket: The Socket or ReadOnlyFile object that has events
-    - \c events: Bitmask of events that occurred (SOCK_POLLIN, SOCK_POLLOUT, SOCK_POLLERR)
+    - \c events: Bitmask of events that occurred (SOCK_POLLIN, SOCK_POLLOUT, SOCK_POLLERR, SOCK_POLLTIMER)
+    - \c socket: The Socket or ReadOnlyFile object that has events (NOTHING for timer events)
+    - \c timer_id: Timer ID (only set for timer events)
+    - \c timer_udata: Timer user data (only set for timer events)
+
+    @since %Qore 2.3 (return type changed from list<hash<SocketPollInfo>> to list<hash<EventPollInfo>>)
 */
-*list<hash<SocketPollInfo>> EventLoop::poll(timeout timeout_ms = -1) {
+*list<hash<EventPollInfo>> EventLoop::poll(timeout timeout_ms = -1) {
     if (el->loop.empty()) {
         return QoreValue();
     }
@@ -427,38 +476,57 @@ if (events) {
         return QoreValue();
     }
 
-    ReferenceHolder<QoreListNode> rv(new QoreListNode(hashdeclSocketPollInfo->getTypeInfo()), xsink);
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(hashdeclEventPollInfo->getTypeInfo()), xsink);
     for (int i = 0; i < count; ++i) {
-        QoreObject* obj = static_cast<QoreObject*>(events[i].udata);
-        if (!obj) {
-            continue;
-        }
+        if (events[i].events & QORE_EV_TIMER) {
+            // Timer event
+            ReferenceHolder<QoreHashNode> entry(new QoreHashNode(hashdeclEventPollInfo, xsink), xsink);
+            if (*xsink) {
+                return QoreValue();
+            }
+            entry->setKeyValue("events", (int64)SOCK_POLLTIMER, xsink);
+            entry->setKeyValue("timer_id", events[i].timer_id, xsink);
+            // Look up and deliver timer user data
+            auto tit = el->timer_data_map.find(events[i].timer_id);
+            if (tit != el->timer_data_map.end()) {
+                entry->setKeyValue("timer_udata", tit->second.udata, xsink);
+                tit->second.udata = QoreValue();  // transferred to hash
+                el->timer_data_map.erase(tit);
+            }
+            if (*xsink) {
+                return QoreValue();
+            }
+            rv->push(entry.release(), xsink);
+        } else {
+            // I/O event
+            QoreObject* obj = static_cast<QoreObject*>(events[i].udata);
+            if (!obj) {
+                continue;
+            }
 
-        // Convert internal event flags back to SOCK_POLLIN/SOCK_POLLOUT
-        int ev = 0;
-        if (events[i].events & QORE_EV_READ) {
-            ev |= SOCK_POLLIN;
-        }
-        if (events[i].events & QORE_EV_WRITE) {
-            ev |= SOCK_POLLOUT;
-        }
-        if (events[i].events & QORE_EV_ERROR) {
-            ev |= SOCK_POLLERR;
-        }
+            // Convert internal event flags back to SOCK_POLLIN/SOCK_POLLOUT
+            int ev = 0;
+            if (events[i].events & QORE_EV_READ) {
+                ev |= SOCK_POLLIN;
+            }
+            if (events[i].events & QORE_EV_WRITE) {
+                ev |= SOCK_POLLOUT;
+            }
+            if (events[i].events & QORE_EV_ERROR) {
+                ev |= SOCK_POLLERR;
+            }
 
-        ReferenceHolder<QoreHashNode> entry(new QoreHashNode(hashdeclSocketPollInfo, xsink), xsink);
-        if (*xsink) {
-            return QoreValue();
+            ReferenceHolder<QoreHashNode> entry(new QoreHashNode(hashdeclEventPollInfo, xsink), xsink);
+            if (*xsink) {
+                return QoreValue();
+            }
+            entry->setKeyValue("events", ev, xsink);
+            entry->setKeyValue("socket", obj->refSelf(), xsink);
+            if (*xsink) {
+                return QoreValue();
+            }
+            rv->push(entry.release(), xsink);
         }
-        entry->setKeyValue("events", ev, xsink);
-        if (*xsink) {
-            return QoreValue();
-        }
-        entry->setKeyValue("socket", obj->refSelf(), xsink);
-        if (*xsink) {
-            return QoreValue();
-        }
-        rv->push(entry.release(), xsink);
     }
 
     return rv.release();
@@ -474,12 +542,70 @@ int EventLoop::size() {
     return el->loop.size();
 }
 
-//! Returns True if no sockets/files are registered
+//! Returns True if no sockets/files/timers are registered
 /** @par Example:
     @code{.py} bool empty = loop.empty(); @endcode
 
-    @return True if no sockets/files are registered
+    @return True if no sockets/files/timers are registered
 */
 bool EventLoop::empty() {
     return el->loop.empty();
+}
+
+//! Adds a timer to the event loop
+/** @par Example:
+    @code{.py}
+    int id = loop.addTimer(now_us() + 100000, "my data");
+    @endcode
+
+    @param deadline absolute deadline for the timer (as a date/time value)
+    @param udata user data to associate with this timer; returned in EventPollInfo when the timer fires
+
+    @return the timer ID
+
+    @since %Qore 2.3
+*/
+int EventLoop::addTimer(date deadline, auto udata) {
+    int64 deadline_us = deadline->getEpochMicrosecondsUTC();
+    int64_t id = el->loop.addTimer(deadline_us, nullptr);
+    // Store the Qore user data separately
+    udata.refSelf();
+    el->timer_data_map[id] = {udata};
+    return id;
+}
+
+//! Cancels a timer
+/** @par Example:
+    @code{.py}
+    bool canceled = loop.cancelTimer(timer_id);
+    @endcode
+
+    @param timer_id the timer ID returned by addTimer()
+
+    @return True if the timer was found and canceled, False if not found
+
+    @since %Qore 2.3
+*/
+bool EventLoop::cancelTimer(int timer_id) {
+    bool rv = el->loop.cancelTimer(timer_id);
+    if (rv) {
+        auto it = el->timer_data_map.find(timer_id);
+        if (it != el->timer_data_map.end()) {
+            it->second.udata.discard(xsink);
+            el->timer_data_map.erase(it);
+        }
+    }
+    return rv;
+}
+
+//! Returns the number of active timers
+/** @par Example:
+    @code{.py} int count = loop.timerCount(); @endcode
+
+    @return the number of active timers
+
+    @since %Qore 2.3
+*/
+int EventLoop::timerCount() {
+    return el->loop.timerCount();
 }

@@ -124,7 +124,10 @@ module HttpServerUtil {
 
     @section httpserverutil_relnotes HttpServerUtil Module Release Notes
 
-    @subsection httputil1_3_1 HttpServerUtil 1.3.1
+    @subsection httputil1_4 HttpServerUtil 1.4
+    - added HTTP/3 (QUIC) listener configuration support (\c enable_h3, \c alt_svc_max_age, \c no_bind)
+    - added maximum HTTP request body size enforcement (\c max_request_body_size)
+    - added \c sync option to allow non-blocking listener addition in async I/O mode
     - added Brotli (\c br) and Zstandard (\c zstd) Content-Encoding support in decodeBody() and encodeBody()
       (<a href="https://github.com/qoretechnologies/qore/issues/5071">issue 5071</a>)
 
@@ -603,15 +606,19 @@ public hashdecl HttpListenerOptionInfo {
     bool ssl_accept_all_certs = True;
 
     #! HTTP version mode for this listener
-    /** Controls HTTP/2 support for incoming connections:
+    /** Controls HTTP/2 and HTTP/3 support for incoming connections:
         - \c "auto": Use HTTP/2 if client negotiates via ALPN, fall back to HTTP/1.1 (default)
         - \c "1.0": HTTP/1.0 only
         - \c "1.1": HTTP/1.1 only
         - \c "2.0": Require HTTP/2, reject connections that don't negotiate HTTP/2
+        - \c "3.0": HTTP/3 (QUIC) listener — uses QUIC sockets configured separately
 
         @note HTTP/2 requires:
         - TLS (non-TLS connections always use HTTP/1.x)
         - Async I/O mode enabled on the HttpServer (\c async_mode: \c True, which is the default)
+
+        @note HTTP/3 requires TLS and uses QUIC as the transport protocol; HTTP/3 listeners are configured
+        via QUIC-specific paths
 
         When async mode is disabled, the server only supports HTTP/1.x regardless of this setting.
 
@@ -638,7 +645,7 @@ public hashdecl HttpListenerOptionInfo {
         @note This option only affects servers running in async I/O mode (the default).
         In sync mode, listeners are ready immediately.
 
-        @since HttpServer 1.7
+        @since HttpServer 1.6
     */
     bool sync = True;
 
@@ -647,9 +654,37 @@ public hashdecl HttpListenerOptionInfo {
         that grow beyond this value, receive HTTP 413 (Content Too Large) and the
         connection is closed.
 
-        @since HttpServer 1.8
+        @since HttpServer 1.6
     */
     int max_request_body_size = 0;
+
+    #! If True, skip bind/listen (for QUIC listeners that use a separate UDP socket)
+    /** @since HttpServer 1.6
+    */
+    bool no_bind = False;
+
+    #! Enable automatic HTTP/3 (QUIC) listener creation for TLS listeners
+    /** When \c True (the default) and both \c cert and \c key are present and async mode is on,
+        an additional QUIC listener is automatically created on the same port as the TCP listener.
+        The server will then advertise HTTP/3 availability via the \c Alt-Svc response header.
+
+        Set to \c False to disable automatic QUIC listener creation for this listener.
+
+        @note Requires async mode and TLS (cert + key). Has no effect without TLS or in sync mode.
+
+        @since HttpServer 1.6
+    */
+    bool enable_h3 = True;
+
+    #! Max-age value for the Alt-Svc header (seconds)
+    /** Controls how long clients should cache the HTTP/3 Alt-Svc advertisement.
+        Only used when \c enable_h3 is \c True and a QUIC listener is auto-created.
+
+        Default: 3600 (1 hour).
+
+        @since HttpServer 1.6
+    */
+    int alt_svc_max_age = 3600;
 }
 
 #! hash providing HTTP handler configuration info
@@ -738,6 +773,19 @@ public class CookieHelper {
             hdr."Cache-Control" = "no-cache, no-store, must-revalidate, max-age=0";
         }
     }
+}
+
+#! Returns @ref True if the request is an HTTP/2 or HTTP/3 extended CONNECT for WebSocket
+/** @param cx the call context hash
+    @param hdr the header hash
+
+    @return @ref True if the request is an HTTP/2 or HTTP/3 extended CONNECT for WebSocket (RFC 8441 / RFC 9220)
+
+    @since %HttpServerUtil 1.0.14
+*/
+public bool sub is_websocket_extended_connect(hash<auto> cx, hash<auto> hdr) {
+    return cx."header-info".is_websocket_connect
+        || (hdr.method == "CONNECT" && hdr.":protocol" == "websocket");
 }
 
 #! returns a complete URL from a bind address
@@ -833,6 +881,11 @@ public nothing sub http_set_reply_headers(Socket s, hash<auto> cx, reference<aut
             "TE",
             "te",
         };
+    }
+
+    # HTTP/3 responses should not include Alt-Svc — the client is already on h3
+    if (cx."header-info".http3) {
+        remove rv.hdr{"Alt-Svc", "alt-svc"};
     }
 
     if (!rv.hdr.Date) {

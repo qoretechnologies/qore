@@ -1,0 +1,257 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    SSE over HTTP/3 tests.
+
+    Tests cover:
+    - SSE connection over HTTP/3 — verify events received
+    - Multiple SSE events over HTTP/3 — verify ordering
+    - SSE with event types over HTTP/3
+*/
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/AsyncSocketIo
+%requires ../../../../qlib/HttpServerAsyncIo
+%requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/HttpClientIo
+
+%exec-class HttpServerQuicSseTest
+
+#! SSE handler that sends events directly via HTTP/3 QUIC streaming APIs
+/** Overrides the 5-arg handleRequest() to get the socket for QUIC API access.
+    For HTTP/3 requests, sends SSE headers and events directly via
+    submitQuicResponseStreaming() and submitQuicStreamData(), then returns
+    reply_sent + streaming to signal the controller.
+*/
+class SseHandler inherits AbstractHttpRequestHandler {
+    private {
+        #! Counter to signal when events have been sent
+        Counter event_sent_counter;
+    }
+
+    constructor(Counter event_sent_counter) {
+        self.event_sent_counter = event_sent_counter;
+    }
+
+    #! Override the 5-arg version to get the socket for HTTP/3 QUIC API access
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s,
+            hash<auto> cx, hash<auto> hdr, *data body) {
+        if (hdr.method == "GET" && hdr.path == "sse") {
+            if (cx."header-info".http3) {
+                return handleHttp3Sse(s, cx);
+            }
+            # For HTTP/2, return SSE response with content-type
+            return makeResponse(200, "data: not-implemented\n\n",
+                {"Content-Type": "text/event-stream"});
+        }
+        return makeResponse(404, "Not Found", {"Content-Type": MimeTypeText});
+    }
+
+    private hash<HttpResponseInfo> handleHttp3Sse(Socket s, hash<auto> cx) {
+        # Ensure the counter is always decremented, even if send operations throw
+        on_exit event_sent_counter.dec();
+
+        int session_id = cx."header-info".session_id;
+        int stream_id = cx."header-info".stream_id;
+
+        # Get wake callback from the async I/O controller
+        *code<nothing()> wake;
+        *AsyncSocketIo::AsyncSocketIoController ctrl = cx.async_ctrl;
+        if (ctrl) {
+            wake = \ctrl.wake();
+        }
+
+        # Create HTTP/3 SSE stream using the listener socket
+        Http3SseStream sse_stream(s, session_id, stream_id, wake);
+
+        # Send response headers
+        sse_stream.sendHeaders();
+
+        # Send 3 test events
+        sse_stream.sendEvent({"data": "event-1"});
+        sse_stream.sendEvent({"type": "custom", "data": "event-2", "id": "2"});
+        sse_stream.sendEvent({"data": "event-3"});
+
+        # Close the stream (sends END_STREAM)
+        sse_stream.close();
+
+        # Return streaming + reply_sent — controller will just wake and continue
+        return cast<hash<HttpResponseInfo>>({
+            "code": 200,
+            "reply_sent": True,
+            "streaming": True,
+            "stream_type": "sse",
+        });
+    }
+}
+
+class HttpServerQuicSseTest inherits Test {
+    private {
+        *Logger mLogger;
+
+        # Self-signed test certificate
+        const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIUahuuRGDlubXWYmiPhjVeT66vtNYwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MDIyMjE5MjIwMVoXDTM2MDIy
+MDE5MjIwMVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEAjZNfLFUyyo02MjZjouaR11FybkZNwDWBG/bhkpTVyj/x
+QKlwKf20LbGSCmMIYHaFnODMg6u6E6sfRJVk+ofwVHBN/Ug+mvoL1zlNJanMdXLH
+7oUsUILY6bVUDPm1ACZmFJsAc9jfHfkluJ6vfYG+DOJbyB0nsMfO9/fvrwndQPUQ
+k9eMq2VfDohni4ijk5BWD/P9UmrciZUNOaNISay469Le5ZrtfGt9An1+Ye3TckJC
+tTF4q7+V+GC88w5QtLd1AMQGf/1ax5cwqQv9SSFvhnwj9o3V3Wkz1dq4XA/9rSA1
+ecPHh/tJeGuvbD11Hyr9LTYjQ+DIel0DV0ZDHdc5vwIDAQABo1MwUTAdBgNVHQ4E
+FgQUYBBsVylVinbbAzTbUt0jRM6mJvwwHwYDVR0jBBgwFoAUYBBsVylVinbbAzTb
+Ut0jRM6mJvwwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAfIAE
+EPvLO+gOnm366xJabLr2Sw3hfmvCq/zSTlPcrB9jdBlOLpMmKcdGiOOCNmzg9+BX
+YNX+I6+MNOGp0j3afWlVwEjiMD66ydSMPEQw0FTzvpIjFN3fHo/MJzFbingRLrk8
+LCo94GmjMBYG+50M8MCKE6EzqfmoYT9fiMJcyJwwdptOWf0URNYKKrG1wRlX4+o8
+uNjQ3VwynI95fAw9WcR/ZtP0pkmCor/hKaYgVRsSGjD78Fu0Uuhm/pCAOuObpEHj
+5eoTlaWC3pZzGA67piqlEDOWiRi9Mo2CzG0t5fmQ83KB51ImauKdYB21whxjkZ+5
+BjwMC4hqSD+bzO2B+A==
+-----END CERTIFICATE-----";
+
+        const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCNk18sVTLKjTYy
+NmOi5pHXUXJuRk3ANYEb9uGSlNXKP/FAqXAp/bQtsZIKYwhgdoWc4MyDq7oTqx9E
+lWT6h/BUcE39SD6a+gvXOU0lqcx1csfuhSxQgtjptVQM+bUAJmYUmwBz2N8d+SW4
+nq99gb4M4lvIHSewx8739++vCd1A9RCT14yrZV8OiGeLiKOTkFYP8/1SatyJlQ05
+o0hJrLjr0t7lmu18a30CfX5h7dNyQkK1MXirv5X4YLzzDlC0t3UAxAZ//VrHlzCp
+C/1JIW+GfCP2jdXdaTPV2rhcD/2tIDV5w8eH+0l4a69sPXUfKv0tNiND4Mh6XQNX
+RkMd1zm/AgMBAAECggEAATo1WYTgPK75DiS4PBR5UDS7DryvoN/LNOsGLUdQC9b+
+aEaacSrAvKKs9vJr2KuTtfahn0SbsjRKFZtL9aYRuHxZbhLfGWiF4MGflcOBQRq+
+eVFl6clwnaS+S/cq5rZD1/WODUhkisslqhI/cubvNwe2rvyduE510LgxYkLuIZ7a
++SCQz1XyPyhb8eVrWIZiprufjqXvDy01MC74l3ZYqaq1hr1oKi0ZDHI95Os7gtwQ
+4HQ3qdJsmYfbaf1223REp8gybnshsxkyjhKRU3nG7ZvgrRRMFkJvfHZ8VcS3cvsK
+ccKBJg7376+VDtc+RHUcBMyVZ881y4Rq2t6ssYVJVQKBgQDFq+N7ZGKOtQChSIXn
+ju/gP5WzSKJFaZhdkSggHi1K+PkuCZ1SXzKD3CPibreSUx9hzoZAAmTjzOfwhVZ7
+5HDqhrKfkWNeThAdXlglhNX5LVKhhmBsNGawANO8Pmq+pueWhK/76XgiGcOknyt6
+NH1ZE/QZpFeZB2binEhf6leYGwKBgQC3WgF2eaj2c4pugq13oZ9BHms5nsbYQgj8
+1H2C1wsgJNiz4tq6xFdvjiaw+r1OrCFrl9nz7npFc7uohtrRxXr7sq5nwMPO3QAP
+VxzyZ/TFP/FI70Avz6x+xX7HIlptpQ1mWacsdrvtoIG1c8veEJTyA4JgjoMhdDer
+JuPze+ZHLQKBgAzuLIhCzcul/W+Pberyx7A0mJdMtgiyWpwsRaKsNqxD0xD24gqk
+XYqQmOxT78Arnc7pEpEXVwArxDRQlJKwI87DluWnPgfKNXWmWT/DC7gsBc65Go+Z
+ceorc65JqvPjuRx4e4aQBCK+6rRXESICUvzDuGEBBhXljQ5fyMA1dRtnAoGAQSFH
+w74Ttvf0BK2G0SgoWglkLWOpXsiWSLlynDenTBPKppu+9vkn1gi41cU72eZrOL0I
+Pw5HgMRLtOGyeTGdLiuaqGBhLepzSv+22KT03dyI6U+TjWhH7gBZuIMLfEdVKzZN
+nA3RU+fgK4SmtotNXWrBtWrqScfuvm1iK+unMUECgYBrwc1rU/GI9tH4MWvBX99n
+pmFneeIUuXJajOsh7jUyTxcrHl+4kkgHDExuFMNPHfrIG8xCj43fjzxD/spz3xRS
++Ki3i3lYOFNhTUCREt5Xx23hkksK6j7SYlfY0IV2UruWt/UubpsfEqxC1Uk07NTo
+l50Xb2GWQesIt9k5jF5IOw==
+-----END PRIVATE KEY-----";
+    }
+
+    constructor() : Test("HttpServerQuicSseTest", "1.0") {
+        @debug {
+            set_signal_handler(SIGUSR1, sub (int sig) {
+                printf("=== SIGUSR1 Thread Stacks ===\n%Y\n=== End Thread Stacks ===\n",
+                    get_all_thread_call_stacks());
+            });
+        }
+
+        addTestCase("SSE events over HTTP/3", \testH3SseEvents());
+
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        mLogger = new Logger("quic-sse-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            mLogger.addAppender(new StdoutAppender());
+        }
+    }
+
+    #! Test SSE events over HTTP/3
+    testH3SseEvents() {
+        Counter event_sent(1);
+        SseHandler handler(event_sent);
+
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": mLogger,
+            "debug": True,
+            "async_mode": True,
+        });
+        on_exit delete server;
+
+        server.setHandler("sse", "/sse", NOTHING, handler);
+        server.waitForAsyncIo();
+
+        hash<auto> h3info = server.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "enable_h3": True,
+        });
+        server.waitForAsyncIo();
+        string h3_url = "https://127.0.0.1:" + h3info.port;
+
+        # Use Http3ClientConnectionManager for HTTP/3 requests
+        HttpClientIo::HttpClientConnectionManager mgr(
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "protocol": "h3",
+                "accept_all_certs": True,
+                "logger": mLogger,
+                "request_timeout": 30s,
+                "connect_timeout": 15s,
+            },
+        );
+        on_exit delete mgr;
+
+        # Make the SSE request over HTTP/3
+        hash<auto> resp = mgr.request(h3_url, "GET", "/sse");
+
+        # Wait for handler to finish sending events
+        int rv = event_sent.waitForZero(30s);
+        assertEq(0, rv, "handler should have completed sending SSE events");
+
+        assertEq(200, resp.status_code, "SSE response should be 200 OK");
+
+        # The response body should contain all 3 SSE events
+        string body;
+        if (resp.body.typeCode() == NT_BINARY) {
+            body = binary_to_string(resp.body);
+        } else {
+            body = resp.body;
+        }
+
+        @debug(printf("SSE response body: %y\n", body));
+
+        # Verify events are present in the response
+        assertTrue(body.find("data: event-1") >= 0,
+            "should contain first event");
+        assertTrue(body.find("event: custom") >= 0,
+            "should contain custom event type");
+        assertTrue(body.find("data: event-2") >= 0,
+            "should contain second event data");
+        assertTrue(body.find("id: 2") >= 0,
+            "should contain event ID");
+        assertTrue(body.find("data: event-3") >= 0,
+            "should contain third event");
+    }
+}

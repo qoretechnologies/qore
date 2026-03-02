@@ -2835,6 +2835,196 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         return doRequestImpl(req, validateRequestOptions(request_options));
     }
 
+    #! @name Async CRUD API
+    /** @{
+    */
+
+    #! Creates a record asynchronously
+    /** The default implementation runs createRecord() in a background thread using Promise/Future.
+
+        @param rec a hash representing a single input record
+        @param create_options the create options
+
+        @return a Future that will resolve to the record creation result
+
+        @throw INVALID-OPERATION the data provider does not support record creation
+
+        @since DataProvider 3.3
+    */
+    Future createRecordAsync(hash<auto> rec, *hash<auto> create_options) {
+        checkCreate();
+        Promise p();
+        Future f = p.getFuture();
+        background doAsyncCreateRecord(p, rec, create_options);
+        return f;
+    }
+
+    #! Searches for records asynchronously
+    /** The default implementation runs searchRecords() in a background thread using Promise/Future.
+
+        @param where_cond the search criteria
+        @param search_options the search options
+
+        @return a Future that will resolve to a list of matching record hashes
+
+        @throw INVALID-OPERATION the data provider does not support reading / searching
+
+        @since DataProvider 3.3
+    */
+    Future searchRecordsAsync(*hash<auto> where_cond, *hash<auto> search_options) {
+        checkRead();
+        Promise p();
+        Future f = p.getFuture();
+        background doAsyncSearchRecords(p, where_cond, search_options);
+        return f;
+    }
+
+    #! Updates records asynchronously
+    /** The default implementation runs updateRecords() in a background thread using Promise/Future.
+
+        @param set the hash of field data to set
+        @param where_cond the search criteria
+        @param search_options the search options
+
+        @return a Future that will resolve to the number of records updated
+
+        @throw INVALID-OPERATION the data provider does not support record updates
+
+        @since DataProvider 3.3
+    */
+    Future updateRecordsAsync(hash<auto> set, *hash<auto> where_cond, *hash<auto> search_options) {
+        checkUpdate();
+        Promise p();
+        Future f = p.getFuture();
+        background doAsyncUpdateRecords(p, set, where_cond, search_options);
+        return f;
+    }
+
+    #! Deletes records asynchronously
+    /** The default implementation runs deleteRecords() in a background thread using Promise/Future.
+
+        @param where_cond the search criteria
+        @param search_options the search options
+
+        @return a Future that will resolve to the number of records deleted
+
+        @throw INVALID-OPERATION the data provider does not support record deletion
+
+        @since DataProvider 3.3
+    */
+    Future deleteRecordsAsync(*hash<auto> where_cond, *hash<auto> search_options) {
+        checkDelete();
+        Promise p();
+        Future f = p.getFuture();
+        background doAsyncDeleteRecords(p, where_cond, search_options);
+        return f;
+    }
+
+    #! Upserts a record asynchronously
+    /** The default implementation runs upsertRecord() in a background thread using Promise/Future.
+
+        @param rec a hash representing a single input record
+        @param upsert_options the upsert options
+
+        @return a Future that will resolve to the upsert result string
+
+        @throw INVALID-OPERATION the data provider does not support record upserts
+
+        @since DataProvider 3.3
+    */
+    Future upsertRecordAsync(hash<auto> rec, *hash<auto> upsert_options) {
+        checkUpsert();
+        Promise p();
+        Future f = p.getFuture();
+        background doAsyncUpsertRecord(p, rec, upsert_options);
+        return f;
+    }
+
+    #! Executes a request asynchronously
+    /** The default implementation runs doRequest() in a background thread using Promise/Future.
+
+        @param req the request body
+        @param request_options the request options
+
+        @return a Future that will resolve to the request response
+
+        @throw INVALID-OPERATION the data provider does not support the request API
+
+        @since DataProvider 3.3
+    */
+    Future doRequestAsync(auto req, *hash<auto> request_options) {
+        checkRequest();
+        Promise p();
+        Future f = p.getFuture();
+        background doAsyncDoRequest(p, req, request_options);
+        return f;
+    }
+
+    /** @} */
+
+    #! @name Async CRUD Background Helpers
+    /** @{
+    */
+
+    #! Background thread helper for async createRecord
+    private doAsyncCreateRecord(Promise p, hash<auto> rec, *hash<auto> create_options) {
+        try {
+            p.set(createRecord(rec, create_options));
+        } catch (hash<ExceptionInfo> ex) {
+            p.setError(ex.err, ex.desc, ex.arg);
+        }
+    }
+
+    #! Background thread helper for async searchRecords
+    private doAsyncSearchRecords(Promise p, *hash<auto> where_cond, *hash<auto> search_options) {
+        try {
+            AbstractDataProviderRecordIterator i = searchRecords(where_cond, search_options);
+            list<hash<auto>> results = map $1, i;
+            p.set(results);
+        } catch (hash<ExceptionInfo> ex) {
+            p.setError(ex.err, ex.desc, ex.arg);
+        }
+    }
+
+    #! Background thread helper for async updateRecords
+    private doAsyncUpdateRecords(Promise p, hash<auto> set, *hash<auto> where_cond,
+            *hash<auto> search_options) {
+        try {
+            p.set(updateRecords(set, where_cond, search_options));
+        } catch (hash<ExceptionInfo> ex) {
+            p.setError(ex.err, ex.desc, ex.arg);
+        }
+    }
+
+    #! Background thread helper for async deleteRecords
+    private doAsyncDeleteRecords(Promise p, *hash<auto> where_cond, *hash<auto> search_options) {
+        try {
+            p.set(deleteRecords(where_cond, search_options));
+        } catch (hash<ExceptionInfo> ex) {
+            p.setError(ex.err, ex.desc, ex.arg);
+        }
+    }
+
+    #! Background thread helper for async upsertRecord
+    private doAsyncUpsertRecord(Promise p, hash<auto> rec, *hash<auto> upsert_options) {
+        try {
+            p.set(upsertRecord(rec, upsert_options));
+        } catch (hash<ExceptionInfo> ex) {
+            p.setError(ex.err, ex.desc, ex.arg);
+        }
+    }
+
+    #! Background thread helper for async doRequest
+    private doAsyncDoRequest(Promise p, auto req, *hash<auto> request_options) {
+        try {
+            p.set(doRequest(req, request_options));
+        } catch (hash<ExceptionInfo> ex) {
+            p.setError(ex.err, ex.desc, ex.arg);
+        }
+    }
+
+    /** @} */
+
     #! Creates a new child data provider and returns it after adding as a child
     /** @param name the name of the new child data provider
         @param fields the fields for the new child data provider; must have at least one field

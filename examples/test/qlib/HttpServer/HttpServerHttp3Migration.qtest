@@ -1,0 +1,593 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    QUIC connection migration tests - exercises client-side active migration
+    (RFC 9000 §9) end-to-end over QUIC/HTTP/3.
+
+    Tests cover:
+    - Client active migration (migrate then request)
+    - Migration during streaming response (1MB body mid-stream)
+    - Migration during large upload (1MB POST body mid-upload)
+    - Multiple successive migrations (5x with path validation retries)
+    - CID exhaustion (migrate beyond active_connection_id_limit)
+    - Migration before handshake (negative test)
+    - Idle connection migration
+    - Concurrent streams (10) + migration
+    - Http3ClientConnectionManager.migrateAll()
+*/
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/AsyncSocketIo
+%requires ../../../../qlib/HttpServerAsyncIo
+%requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/HttpClientIo
+
+%exec-class HttpServerHttp3MigrationTest
+
+#! Simple echo handler for migration tests
+class MigrationEchoHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, body ?? "OK", {
+            "Content-Type": hdr."content-type" ?? "text/plain",
+            "X-Request-Path": hdr.path,
+        });
+    }
+}
+
+#! Handler that returns a large body for streaming tests
+class MigrationLargeHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        int size = 100000;
+        *list<*string> m = (hdr.path =~ x/large\/(\d+)/);
+        if (m) {
+            size = int(m[0]);
+        }
+        string response_body = strmul("M", size);
+        return makeResponse(200, response_body, {"Content-Type": "text/plain"});
+    }
+}
+
+class HttpServerHttp3MigrationTest inherits Test {
+    private {
+        HttpServer mServer;
+        *Logger mLogger;
+        int mH3Port;
+        string mH3Url;
+    }
+
+    public {
+        const CertPem = "-----BEGIN CERTIFICATE-----
+MIICpDCCAYwCCQCCHxSkNmz6/jANBgkqhkiG9w0BAQsFADAUMRIwEAYDVQQDDAls
+b2NhbGhvc3QwHhcNMjMwNDA1MjEzMzI1WhcNMjQwNDA0MjEzMzI1WjAUMRIwEAYD
+VQQDDAlsb2NhbGhvc3QwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQCN
+k18sVTLKjTYyNmOi5pHXUXJuRk3ANYEb9uGSlNXKP/FAqXAp/bQtsZIKYwhgdoWc
+4MyDq7oTqx9ElWT6h/BUcE39SD6a+gvXOU0lqcx1csfuhSxQgtjptVQM+bUAJmYU
+mwBz2N8d+SW4nq99gb4M4lvIHSewx8739++vCd1A9RCT14yrZV8OiGeLiKOTkFYP
+8/1SatyJlQ05o0hJrLjr0t7lmu18a30CfX5h7dNyQkK1MXirv5X4YLzzDlC0t3UA
+xAZ//VrHlzCpC/1JIW+GfCP2jdXdaTPV2rhcD/2tIDV5w8eH+0l4a69sPXUfKv0t
+NiND4Mh6XQNXRkMd1zm/AgMBAAEwDQYJKoZIhvcNAQELBQADggEBAHyABBD7yzvq
+Dp5t+usSXmy69ksN4X5rwqv800ZT3Kwff2QYTi6TJinHRojjgjZs4PfgV2DV/iOv
+jDThqdI92n1pVcBI4jA+usnUjDxEMNBU876SIxTd3x6PzCcxW4pIES65PCwqPeBp
+ozAWBvudDPDAgROhM6n5qGE/X4jCXMicMHaXTln9FETWCiqxtcEZV+PqPLjY0N1c
+MpyPeXwMPVnEf2bT9KZJgqK/4SmmIFUbEhow+/BbtFLoZv6QgDrjm6RB4+XqE5Wl
+gt6WcxgOu6YqpRAzlokYvTKNgsxtLeX5kPNygedSJmrinWAdtcIcY5GfuQY8DAuI
+akg/m8ztgfg=
+-----END CERTIFICATE-----";
+
+        const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCNk18sVTLKjTYy
+NmOi5pHXUXJuRk3ANYEb9uGSlNXKP/FAqXAp/bQtsZIKYwhgdoWc4MyDq7oTqx9E
+lWT6h/BUcE39SD6a+gvXOU0lqcx1csfuhSxQgtjptVQM+bUAJmYUmwBz2N8d+SW4
+nq99gb4M4lvIHSewx8739++vCd1A9RCT14yrZV8OiGeLiKOTkFYP8/1SatyJlQ05
+o0hJrLjr0t7lmu18a30CfX5h7dNyQkK1MXirv5X4YLzzDlC0t3UAxAZ//VrHlzCp
+C/1JIW+GfCP2jdXdaTPV2rhcD/2tIDV5w8eH+0l4a69sPXUfKv0tNiND4Mh6XQNX
+RkMd1zm/AgMBAAECggEAATo1WYTgPK75DiS4PBR5UDS7DryvoN/LNOsGLUdQC9b+
+aEaacSrAvKKs9vJr2KuTtfahn0SbsjRKFZtL9aYRuHxZbhLfGWiF4MGflcOBQRq+
+eVFl6clwnaS+S/cq5rZD1/WODUhkisslqhI/cubvNwe2rvyduE510LgxYkLuIZ7a
++SCQz1XyPyhb8eVrWIZiprufjqXvDy01MC74l3ZYqaq1hr1oKi0ZDHI95Os7gtwQ
+4HQ3qdJsmYfbaf1223REp8gybnshsxkyjhKRU3nG7ZvgrRRMFkJvfHZ8VcS3cvsK
+ccKBJg7376+VDtc+RHUcBMyVZ881y4Rq2t6ssYVJVQKBgQDFq+N7ZGKOtQChSIXn
+ju/gP5WzSKJFaZhdkSggHi1K+PkuCZ1SXzKD3CPibreSUx9hzoZAAmTjzOfwhVZ7
+5HDqhrKfkWNeThAdXlglhNX5LVKhhmBsNGawANO8Pmq+pueWhK/76XgiGcOknyt6
+NH1ZE/QZpFeZB2binEhf6leYGwKBgQC3WgF2eaj2c4pugq13oZ9BHms5nsbYQgj8
+1H2C1wsgJNiz4tq6xFdvjiaw+r1OrCFrl9nz7npFc7uohtrRxXr7sq5nwMPO3QAP
+VxzyZ/TFP/FI70Avz6x+xX7HIlptpQ1mWacsdrvtoIG1c8veEJTyA4JgjoMhdDer
+JuPze+ZHLQKBgAzuLIhCzcul/W+Pberyx7A0mJdMtgiyWpwsRaKsNqxD0xD24gqk
+XYqQmOxT78Arnc7pEpEXVwArxDRQlJKwI87DluWnPgfKNXWmWT/DC7gsBc65Go+Z
+ceorc65JqvPjuRx4e4aQBCK+6rRXESICUvzDuGEBBhXljQ5fyMA1dRtnAoGAQSFH
+w74Ttvf0BK2G0SgoWglkLWOpXsiWSLlynDenTBPKppu+9vkn1gi41cU72eZrOL0I
+Pw5HgMRLtOGyeTGdLiuaqGBhLepzSv+22KT03dyI6U+TjWhH7gBZuIMLfEdVKzZN
+nA3RU+fgK4SmtotNXWrBtWrqScfuvm1iK+unMUECgYBrwc1rU/GI9tH4MWvBX99n
+pmFneeIUuXJajOsh7jUyTxcrHl+4kkgHDExuFMNPHfrIG8xCj43fjzxD/spz3xRS
++Ki3i3lYOFNhTUCREt5Xx23hkksK6j7SYlfY0IV2UruWt/UubpsfEqxC1Uk07NTo
+l50Xb2GWQesIt9k5jF5IOw==
+-----END PRIVATE KEY-----";
+    }
+
+    constructor() : Test("HttpServerHttp3MigrationTest", "1.0") {
+        # Set up SIGUSR1 handler to dump thread stacks for debugging hangs
+        @debug {
+            set_signal_handler(SIGUSR1, sub (int sig) {
+                printf("=== SIGUSR1 Thread Stacks ===\n%Y\n=== End Thread Stacks ===\n",
+                    get_all_thread_call_stacks());
+            });
+        }
+
+        # Group 1: Client Active Migration
+        addTestCase("client active migration", \testClientActiveMigration());
+        addTestCase("migration during streaming response", \testMigrationDuringStreaming());
+        addTestCase("migration during large upload", \testMigrationDuringUpload());
+        addTestCase("multiple successive migrations", \testMultipleMigrations());
+        addTestCase("idle connection migration", \testIdleMigration());
+        addTestCase("concurrent streams + migration", \testConcurrentStreamsMigration());
+
+        # Group 2: Connection Manager Migration
+        addTestCase("migrateAll", \testMigrateAll());
+
+        # Group 3: Negative Tests
+        addTestCase("migration before handshake", \testMigrationBeforeHandshake());
+        addTestCase("CID exhaustion", \testCidExhaustion());
+
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        mLogger = new Logger("http3-migration-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            mLogger.addAppender(new StdoutAppender());
+        }
+
+        mServer = new HttpServer(<HttpServerOptionInfo>{
+            "logger": mLogger,
+            "debug": True,
+            "async_mode": True,
+        });
+
+        mServer.setHandler("echo", "/echo", NOTHING, new MigrationEchoHandler());
+        mServer.setHandler("large", "/large", NOTHING, new MigrationLargeHandler());
+
+        mServer.waitForAsyncIo();
+
+        hash<auto> h3info = mServer.addQuicListener(<HttpListenerOptionInfo>{
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        });
+        mH3Port = h3info.port;
+        mH3Url = "https://127.0.0.1:" + mH3Port;
+    }
+
+    globalTearDown() {
+        try {
+            mServer.stopNoWait();
+        } catch () {
+            # Ignore shutdown errors
+        }
+    }
+
+    #! Helper: create a single Http3ClientConnection and drive it to ready
+    private Http3ClientConnection createReadyConnection() {
+        hash<auto> url_info = {
+            "host": "127.0.0.1",
+            "port": mH3Port,
+            "protocol": "https",
+        };
+        Http3ClientConnection conn(url_info, 15s, mLogger, HttpClientIo::DefaultMaxStreamsPerConnection,
+            NOTHING, True);
+        assertTrue(conn.driveToReady(15s), "connection should become ready");
+        return conn;
+    }
+
+    #! Helper: do a sync request via Http3ClientConnection and return the response
+    private hash<auto> doSyncRequest(Http3ClientConnection conn, string method, string path,
+            *hash<auto> headers, *data body) {
+        *hash<auto> result;
+        *hash<auto> error;
+        Counter cnt(1);
+
+        conn.submitRequest(method, path, headers, body, sub (auto resp, *hash<auto> err) {
+            if (err) {
+                error = err;
+            } else {
+                result = resp;
+            }
+            cnt.dec();
+        });
+
+        # Drive I/O until callback fires
+        date end_time = now_us() + 15s;
+        while (cnt.getCount() > 0) {
+            if (now_us() > end_time) {
+                throw "TIMEOUT", "request timed out";
+            }
+            conn.drivePoll(500ms);
+        }
+
+        if (error) {
+            throw error.err, error.desc;
+        }
+        return result;
+    }
+
+    #! Test: connect → request → migrate → request → verify both succeed
+    testClientActiveMigration() {
+        Http3ClientConnection conn = createReadyConnection();
+        on_exit { try { conn.close(); } catch () {} }
+
+        # Request before migration
+        hash<auto> resp1 = doSyncRequest(conn, "GET", "/echo");
+        assertEq(200, resp1.status_code, "pre-migration request succeeds");
+
+        # Migrate
+        assertTrue(conn.migrate(), "migration returns True");
+
+        # Request after migration
+        hash<auto> resp2 = doSyncRequest(conn, "GET", "/echo");
+        assertEq(200, resp2.status_code, "post-migration request succeeds");
+
+        # Verify connection is still ready
+        assertTrue(conn.isReady(), "connection still ready after migration");
+    }
+
+    #! Test: start large streaming response → migrate mid-stream → verify all data arrives
+    testMigrationDuringStreaming() {
+        Http3ClientConnection conn = createReadyConnection();
+        on_exit { try { conn.close(); } catch () {} }
+
+        # 1MB body — fills the QUIC flow control window (256KB per stream, 1MB
+        # aggregate) to ensure the response is still in-flight when migration is
+        # triggered.  Must not exceed QUIC_MAX_STREAM_BODY (1MB).
+        # If this test becomes flaky (body completes before migration), the
+        # assertTrue(migrated) assertion below will catch it — increase body_size
+        # or reduce poll count if needed.
+        int body_size = 1000000;
+        *hash<auto> result;
+        *hash<auto> error;
+        Counter cnt(1);
+        bool migrated = False;
+
+        conn.submitRequest("GET", sprintf("/large/%d", body_size), NOTHING, NOTHING,
+                sub (auto resp, *hash<auto> err) {
+            if (err) {
+                error = err;
+            } else {
+                result = resp;
+            }
+            cnt.dec();
+        });
+
+        # Drive a few poll cycles to start receiving data, then migrate
+        int polls = 0;
+        while (cnt.getCount() > 0 && polls < 5) {
+            conn.drivePoll(100ms);
+            ++polls;
+        }
+
+        # Migrate mid-stream — assert that the response is still in progress
+        if (cnt.getCount() > 0) {
+            assertTrue(conn.migrate(), "migration during streaming succeeds");
+            migrated = True;
+        }
+        assertTrue(migrated, "migration was attempted while response was still in-flight");
+
+        # Drive to completion
+        date end_time = now_us() + 15s;
+        while (cnt.getCount() > 0) {
+            if (now_us() > end_time) {
+                throw "TIMEOUT", "streaming request timed out after migration";
+            }
+            conn.drivePoll(500ms);
+        }
+
+        if (error) {
+            throw error.err, error.desc;
+        }
+        assertEq(200, result.status_code, "streaming response status after migration");
+        # HTTP/3 response body comes as binary from the C++ layer
+        string body_str = result.body.typeCode() == NT_BINARY ? binary_to_string(result.body) : result.body;
+        assertEq(body_size, body_str.size(), "streaming response body size after migration");
+        assertEq(strmul("M", body_size), body_str, "streaming response body content matches");
+    }
+
+    #! Test: migrate 5 times with I/O between each → verify final state consistent
+    testMultipleMigrations() {
+        Http3ClientConnection conn = createReadyConnection();
+        on_exit { try { conn.close(); } catch () {} }
+
+        # Migrate 5 times; ngtcp2 won't allow a new migration while path validation
+        # from the previous one is still in progress, so retry with I/O driving.
+        # With active_connection_id_limit=8, 5 migrations is within limits (7 spare CIDs).
+        int migrations = 5;
+        for (int i = 0; i < migrations; ++i) {
+            # Retry migration until path validation from previous migration completes
+            date deadline = now_us() + 10s;
+            bool migrated = False;
+            while (!migrated && now_us() < deadline) {
+                try {
+                    assertTrue(conn.migrate(), sprintf("migration %d succeeds", i + 1));
+                    migrated = True;
+                } catch (hash<ExceptionInfo> ex) {
+                    if (ex.err == "QUIC-MIGRATION-ERROR" && ex.desc =~ /not in a migratable state/) {
+                        # Drive I/O to allow path validation to complete
+                        conn.drivePoll(100ms);
+                    } else {
+                        rethrow;
+                    }
+                }
+            }
+            assertTrue(migrated, sprintf("migration %d completed within deadline", i + 1));
+            # Do a request to verify the connection works after this migration
+            hash<auto> mid_resp = doSyncRequest(conn, "GET", "/echo");
+            assertEq(200, mid_resp.status_code, sprintf("request after migration %d succeeds", i + 1));
+        }
+
+        # Verify connection still works
+        hash<auto> resp = doSyncRequest(conn, "POST", "/echo", NOTHING, "after-multiple-migrations");
+        assertEq(200, resp.status_code, "request after multiple migrations succeeds");
+        # HTTP/3 response body comes as binary from the C++ layer
+        string body_str = resp.body.typeCode() == NT_BINARY ? binary_to_string(resp.body) : resp.body;
+        assertEq("after-multiple-migrations", body_str,
+            "response body correct after multiple migrations");
+        assertTrue(conn.isReady(), "connection still ready after multiple migrations");
+    }
+
+    #! Test: migrate idle connection → verify keep-alive works on new path
+    testIdleMigration() {
+        Http3ClientConnection conn = createReadyConnection();
+        on_exit { try { conn.close(); } catch () {} }
+
+        # Do an initial request
+        hash<auto> resp1 = doSyncRequest(conn, "GET", "/echo");
+        assertEq(200, resp1.status_code, "initial request succeeds");
+
+        # Let it sit idle briefly
+        conn.drivePoll(200ms);
+
+        # Migrate the idle connection
+        assertTrue(conn.migrate(), "idle migration succeeds");
+
+        # Drive a few cycles for path validation
+        conn.drivePoll(200ms);
+
+        # Verify it still works
+        hash<auto> resp2 = doSyncRequest(conn, "POST", "/echo", NOTHING, "after-idle-migration");
+        assertEq(200, resp2.status_code, "request after idle migration succeeds");
+        string body2 = resp2.body.typeCode() == NT_BINARY ? binary_to_string(resp2.body) : resp2.body;
+        assertEq("after-idle-migration", body2, "response correct after idle migration");
+    }
+
+    #! Test: 10 in-flight requests → migrate → all complete successfully
+    testConcurrentStreamsMigration() {
+        Http3ClientConnection conn = createReadyConnection();
+        on_exit { try { conn.close(); } catch () {} }
+
+        int num_requests = 10;
+        Counter cnt(num_requests);
+        hash<string, hash<auto>> results;
+        hash<string, hash<auto>> errors;
+        Mutex results_lock();
+
+        # Submit multiple concurrent requests
+        for (int i = 0; i < num_requests; ++i) {
+            string req_body = sprintf("concurrent-%d", i);
+            string key = string(i);
+            conn.submitRequest("POST", "/echo", NOTHING, req_body,
+                    sub (auto resp, *hash<auto> err) {
+                AutoLock al(results_lock);
+                if (err) {
+                    errors{key} = err;
+                } else {
+                    results{key} = resp;
+                }
+                cnt.dec();
+            });
+        }
+
+        # Drive a few cycles then migrate
+        conn.drivePoll(100ms);
+        assertTrue(conn.migrate(), "migration with concurrent streams succeeds");
+
+        # Drive to completion
+        date end_time = now_us() + 15s;
+        while (cnt.getCount() > 0) {
+            if (now_us() > end_time) {
+                throw "TIMEOUT", sprintf("concurrent requests timed out: %d/%d remaining",
+                    cnt.getCount(), num_requests);
+            }
+            conn.drivePoll(500ms);
+        }
+
+        # Verify all requests succeeded
+        assertEq(0, errors.size(), "no errors in concurrent requests after migration");
+        assertEq(num_requests, results.size(), "all concurrent requests completed after migration");
+        for (int i = 0; i < num_requests; ++i) {
+            string key = string(i);
+            assertEq(200, results{key}.status_code,
+                sprintf("concurrent request %d status", i));
+        }
+    }
+
+    #! Test: Http3ClientConnectionManager.migrateAll()
+    testMigrateAll() {
+        HttpClientIo::HttpClientConnectionManager mgr(
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "protocol": "h3",
+                "logger": mLogger,
+                "request_timeout": 15s,
+                "connect_timeout": 15s,
+            },
+        );
+        on_exit { try { mgr.closeAll(); } catch () {} }
+
+        # Do a request to establish a connection
+        hash<auto> resp1 = mgr.request(mH3Url, "GET", "/echo");
+        assertEq(200, resp1.status_code, "initial request via manager succeeds");
+
+        # Get stats to verify we have at least one connection
+        hash<auto> stats = mgr.getStats();
+        assertTrue(stats.total_connections > 0, "manager has connections before migration");
+
+        # Migrate all connections
+        int migrated = mgr.migrateAll();
+        assertTrue(migrated > 0, "migrateAll migrated at least one connection");
+
+        # Verify connections still work after migration
+        hash<auto> resp2 = mgr.request(mH3Url, "POST", "/echo", NOTHING, "after-migrateAll");
+        assertEq(200, resp2.status_code, "request after migrateAll succeeds");
+        string body2 = resp2.body.typeCode() == NT_BINARY ? binary_to_string(resp2.body) : resp2.body;
+        assertEq("after-migrateAll", body2, "response body correct after migrateAll");
+    }
+
+    #! Test: attempt migration during handshake → verify error
+    testMigrationBeforeHandshake() {
+        hash<auto> url_info = {
+            "host": "127.0.0.1",
+            "port": mH3Port,
+            "protocol": "https",
+        };
+        Http3ClientConnection conn(url_info, 15s, mLogger, HttpClientIo::DefaultMaxStreamsPerConnection,
+            NOTHING, True);
+        on_exit { try { conn.close(); } catch () {} }
+
+        # Do NOT drive to ready — attempt migration while still connecting
+        assertThrows("HTTP3-STATE-ERROR", sub () {
+            conn.migrate();
+        }, NOTHING, "migration before handshake throws HTTP3-STATE-ERROR");
+    }
+
+    #! Test: migrate beyond active_connection_id_limit → verify QUIC-MIGRATION-ERROR
+    testCidExhaustion() {
+        Http3ClientConnection conn = createReadyConnection();
+        on_exit { try { conn.close(); } catch () {} }
+
+        # active_connection_id_limit = 8 means 7 spare CIDs for migration.
+        # Migrate until we hit the limit; ngtcp2 returns NGTCP2_ERR_CONN_ID_BLOCKED
+        # which surfaces as QUIC-MIGRATION-ERROR with "active_connection_id_limit exhausted".
+        #
+        # Loop bound: 10 iterations × up to 5s path validation wait = 50s worst case.
+        # On loopback, path validation typically completes in <100ms so the test
+        # finishes in seconds.  The 5s per-iteration deadline guards against stalls.
+        int successful = 0;
+        bool exhausted = False;
+        for (int i = 0; i < 10; ++i) {
+            # Wait for path validation from previous migration to complete
+            date deadline = now_us() + 5s;
+            bool migrated = False;
+            while (!migrated && !exhausted && now_us() < deadline) {
+                try {
+                    conn.migrate();
+                    migrated = True;
+                    ++successful;
+                } catch (hash<ExceptionInfo> ex) {
+                    if (ex.err == "QUIC-MIGRATION-ERROR"
+                            && ex.desc =~ /active_connection_id_limit exhausted/) {
+                        exhausted = True;
+                    } else if (ex.err == "QUIC-MIGRATION-ERROR"
+                            && ex.desc =~ /not in a migratable state/) {
+                        # Path validation in progress — drive I/O and retry
+                        conn.drivePoll(100ms);
+                    } else {
+                        rethrow;
+                    }
+                }
+            }
+            if (exhausted) {
+                break;
+            }
+            # Drive I/O to process path validation for this migration
+            conn.drivePoll(200ms);
+        }
+        assertTrue(exhausted, "CID exhaustion detected");
+        assertTrue(successful > 0, sprintf("at least one migration succeeded before exhaustion (got %d)",
+            successful));
+
+        # Verify the connection still works for existing streams even after CID exhaustion
+        hash<auto> resp = doSyncRequest(conn, "GET", "/echo");
+        assertEq(200, resp.status_code, "connection still works after CID exhaustion");
+    }
+
+    #! Test: client sends large POST body → migrate mid-upload → verify upload completes
+    testMigrationDuringUpload() {
+        Http3ClientConnection conn = createReadyConnection();
+        on_exit { try { conn.close(); } catch () {} }
+
+        # 1MB upload body — fills the QUIC flow control window (256KB per stream)
+        # to ensure the upload is still in-flight during migration.  Must not
+        # exceed QUIC_MAX_STREAM_BODY (1MB).  See streaming test for flakiness note.
+        string upload_body = strmul("U", 1000000);
+        *hash<auto> result;
+        *hash<auto> error;
+        Counter cnt(1);
+        bool migrated = False;
+
+        conn.submitRequest("POST", "/echo", NOTHING, upload_body,
+                sub (auto resp, *hash<auto> err) {
+            if (err) {
+                error = err;
+            } else {
+                result = resp;
+            }
+            cnt.dec();
+        });
+
+        # Drive a few poll cycles to start sending, then migrate
+        int polls = 0;
+        while (cnt.getCount() > 0 && polls < 5) {
+            conn.drivePoll(100ms);
+            ++polls;
+        }
+
+        # Migrate mid-upload — assert that the request is still in progress
+        if (cnt.getCount() > 0) {
+            assertTrue(conn.migrate(), "migration during upload succeeds");
+            migrated = True;
+        }
+        assertTrue(migrated, "migration was attempted while upload was still in-flight");
+
+        # Drive to completion
+        date end_time = now_us() + 15s;
+        while (cnt.getCount() > 0) {
+            if (now_us() > end_time) {
+                throw "TIMEOUT", "upload request timed out after migration";
+            }
+            conn.drivePoll(500ms);
+        }
+
+        if (error) {
+            throw error.err, error.desc;
+        }
+        assertEq(200, result.status_code, "upload response status after migration");
+        # The echo handler echoes the body back
+        string resp_body = result.body.typeCode() == NT_BINARY
+            ? binary_to_string(result.body) : result.body;
+        assertEq(upload_body.size(), resp_body.size(),
+            "upload response body size matches after migration");
+        assertEq(upload_body, resp_body, "upload response body content matches after migration");
+    }
+}

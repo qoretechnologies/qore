@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -589,6 +589,7 @@ FeatureList::FeatureList() {
    push_back("DGC");
    push_back("NaNBoxing");
    push_back("HTTP2");
+   push_back("HTTP3");
    push_back("JIT");
 #ifdef DEBUG
    push_back("debug");

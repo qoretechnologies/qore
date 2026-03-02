@@ -36,8 +36,9 @@ public namespace ConnectionProvider {
       \c HTTP-CLIENT-RECEIVE-ERROR exception to be raised, rather such responses will be passed through to the
       caller like any other response
     - \c "headers": headers to add in each outgoing request
-    - \c "http_version": HTTP version to use (\c "auto", \c "1.0", \c "1.1", or \c "2.0", defaults to \c "auto");
-      HTTP/2 (\c "2.0" or \c "auto") requires TLS and is negotiated via ALPN
+    - \c "http_version": HTTP version to use (\c "auto", \c "1.0", \c "1.1", \c "2.0", or \c "3.0", defaults to
+      \c "auto"); HTTP/2 (\c "2.0" or \c "auto") requires TLS and is negotiated via ALPN; HTTP/3 (\c "3.0")
+      requires TLS and uses QUIC as the transport protocol
     - \c "max_redirects": maximum redirects to support
     - \c "password": The password for authentication; only used if no username or password is set in the URL and if
       the \c username option is also used
@@ -54,10 +55,6 @@ public namespace ConnectionProvider {
     - \c "timeout": transfer timeout to use in milliseconds (default: 45 seconds)
     - \c "username": The username for HTTP basic authentication; only used if no username or password is set in the
       URL and if the \c password option is also used
-
-    @note <b>HTTP/2 Limitations:</b> WebSocket over HTTP/2 (RFC 8441) and Server-Sent Events (SSE) over HTTP/2
-    are not currently supported. WebSocket and SSE connections will use HTTP/1.x even when \c http_version is
-    set to \c "auto" or \c "2.0".
 
     @see @ref Qore::HTTPClient::constructor(hash<auto>) "HTTPClient::constructor(hash<auto> opts)" for more
     information on the above options
@@ -151,13 +148,14 @@ public class HttpConnection inherits AbstractConnectionWithInfo {
                     "short_desc": "The HTTP version to use",
                     "type": "string",
                     "desc": "The HTTP version to use: `auto` (HTTP/2 if available, default), `1.0`, `1.1`, "
-                        "or `2.0`. HTTP/2 requires TLS and is negotiated via ALPN. Note: WebSocket and SSE "
-                        "connections will always use HTTP/1.x regardless of this setting",
+                        "`2.0`, or `3.0`. HTTP/2 requires TLS and is negotiated via ALPN. HTTP/3 requires "
+                        "TLS and uses QUIC as the transport protocol",
                     "default_value": "auto",
                     "allowed_values": (
                         <AllowedValueInfo>{
                             "value": "auto",
-                            "desc": "Use HTTP/2 if available via ALPN, fall back to HTTP/1.1 (default)",
+                            "desc": "Use HTTP/2 if available via ALPN, fall back to HTTP/1.1; upgrade to "
+                                "HTTP/3 if advertised via Alt-Svc (default)",
                         },
                         <AllowedValueInfo>{
                             "value": "1.0",
@@ -170,6 +168,10 @@ public class HttpConnection inherits AbstractConnectionWithInfo {
                         <AllowedValueInfo>{
                             "value": "2.0",
                             "desc": "Require HTTP/2, fail if the server doesn't support it (TLS required)",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "3.0",
+                            "desc": "Require HTTP/3 (QUIC), fail if unavailable (TLS required)",
                         },
                     ),
                 },
@@ -364,6 +366,35 @@ public class HttpConnection inherits AbstractConnectionWithInfo {
                 "HttpConnection");
         }
         return getPollImpl().startPollConnect();
+    }
+
+    #! Returns @ref True since HTTP connections support the async request API
+    /** @return @ref True
+
+        @since ConnectionProvider 2.3
+    */
+    bool supportsAsyncRequestApi() {
+        return True;
+    }
+
+    #! Starts a non-blocking HTTP request on the connection
+    /** @param method the HTTP method (GET, POST, PUT, DELETE, PATCH, etc.)
+        @param path the request path
+        @param body the request body
+        @param headers optional request headers
+        @param logger an optional logger interface
+
+        @return a poll operation for the async request
+
+        @since ConnectionProvider 2.3
+    */
+    Qore::AbstractPollOperation startPollRequest(string method, string path, auto body,
+            *hash<auto> headers, *Logger::LoggerInterface logger) {
+        hash<auto> req_headers;
+        req_headers += opts.headers;
+        req_headers += headers;
+        return new HttpRequestPollOperation(url, method, path, body,
+            opts{keys ConnectionScheme.options} + {"url": url}, req_headers, logger);
     }
 
     #! Returns options for creating a new connection

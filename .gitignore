@@ -8,38 +8,13 @@
 *~
 *.sw?
 
-# Automake & friends
-.deps
-.libs
-libtool
-ltmain.sh
-missing
-ylwrap
-Makefile
-Makefile.in
-acinclude.m4
-aclocal.m4
-autom4te.cache
-compile
-config.guess
-config.log
-config.status
-config.sub
-configure
-depcomp
-install-sh
+# Build artifacts
 /qore
 qr
 qore.exe
 qr.exe
 qore.pc
 qore.spec
-test-driver
-libtool.m4
-ltoptions.m4
-ltsugar.m4
-ltversion.m4
-lt~obsolete.m4
 
 # cmake
 cmake/QoreConfig.cmake
