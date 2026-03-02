@@ -5853,6 +5853,15 @@ nothing Socket::submitQuicStreamingResponseWithStream(int session_id, int stream
         return QoreValue();
     }
 
+    // Enforce at the C++ level: only streams whose C++ vtable reports isIoThreadSafe() can be
+    // submitted to the I/O thread.  This prevents Qore-level subclasses from overriding the
+    // method to return true while having a blocking read() that would stall the I/O thread.
+    if (!body->isIoThreadSafe()) {
+        xsink->raiseException("QUIC-ERROR",
+            "%s is not safe for I/O thread use; isIoThreadSafe() returned false", body->getName());
+        return QoreValue();
+    }
+
     // Transfer InputStream ownership to the session for I/O thread reading
     InputStream* body_ptr = body.release();
     s->setQuicStreamInputStream(session_id, stream_id, body_ptr, xsink);

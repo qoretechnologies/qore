@@ -790,6 +790,15 @@ int QoreSocketObject::submitHttp2StreamingResponseHeaders(int32_t stream_id, int
 
 int QoreSocketObject::submitHttp2StreamingResponseWithStream(int32_t stream_id, int status_code,
         const QoreHashNode* headers, InputStream* body, ExceptionSink* xsink) {
+    // Enforce at the C++ level: only streams whose C++ vtable reports isIoThreadSafe() can be
+    // submitted to the I/O thread.  This prevents Qore-level subclasses from overriding the
+    // method to return true while having a blocking read() that would stall the I/O thread.
+    if (!body->isIoThreadSafe()) {
+        xsink->raiseException("HTTP2-ERROR",
+            "%s is not safe for I/O thread use; isIoThreadSafe() returned false", body->getName());
+        return -1;
+    }
+
     AutoLocker al(priv->m);
     Http2Session* session = priv->socket->priv->h2_session.get();
     if (!session) {
