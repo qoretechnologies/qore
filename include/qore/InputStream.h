@@ -4,7 +4,7 @@
 
   Qore Programming Language
 
-  Copyright (C) 2016 - 2024 Qore Technologies, s.r.o.
+  Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -108,6 +108,26 @@ public:
     virtual bool supportsNonBlockingIo() const { return false; }
 
     /**
+      * @brief Returns true if this stream's read() will never block.
+      *
+      * This C++ vtable method is the sole authority on whether a stream can be submitted
+      * to the I/O thread for non-blocking streaming. The C++ submit methods check this
+      * directly — Qore-level overrides of isIoThreadSafe() have no effect on I/O thread
+      * eligibility.
+      *
+      * Memory-backed streams (like BinaryInputStream) override this to return true
+      * even though they don't have a pollable file descriptor.
+      *
+      * The default implementation returns supportsNonBlockingIo(), since fd-backed streams
+      * with non-blocking I/O support are also safe for I/O thread use.
+      *
+      * @return true if read() will never block
+      *
+      * @since %Qore 2.3
+      */
+    virtual bool isIoThreadSafe() const { return supportsNonBlockingIo(); }
+
+    /**
       * @brief Returns the pollable file descriptor for this stream, or -1 if not pollable.
       * @return the file descriptor, or -1
       *
@@ -116,13 +136,21 @@ public:
     virtual int getPollableDescriptor() const { return -1; }
 
     /**
-      * @brief Non-blocking read: returns bytes read, 0 if would block, -1 on error.
+      * @brief Non-blocking read from the stream.
+      *
+      * Return values:
+      * - &gt; 0: number of bytes successfully read into @a ptr
+      * - 0: end of stream (EOF) when the fd was previously reported as readable by poll()/select(),
+      *   or EAGAIN/EWOULDBLOCK for implementations that map would-block to 0
+      *   (e.g. FileInputStream). Callers should use an inline poll(fd, 0) before calling this
+      *   method to distinguish EOF from would-block.
+      * - &lt; 0: error (exception raised in @a xsink)
       *
       * Default implementation delegates to blocking read() (safe for memory-based streams).
       * @param ptr the destination buffer
       * @param limit the maximum number of bytes to read
       * @param xsink the exception sink
-      * @return the number of bytes read, 0 if would block
+      * @return the number of bytes read, 0 on EOF or would-block, negative on error
       *
       * @since %Qore 2.2
       */

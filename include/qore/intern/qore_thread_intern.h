@@ -46,7 +46,10 @@ class RuntimeConfig;
 
 // the values here are subject to change and come from purely empirical testing
 #ifndef QORE_STACK_GUARD
-// "generic" value (tested on OSX i386 and ppc and Linux i386)
+// Fallback only; platform-specific headers (macros-x86_64.h, macros-aarch64.h,
+// etc.) should define QORE_STACK_GUARD before this header is included.
+// The guard must be larger than the thread startup overhead (stack consumed
+// between the actual thread stack top and ThreadData::stack_start initialization).
 #define QORE_STACK_GUARD (1024 * 8)
 #endif // QORE_STACK_GUARD
 

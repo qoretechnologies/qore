@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2016 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -59,6 +59,9 @@ public:
     DLLLOCAL const char* getName() override {
         return "BinaryInputStream";
     }
+
+    //! BinaryInputStream is memory-backed and read() never blocks; safe for I/O-thread-driven streaming
+    DLLLOCAL bool isIoThreadSafe() const override { return true; }
 
     DLLLOCAL int64 read(void* ptr, int64 limit, ExceptionSink* xsink) override {
         assert(limit > 0);

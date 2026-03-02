@@ -288,11 +288,9 @@ The UI uses `preselected: True` on action options to determine which fields to s
 
 ## 15. Build System and Documentation
 
-### Build Registration (MANDATORY - grep for module name in both files)
+### Build Registration (MANDATORY - grep for module name in CMakeLists.txt)
 - [ ] `CMakeLists.txt` has `qore_user_module()` entry for REST client module
 - [ ] `CMakeLists.txt` has `qore_user_module()` entry for DataProvider module
-- [ ] `Makefile.am` has module in appropriate list (single-file or directory)
-- [ ] `Makefile.am` has packaging rules for directory modules
 
 ### Documentation
 - [ ] Entry in `doxygen/lang/120_modules.dox.tmpl`

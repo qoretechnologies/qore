@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -45,7 +45,7 @@
 #include <cstring>
 #include <functional>
 #include <list>
-#include <set>
+#include <map>
 #include <set>
 #include <string>
 #include <strings.h>
@@ -214,10 +214,16 @@ public:
 //! for std::string case-insensitive less-than comparisons
 class ltstrcase {
 public:
-    DLLLOCAL bool operator()(std::string s1, std::string s2) const {
+    DLLLOCAL bool operator()(const std::string& s1, const std::string& s2) const {
         return strcasecmp(s1.c_str(), s2.c_str()) < 0;
     }
 };
+
+//! Case-insensitive string-to-string map for HTTP headers
+/** HTTP header field names are case-insensitive per RFC 7230 Section 3.2.
+    Using this type ensures correct lookups regardless of casing.
+*/
+typedef std::map<std::string, std::string, ltstrcase> strcase_str_map_t;
 
 class eqstr {
 public:

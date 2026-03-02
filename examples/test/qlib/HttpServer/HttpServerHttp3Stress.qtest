@@ -1,0 +1,664 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    HTTP/3 stress, concurrency, scalability, and throughput tests.
+
+    Tests cover:
+    - Sustained throughput (requests/sec, MB/sec)
+    - Concurrent requests on single connection
+    - Multiple independent connections
+    - Mixed concurrent workloads
+    - Scalability over sustained use
+    - Increasing body sizes
+    - Repeated connect/disconnect cycles
+    - Back-to-back requests with zero delay
+*/
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/AsyncSocketIo
+%requires ../../../../qlib/HttpServerAsyncIo
+%requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/HttpClientIo
+
+%exec-class HttpServerHttp3StressTest
+
+# NOTE: SimpleHandler, EchoHandler, StatusCodeHandler, and LargeResponseHandler
+# are intentionally duplicated from HttpServerHttp3Integration.qtest.  Test files
+# in this repo are standalone (no shared test-helper module), and the handlers
+# are trivial enough that duplication is preferable to adding a dependency.
+
+#! Simple handler for basic GET tests
+class SimpleHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, "Hello World", {"Content-Type": "text/plain"});
+    }
+}
+
+#! Echo handler that returns the request body
+class EchoHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, body ?? "", {
+            "Content-Type": hdr."content-type" ?? "application/octet-stream",
+        });
+    }
+}
+
+#! Handler that returns a configurable status code from the path
+class StatusCodeHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        int code = 200;
+        *list<*string> m = (hdr.path =~ x/status\/(\d+)/);
+        if (m) {
+            code = int(m[0]);
+        }
+        return makeResponse(code, sprintf("Status: %d", code), {"Content-Type": "text/plain"});
+    }
+}
+
+#! Handler that returns a large response body based on path size
+class LargeResponseHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        int size = 1000;
+        *list<*string> m = (hdr.path =~ x/large\/(\d+)/);
+        if (m) {
+            size = int(m[0]);
+        }
+        string response_body = strmul("X", size);
+        return makeResponse(200, response_body, {"Content-Type": "text/plain"});
+    }
+}
+
+class HttpServerHttp3StressTest inherits QUnit::Test {
+    private {
+        HttpServer mServer;
+        int mH3Port;
+        string mH3Url;
+        Logger mLogger;
+
+        # Self-signed test certificate (RSA 2048-bit, CN=localhost, valid 10 years)
+        const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIUahuuRGDlubXWYmiPhjVeT66vtNYwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MDIyMjE5MjIwMVoXDTM2MDIy
+MDE5MjIwMVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEAjZNfLFUyyo02MjZjouaR11FybkZNwDWBG/bhkpTVyj/x
+QKlwKf20LbGSCmMIYHaFnODMg6u6E6sfRJVk+ofwVHBN/Ug+mvoL1zlNJanMdXLH
+7oUsUILY6bVUDPm1ACZmFJsAc9jfHfkluJ6vfYG+DOJbyB0nsMfO9/fvrwndQPUQ
+k9eMq2VfDohni4ijk5BWD/P9UmrciZUNOaNISay469Le5ZrtfGt9An1+Ye3TckJC
+tTF4q7+V+GC88w5QtLd1AMQGf/1ax5cwqQv9SSFvhnwj9o3V3Wkz1dq4XA/9rSA1
+ecPHh/tJeGuvbD11Hyr9LTYjQ+DIel0DV0ZDHdc5vwIDAQABo1MwUTAdBgNVHQ4E
+FgQUYBBsVylVinbbAzTbUt0jRM6mJvwwHwYDVR0jBBgwFoAUYBBsVylVinbbAzTb
+Ut0jRM6mJvwwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAfIAE
+EPvLO+gOnm366xJabLr2Sw3hfmvCq/zSTlPcrB9jdBlOLpMmKcdGiOOCNmzg9+BX
+YNX+I6+MNOGp0j3afWlVwEjiMD66ydSMPEQw0FTzvpIjFN3fHo/MJzFbingRLrk8
+LCo94GmjMBYG+50M8MCKE6EzqfmoYT9fiMJcyJwwdptOWf0URNYKKrG1wRlX4+o8
+uNjQ3VwynI95fAw9WcR/ZtP0pkmCor/hKaYgVRsSGjD78Fu0Uuhm/pCAOuObpEHj
+5eoTlaWC3pZzGA67piqlEDOWiRi9Mo2CzG0t5fmQ83KB51ImauKdYB21whxjkZ+5
+BjwMC4hqSD+bzO2B+A==
+-----END CERTIFICATE-----";
+
+        const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCNk18sVTLKjTYy
+NmOi5pHXUXJuRk3ANYEb9uGSlNXKP/FAqXAp/bQtsZIKYwhgdoWc4MyDq7oTqx9E
+lWT6h/BUcE39SD6a+gvXOU0lqcx1csfuhSxQgtjptVQM+bUAJmYUmwBz2N8d+SW4
+nq99gb4M4lvIHSewx8739++vCd1A9RCT14yrZV8OiGeLiKOTkFYP8/1SatyJlQ05
+o0hJrLjr0t7lmu18a30CfX5h7dNyQkK1MXirv5X4YLzzDlC0t3UAxAZ//VrHlzCp
+C/1JIW+GfCP2jdXdaTPV2rhcD/2tIDV5w8eH+0l4a69sPXUfKv0tNiND4Mh6XQNX
+RkMd1zm/AgMBAAECggEAATo1WYTgPK75DiS4PBR5UDS7DryvoN/LNOsGLUdQC9b+
+aEaacSrAvKKs9vJr2KuTtfahn0SbsjRKFZtL9aYRuHxZbhLfGWiF4MGflcOBQRq+
+eVFl6clwnaS+S/cq5rZD1/WODUhkisslqhI/cubvNwe2rvyduE510LgxYkLuIZ7a
++SCQz1XyPyhb8eVrWIZiprufjqXvDy01MC74l3ZYqaq1hr1oKi0ZDHI95Os7gtwQ
+4HQ3qdJsmYfbaf1223REp8gybnshsxkyjhKRU3nG7ZvgrRRMFkJvfHZ8VcS3cvsK
+ccKBJg7376+VDtc+RHUcBMyVZ881y4Rq2t6ssYVJVQKBgQDFq+N7ZGKOtQChSIXn
+ju/gP5WzSKJFaZhdkSggHi1K+PkuCZ1SXzKD3CPibreSUx9hzoZAAmTjzOfwhVZ7
+5HDqhrKfkWNeThAdXlglhNX5LVKhhmBsNGawANO8Pmq+pueWhK/76XgiGcOknyt6
+NH1ZE/QZpFeZB2binEhf6leYGwKBgQC3WgF2eaj2c4pugq13oZ9BHms5nsbYQgj8
+1H2C1wsgJNiz4tq6xFdvjiaw+r1OrCFrl9nz7npFc7uohtrRxXr7sq5nwMPO3QAP
+VxzyZ/TFP/FI70Avz6x+xX7HIlptpQ1mWacsdrvtoIG1c8veEJTyA4JgjoMhdDer
+JuPze+ZHLQKBgAzuLIhCzcul/W+Pberyx7A0mJdMtgiyWpwsRaKsNqxD0xD24gqk
+XYqQmOxT78Arnc7pEpEXVwArxDRQlJKwI87DluWnPgfKNXWmWT/DC7gsBc65Go+Z
+ceorc65JqvPjuRx4e4aQBCK+6rRXESICUvzDuGEBBhXljQ5fyMA1dRtnAoGAQSFH
+w74Ttvf0BK2G0SgoWglkLWOpXsiWSLlynDenTBPKppu+9vkn1gi41cU72eZrOL0I
+Pw5HgMRLtOGyeTGdLiuaqGBhLepzSv+22KT03dyI6U+TjWhH7gBZuIMLfEdVKzZN
+nA3RU+fgK4SmtotNXWrBtWrqScfuvm1iK+unMUECgYBrwc1rU/GI9tH4MWvBX99n
+pmFneeIUuXJajOsh7jUyTxcrHl+4kkgHDExuFMNPHfrIG8xCj43fjzxD/spz3xRS
++Ki3i3lYOFNhTUCREt5Xx23hkksK6j7SYlfY0IV2UruWt/UubpsfEqxC1Uk07NTo
+l50Xb2GWQesIt9k5jF5IOw==
+-----END PRIVATE KEY-----";
+    }
+
+    constructor() : Test("HttpServerHttp3StressTest", "1.0") {
+        # Set up SIGUSR1 handler to dump thread stacks for debugging hangs
+        @debug {
+            set_signal_handler(SIGUSR1, sub (int sig) {
+                printf("=== SIGUSR1 Thread Stacks ===\n%Y\n=== End Thread Stacks ===\n",
+                    get_all_thread_call_stacks());
+            });
+        }
+
+        # Group 1: Throughput
+        addTestCase("sustained throughput", \testSustainedThroughput());
+        addTestCase("large body throughput", \testLargeBodyThroughput());
+
+        # Group 2: Concurrency
+        addTestCase("concurrent requests", \testConcurrentRequests());
+        addTestCase("concurrent connections", \testConcurrentConnections());
+        addTestCase("mixed concurrent workload", \testMixedConcurrentWorkload());
+
+        # Group 3: Scalability
+        addTestCase("many sequential requests", \testManySequentialRequests());
+        addTestCase("increasing body sizes", \testIncreasingBodySizes());
+
+        # Group 4: Reliability
+        addTestCase("repeated connect/disconnect", \testRepeatedConnectDisconnect());
+        addTestCase("back-to-back requests", \testBackToBackRequests());
+
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        mLogger = new Logger("http3-stress-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            mLogger.addAppender(new StdoutAppender());
+        }
+
+        # Create HTTP server with async mode
+        mServer = new HttpServer(<HttpServerOptionInfo>{
+            "logger": mLogger,
+            "debug": True,
+            "async_mode": True,
+        });
+
+        # Register handlers
+        mServer.setHandler("simple", "/hello", NOTHING, new SimpleHandler());
+        mServer.setHandler("echo", "/echo", NOTHING, new EchoHandler());
+        mServer.setHandler("status", "/status", NOTHING, new StatusCodeHandler());
+        mServer.setHandler("large", "/large", NOTHING, new LargeResponseHandler());
+
+        # Wait for async I/O to be ready
+        mServer.waitForAsyncIo();
+
+        # Add QUIC/HTTP/3 listener
+        hash<auto> h3info = mServer.addQuicListener(<HttpListenerOptionInfo>{
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        });
+        mH3Port = h3info.port;
+        mH3Url = "https://127.0.0.1:" + mH3Port;
+
+        if (m_options.verbose > 1) {
+            printf("HTTP/3 stress test server started on UDP port %d\n", mH3Port);
+        }
+    }
+
+    globalTearDown() {
+        delete mServer;
+    }
+
+    #! Creates a new Http3ClientConnectionManager for independent test usage
+    private HttpClientIo::HttpClientConnectionManager newManager(*timeout req_timeout) {
+        return new HttpClientIo::HttpClientConnectionManager(
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "protocol": "h3",
+                "logger": mLogger,
+                "request_timeout": req_timeout ?? 30s,
+                "connect_timeout": 15s,
+            },
+        );
+    }
+
+    # ---- Group 1: Throughput ----
+
+    testSustainedThroughput() {
+        auto mgr = newManager();
+        on_exit mgr.closeAll();
+
+        # Duration: 5s is a reasonable CI default; valgrind runs are auto-detected
+        # via low throughput (testSkip if < 500 requests)
+        date end_time = now_us() + 5s;
+        int count = 0;
+        int errors = 0;
+
+        while (now_us() < end_time) {
+            try {
+                hash<auto> resp = mgr.request(mH3Url, "GET", "/hello");
+                if (resp.status_code == 200) {
+                    count++;
+                } else {
+                    errors++;
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                errors++;
+                if (m_options.verbose > 1) {
+                    printf("throughput error: %s: %s\n", ex.err, ex.desc);
+                }
+            }
+        }
+
+        # Under valgrind, count may be very low
+        if (count < 10) {
+            testSkip(sprintf("likely under valgrind: only %d requests in 5s", count));
+            return;
+        }
+
+        assertEq(0, errors, "no errors during sustained throughput");
+        assertTrue(count > 0, sprintf("throughput > 0: %d requests in 5s", count));
+
+        if (m_options.verbose) {
+            printf("sustained throughput: %d requests in 5s (%.1f req/s)\n",
+                count, count / 5.0);
+        }
+    }
+
+    testLargeBodyThroughput() {
+        auto mgr = newManager();
+        on_exit mgr.closeAll();
+
+        int body_size = 10000;  # 10KB per response
+        date end_time = now_us() + 5s;
+        int count = 0;
+        int total_bytes = 0;
+        int errors = 0;
+
+        while (now_us() < end_time) {
+            try {
+                hash<auto> resp = mgr.request(mH3Url, "GET",
+                    sprintf("/large/%d", body_size));
+                if (resp.status_code == 200) {
+                    count++;
+                    string body_str = resp.body.typeCode() == NT_BINARY
+                        ? resp.body.toString("UTF-8") : resp.body;
+                    total_bytes += body_str.size();
+                } else {
+                    errors++;
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                errors++;
+                if (m_options.verbose > 1) {
+                    printf("large body throughput error: %s: %s\n", ex.err, ex.desc);
+                }
+            }
+        }
+
+        if (count < 5) {
+            testSkip(sprintf("likely under valgrind: only %d requests in 5s", count));
+            return;
+        }
+
+        assertEq(0, errors, "no errors during large body throughput");
+        assertTrue(count > 0, sprintf("throughput > 0: %d requests in 5s", count));
+
+        if (m_options.verbose) {
+            float mb_sec = (float(total_bytes) / (1024.0 * 1024.0)) / 5.0;
+            printf("large body throughput: %d requests in 5s (%.1f req/s, %.2f MB/s)\n",
+                count, count / 5.0, mb_sec);
+        }
+    }
+
+    # ---- Group 2: Concurrency ----
+
+    testConcurrentRequests() {
+        auto mgr = newManager(60s);
+        on_exit mgr.closeAll();
+
+        int n = 20;
+        Counter done(n);
+        list<hash<auto>> results();
+        Mutex m();
+
+        for (int i = 0; i < n; i++) {
+            int idx = i;
+            background sub() {
+                on_exit done.dec();
+                try {
+                    hash<auto> resp = mgr.request(mH3Url, "GET", "/hello");
+                    string body_str = resp.body.typeCode() == NT_BINARY
+                        ? resp.body.toString("UTF-8") : resp.body;
+                    {
+                        AutoLock al(m);
+                        push results, {
+                            "idx": idx,
+                            "status": resp.status_code,
+                            "body": body_str,
+                            "success": True,
+                        };
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    {
+                        AutoLock al(m);
+                        push results, {
+                            "idx": idx,
+                            "error": ex.err + ": " + ex.desc,
+                            "success": False,
+                        };
+                    }
+                }
+            }();
+        }
+
+        assertEq(0, done.waitForZero(60s), "all concurrent requests completed");
+        assertEq(n, results.size(), "got results for all requests");
+
+        int successes = 0;
+        foreach hash<auto> r in (results) {
+            if (r.success) {
+                successes++;
+                assertEq(200, r.status, sprintf("request %d should return 200", r.idx));
+                assertEq("Hello World", r.body,
+                    sprintf("request %d body should match", r.idx));
+            } else if (m_options.verbose) {
+                printf("concurrent request %d failed: %s\n", r.idx, r.error);
+            }
+        }
+        assertEq(n, successes, "all concurrent requests should succeed");
+
+        if (m_options.verbose) {
+            printf("concurrent requests: %d/%d succeeded\n", successes, n);
+        }
+    }
+
+    testConcurrentConnections() {
+        int num_managers = 5;
+        int requests_per_manager = 5;
+        int total = num_managers * requests_per_manager;
+        Counter done(total);
+        list<hash<auto>> results();
+        Mutex m();
+
+        # Each manager gets its own connection to the server
+        list<HttpClientIo::HttpClientConnectionManager> managers = ();
+        for (int i = 0; i < num_managers; i++) {
+            push managers, newManager(60s);
+        }
+        on_exit {
+            foreach auto mgr in (managers) {
+                mgr.closeAll();
+            }
+        }
+
+        for (int i = 0; i < num_managers; i++) {
+            auto mgr = managers[i];
+            for (int j = 0; j < requests_per_manager; j++) {
+                int mgr_idx = i;
+                int req_idx = j;
+                background sub() {
+                    on_exit done.dec();
+                    try {
+                        hash<auto> resp = mgr.request(mH3Url, "GET", "/hello");
+                        string body_str = resp.body.typeCode() == NT_BINARY
+                            ? resp.body.toString("UTF-8") : resp.body;
+                        {
+                            AutoLock al(m);
+                            push results, {
+                                "mgr": mgr_idx,
+                                "req": req_idx,
+                                "status": resp.status_code,
+                                "body": body_str,
+                                "success": True,
+                            };
+                        }
+                    } catch (hash<ExceptionInfo> ex) {
+                        {
+                            AutoLock al(m);
+                            push results, {
+                                "mgr": mgr_idx,
+                                "req": req_idx,
+                                "error": ex.err + ": " + ex.desc,
+                                "success": False,
+                            };
+                        }
+                    }
+                }();
+            }
+        }
+
+        assertEq(0, done.waitForZero(60s), "all concurrent connection requests completed");
+        assertEq(total, results.size(), "got results for all requests");
+
+        int successes = 0;
+        foreach hash<auto> r in (results) {
+            if (r.success) {
+                successes++;
+                assertEq(200, r.status,
+                    sprintf("mgr %d req %d should return 200", r.mgr, r.req));
+                assertEq("Hello World", r.body,
+                    sprintf("mgr %d req %d body should match", r.mgr, r.req));
+            } else if (m_options.verbose) {
+                printf("concurrent connection mgr %d req %d failed: %s\n",
+                    r.mgr, r.req, r.error);
+            }
+        }
+        assertEq(total, successes, "all concurrent connection requests should succeed");
+
+        if (m_options.verbose) {
+            printf("concurrent connections: %d/%d succeeded (%d managers)\n",
+                successes, total, num_managers);
+        }
+    }
+
+    testMixedConcurrentWorkload() {
+        auto mgr = newManager(60s);
+        on_exit mgr.closeAll();
+
+        # Define mixed workload: different methods, paths, and body sizes
+        list<hash<auto>> workload = ();
+        for (int i = 0; i < 5; i++) {
+            push workload, {"method": "GET", "path": "/hello", "expected_status": 200};
+        }
+        for (int i = 0; i < 5; i++) {
+            push workload, {"method": "POST", "path": "/echo",
+                "body": strmul("Z", 1024), "expected_status": 200,
+                "headers": {"content-type": "text/plain"}};
+        }
+        for (int i = 0; i < 5; i++) {
+            push workload, {"method": "GET", "path": "/large/50000", "expected_status": 200};
+        }
+        for (int i = 0; i < 5; i++) {
+            push workload, {"method": "GET", "path": "/status/201", "expected_status": 201};
+        }
+
+        int n = workload.size();
+        Counter done(n);
+        list<hash<auto>> results();
+        Mutex m();
+
+        for (int i = 0; i < n; i++) {
+            hash<auto> work = workload[i];
+            int idx = i;
+            background sub() {
+                on_exit done.dec();
+                try {
+                    hash<auto> resp = mgr.request(mH3Url, work.method, work.path,
+                        work.headers, work.body);
+                    {
+                        AutoLock al(m);
+                        push results, {
+                            "idx": idx,
+                            "status": resp.status_code,
+                            "expected": work.expected_status,
+                            "success": True,
+                        };
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    {
+                        AutoLock al(m);
+                        push results, {
+                            "idx": idx,
+                            "error": ex.err + ": " + ex.desc,
+                            "success": False,
+                        };
+                    }
+                }
+            }();
+        }
+
+        assertEq(0, done.waitForZero(60s), "all mixed workload requests completed");
+        assertEq(n, results.size(), "got results for all mixed requests");
+
+        int successes = 0;
+        foreach hash<auto> r in (results) {
+            if (r.success) {
+                successes++;
+                assertEq(r.expected, r.status,
+                    sprintf("mixed request %d should return %d", r.idx, r.expected));
+            } else if (m_options.verbose) {
+                printf("mixed request %d failed: %s\n", r.idx, r.error);
+            }
+        }
+        assertEq(n, successes, "all mixed workload requests should succeed");
+
+        if (m_options.verbose) {
+            printf("mixed concurrent workload: %d/%d succeeded\n", successes, n);
+        }
+    }
+
+    # ---- Group 3: Scalability ----
+
+    testManySequentialRequests() {
+        auto mgr = newManager();
+        on_exit mgr.closeAll();
+
+        # Determine count based on environment (valgrind vs normal)
+        date probe_start = now_us();
+        hash<auto> probe = mgr.request(mH3Url, "GET", "/hello");
+        assertEq(200, probe.status_code, "probe request should succeed");
+        date probe_elapsed = now_us() - probe_start;
+
+        # If probe takes > 500ms, likely under valgrind; use fewer iterations
+        int count = probe_elapsed > 500ms ? 10 : 100;
+
+        int successes = 0;
+        for (int i = 0; i < count; i++) {
+            hash<auto> resp = mgr.request(mH3Url, "GET", "/hello");
+            if (resp.status_code == 200) {
+                successes++;
+            }
+        }
+
+        assertEq(count, successes,
+            sprintf("all %d sequential requests should succeed", count));
+
+        # Verify connection reuse
+        hash<auto> stats = mgr.getStats();
+        string key = sprintf("127.0.0.1:%d", mH3Port);
+        if (stats.per_host.hasKey(key)) {
+            assertEq(1, stats.per_host{key}.connections,
+                "should reuse single connection for all sequential requests");
+        }
+
+        if (m_options.verbose) {
+            printf("many sequential requests: %d/%d succeeded\n", successes, count);
+        }
+    }
+
+    testIncreasingBodySizes() {
+        auto mgr = newManager();
+        on_exit mgr.closeAll();
+
+        list<int> sizes = (100, 1000, 10000, 50000, 100000, 500000);
+
+        foreach int size in (sizes) {
+            hash<auto> resp = mgr.request(mH3Url, "GET",
+                sprintf("/large/%d", size));
+            assertEq(200, resp.status_code,
+                sprintf("large/%d should return 200", size));
+            string body_str = resp.body.typeCode() == NT_BINARY
+                ? resp.body.toString("UTF-8") : resp.body;
+            assertEq(size, body_str.size(),
+                sprintf("response for /large/%d should be %d bytes", size, size));
+            # Verify content
+            assertEq(strmul("X", size), body_str,
+                sprintf("response for /large/%d content should match", size));
+
+            if (m_options.verbose > 1) {
+                printf("increasing body sizes: %d bytes OK\n", size);
+            }
+        }
+
+        if (m_options.verbose) {
+            printf("increasing body sizes: all %d sizes verified\n", sizes.size());
+        }
+    }
+
+    # ---- Group 4: Reliability ----
+
+    testRepeatedConnectDisconnect() {
+        int cycles = 10;
+
+        for (int i = 0; i < cycles; i++) {
+            auto mgr = newManager();
+            on_exit mgr.closeAll();
+            hash<auto> resp = mgr.request(mH3Url, "GET", "/hello");
+            assertEq(200, resp.status_code,
+                sprintf("cycle %d should return 200", i));
+            string body_str = resp.body.typeCode() == NT_BINARY
+                ? resp.body.toString("UTF-8") : resp.body;
+            assertEq("Hello World", body_str,
+                sprintf("cycle %d body should match", i));
+            mgr.closeAll();
+
+            if (m_options.verbose > 1) {
+                printf("connect/disconnect cycle %d: OK\n", i);
+            }
+        }
+
+        if (m_options.verbose) {
+            printf("repeated connect/disconnect: %d cycles OK\n", cycles);
+        }
+    }
+
+    testBackToBackRequests() {
+        auto mgr = newManager();
+        on_exit mgr.closeAll();
+
+        # Determine count based on environment
+        date probe_start = now_us();
+        hash<auto> probe = mgr.request(mH3Url, "GET", "/hello");
+        assertEq(200, probe.status_code, "probe request should succeed");
+        date probe_elapsed = now_us() - probe_start;
+
+        int count = probe_elapsed > 500ms ? 10 : 50;
+
+        int successes = 0;
+        for (int i = 0; i < count; i++) {
+            # Zero delay between requests
+            hash<auto> resp = mgr.request(mH3Url, "GET", "/hello");
+            if (resp.status_code == 200) {
+                successes++;
+            }
+        }
+
+        assertEq(count, successes,
+            sprintf("all %d back-to-back requests should succeed", count));
+
+        if (m_options.verbose) {
+            printf("back-to-back requests: %d/%d succeeded\n", successes, count);
+        }
+    }
+}

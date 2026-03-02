@@ -143,19 +143,22 @@ log("started listener on %s", lh.desc);
     @section http_relnotes HttpServer Module Release Notes
 
     @subsection http1_6 HttpServer 1.6
+    - added HTTP/3 (QUIC) support with automatic listener creation for TLS listeners
+    - added \c Alt-Svc header support for advertising HTTP/3 availability
+    - added \c enable_h3 and \c alt_svc_max_age configuration options
+    - added maximum HTTP request body size enforcement (\c max_request_body_size)
+    - added \c sync option to allow non-blocking listener addition in async I/O mode
+    - added Brotli (\c br) and Zstandard (\c zstd) Content-Encoding support
+      (<a href="https://github.com/qoretechnologies/qore/issues/5071">issue 5071</a>)
+      - responses can be compressed with Brotli or Zstd when clients send appropriate \c Accept-Encoding headers
+      - requires Qore built with Brotli and/or Zstd support
+    - return HTTP 204 when a handler returns code 200 with no response body
     - fixed I/O thread blocking on \c Socket::getPeerInfo() calls that could cause the server to become unresponsive
       - disabled DNS hostname lookups in \c getPeerInfo() calls to prevent blocking the I/O thread
       - moved \c getPeerInfo() calls to after SSL handshake completion when socket is stable
       - peer info now shows IP addresses instead of hostnames in logs
     - removed high-frequency INFO log messages from async I/O hot paths to reduce log spam
     - fixed async I/O cache leak when clients disconnect during SSL handshake
-
-    @subsection http1_5_2 HttpServer 1.5.2
-    - added Brotli (\c br) and Zstandard (\c zstd) Content-Encoding support
-      (<a href="https://github.com/qoretechnologies/qore/issues/5071">issue 5071</a>)
-      - responses can be compressed with Brotli or Zstd when clients send appropriate \c Accept-Encoding headers
-      - requires Qore built with Brotli and/or Zstd support
-    - return HTTP 204 when a handler returns code 200 with no response body
     - fixed a shutdown crash when HttpServer instances created with the deprecated logger callback constructor were
       torn down while async logging was still active
 
@@ -476,9 +479,44 @@ public hashdecl HttpServerOptionInfo {
         that grow beyond this value, receive HTTP 413 (Content Too Large) and the
         connection is closed.
 
-        @since HttpServer 1.8
+        @since HttpServer 1.6
     */
     int max_request_body_size = 0;
+
+    #! Enable automatic HTTP/3 (QUIC) listener creation for TLS listeners
+    /** When \c True (the default), QUIC listeners are automatically created alongside TLS TCP listeners
+        in async mode.  The server advertises HTTP/3 availability via the \c Alt-Svc response header.
+
+        Set to \c False to disable automatic QUIC listener creation server-wide.
+
+        @note Individual listeners can override this via the \c enable_h3 field in
+        @ref HttpListenerOptionInfo.
+
+        @since HttpServer 1.6
+    */
+    bool enable_h3 = True;
+
+    #! Default max-age value for the Alt-Svc header (seconds)
+    /** Controls how long clients should cache the HTTP/3 Alt-Svc advertisement.
+
+        Default: 3600 (1 hour).
+
+        @since HttpServer 1.6
+    */
+    int alt_svc_max_age = 3600;
+
+    #! QUIC GOAWAY drain timeout — duration to wait for in-flight requests during graceful shutdown
+    /** Per RFC 9114 Section 5.2, the server sends a GOAWAY notice first, then waits
+        for in-flight requests to complete before sending the final GOAWAY.  This
+        timeout controls that waiting period.
+
+        The default (5s) allows sufficient time for remote clients to receive the
+        GOAWAY notice and for in-flight requests to complete.  For localhost or
+        low-latency testing, a shorter value (e.g. 100ms) may be used.
+
+        @since HttpServer 1.6
+    */
+    timeout quic_drain_timeout = 5s;
 }
 
 #! The HttpServer class implements a multithreaded HTTP server
@@ -652,6 +690,29 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         #! Maximum HTTP request body size in bytes (0 = unlimited)
         int max_request_body_size = 0;
 
+        #! Enable automatic HTTP/3 (QUIC) listener creation
+        bool enable_h3 = True;
+
+        #! Default max-age for Alt-Svc header (seconds)
+        int alt_svc_max_age = 3600;
+
+        #! Map of TCP listener ID -> auto-created QUIC listener ID
+        /** Keys are string listener IDs (Qore auto-converts int keys to strings
+            in hashes).  Values are the corresponding QUIC listener ID.
+        */
+        hash<string, int> quic_listener_map;
+
+        #! Map of TCP listener ID -> QUIC port
+        /** Keys are string listener IDs (same auto-conversion as quic_listener_map).
+            Values are the UDP port of the QUIC listener.
+        */
+        hash<string, int> quic_port_map;
+
+        #! Map of TCP listener ID -> per-listener Alt-Svc max-age
+        /** Keys are string listener IDs.  Values are the max-age value for Alt-Svc headers.
+        */
+        hash<string, int> quic_alt_svc_max_age;
+
         #! Async I/O controller (when async mode is enabled)
         *HttpServerAsyncIo::HttpAsyncSocketIoController asyncIo;
 
@@ -820,7 +881,7 @@ public class HttpServer inherits HttpServer::AbstractLogger {
     #! Returns the maximum request body size in bytes (0 = unlimited)
     /** @return the maximum request body size in bytes; 0 means unlimited
 
-        @since HttpServer 1.8
+        @since HttpServer 1.6
     */
     int getMaxRequestBodySize() {
         return max_request_body_size;
@@ -829,7 +890,7 @@ public class HttpServer inherits HttpServer::AbstractLogger {
     #! Sets the maximum request body size in bytes (0 = unlimited)
     /** @param size the maximum request body size in bytes; 0 means unlimited
 
-        @since HttpServer 1.8
+        @since HttpServer 1.6
     */
     setMaxRequestBodySize(int size) {
         max_request_body_size = size;
@@ -985,6 +1046,93 @@ public class HttpServer inherits HttpServer::AbstractLogger {
             waitForAsyncIo();
         }
         return rv;
+    }
+
+    #! Adds an HTTP/3 QUIC listener on the given UDP port
+    /** @param opts listener options; \c cert and \c key are required for QUIC TLS 1.3
+        @param port the UDP port to bind for QUIC (0 for random port)
+
+        @return a hash with \c port and \c name keys
+
+        @throw HTTP3-ERROR if async mode is not enabled or certificate/key missing
+
+        @since Qore 2.3
+    */
+    hash<auto> addQuicListener(hash<HttpListenerOptionInfo> opts, int port = 0) {
+        if (!asyncMode) {
+            throw "HTTP3-ERROR", "HTTP/3 QUIC listeners require async mode (async_mode: True)";
+        }
+        if (!opts.cert || !opts.key) {
+            throw "HTTP3-ERROR", "QUIC requires SSL certificate and private key for TLS 1.3";
+        }
+
+        # Create a UDP socket and bind it
+        Socket udp_sock();
+        on_error try { udp_sock.close(); } catch () {}
+        string bind_addr = opts.node ?? "0.0.0.0";
+        string bind_port = port > 0 ? string(port) : (opts.service ?? "0");
+        # Resolve the address family: use the explicitly requested family, or detect from
+        # the bind address ("::" is IPv6, anything else defaults to IPv4)
+        int family;
+        if (opts.family != AF_UNSPEC) {
+            family = opts.family;
+        } else if (bind_addr == "::" || bind_addr =~ /^[0-9a-fA-F]*:/) {
+            family = AF_INET6;
+        } else {
+            family = AF_INET;
+        }
+        udp_sock.bindINET(bind_addr, bind_port, True, family, SOCK_DGRAM);
+
+        # Get the actual port that was bound
+        hash<auto> sock_info = udp_sock.getSocketInfo();
+        int actual_port = sock_info.port;
+
+        # Set up SSL certificate and key for QUIC
+        udp_sock.setCertificate(opts.cert);
+        udp_sock.setPrivateKey(opts.key);
+
+        string name = opts.name ?? sprintf("quic-%d", actual_port);
+
+        # Create an HttpListener for handler dispatch (no TCP bind)
+        int lid = seqListeners.next();
+        string lname = name + sprintf("-%d", lid);
+        HttpListener http_listener = getListener(self, lid, <HttpListenerOptionInfo>{
+            "name": lname,
+            "cert": opts.cert,
+            "key": opts.key,
+            "ssl_verify_flags": opts.ssl_verify_flags,
+            "get_remote_certs": opts.get_remote_certs,
+            "no_start_main_thread": True,
+            "no_bind": True,
+        });
+        # Increment listener counter; decremented by HttpListener::listenerStopped()
+        # when the listener is stopped/deleted (on_error handles setup failures)
+        c.add();
+        on_error c.done();
+
+        # Register with the async I/O controller
+        if (!asyncIo) {
+            throw "HTTP3-ERROR", "async I/O controller not initialized";
+        }
+        asyncIo.addQuicListener(udp_sock, asyncTarget, opts.cert, opts.key, http_listener,
+            opts.ssl_verify_flags, opts.ssl_accept_all_certs, opts.get_remote_certs);
+
+        listeners{lid} = http_listener;
+        nmap{lname} = lid;
+        # NOTE: QUIC listeners are not added to smap (bind-address map) because
+        # they use UDP sockets with a different address format than TCP listeners.
+        # Use getListeners() or nmap (by name) to find QUIC listeners.
+
+        log("QUIC/HTTP/3 listener started on UDP port %d (name: %s)",
+            actual_port, name);
+
+        return {
+            "port": actual_port,
+            "name": name,
+            "protocol": "h3",
+            "id": lid,
+            "alt_svc_max_age": opts.alt_svc_max_age ?? alt_svc_max_age,
+        };
     }
 
     #! throws an exception; these objects do not support copying
@@ -1157,6 +1305,26 @@ public class HttpServer inherits HttpServer::AbstractLogger {
             }
         }
 
+        string lid = string(l.getID());
+
+        # If this TCP listener had an auto-created QUIC listener, stop it too
+        if (quic_listener_map.hasKey(lid)) {
+            int quic_lid = remove quic_listener_map{lid};
+            remove quic_port_map{lid};
+            remove quic_alt_svc_max_age{lid};
+            updateAltSvcHeader();
+            # Stop the QUIC listener if it still exists.
+            # NOTE: stop() triggers the QUIC listener's own listenerStopped()
+            # flow which removes it from listeners{}, nmap{}, and smap{}.
+            if (listeners.hasKey(string(quic_lid))) {
+                try {
+                    listeners{quic_lid}.stop();
+                } catch (hash<ExceptionInfo> ex) {
+                    # Best-effort cleanup
+                }
+            }
+        }
+
         delete smap.(l.getAddress());
         remove listeners.(l.getID());
         remove nmap.(l.getName());
@@ -1191,7 +1359,7 @@ public class HttpServer inherits HttpServer::AbstractLogger {
 
         if (asyncMode) {
             # Cancel any remaining operations owned by this server on globalAsyncCtrl
-            # (e.g. HTTP/2 poll operations from execHttp2PollOperation)
+            # (e.g. HTTP/2 and HTTP/3 poll operations from execAsyncPollOperation)
             string ownerId = self.uniqueHash();
             @debug(log("stop: calling globalAsyncCtrl.cancelByOwner(%s)", ownerId));
             int canceled = globalAsyncCtrl.cancelByOwner(ownerId);
@@ -1591,6 +1759,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         }
 
         bool is_http2 = cx."header-info".http2 ?? False;
+        bool is_multiplexed = is_http2 || (cx."header-info".http3 ?? False);
         data response_msg;
         if (msg || !chunked_msg) {
             # issue #3116: do not send a reply body if the response code does not allow it
@@ -1615,8 +1784,8 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                 # ignore any encoding passed in case of a string input stream response body, and use its encoding
                 encoding = cast<StringInputStream>(chunked_msg).getEncoding();
             }
-            if (is_http2) {
-                # Keep the InputStream for HTTP/2 streaming - don't buffer
+            if (is_multiplexed) {
+                # Keep the InputStream for HTTP/2 and HTTP/3 streaming - don't buffer
             } else {
                 extra_hdrs."Transfer-Encoding" = "chunked";
             }
@@ -1641,7 +1810,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             extra_hdrs."Content-Type" += ";charset=" + encoding;
         }
 
-        if (!is_http2) {
+        if (!is_multiplexed) {
             hdr.Connection = cx.close ? "close" : "Keep-Alive";
         }
 
@@ -1650,7 +1819,9 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         }
 
         hdr.Date = getDateHeader();
-        if (is_http2) {
+        if (is_multiplexed) {
+            # HTTP/2 and HTTP/3 prohibit connection-specific headers (RFC 9113 Section 8.2.2,
+            # RFC 9114 Section 4.2)
             remove hdr.Connection;
             remove hdr.connection;
             remove hdr."Keep-Alive";
@@ -1667,8 +1838,8 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
 
         # log exceptions if not "SOCKET-SEND-ERROR" (probably broken pipe)
         try {
-            # Check if this is an HTTP/2 connection
             if (is_http2) {
+                # HTTP/2: send response via HTTP/2 DATA frames
                 int stream_id = cx."header-info".stream_id;
                 auto send_body = response_msg ?? chunked_msg;
                 AbstractPollOperation op;
@@ -1682,7 +1853,20 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                     }
                     op = s.startPollSendHttp2Response(stream_id, status_code, hdr, send_body);
                 }
-                execHttp2PollOperation(s, op);
+                execAsyncPollOperation(s, op);
+            } else if (cx."header-info".http3) {
+                # HTTP/3: send response via QUIC stream (NOT the HTTP/1.x sendHTTPResponse path)
+                int session_id = cx."header-info".session_id;
+                int stream_id = cx."header-info".stream_id;
+                auto send_body = response_msg ?? chunked_msg;
+                if (send_body instanceof InputStream) {
+                    # HTTP/3: stream InputStream response incrementally to avoid buffering
+                    AbstractPollOperation op = s.startPollQuicSendStreamingResponse(
+                        session_id, stream_id, status_code, hdr, send_body);
+                    execAsyncPollOperation(s, op);
+                } else {
+                    s.submitQuicResponse(session_id, stream_id, status_code, hdr, send_body);
+                }
             } else {
                 s.sendHTTPResponse(status_code, HttpServer::HttpCodes{status_code}, "1.1", hdr,
                     response_msg ?? chunked_msg);
@@ -1856,6 +2040,8 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         # but we use ?? True to ensure async mode is enabled even if opts is
         # passed as a hash<auto> instead of hash<HttpServerOptionInfo>
         max_request_body_size = opts.max_request_body_size ?? 0;
+        enable_h3 = opts.enable_h3 ?? True;
+        alt_svc_max_age = opts.alt_svc_max_age ?? 3600;
         asyncMode = opts.async_mode ?? True;
         @debug(log("init: asyncMode=%y", asyncMode));
         if (asyncMode) {
@@ -1873,8 +2059,33 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                 "max_handler_threads": opts.max_handler_threads,
                 "min_idle_handler_threads": opts.min_idle_handler_threads,
                 "max_idle_handler_threads": opts.max_idle_handler_threads,
+                "quic_drain_timeout": opts.quic_drain_timeout,
             });
             asyncIo.start();
+        }
+    }
+
+    #! Updates the Alt-Svc response header based on active QUIC listeners
+    /** Rebuilds the \c Alt-Svc header from all active QUIC listener ports.
+        Called whenever QUIC listeners are added or removed.
+
+        @since HttpServer 1.6
+    */
+    private updateAltSvcHeader() {
+        # Build Alt-Svc header from all active QUIC listeners.
+        # NOTE: thread-safe because Qore hash/string value assignments are
+        # atomic (reference-counted); readers of hdr."Alt-Svc" get the old
+        # or new value, never a partial/corrupt value.
+        list<string> alt_svc_entries = ();
+        foreach string lid in (keys quic_port_map) {
+            int quic_port = quic_port_map{lid};
+            int ma = quic_alt_svc_max_age{lid} ?? alt_svc_max_age;
+            alt_svc_entries += sprintf("h3=\":%d\"; ma=%d", quic_port, ma);
+        }
+        if (alt_svc_entries) {
+            hdr."Alt-Svc" = alt_svc_entries.join(", ");
+        } else {
+            remove hdr."Alt-Svc";
         }
     }
 
@@ -1988,7 +2199,33 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         if (asyncMode) {
             asyncIo.addListener(l, asyncTarget, l.isSsl(), l.getSslCertificateObject(),
                 l.getSslPrivateKeyObject(), l.getHttpVersion(), l.getSslVerifyFlags(),
-                l.getSslAcceptAllCerts(), l.getGetRemoteCerts(), l.getMaxRequestBodySize());
+                l.getSslAcceptAllCerts(), l.getGetRemoteCerts(), l.getMaxRequestBodySize(), l);
+
+            # Auto-create QUIC listener for TLS listeners in async mode
+            if (enable_h3 && info.cert && info.key && (info.enable_h3 ?? True)) {
+                try {
+                    # Use the actual listener socket info to get the resolved address
+                    # and family, since the original info may have AF_UNSPEC / no node
+                    hash<auto> linfo = l.getInfo();
+                    hash<auto> quic_info = addQuicListener(<HttpListenerOptionInfo>{
+                        "cert": info.cert,
+                        "key": info.key,
+                        "node": linfo.address ?? info.node,
+                        "family": linfo.family,
+                        "alt_svc_max_age": info.alt_svc_max_age,
+                    }, linfo.port);
+                    quic_port_map{id} = quic_info.port;
+                    quic_alt_svc_max_age{id} = quic_info.alt_svc_max_age;
+                    quic_listener_map{id} = quic_info.id;
+                    updateAltSvcHeader();
+                    log("Auto-created QUIC/HTTP/3 listener on UDP port %d for TCP listener %d",
+                        quic_info.port, id);
+                } catch (hash<ExceptionInfo> ex) {
+                    # QUIC auto-creation is best-effort; log and continue with TCP-only
+                    log("WARNING: Failed to auto-create QUIC listener for TCP listener %d: %s: %s",
+                        id, ex.err, ex.desc);
+                }
+            }
         }
 
         return l;
@@ -2077,6 +2314,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             hash<auto> info, *reference<hash<HttpAsyncResponseInfo>> async_response_out) {
         remove cx."response-sent";
         bool is_http2 = cx."header-info".http2 ?? False;
+        bool is_multiplexed = is_http2 || (cx."header-info".http3 ?? False);
         if (is_http2) {
             s.setHttp2ActiveStream(cx."header-info".stream_id);
             on_exit s.setHttp2ActiveStream(-1);
@@ -2168,9 +2406,14 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             if (listener.hasHandlers()) {
                 hi = listener.findHandler(hdr, \score, True, \root_path);
                 if (!hi) {
-                    if (listener.defaultHandler)
+                    if (listener.defaultHandler) {
                         hi = listener.defaultHandler;
-                    else {
+                    } else if (async_response_out) {
+                        # Async mode: capture the 404 response for the controller to send
+                        async_response_out = buildAsyncErrorResponse(404, "Not found", cx,
+                            listener, s, !is_multiplexed);
+                        return;
+                    } else {
                         sendHttpError(listener, cx, s, 404, "Not found", NOTHING, NOTHING,
                             cx."response-encoding", head);
                         return;
@@ -2224,12 +2467,13 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             s.setHttp2MaxRequestBodySize(max_body);
 
             *data body;
-            # For HTTP/2, body is already read by poll operation and stored in header-info
-            if (cx."header-info".http2 && cx."header-info".body) {
-                # Check HTTP/2 body size against limit (body was already read by the C++
+            # For HTTP/2 and HTTP/3, body is already read by poll operation and stored in header-info
+            if ((cx."header-info".http2 || cx."header-info".http3) && cx."header-info".body) {
+                # Check body size against limit (body was already read by the C++
                 # layer; this is a secondary check in case the C++ limit was not set)
                 if (max_body > 0 && cx."header-info".body.size() > max_body) {
-                    string etxt = sprintf("HTTP/2 request body size %d exceeds maximum allowed body size %d",
+                    string etxt = sprintf("%s request body size %d exceeds maximum allowed body size %d",
+                        cx."header-info".http3 ? "HTTP/3" : "HTTP/2",
                         cx."header-info".body.size(), max_body);
                     listener.logError("%s: from %s", etxt, cx."peer-info".address_desc);
                     cx.close = True;
@@ -2237,7 +2481,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                         cx."response-encoding", hdr.method == "HEAD");
                     return;
                 }
-                # HTTP/2 body is always binary - convert to string if text content type
+                # HTTP/2 and HTTP/3 body is always binary - convert to string if text content type
                 if (hdr."content-encoding" || hdr."content-type" == MimeTypeOctetStream) {
                     body = cx."header-info".body;
                 } else {
@@ -2386,14 +2630,24 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             }
 
             if (rv.reply_sent) {
-                if (is_http2 && async_response_out) {
-                    # Async HTTP/2 mode: the handler claimed reply_sent but didn't actually send
-                    # a response; generate a 500 error for the controller to send
-                    string err = sprintf("handler %y set reply_sent without sending a response",
-                        cx.handler_name);
-                    logError("%s", err);
-                    async_response_out = buildAsyncErrorResponse(500, err, cx, listener, s, False);
-                } else if (!is_http2 && rv."code" >= 200) {
+                if (is_multiplexed && async_response_out) {
+                    if (rv.streaming) {
+                        # Streaming handler already sent response directly via protocol-specific
+                        # APIs (e.g., HTTP/3 QUIC submitQuicResponseStreaming + submitQuicStreamData
+                        # for SSE).  Signal the controller to acknowledge and continue.
+                        async_response_out = <HttpAsyncResponseInfo>{
+                            "streaming": True,
+                            "stream_type": rv.stream_type,
+                        };
+                    } else {
+                        # Async multiplexed mode: the handler claimed reply_sent but didn't actually
+                        # send a response; generate a 500 error for the controller to send
+                        string err = sprintf("handler %y set reply_sent without sending a response",
+                            cx.handler_name);
+                        logError("%s", err);
+                        async_response_out = buildAsyncErrorResponse(500, err, cx, listener, s, False);
+                    }
+                } else if (!is_multiplexed && rv."code" >= 200) {
                     cx."response-sent" = True;
                 }
                 return;
@@ -2422,9 +2676,9 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             int err_code = ex.err == "HTTP-BODY-TOO-LARGE" ? 413 : 500;
             if (async_response_out) {
                 # Async mode: capture the error response for the controller to send
-                # Sending synchronously via execHttp2PollOperation from the handler thread
-                # races with the async I/O controller on HTTP/2 connections
-                async_response_out = buildAsyncErrorResponse(err_code, str, cx, listener, s, !is_http2);
+                # Sending synchronously from the handler thread races with the
+                # async I/O controller on multiplexed (HTTP/2, HTTP/3) connections
+                async_response_out = buildAsyncErrorResponse(err_code, str, cx, listener, s, !is_multiplexed);
             } else {
                 sendHttpError(listener, cx, s, err_code, str, NOTHING, NOTHING, cx."response-encoding", head);
             }
@@ -2461,8 +2715,8 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
     private sendReply(RequestHelper request_helper, HttpListener listener, Socket s,
             *HttpServer::AbstractHttpRequestHandler handler, hash<auto> rv, reference<hash> cx, hash<auto> hdr,
             bool head, *reference<hash<HttpAsyncResponseInfo>> async_response_out) {
-        listener.log("sendReply: code=%d async_response_out=%y is_http2=%y",
-            rv."code", exists async_response_out, cx."header-info".http2);
+        listener.log("sendReply: code=%d async_response_out=%y http2=%y http3=%y",
+            rv."code", exists async_response_out, cx."header-info".http2, cx."header-info".http3);
         if (exists rv.close)
             cx.close = boolean(rv.close);
 
@@ -2531,6 +2785,9 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
 
         HttpServer::http_set_reply_headers(s, cx, \rv);
 
+        # Detect HTTP/2 or HTTP/3 WebSocket extended CONNECT (RFC 8441 / RFC 9220)
+        bool is_extended_connect = is_websocket_extended_connect(cx, hdr);
+
         if (rv."code" >= 300 && rv."code" < 400) {
             # handle redirect msgs (RFC 2616 section 10.3 http://tools.ietf.org/html/rfc2616#section-10.3)
             doResponse(listener, s, cx, rv, \async_response_out);
@@ -2578,8 +2835,9 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                     rv.body = bzip2(rv.body);
                 }
                 if (rv.hdr."Content-Encoding") {
-                    listener.log("cid %d: HTTP/2=%y compressed %s: %d -> %d bytes", cx.id,
-                        cx."header-info".http2, rv.hdr."Content-Encoding", orig_size, rv.body.size());
+                    listener.log("cid %d: %s compressed %s: %d -> %d bytes (type: %s)", cx.id,
+                        cx."header-info".http3 ? "HTTP/3" : cx."header-info".http2 ? "HTTP/2" : "HTTP/1.x",
+                        rv.hdr."Content-Encoding", orig_size, rv.body.size(), rv.body.type());
                 }
             }
 
@@ -2589,10 +2847,9 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                     ?? s.getEncoding().lwr());
             }
 
-            # For HTTP/2 WebSocket streaming, don't send response here - it's handled in the dedicated socket section
-            bool is_h2_ws_connect = cx."header-info".is_websocket_connect
-                || (cx."header-info".http2 && hdr.method == "CONNECT" && hdr.":protocol" == "websocket");
-            if (!rv.streaming || !is_h2_ws_connect) {
+            # For HTTP/2 and HTTP/3 WebSocket streaming, don't send response here -
+            # it's handled in the dedicated socket section
+            if (!rv.streaming || !is_extended_connect) {
                 doResponse(listener, s, cx, rv, \async_response_out);
             }
         }
@@ -2607,18 +2864,19 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             cx.user_state += rv.user_state;
         }
 
-        # Check for dedicated socket handlers: HTTP/1.1 WebSocket (101), SSE, or HTTP/2 WebSocket (200 + streaming)
-        bool is_http2_websocket = rv.streaming && (cx."header-info".is_websocket_connect
-            || (cx."header-info".http2 && hdr.method == "CONNECT" && hdr.":protocol" == "websocket"));
-        if (is_http2_websocket) {
+        # Check for dedicated socket handlers: HTTP/1.1 WebSocket (101), SSE,
+        # HTTP/2 WebSocket (200 + streaming), or HTTP/3 WebSocket (200 + streaming)
+        bool is_http3 = is_extended_connect && (cx."header-info".http3 ?? False);
+        if (rv.streaming && is_extended_connect) {
+            string proto_label = is_http3 ? "HTTP/3" : "HTTP/2";
             string ws_id = sprintf("%y:%d", cx.id, cx."header-info".stream_id);
             if (rv.close) {
-                listener.logError("cid %d: HTTP/2 WebSocket returned from handler %y, but the close flag is set",
-                    cx.id, cx.handler_name);
+                listener.logError("cid %d: %s WebSocket returned from handler %y, but the close flag is set",
+                    cx.id, proto_label, cx.handler_name);
             } else if (!(handler instanceof HttpServer::AbstractHttpSocketHandlerInterface)) {
-                listener.logError("cid %d: HTTP/2 WebSocket returned from handler %y, but the handler does "
-                    "not inherit AbstractHttpSocketHandlerInterface (class: %y)", cx.id, cx.handler_name,
-                    handler.className());
+                listener.logError("cid %d: %s WebSocket returned from handler %y, but the handler does "
+                    "not inherit AbstractHttpSocketHandlerInterface (class: %y)", cx.id, proto_label,
+                    cx.handler_name, handler.className());
                 self.sendHttpError(listener, cx, s, 501,
                     "WebSocket handler must inherit AbstractHttpSocketHandlerInterface",
                     NOTHING, NOTHING, cx."response-encoding", False);
@@ -2631,9 +2889,18 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                         int stream_id = cx."header-info".stream_id;
                         hash<auto> ws_hdr = rv.hdr ?? {};
 
-                        if (cx.async_mode) {
-                            # Multiplexed mode: submit CONNECT response directly to the
-                            # nghttp2 session.  h2op on the I/O thread will flush it.
+                        if (is_http3) {
+                            # HTTP/3 (RFC 9220): submit CONNECT response via QUIC session
+                            int session_id = cx."header-info".session_id;
+                            s.submitQuicConnectResponse(session_id, stream_id,
+                                rv."code" ?? 200, ws_hdr);
+                            *AsyncSocketIo::AsyncSocketIoController ctrl = cx.async_ctrl;
+                            if (ctrl) {
+                                ctrl.wake();
+                            }
+                        } else if (cx.async_mode) {
+                            # HTTP/2 multiplexed mode: submit CONNECT response directly
+                            # to the nghttp2 session.  h2op on the I/O thread will flush it.
                             s.submitHttp2ConnectResponse(stream_id, rv."code" ?? 200, ws_hdr);
                             # Wake the I/O controller so h2op's continuePoll() flushes
                             # the pending CONNECT response
@@ -2645,7 +2912,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                             # Sync mode: use poll operation
                             AbstractPollOperation op = s.startPollSendHttp2ConnectResponse(
                                 stream_id, rv."code" ?? 200, ws_hdr);
-                            execHttp2PollOperation(s, op);
+                            execAsyncPollOperation(s, op);
                         }
 
                         hash<auto> ws_cx = cx + {"listener": listener, "id": ws_id};
@@ -2654,25 +2921,27 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                         }
                     } catch (hash<ExceptionInfo> ex) {
                         if (ex.err == "SOCKET-NOT-OPEN") {
-                            listener.logError("cid %d: HTTP/2 WebSocket handler %y: socket closed by remote", cx.id,
-                                cx.handler_name);
+                            listener.logError("cid %d: %s WebSocket handler %y: socket closed by remote",
+                                cx.id, proto_label, cx.handler_name);
                         } else {
                             string desc = !debug
                                 ? sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc)
                                 : get_exception_string(ex);
-                            listener.logError("cid %d: error in HTTP/2 WebSocket handler %y: %s", cx.id,
-                                cx.handler_name, desc);
+                            listener.logError("cid %d: error in %s WebSocket handler %y: %s",
+                                cx.id, proto_label, cx.handler_name, desc);
                         }
                     }
                     if (request_helper.isDedicatedExternal()) {
-                        listener.log("cid %d: HTTP/2 WebSocket handler %y managed externally", cx.id, cx.handler_name);
+                        listener.log("cid %d: %s WebSocket handler %y managed externally",
+                            cx.id, proto_label, cx.handler_name);
                     } else {
                         listener.removeDedicatedSocket(ws_id);
-                        listener.log("cid %d: stopped HTTP/2 WebSocket handler: %y", cx.id, cx.handler_name);
+                        listener.log("cid %d: stopped %s WebSocket handler: %y",
+                            cx.id, proto_label, cx.handler_name);
                     }
                 } else {
-                    listener.logError("cid %d: cannot start HTTP/2 WebSocket handler %y because the listener is "
-                        "shutting down", cx.id, cx.handler_name);
+                    listener.logError("cid %d: cannot start %s WebSocket handler %y because the listener is "
+                        "shutting down", cx.id, proto_label, cx.handler_name);
                 }
             }
             return;
@@ -2729,20 +2998,22 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         }
     }
 
-    #! Executes an HTTP/2 poll operation using the global async I/O controller
+    #! Executes an async poll operation using the global async I/O controller
     /** @par Internal Method
         This method is for internal use only and should not be called directly by user code.
 
-        This method sends an HTTP/2 response using the shared AsyncSocketIoController for efficient
+        This method sends a response via the shared AsyncSocketIoController for efficient
         I/O multiplexing. It blocks until the response is fully sent, but the underlying I/O is
         handled asynchronously by the controller's I/O thread.
+
+        Used for both HTTP/2 and HTTP/3 (QUIC) poll operations.
 
         @param s the socket to send on
         @param op the poll operation to execute
 
         @throw any exception raised during the I/O operation
     */
-    execHttp2PollOperation(Socket s, AbstractPollOperation op) {
+    execAsyncPollOperation(Socket s, AbstractPollOperation op) {
         hash<SocketPollResultInfo> result = globalAsyncCtrl.exec(<SocketPollOperationInfo>{
             "sock": s,
             "spop": op,
@@ -2817,7 +3088,8 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             return;
         }
 
-        bool chunked = rv.chunked_body || (rv.body && (rv.hdr."Transfer-Encoding" || rv.body instanceof InputStream));
+        bool chunked = rv.chunked_body || (rv.body && (rv.hdr."Transfer-Encoding"
+            || (rv.body instanceof InputStream && !rv.hdr."Content-Length")));
         auto body = rv.body;
 
         if (chunked) {
@@ -2834,8 +3106,8 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         }
 
         # If async capture is requested, store response info instead of sending
-        listener.log("doResponse: async_response_out=%y code=%d is_http2=%y",
-            exists async_response_out, rv."code", cx."header-info".http2);
+        listener.log("doResponse: async_response_out=%y code=%d http2=%y http3=%y",
+            exists async_response_out, rv."code", cx."header-info".http2, cx."header-info".http3);
         if (async_response_out) {
             # Preserve InputStream for async mode so the controller can send it
             # with proper chunked framing; the controller handles thread reassignment
@@ -2864,8 +3136,8 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         }
 
         try {
-            # Check if this is an HTTP/2 connection
             if (cx."header-info".http2) {
+                # HTTP/2: send via HTTP/2 DATA frames
                 int stream_id = cx."header-info".stream_id;
                 # Remove Transfer-Encoding header (HTTP/2 uses DATA frames, not chunked encoding)
                 hash<auto> hdr = rv.hdr ?? {};
@@ -2877,7 +3149,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                         stream_id, rv."code");
                     AbstractPollOperation op = s.startPollSendHttp2StreamingResponse(
                         stream_id, rv."code", hdr, body);
-                    execHttp2PollOperation(s, op);
+                    execAsyncPollOperation(s, op);
                 } else {
                     # HTTP/2: send pre-materialized body
                     auto final_body = body ?? rv.body;
@@ -2888,9 +3160,30 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                         stream_id, rv."code", final_body ? final_body.size() : 0);
                     AbstractPollOperation op = s.startPollSendHttp2Response(stream_id, rv."code", hdr,
                         final_body);
-                    execHttp2PollOperation(s, op);
+                    execAsyncPollOperation(s, op);
                 }
                 listener.log("doResponse: HTTP/2 send complete");
+            } else if (cx."header-info".http3) {
+                # HTTP/3: send via QUIC stream
+                int session_id = cx."header-info".session_id;
+                int stream_id = cx."header-info".stream_id;
+                hash<auto> hdr = rv.hdr ?? {};
+                remove hdr."Transfer-Encoding";
+                auto final_body = body ?? rv.body;
+                if (final_body instanceof InputStream) {
+                    # HTTP/3: stream InputStream response incrementally to avoid buffering
+                    listener.log("doResponse: HTTP/3 streaming send starting session=%d "
+                        "stream=%d code=%d", session_id, stream_id, rv."code");
+                    AbstractPollOperation op = s.startPollQuicSendStreamingResponse(
+                        session_id, stream_id, rv."code", hdr, final_body);
+                    execAsyncPollOperation(s, op);
+                } else {
+                    listener.log("doResponse: HTTP/3 send session=%d stream=%d code=%d "
+                        "body_size=%d", session_id, stream_id, rv."code",
+                        final_body ? final_body.size() : 0);
+                    s.submitQuicResponse(session_id, stream_id, rv."code", hdr, final_body);
+                }
+                listener.log("doResponse: HTTP/3 send complete");
             } else if (!chunked) {
                 # HTTP/1.x: send a normal monolithic response
                 s.sendHTTPResponse(rv."code", HttpServer::HttpCodes{rv."code"}, "1.1", rv.hdr ?? {}, rv.body);
@@ -3103,39 +3396,50 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             ssl = True;
         }
 
-        # make INET (tcp) bind
-        if (exists opts.service) {
-            bindINET(opts.node, opts.service, True, opts.family);
-            socket = sprintf("%s:%s", opts.node ?? "*", opts.service);
+        if (opts.no_bind) {
+            # QUIC listener mode: skip bind/listen (network I/O uses a separate UDP socket)
+            socket = opts.name;
+            socket_info = {
+                "ssl": True,
+                "name": name,
+                "id": id,
+            } + opts.ext_info;
+            socket_info.desc = name;
         } else {
-            socket = opts.node;
-            if (opts.node =~ /^\//) {
-                # try to unlink the file first if it's a UNIX domain socket
-                unlink(opts.node);
-                bindUNIX(opts.node);
+            # make INET (tcp) bind
+            if (exists opts.service) {
+                bindINET(opts.node, opts.service, True, opts.family);
+                socket = sprintf("%s:%s", opts.node ?? "*", opts.service);
             } else {
-                if (bind(opts.node, True)) {
-                    throw "HTTPLISTENER-BIND-ERROR", strerror();
+                socket = opts.node;
+                if (opts.node =~ /^\//) {
+                    # try to unlink the file first if it's a UNIX domain socket
+                    unlink(opts.node);
+                    bindUNIX(opts.node);
+                } else {
+                    if (bind(opts.node, True)) {
+                        throw "HTTPLISTENER-BIND-ERROR", strerror();
+                    }
                 }
             }
-        }
 
-        # save socket port/path
-        socket_info = getSocketInfo() + {
-            "ssl": ssl,
-            "name": name,
-            "id": id,
-        } + opts.ext_info;
+            # save socket port/path
+            socket_info = getSocketInfo() + {
+                "ssl": ssl,
+                "name": name,
+                "id": id,
+            } + opts.ext_info;
 
-        # make 'desc' key for logging
-        socket_info.desc = socket_info.address_desc;
-        if (socket_info.port) {
-            socket_info.desc += ":" + socket_info.port;
-        }
+            # make 'desc' key for logging
+            socket_info.desc = socket_info.address_desc;
+            if (socket_info.port) {
+                socket_info.desc += ":" + socket_info.port;
+            }
 
-        # set listening state on socket
-        if (listen(ListenQueue)) {
-            throw "HTTP-LISTEN-ERROR", sprintf("listen error %d on socket %s: %s", errno(), socket, strerror());
+            # set listening state on socket
+            if (listen(ListenQueue)) {
+                throw "HTTP-LISTEN-ERROR", sprintf("listen error %d on socket %s: %s", errno(), socket, strerror());
+            }
         }
 
         # start main listener thread (unless using async I/O mode)
@@ -3412,7 +3716,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
         @return the maximum body size in bytes; 0 means unlimited
 
-        @since HttpServer 1.8
+        @since HttpServer 1.6
     */
     int getMaxRequestBodySize() {
         int rv = opts.max_request_body_size ?? 0;
@@ -3522,7 +3826,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
     }
 
     #! Returns the HTTP version mode for this listener
-    /** @return the HTTP version mode: "auto", "1.0", "1.1", or "2.0"
+    /** @return the HTTP version mode: "auto", "1.0", "1.1", "2.0", or "3.0"
 
         @note If get_global_http2_mode() returns "disabled", HTTP/2 is not offered even if the listener is
         configured with "auto" or "2.0"
@@ -3631,7 +3935,8 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
     string getResponseLogString(hash<auto> cx, int status_code, *data body, *hash<auto> hdr) {
         # do log msg
-        string http_ver = cx."header-info".http2 ? "HTTP/2" : "HTTP/1.1";
+        string http_ver = cx."header-info".http3 ? "HTTP/3"
+            : cx."header-info".http2 ? "HTTP/2" : "HTTP/1.1";
         string lstr = sprintf("cid %d: %s %d %s", cx.id, http_ver, status_code, HttpServer::HttpCodes{status_code});
         if (cx.handler_name)
             lstr += sprintf(" handler: %y", cx.handler_name);
@@ -3657,7 +3962,8 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
     logResponse(hash<auto> cx, int code, InputStream body, *hash<auto> hdr) {
         # do log msg
-        string http_ver = cx."header-info".http2 ? "HTTP/2" : "HTTP/1.1";
+        string http_ver = cx."header-info".http3 ? "HTTP/3"
+            : cx."header-info".http2 ? "HTTP/2" : "HTTP/1.1";
         string lstr = sprintf("cid %d: %s %d %s", cx.id, http_ver, code, HttpServer::HttpCodes{code});
         if (cx.handler_name)
             lstr += sprintf(" handler: %y", cx.handler_name);
@@ -4194,7 +4500,13 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
         # Add client certificate if requested and available
         if (get_remote_certs) {
-            cx."client-cert" = s.getRemoteCertificate();
+            if (header_info.http3) {
+                # For HTTP/3 (QUIC), the TLS handshake is in the QuicSession, not
+                # the listener socket — use getQuicPeerCertificate() with the session ID
+                cx."client-cert" = s.getQuicPeerCertificate(header_info.session_id);
+            } else {
+                cx."client-cert" = s.getRemoteCertificate();
+            }
         }
 
         # Capture the response for the controller to send
@@ -4218,6 +4530,17 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             return <HttpServerAsyncIo::HttpRequestResultInfo>{};
         }
 
+        # If handler consumed the response (e.g., WebSocket/SSE upgrade sent the 101
+        # response directly and deleted async_response), the connection is now managed
+        # by a dedicated handler
+        if (!async_response) {
+            if (request_helper.isDedicated()) {
+                return <HttpServerAsyncIo::HttpRequestResultInfo>{"dedicated": True};
+            }
+            # Response was sent directly by the handler
+            return <HttpServerAsyncIo::HttpRequestResultInfo>{};
+        }
+
         # Translate result to HttpRequestResultInfo for the controller
         return translateToRequestResult(async_response, request_helper, cx, s);
     }
@@ -4233,25 +4556,32 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
     private hash<HttpServerAsyncIo::HttpRequestResultInfo> translateToRequestResult(
             hash<HttpAsyncResponseInfo> async_response, RequestHelper request_helper,
             hash<auto> cx, Socket s) {
-        bool is_http2 = cx."header-info".http2 ?? False;
+        bool is_multiplexed = (cx."header-info".http2 ?? False) || (cx."header-info".http3 ?? False);
+
+        # Handler already sent a streaming response (e.g., HTTP/3 SSE via QUIC APIs)
+        if (async_response.streaming) {
+            return <HttpServerAsyncIo::HttpRequestResultInfo>{
+                "streaming": True,
+                "stream_type": async_response.stream_type,
+            };
+        }
 
         if (async_response.code && !request_helper.isDedicated()) {
             # Normal response - return response data for controller to send
             hash<auto> hdr = async_response.hdr ?? {};
-            if (is_http2) {
-                # HTTP/2 uses DATA frames, not chunked Transfer-Encoding
+            if (is_multiplexed) {
+                # HTTP/2 and HTTP/3 use DATA frames, not chunked Transfer-Encoding
                 remove hdr."Transfer-Encoding";
             }
             if (async_response.body && !hdr."Content-Length" && !hdr."Transfer-Encoding") {
                 hdr."Content-Length" = string(async_response.body.size());
             }
-
             # Log the response
             logResponse(cx, async_response);
 
-            # For HTTP/2, don't close the TCP connection based on cx.close — the stream
-            # is closed via END_STREAM; the controller decides via h2op.shouldKeepAlive()
-            bool do_close = !is_http2 && (async_response.close || !s.isOpen());
+            # For multiplexed protocols (HTTP/2, HTTP/3), don't close the connection
+            # based on cx.close — the stream is closed independently
+            bool do_close = !is_multiplexed && (async_response.close || !s.isOpen());
             return <HttpServerAsyncIo::HttpRequestResultInfo>{
                 "code": async_response.code,
                 "status_message": HttpServer::HttpCodes{async_response.code},
@@ -4260,7 +4590,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 "input_stream": async_response.input_stream,
                 "send_callback": async_response.send_callback,
                 "send_timeout": async_response.send_timeout,
-                "chunked": async_response.chunked && !is_http2,
+                "chunked": async_response.chunked && !is_multiplexed,
                 "close": do_close,
                 "return_to_idle": !do_close,
                 "ttl": serv.getTtl(),
@@ -4278,8 +4608,8 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             # Handler failed to send response - send 500 error
             string err = sprintf("handler %y returned without sending a response", cx.handler_name);
             logError("%s", err);
-            if (is_http2) {
-                # HTTP/2: return the error response for the controller to send asynchronously
+            if (is_multiplexed) {
+                # Multiplexed: return the error response for the controller to send asynchronously
                 # Do NOT call sendHttpError synchronously - it races with the async I/O controller
                 hash<HttpAsyncResponseInfo> err_resp = serv.buildAsyncErrorResponse(500, err, cx,
                     self, s, False);
@@ -4301,7 +4631,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             serv.sendHttpError(self, cx, s, 500, err, NOTHING, NOTHING, cx."response-encoding", False);
         }
 
-        if ((!cx.close || is_http2) && s.isOpen()) {
+        if ((!cx.close || is_multiplexed) && s.isOpen()) {
             return <HttpServerAsyncIo::HttpRequestResultInfo>{
                 "return_to_idle": True,
                 "ttl": serv.getTtl(),
@@ -4315,14 +4645,14 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         @assert(response.code, "response.code must be set");
         @debug {
             auto body_size = response.body ? response.body.size() : 0;
-            log("DEBUG: sendResponseSync: code=%d body_size=%d chunked=%y http2=%y", response.code,
-                body_size, response.chunked, response.cx."header-info".http2);
+            log("DEBUG: sendResponseSync: code=%d body_size=%d chunked=%y http2=%y http3=%y",
+                response.code, body_size, response.chunked, response.cx."header-info".http2,
+                response.cx."header-info".http3);
         }
         try {
-            # Check if this is an HTTP/2 connection
             if (response.cx."header-info".http2) {
+                # HTTP/2: send via HTTP/2 DATA frames
                 int stream_id = response.cx."header-info".stream_id;
-                # Remove Transfer-Encoding header (HTTP/2 uses DATA frames, not chunked encoding)
                 hash<auto> hdr = response.hdr ?? {};
                 remove hdr."Transfer-Encoding";
                 AbstractPollOperation op;
@@ -4334,14 +4664,31 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                     op = s.startPollSendHttp2StreamingResponse(stream_id, response.code, hdr,
                         response.input_stream);
                 } else {
-                    # Set Content-Length for HTTP/2 if body exists
                     if (response.body && !hdr."Content-Length") {
                         hdr."Content-Length" = string(response.body.size());
                     }
                     op = s.startPollSendHttp2Response(stream_id, response.code, hdr,
                         response.body);
                 }
-                serv.execHttp2PollOperation(s, op);
+                serv.execAsyncPollOperation(s, op);
+            } else if (response.cx."header-info".http3) {
+                # HTTP/3: send via QUIC stream
+                int session_id = response.cx."header-info".session_id;
+                int stream_id = response.cx."header-info".stream_id;
+                hash<auto> hdr = response.hdr ?? {};
+                remove hdr."Transfer-Encoding";
+                if (response.input_stream) {
+                    # HTTP/3: stream InputStream response incrementally
+                    # Stream was unassigned in doResponse(); reassign to current thread so
+                    # startPollQuicSendStreamingResponse() can access it (it will unassign again)
+                    response.input_stream.reassignThread();
+                    AbstractPollOperation op = s.startPollQuicSendStreamingResponse(
+                        session_id, stream_id, response.code, hdr, response.input_stream);
+                    serv.execAsyncPollOperation(s, op);
+                } else {
+                    s.submitQuicResponse(session_id, stream_id, response.code, hdr,
+                        response.body);
+                }
             } else if (response.send_callback) {
                 # HTTP/1.x: send callback-based chunked response (e.g. DataStream protocol)
                 s.sendHTTPResponseWithCallback(response.send_callback, response.code,
@@ -4945,8 +5292,8 @@ class HttpServerNativeAsyncTarget inherits HttpServerAsyncIo::HttpAsyncTarget {
     */
     *hash<HttpServerAsyncIo::HttpRequestResultInfo> tryInlineRequest(
             hash<HttpServerAsyncIo::HttpConnectionInfo> info) {
-        # Only for HTTP/1.x — HTTP/2 always uses thread pool
-        if (info.header_info.http2) {
+        # Only for HTTP/1.x — HTTP/2 and HTTP/3 always use thread pool
+        if (info.header_info.http2 || info.header_info.http3) {
             return NOTHING;
         }
         # Reject requests with a body — the inline path does not read the body
@@ -4986,7 +5333,7 @@ class HttpServerNativeAsyncTarget inherits HttpServerAsyncIo::HttpAsyncTarget {
         @param listener the listener that accepted this connection
         @param cx connection context
     */
-    onIdleTimeout(Socket sock, object listener, hash<auto> cx) {
+    onIdleTimeout(Socket sock, *HttpServer::HttpListenerInterface listener, hash<auto> cx) {
         log(LoggerLevel::DEBUG, "idle timeout for connection %y", sock.uniqueHash());
         try {
             sock.close();
@@ -5003,7 +5350,7 @@ class HttpServerNativeAsyncTarget inherits HttpServerAsyncIo::HttpAsyncTarget {
         @param listener the listener for this connection
         @param cx connection context
     */
-    onError(Socket sock, hash<ExceptionInfo> ex, object listener, *hash<auto> cx) {
+    onError(Socket sock, hash<ExceptionInfo> ex, *HttpServer::HttpListenerInterface listener, *hash<auto> cx) {
         log(LoggerLevel::ERROR, "async I/O error for %y: %s: %s", sock.uniqueHash(), ex.err, ex.desc);
         try {
             sock.close();
@@ -5019,7 +5366,7 @@ class HttpServerNativeAsyncTarget inherits HttpServerAsyncIo::HttpAsyncTarget {
         @param listener the listener for this connection
         @param cx connection context
     */
-    onSseDisconnect(Socket sock, object listener, hash<auto> cx) {
+    onSseDisconnect(Socket sock, *HttpServer::HttpListenerInterface listener, hash<auto> cx) {
         log(LoggerLevel::DEBUG, "SSE disconnect for %y", sock.uniqueHash());
         try {
             sock.close();
@@ -5032,8 +5379,8 @@ class HttpServerNativeAsyncTarget inherits HttpServerAsyncIo::HttpAsyncTarget {
     /** Not used in the current HttpServer flow - WebSocket connections are managed
         by dedicated handler threads, not by the async I/O controller.
     */
-    onWebSocketFrame(Socket sock, hash<HttpServerAsyncIo::WebSocketFrameInfo> frame, object listener,
-            hash<auto> cx) {
+    onWebSocketFrame(Socket sock, hash<HttpServerAsyncIo::WebSocketFrameInfo> frame,
+            *HttpServer::HttpListenerInterface listener, hash<auto> cx) {
         # WebSocket frames are handled by dedicated handler threads
     }
 
@@ -5046,7 +5393,7 @@ class HttpServerNativeAsyncTarget inherits HttpServerAsyncIo::HttpAsyncTarget {
         @param listener the listener for this connection
         @param cx connection context
     */
-    onWebSocketClose(Socket sock, int code, string reason, object listener, hash<auto> cx) {
+    onWebSocketClose(Socket sock, int code, string reason, *HttpServer::HttpListenerInterface listener, hash<auto> cx) {
         log(LoggerLevel::DEBUG, "WebSocket close for %y: code=%d reason=%y", sock.uniqueHash(), code, reason);
         try {
             sock.close();
@@ -5121,6 +5468,22 @@ hashdecl HttpAsyncResponseInfo {
         @see send_callback
     */
     *timeout send_timeout;
+
+    #! Whether this is a streaming response already sent by the handler
+    /** Set when a handler sends a streaming response (e.g., HTTP/3 SSE) directly
+        via protocol-specific APIs and sets \c reply_sent in the response.
+        The controller should not send a response — it just acknowledges and continues.
+
+        @since HttpServer 1.6
+    */
+    bool streaming = False;
+
+    #! The type of streaming connection: "sse" or "websocket"
+    /** Only used when \c streaming is @ref True.
+
+        @since HttpServer 1.6
+    */
+    *string stream_type;
 }
 } # namespace Priv
 

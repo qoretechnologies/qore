@@ -52,7 +52,7 @@
 %endtry
 
 module WebSocketClient {
-    version = "2.6";
+    version = "2.8";
     desc = "user module for providing client support for the WebSocket protocol";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -141,6 +141,15 @@ module WebSocketClient {
     This module automatically uses the <a href="../../WebSocketUtil/html/index.html">WebSocketUtil</a> module for
     encoding and decoding web socket messages.
 
+    The module supports WebSocket connections over all HTTP protocol versions:
+    - <b>HTTP/1.1</b>: Standard WebSocket upgrade handshake (RFC 6455)
+    - <b>HTTP/2</b>: Extended CONNECT method (RFC 8441)
+    - <b>HTTP/3</b>: Extended CONNECT over QUIC (RFC 9220)
+
+    HTTP/2 and HTTP/3 WebSocket transport is automatically negotiated based on the server's
+    capabilities; use @ref WebSocketClient::WebSocketClient::isHttp2() "isHttp2()" and
+    @ref WebSocketClient::WebSocketClient::isHttp3() "isHttp3()" to check which transport is in use.
+
     All the public symbols in the module are defined in the WebSocketClient namespace.
 
     Currently the module provides the following classes:
@@ -174,6 +183,31 @@ Counter c(1);
 c.waitForZero();
     @endcode
 
+    @par HTTP/3 WebSocket Example
+    When connecting to an HTTP/3-capable server over \c wss://, the WebSocket client automatically
+    negotiates HTTP/3 transport using extended CONNECT (RFC 9220):
+    @code{.py}
+%requires WebSocketClient
+
+code callback = sub (*data d) {
+    if (d) {
+        printf("received: %y\n", d);
+    }
+};
+
+WebSocketClient ws(callback, {
+    "url": "wss://example.com/ws",
+});
+ws.connect();
+
+# Check if HTTP/3 was negotiated
+if (ws.isHttp3()) {
+    printf("Using HTTP/3 WebSocket (RFC 9220)\n");
+}
+
+ws.send("Hello from HTTP/3!");
+    @endcode
+
     @section websocketclient_debug Debug Info Collection
 
     WebSocket data providers support debug info collection for capturing technical details about WebSocket
@@ -200,8 +234,10 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
     printf("%s: %s\n", debug.operation, debug.ws_message_type);
     printf("  Duration: %dms\n", debug.duration_ms);
     printf("  Size: %d bytes\n", debug.request_size ?? debug.response_size);
-    if (debug.http2) {
-        printf("  Protocol: HTTP/2 WebSocket\n");
+    if (debug.http3) {
+        printf("  Protocol: HTTP/3 WebSocket (RFC 9220)\n");
+    } else if (debug.http2) {
+        printf("  Protocol: HTTP/2 WebSocket (RFC 8441)\n");
     }
 }
     @endcode
@@ -209,6 +245,18 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
     See @ref dataprovider_debugging "Debugging Data Providers" in the DataProvider module for more information.
 
     @section websocketclient_relnotes WebSocketClient Module Release History
+
+    @subsection wsc_v2_7 v2.7
+    - added support for WebSocket over HTTP/3 (RFC 9220 — Extended CONNECT over QUIC)
+      - automatic detection and use of HTTP/3 extended CONNECT when connecting to HTTP/3 servers
+      - added @ref WebSocketClient::WebSocketClient::isHttp3() "WebSocketClient::isHttp3()" method to check if
+        HTTP/3 WebSocket is being used
+      - added \c http3 key to @ref WebSocketClient::WebSocketClient::getConnectionInfo()
+        "WebSocketClient::getConnectionInfo()"
+      - data provider's \c ws-connected-event now includes \c http3 field indicating HTTP/3 usage
+    - debug info now includes \c http3 field for HTTP/3 WebSocket connections
+    - extracted \c readWsMessageFromStream() helper to eliminate duplicate HTTP/2 and HTTP/3
+      WebSocket frame reading logic
 
     @subsection wsc_v2_6 v2.6
     - added async polling API support for WebSocket connections
@@ -485,6 +533,11 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
         HTTPClient hc;
         int stop = 0;
 
+        #! Mutex for serializing send operations
+        /** @since WebSocketClient 2.8
+        */
+        Mutex send_lock();
+
         code callback;
         code raw_callback;
         code pong_callback;
@@ -564,6 +617,15 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
 
         #! Buffer for HTTP/2 WebSocket frames spanning multiple DATA frames
         *binary h2_frame_buf;
+
+        #! True if using HTTP/3 WebSocket (RFC 9220)
+        bool http3_websocket = False;
+
+        #! HTTP/3 stream ID for WebSocket data (RFC 9220); -1 means no active stream
+        int h3_stream_id = -1;
+
+        #! Buffer for HTTP/3 WebSocket frames spanning multiple QUIC stream data
+        *binary h3_frame_buf;
     }
 
     #! Creates the WebSocket client object from the arguments
@@ -778,6 +840,62 @@ ws.connect();
         return connectIntern(opts, \info);
     }
 
+    #! Starts a non-blocking WebSocket connection
+    /** Returns a poll operation that performs the WebSocket handshake asynchronously.
+        After the poll operation completes successfully, call startEventLoop() to start
+        the background receive thread.
+
+        @param opts optional connection options; the \c hdr key can provide additional headers
+        @return a @ref WebSocketConnectPollOperation for the async connect
+
+        @note Only supports HTTP/1.1 WebSocket connections in async mode
+
+        @since WebSocketClient 2.8
+    */
+    WebSocketConnectPollOperation startPollConnect(*hash<auto> opts) {
+        if (!opts.hdr.Accept) {
+            opts.hdr.Accept = getAcceptHeader();
+        }
+        hash<auto> hdr = {
+            "User-Agent": DefaultUserAgent,
+        } + opts.hdr;
+
+        return new WebSocketConnectPollOperation(self, hc, hdr, http_opts, url, ws_ver,
+            offered_extensions);
+    }
+
+    #! Starts the background event loop after an async connect completes
+    /** Call this after WebSocketConnectPollOperation.goalReached() returns True.
+
+        @param connect_result the handshake response from the poll operation's getOutput()
+
+        @since WebSocketClient 2.8
+    */
+    startEventLoop(hash<auto> connect_result) {
+        AutoLock al(m);
+
+        # validate connection state
+        if (!hc.isOpen()) {
+            throw "WEBSOCKET-ERROR", "cannot start event loop: connection not open";
+        }
+
+        # process extensions from the connect result
+        processExtensions(connect_result);
+        finishConnect();
+
+        on_error {
+            clearTid();
+        }
+
+%ifdef PO_NO_THREAD_CONTROL
+        updateTid(start_thread(\eventLoop()));
+%else
+        updateTid(start_thread ? start_thread(\eventLoop()) : background eventLoop());
+%endif
+
+        logDebug("WS I/O thread started with TID %d (async connect)", tid);
+    }
+
     #! returns @ref True "True" if the connection is currently open and active, @ref False "False" if not
     bool isOpen() {
         m.lock();
@@ -796,6 +914,18 @@ ws.connect();
         on_exit m.unlock();
 
         return http2_websocket;
+    }
+
+    #! Returns @ref True "True" if the connection is using HTTP/3 WebSocket (RFC 9220)
+    /** @return @ref True "True" if connected via HTTP/3 extended CONNECT
+
+        @since WebSocketClient 2.7
+    */
+    bool isHttp3() {
+        m.lock();
+        on_exit m.unlock();
+
+        return http3_websocket;
     }
 
     #! Initiate a server reconnect immediately
@@ -843,6 +973,7 @@ ws.connect();
     /** @returns a hash with the following keys:
         - \c cid: the WebSocket client connection ID
         - \c http2: @ref True if using HTTP/2 WebSocket (RFC 8441)
+        - \c http3: @ref True if using HTTP/3 WebSocket (RFC 9220)
         - \c num_connects: how many times has the client connected to the server
         - \c peer: information about the connected server socket (see
           @ref Qore::Socket::getPeerInfo() "Socket::getPeerInfo()")
@@ -850,12 +981,14 @@ ws.connect();
           @ref Qore::Socket::getSocketInfo() "Socket::getSocketInfo()")
 
         @since WebSocketClient 2.6 added \c http2
+        @since WebSocketClient 2.7 added \c http3
     */
     *hash<auto> getConnectionInfo() {
         # use += to keep "hash<auto>"
         hash<auto> rv += {
             "cid": cid,
             "http2": http2_websocket,
+            "http3": http3_websocket,
             "num_connects": num_connects,
         };
         try {
@@ -921,7 +1054,9 @@ ws.connect();
     private disconnectIntern(int cmd = WSCC_GoingAway, *bool destroy) {
         AutoLock al(m);
 
-        if (hc.isOpen()) {
+        # HTTP/3 closes the TCP socket after QUIC handshake, so isOpen() returns False
+        # even though the QUIC connection is active; check http3_websocket as well
+        if (hc.isOpen() || (http3_websocket && tid)) {
             disconnectUnlocked(cmd);
         } else if (destroy && tid && tid != gettid()) {
             # wait for reconnect thread to stop if deleting when disconnected and reconnecting
@@ -1116,6 +1251,73 @@ ws.setEventQueue();
         logDebug("sending message: %y op: %d/%y fin: %y (%y %y)", msg, op, WSOPMap{op} ?? "unknown", fin, hc.isOpen(),
             hc.isConnected());
         sendWithExtensions(msg, op, fin);
+    }
+
+    #! Starts a non-blocking send operation for string data
+    /** @param str the string to send
+
+        @return a @ref WebSocketSendPollOperation for the async send
+
+        @since WebSocketClient 2.8
+    */
+    WebSocketSendPollOperation startPollSend(string str) {
+        return startPollSendIntern(str, WSOP_Text, True);
+    }
+
+    #! Starts a non-blocking send operation for binary data
+    /** @param bin the binary data to send
+
+        @return a @ref WebSocketSendPollOperation for the async send
+
+        @since WebSocketClient 2.8
+    */
+    WebSocketSendPollOperation startPollSend(binary bin) {
+        return startPollSendIntern(bin, WSOP_Binary, True);
+    }
+
+    #! Starts a non-blocking send operation with explicit opcode and FIN flag
+    /** @param msg the message data to send
+        @param op the WebSocket opcode
+        @param fin the FIN flag
+
+        @return a @ref WebSocketSendPollOperation for the async send
+
+        @since WebSocketClient 2.8
+    */
+    WebSocketSendPollOperation startPollSend(data msg, int op, bool fin) {
+        return startPollSendIntern(msg, op, fin);
+    }
+
+    #! Internal method to create a poll send operation
+    /** @since WebSocketClient 2.8
+    */
+    private WebSocketSendPollOperation startPollSendIntern(data msg, int op, bool fin) {
+        int rsv_bits = 0;
+        # Apply extension transforms if active
+        if (active_extensions) {
+            hash<auto> ctx = {
+                "op": op,
+                "fin": fin,
+                "first": True,
+            };
+            foreach AbstractWebSocketExtension ext in (active_extensions) {
+                hash<auto> result = ext.transformOutgoing(msg, ctx);
+                msg = result.data;
+                rsv_bits |= result.rsv_bits;
+            }
+        }
+        binary frame_data = ws_encode_message(msg, op, True, fin, rsv_bits);
+
+        if (http3_websocket && h3_stream_id >= 0) {
+            return new WebSocketSendPollOperation(self, frame_data, "http3", hc, h3_stream_id,
+                timeout_ms, send_lock);
+        } else if (http2_websocket && h2_stream_id > 0) {
+            return new WebSocketSendPollOperation(self, frame_data, "http2", hc, h2_stream_id,
+                timeout_ms, send_lock);
+        } else {
+            return new WebSocketSendPollOperation(self, frame_data, "http1", hc, 0, timeout_ms,
+                send_lock);
+        }
     }
 
     #! Sends a message with extension transforms applied
@@ -1412,9 +1614,22 @@ ws.setEventQueue();
             }
 
             try {
-                # For HTTP/2, use the HTTP/2-aware data availability check
+                # For HTTP/2 and HTTP/3, use protocol-aware data availability checks
                 bool data_available;
-                if (http2_websocket && h2_stream_id > 0) {
+                if (http3_websocket && h3_stream_id >= 0) {
+                    if (h3_frame_buf && h3_frame_buf.size()) {
+                        data_available = True;
+                    } else {
+                        # Try to read data and buffer it for readWsMessage()
+                        *binary h3_data = hc.readHttp3StreamData(h3_stream_id, 50);
+                        if (h3_data) {
+                            h3_frame_buf = h3_frame_buf ? h3_frame_buf + h3_data : h3_data;
+                            data_available = True;
+                        } else {
+                            data_available = False;
+                        }
+                    }
+                } else if (http2_websocket && h2_stream_id > 0) {
                     data_available = h2_frame_buf && h2_frame_buf.size()
                         ? True
                         : hc.isHttp2DataAvailable(h2_stream_id, 50ms);
@@ -1748,7 +1963,18 @@ ws.setEventQueue();
     /** @since WebSocketClient 2.6
     */
     private sendWsFrame(binary data) {
-        if (http2_websocket && h2_stream_id > 0) {
+        AutoLock al(send_lock);
+        sendWsFrameUnlocked(data);
+    }
+
+    #! Sends a WebSocket frame without acquiring the send lock
+    /** @since WebSocketClient 2.8
+    */
+    private sendWsFrameUnlocked(binary data) {
+        if (http3_websocket && h3_stream_id >= 0) {
+            # HTTP/3: Send data through the QUIC stream
+            hc.sendHttp3StreamData(h3_stream_id, data, False, timeout_ms);
+        } else if (http2_websocket && h2_stream_id > 0) {
             # HTTP/2: Send data through the HTTP/2 stream
             hc.sendHttp2StreamData(h2_stream_id, data, False, timeout_ms);
         } else {
@@ -1757,86 +1983,76 @@ ws.setEventQueue();
         }
     }
 
-    #! Reads a WebSocket message (handles HTTP/2 vs HTTP/1.1)
+    #! Reads a WebSocket message (handles HTTP/2, HTTP/3, and HTTP/1.1)
     /** @return WebSocket message info hash
         @since WebSocketClient 2.6
     */
     private hash<WsMsgInfo> readWsMessage() {
+        if (http3_websocket && h3_stream_id >= 0) {
+            return readWsMessageFromStream(\h3_frame_buf,
+                *binary sub (int read_timeout_ms) {
+                    return hc.readHttp3StreamData(h3_stream_id, read_timeout_ms);
+                },
+                "HTTP/3");
+        }
         if (http2_websocket && h2_stream_id > 0) {
-            # HTTP/2: Read data from HTTP/2 stream and parse WebSocket frame
-            # Large WebSocket frames may be split across multiple HTTP/2 DATA frames,
-            # so we need to accumulate data until we have a complete WebSocket frame
-            binary buf = h2_frame_buf ?? binary();
-            date start = now_us();
-            date deadline = start + timeout_ms;
-            while (True) {
-                *int needed = ws_get_frame_size(buf);
-                if (exists needed && buf.size() >= needed) {
-                    binary frame = buf.substr(0, needed);
-                    if (buf.size() > needed) {
-                        h2_frame_buf = buf.substr(needed);
-                    } else {
-                        remove h2_frame_buf;
-                    }
-                    hash<WsMsgInfo> h = ws_parse_frame(frame);
-                    @debug {
-                        if (getenv("QORE_HTTP2_WS_DEBUG_FRAMES")) {
-                            *hash<auto> info = h.info;
-                            int b0 = info."b0" ?? -1;
-                            int b1 = info."b1" ?? -1;
-                            log(LoggerLevel::INFO,
-                                "HTTP/2 WS recv frame: b0=0x%02x b1=0x%02x fin=%y op=%d masked=%y rsv1=%y rsv2=%y rsv3=%y",
-                                b0, b1, h.fin, h.op, h.masked, h.rsv1, h.rsv2, h.rsv3);
-                        }
-                    }
-                    return h;
-                }
+            return readWsMessageFromStream(\h2_frame_buf,
+                *binary sub (int read_timeout_ms) {
+                    return hc.readHttp2StreamData(h2_stream_id, read_timeout_ms);
+                },
+                "HTTP/2");
+        }
+        # HTTP/1.1: Read WebSocket message directly from socket
+        return ws_read_message(hc, timeout_ms);
+    }
 
-                # Calculate remaining time for this read
-                date remaining = deadline - now_us();
-                if (remaining <= 0s) {
-                    *int needed_timeout = ws_get_frame_size(buf);
-                    throw "WEBSOCKET-ERROR", sprintf("timeout reading WebSocket frame from HTTP/2 stream "
-                        "(have %d bytes, need %s)", buf.size(),
-                        exists needed_timeout ? needed_timeout.toString() : "unknown");
-                }
+    #! Reads a WebSocket message from a stream (HTTP/2 or HTTP/3)
+    /** Large WebSocket frames may be split across multiple protocol DATA frames,
+        so data is accumulated until a complete WebSocket frame is available.
 
-                # Use remaining time but cap at 100ms to allow checking for complete frames
-                int read_timeout_ms = min(get_milliseconds(remaining), 100);
-                *binary data = hc.readHttp2StreamData(h2_stream_id, read_timeout_ms);
-                if (data) {
-                    buf += data;
-                }
+        @param frame_buf reference to the persistent frame buffer for this stream
+        @param read_data callback \c code<*binary(int)> that accepts a timeout in milliseconds and returns stream data
+        @param proto_label protocol label for error messages (e.g. \c "HTTP/2", \c "HTTP/3")
 
-                # Check if we have enough data for a complete frame
-                *int needed2 = ws_get_frame_size(buf);
-                if (exists needed2 && buf.size() >= needed2) {
-                    # We have a complete frame; preserve any remaining bytes
-                    binary frame = buf.substr(0, needed2);
-                    if (buf.size() > needed2) {
-                        h2_frame_buf = buf.substr(needed2);
-                    } else {
-                        remove h2_frame_buf;
-                    }
-                    hash<WsMsgInfo> h = ws_parse_frame(frame);
-                    @debug {
-                        if (getenv("QORE_HTTP2_WS_DEBUG_FRAMES")) {
-                            *hash<auto> info = h.info;
-                            int b0 = info."b0" ?? -1;
-                            int b1 = info."b1" ?? -1;
-                            log(LoggerLevel::INFO,
-                                "HTTP/2 WS recv frame: b0=0x%02x b1=0x%02x fin=%y op=%d masked=%y rsv1=%y rsv2=%y rsv3=%y",
-                                b0, b1, h.fin, h.op, h.masked, h.rsv1, h.rsv2, h.rsv3);
-                        }
-                    }
-                    return h;
-                } else if (!data && buf.empty()) {
-                    throw "WEBSOCKET-ERROR", "no data available from HTTP/2 stream";
-                }
+        @return WebSocket message info hash
+
+        @since WebSocketClient 2.7
+    */
+    private hash<WsMsgInfo> readWsMessageFromStream(
+            reference<*binary> frame_buf,
+            code<*binary(int)> read_data,
+            string proto_label) {
+        binary buf = frame_buf ?? binary();
+        date deadline = now_us() + timeout_ms;
+        while (True) {
+            *int needed = ws_get_frame_size(buf);
+            if (exists needed && buf.size() >= needed) {
+                binary frame = buf.substr(0, needed);
+                frame_buf = buf.size() > needed ? buf.substr(needed) : NOTHING;
+                return ws_parse_frame(frame);
             }
-        } else {
-            # HTTP/1.1: Read WebSocket message directly from socket
-            return ws_read_message(hc, timeout_ms);
+
+            date remaining = deadline - now_us();
+            if (remaining <= 0s) {
+                throw "WEBSOCKET-ERROR", sprintf("timeout reading WebSocket frame from %s stream "
+                    "(have %d bytes, need %s)", proto_label, buf.size(),
+                    exists needed ? needed.toString() : "unknown");
+            }
+
+            int read_timeout_ms = min(remaining.durationMilliseconds(), 100);
+            *binary data = read_data(read_timeout_ms);
+            if (data) {
+                buf += data;
+            }
+
+            *int needed2 = ws_get_frame_size(buf);
+            if (exists needed2 && buf.size() >= needed2) {
+                binary frame = buf.substr(0, needed2);
+                frame_buf = buf.size() > needed2 ? buf.substr(needed2) : NOTHING;
+                return ws_parse_frame(frame);
+            } else if (!data && buf.empty()) {
+                throw "WEBSOCKET-ERROR", sprintf("no data available from %s stream", proto_label);
+            }
         }
     }
 
@@ -1895,6 +2111,25 @@ ws.setEventQueue();
             hc.connect();
         }
 
+        # RFC 9220: Use extended CONNECT for HTTP/3 WebSocket
+        # Try HTTP/3 if already active, or if http3_mode is "required" (QUIC will be
+        # established by sendHttp3Connect internally — the initial hc.connect() only
+        # establishes TCP+TLS, not QUIC)
+        if (hc.isHttp3Active() || hc.getHttp3Mode() == "required") {
+            try {
+                return connectHttp3WebSocket(hdr, \info, reconnect);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "HTTP3-CONNECT-ERROR" && http_opts.http_version == "auto") {
+                    logInfo("HTTP/3 WebSocket not supported by server; retrying with HTTP/1.1");
+                    http_opts.http_version = "1.1";
+                    hc = new HTTPClient(http_opts);
+                    hc.connect();
+                    return connectHttp1WebSocket(hdr, \info, reconnect);
+                }
+                rethrow;
+            }
+        }
+
         # RFC 8441: Use extended CONNECT for HTTP/2 WebSocket
         bool h2_active = hc.isHttp2Active();
         if (h2_active) {
@@ -1919,6 +2154,7 @@ ws.setEventQueue();
     #! HTTP/1.1 WebSocket handshake with Upgrade header
     private hash<auto> connectHttp1WebSocket(hash<auto> hdr, *reference<hash<auto>> info, *bool reconnect) {
         http2_websocket = False;
+        http3_websocket = False;
 
         string key = get_random_string(16).toBase64();
         hdr += {
@@ -2055,7 +2291,84 @@ ws.setEventQueue();
         return rh;
     }
 
-    #! Process server's extension response (shared between HTTP/1.1 and HTTP/2)
+    #! RFC 9220: HTTP/3 WebSocket handshake using extended CONNECT
+    /** Uses \c Sec-WebSocket-Key in the CONNECT request and validates the \c Sec-WebSocket-Accept response header.
+        @since WebSocketClient 2.7
+    */
+    private hash<auto> connectHttp3WebSocket(hash<auto> hdr, *reference<hash<auto>> info, *bool reconnect) {
+        http3_websocket = True;
+        http2_websocket = False;
+        h3_stream_id = -1;
+        remove h3_frame_buf;
+        logDebug("Using HTTP/3 WebSocket handshake (RFC 9220)");
+
+        # Merge HTTPClient's default headers with the request headers
+        hdr = hc.getDefaultHeaders() + hdr;
+
+        # Remove :protocol from headers — it's handled by sendHttp3Connect
+        remove hdr.":protocol";
+
+        # Add Sec-WebSocket-Key for RFC 9220 handshake
+        string key = get_random_string(16).toBase64();
+        hdr."Sec-WebSocket-Key" = key;
+        hdr."Sec-WebSocket-Version" = sprintf("%d", ws_ver);
+
+        # Add extension offers if configured
+        if (offered_extensions) {
+            *string ext_header = WebSocketExtensionRegistry::buildOfferHeader(offered_extensions);
+            if (ext_header) {
+                hdr."Sec-WebSocket-Extensions" = ext_header;
+                logDebug("Offering extensions: %s", ext_header);
+            }
+        }
+
+        *hash<auto> rh;
+        {
+            on_error {
+                logArgs(reconnect ? LoggerLevel::DEBUG : LoggerLevel::ERROR,
+                    "error in HTTP/3 WebSocket CONNECT to %s: %N", (url, info));
+                hc = new HTTPClient(http_opts);
+                rethrow $1.err, sprintf("%s: info: %y", $1.desc, info{"request-uri", "response-uri"});
+            }
+            # RFC 9220: Use extended CONNECT with :protocol pseudo-header
+            string path = hc.getConnectionPath() ?? "/";
+            rh = hc.sendHttp3Connect(path, hdr, "websocket", \info);
+        }
+
+        if (!rh) {
+            raiseError("HTTP/3 WebSocket CONNECT to %y failed", hc.getURL());
+        }
+
+        # Store stream ID for data transfer
+        h3_stream_id = rh.stream_id;
+
+        # RFC 9220: Expect 200 OK
+        if (rh.status_code != 200) {
+            raiseError("HTTP/3 server at URL %y returned status code '%d' to our WebSocket CONNECT request; "
+                "expecting '200 OK' (RFC 9220)", hc.getURL(), rh.status_code);
+        }
+
+        hash<auto> rhdr = rh.headers ?? rh;
+        if (!rhdr."sec-websocket-accept") {
+            raiseError("HTTP/3 server at URL %y did not return the Sec-WebSocket-Accept response header (headers "
+                "returned: %y)", hc.getURL(), rhdr);
+        }
+
+        {
+            string expected_key = ws_get_response_key(key);
+            if (rhdr."sec-websocket-accept" != expected_key) {
+                raiseError("HTTP/3 server at URL %y returned an invalid value in the Sec-WebSocket-Accept response "
+                    "header: %y; expecting %y", hc.getURL(), rhdr."sec-websocket-accept", expected_key);
+            }
+        }
+
+        processExtensions(rhdr);
+        finishConnect();
+
+        return rh;
+    }
+
+    #! Process server's extension response (shared between HTTP/1.1, HTTP/2, and HTTP/3)
     private processExtensions(hash<auto> rh) {
         active_extensions = NOTHING;
         extension_rsv_mask = 0;
@@ -2219,6 +2532,7 @@ class MyObserver inherits Observer {
     private hash<auto> getConnectionEventInfo() {
         return {
             "http2": isHttp2(),
+            "http3": isHttp3(),
         };
     }
 
@@ -2826,12 +3140,14 @@ public class WebSocketClientDataProviderBase inherits DataProvider::AbstractData
                 # HTTP/2 WebSocket (RFC 8441) session management. HTTP/2 WebSocket is also
                 # temporarily disabled on the server side (HttpServer.qm).
                 "desc": "The HTTP version to use: `1.1` (default), `auto` (HTTP/2 if available), `1.0`, "
-                    "or `2.0`. HTTP/2 (RFC 8441) requires TLS and is negotiated via ALPN",
+                    "`2.0`, or `3.0`. HTTP/2 (RFC 8441) requires TLS and is negotiated via ALPN. "
+                    "HTTP/3 (RFC 9220) requires TLS and uses QUIC",
                 "default_value": "1.1",
                 "allowed_values": (
                     <AllowedValueInfo>{
                         "value": "auto",
-                        "desc": "Use HTTP/2 if available via ALPN, fall back to HTTP/1.1",
+                        "desc": "Use HTTP/2 if available via ALPN, fall back to HTTP/1.1; upgrade to "
+                            "HTTP/3 if advertised via Alt-Svc",
                     },
                     <AllowedValueInfo>{
                         "value": "1.0",
@@ -2844,6 +3160,10 @@ public class WebSocketClientDataProviderBase inherits DataProvider::AbstractData
                     <AllowedValueInfo>{
                         "value": "2.0",
                         "desc": "Require HTTP/2, fail if the server doesn't support it (TLS required)",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "3.0",
+                        "desc": "Require HTTP/3 (QUIC), fail if unavailable (TLS required)",
                     },
                 ),
             },
@@ -3261,11 +3581,12 @@ public class WebSocketClientDataProviderBase inherits DataProvider::AbstractData
             "end_time": end_time,
             "duration_ms": duration_ms,
             "url": client.getUrl(),
-            "protocol": client.isHttp2() ? "HTTP/2" : "HTTP/1.1",
+            "protocol": client.isHttp3() ? "HTTP/3" : (client.isHttp2() ? "HTTP/2" : "HTTP/1.1"),
             "request_body": msg,
             "request_size": msg_size,
             "ws_message_type": ws_message_type,
             "http2": client.isHttp2(),
+            "http3": client.isHttp3(),
             "tls": client.getUrl() =~ /^wss:/i,
             "error": error_msg,
         };
@@ -3418,6 +3739,8 @@ public class WebSocketClientConnectedEventDataType inherits HashDataType {
     #! Creates the type
     constructor() {
         addField(new QoreDataField("http2", "True if using HTTP/2 WebSocket (RFC 8441), False if using HTTP/1.1",
+            AbstractDataProviderType::get(BoolType)));
+        addField(new QoreDataField("http3", "True if using HTTP/3 WebSocket (RFC 9220)",
             AbstractDataProviderType::get(BoolType)));
     }
 }
@@ -3753,4 +4076,255 @@ class QueuedObserver inherits DataProvider::Observer {
         q.push(data_."data");
     }
 }
+} # namespace Priv
+
+#! Poll operation for non-blocking WebSocket sends
+/** Supports HTTP/1.1, HTTP/2, and HTTP/3 transports.
+
+    For HTTP/1.1, uses \c Socket.startPollSend() for true non-blocking I/O.
+    The socket's directional non-block flags allow the send poll operation
+    to coexist with the concurrent event loop receive thread.
+
+    For HTTP/2 and HTTP/3, the stream data send is performed directly
+    in the first continuePoll() call since stream multiplexing handles
+    the I/O internally.
+
+    @since WebSocketClient 2.8
+*/
+public class WebSocketSendPollOperation inherits Qore::AbstractPollOperation {
+    private {
+        #! The WebSocketClient that created this operation
+        WebSocketClient wsc;
+        #! The encoded frame data to send
+        binary frame_data;
+        #! Transport type: "http1", "http2", "http3"
+        string transport;
+        #! The HTTPClient to send through
+        HTTPClient hc;
+        #! Stream ID for HTTP/2 and HTTP/3
+        int stream_id;
+        #! Timeout for the send operation
+        timeout send_timeout;
+        #! Send lock reference
+        Mutex send_lock;
+        #! Goal reached flag
+        bool goal_reached = False;
+        #! Inner poll operation for HTTP/1.1
+        *AbstractPollOperation inner_poller;
+        #! Whether the lock is currently held
+        bool lock_held = False;
+    }
+
+    #! Creates a new WebSocketSendPollOperation
+    constructor(WebSocketClient wsc, binary frame_data, string transport, HTTPClient hc,
+            int stream_id, timeout send_timeout, Mutex send_lock) {
+        self.wsc = wsc;
+        self.frame_data = frame_data;
+        self.transport = transport;
+        self.hc = hc;
+        self.stream_id = stream_id;
+        self.send_timeout = send_timeout;
+        self.send_lock = send_lock;
+    }
+
+    string getGoal() {
+        return "ws-send";
+    }
+
+    string getState() {
+        if (goal_reached) {
+            return "complete";
+        }
+        if (inner_poller) {
+            return "sending-" + inner_poller.getState();
+        }
+        return "pending";
+    }
+
+    bool goalReached() {
+        return goal_reached;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        if (goal_reached) {
+            return;
+        }
+
+        # For HTTP/1.1: use non-blocking send via startPollSend()
+        if (transport == "http1") {
+            if (!inner_poller) {
+                send_lock.lock();
+                lock_held = True;
+                inner_poller = hc.startPollSend(frame_data);
+            }
+            *hash<SocketPollInfo> rv = inner_poller.continuePoll();
+            if (inner_poller.goalReached()) {
+                inner_poller = NOTHING;
+                goal_reached = True;
+                lock_held = False;
+                send_lock.unlock();
+            }
+            return rv;
+        }
+
+        # For HTTP/2 and HTTP/3: blocking stream send in one call
+        send_lock.lock();
+        on_exit {
+            send_lock.unlock();
+        }
+        if (transport == "http3") {
+            hc.sendHttp3StreamData(stream_id, frame_data, False, send_timeout);
+        } else {
+            hc.sendHttp2StreamData(stream_id, frame_data, False, send_timeout);
+        }
+        goal_reached = True;
+    }
+
+    auto getOutput() {
+        return goal_reached;
+    }
+
+    abort() {
+        if (lock_held) {
+            send_lock.unlock();
+            lock_held = False;
+        }
+        if (inner_poller) {
+            inner_poller.abort();
+        }
+    }
+}
+
+#! Poll operation for non-blocking WebSocket connection establishment
+/** Performs the HTTP/1.1 WebSocket upgrade handshake asynchronously using
+    \c HTTPClient.startPollSendRecv().
+
+    After the poll operation completes successfully, the caller should use
+    \c WebSocketClient.startEventLoop() with the output to start the background
+    receive thread.
+
+    @since WebSocketClient 2.8
+*/
+public class WebSocketConnectPollOperation inherits Qore::AbstractPollOperation {
+    private {
+        #! The WebSocketClient that created this operation
+        WebSocketClient wsc;
+        #! The HTTPClient to connect through
+        HTTPClient hc;
+        #! The WebSocket key for handshake validation
+        string ws_key;
+        #! The inner poll operation for HTTP send/receive
+        *AbstractPollOperation inner_poller;
+        #! Goal reached flag
+        bool goal_reached = False;
+        #! Output from the operation (handshake response)
+        *hash<auto> output;
+        #! Current state
+        string state = "connecting";
+    }
+
+    #! Creates a new WebSocketConnectPollOperation
+    /** @param wsc the WebSocketClient that created this operation
+        @param hc the HTTPClient to connect through
+        @param hdr additional headers for the request
+        @param http_opts HTTP options for the client
+        @param url the WebSocket URL
+        @param ws_ver the WebSocket protocol version (default 13)
+        @param offered_extensions optional list of extensions to offer
+    */
+    constructor(WebSocketClient wsc, HTTPClient hc, hash<auto> hdr, hash<auto> http_opts,
+            string url, softint ws_ver, *list<AbstractWebSocketExtension> offered_extensions) {
+        self.wsc = wsc;
+        self.hc = hc;
+
+        # Generate WebSocket key for handshake
+        ws_key = get_random_string(16).toBase64();
+
+        # Build WebSocket upgrade headers
+        hdr += {
+            "Upgrade": "websocket",
+            "Connection": "Upgrade",
+            "Sec-WebSocket-Key": ws_key,
+        };
+        if (ws_ver) {
+            hdr."Sec-WebSocket-Version" = sprintf("%d", ws_ver);
+        }
+
+        # Add extension offers if configured
+        if (offered_extensions) {
+            *string ext_header = WebSocketExtensionRegistry::buildOfferHeader(offered_extensions);
+            if (ext_header) {
+                hdr."Sec-WebSocket-Extensions" = ext_header;
+            }
+        }
+
+        # Start the async HTTP send/receive for the upgrade request
+        inner_poller = hc.startPollSendRecv("GET", "", NOTHING, hdr);
+    }
+
+    string getGoal() {
+        return "ws-connect";
+    }
+
+    string getState() {
+        if (goal_reached) {
+            return "complete";
+        }
+        return state + (inner_poller ? ("-" + inner_poller.getState()) : "");
+    }
+
+    bool goalReached() {
+        return goal_reached;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        if (goal_reached || !inner_poller) {
+            return;
+        }
+
+        *hash<SocketPollInfo> info = inner_poller.continuePoll();
+        if (info) {
+            return info;
+        }
+
+        # HTTP send/receive complete - validate the WebSocket handshake response
+        hash<auto> resp = inner_poller.getOutput();
+
+        # Expect 101 Switching Protocols
+        if (resp.code != 101) {
+            *string status_message = resp.info."response-headers".status_message;
+            throw "WEBSOCKET-CONNECT-ERROR", sprintf("WebSocket handshake failed: expected 101 Switching "
+                "Protocols, got %d %s", resp.code, status_message ?? "");
+        }
+
+        # Validate Sec-WebSocket-Accept header
+        *hash<auto> response_headers = resp.info."response-headers";
+        *string accept_key = response_headers."sec-websocket-accept";
+        if (!accept_key) {
+            throw "WEBSOCKET-CONNECT-ERROR", "WebSocket handshake failed: missing Sec-WebSocket-Accept "
+                "header";
+        }
+
+        string expected_key = ws_get_response_key(ws_key);
+        if (accept_key != expected_key) {
+            throw "WEBSOCKET-CONNECT-ERROR", sprintf("WebSocket handshake failed: invalid "
+                "Sec-WebSocket-Accept header: got %y, expected %y", accept_key, expected_key);
+        }
+
+        # Build output hash matching the format from connectHttp1WebSocket()
+        output = response_headers;
+        output.status_code = resp.code;
+        state = "complete";
+        goal_reached = True;
+    }
+
+    auto getOutput() {
+        return output;
+    }
+
+    abort() {
+        if (inner_poller) {
+            inner_poller.abort();
+        }
+    }
 }

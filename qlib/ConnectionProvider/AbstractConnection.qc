@@ -799,6 +799,40 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
         return getImpl(False);
     }
 
+    #! Returns @ref True if the connection supports the async request API
+    /** This base class method returns @ref False; to support the async request API, override this method in child
+        classes
+
+        @see
+        - \c startPollRequest()
+
+        @since ConnectionProvider 2.3
+    */
+    bool supportsAsyncRequestApi() {
+        return False;
+    }
+
+    #! Starts a non-blocking HTTP request on the connection
+    /** Only called if the connection supports the async request API
+
+        @param method the HTTP method (GET, POST, PUT, DELETE, PATCH, etc.)
+        @param path the request path
+        @param body the request body
+        @param headers optional request headers
+        @param logger an optional logger interface
+
+        @return a poll operation for the async request
+
+        @see supportsAsyncRequestApi()
+
+        @since ConnectionProvider 2.3
+    */
+    Qore::AbstractPollOperation startPollRequest(string method, string path, auto body,
+            *hash<auto> headers, *Logger::LoggerInterface logger) {
+        throw "UNSUPPORTED", sprintf("connection %y (%s) does not support the async request API",
+            name, safe_url);
+    }
+
     #! Handles a successful ping operation on the connection
     handlePingSuccess(date delta) {
         up = True;

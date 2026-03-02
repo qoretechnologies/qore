@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file CdsRestClient.qm Qore user module for calling Microsoft Common Data Service REST services
 
-/*  CdsRestClient.qm Copyright (C) 2023 - 2025 Qore Technologies, s.r.o.
+/*  CdsRestClient.qm Copyright (C) 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -39,7 +39,7 @@
 %requires(reexport) ConnectionProvider >= 1.4
 
 module CdsRestClient {
-    version = "2.1";
+    version = "2.2";
     desc = "user module for calling Microsoft Dynamics 365 Common Data Service REST services";
     author = "David Nichols <david@qore.org>";
     url = "https://qore.org";
@@ -433,6 +433,27 @@ CdsRestClient rest({
             if (info."response-body".error && info."response-body".size() == 1
                 && info."response-body".error."code".typeCode() == NT_STRING
                 && info."response-body".error.message.typeCode() == NT_STRING) {
+                hash<auto> error = info."response-body".error;
+                string errcode = remove error."code";
+                string msg = remove error.message;
+                throw errcode, msg, error + ex.arg + {"decoded_body": info."response-body"};
+            }
+            rethrow;
+        }
+    }
+
+    #! Processes async response with CDS-specific error wrapping
+    /** @since CdsRestClient 2.2
+    */
+    private hash<auto> processAsyncResponse(hash<auto> resp, string method, string path,
+            reference<hash<auto>> info, bool decode_errors) {
+        try {
+            return RestClient::processAsyncResponse(resp, method, path, \info, decode_errors);
+        } catch (hash<ExceptionInfo> ex) {
+            # throw an exception for the CDS error
+            if (info."response-body".error && info."response-body".size() == 1
+                    && info."response-body".error."code".typeCode() == NT_STRING
+                    && info."response-body".error.message.typeCode() == NT_STRING) {
                 hash<auto> error = info."response-body".error;
                 string errcode = remove error."code";
                 string msg = remove error.message;

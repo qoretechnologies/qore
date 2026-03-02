@@ -44,6 +44,16 @@ class QoreSSLPrivateKey;
 class Queue;
 class my_socket_priv;
 
+//! Non-blocking operation direction flags for directional socket locking
+/** @since %Qore 2.3
+*/
+///@{
+constexpr unsigned NB_SEND    = (1 << 0);  //!< Send operation in progress
+constexpr unsigned NB_RECV    = (1 << 1);  //!< Receive operation in progress
+constexpr unsigned NB_CONNECT = (1 << 2);  //!< Connect operation in progress
+constexpr unsigned NB_ALL     = NB_SEND | NB_RECV | NB_CONNECT;  //!< Blocks everything
+///@}
+
 class QoreSocketObject : public AbstractPollableIoObjectBase {
     friend class my_socket_priv;
     friend struct qore_httpclient_priv;
@@ -66,6 +76,13 @@ class QoreSocketObject : public AbstractPollableIoObjectBase {
     friend class SocketHttp2FlushPollOperation;
     friend class SocketHttp2ClientMultiplexPollOperation;
     friend class SocketSendAndReadHeaderPollOperation;
+    friend class SocketSendStreamAndReadHeaderPollOperation;
+    friend class SocketRecvFromPollOperation;
+    friend class SocketSendToPollOperation;
+    friend class SocketQuicClientPollOperation;
+    friend class SocketQuicServerPollOperation;
+    friend class SocketQuicSendResponsePollOperation;
+    friend class SocketQuicSendStreamingResponsePollOperation;
 
 public:
     DLLEXPORT QoreSocketObject();
@@ -412,6 +429,14 @@ public:
     DLLEXPORT int submitHttp2StreamingResponseHeaders(int32_t stream_id, int status_code,
             const QoreHashNode* headers, ExceptionSink* xsink);
 
+    //! Submit HTTP/2 streaming response with InputStream body (non-blocking)
+    /** Handler thread calls this and returns immediately. The I/O thread reads from
+        the InputStream and sends DATA frames incrementally.
+        @since %Qore 2.3
+    */
+    DLLEXPORT int submitHttp2StreamingResponseWithStream(int32_t stream_id, int status_code,
+            const QoreHashNode* headers, InputStream* body, ExceptionSink* xsink);
+
     //! Blocking read of HTTP/2 stream data for incremental server-side streaming
     /** @since %Qore 2.3
     */
@@ -483,11 +508,206 @@ public:
     //! Returns the maximum request body size for HTTP/2 streams
     DLLEXPORT int64 getHttp2MaxRequestBodySize() const;
 
-    //! Sets the non-blocking connection flag
+    //! Sets the non-blocking connection flag (blocks all directions)
     DLLEXPORT int setNonBlock(ExceptionSink* xsink);
 
-    //! Clears the non-blocking connection flag
+    //! Sets the non-blocking flag for a specific direction
+    /** @param xsink exception sink
+        @param direction bitmask of NB_SEND, NB_RECV, NB_CONNECT flags
+
+        @return 0 on success, -1 on error
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT int setNonBlock(ExceptionSink* xsink, unsigned direction);
+
+    //! Clears all non-blocking connection flags
     DLLEXPORT void clearNonBlock();
+
+    //! Clears the non-blocking flag for a specific direction
+    /** @param direction bitmask of NB_SEND, NB_RECV, NB_CONNECT flags to clear
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT void clearNonBlock(unsigned direction);
+
+    //! Returns true if the socket has an active QUIC/HTTP/3 session
+    /** @since %Qore 2.3
+    */
+    DLLEXPORT bool isQuic() const;
+
+    //! Submits an HTTP/3 request on an active QUIC client connection
+    /** @param method HTTP method (GET, POST, etc.)
+        @param path request path
+        @param headers request headers (hash of string key -> string value)
+        @param body optional request body
+        @param body_len request body length
+        @param xsink exception sink
+
+        @return the stream ID on success, -1 on error
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT int64_t submitQuicRequest(const char* method, const char* path,
+        const QoreHashNode* headers, const void* body, size_t body_len, ExceptionSink* xsink);
+
+    //! Returns the first QUIC session ID for this socket (for client connections with one session)
+    /** @return the session ID of the first (or only) QUIC session, 0 if no session is active
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT int64_t getFirstQuicSessionId(ExceptionSink* xsink = nullptr) const;
+
+    //! Cancels a pending HTTP/3 stream on an active QUIC connection
+    /** @param session_id the QUIC session ID
+        @param stream_id the stream ID to cancel
+        @param xsink exception sink
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT void cancelQuicStream(int64_t session_id, int64_t stream_id, ExceptionSink* xsink);
+
+    //! Submits an HTTP/3 response on an active QUIC server connection
+    /** @param session_id the QUIC session ID
+        @param stream_id the stream ID to respond on
+        @param status_code HTTP status code
+        @param headers response headers (hash of string key -> string value)
+        @param body optional response body
+        @param body_len response body length
+        @param xsink exception sink
+
+        @return 0 on success, -1 on error
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT int submitQuicResponse(int64_t session_id, int64_t stream_id, int status_code,
+        const QoreHashNode* headers, const void* body, size_t body_len, ExceptionSink* xsink);
+
+    //! Sends an HTTP/3 GOAWAY shutdown notice on a QUIC session
+    /** @param session_id the QUIC session ID
+        @param xsink exception sink
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT void submitQuicShutdownNotice(int64_t session_id, ExceptionSink* xsink);
+
+    //! Sends an HTTP/3 GOAWAY shutdown on a QUIC session
+    /** @param session_id the QUIC session ID
+        @param xsink exception sink
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT void submitQuicShutdown(int64_t session_id, ExceptionSink* xsink);
+
+    //! Returns GOAWAY state for a QUIC session
+    /** @param session_id the QUIC session ID
+        @param xsink exception sink
+        @return hash with goaway_sent, goaway_received, goaway_max_stream_id keys
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT QoreHashNode* getQuicSessionGoawayState(int64_t session_id, ExceptionSink* xsink);
+
+    //! Returns True if a GOAWAY has been received from the peer on a QUIC session
+    /** Lightweight check — avoids hash allocation; suitable for polling on every I/O cycle.
+
+        @param session_id the QUIC session ID
+        @param xsink exception sink
+        @return True if a GOAWAY has been received, False otherwise (also False if session not found)
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT bool isQuicGoawayReceived(int64_t session_id, ExceptionSink* xsink);
+
+    //! Returns the peer (client) certificate from a QUIC session after TLS handshake
+    /** For mTLS (mutual TLS) — returns the client's X.509 certificate presented
+        during the QUIC/TLS 1.3 handshake.
+
+        @param session_id the QUIC session ID
+        @param xsink exception sink
+        @return QoreObject wrapping SSLCertificate, or nullptr if no client cert was presented
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT QoreObject* getQuicPeerCertificate(int64_t session_id, ExceptionSink* xsink);
+
+    //! Submits a streaming HTTP/3 response (headers only) on a QUIC session
+    /** Data is provided incrementally via submitQuicStreamData().
+
+        @param session_id the QUIC session ID
+        @param stream_id the HTTP/3 stream ID
+        @param status_code the HTTP status code
+        @param headers response headers
+        @param xsink exception sink
+
+        @return 0 on success, -1 on error
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT int submitQuicResponseStreaming(int64_t session_id, int64_t stream_id, int status_code,
+        const QoreHashNode* headers, ExceptionSink* xsink);
+
+    //! Sends body data on a streaming HTTP/3 response
+    /** @param session_id the QUIC session ID
+        @param stream_id the HTTP/3 stream ID
+        @param data body data to send (nullptr with end_stream=true to signal EOF)
+        @param len length of data
+        @param end_stream true if this is the last chunk
+        @param xsink exception sink
+
+        @return 0 on success, 1 if buffer full (backpressure), -1 on error
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT int submitQuicStreamData(int64_t session_id, int64_t stream_id,
+        const void* data, size_t len, bool end_stream, ExceptionSink* xsink);
+
+    //! Set InputStream for I/O thread streaming on a QUIC session stream
+    /** @since %Qore 2.3
+    */
+    DLLEXPORT void setQuicStreamInputStream(int64_t session_id, int64_t stream_id,
+        InputStream* body, ExceptionSink* xsink);
+
+    //! Wait for a streaming body buffer to drain below the backpressure threshold
+    /** Blocks until the stream's buffered data drops below QUIC_MAX_STREAM_BODY,
+        the stream is closed, or the timeout expires.
+
+        @param session_id the QUIC session ID
+        @param stream_id the HTTP/3 stream ID
+        @param timeout_ms maximum wait time in milliseconds (0 = no wait, -1 = infinite)
+        @param xsink exception sink
+        @return 0 if buffer drained, 1 if timed out, -1 if stream not found or closed
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT int waitForQuicStreamDrain(int64_t session_id, int64_t stream_id,
+        int timeout_ms, ExceptionSink* xsink);
+
+    //! Submit a response for an HTTP/3 extended CONNECT request (RFC 9220)
+    /** @param session_id the QUIC session ID
+        @param stream_id the HTTP/3 stream ID from the CONNECT request
+        @param status_code HTTP status code (200 to accept, 4xx to reject)
+        @param headers optional response headers
+        @param xsink exception sink
+
+        @return 0 on success, -1 on error
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT int submitQuicConnectResponse(int64_t session_id, int64_t stream_id,
+        int status_code, const QoreHashNode* headers, ExceptionSink* xsink);
+
+    //! Read data from an HTTP/3 extended CONNECT stream (RFC 9220)
+    /** @param session_id the QUIC session ID
+        @param stream_id the HTTP/3 stream ID
+        @param xsink exception sink
+
+        @return binary data if available, or NOTHING if no data is buffered
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT QoreValue readQuicConnectStreamData(int64_t session_id, int64_t stream_id,
+        ExceptionSink* xsink);
 
 private:
     DLLLOCAL QoreSocketObject(QoreSocket* s, QoreSSLCertificate* cert = nullptr, QoreSSLPrivateKey* pk = nullptr);

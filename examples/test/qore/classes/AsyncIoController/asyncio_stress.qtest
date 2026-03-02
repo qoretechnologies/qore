@@ -1,0 +1,1763 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../../qlib/QUnit.qm
+
+%exec-class AsyncIoStressTest
+
+#! Helper class for accept replenishment loop tests
+/** Avoids self-referencing closures which trigger assertion failures in Qore's
+    ThreadClosureVariableStack when called from the I/O thread.
+*/
+class AcceptReplenisher {
+    private {
+        Socket listener;
+        AsyncIoController ctrl;
+        Counter done;
+        int total;
+        Mutex m();
+        int key_counter = 0;
+        int completed_count = 0;
+    }
+
+    constructor(Socket l, AsyncIoController c, int t) {
+        listener = l;
+        ctrl = c;
+        total = t;
+        done = new Counter(t);
+    }
+
+    Counter getDone() {
+        return done;
+    }
+
+    int getCompletedCount() {
+        AutoLock al(m);
+        return completed_count;
+    }
+
+    submitOne() {
+        int my_key;
+        {
+            AutoLock al(m);
+            my_key = key_counter++;
+        }
+        AbstractPollOperation spop = listener.startPollAccept();
+        ctrl.submit(<SocketPollOperationInfo>{
+            "sock": listener,
+            "spop": spop,
+            "owner": "accept-loop",
+            "to": 60s,
+            "key": sprintf("accept:%d", my_key),
+            "callback": \onAcceptComplete(),
+        });
+    }
+
+    private onAcceptComplete(hash<SocketPollResultInfo> result) {
+        if (result.canceled ?? False || result.ex) {
+            return;
+        }
+        bool should_continue;
+        {
+            AutoLock al(m);
+            ++completed_count;
+            should_continue = completed_count < total;
+        }
+        done.dec();
+        if (should_continue) {
+            submitOne();
+        }
+    }
+}
+
+#! Helper class for multi-accept replenishment under load
+class MultiAcceptReplenisher {
+    private {
+        Socket listener;
+        AsyncIoController ctrl;
+        Counter done;
+        int total;
+        Mutex m();
+        int key_counter = 0;
+        int completed_count = 0;
+    }
+
+    constructor(Socket l, AsyncIoController c, int t) {
+        listener = l;
+        ctrl = c;
+        total = t;
+        done = new Counter(t);
+    }
+
+    Counter getDone() {
+        return done;
+    }
+
+    int getCompletedCount() {
+        AutoLock al(m);
+        return completed_count;
+    }
+
+    submitOne() {
+        int my_key;
+        {
+            AutoLock al(m);
+            my_key = key_counter++;
+        }
+        AbstractPollOperation spop = listener.startPollAccept();
+        ctrl.submit(<SocketPollOperationInfo>{
+            "sock": listener,
+            "spop": spop,
+            "owner": "resubmit-load",
+            "to": 60s,
+            "key": sprintf("resubmit:%d", my_key),
+            "callback": \onAcceptComplete(),
+        });
+    }
+
+    private onAcceptComplete(hash<SocketPollResultInfo> result) {
+        if (result.canceled ?? False || result.ex) {
+            return;
+        }
+        bool should_continue;
+        {
+            AutoLock al(m);
+            ++completed_count;
+            should_continue = completed_count < total;
+        }
+        done.dec();
+        if (should_continue) {
+            submitOne();
+        }
+    }
+}
+
+#! Helper class for 3-stage callback chain tests
+/** Avoids deeply nested closures which trigger assertion failures in Qore's
+    ThreadClosureVariableStack when callbacks run from the I/O thread.
+*/
+class ChainedOperationHandler {
+    private {
+        AsyncIoController ctrl;
+        Counter done;
+        Queue stages_q();
+    }
+
+    constructor(AsyncIoController c) {
+        ctrl = c;
+        done = new Counter(1);
+    }
+
+    Counter getDone() {
+        return done;
+    }
+
+    Queue getStagesQueue() {
+        return stages_q;
+    }
+
+    onAcceptComplete(hash<SocketPollResultInfo> result) {
+        if (result.canceled ?? False || result.ex) {
+            done.dec();
+            return;
+        }
+        stages_q.push("accept");
+
+        # Stage 2: Recv on accepted socket
+        Socket accepted = result.spop.getOutput();
+        AbstractPollOperation recv_op = accepted.startPollRecvData();
+        ctrl.submit(<SocketPollOperationInfo>{
+            "sock": accepted,
+            "spop": recv_op,
+            "owner": "chain-test",
+            "to": 60s,
+            "key": "chain:stage2",
+            "callback": \onStage2Complete(),
+        });
+    }
+
+    private onStage2Complete(hash<SocketPollResultInfo> result) {
+        if (result.canceled ?? False || result.ex) {
+            done.dec();
+            return;
+        }
+        stages_q.push("stage2");
+
+        # Stage 3: Another recv on the same socket
+        AbstractPollOperation recv_op2 = result.sock.startPollRecvData();
+        ctrl.submit(<SocketPollOperationInfo>{
+            "sock": result.sock,
+            "spop": recv_op2,
+            "owner": "chain-test",
+            "to": 60s,
+            "key": "chain:stage3",
+            "callback": \onStage3Complete(),
+        });
+    }
+
+    private onStage3Complete(hash<SocketPollResultInfo> result) {
+        stages_q.push("stage3");
+        done.dec();
+    }
+}
+
+#! Comprehensive async I/O stress tests for AsyncIoController
+/** Tests real-world patterns used by HTTP, HTTP/2, HTTP/3/QUIC, and gRPC consumers.
+    Validates multiplexing, callback state machines, cancellation under load,
+    timer + I/O interactions, scalability, and edge cases.
+
+    Copyright 2026 Qore Technologies, s.r.o.
+*/
+class AsyncIoStressTest inherits QUnit::Test {
+    public {
+        const ConnectTimeout = 60s;
+        const ShortTimeout = 10s;
+        const StressTimeout = 30s;
+    }
+
+    constructor() : Test("AsyncIoStressTest", "1.0") {
+        # Category 1: Multiplexing (HTTP/2 pattern)
+        addTestCase("multiplex same socket custom keys", \testMultiplexSameSocketCustomKeys());
+        addTestCase("multiplex cancel by key partial", \testMultiplexCancelByKeyPartial());
+        addTestCase("multiplex cancel by owner partial", \testMultiplexCancelByOwnerPartial());
+
+        # Category 2: State Machine (HTTP server accept, HTTP/2 polling)
+        addTestCase("accept replenishment loop", \testAcceptReplenishmentLoop());
+        addTestCase("callback chained operations", \testCallbackChainedOperations());
+        addTestCase("callback resubmit under load", \testCallbackResubmitUnderLoad());
+
+        # Category 3: Cancellation Stress
+        addTestCase("cancel by owner under load", \testCancelByOwnerUnderLoad());
+        addTestCase("rapid replace on same key", \testRapidReplaceOnSameKey());
+        addTestCase("concurrent replace in flight", \testConcurrentReplaceInFlight());
+
+        # Category 4: Timer Stress
+        addTestCase("timer and io stress", \testTimerAndIoStress());
+        addTestCase("autostop with timers", \testAutostopWithTimers());
+        addTestCase("timer retransmission pattern", \testTimerRetransmissionPattern());
+
+        # Category 5: Scalability
+        addTestCase("io thread restart cycles", \testIoThreadRestartCycles());
+        addTestCase("submit during stop", \testSubmitDuringStop());
+        addTestCase("large scale mixed operations", \testLargeScaleMixedOperations());
+
+        # Category 6: Mixed Patterns
+        addTestCase("mixed exec and callback", \testMixedExecAndCallback());
+        addTestCase("wake for pending writes", \testWakeForPendingWrites());
+        addTestCase("generation counter stale results", \testGenerationCounterStaleResults());
+        addTestCase("udp datagram with timer retransmit", \testUdpDatagramWithTimerRetransmit());
+        addTestCase("connection migration pattern", \testConnectionMigrationPattern());
+
+        # Category 7: Error/Edge Cases
+        addTestCase("shared socket ref counting", \testSharedSocketRefCounting());
+        addTestCase("callback exception does not lose ops", \testCallbackExceptionDoesNotLoseOps());
+        addTestCase("stop clear under load", \testStopClearUnderLoad());
+        addTestCase("duplicate key with custom keys", \testDuplicateKeyWithCustomKeys());
+        addTestCase("wait for processing edge cases", \testWaitForProcessingEdgeCases());
+        addTestCase("exec timeout", \testExecTimeout());
+
+        set_return_value(main());
+    }
+
+    #! Returns a reduced count when running under valgrind
+    private int scaleForValgrind(int normal, int valgrind_count) {
+        if (ENV.VALGRIND || ENV.RUNNING_UNDER_VALGRIND) {
+            return valgrind_count;
+        }
+        return normal;
+    }
+
+    #! Creates a connected TCP socket pair and a blocking recv poll operation
+    /** @return a hash with keys: listener, server, client, spop
+    */
+    private hash<auto> setupBlockingRecvOp() {
+        Socket listener();
+        listener.bind("localhost:0");
+        listener.listen();
+        int port = listener.getSocketInfo().port;
+
+        Socket client();
+        client.connect("localhost:" + port);
+        Socket server = listener.accept(ConnectTimeout);
+
+        # Use startPollRecvData() which reads whatever packet is available
+        # (startPollRecvString(N) reads exactly N bytes, which blocks until all N arrive)
+        AbstractPollOperation spop = server.startPollRecvData();
+
+        return {
+            "listener": listener,
+            "server": server,
+            "client": client,
+            "spop": spop,
+        };
+    }
+
+    #! Creates a connected TCP socket pair without a poll operation
+    private hash<auto> setupSocketPair() {
+        Socket listener();
+        listener.bind("localhost:0");
+        listener.listen();
+        int port = listener.getSocketInfo().port;
+
+        Socket client();
+        client.connect("localhost:" + port);
+        Socket server = listener.accept(ConnectTimeout);
+
+        return {
+            "listener": listener,
+            "server": server,
+            "client": client,
+            "port": port,
+        };
+    }
+
+    #! Creates a bound UDP socket on loopback
+    private Socket createBoundUdpSocket() {
+        Socket sock();
+        sock.bindINET("127.0.0.1", "0", False, AF_INET, SOCK_DGRAM);
+        return sock;
+    }
+
+    # ========================================================================
+    # Category 1: Multiplexing (HTTP/2 pattern)
+    # ========================================================================
+
+    #! 5 concurrent accept ops on same listener socket with custom keys
+    testMultiplexSameSocketCustomKeys() {
+        Socket listener();
+        listener.bind("localhost:0");
+        listener.listen(10);
+        int port = listener.getSocketInfo().port;
+        on_exit listener.close();
+
+        AsyncIoController ctrl(False);
+        ctrl.start();
+        on_exit ctrl.stop();
+
+        int n = 5;
+        list<Queue> queues = ();
+
+        # Submit 5 accept ops on the same listener with different custom keys
+        for (int i = 0; i < n; ++i) {
+            AbstractPollOperation spop = listener.startPollAccept();
+            Queue q = ctrl.submit(<SocketPollOperationInfo>{
+                "sock": listener,
+                "spop": spop,
+                "owner": "mux-test",
+                "to": ConnectTimeout,
+                "key": sprintf("mux:%d", i + 1),
+            });
+            push queues, q;
+        }
+
+        assertTrue(ctrl.waitForProcessing(ShortTimeout));
+        assertEq(n, ctrl.getCacheSize());
+
+        # Connect 5 clients to trigger all accept ops
+        for (int i = 0; i < n; ++i) {
+            Socket client();
+            client.connect("localhost:" + port);
+        }
+
+        # All 5 should complete independently
+        int completed = 0;
+        for (int i = 0; i < n; ++i) {
+            hash<SocketPollResultInfo> result = queues[i].get(ConnectTimeout);
+            assertEq(True, exists result);
+            if (!(result.canceled ?? False) && !result.ex) {
+                ++completed;
+            }
+        }
+        assertEq(n, completed);
+    }
+
+    #! 5 accept ops on same listener, cancel key "stream:3", connect 4 clients
+    testMultiplexCancelByKeyPartial() {
+        Socket listener();
+        listener.bind("localhost:0");
+        listener.listen(10);
+        int port = listener.getSocketInfo().port;
+        on_exit listener.close();
+
+        AsyncIoController ctrl(False);
+        ctrl.start();
+        on_exit ctrl.stop();
+
+        int n = 5;
+        list<Queue> queues = ();
+
+        for (int i = 0; i < n; ++i) {
+            AbstractPollOperation spop = listener.startPollAccept();
+            Queue q = ctrl.submit(<SocketPollOperationInfo>{
+                "sock": listener,
+                "spop": spop,
+                "owner": "mux-cancel",
+                "to": ConnectTimeout,
+                "key": sprintf("stream:%d", i + 1),
+            });
+            push queues, q;
+        }
+
+        assertTrue(ctrl.waitForProcessing(ShortTimeout));
+
+        # Cancel stream:3
+        assertTrue(ctrl.cancelByKey("stream:3"));
+        assertEq(n - 1, ctrl.getCacheSize());
+
+        # Verify stream:3 result is canceled
+        hash<SocketPollResultInfo> canceled_result = queues[2].get(ShortTimeout);
+        assertTrue(canceled_result.canceled ?? False);
+
+        # Connect 4 clients for the remaining ops
+        for (int i = 0; i < n - 1; ++i) {
+            Socket client();
+            client.connect("localhost:" + port);
+        }
+
+        # Verify the other 4 complete
+        int completed = 0;
+        for (int i = 0; i < n; ++i) {
+            if (i == 2) {
+                continue;  # Already consumed stream:3
+            }
+            hash<SocketPollResultInfo> result = queues[i].get(ConnectTimeout);
+            if (!(result.canceled ?? False) && !result.ex) {
+                ++completed;
+            }
+        }
+        assertEq(n - 1, completed);
+    }
+
+    #! 3 accept ops owner "conn-A" + 3 ops owner "conn-B", cancel owner "conn-A"
+    testMultiplexCancelByOwnerPartial() {
+        Socket listener();
+        listener.bind("localhost:0");
+        listener.listen(10);
+        int port = listener.getSocketInfo().port;
+        on_exit listener.close();
+
+        AsyncIoController ctrl(False);
+        ctrl.start();
+        on_exit ctrl.stop();
+
+        list<Queue> queues_a = ();
+        list<Queue> queues_b = ();
+
+        # Submit 3 ops for conn-A
+        for (int i = 0; i < 3; ++i) {
+            AbstractPollOperation spop = listener.startPollAccept();
+            Queue q = ctrl.submit(<SocketPollOperationInfo>{
+                "sock": listener,
+                "spop": spop,
+                "owner": "conn-A",
+                "to": ConnectTimeout,
+                "key": sprintf("A:%d", i),
+            });
+            push queues_a, q;
+        }
+
+        # Submit 3 ops for conn-B
+        for (int i = 0; i < 3; ++i) {
+            AbstractPollOperation spop = listener.startPollAccept();
+            Queue q = ctrl.submit(<SocketPollOperationInfo>{
+                "sock": listener,
+                "spop": spop,
+                "owner": "conn-B",
+                "to": ConnectTimeout,
+                "key": sprintf("B:%d", i),
+            });
+            push queues_b, q;
+        }
+
+        assertTrue(ctrl.waitForProcessing(ShortTimeout));
+
+        # Cancel all conn-A ops
+        int canceled = ctrl.cancelByOwner("conn-A");
+        assertEq(3, canceled);
+        assertEq(3, ctrl.getCacheSize());
+
+        # Verify all conn-A results are canceled
+        for (int i = 0; i < 3; ++i) {
+            hash<SocketPollResultInfo> result = queues_a[i].get(ShortTimeout);
+            assertTrue(result.canceled ?? False);
+        }
+
+        # Connect 3 clients for conn-B
+        for (int i = 0; i < 3; ++i) {
+            Socket client();
+            client.connect("localhost:" + port);
+        }
+
+        # Verify conn-B ops complete
+        int completed = 0;
+        for (int i = 0; i < 3; ++i) {
+            hash<SocketPollResultInfo> result = queues_b[i].get(ConnectTimeout);
+            if (!(result.canceled ?? False) && !result.ex) {
+                ++completed;
+            }
+        }
+        assertEq(3, completed);
+    }
+
+    # ========================================================================
+    # Category 2: State Machine (HTTP server accept, HTTP/2 polling)
+    # ========================================================================
+
+    #! Listener with callback that re-submits accept on completion (replenishment loop)
+    testAcceptReplenishmentLoop() {
+        Socket listener();
+        listener.bind("localhost:0");
+        listener.listen(20);
+        int port = listener.getSocketInfo().port;
+        on_exit listener.close();
+
+        AsyncIoController ctrl(False);
+        ctrl.start();
+        on_exit ctrl.stop();
+
+        int total_accepts = scaleForValgrind(10, 3);
+
+        # Use helper class to avoid self-referencing closures
+        AcceptReplenisher replenisher(listener, ctrl, total_accepts);
+
+        # Start the accept loop
+        replenisher.submitOne();
+        assertTrue(ctrl.waitForProcessing(ShortTimeout));
+
+        # Connect clients sequentially to trigger the chain
+        for (int i = 0; i < total_accepts; ++i) {
+            Socket client();
+            client.connect("localhost:" + port);
+        }
+
+        assertEq(0, replenisher.getDone().waitForZero(StressTimeout));
+        assertEq(total_accepts, replenisher.getCompletedCount());
+    }
+
+    #! 3-stage callback chain: accept -> recv "stage2" -> recv "stage3"
+    testCallbackChainedOperations() {
+        Socket listener();
+        listener.bind("localhost:0");
+        listener.listen();
+        int port = listener.getSocketInfo().port;
+        on_exit listener.close();
+
+        AsyncIoController ctrl(False);
+        ctrl.start();
+        on_exit ctrl.stop();
+
+        # Use helper class to avoid nested closures crashing on I/O thread
+        ChainedOperationHandler handler(ctrl);
+
+        # Stage 1: Accept
+        AbstractPollOperation accept_op = listener.startPollAccept();
+        ctrl.submit(<SocketPollOperationInfo>{
+            "sock": listener,
+            "spop": accept_op,
+            "owner": "chain-test",
+            "to": ConnectTimeout,
+            "key": "chain:accept",
+            "callback": \handler.onAcceptComplete(),
+        });
+
+        assertTrue(ctrl.waitForProcessing(ShortTimeout));
+
+        # Connect and send data for each stage
+        Socket client();
+        client.connect("localhost:" + port);
+
+        Queue stages_q = handler.getStagesQueue();
+
+        # Wait for accept to complete and stage2 recv to be submitted
+        string stage = stages_q.get(StressTimeout);
+        assertEq("accept", stage);
+        assertTrue(ctrl.waitForProcessing(ShortTimeout));
+
+        # Send data for stage 2
+        client.send("stage2-data");
+
+        # Wait for stage2 to complete
+        stage = stages_q.get(StressTimeout);
+        assertEq("stage2", stage);
+        assertTrue(ctrl.waitForProcessing(ShortTimeout));
+
+        # Send data for stage 3
+        client.send("stage3-data");
+
+        assertEq(0, handler.getDone().waitForZero(StressTimeout));
+
+        stage = stages_q.get(0);
+        assertEq("stage3", stage);
+    }
+
+    #! 3 initial accept ops with replenishment callbacks, N clients connect
+    testCallbackResubmitUnderLoad() {
+        Socket listener();
+        listener.bind("localhost:0");
+        listener.listen(30);
+        int port = listener.getSocketInfo().port;
+        on_exit listener.close();
+
+        AsyncIoController ctrl(False);
+        ctrl.start();
+        on_exit ctrl.stop();
+
+        int total_clients = scaleForValgrind(20, 5);
+        int initial_accepts = 3;
+
+        # Use helper class to avoid self-referencing closures
+        MultiAcceptReplenisher replenisher(listener, ctrl, total_clients);
+
+        # Start with 3 concurrent accept ops
+        for (int i = 0; i < initial_accepts; ++i) {
+            replenisher.submitOne();
+        }
+
+        assertTrue(ctrl.waitForProcessing(ShortTimeout));
+
+        # Connect clients
+        for (int i = 0; i < total_clients; ++i) {
+            Socket client();
+            client.connect("localhost:" + port);
+        }
+
+        assertEq(0, replenisher.getDone().waitForZero(StressTimeout));
+        assertEq(total_clients, replenisher.getCompletedCount());
+    }
+
+    # ========================================================================
+    # Category 3: Cancellation Stress
+    # ========================================================================
+
+    #! 50 blocking recv ops, send data on some, then cancelByOwner
+    testCancelByOwnerUnderLoad() {
+        int n = scaleForValgrind(50, 10);
+        int send_count = scaleForValgrind(10, 3);
+
+        AsyncIoController ctrl(False);
+        ctrl.start();
+        on_exit ctrl.stop();
+
+        list<hash<auto>> setups = ();
+        list<Queue> queues = ();
+
+        for (int i = 0; i < n; ++i) {
+            hash<auto> setup = setupBlockingRecvOp();
+            push setups, setup;
+            Queue q = ctrl.submit(<SocketPollOperationInfo>{
+                "sock": setup.server,
+                "spop": setup.spop,
+                "owner": "cancel-load",
+                "to": -1,
+                "key": sprintf("cancel-load:%d", i),
+            });
+            push queues, q;
+        }
+
+        assertTrue(ctrl.waitForProcessing(ShortTimeout));
+
+        # Send data on some sockets to start completing them
+        for (int i = 0; i < send_count; ++i) {
+            setups[i].client.send("data");
+        }
+
+        # Cancel all by owner
+        ctrl.cancelByOwner("cancel-load");
+
+        # Collect all results
+        int total_completed = 0;
+        int total_canceled = 0;
+        for (int i = 0; i < n; ++i) {
+            hash<SocketPollResultInfo> result = queues[i].get(StressTimeout);
+            assertEq(True, exists result);
+            if (result.canceled ?? False) {
+                ++total_canceled;
+            } else {
+                ++total_completed;
+            }
+        }
+
+        # total_completed + total_canceled must equal N
+        assertEq(n, total_completed + total_canceled);
+    }
+
+    #! Submit recv op with key, then 9 more replace=True on same key
+    testRapidReplaceOnSameKey() {
+        int n_replacements = 10;
+
+        AsyncIoController ctrl(False);
+        ctrl.start();
+        on_exit ctrl.stop();
+
+        list<hash<auto>> setups = ();
+        list<Queue> queues = ();
+
+        # Submit initial op
+        hash<auto> setup0 = setupBlockingRecvOp();
+        push setups, setup0;
+        Queue q0 = ctrl.submit(<SocketPollOperationInfo>{
+            "sock": setup0.server,
+            "spop": setup0.spop,
+            "owner": "rapid-replace",
+            "to": -1,
+            "key": "replace-target",
+        });
+        push queues, q0;
+
+        assertTrue(ctrl.waitForProcessing(ShortTimeout));
+
+        # Replace 9 more times
+        for (int i = 1; i < n_replacements; ++i) {
+            hash<auto> setup = setupBlockingRecvOp();
+            push setups, setup;
+            Queue q = ctrl.submit(<SocketPollOperationInfo>{
+                "sock": setup.server,
+                "spop": setup.spop,
+                "owner": "rapid-replace",
+                "to": -1,
+                "key": "replace-target",
+            }, True);
+            push queues, q;
+            assertTrue(ctrl.waitForProcessing(ShortTimeout));
+        }
+
+        # All replaced ops should be canceled
+        int canceled_count = 0;
+        for (int i = 0; i < n_replacements - 1; ++i) {
+            hash<SocketPollResultInfo> result = queues[i].get(ShortTimeout);
+            if (result.canceled ?? False) {
+                ++canceled_count;
+            }
+        }
+        assertEq(n_replacements - 1, canceled_count);
+
+        # Last op should still be pending
+        assertEq(1, ctrl.getCacheSize());
+
+        # Send data to complete the last op
+        setups[n_replacements - 1].client.send("final-data");
+        hash<SocketPollResultInfo> final_result = queues[n_replacements - 1].get(ConnectTimeout);
+        assertFalse(final_result.canceled ?? False);
+        assertNothing(final_result.ex);
+    }
+
+    #! 5 threads each calling submit(replace=True) on same key, serialized via mutex
+    testConcurrentReplaceInFlight() {
+        AsyncIoController ctrl(False);
+        ctrl.start();
+        on_exit ctrl.stop();
+
+        int n_threads = 5;
+        string replace_key = "concurrent-replace";
+
+        # Pre-create all socket setups so references stay alive for the entire test
+        # (if client sockets are garbage collected, EOF completes recv ops prematurely)
+        list<hash<auto>> all_setups = ();
+        for (int i = 0; i < n_threads + 1; ++i) {
+            push all_setups, setupBlockingRecvOp();
+        }
+
+        # Submit initial op using first setup
+        Mutex qm();
+        list<Queue> all_queues = ();
+        Queue initial_q = ctrl.submit(<SocketPollOperationInfo>{
+            "sock": all_setups[0].server,
+            "spop": all_setups[0].spop,
+            "owner": "concurrent-replace",
+            "to": -1,
+            "key": replace_key,
+        });
+        push all_queues, initial_q;
+
+        assertTrue(ctrl.waitForProcessing(ShortTimeout));
+
+        # Each thread does replace=True, serialized via mutex to avoid
+        # concurrent replace race on the same key
+        Mutex serialize();
+        Counter threads_done(n_threads);
+        int last_setup_idx = 0;
+        Mutex wfp_m();
+        list<bool> wfp_results = ();
+
+        for (int i = 0; i < n_threads; ++i) {
+            int setup_idx = i + 1;
+            background sub () {
+                on_exit threads_done.dec();
+                try {
+                    AutoLock al(serialize);
+                    Queue q = ctrl.submit(<SocketPollOperationInfo>{
+                        "sock": all_setups[setup_idx].server,
+                        "spop": all_setups[setup_idx].spop,
+                        "owner": "concurrent-replace",
+                        "to": -1,
+                        "key": replace_key,
+                    }, True);
+                    {
+                        AutoLock al2(qm);
+                        push all_queues, q;
+                    }
+                    last_setup_idx = setup_idx;
+                    bool wfp = ctrl.waitForProcessing(ShortTimeout);
+                    {
+                        AutoLock al2(wfp_m);
+                        push wfp_results, wfp;
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    # Ignore errors
+                }
+            }();
+        }
+
+        assertEq(0, threads_done.waitForZero(StressTimeout));
+
+        # Verify all background waitForProcessing calls succeeded
+        for (int i = 0; i < wfp_results.size(); ++i) {
+            assertTrue(wfp_results[i]);
+        }
+
+        # Only 1 op should survive
+        assertEq(1, ctrl.getCacheSize());
+
+        # First N queues should have canceled results (replaced ops)
+        for (int i = 0; i < n_threads; ++i) {
+            hash<SocketPollResultInfo> result = all_queues[i].get(ShortTimeout);
+            assertTrue(result.canceled ?? False);
+        }
+
+        # Complete the survivor by sending data to the correct client
+        # (thread execution order is non-deterministic, so last_setup_idx tracks
+        # which setup was submitted last and is therefore the survivor)
+        all_setups[last_setup_idx].client.send("final-data");
+        hash<SocketPollResultInfo> last_result = all_queues[n_threads].get(ConnectTimeout);
+        assertFalse(last_result.canceled ?? False);
+        assertNothing(last_result.ex);
+    }
+
+    # ========================================================================
+    # Category 4: Timer Stress
+    # ========================================================================
+
+    #! N recv ops + N timers with staggered deadlines
+    testTimerAndIoStress() {
+        int n = scaleForValgrind(50, 10);
+
+        AsyncIoController ctrl(False);
+        ctrl.start();
+        on_exit ctrl.stop();
+
+        # Set up timer callback
+        Mutex timer_m();
+        list<int> timer_ids_fired = ();
+        Counter timer_done(n);
+
+        ctrl.setTimerCallback(sub (hash<TimerEventInfo> info) {
+            {
+                AutoLock al(timer_m);
+                push timer_ids_fired, info.id;
+            }
+            timer_done.dec();
+        });
+
+        # Create socket pairs and submit recv ops
+        list<hash<auto>> setups = ();
+        list<Queue> queues = ();
+        for (int i = 0; i < n; ++i) {
+            hash<auto> setup = setupBlockingRecvOp();
+            push setups, setup;
+            Queue q = ctrl.submit(<SocketPollOperationInfo>{
+                "sock": setup.server,
+                "spop": setup.spop,
+                "owner": "timer-io-stress",
+                "to": ConnectTimeout,
+                "key": sprintf("tis:%d", i),
+            });
+            push queues, q;
+        }
+
+        # Add N timers with staggered deadlines
+        for (int i = 0; i < n; ++i) {
+            ctrl.addTimer(now_us() + (50ms + milliseconds(i * 10)), {"index": i});
+        }
+
+        assertTrue(ctrl.waitForProcessing(ShortTimeout));
+
+        # Send data on all sockets to complete I/O ops
+        for (int i = 0; i < n; ++i) {
+            setups[i].client.send("data");
+        }
+
+        # Wait for all I/O completions
+        int io_completed = 0;
+        for (int i = 0; i < n; ++i) {
+            hash<SocketPollResultInfo> result = queues[i].get(StressTimeout);
+            if (!(result.canceled ?? False) && !result.ex) {
+                ++io_completed;
+            }
+        }
+        assertEq(n, io_completed);
+
+        # Wait for all timer callbacks
+        assertEq(0, timer_done.waitForZero(StressTimeout));
+        {
+            AutoLock al(timer_m);
+            assertEq(n, timer_ids_fired.size());
+        }
+    }
+
+    #! autostop=True, submit one connect op + add timer. Autostop fires when cache empties.
+    testAutostopWithTimers() {
+        Socket listener();
+        listener.bind("localhost:0");
+        listener.listen();
+        int port = listener.getSocketInfo().port;
+        on_exit listener.close();
+
+        AsyncIoController ctrl(True);
+
+        # Set up timer callback - track whether it fires
+        bool timer_fired = False;
+        Mutex m();
+        ctrl.setTimerCallback(sub (hash<TimerEventInfo> info) {
+            AutoLock al(m);
+            timer_fired = True;
+        });
+
+        # Submit a connect op
+        Socket client();
+        AbstractPollOperation spop = client.startPollConnect("localhost:" + port);
+        Queue q = ctrl.submit(<SocketPollOperationInfo>{
+            "sock": client,
+            "spop": spop,
+            "owner": "autostop-timer",
+            "to": ConnectTimeout,
+        });
+
+        # Add a timer at +500ms (longer than connect will take)
+        ctrl.addTimer(now_us() + 500ms, "autostop-check");
+
+        # Accept the connection so I/O completes
+        Socket accepted = listener.accept(ConnectTimeout);
+
+        # Wait for I/O result
+        hash<SocketPollResultInfo> result = q.get(ConnectTimeout);
+        assertFalse(result.canceled ?? False);
+        assertNothing(result.ex);
+
+        # Autostop should fire when cache empties (I/O done), even though timer is pending
+        ctrl.waitStop();
+        assertFalse(ctrl.running());
+
+        # Timer callback should NOT fire because the thread stopped
+        {
+            AutoLock al(m);
+            assertFalse(timer_fired);
+        }
+    }
+
+    #! Timer-driven send pattern: TCP recv op + timer that sends data on fire
+    testTimerRetransmissionPattern() {
+        # Set up a connected TCP pair: server will recv, client will send on timer
+        hash<auto> pair = setupSocketPair();
+        on_exit {
+            pair.server.close();
+            pair.client.close();
+            pair.listener.close();
+        }
+
+        AsyncIoController ctrl(False);
+        ctrl.start();
+        on_exit ctrl.stop();
+
+        # Submit recv op on server side
+        AbstractPollOperation recv_op = pair.server.startPollRecvData();
+        Queue q = ctrl.submit(<SocketPollOperationInfo>{
+            "sock": pair.server,
+            "spop": recv_op,
+            "owner": "retransmit",
+            "to": ConnectTimeout,
+            "key": "tcp:recv",
+        });
+
+        assertTrue(ctrl.waitForProcessing(ShortTimeout));
+
+        # Timer callback sends data on the client side when it fires
+        Counter timer_done(1);
+        Socket timer_client = pair.client;
+        ctrl.setTimerCallback(sub (hash<TimerEventInfo> info) {
+            timer_client.send("retransmit-data");
+            timer_done.dec();
+        });
+
+        # Add timer at +100ms
+        ctrl.addTimer(now_us() + 100ms, "retransmit");
+
+        # Timer fires -> data sent -> recv completes
+        assertEq(0, timer_done.waitForZero(ShortTimeout));
+
+        hash<SocketPollResultInfo> result = q.get(ConnectTimeout);
+        assertFalse(result.canceled ?? False);
+        assertNothing(result.ex);
+    }
+
+    # ========================================================================
+    # Category 5: Scalability
+    # ========================================================================
+
+    #! 10 cycles of start -> submit connect -> accept -> result -> stop
+    testIoThreadRestartCycles() {
+        int cycles = scaleForValgrind(10, 3);
+
+        AsyncIoController ctrl(False);
+
+        for (int i = 0; i < cycles; ++i) {
+            ctrl.start();
+            assertTrue(ctrl.waitReady(ShortTimeout));
+
+            Socket listener();
+            listener.bind("localhost:0");
+            listener.listen();
+            int port = listener.getSocketInfo().port;
+
+            Socket client();
+            AbstractPollOperation spop = client.startPollConnect("localhost:" + port);
+            Queue q = ctrl.submit(<SocketPollOperationInfo>{
+                "sock": client,
+                "spop": spop,
+                "owner": sprintf("cycle-%d", i),
+                "to": ConnectTimeout,
+            });
+
+            Socket accepted = listener.accept(ConnectTimeout);
+
+            hash<SocketPollResultInfo> result = q.get(ConnectTimeout);
+            assertFalse(result.canceled ?? False);
+            assertNothing(result.ex);
+
+            ctrl.stop();
+            assertFalse(ctrl.running());
+        }
+    }
+
+    #! Submit blocking op, background thread calls stop(), main thread immediately submits new op
+    testSubmitDuringStop() {
+        AsyncIoController ctrl(False);
+        ctrl.start();
+        assertTrue(ctrl.waitReady(ShortTimeout));
+
+        # Submit a blocking op
+        hash<auto> setup = setupBlockingRecvOp();
+        Queue q1 = ctrl.submit(<SocketPollOperationInfo>{
+            "sock": setup.server,
+            "spop": setup.spop,
+            "owner": "stop-submit",
+            "to": -1,
+            "key": "stop-submit:1",
+        });
+
+        assertTrue(ctrl.waitForProcessing(ShortTimeout));
+
+        # Background thread calls stop
+        Counter stop_done(1);
+        background sub () {
+            on_exit stop_done.dec();
+            try {
+                ctrl.stop();
+            } catch (hash<ExceptionInfo> ex) {
+                # Expected
+            }
+        }();
+
+        # Wait for stop to complete
+        assertEq(0, stop_done.waitForZero(ShortTimeout));
+
+        # First op should be canceled
+        hash<SocketPollResultInfo> result1 = q1.get(ShortTimeout);
+        assertTrue(result1.canceled ?? False);
+
+        # Submit a new op — should restart the thread
+        Socket listener2();
+        listener2.bind("localhost:0");
+        listener2.listen();
+        int port2 = listener2.getSocketInfo().port;
+
+        Socket client2();
+        AbstractPollOperation spop2 = client2.startPollConnect("localhost:" + port2);
+        Queue q2 = ctrl.submit(<SocketPollOperationInfo>{
+            "sock": client2,
+            "spop": spop2,
+            "owner": "stop-submit-2",
+            "to": ConnectTimeout,
+        });
+
+        Socket accepted2 = listener2.accept(ConnectTimeout);
+        hash<SocketPollResultInfo> result2 = q2.get(ConnectTimeout);
+        assertFalse(result2.canceled ?? False);
+        assertNothing(result2.ex);
+
+        ctrl.stop();
+    }
+
+    #! N=100 mixed accept + recv + timers
+    testLargeScaleMixedOperations() {
+        int n = scaleForValgrind(100, 20);
+        int n_accept = n / 2;
+        int n_recv = n / 2;
+        int n_timers = n / 10;
+
+        AsyncIoController ctrl(False);
+        ctrl.start();
+        on_exit ctrl.stop();
+
+        # Timer tracking
+        Counter timer_done(n_timers);
+        Mutex timer_m();
+        int timer_fire_count = 0;
+        ctrl.setTimerCallback(sub (hash<TimerEventInfo> info) {
+            {
+                AutoLock al(timer_m);
+                ++timer_fire_count;
+            }
+            timer_done.dec();
+        });
+
+        # Submit accept ops with callbacks
+        Socket listener();
+        listener.bind("localhost:0");
+        listener.listen(n_accept + 10);
+        int port = listener.getSocketInfo().port;
+        on_exit listener.close();
+
+        Counter accept_done(n_accept);
+        for (int i = 0; i < n_accept; ++i) {
+            AbstractPollOperation spop = listener.startPollAccept();
+            ctrl.submit(<SocketPollOperationInfo>{
+                "sock": listener,
+                "spop": spop,
+                "owner": "large-scale",
+                "to": ConnectTimeout,
+                "key": sprintf("lsa:%d", i),
+                "callback": sub (hash<SocketPollResultInfo> result) {
+                    accept_done.dec();
+                },
+            });
+        }
+
+        # Submit recv ops with queues
+        list<hash<auto>> recv_setups = ();
+        list<Queue> recv_queues = ();
+        for (int i = 0; i < n_recv; ++i) {
+            hash<auto> setup = setupBlockingRecvOp();
+            push recv_setups, setup;
+            Queue q = ctrl.submit(<SocketPollOperationInfo>{
+                "sock": setup.server,
+                "spop": setup.spop,
+                "owner": "large-scale",
+                "to": ConnectTimeout,
+                "key": sprintf("lsr:%d", i),
+            });
+            push recv_queues, q;
+        }
+
+        # Add timers
+        for (int i = 0; i < n_timers; ++i) {
+            ctrl.addTimer(now_us() + (100ms + milliseconds(i * 20)), {"index": i});
+        }
+
+        assertTrue(ctrl.waitForProcessing(ShortTimeout));
+
+        # Connect clients for accept ops
+        for (int i = 0; i < n_accept; ++i) {
+            Socket client();
+            client.connect("localhost:" + port);
+        }
+
+        # Send data for recv ops
+        for (int i = 0; i < n_recv; ++i) {
+            recv_setups[i].client.send("data");
+        }
+
+        # Wait for all accept completions
+        assertEq(0, accept_done.waitForZero(StressTimeout));
+
+        # Wait for all recv completions
+        int recv_completed = 0;
+        for (int i = 0; i < n_recv; ++i) {
+            hash<SocketPollResultInfo> result = recv_queues[i].get(StressTimeout);
+            if (!(result.canceled ?? False) && !result.ex) {
+                ++recv_completed;
+            }
+        }
+        assertEq(n_recv, recv_completed);
+
+        # Wait for all timer completions
+        assertEq(0, timer_done.waitForZero(StressTimeout));
+        {
+            AutoLock al(timer_m);
+            assertEq(n_timers, timer_fire_count);
+        }
+    }
+
+    # ========================================================================
+    # Category 6: Mixed Patterns
+    # ========================================================================
+
+    #! 3 callback recv ops + 1 blocking exec() connect op on same controller
+    testMixedExecAndCallback() {
+        AsyncIoController ctrl(False);
+        ctrl.start();
+        on_exit ctrl.stop();
+
+        int n_callbacks = 3;
+        Counter cb_done(n_callbacks);
+        Mutex cb_m();
+        int cb_success = 0;
+
+        # Submit 3 recv ops with callbacks
+        list<hash<auto>> setups = ();
+        for (int i = 0; i < n_callbacks; ++i) {
+            hash<auto> setup = setupBlockingRecvOp();
+            push setups, setup;
+            ctrl.submit(<SocketPollOperationInfo>{
+                "sock": setup.server,
+                "spop": setup.spop,
+                "owner": "mixed-exec",
+                "to": ConnectTimeout,
+                "key": sprintf("mixed-cb:%d", i),
+                "callback": sub (hash<SocketPollResultInfo> result) {
+                    if (!(result.canceled ?? False) && !result.ex) {
+                        AutoLock al(cb_m);
+                        ++cb_success;
+                    }
+                    cb_done.dec();
+                },
+            });
+        }
+
+        assertTrue(ctrl.waitForProcessing(ShortTimeout));
+
+        # Background thread: send data to trigger all 3 callbacks
+        background sub () {
+            try {
+                for (int i = 0; i < n_callbacks; ++i) {
+                    setups[i].client.send("callback-data");
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                # Ignore
+            }
+        }();
+
+        # Main thread: blocking exec() with a connect op
+        Socket listener();
+        listener.bind("localhost:0");
+        listener.listen();
+        int port = listener.getSocketInfo().port;
+
+        # Accept in background
+        Counter accept_done(1);
+        background sub () {
+            on_exit accept_done.dec();
+            try {
+                Socket accepted = listener.accept(ConnectTimeout);
+            } catch (hash<ExceptionInfo> ex) {
+                # Ignore
+            }
+        }();
+
+        Socket client();
+        AbstractPollOperation spop = client.startPollConnect("localhost:" + port);
+        hash<SocketPollResultInfo> exec_result = ctrl.exec(<SocketPollOperationInfo>{
+            "sock": client,
+            "spop": spop,
+            "owner": "mixed-exec-sync",
+            "to": ConnectTimeout,
+        });
+
+        # exec() should return connect result
+        assertFalse(exec_result.canceled ?? False);
+        assertNothing(exec_result.ex);
+
+        # All 3 callbacks should fire
+        assertEq(0, cb_done.waitForZero(StressTimeout));
+        {
+            AutoLock al(cb_m);
+            assertEq(n_callbacks, cb_success);
+        }
+
+        assertEq(0, accept_done.waitForZero(ShortTimeout));
+    }
+
+    #! Submit recv op, call wake() 5-10 times rapidly, then send data
+    testWakeForPendingWrites() {
+        AsyncIoController ctrl(False);
+        ctrl.start();
+        on_exit ctrl.stop();
+
+        hash<auto> setup = setupBlockingRecvOp();
+        Queue q = ctrl.submit(<SocketPollOperationInfo>{
+            "sock": setup.server,
+            "spop": setup.spop,
+            "owner": "wake-test",
+            "to": ConnectTimeout,
+        });
+
+        assertTrue(ctrl.waitForProcessing(ShortTimeout));
+
+        # Rapid wakes (HTTP/2 frame flushing pattern)
+        for (int i = 0; i < 10; ++i) {
+            ctrl.wake();
+        }
+
+        # Send data to complete the recv
+        setup.client.send("wake-data");
+
+        hash<SocketPollResultInfo> result = q.get(ConnectTimeout);
+        assertFalse(result.canceled ?? False);
+        assertNothing(result.ex);
+    }
+
+    #! Submit op with other: {"gen": 1}, cancel, submit replacement with other: {"gen": 2}
+    testGenerationCounterStaleResults() {
+        AsyncIoController ctrl(False);
+        ctrl.start();
+        on_exit ctrl.stop();
+
+        hash<auto> setup1 = setupBlockingRecvOp();
+        Queue q_old = ctrl.submit(<SocketPollOperationInfo>{
+            "sock": setup1.server,
+            "spop": setup1.spop,
+            "owner": "gen-test",
+            "to": -1,
+            "key": "gen-key",
+            "other": {"gen": 1},
+        });
+
+        assertTrue(ctrl.waitForProcessing(ShortTimeout));
+
+        # Cancel the first op
+        assertTrue(ctrl.cancelByKey("gen-key"));
+
+        # Verify first result is canceled with gen 1
+        hash<SocketPollResultInfo> result1 = q_old.get(ShortTimeout);
+        assertTrue(result1.canceled ?? False);
+        assertEq(1, result1.other.gen);
+
+        # Submit replacement with gen 2
+        hash<auto> setup2 = setupBlockingRecvOp();
+        Queue q_new = ctrl.submit(<SocketPollOperationInfo>{
+            "sock": setup2.server,
+            "spop": setup2.spop,
+            "owner": "gen-test",
+            "to": ConnectTimeout,
+            "key": "gen-key",
+            "other": {"gen": 2},
+        });
+
+        assertTrue(ctrl.waitForProcessing(ShortTimeout));
+
+        # Complete the new op
+        setup2.client.send("gen2-data");
+
+        hash<SocketPollResultInfo> result2 = q_new.get(ConnectTimeout);
+        assertFalse(result2.canceled ?? False);
+        assertNothing(result2.ex);
+        assertEq(2, result2.other.gen);
+    }
+
+    #! UDP recv + timer that triggers a send to complete a recv (simulates QUIC retransmit)
+    testUdpDatagramWithTimerRetransmit() {
+        # Use a TCP pair for the timer-driven send pattern
+        # (UDP sendTo requires startPollSendTo which needs a nested callback)
+        hash<auto> pair = setupSocketPair();
+        on_exit {
+            pair.server.close();
+            pair.client.close();
+            pair.listener.close();
+        }
+
+        AsyncIoController ctrl(False);
+        ctrl.start();
+        on_exit ctrl.stop();
+
+        # Submit recv op
+        AbstractPollOperation recv_op = pair.server.startPollRecvData();
+        Queue q = ctrl.submit(<SocketPollOperationInfo>{
+            "sock": pair.server,
+            "spop": recv_op,
+            "owner": "retransmit-2",
+            "to": ConnectTimeout,
+            "key": "retransmit:recv",
+        });
+
+        assertTrue(ctrl.waitForProcessing(ShortTimeout));
+
+        # Timer callback sends data directly (synchronous send on connected socket)
+        Counter timer_done(1);
+        Socket timer_client = pair.client;
+        ctrl.setTimerCallback(sub (hash<TimerEventInfo> info) {
+            timer_client.send("timer-retransmit-data");
+            timer_done.dec();
+        });
+
+        ctrl.addTimer(now_us() + 100ms, "retransmit-2");
+
+        # Timer fires -> data sent -> recv completes
+        assertEq(0, timer_done.waitForZero(ShortTimeout));
+
+        hash<SocketPollResultInfo> result = q.get(ConnectTimeout);
+        assertFalse(result.canceled ?? False);
+        assertNothing(result.ex);
+    }
+
+    #! Recv on socketA with key "conn:1", cancel, submit recv on socketB with same key
+    testConnectionMigrationPattern() {
+        AsyncIoController ctrl(False);
+        ctrl.start();
+        on_exit ctrl.stop();
+
+        # Setup socketA
+        hash<auto> setupA = setupBlockingRecvOp();
+        Queue qA = ctrl.submit(<SocketPollOperationInfo>{
+            "sock": setupA.server,
+            "spop": setupA.spop,
+            "owner": "migration",
+            "to": -1,
+            "key": "conn:1",
+        });
+
+        assertTrue(ctrl.waitForProcessing(ShortTimeout));
+
+        # Cancel socketA op
+        assertTrue(ctrl.cancelByKey("conn:1"));
+
+        hash<SocketPollResultInfo> resultA = qA.get(ShortTimeout);
+        assertTrue(resultA.canceled ?? False);
+
+        # Submit on socketB with same key (no replace needed since old one was canceled)
+        hash<auto> setupB = setupBlockingRecvOp();
+        Queue qB = ctrl.submit(<SocketPollOperationInfo>{
+            "sock": setupB.server,
+            "spop": setupB.spop,
+            "owner": "migration",
+            "to": ConnectTimeout,
+            "key": "conn:1",
+        });
+
+        assertTrue(ctrl.waitForProcessing(ShortTimeout));
+
+        # Send data on socketB
+        setupB.client.send("migrated-data");
+
+        hash<SocketPollResultInfo> resultB = qB.get(ConnectTimeout);
+        assertFalse(resultB.canceled ?? False);
+        assertNothing(resultB.ex);
+    }
+
+    # ========================================================================
+    # Category 7: Error/Edge Cases
+    # ========================================================================
+
+    #! 5 accept ops on same listener with custom keys. Cancel 3 by key. 2 remaining still work.
+    testSharedSocketRefCounting() {
+        Socket listener();
+        listener.bind("localhost:0");
+        listener.listen(10);
+        int port = listener.getSocketInfo().port;
+        on_exit listener.close();
+
+        AsyncIoController ctrl(False);
+        ctrl.start();
+        on_exit ctrl.stop();
+
+        int n = 5;
+        list<Queue> queues = ();
+        for (int i = 0; i < n; ++i) {
+            AbstractPollOperation spop = listener.startPollAccept();
+            Queue q = ctrl.submit(<SocketPollOperationInfo>{
+                "sock": listener,
+                "spop": spop,
+                "owner": "refcount",
+                "to": ConnectTimeout,
+                "key": sprintf("ref:%d", i),
+            });
+            push queues, q;
+        }
+
+        assertTrue(ctrl.waitForProcessing(ShortTimeout));
+        assertEq(n, ctrl.getCacheSize());
+
+        # Cancel 3 ops by key
+        for (int i = 0; i < 3; ++i) {
+            assertTrue(ctrl.cancelByKey(sprintf("ref:%d", i)));
+        }
+        assertEq(2, ctrl.getCacheSize());
+
+        # Verify canceled ops
+        for (int i = 0; i < 3; ++i) {
+            hash<SocketPollResultInfo> result = queues[i].get(ShortTimeout);
+            assertTrue(result.canceled ?? False);
+        }
+
+        # Remaining 2 ops should still work — connect 2 clients
+        for (int i = 0; i < 2; ++i) {
+            Socket client();
+            client.connect("localhost:" + port);
+        }
+
+        int completed = 0;
+        for (int i = 3; i < n; ++i) {
+            hash<SocketPollResultInfo> result = queues[i].get(ConnectTimeout);
+            if (!(result.canceled ?? False) && !result.ex) {
+                ++completed;
+            }
+        }
+        assertEq(2, completed);
+    }
+
+    #! 5 connect ops with callbacks, one throws exception. Other 4 succeed.
+    testCallbackExceptionDoesNotLoseOps() {
+        AsyncIoController ctrl(False);
+        ctrl.start();
+        on_exit ctrl.stop();
+
+        int n = 5;
+        int throw_index = 2;  # The third callback throws
+
+        Socket listener();
+        listener.bind("localhost:0");
+        listener.listen(n + 5);
+        int port = listener.getSocketInfo().port;
+        on_exit listener.close();
+
+        Mutex m();
+        list<int> completed_indices = ();
+        Counter done(n);
+
+        for (int i = 0; i < n; ++i) {
+            int my_index = i;
+            Socket client();
+            AbstractPollOperation spop = client.startPollConnect("localhost:" + port);
+            ctrl.submit(<SocketPollOperationInfo>{
+                "sock": client,
+                "spop": spop,
+                "owner": "cb-exception",
+                "to": ConnectTimeout,
+                "key": sprintf("cb-ex:%d", i),
+                "callback": sub (hash<SocketPollResultInfo> result) {
+                    {
+                        AutoLock al(m);
+                        push completed_indices, my_index;
+                    }
+                    done.dec();
+                    if (my_index == throw_index) {
+                        throw "TEST-CB-EXCEPTION", "intentional exception from callback";
+                    }
+                },
+            });
+        }
+
+        # Accept all connections
+        for (int i = 0; i < n; ++i) {
+            Socket accepted = listener.accept(ConnectTimeout);
+        }
+
+        assertEq(0, done.waitForZero(StressTimeout));
+
+        {
+            AutoLock al(m);
+            assertEq(n, completed_indices.size());
+        }
+
+        # Controller should still be functional
+        Socket client2();
+        AbstractPollOperation spop2 = client2.startPollConnect("localhost:" + port);
+        Queue q = ctrl.submit(<SocketPollOperationInfo>{
+            "sock": client2,
+            "spop": spop2,
+            "owner": "post-exception",
+            "to": ConnectTimeout,
+        });
+
+        Socket accepted2 = listener.accept(ConnectTimeout);
+        hash<SocketPollResultInfo> result = q.get(ConnectTimeout);
+        assertFalse(result.canceled ?? False);
+        assertNothing(result.ex);
+    }
+
+    #! 30 blocking recv ops. stopClear(). All 30 results have canceled=True.
+    testStopClearUnderLoad() {
+        int n = scaleForValgrind(30, 5);
+
+        AsyncIoController ctrl(False);
+        ctrl.start();
+        on_exit {
+            try { ctrl.stop(); } catch () {}
+        }
+
+        # Must keep references to setups so client sockets aren't garbage collected
+        # (client socket close would cause EOF on server, completing recv ops)
+        list<hash<auto>> setups = ();
+        list<Queue> queues = ();
+        for (int i = 0; i < n; ++i) {
+            hash<auto> setup = setupBlockingRecvOp();
+            push setups, setup;
+            Queue q = ctrl.submit(<SocketPollOperationInfo>{
+                "sock": setup.server,
+                "spop": setup.spop,
+                "owner": "stop-clear",
+                "to": -1,
+                "key": sprintf("sc:%d", i),
+            });
+            push queues, q;
+        }
+
+        assertTrue(ctrl.waitForProcessing(ShortTimeout));
+        assertEq(n, ctrl.getCacheSize());
+
+        # stopClear
+        ctrl.stopClear();
+
+        # All should be canceled
+        int canceled = 0;
+        for (int i = 0; i < n; ++i) {
+            hash<SocketPollResultInfo> result = queues[i].get(ShortTimeout);
+            if (result.canceled ?? False) {
+                ++canceled;
+            }
+        }
+        assertEq(n, canceled);
+
+        assertFalse(ctrl.running());
+        assertEq(0, ctrl.getCacheSize());
+    }
+
+    #! Submit with key "dup", submit again with same key without replace. ASYNC-IO-ERROR thrown.
+    testDuplicateKeyWithCustomKeys() {
+        AsyncIoController ctrl(False);
+        ctrl.start();
+        on_exit ctrl.stop();
+
+        hash<auto> setup1 = setupBlockingRecvOp();
+        Queue q1 = ctrl.submit(<SocketPollOperationInfo>{
+            "sock": setup1.server,
+            "spop": setup1.spop,
+            "owner": "dup-test",
+            "to": -1,
+            "key": "dup",
+        });
+
+        assertTrue(ctrl.waitForProcessing(ShortTimeout));
+
+        # Second submit with same key should throw
+        hash<auto> setup2 = setupBlockingRecvOp();
+        assertThrows("ASYNC-IO-ERROR", sub () {
+            ctrl.submit(<SocketPollOperationInfo>{
+                "sock": setup2.server,
+                "spop": setup2.spop,
+                "owner": "dup-test",
+                "to": -1,
+                "key": "dup",
+            });
+        });
+
+        # First op should still be active and cancelable
+        assertEq(1, ctrl.getCacheSize());
+        assertTrue(ctrl.cancelByKey("dup"));
+
+        hash<SocketPollResultInfo> result = q1.get(ShortTimeout);
+        assertTrue(result.canceled ?? False);
+    }
+
+    #! Multiple submit batches with waitForProcessing() after each
+    testWaitForProcessingEdgeCases() {
+        AsyncIoController ctrl(False);
+        ctrl.start();
+        on_exit ctrl.stop();
+
+        int batches = scaleForValgrind(5, 3);
+        int batch_size = scaleForValgrind(10, 3);
+
+        for (int batch = 0; batch < batches; ++batch) {
+            list<Queue> queues = ();
+
+            # Submit a batch of connect ops
+            Socket listener();
+            listener.bind("localhost:0");
+            listener.listen(batch_size + 5);
+            int port = listener.getSocketInfo().port;
+
+            for (int i = 0; i < batch_size; ++i) {
+                Socket client();
+                AbstractPollOperation spop = client.startPollConnect("localhost:" + port);
+                Queue q = ctrl.submit(<SocketPollOperationInfo>{
+                    "sock": client,
+                    "spop": spop,
+                    "owner": sprintf("batch-%d", batch),
+                    "to": ConnectTimeout,
+                    "key": sprintf("batch:%d:%d", batch, i),
+                });
+                push queues, q;
+            }
+
+            # waitForProcessing after batch submit
+            assertTrue(ctrl.waitForProcessing(ShortTimeout));
+
+            # Accept all and drain queues
+            for (int i = 0; i < batch_size; ++i) {
+                Socket accepted = listener.accept(ConnectTimeout);
+            }
+
+            int completed = 0;
+            for (int i = 0; i < batch_size; ++i) {
+                hash<SocketPollResultInfo> result = queues[i].get(ConnectTimeout);
+                if (!(result.canceled ?? False) && !result.ex) {
+                    ++completed;
+                }
+            }
+            assertEq(batch_size, completed);
+        }
+    }
+
+    #! exec() with recv op and 500ms timeout, no data sent
+    testExecTimeout() {
+        AsyncIoController ctrl(False);
+        ctrl.start();
+        on_exit ctrl.stop();
+        assertTrue(ctrl.waitReady(ShortTimeout));
+
+        hash<auto> setup = setupBlockingRecvOp();
+
+        # exec() with timeout - no data sent so it should time out
+        hash<SocketPollResultInfo> result = ctrl.exec(<SocketPollOperationInfo>{
+            "sock": setup.server,
+            "spop": setup.spop,
+            "owner": "exec-timeout",
+            "to": 500ms,
+        });
+
+        assertFalse(result.canceled ?? False);
+        assertEq(True, exists result.ex);
+        assertEq("SOCKET-TIMEOUT", result.ex.err);
+
+        # Controller should still be functional
+        Socket listener();
+        listener.bind("localhost:0");
+        listener.listen();
+        int port = listener.getSocketInfo().port;
+
+        Socket client();
+        AbstractPollOperation spop = client.startPollConnect("localhost:" + port);
+        Queue q = ctrl.submit(<SocketPollOperationInfo>{
+            "sock": client,
+            "spop": spop,
+            "owner": "post-timeout",
+            "to": ConnectTimeout,
+        });
+
+        Socket accepted = listener.accept(ConnectTimeout);
+        hash<SocketPollResultInfo> result2 = q.get(ConnectTimeout);
+        assertFalse(result2.canceled ?? False);
+        assertNothing(result2.ex);
+    }
+}

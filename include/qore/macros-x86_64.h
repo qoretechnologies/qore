@@ -2,7 +2,7 @@
 /*
   Qore Programming Language
 
-  Copyright (C) 2003 - 2023 David Nichols
+  Copyright (C) 2003 - 2026 David Nichols
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -34,8 +34,12 @@
 
 #define STACK_DIRECTION_DOWN 1
 
-// we need 32K of stack guard on x86_64
-#define QORE_STACK_GUARD (1024 * 32)
+// Stack guard must be larger than the thread startup overhead (the stack consumed
+// between the actual thread stack top and the point where stack_start is set in
+// ThreadData).  Measured overhead in debug builds: ~52KB (due to thread init,
+// module loading, etc.), so 80KB provides ~28KB margin for check_stack to detect
+// overflow before hitting the OS guard page.
+#define QORE_STACK_GUARD (80 * 1024)
 
 #ifdef __GNUC__
 #define HAVE_CHECK_STACK_POS

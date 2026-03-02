@@ -49,6 +49,8 @@
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/QC_EventLoop.h"
 #include "qore/intern/QC_EventNotifier.h"
+#include "qore/intern/QC_LoggerInterfaceBase.h"
+#include "qore/intern/QC_AsyncIoController.h"
 #include "qore/intern/QC_SSLCertificate.h"
 #include "qore/intern/QC_SSLPrivateKey.h"
 #include "qore/intern/QC_ProgramControl.h"
@@ -205,20 +207,29 @@ const TypedHashDecl* hashdeclStatInfo,
     * hashdeclListSerializationInfo,
     * hashdeclUrlInfo,
     * hashdeclFtpResponseInfo,
+    * hashdeclExtraPollFdInfo,
     * hashdeclSocketPollInfo,
+    * hashdeclDatagramInfo,
+    * hashdeclQuicGoawayStateInfo,
     * hashdeclPipeInfo,
     * hashdeclSseMessageInfo,
     * hashdeclPortRangeInfo,
     * hashdeclFilesystemPathInfo,
     * hashdeclFilesystemSecurityConfigInfo,
     * hashdeclNetworkSecurityConfigInfo,
-    * hashdeclSandboxConfigInfo;
+    * hashdeclSandboxConfigInfo,
+    * hashdeclSocketPollOperationInfo,
+    * hashdeclSocketPollResultInfo,
+    * hashdeclEventPollInfo,
+    * hashdeclTimerEventInfo;
 
 const QoreEnumDecl* enumHTTP2Mode;
+const QoreEnumDecl* enumHTTP3Mode;
 
 DLLLOCAL void init_context_functions(QoreNamespace& ns);
 DLLLOCAL void init_RangeIterator_functions(QoreNamespace& ns);
 DLLLOCAL QoreEnumDecl* init_enum_HTTP2Mode(QoreNamespace& ns);
+DLLLOCAL QoreEnumDecl* init_enum_HTTP3Mode(QoreNamespace& ns);
 
 GVEntryBase::GVEntryBase(const QoreProgramLocation* loc, char* n, const QoreTypeInfo* typeInfo,
         QoreParseTypeInfo* parseTypeInfo, qore_var_t type) :
@@ -1211,7 +1222,10 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     hashdeclUrlInfo = init_hashdecl_UrlInfo(qns);
     hashdeclFtpResponseInfo = init_hashdecl_FtpResponseInfo(qns);
     preinitAbstractPollableIoObjectClass();
+    hashdeclExtraPollFdInfo = init_hashdecl_ExtraPollFdInfo(qns);
     hashdeclSocketPollInfo = init_hashdecl_SocketPollInfo(qns);
+    hashdeclDatagramInfo = init_hashdecl_DatagramInfo(qns);
+    hashdeclQuicGoawayStateInfo = init_hashdecl_QuicGoawayStateInfo(qns);
     preinitReadOnlyFileClass();
     preinitFileClass();
     hashdeclPipeInfo = init_hashdecl_PipeInfo(qns);
@@ -1223,6 +1237,7 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     hashdeclSandboxConfigInfo = init_hashdecl_SandboxConfigInfo(qns);
 
     enumHTTP2Mode = init_enum_HTTP2Mode(qns);
+    enumHTTP3Mode = init_enum_HTTP3Mode(qns);
 
     // add Thread namespace (save pointer for late-bound classes that depend on AbstractIterator)
     QoreNamespace* thread_ns = get_thread_ns(qns);
@@ -1272,7 +1287,20 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     qns.addSystemClass(initSSLPrivateKeyClass(qns));
     qns.addSystemClass(initSocketClass(qns));
     qns.addSystemClass(initEventNotifierClass(qns));
+    // EventPollInfo/TimerEventInfo must be initialized before initEventLoopClass which uses them
+    // EventPollInfo references AbstractPollableIoObject; must be after initSocketClass
+    hashdeclEventPollInfo = init_hashdecl_EventPollInfo(qns);
+    // TimerEventInfo has no special dependencies
+    hashdeclTimerEventInfo = init_hashdecl_TimerEventInfo(qns);
     qns.addSystemClass(initEventLoopClass(qns));
+    // Init hashdecls that reference Socket, AbstractPollOperation, and Queue classes
+    // Must be after initSocketClass, initAbstractPollOperationClass, and get_thread_ns (Queue)
+    // Must be before initAsyncIoControllerClass which references these hashdecls
+    hashdeclSocketPollOperationInfo = init_hashdecl_SocketPollOperationInfo(qns);
+    hashdeclSocketPollResultInfo = init_hashdecl_SocketPollResultInfo(qns);
+
+    qns.addSystemClass(initLoggerInterfaceBaseClass(qns));  // must be before AsyncIoController and logger_bin module
+    qns.addSystemClass(initAsyncIoControllerClass(qns));
     qns.addSystemClass(initSandboxManagerClass(qns));  // must be before Program class
     qns.addSystemClass(initParseOptionsClass(qns));  // must be before Program class
     preinitProgramClass();  // to resolve circular dependency Program/Expression class

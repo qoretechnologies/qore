@@ -39,7 +39,7 @@
 %modern
 
 module WebSocketHandler {
-    version = "2.3";
+    version = "2.5";
     desc = "User module for providing WebSocket server services";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -58,13 +58,100 @@ module WebSocketHandler {
 
     To use this module, use \c "%requires WebSocketHandler" and \c "%requires HttpServer" in your code.
 
+    The module supports WebSocket connections over all HTTP protocol versions:
+    - <b>HTTP/1.1</b>: Standard WebSocket upgrade handshake (RFC 6455)
+    - <b>HTTP/2</b>: Extended CONNECT method (RFC 8441)
+    - <b>HTTP/3</b>: Extended CONNECT over QUIC (RFC 9220)
+
     All the public symbols in the module are defined in the WebSocketHandler namespace.
 
     The main classes provided in this module are:
     - @ref WebSocketHandler::WebSocketConnection
     - @ref WebSocketHandler::WebSocketHandler
 
+    @par HTTP/3 WebSocket Server Example
+    To accept WebSocket connections over HTTP/3, add a QUIC listener to the HttpServer
+    with \c enable_h3 set to \c True. The %WebSocketHandler automatically detects HTTP/3
+    extended CONNECT requests with \c :protocol=websocket (RFC 9220):
+    @code{.py}
+%requires HttpServer
+%requires WebSocketHandler
+
+# Subclass WebSocketConnection to handle incoming messages
+class EchoWsConnection inherits WebSocketConnection {
+    constructor(WebSocketHandler handler) : WebSocketConnection(handler) {}
+    gotMessage(string msg) { send(msg); }
+    gotMessage(binary msg) { send(msg); }
+}
+
+# Subclass WebSocketHandler to create connections
+class EchoWsHandler inherits WebSocketHandler {
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new EchoWsConnection(self);
+    }
+}
+
+# Create server in async mode (required for HTTP/3)
+EchoWsHandler ws_handler();
+HttpServer server(<HttpServerOptionInfo>{"async_mode": True});
+server.setHandler("ws", "", NOTHING, ws_handler);
+server.setDefaultHandler("ws", ws_handler);
+server.waitForAsyncIo();
+
+# Add QUIC listener with TLS cert (QUIC requires TLS 1.3)
+server.addListener(<HttpListenerOptionInfo>{
+    "service": 8443,
+    "cert": cert,      # SSLCertificate object
+    "key": key,         # SSLPrivateKey object
+    "enable_h3": True,
+});
+server.waitForAsyncIo();
+printf("HTTP/3 WebSocket server listening on port 8443\n");
+    @endcode
+
+    WebSocket clients connecting over HTTP/3 are handled identically to HTTP/1.1 and HTTP/2
+    clients — the same \c gotMessage() callbacks and
+    @ref WebSocketHandler::WebSocketHandler::sendOne() "sendOne()" /
+    @ref WebSocketHandler::WebSocketHandler::sendAll() "sendAll()" APIs work across all transports.
+
     @section websockethandler_relnotes WebSocketHandler Release History
+
+    @subsection websockethandler_v2_5 Version 2.5
+    - replaced frame-dropping behavior on transport backpressure with a per-connection pending
+      send buffer that retains frames and drains them at each handler loop iteration
+      - HTTP/2 flow control (\c HTTP2-FLOW-CONTROL) and HTTP/1.1 async contention
+        (\c SOCKET-NON-BLOCK-ERROR) now queue frames instead of dropping them
+      - natural backpressure to the application layer: the Channel is not polled while the
+        pending send buffer has data, so @ref WebSocketHandler::WebSocketConnection::send()
+        "WebSocketConnection::send()" blocks when the Channel fills up
+      - heartbeat pings are suppressed during backpressure to avoid growing the buffer
+    - added @ref WebSocketHandler::WebSocketHandler::MaxPendingSendBytes
+      "MaxPendingSendBytes" constant (4 MB safety limit)
+    - added @ref WebSocketHandler::WebSocketHandler::MaxDrainFramesPerIteration
+      "MaxDrainFramesPerIteration" constant to cap drain time per loop iteration
+
+    @subsection websockethandler_v2_4 Version 2.4
+    - added support for WebSocket over HTTP/3 (RFC 9220 — Extended CONNECT over QUIC)
+      - server-side detection of HTTP/3 CONNECT requests with \c :protocol=websocket
+      - bidirectional WebSocket frame exchange over QUIC streams
+      - backpressure handling via QUIC flow control with I/O controller wake integration
+      - explicit QUIC stream close on WebSocket handler exit (essential for stream multiplexing)
+    - refactored to use @ref AsyncSocketIo::AbstractStreamContext "AbstractStreamContext" for
+      protocol-agnostic WebSocket I/O, eliminating per-protocol branching in \c handleRequest(),
+      \c startImpl(), and \c sendFrame()
+    - added @ref WebSocketHandler::WebSocketConnection::setStreamContext()
+      "WebSocketConnection::setStreamContext()" and
+      @ref WebSocketHandler::WebSocketConnection::getStreamContext()
+      "WebSocketConnection::getStreamContext()" methods for unified stream context management
+    - deprecated @ref WebSocketHandler::WebSocketConnection::setHttp2StreamContext()
+      "WebSocketConnection::setHttp2StreamContext()",
+      @ref WebSocketHandler::WebSocketConnection::getHttp2StreamContext()
+      "WebSocketConnection::getHttp2StreamContext()",
+      @ref WebSocketHandler::WebSocketConnection::setHttp3StreamContext()
+      "WebSocketConnection::setHttp3StreamContext()", and
+      @ref WebSocketHandler::WebSocketConnection::getHttp3StreamContext()
+      "WebSocketConnection::getHttp3StreamContext()" — use \c setStreamContext() /
+      \c getStreamContext() instead
 
     @subsection websockethandler_v2_3 Version 2.3
     - fixed @ref WebSocketHandler::WebSocketHandler::sendAll() "WebSocketHandler::sendAll()" to apply
@@ -219,7 +306,7 @@ public class WebSocketConnection {
 
         bool async_mode = False;
         *AsyncSocketIo::AsyncSocketIoController async_ctrl;
-        *AsyncSocketIo::Http2StreamContext h2_ctx;
+        *AsyncSocketIo::AbstractStreamContext stream_ctx;
 
         #! Listener ID this connection belongs to
         string lid;
@@ -228,6 +315,16 @@ public class WebSocketConnection {
     private:internal {
         #! The socket used by the server for this connection
         Socket sock;
+
+        #! Frames that couldn't be sent due to backpressure, awaiting retry
+        /** @since WebSocketHandler 2.5
+        */
+        list<binary> pending_sends;
+
+        #! Total bytes in pending_sends for memory limit enforcement
+        /** @since WebSocketHandler 2.5
+        */
+        int pending_send_bytes = 0;
     }
 
     #! the constructor is called when a new connection is made by a websocket client
@@ -249,12 +346,54 @@ public class WebSocketConnection {
         self.async_ctrl = async_ctrl;
     }
 
-    setHttp2StreamContext(*AsyncSocketIo::Http2StreamContext ctx) {
-        self.h2_ctx = ctx;
+    #! Sets the stream context for WebSocket over HTTP/2 or HTTP/3
+    /** @param ctx the stream context, or @ref nothing to clear
+
+        @since WebSocketHandler 2.4
+    */
+    setStreamContext(*AsyncSocketIo::AbstractStreamContext ctx) {
+        self.stream_ctx = ctx;
     }
 
-    *AsyncSocketIo::Http2StreamContext getHttp2StreamContext() {
-        return h2_ctx;
+    #! Returns the stream context for WebSocket over HTTP/2 or HTTP/3
+    /** @return the stream context, or @ref nothing if not using HTTP/2 or HTTP/3 WebSocket
+
+        @since WebSocketHandler 2.4
+    */
+    *AsyncSocketIo::AbstractStreamContext getStreamContext() {
+        return stream_ctx;
+    }
+
+    #! Sets the HTTP/2 stream context
+    /** @deprecated Use @ref setStreamContext() instead
+    */
+    deprecated setHttp2StreamContext(*AsyncSocketIo::Http2StreamContext ctx) {
+        self.stream_ctx = ctx;
+    }
+
+    #! Returns the HTTP/2 stream context
+    /** @deprecated Use @ref getStreamContext() instead
+    */
+    deprecated *AsyncSocketIo::Http2StreamContext getHttp2StreamContext() {
+        return stream_ctx instanceof AsyncSocketIo::Http2StreamContext
+            ? cast<AsyncSocketIo::Http2StreamContext>(stream_ctx)
+            : NOTHING;
+    }
+
+    #! Sets the HTTP/3 stream context for WebSocket over QUIC (RFC 9220)
+    /** @deprecated Use @ref setStreamContext() instead
+    */
+    deprecated setHttp3StreamContext(*AsyncSocketIo::Http3StreamContext ctx) {
+        self.stream_ctx = ctx;
+    }
+
+    #! Returns the HTTP/3 stream context for WebSocket over QUIC (RFC 9220)
+    /** @deprecated Use @ref getStreamContext() instead
+    */
+    deprecated *AsyncSocketIo::Http3StreamContext getHttp3StreamContext() {
+        return stream_ctx instanceof AsyncSocketIo::Http3StreamContext
+            ? cast<AsyncSocketIo::Http3StreamContext>(stream_ctx)
+            : NOTHING;
     }
 
     bool isAsyncMode() {
@@ -454,7 +593,7 @@ public class WebSocketConnection {
     */
     flush() {
         if (gettid() != tid) {
-            while (!stop_flag && !channel.empty()) {
+            while (!stop_flag && (!channel.empty() || hasPendingSends())) {
                 usleep(DefaultQueuePollingInterval);
             }
         } else {
@@ -467,6 +606,80 @@ public class WebSocketConnection {
         stop_flag = True;
         # closing the channel wakes up the polling thread immediately
         channel.close();
+    }
+
+    #! Returns True if there are buffered frames awaiting send
+    /** @return True if frames are pending, False otherwise
+
+        @note Internal API — called by @ref WebSocketHandler from the handler (I/O) thread.
+        Not intended for use by subclasses.
+
+        @since WebSocketHandler 2.5
+    */
+    bool hasPendingSends() {
+        return pending_send_bytes > 0;
+    }
+
+    #! Returns the total bytes currently buffered in the pending send queue
+    /** @return the number of bytes buffered
+
+        @note Internal API — called by @ref WebSocketHandler from the handler (I/O) thread.
+        Not intended for use by subclasses.
+
+        @since WebSocketHandler 2.5
+    */
+    int getPendingSendBytes() {
+        return pending_send_bytes;
+    }
+
+    #! Peeks at the first pending frame without removing it
+    /** @return the first pending frame
+
+        @pre @ref hasPendingSends() must return True
+
+        @note Internal API — called by @ref WebSocketHandler from the handler (I/O) thread.
+        Not intended for use by subclasses.
+
+        @since WebSocketHandler 2.5
+    */
+    binary peekPendingSend() {
+        return pending_sends[0];
+    }
+
+    #! Removes and returns the first pending frame
+    /** @return the dequeued frame
+
+        @pre @ref hasPendingSends() must return True
+
+        @note Internal API — called by @ref WebSocketHandler from the handler (I/O) thread.
+        Not intended for use by subclasses.
+
+        @since WebSocketHandler 2.5
+    */
+    binary dequeuePendingSend() {
+        binary frame = shift pending_sends;
+        pending_send_bytes -= frame.size();
+        return frame;
+    }
+
+    #! Appends a frame to the pending send buffer; returns False if over limit
+    /** @param frame the frame to queue
+        @return True if the frame was queued successfully, False if the pending send buffer is full
+
+        @note Internal API — called by @ref WebSocketHandler from the handler (I/O) thread.
+        Not intended for use by subclasses.  A single frame larger than
+        @ref WebSocketHandler::MaxPendingSendBytes "MaxPendingSendBytes" can never be buffered
+        and will always be dropped.
+
+        @since WebSocketHandler 2.5
+    */
+    bool queuePendingSend(binary frame) {
+        if (pending_send_bytes + frame.size() > WebSocketHandler::MaxPendingSendBytes) {
+            return False;
+        }
+        push pending_sends, frame;
+        pending_send_bytes += frame.size();
+        return True;
     }
 
 %ifndef NoAsyncApi
@@ -679,9 +892,9 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         const DefaultHeartbeatMsg = "heartbeat";
 
         #! Maximum retries when HTTP/2 flow control backpressure is detected
-        /** When sendFrame() encounters \c HTTP2-FLOW-CONTROL (per-stream buffer > 1MB),
+        /** When @ref trySendDirect() encounters \c HTTP2-FLOW-CONTROL (per-stream buffer > 1MB),
             it pumps I/O to drain the buffer and retries up to this many times before
-            dropping the frame.
+            returning \c False to signal backpressure to the caller.
         */
         const FlowControlMaxRetries = 10;
 
@@ -691,6 +904,27 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
             (including \c WINDOW_UPDATE) from the peer.
         */
         const FlowControlRetryMs = 50ms;
+
+        #! Maximum bytes buffered in pending_sends before dropping frames
+        /** When transport backpressure prevents immediate delivery, frames are buffered in
+            a per-connection pending send list and drained at each handler loop iteration.
+            If the total buffered bytes would exceed this limit, new frames are dropped
+            with a warning log.
+
+            @since WebSocketHandler 2.5
+        */
+        const MaxPendingSendBytes = 4 * 1024 * 1024;
+
+        #! Maximum frames to drain from the pending send buffer per handler loop iteration
+        /** Caps the time spent in @ref drainPendingSends() so that incoming data is not
+            starved while flushing a large backlog.  Each frame may incur up to
+            @ref FlowControlMaxRetries retries of @ref FlowControlRetryMs each, so the
+            worst-case drain time per iteration is roughly
+            \c MaxDrainFramesPerIteration * \c FlowControlMaxRetries * \c FlowControlRetryMs.
+
+            @since WebSocketHandler 2.5
+        */
+        const MaxDrainFramesPerIteration = 10;
 
         #! known constructor options
         const Options = (
@@ -966,16 +1200,17 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         #logDebug("websocket request: cx: %N", cx);
         #logDebug("websocket request: hdr: %N", hdr);
 
-        # RFC 8441: HTTP/2 WebSocket uses CONNECT with :protocol=websocket
-        bool is_http2_ws = cx."header-info".http2
-            && (cx."header-info".is_websocket_connect
-                || (hdr.method == "CONNECT" && hdr.":protocol" == "websocket"));
-        if (is_http2_ws) {
-            logDebug("HTTP/2 WebSocket CONNECT request received");
+        # RFC 8441 / RFC 9220: HTTP/2 or HTTP/3 WebSocket uses CONNECT with :protocol=websocket
+        bool is_extended_connect = is_websocket_extended_connect(cx, hdr);
+        if (is_extended_connect) {
+            bool is_http3 = cx."header-info".http3 ?? False;
+            logDebug("%s WebSocket CONNECT request received (RFC %s)",
+                is_http3 ? "HTTP/3" : "HTTP/2",
+                is_http3 ? "9220" : "8441");
 
             # Negotiate extensions if supported
             *hash<auto> ext_result = negotiateExtensions(hdr."sec-websocket-extensions");
-            # HTTP/2 header field names must be lowercase
+            # HTTP/2 and HTTP/3 header field names must be lowercase
             hash<auto> rhdr = {};
             if (hdr."sec-websocket-key") {
                 rhdr."sec-websocket-accept" = ws_get_response_key(hdr."sec-websocket-key");
@@ -992,7 +1227,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                 };
             }
 
-            # RFC 8441: Return 200 OK for HTTP/2 WebSocket CONNECT
+            # RFC 8441/9220: Return 200 OK for HTTP/2 or HTTP/3 WebSocket CONNECT
             return {
                 "code": 200,
                 "hdr": rhdr,
@@ -1056,15 +1291,21 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
     */
     bool startImpl(softstring lid, hash<auto> cx, hash<auto> hdr, Qore::Socket sock) {
         softstring cid = cx.id;
-        bool is_http2_ws = cx."header-info".http2
-            && (cx."header-info".is_websocket_connect
-                || (hdr.method == "CONNECT" && hdr.":protocol" == "websocket"));
-        int h2_stream_id = is_http2_ws ? cx."header-info".stream_id : -1;
+        bool is_extended_connect = is_websocket_extended_connect(cx, hdr);
+        bool is_http3 = is_extended_connect && (cx."header-info".http3 ?? False);
+        bool is_http2 = is_extended_connect && (cx."header-info".http2 ?? False);
+        int h2_stream_id = is_http2 ? cx."header-info".stream_id : -1;
+        int h3_session_id = is_http3 ? cx."header-info".session_id : -1;
+        int h3_stream_id = is_http3 ? cx."header-info".stream_id : -1;
         softstring exit_reason = "unknown";
-        @debug(bool h2_ws_debug_handler = is_http2_ws && getenv("QORE_HTTP2_WS_DEBUG_HANDLER"));
+        @debug(bool h2_ws_debug_handler = is_http2 && getenv("QORE_HTTP2_WS_DEBUG_HANDLER"));
         @debug {
             if (h2_ws_debug_handler) {
                 log(LoggerLevel::INFO, "HTTP/2 WS handler start: cid=%y stream_id=%d from %s:%d", cx.id, h2_stream_id,
+                    cx."peer-info".hostname_desc, cx."peer-info".port);
+            } else if (is_http3) {
+                logDebug("HTTP/3 WS handler start: cid=%y session_id=%d stream_id=%d from %s:%d",
+                    cx.id, h3_session_id, h3_stream_id,
                     cx."peer-info".hostname_desc, cx."peer-info".port);
             } else {
                 logDebug("WebSocketHandler::startImpl() cid: %y from %s:%d", cx.id, cx."peer-info".hostname_desc,
@@ -1072,7 +1313,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
             }
         }
         # Debug helper for HTTP/2 WS frame headers
-        @debug(bool h2_ws_debug_frames = is_http2_ws && getenv("QORE_HTTP2_WS_DEBUG_FRAMES"));
+        @debug(bool h2_ws_debug_frames = is_http2 && getenv("QORE_HTTP2_WS_DEBUG_FRAMES"));
         bool async_mode = cx."async_mode" ?? False;
         *AsyncSocketIo::AsyncSocketIoController async_ctrl;
         if (async_mode) {
@@ -1084,11 +1325,23 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         wsc.setSocket(sock);
         wsc.setListenerId(lid);
         wsc.setAsyncIo(async_mode, async_ctrl);
-        if (is_http2_ws) {
+        if (is_http2) {
             @assert(h2_stream_id > 0, "missing HTTP/2 stream id for WebSocket");
             # The WebSocket handler thread owns the socket exclusively and must read
             # HTTP/2 frames directly (no I/O thread is polling this connection)
-            wsc.setHttp2StreamContext(new AsyncSocketIo::Http2StreamContext(sock, h2_stream_id, True));
+            wsc.setStreamContext(new AsyncSocketIo::Http2StreamContext(sock, h2_stream_id, True));
+        } else if (is_http3) {
+            @assert(h3_session_id > 0, "missing HTTP/3 session id for WebSocket");
+            @assert(h3_stream_id >= 0, "missing HTTP/3 stream id for WebSocket");
+            # CONNECT response was already sent by HttpServer.qm before calling start()
+            # Create HTTP/3 stream context for WebSocket frame I/O
+            code<nothing()> wake = sub () {
+                if (async_ctrl) {
+                    async_ctrl.wake();
+                }
+            };
+            wsc.setStreamContext(new AsyncSocketIo::Http3StreamContext(
+                sock, h3_session_id, h3_stream_id, wake));
         }
 
         # Set negotiated extensions on the connection (stored by handleRequest)
@@ -1113,6 +1366,15 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         on_exit {
             #logDebug("WebSocketHandler::startImpl(): close connection: cid: %y from %s:%d", cx.id,
             #    cx."peer-info".hostname_desc, cx."peer-info".port);
+            # Close the stream context (no-op for HTTP/2; sends END_STREAM for HTTP/3)
+            try {
+                *AsyncSocketIo::AbstractStreamContext ctx = wsc.getStreamContext();
+                if (ctx) {
+                    ctx.close();
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                logError("exception closing WebSocket stream: %s", get_exception_string(ex));
+            }
             try {
                 deregisterConnectionImpl(wsc);
                 wsc.connectionClosed();
@@ -1133,7 +1395,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         data buf;
         # RSV bits from first frame for fragmented messages (RFC 7692 Section 6.2.1)
         hash<auto> first_frame_rsv;
-        binary http2_buf;
+        binary stream_buf;
         while (True) {
             #logDebug("WebSocketHandler::startImpl() loop cid: %y", cx.id);
             if (stop || lsh{lid} || wsc.stop_flag) {
@@ -1150,21 +1412,39 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
 
             try {
                 bool update = False;
-                # send any and all messages on the channel
-                *binary d = wsc.pollData();
-                if (d) {
-                    @debug {
-                        if (h2_ws_debug_frames && d.size() >= 2) {
-                            int b0 = d[0];
-                            int b1 = d[1];
-                            log(LoggerLevel::INFO,
-                                "HTTP/2 WS send frame: b0=0x%02x b1=0x%02x fin=%y op=%d masked=%y", b0, b1,
-                                (b0 & WS_FIN) != 0, b0 & 0x0f, (b1 & 0x80) != 0);
+
+                # Drain any buffered frames from previous iterations
+                drainPendingSends(wsc, sock);
+
+                # Only poll the Channel for new messages if no pending sends remain;
+                # this creates natural backpressure to the application thread — when
+                # we stop dequeuing, the Channel fills up and send() blocks
+                if (!wsc.hasPendingSends()) {
+                    # send any and all messages on the channel
+                    *binary d = wsc.pollData();
+                    if (d) {
+                        @debug {
+                            if (h2_ws_debug_frames && d.size() >= 2) {
+                                int b0 = d[0];
+                                int b1 = d[1];
+                                log(LoggerLevel::INFO,
+                                    "HTTP/2 WS send frame: b0=0x%02x b1=0x%02x fin=%y op=%d masked=%y", b0, b1,
+                                    (b0 & WS_FIN) != 0, b0 & 0x0f, (b1 & 0x80) != 0);
+                            }
                         }
+                        sendFrame(wsc, sock, d);
+                        update = True;
+                        flushIoIntern(wsc, sock, False);
                     }
-                    sendFrame(wsc, sock, d);
-                    update = True;
-                    flushIoIntern(wsc, sock, False);
+                } else {
+                    # Still backpressured after drain — pump I/O to give the peer a
+                    # chance to send WINDOW_UPDATE / drain its receive buffer, and
+                    # avoid busy-looping
+                    try {
+                        sock.isDataAvailable(FlowControlRetryMs);
+                    } catch () {
+                        # Socket error — next drain iteration will detect
+                    }
                 }
 
                 if (wsc.stop_flag) {
@@ -1172,35 +1452,40 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                 }
                 hash<WsMsgInfo> h;
                 bool have_frame = False;
-                if (is_http2_ws && async_mode) {
-                    *AsyncSocketIo::Http2StreamContext h2_ctx = wsc.getHttp2StreamContext();
-                    *binary incoming = h2_ctx ? h2_ctx.readData() : sock.readHttp2StreamData(h2_stream_id);
+                if (is_extended_connect && async_mode) {
+                    # HTTP/2 and HTTP/3 WebSocket: read from stream context
+                    *AsyncSocketIo::AbstractStreamContext ctx = wsc.getStreamContext();
+                    *binary incoming = ctx ? ctx.readData() : NOTHING;
                     if (incoming) {
-                        http2_buf = http2_buf ? http2_buf + incoming : incoming;
+                        stream_buf = stream_buf ? stream_buf + incoming : incoming;
                     }
-                    # Check HTTP/2 WebSocket buffer size against limit
-                    if (max_message_size > 0 && http2_buf.size() > max_message_size) {
-                        logError("HTTP/2 WebSocket buffer size %d exceeds maximum %d",
-                            http2_buf.size(), max_message_size);
+                    # Check WebSocket buffer size against limit
+                    if (max_message_size > 0 && stream_buf.size() > max_message_size) {
+                        logError("%s WebSocket buffer size %d exceeds maximum %d",
+                            is_http3 ? "HTTP/3" : "HTTP/2",
+                            stream_buf.size(), max_message_size);
                         sendClose(wsc, sock, WSCC_MessageTooBig,
                             sprintf("message size exceeds %d byte limit", max_message_size));
                         exit_reason = "message-too-large";
                         break;
                     }
-                    int frame_len = getWsFrameLength(http2_buf);
-                    if (frame_len > 0) {
-                        binary frame = http2_buf.substr(0, frame_len);
-                        if (frame_len == http2_buf.size()) {
-                            remove http2_buf;
+                    *int frame_len = stream_buf ? ws_get_frame_size(stream_buf) : NOTHING;
+                    if (frame_len) {
+                        binary frame = stream_buf.substr(0, frame_len);
+                        if (frame_len == stream_buf.size()) {
+                            remove stream_buf;
                         } else {
-                            http2_buf = http2_buf.substr(frame_len);
+                            stream_buf = stream_buf.substr(frame_len);
                         }
                         h = ws_parse_frame(frame, sock.getEncoding());
                         have_frame = True;
                     } else {
                         int now = clock_getmillis() / 1000;
                         if (!update) {
-                            if ((now - timestamp) >= heartbeat) {
+                            # Skip heartbeats when backpressured — the pending data activity
+                            # keeps the connection "warm", and adding heartbeats to the pending
+                            # buffer just wastes memory.  Heartbeats resume when the backlog drains.
+                            if (!wsc.hasPendingSends() && (now - timestamp) >= heartbeat) {
                                 binary frame = ws_encode_message(heartbeat_msg, WSOP_Ping);
                                 @debug {
                                     if (h2_ws_debug_frames && frame.size() >= 2) {
@@ -1223,7 +1508,8 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                     if (!sock.isDataAvailable(0ms)) {
                         int now = clock_getmillis() / 1000;
                         if (!update) {
-                            if ((now - timestamp) >= heartbeat) {
+                            # Skip heartbeats when backpressured — see comment above
+                            if (!wsc.hasPendingSends() && (now - timestamp) >= heartbeat) {
                                 binary frame = ws_encode_message(heartbeat_msg, WSOP_Ping);
                                 @debug {
                                     if (h2_ws_debug_frames && frame.size() >= 2) {
@@ -1296,14 +1582,15 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                     h.masked ? " masked" : "", h.fin ? " FIN" : "", WebSocketHandler::getDataString(h.msg));
 
                 if (!h.masked) {
-                    if (!is_http2_ws) {
+                    if (!is_extended_connect) {
                         logError("unmasked client frame received");
                         sendClose(wsc, sock, WSCC_ProtocolError);
                         exit_reason = "protocol-error-unmasked";
                         break;
                     }
-                    # HTTP/2 WebSocket frames are not masked (RFC 8441)
-                    logDebug("unmasked client frame received on HTTP/2 WebSocket");
+                    # HTTP/2 and HTTP/3 WebSocket frames are not masked (RFC 8441/9220)
+                    logDebug("unmasked client frame received on %s WebSocket",
+                        is_http3 ? "HTTP/3" : "HTTP/2");
                 }
 
                 # Validate RSV bits; control frames must not use RSV bits per RFC 6455 / RFC 7692
@@ -1446,7 +1733,9 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                 try {
                     sendClose(wsc, sock, close_code, err);
                 } catch (hash<ExceptionInfo> ex2) {
-                    logError("failed to send close frame: %s: %s", ex2.err, ex2.desc);
+                    # Log at debug level: close frame failure is expected when the connection
+                    # already has a fatal error (the primary error was logged above)
+                    logDebug("failed to send close frame: %s: %s", ex2.err, ex2.desc);
                 }
                 exit_reason = ex.err == "WEBSOCKET-FRAME-TOO-LARGE"
                     ? "message-too-large"
@@ -1472,6 +1761,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
     }
 
     private:internal bool flushIoIntern(WebSocketConnection wsc, Socket sock, bool update_tld) {
+        drainPendingSends(wsc, sock);
         bool rv;
         while (!wsc.stop_flag && exists (*binary d = wsc.pollDataImmediate())) {
             sendFrame(wsc, sock, d);
@@ -1676,79 +1966,57 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                     b0, b1, (b0 & WS_FIN) != 0, b0 & 0x0f, (b1 & 0x80) != 0);
             }
         }
-        sendFrame(wsc, sock, frame);
+        # Close frames bypass the pending send buffer for prompt delivery
+        trySendDirect(wsc, sock, frame);
     }
 
-    private int getWsFrameLength(*binary buf) {
-        # Fast length-only parse to avoid ws_parse_frame() exceptions and decoding overhead
-        # when we just need to know if the buffer contains a complete frame.
-        if (!buf || buf.size() < 2) {
-            return 0;
-        }
+    #! Attempts to send a frame directly; returns True on success, False on backpressure
+    /** Fatal errors call @ref WebSocketConnection::stop() "wsc.stop()" and return True
+        (frame "handled" — connection dead).
 
-        int pos = 0;
-        pos += 1;
-        int b1 = buf[pos++];
-        bool masked = (b1 & 0x80) ? True : False;
-        int len = b1 & 0x7f;
+        @param wsc the WebSocket connection
+        @param sock the socket to send on
+        @param frame the binary frame data to send
 
-        if (len == 126) {
-            if (buf.size() < pos + 2) {
-                return 0;
-            }
-            len = (buf[pos] << 8) | buf[pos + 1];
-            pos += 2;
-        } else if (len == 127) {
-            if (buf.size() < pos + 8) {
-                return 0;
-            }
-            len = 0;
-            for (int i = 0; i < 8; ++i) {
-                len = (len << 8) | buf[pos++];
-            }
-        }
+        @return True if the frame was sent (or the connection was killed due to a fatal error),
+        False if transport backpressure prevented sending
 
-        if (masked) {
-            if (buf.size() < pos + 4) {
-                return 0;
-            }
-            pos += 4;
-        }
-
-        int total = pos + len;
-        if (buf.size() < total) {
-            return 0;
-        }
-        return total;
-    }
-
-    private sendFrame(WebSocketConnection wsc, Socket sock, binary frame) {
-        *AsyncSocketIo::Http2StreamContext h2_ctx = wsc.getHttp2StreamContext();
-        if (h2_ctx) {
+        @since WebSocketHandler 2.5
+    */
+    private bool trySendDirect(WebSocketConnection wsc, Socket sock, binary frame) {
+        # HTTP/2 or HTTP/3 WebSocket: send via stream context with backpressure handling
+        *AsyncSocketIo::AbstractStreamContext ctx = wsc.getStreamContext();
+        if (ctx) {
+            string proto = ctx.getProtocol();
             int flow_control_retry = 0;
             while (True) {
                 try {
-                    h2_ctx.sendData(frame, False);
+                    ctx.sendData(frame, False);
                     break;
                 } catch (hash<ExceptionInfo> ex) {
+                    if (ex.err == "SOCKET-NOT-OPEN" || ex.err == "QUIC-ERROR"
+                            || ex.err == "QUIC-HTTP3-ERROR") {
+                        # QUIC-HTTP3-ERROR: Http3StreamContext.sendData() handles backpressure
+                        # internally, so any error that escapes is fatal (e.g., session gone,
+                        # stream reset)
+                        wsc.stop();
+                        return True;
+                    }
                     if (ex.err == "HTTP2-ERROR" && ex.desc =~ /no HTTP\/2 session active/) {
                         @debug {
-                            logDebug("HTTP/2 WS sendFrame: stream session inactive; stopping connection");
+                            logDebug("HTTP/2 WS trySendDirect: stream session inactive; stopping connection");
                         }
                         wsc.stop();
-                        return;
+                        return True;
                     }
-                    if (ex.err == "SOCKET-NOT-OPEN") {
+                    if (ex.err == "SOCKET-SSL-ERROR") {
+                        logError("%s WS trySendDirect: SSL error; stopping: %s", proto.upr(), ex.desc);
                         wsc.stop();
-                        return;
+                        return True;
                     }
                     if (ex.err == "HTTP2-FLOW-CONTROL") {
                         if (wsc.stop_flag || ++flow_control_retry > FlowControlMaxRetries) {
-                            if (!wsc.stop_flag) {
-                                logWarn("HTTP/2 WS sendFrame: flow control backpressure after %d retries, "
-                                    "frame dropped (%d bytes)", FlowControlMaxRetries, frame.size());
-                            }
-                            return;
+                            return False;
                         }
                         # Pump I/O: flush outgoing buffer to TCP and read incoming HTTP/2 frames
                         # (including WINDOW_UPDATE) from the peer to free flow control window
@@ -1759,19 +2027,13 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                         }
                         continue;
                     }
-                    if (ex.err == "SOCKET-SSL-ERROR") {
-                        # SSL connection dead - stop gracefully
-                        logError("HTTP/2 WS sendFrame: SSL error; stopping: %s", ex.desc);
-                        wsc.stop();
-                        return;
-                    }
                     throw ex.err, ex.desc, ex.arg;
                 }
             }
             if (wsc.isAsyncMode() && wsc.getAsyncCtrl()) {
                 wsc.getAsyncCtrl().wake();
             }
-            return;
+            return True;
         }
         if (wsc.isAsyncMode()) {
             @assert(wsc.getAsyncCtrl(), "missing async controller for async mode WebSocket send");
@@ -1780,25 +2042,8 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                 op = sock.startPollSend(frame);
             } catch (hash<ExceptionInfo> ex) {
                 if (ex.err == "SOCKET-NON-BLOCK-ERROR") {
-                    # Another async send is already in progress on this socket.
-                    # This can happen in HTTP/1.1 async mode when multiple threads or callbacks
-                    # try to send frames concurrently (e.g., application message + control frame).
-                    #
-                    # WARNING: Dropping frames can cause protocol issues, especially for control frames
-                    # (ping/pong/close). WebSocket clients may timeout waiting for pong responses or
-                    # close acknowledgments.
-                    #
-                    # NOTE: HTTP/2 WebSocket doesn't have this issue since it uses a different code path
-                    # (Http2StreamContext.sendData()) that handles multiplexing at the protocol level.
-                    #
-                    # A proper fix would require implementing a per-connection send queue and ensuring
-                    # frames are sent in order after the current async operation completes. This is
-                    # complex because exec() blocks waiting for the operation, so queued frames would
-                    # need to be sent from the main I/O loop, not from within sendFrame().
-                    log(LoggerLevel::WARN,
-                        "WebSocketHandler::sendFrame(): async send already in progress; dropping frame "
-                        "(size=%d bytes)", frame.size());
-                    return;
+                    # Another async send is already in progress on this socket — backpressure
+                    return False;
                 }
                 throw ex.err, ex.desc, ex.arg;
             }
@@ -1812,9 +2057,63 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
             if (result.ex) {
                 throw result.ex.err, result.ex.desc, result.ex.arg;
             }
-            return;
+            return True;
         }
         sock.send2(frame, send_timeout);
+        return True;
+    }
+
+    #! Sends a WebSocket frame, buffering if transport backpressure is detected
+    /** If there are already pending frames for this connection, the new frame is queued behind them
+        to maintain ordering. If the transport accepts the frame immediately, it is sent directly.
+        If backpressure prevents sending and the pending buffer is full, the frame is dropped with
+        a warning.
+
+        @param wsc the WebSocket connection
+        @param sock the socket to send on
+        @param frame the binary frame data to send
+
+        @since WebSocketHandler 2.5
+    */
+    private sendFrame(WebSocketConnection wsc, Socket sock, binary frame) {
+        if (wsc.hasPendingSends()) {
+            # Maintain ordering: queue behind existing pending frames
+            if (!wsc.queuePendingSend(frame)) {
+                log(LoggerLevel::WARN, "WebSocket pending send buffer full (%d bytes); "
+                    "dropping frame (%d bytes)", wsc.getPendingSendBytes(), frame.size());
+            }
+            return;
+        }
+        if (!trySendDirect(wsc, sock, frame)) {
+            if (!wsc.queuePendingSend(frame)) {
+                log(LoggerLevel::WARN, "WebSocket pending send buffer full; "
+                    "dropping frame (%d bytes)", frame.size());
+            }
+        }
+    }
+
+    #! Drains pending send buffer in order; stops at first backpressure or frame cap
+    /** Sends buffered frames one at a time until the buffer is empty, the transport
+        pushes back again, or @ref MaxDrainFramesPerIteration frames have been sent.
+        Uses peek+dequeue to ensure frames are not lost on failure.
+
+        The frame cap prevents starving incoming data when a large backlog has accumulated;
+        remaining frames will be drained in subsequent handler loop iterations.
+
+        @param wsc the WebSocket connection
+        @param sock the socket to send on
+
+        @since WebSocketHandler 2.5
+    */
+    private drainPendingSends(WebSocketConnection wsc, Socket sock) {
+        int drained = 0;
+        while (!wsc.stop_flag && wsc.hasPendingSends() && drained < MaxDrainFramesPerIteration) {
+            if (!trySendDirect(wsc, sock, wsc.peekPendingSend())) {
+                break;
+            }
+            wsc.dequeuePendingSend();
+            ++drained;
+        }
     }
 
     static string getDataString(*data d) {

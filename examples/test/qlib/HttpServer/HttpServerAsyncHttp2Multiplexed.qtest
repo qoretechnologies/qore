@@ -1267,6 +1267,15 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     #! Uses the external nghttp2-based client to verify that WebSocket, regular GET,
     #! and streaming GET all work on the SAME TCP connection (different HTTP/2 streams).
     testSameConnectionWsAndHttp() {
+        # The external nghttp2-ws-client binary has hard-coded timeouts that
+        # cannot accommodate valgrind's 20-50x slowdown
+        if (is_file("/proc/self/maps")) {
+            *string maps = ReadOnlyFile::readTextFile("/proc/self/maps");
+            if (maps =~ /valgrind|vgpreload/) {
+                testSkip("external client timeouts incompatible with valgrind");
+            }
+        }
+
         # Find required tools
         string gpp_path = ENV.GPP_PATH ?? "g++";
         string pkg_config = "pkg-config";

@@ -18,7 +18,6 @@
 - `cmake -S . -B build -DCMAKE_INSTALL_PREFIX=/usr` configures the recommended CMake build.
 - `cmake --build build` builds the compiler, runtime, and tools.
 - `cmake --build build --target docs` builds documentation (requires doxygen).
-- `./configure --disable-static --disable-debug --prefix=/usr && make` runs the legacy autotools build.
 - `./run_tests.sh` runs Qore tests from `examples/test/` (expects a built `qore`/`libqore`).
 - `./run_tests.sh -d <subdir>` runs a subset of tests, e.g. `./run_tests.sh -d http`.
 

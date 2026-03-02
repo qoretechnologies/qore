@@ -1,0 +1,487 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_AsyncIoController.qpp
+
+    Qore Programming Language
+
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Note that the Qore library is released under a choice of three open-source
+    licenses: MIT (as above), LGPL 2+, or GPL 2+; see README-LICENSE for more
+    information.
+*/
+
+#include <qore/Qore.h>
+#include <qore/QoreSocketObject.h>
+#include "qore/intern/AsyncIoControllerPriv.h"
+#include "qore/intern/QC_Socket.h"
+
+extern qore_classid_t CID_QUEUE;
+extern QoreClass* QC_QUEUE;
+
+//! Socket polling operation info hash
+/** Contains all the information needed to submit an async I/O operation
+
+    @since %Qore 2.3
+*/
+hashdecl Qore::SocketPollOperationInfo {
+    //! Socket object
+    Socket sock;
+
+    //! Poll operation
+    AbstractPollOperation spop;
+
+    //! Last poll info for this operation
+    *hash<SocketPollInfo> poll_info;
+
+    //! I/O timeout; use a negative value to disable timeout (operation will wait indefinitely)
+    /** Default: 30 seconds
+    */
+    timeout to = 30s;
+
+    //! Owner identifier for cancellation; required for proper cleanup during shutdown via cancelByOwner()
+    string owner;
+
+    //! Free-form data to be returned when the operation completes
+    *hash<auto> other;
+
+    //! Optional result Queue; if provided, results will be pushed to this Queue instead of a new one
+    /** This allows multiple operations to share a single result Queue for easier coordination
+    */
+    *Queue resultQueue;
+
+    //! Optional completion callback; called in the I/O thread when the operation completes
+    /** When provided, results are delivered via callback instead of Queue.
+        The callback signature must accept a single hash<SocketPollResultInfo> argument.
+        Mutually exclusive with \c resultQueue.
+    */
+    *code callback;
+
+    //! Optional custom cache key; default: sock.uniqueHash()
+    /** Allows multiple concurrent operations on the same socket (e.g., concurrent accepts
+        on a listener) by using distinct keys like "accept:<hash>:1", "accept:<hash>:2".
+    */
+    *string key;
+}
+
+//! Socket poll result info hash
+/** Contains the result of a completed async I/O operation
+
+    @since %Qore 2.3
+*/
+hashdecl Qore::SocketPollResultInfo {
+    //! The socket that completed the operation
+    Socket sock;
+
+    //! The poll operation that completed
+    AbstractPollOperation spop;
+
+    //! If the operation was canceled
+    *bool canceled;
+
+    //! Any exception raised while executing the operation
+    *hash<ExceptionInfo> ex;
+
+    //! Free-form data provided when the operation was submitted
+    *hash<auto> other;
+}
+
+//! Async I/O controller for managing multiple concurrent socket poll operations
+/** The AsyncIoController provides a high-performance event loop for managing multiple concurrent
+    socket operations. It uses the most efficient I/O mechanism available on each platform
+    (epoll on Linux, kqueue on macOS/BSD) via the EventLoop class.
+
+    The controller runs a dedicated I/O thread that processes socket events and drives poll
+    operations through their state machines. Operations are submitted via @ref submit() or
+    @ref exec(), and results are delivered via Queue or callback.
+
+    The controller supports:
+    - Multiple concurrent operations on different sockets
+    - Multiple concurrent operations on the same socket (using custom keys)
+    - Cancellation by socket, key, or owner
+    - Autostop behavior (I/O thread exits when all operations complete)
+    - Wake/force-poll for handling pending writes (HTTP/2)
+
+    @par Thread Safety
+    All public methods are thread-safe. The controller uses a single mutex with careful lock
+    ordering to avoid deadlocks.
+
+    @par Three-Phase I/O Cycle
+    The I/O thread implements a deterministic three-phase polling cycle:
+    - Phase 1 (Snapshot under lock): collect operations needing continuePoll()
+    - Phase 2 (continuePoll outside lock): drive operations, collect results
+    - Phase 3 (Update under lock + deferred delivery): update cache/EventLoop, deliver callbacks
+
+    @note This class is not available with the @ref PO_NO_NETWORK parse option
+
+    @since %Qore 2.3
+*/
+qclass AsyncIoController [dom=NETWORK; arg=AsyncIoControllerPriv* ctrl; ns=Qore];
+
+//! Creates a new AsyncIoController
+/** @par Example:
+    @code{.py}
+    AsyncIoController ctrl(True);
+    @endcode
+
+    @param autostop if @ref True "True" (default), the I/O thread will automatically exit when
+    all operations have completed; if @ref False "False", the I/O thread will keep running
+    until explicitly stopped
+
+    @throw EVENT-LOOP-ERROR failed to create the event loop or event notifier
+*/
+AsyncIoController::constructor(bool autostop = True) {
+    ReferenceHolder<AsyncIoControllerPriv> holder(new AsyncIoControllerPriv(autostop, xsink), xsink);
+    if (*xsink) {
+        return;
+    }
+    self->setPrivate(CID_ASYNCIOCONTROLLER, holder.release());
+}
+
+//! Destroys the AsyncIoController
+/** Stops the I/O thread and cancels all pending operations
+*/
+AsyncIoController::destructor() {
+    ctrl->stop(xsink);
+    ctrl->deref(xsink);
+}
+
+//! Creates a copy of the AsyncIoController
+/** @note The copy creates a new independent controller with no shared state
+*/
+AsyncIoController::copy() {
+    ReferenceHolder<AsyncIoControllerPriv> holder(new AsyncIoControllerPriv(ctrl->getAutostop(), xsink), xsink);
+    if (*xsink) {
+        return;
+    }
+    self->setPrivate(CID_ASYNCIOCONTROLLER, holder.release());
+}
+
+//! Submits an async I/O operation
+/** @par Example:
+    @code{.py}
+    Queue q = ctrl.submit({"sock": sock, "spop": op, "owner": "server"});
+    hash<SocketPollResultInfo> result = q.get();
+    @endcode
+
+    @param info the operation info hash
+    @param replace if @ref True "True", cancel any existing operation with the same key
+
+    @return a Queue object for receiving the result, or @ref nothing if a callback was provided
+    in the info hash
+
+    @throw ASYNC-IO-ERROR if the controller is shutting down or the info hash is invalid
+*/
+*Queue AsyncIoController::submit(hash<SocketPollOperationInfo> info, *bool replace) {
+    return ctrl->submit(self, const_cast<QoreHashNode*>(info), replace, xsink);
+}
+
+//! Executes an async I/O operation synchronously
+/** @par Example:
+    @code{.py}
+    hash<SocketPollResultInfo> result = ctrl.exec({"sock": sock, "spop": op, "owner": "server"});
+    @endcode
+
+    @param info the operation info hash
+    @param replace if @ref True "True", cancel any existing operation with the same key
+
+    @return the result hash
+
+    @throw ASYNC-IO-ERROR if the controller is shutting down or the info hash is invalid
+*/
+hash<SocketPollResultInfo> AsyncIoController::exec(hash<SocketPollOperationInfo> info, *bool replace) {
+    return ctrl->exec(self, const_cast<QoreHashNode*>(info), replace, xsink);
+}
+
+//! Cancels an operation by socket
+/** @par Example:
+    @code{.py}
+    bool canceled = ctrl.cancel(sock);
+    @endcode
+
+    @param sock the socket whose operation should be canceled
+
+    @return @ref True "True" if an operation was found and canceled
+*/
+bool AsyncIoController::cancel(Socket[QoreSocketObject] sock) {
+    return ctrl->cancel(*sock, xsink);
+}
+
+//! Cancels an operation by key
+/** @par Example:
+    @code{.py}
+    bool canceled = ctrl.cancelByKey("accept:abc123:1");
+    @endcode
+
+    @param key the operation key to cancel
+
+    @return @ref True "True" if an operation was found and canceled
+*/
+bool AsyncIoController::cancelByKey(string key) {
+    return ctrl->cancelByKey(key, xsink);
+}
+
+//! Cancels all operations for an owner
+/** @par Example:
+    @code{.py}
+    int count = ctrl.cancelByOwner("server");
+    @endcode
+
+    @param owner the owner identifier whose operations should be canceled
+
+    @return the number of operations canceled
+*/
+int AsyncIoController::cancelByOwner(string owner) {
+    return ctrl->cancelByOwner(owner, xsink);
+}
+
+//! Wakes the I/O thread to force re-poll on all operations
+/** This is used when there are pending writes (e.g., HTTP/2 pending data) that need
+    to be flushed even if no socket events have occurred.
+
+    @par Example:
+    @code{.py}
+    ctrl.wake();
+    @endcode
+*/
+nothing AsyncIoController::wake() {
+    ctrl->wake();
+}
+
+//! Starts the I/O thread
+/** @par Example:
+    @code{.py}
+    ctrl.start();
+    @endcode
+
+    @note The I/O thread is automatically started when the first operation is submitted.
+    This method is only needed if you want to pre-start the thread.
+*/
+nothing AsyncIoController::start() {
+    ctrl->start(xsink);
+}
+
+//! Stops the I/O thread gracefully
+/** @par Example:
+    @code{.py}
+    ctrl.stop();
+    @endcode
+
+    Sends a quit command to the I/O thread and waits for it to exit.
+    All pending operations are canceled.
+*/
+nothing AsyncIoController::stop() {
+    ctrl->stop(xsink);
+}
+
+//! Stops the I/O thread and clears all operations
+/** @par Example:
+    @code{.py}
+    ctrl.stopClear();
+    @endcode
+*/
+nothing AsyncIoController::stopClear() {
+    ctrl->stopClear(xsink);
+}
+
+//! Waits for the I/O thread to stop
+/** @par Example:
+    @code{.py}
+    ctrl.waitStop();
+    @endcode
+
+    @return @ref True "True" if the I/O thread has stopped
+*/
+bool AsyncIoController::waitStop() {
+    return ctrl->waitStop(xsink);
+}
+
+//! Waits for the I/O thread to be ready
+/** @par Example:
+    @code{.py}
+    bool ready = ctrl.waitReady(5s);
+    @endcode
+
+    @param to timeout for waiting; use 0 to wait indefinitely
+
+    @return @ref True "True" if the I/O thread is ready within the timeout
+*/
+bool AsyncIoController::waitReady(*timeout to) {
+    return ctrl->waitReady(to, xsink);
+}
+
+//! Waits until the I/O thread has processed all currently submitted operations
+/** @par Example:
+    @code{.py}
+    bool processed = ctrl.waitForProcessing(5s);
+    @endcode
+
+    This method blocks until the I/O thread's Phase 1 cache snapshot has captured all
+    operations that were submitted before the call. This provides a stronger guarantee
+    than waitReady(): not only is the I/O thread running, but it has actually polled
+    all pending operations at least once.
+
+    @param to timeout for waiting; use 0 to wait indefinitely
+
+    @return @ref True "True" if all submitted operations have been processed, @ref False "False" if the
+    timeout expired or the I/O thread is not running
+
+    @since %Qore 2.3
+*/
+bool AsyncIoController::waitForProcessing(*timeout to) {
+    return ctrl->waitForProcessing(to, xsink);
+}
+
+//! Returns true if the I/O thread is running
+/** @par Example:
+    @code{.py}
+    if (ctrl.running()) { ... }
+    @endcode
+
+    @return @ref True "True" if the I/O thread is running
+*/
+bool AsyncIoController::running() {
+    return ctrl->running();
+}
+
+//! Returns the number of cached operations
+/** @par Example:
+    @code{.py}
+    int count = ctrl.getCacheSize();
+    @endcode
+
+    @return the number of active operations in the cache
+*/
+int AsyncIoController::getCacheSize() {
+    return ctrl->getCacheSize();
+}
+
+//! Sets the autostop flag
+/** @par Example:
+    @code{.py}
+    ctrl.setAutostop(False);
+    @endcode
+
+    @param autostop if @ref True "True", the I/O thread will exit when all operations complete
+*/
+nothing AsyncIoController::setAutostop(bool autostop = True) {
+    ctrl->setAutostop(autostop);
+}
+
+//! Returns the autostop flag
+/** @par Example:
+    @code{.py}
+    bool autostop = ctrl.getAutostop();
+    @endcode
+
+    @return @ref True "True" if autostop is enabled
+*/
+bool AsyncIoController::getAutostop() {
+    return ctrl->getAutostop();
+}
+
+//! Returns info about the controller state
+/** @par Example:
+    @code{.py}
+    hash<auto> info = ctrl.getInfo();
+    @endcode
+
+    @return a hash with controller state information including running, cache size, autostop, etc.
+*/
+hash<auto> AsyncIoController::getInfo() {
+    return ctrl->getInfo(xsink);
+}
+
+//! Sets the logger for the controller
+/** @par Example:
+    @code{.py}
+    ctrl.setLogger(logger);
+    @endcode
+
+    @param logger a @ref Qore::LoggerInterfaceBase "LoggerInterfaceBase" object for logging,
+    or @ref nothing "NOTHING" to disable per-controller logging (falls back to the global
+    async I/O logger set via @ref set_async_io_logger())
+
+    @since %Qore 2.3
+*/
+nothing AsyncIoController::setLogger(*object logger) {
+    ctrl->setLogger(logger, xsink);
+}
+
+//! Adds a timer that fires at the given deadline
+/** @par Example:
+    @code{.py}
+    int timer_id = ctrl.addTimer(now_us() + 1000000, {"key": "heartbeat"});
+    @endcode
+
+    @param deadline the absolute deadline for the timer; when the deadline is reached,
+    the timer callback will be called with a @ref TimerEventInfo hash
+    @param udata user data to associate with the timer; will be returned in the
+    @ref TimerEventInfo::udata field when the timer fires
+
+    @return the unique timer ID that can be used to cancel the timer
+
+    @throw ASYNC-IO-ERROR if the controller is shutting down
+
+    @note A timer callback must be set via @ref setTimerCallback() before timers will deliver events
+
+    @since %Qore 2.3
+*/
+int AsyncIoController::addTimer(date deadline, auto udata) {
+    return ctrl->addTimer(deadline, udata, xsink);
+}
+
+//! Cancels a timer
+/** @par Example:
+    @code{.py}
+    bool canceled = ctrl.cancelTimer(timer_id);
+    @endcode
+
+    @param timer_id the timer ID returned by @ref addTimer()
+
+    @return @ref True "True" if the timer was found and canceled, @ref False "False" if the
+    timer was not found (already fired or invalid ID)
+
+    @since %Qore 2.3
+*/
+bool AsyncIoController::cancelTimer(int timer_id) {
+    return ctrl->cancelTimer(timer_id, xsink);
+}
+
+//! Sets the timer callback for the controller
+/** @par Example:
+    @code{.py}
+    ctrl.setTimerCallback(sub (hash<TimerEventInfo> info) {
+        printf("Timer %d fired with data: %y\n", info.id, info.udata);
+    });
+    @endcode
+
+    @param callback a callback that accepts a @ref TimerEventInfo hash argument, or @ref nothing
+    to disable timer event delivery
+
+    @note The callback is called in the I/O thread context. It should complete quickly to avoid
+    blocking other I/O operations.
+
+    @since %Qore 2.3
+*/
+nothing AsyncIoController::setTimerCallback(*code callback) {
+    ctrl->setTimerCallback(callback ? callback->refRefSelf() : nullptr, xsink);
+}

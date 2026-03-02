@@ -35,5 +35,7 @@
 #include <qore/Qore.h>
 
 DLLLOCAL QoreClass* initEventLoopClass(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_EventPollInfo(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_TimerEventInfo(QoreNamespace& ns);
 
 #endif // _QORE_CLASS_EVENTLOOP_H

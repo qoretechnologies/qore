@@ -1,0 +1,1246 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    AsyncIoController Heavy Benchmark
+    ----------------------------------
+    Standalone heavy benchmark for AsyncIoController. Not a QUnit test;
+    configurable via command-line args. Reports throughput, latency percentiles,
+    and scaling data.
+
+    Usage:
+      qore asyncio_bench.qr [OPTIONS]
+
+    Options:
+      --duration=SECS     Sustained test duration (default: 10)
+      --concurrency=N     Concurrent operations (default: 1000)
+      --threads=N         Submitter threads (default: 4)
+      --warmup=SECS       Warmup duration before measuring (default: 2)
+      --test=NAME         Run specific test (default: all)
+      --quiet             Summary only, no per-second progress
+      --help              Show usage
+*/
+
+#! Latency statistics collector (ring buffer)
+/** Collects latencies in a fixed-size ring buffer and computes percentiles,
+    ops/sec, and other statistics.
+*/
+class BenchStats {
+    private {
+        Mutex m();
+        list<int> latencies;    # microseconds
+        int buf_size;
+        int write_pos = 0;
+        int count = 0;
+        int total_ops = 0;
+        date start_time;
+        date end_time;
+    }
+
+    constructor(int buffer_size = 1000000) {
+        buf_size = buffer_size;
+        latencies = ();
+        for (int i = 0; i < buf_size; ++i) {
+            push latencies, 0;
+        }
+    }
+
+    #! Record a latency sample in microseconds
+    record(int latency_us) {
+        AutoLock al(m);
+        latencies[write_pos] = latency_us;
+        write_pos = (write_pos + 1) % buf_size;
+        ++count;
+        ++total_ops;
+    }
+
+    #! Mark the start of measurement
+    markStart() {
+        AutoLock al(m);
+        start_time = now_us();
+        total_ops = 0;
+    }
+
+    #! Mark the end of measurement
+    markEnd() {
+        AutoLock al(m);
+        end_time = now_us();
+    }
+
+    #! Get total ops recorded since markStart()
+    int getTotalOps() {
+        AutoLock al(m);
+        return total_ops;
+    }
+
+    #! Get elapsed seconds since markStart()
+    float getElapsedSecs() {
+        AutoLock al(m);
+        date end = end_time ?? now_us();
+        return float((end - start_time).durationMicroseconds()) / 1000000.0;
+    }
+
+    #! Get ops/sec
+    float getOpsPerSec() {
+        float elapsed = getElapsedSecs();
+        if (elapsed <= 0.0) {
+            return 0.0;
+        }
+        return float(getTotalOps()) / elapsed;
+    }
+
+    #! Get latency percentile in microseconds
+    /** @param pct percentile (0.0-1.0)
+        @return latency in microseconds
+    */
+    int getPercentile(float pct) {
+        AutoLock al(m);
+        int n = count < buf_size ? count : buf_size;
+        if (n == 0) {
+            return 0;
+        }
+
+        # Copy the active portion
+        list<int> sorted = ();
+        for (int i = 0; i < n; ++i) {
+            push sorted, latencies[i];
+        }
+        sorted = sort(sorted);
+
+        int idx = int(float(n - 1) * pct);
+        if (idx >= n) {
+            idx = n - 1;
+        }
+        return sorted[idx];
+    }
+
+    #! Get max latency in microseconds
+    int getMax() {
+        AutoLock al(m);
+        int n = count < buf_size ? count : buf_size;
+        if (n == 0) {
+            return 0;
+        }
+        int mx = 0;
+        for (int i = 0; i < n; ++i) {
+            if (latencies[i] > mx) {
+                mx = latencies[i];
+            }
+        }
+        return mx;
+    }
+
+    #! Reset all statistics
+    reset() {
+        AutoLock al(m);
+        write_pos = 0;
+        count = 0;
+        total_ops = 0;
+        remove start_time;
+        remove end_time;
+    }
+
+    #! Format latency in human-readable form
+    static string formatLatency(int us) {
+        if (us < 1000) {
+            return sprintf("%dus", us);
+        }
+        if (us < 1000000) {
+            return sprintf("%.1fms", float(us) / 1000.0);
+        }
+        return sprintf("%.2fs", float(us) / 1000000.0);
+    }
+}
+
+#! Helper class for sustained connect operations
+/** Avoids self-referencing closures from the I/O thread callback context.
+*/
+class ConnectBenchWorker {
+    private {
+        AsyncIoController ctrl;
+        BenchStats stats;
+        Mutex m();
+        int key_counter = 0;
+        bool running = True;
+        int active_ops = 0;
+    }
+
+    constructor(AsyncIoController c, BenchStats s) {
+        ctrl = c;
+        stats = s;
+    }
+
+    #! Submit a connect operation to one of the pre-created listeners
+    submitConnect(int port) {
+        int my_key;
+        {
+            AutoLock al(m);
+            if (!running) {
+                return;
+            }
+            my_key = key_counter++;
+            ++active_ops;
+        }
+        Socket client();
+        AbstractPollOperation spop = client.startPollConnect("localhost:" + port);
+        date start = now_us();
+        ctrl.submit(<SocketPollOperationInfo>{
+            "sock": client,
+            "spop": spop,
+            "owner": "bench-connect",
+            "to": 30s,
+            "key": sprintf("connect:%d", my_key),
+            "callback": sub (hash<SocketPollResultInfo> result) {
+                int latency = (now_us() - start).durationMicroseconds();
+                stats.record(latency);
+                # Close the connected socket to free the fd
+                try { client.close(); } catch () {}
+                {
+                    AutoLock al(m);
+                    --active_ops;
+                }
+            },
+        });
+    }
+
+    #! Stop submitting
+    stop() {
+        AutoLock al(m);
+        running = False;
+    }
+
+    #! Check if still running
+    bool isRunning() {
+        AutoLock al(m);
+        return running;
+    }
+
+    #! Get active operation count
+    int getActiveOps() {
+        AutoLock al(m);
+        return active_ops;
+    }
+}
+
+#! Helper class for recv benchmark
+class RecvBenchHelper {
+    private {
+        AsyncIoController ctrl;
+        BenchStats stats;
+        Mutex m();
+        int key_counter = 0;
+    }
+
+    constructor(AsyncIoController c, BenchStats s) {
+        ctrl = c;
+        stats = s;
+    }
+
+    #! Submit a recv operation on a server socket
+    submitRecv(Socket server, Counter done) {
+        int my_key;
+        {
+            AutoLock al(m);
+            my_key = key_counter++;
+        }
+        AbstractPollOperation spop = server.startPollRecvData();
+        date start = now_us();
+        ctrl.submit(<SocketPollOperationInfo>{
+            "sock": server,
+            "spop": spop,
+            "owner": "bench-recv",
+            "to": 30s,
+            "key": sprintf("recv:%d", my_key),
+            "callback": sub (hash<SocketPollResultInfo> result) {
+                int latency = (now_us() - start).durationMicroseconds();
+                stats.record(latency);
+                done.dec();
+            },
+        });
+    }
+}
+
+#! Helper class for accept benchmark ops
+class AcceptBenchHelper {
+    private {
+        AsyncIoController ctrl;
+        BenchStats stats;
+        Mutex m();
+        int key_counter = 0;
+    }
+
+    constructor(AsyncIoController c, BenchStats s) {
+        ctrl = c;
+        stats = s;
+    }
+
+    #! Submit an accept operation on a listener
+    submitAccept(Socket listener, Counter done) {
+        int my_key;
+        {
+            AutoLock al(m);
+            my_key = key_counter++;
+        }
+        AbstractPollOperation spop = listener.startPollAccept();
+        date start = now_us();
+        ctrl.submit(<SocketPollOperationInfo>{
+            "sock": listener,
+            "spop": spop,
+            "owner": "bench-accept",
+            "to": 30s,
+            "key": sprintf("accept:%d", my_key),
+            "callback": sub (hash<SocketPollResultInfo> result) {
+                int latency = (now_us() - start).durationMicroseconds();
+                stats.record(latency);
+                done.dec();
+            },
+        });
+    }
+}
+
+#! Format a number with thousand separators
+string sub formatNum(auto n) {
+    string s = string(int(n));
+    string result = "";
+    int len = s.length();
+    for (int i = 0; i < len; ++i) {
+        if (i > 0 && (len - i) % 3 == 0) {
+            result += ",";
+        }
+        result += s[i];
+    }
+    return result;
+}
+
+#! Print a right-padded string
+string sub rpad(string s, int width) {
+    if (s.length() >= width) {
+        return s;
+    }
+    return s + strmul(" ", width - s.length());
+}
+
+#! Print a left-padded string
+string sub lpad(string s, int width) {
+    if (s.length() >= width) {
+        return s;
+    }
+    return strmul(" ", width - s.length()) + s;
+}
+
+const Opts = {
+    "duration": "duration=i",
+    "concurrency": "concurrency=i",
+    "threads": "threads=i",
+    "warmup": "warmup=i",
+    "test": "test=s",
+    "quiet": "quiet",
+    "help": "help,h",
+};
+
+const DefaultDuration = 10;
+const DefaultConcurrency = 1000;
+const DefaultThreads = 4;
+const DefaultWarmup = 2;
+
+const AllTests = (
+    "submit_complete_throughput",
+    "concurrent_recv_scalability",
+    "multi_thread_contention",
+    "mixed_workload_sustained",
+    "timer_throughput",
+);
+
+sub usage() {
+    printf(
+"Usage: asyncio_bench.qr [OPTIONS]
+
+Options:
+  --duration=SECS     Sustained test duration (default: %d)
+  --concurrency=N     Concurrent operations (default: %d)
+  --threads=N         Submitter threads (default: %d)
+  --warmup=SECS       Warmup duration before measuring (default: %d)
+  --test=NAME         Run specific test: %s (default: all)
+  --quiet             Summary only, no per-second progress
+  --help              Show usage
+", DefaultDuration, DefaultConcurrency, DefaultThreads, DefaultWarmup,
+        (foldl $1 + ", " + $2, AllTests));
+    exit(0);
+}
+
+hash<auto> sub parseOpts() {
+    GetOpt g(Opts);
+    hash<auto> o = g.parse3(\ARGV);
+    if (o.help) {
+        usage();
+    }
+    return {
+        "duration": o.duration ?? DefaultDuration,
+        "concurrency": o.concurrency ?? DefaultConcurrency,
+        "threads": o.threads ?? DefaultThreads,
+        "warmup": o.warmup ?? DefaultWarmup,
+        "test": o.test,
+        "quiet": o.quiet ?? False,
+    };
+}
+
+# ============================================================================
+# Test 1: submit_complete_throughput
+# ============================================================================
+
+#! Raw ops/sec ceiling - sustained connect/accept operations
+sub runSubmitCompleteThroughput(hash<auto> opts) {
+    printf("\n--- submit_complete_throughput ---\n");
+
+    int num_listeners = opts.threads * 2;
+    int duration_secs = opts.duration;
+    int warmup_secs = opts.warmup;
+
+    # Create listeners
+    list<Socket> listeners = ();
+    list<int> ports = ();
+    for (int i = 0; i < num_listeners; ++i) {
+        Socket l();
+        l.bind("localhost:0");
+        l.listen(1024);
+        push listeners, l;
+        push ports, l.getSocketInfo().port;
+    }
+    on_exit {
+        for (int i = 0; i < num_listeners; ++i) {
+            listeners[i].close();
+        }
+    }
+
+    AsyncIoController ctrl(False);
+    ctrl.start();
+    on_exit ctrl.stop();
+
+    BenchStats stats(1000000);
+    ConnectBenchWorker worker(ctrl, stats);
+
+    # Flag to stop threads
+    Mutex stop_m();
+    bool should_stop = False;
+
+    # Launch acceptor threads to drain the listener backlog and free fds
+    Counter acceptor_done(num_listeners);
+    for (int i = 0; i < num_listeners; ++i) {
+        Socket my_listener = listeners[i];
+        background sub () {
+            on_exit acceptor_done.dec();
+            try {
+                while (True) {
+                    {
+                        AutoLock al(stop_m);
+                        if (should_stop) {
+                            break;
+                        }
+                    }
+                    # Accept with short timeout so we can check stop flag
+                    try {
+                        Socket accepted = my_listener.accept(200ms);
+                        accepted.close();
+                    } catch () {
+                        # timeout or error, just retry
+                    }
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                # listener closed or error
+            }
+        }();
+    }
+
+    # Launch submitter threads
+    Counter thread_done(opts.threads);
+    for (int t = 0; t < opts.threads; ++t) {
+        int my_t = t;
+        background sub () {
+            on_exit thread_done.dec();
+            try {
+                while (True) {
+                    {
+                        AutoLock al(stop_m);
+                        if (should_stop) {
+                            break;
+                        }
+                    }
+                    int port = ports[my_t % num_listeners];
+                    worker.submitConnect(port);
+                    # Throttle if too many active ops to avoid fd exhaustion
+                    while (worker.getActiveOps() > opts.concurrency) {
+                        bool stopped;
+                        {
+                            AutoLock al(stop_m);
+                            stopped = should_stop;
+                        }
+                        if (stopped) {
+                            break;
+                        }
+                        # Brief yield - let I/O thread drain
+                        usleep(100);
+                    }
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                printf("  ERROR in submitter thread %d: %s: %s\n", my_t, ex.err, ex.desc);
+            }
+        }();
+    }
+
+    # Warmup phase
+    if (!opts.quiet) {
+        printf("  Warming up for %d seconds...\n", warmup_secs);
+    }
+    sleep(warmup_secs);
+
+    # Reset and start measuring
+    stats.reset();
+    stats.markStart();
+
+    if (!opts.quiet) {
+        printf("  Measuring for %d seconds...\n", duration_secs);
+    }
+
+    # Report progress
+    for (int s = 0; s < duration_secs; ++s) {
+        sleep(1);
+        if (!opts.quiet) {
+            printf("  [%d/%d] %s ops so far (%.0f ops/sec)\n",
+                s + 1, duration_secs, formatNum(stats.getTotalOps()), stats.getOpsPerSec());
+        }
+    }
+
+    stats.markEnd();
+
+    # Stop workers
+    {
+        AutoLock al(stop_m);
+        should_stop = True;
+    }
+    worker.stop();
+    thread_done.waitForZero(30s);
+    acceptor_done.waitForZero(10s);
+
+    # Wait for in-flight operations to drain
+    ctrl.waitForProcessing(10s);
+
+    # Print results
+    printf("  Throughput:  %s ops/sec\n", formatNum(int(stats.getOpsPerSec())));
+    printf("  Latency:     P50=%s  P95=%s  P99=%s  Max=%s\n",
+        BenchStats::formatLatency(stats.getPercentile(0.50)),
+        BenchStats::formatLatency(stats.getPercentile(0.95)),
+        BenchStats::formatLatency(stats.getPercentile(0.99)),
+        BenchStats::formatLatency(stats.getMax()));
+    printf("  Total ops:   %s\n", formatNum(stats.getTotalOps()));
+}
+
+# ============================================================================
+# Test 2: concurrent_recv_scalability
+# ============================================================================
+
+#! Scaling curve - ramp concurrent recv ops and measure throughput
+sub runConcurrentRecvScalability(hash<auto> opts) {
+    printf("\n--- concurrent_recv_scalability ---\n");
+
+    # Scale concurrency levels based on --concurrency
+    int max_conc = opts.concurrency;
+    list<int> levels = ();
+    # Build levels: 100, 500, 1000, 2000, 5000 scaled to max_conc
+    list<int> base_levels = (100, 500, 1000, 2000, 5000);
+    for (int i = 0; i < base_levels.size(); ++i) {
+        if (base_levels[i] <= max_conc) {
+            push levels, base_levels[i];
+        }
+    }
+    if (levels.empty() || levels.last() != max_conc) {
+        push levels, max_conc;
+    }
+
+    printf("  %-15s %-12s %s\n", "Concurrency", "Ops/sec", "P99 Latency");
+
+    for (int li = 0; li < levels.size(); ++li) {
+        int n = levels[li];
+
+        # Create socket pairs
+        list<Socket> listeners = ();
+        list<Socket> servers = ();
+        list<Socket> clients = ();
+
+        for (int i = 0; i < n; ++i) {
+            Socket listener();
+            listener.bind("localhost:0");
+            listener.listen();
+            int port = listener.getSocketInfo().port;
+
+            Socket client();
+            client.connect("localhost:" + port);
+            Socket server = listener.accept(30s);
+
+            push listeners, listener;
+            push servers, server;
+            push clients, client;
+        }
+        on_exit {
+            for (int i = 0; i < n; ++i) {
+                listeners[i].close();
+                servers[i].close();
+                clients[i].close();
+            }
+        }
+
+        AsyncIoController ctrl(False);
+        ctrl.start();
+        on_exit ctrl.stop();
+
+        BenchStats stats(n < 1000000 ? n : 1000000);
+        RecvBenchHelper helper(ctrl, stats);
+        Counter done(n);
+
+        # Submit all recv ops
+        stats.markStart();
+        for (int i = 0; i < n; ++i) {
+            helper.submitRecv(servers[i], done);
+        }
+
+        # Send data on all clients (using background threads for speed)
+        int send_threads = opts.threads;
+        int per_thread = n / send_threads;
+        Counter send_done(send_threads);
+        for (int t = 0; t < send_threads; ++t) {
+            int start_idx = t * per_thread;
+            int end_idx = (t == send_threads - 1) ? n : (t + 1) * per_thread;
+            background sub () {
+                on_exit send_done.dec();
+                try {
+                    for (int i = start_idx; i < end_idx; ++i) {
+                        clients[i].send("data");
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    printf("  ERROR sending: %s: %s\n", ex.err, ex.desc);
+                }
+            }();
+        }
+
+        # Wait for all to complete
+        int rc = done.waitForZero(60s);
+        stats.markEnd();
+        send_done.waitForZero(10s);
+
+        if (rc != 0) {
+            printf("  %-15d TIMEOUT\n", n);
+        } else {
+            printf("  %-15d %-12s %s\n", n,
+                formatNum(int(stats.getOpsPerSec())),
+                BenchStats::formatLatency(stats.getPercentile(0.99)));
+        }
+    }
+}
+
+# ============================================================================
+# Test 3: multi_thread_contention
+# ============================================================================
+
+#! Thread scalability - fixed workload, vary thread count
+sub runMultiThreadContention(hash<auto> opts) {
+    printf("\n--- multi_thread_contention ---\n");
+
+    int total_ops = opts.concurrency * 10;  # e.g. 10000 for concurrency=1000
+    list<int> thread_counts = (1, 2, 4, 8, 16);
+
+    # Filter out thread counts that exceed --threads * 2
+    list<int> active_counts = ();
+    for (int i = 0; i < thread_counts.size(); ++i) {
+        if (thread_counts[i] <= opts.threads * 4) {
+            push active_counts, thread_counts[i];
+        }
+    }
+    if (active_counts.empty()) {
+        push active_counts, 1;
+    }
+
+    printf("  %-10s %-12s %s\n", "Threads", "Ops/sec", "Speedup");
+    float baseline_ops_sec = 0.0;
+
+    for (int ti = 0; ti < active_counts.size(); ++ti) {
+        int num_threads = active_counts[ti];
+
+        # Create listeners for the connect workload
+        int num_listeners = num_threads * 2;
+        list<Socket> listeners = ();
+        list<int> ports = ();
+        for (int i = 0; i < num_listeners; ++i) {
+            Socket l();
+            l.bind("localhost:0");
+            l.listen(1024);
+            push listeners, l;
+            push ports, l.getSocketInfo().port;
+        }
+        on_exit {
+            for (int i = 0; i < num_listeners; ++i) {
+                listeners[i].close();
+            }
+        }
+
+        AsyncIoController ctrl(False);
+        ctrl.start();
+        on_exit ctrl.stop();
+
+        # Acceptor threads to drain listener backlog
+        Mutex acc_stop_m();
+        bool acc_should_stop = False;
+        Counter acc_done(num_listeners);
+        for (int ai = 0; ai < num_listeners; ++ai) {
+            Socket my_listener = listeners[ai];
+            background sub () {
+                on_exit acc_done.dec();
+                try {
+                    while (True) {
+                        {
+                            AutoLock al(acc_stop_m);
+                            if (acc_should_stop) {
+                                break;
+                            }
+                        }
+                        try {
+                            Socket accepted = my_listener.accept(200ms);
+                            accepted.close();
+                        } catch () {}
+                    }
+                } catch () {}
+            }();
+        }
+
+        BenchStats stats(total_ops < 1000000 ? total_ops : 1000000);
+        int ops_per_thread = total_ops / num_threads;
+        # Adjust total to match actual ops submitted (avoid integer division remainder)
+        int actual_total = ops_per_thread * num_threads;
+
+        Counter all_done(num_threads);
+        Counter ops_done(actual_total);
+
+        date start = now_us();
+
+        for (int t = 0; t < num_threads; ++t) {
+            int my_t = t;
+            background sub () {
+                on_exit all_done.dec();
+                try {
+                    for (int i = 0; i < ops_per_thread; ++i) {
+                        int port = ports[my_t % num_listeners];
+                        Socket client();
+                        AbstractPollOperation spop = client.startPollConnect("localhost:" + port);
+                        date op_start = now_us();
+                        ctrl.submit(<SocketPollOperationInfo>{
+                            "sock": client,
+                            "spop": spop,
+                            "owner": "bench-contention",
+                            "to": 30s,
+                            "key": sprintf("ct:%d:%d", my_t, i),
+                            "callback": sub (hash<SocketPollResultInfo> result) {
+                                int latency = (now_us() - op_start).durationMicroseconds();
+                                stats.record(latency);
+                                # Close the connected socket to free fds
+                                try { client.close(); } catch () {}
+                                ops_done.dec();
+                            },
+                        });
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    printf("  ERROR in thread %d: %s: %s\n", my_t, ex.err, ex.desc);
+                }
+            }();
+        }
+
+        # Wait for all ops to complete
+        int rc = ops_done.waitForZero(120s);
+        date end = now_us();
+        all_done.waitForZero(10s);
+
+        # Stop acceptor threads
+        {
+            AutoLock al(acc_stop_m);
+            acc_should_stop = True;
+        }
+        acc_done.waitForZero(10s);
+
+        if (rc != 0) {
+            printf("  %-10d TIMEOUT\n", num_threads);
+            continue;
+        }
+
+        float elapsed = float((end - start).durationMicroseconds()) / 1000000.0;
+        float ops_sec = float(actual_total) / elapsed;
+
+        if (ti == 0) {
+            baseline_ops_sec = ops_sec;
+        }
+
+        float speedup = baseline_ops_sec > 0.0 ? ops_sec / baseline_ops_sec : 0.0;
+        printf("  %-10d %-12s %.2fx\n", num_threads, formatNum(int(ops_sec)), speedup);
+    }
+}
+
+# ============================================================================
+# Test 4: mixed_workload_sustained
+# ============================================================================
+
+#! Production-like sustained mixed workload
+sub runMixedWorkloadSustained(hash<auto> opts) {
+    printf("\n--- mixed_workload_sustained ---\n");
+
+    int duration_secs = opts.duration;
+    int warmup_secs = opts.warmup;
+    int target_conc = opts.concurrency;
+
+    # Create listeners for connect + accept ops
+    int num_listeners = opts.threads * 2;
+    list<Socket> listeners = ();
+    list<int> ports = ();
+    for (int i = 0; i < num_listeners; ++i) {
+        Socket l();
+        l.bind("localhost:0");
+        l.listen(1024);
+        push listeners, l;
+        push ports, l.getSocketInfo().port;
+    }
+    on_exit {
+        for (int i = 0; i < num_listeners; ++i) {
+            listeners[i].close();
+        }
+    }
+
+    AsyncIoController ctrl(False);
+    ctrl.start();
+    on_exit ctrl.stop();
+
+    BenchStats connect_stats(500000);
+    BenchStats recv_stats(500000);
+    BenchStats accept_stats(500000);
+    BenchStats timer_stats(500000);
+    BenchStats all_stats(1000000);
+
+    ConnectBenchWorker connect_worker(ctrl, connect_stats);
+    AcceptBenchHelper accept_helper(ctrl, accept_stats);
+
+    Mutex stop_m();
+    bool should_stop = False;
+    Mutex key_m();
+    int global_key = 0;
+
+    # Acceptor threads to drain connect backlog on shared listeners
+    Counter acceptor_done(num_listeners);
+    for (int ai = 0; ai < num_listeners; ++ai) {
+        Socket my_listener = listeners[ai];
+        background sub () {
+            on_exit acceptor_done.dec();
+            try {
+                while (True) {
+                    {
+                        AutoLock al(stop_m);
+                        if (should_stop) {
+                            break;
+                        }
+                    }
+                    try {
+                        Socket accepted = my_listener.accept(200ms);
+                        accepted.close();
+                    } catch () {}
+                }
+            } catch () {}
+        }();
+    }
+
+    # Submitter threads: each one submits a mix of operations
+    Counter thread_done(opts.threads);
+    for (int t = 0; t < opts.threads; ++t) {
+        int my_t = t;
+        background sub () {
+            on_exit thread_done.dec();
+            try {
+                int op_idx = 0;
+                while (True) {
+                    {
+                        AutoLock al(stop_m);
+                        if (should_stop) {
+                            break;
+                        }
+                    }
+
+                    int op_type = op_idx % 10;
+                    ++op_idx;
+                    date op_start = now_us();
+
+                    if (op_type < 6) {
+                        # 60% connect ops
+                        int port = ports[my_t % num_listeners];
+                        Socket client();
+                        AbstractPollOperation spop = client.startPollConnect("localhost:" + port);
+                        int my_key;
+                        { AutoLock al(key_m); my_key = global_key++; }
+                        ctrl.submit(<SocketPollOperationInfo>{
+                            "sock": client,
+                            "spop": spop,
+                            "owner": "mixed-connect",
+                            "to": 30s,
+                            "key": sprintf("mc:%d", my_key),
+                            "callback": sub (hash<SocketPollResultInfo> result) {
+                                int latency = (now_us() - op_start).durationMicroseconds();
+                                connect_stats.record(latency);
+                                all_stats.record(latency);
+                                try { client.close(); } catch () {}
+                            },
+                        });
+                    } else if (op_type < 8) {
+                        # 20% recv ops - create a socket pair, submit recv, send data
+                        Socket listener();
+                        listener.bind("localhost:0");
+                        listener.listen();
+                        int port = listener.getSocketInfo().port;
+                        Socket client();
+                        client.connect("localhost:" + port);
+                        Socket server = listener.accept(30s);
+                        listener.close();
+
+                        AbstractPollOperation spop = server.startPollRecvData();
+                        int my_key;
+                        { AutoLock al(key_m); my_key = global_key++; }
+                        ctrl.submit(<SocketPollOperationInfo>{
+                            "sock": server,
+                            "spop": spop,
+                            "owner": "mixed-recv",
+                            "to": 30s,
+                            "key": sprintf("mr:%d", my_key),
+                            "callback": sub (hash<SocketPollResultInfo> result) {
+                                int latency = (now_us() - op_start).durationMicroseconds();
+                                recv_stats.record(latency);
+                                all_stats.record(latency);
+                            },
+                        });
+                        # Send data immediately
+                        client.send("data");
+                    } else if (op_type < 9) {
+                        # 10% accept ops - submit accept, then connect a client
+                        Socket al_listener();
+                        al_listener.bind("localhost:0");
+                        al_listener.listen();
+                        int port = al_listener.getSocketInfo().port;
+
+                        AbstractPollOperation spop = al_listener.startPollAccept();
+                        int my_key;
+                        { AutoLock al(key_m); my_key = global_key++; }
+                        ctrl.submit(<SocketPollOperationInfo>{
+                            "sock": al_listener,
+                            "spop": spop,
+                            "owner": "mixed-accept",
+                            "to": 30s,
+                            "key": sprintf("ma:%d", my_key),
+                            "callback": sub (hash<SocketPollResultInfo> result) {
+                                int latency = (now_us() - op_start).durationMicroseconds();
+                                accept_stats.record(latency);
+                                all_stats.record(latency);
+                            },
+                        });
+                        # Connect a client immediately
+                        Socket aclient();
+                        aclient.connect("localhost:" + port);
+                    } else {
+                        # 10% timer ops
+                        date deadline = now_us() + 100ms;
+                        int my_key;
+                        { AutoLock al(key_m); my_key = global_key++; }
+                        ctrl.setTimerCallback(sub (hash<TimerEventInfo> info) {
+                            int latency = (now_us() - op_start).durationMicroseconds();
+                            timer_stats.record(latency);
+                            all_stats.record(latency);
+                        });
+                        ctrl.addTimer(deadline, {"key": my_key});
+                    }
+
+                    # Throttle
+                    while (ctrl.getCacheSize() > target_conc) {
+                        bool stopped;
+                        {
+                            AutoLock al(stop_m);
+                            stopped = should_stop;
+                        }
+                        if (stopped) {
+                            break;
+                        }
+                        usleep(100);
+                    }
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                printf("  ERROR in mixed thread %d: %s: %s\n", my_t, ex.err, ex.desc);
+            }
+        }();
+    }
+
+    # Warmup
+    if (!opts.quiet) {
+        printf("  Warming up for %d seconds...\n", warmup_secs);
+    }
+    sleep(warmup_secs);
+
+    # Reset stats and measure
+    connect_stats.reset();
+    recv_stats.reset();
+    accept_stats.reset();
+    timer_stats.reset();
+    all_stats.reset();
+    all_stats.markStart();
+
+    if (!opts.quiet) {
+        printf("  Measuring for %d seconds...\n", duration_secs);
+    }
+
+    for (int s = 0; s < duration_secs; ++s) {
+        sleep(1);
+        if (!opts.quiet) {
+            printf("  [%d/%d] %s ops (%.0f ops/sec)\n",
+                s + 1, duration_secs, formatNum(all_stats.getTotalOps()), all_stats.getOpsPerSec());
+        }
+    }
+
+    all_stats.markEnd();
+
+    # Stop threads
+    {
+        AutoLock al(stop_m);
+        should_stop = True;
+    }
+    connect_worker.stop();
+    thread_done.waitForZero(30s);
+    acceptor_done.waitForZero(10s);
+    ctrl.waitForProcessing(10s);
+
+    int total = all_stats.getTotalOps();
+    int c_ops = connect_stats.getTotalOps();
+    int r_ops = recv_stats.getTotalOps();
+    int a_ops = accept_stats.getTotalOps();
+    int t_ops = timer_stats.getTotalOps();
+
+    float elapsed = all_stats.getElapsedSecs();
+    printf("  Duration: %.1fs | Total: %s ops | %s ops/sec\n",
+        elapsed, formatNum(total), formatNum(int(all_stats.getOpsPerSec())));
+    printf("  Connect:  %s (%d%%) | Recv: %s (%d%%) | Accept: %s (%d%%) | Timer: %s (%d%%)\n",
+        formatNum(c_ops), total > 0 ? c_ops * 100 / total : 0,
+        formatNum(r_ops), total > 0 ? r_ops * 100 / total : 0,
+        formatNum(a_ops), total > 0 ? a_ops * 100 / total : 0,
+        formatNum(t_ops), total > 0 ? t_ops * 100 / total : 0);
+    printf("  Latency:  P50=%s  P95=%s  P99=%s  Max=%s\n",
+        BenchStats::formatLatency(all_stats.getPercentile(0.50)),
+        BenchStats::formatLatency(all_stats.getPercentile(0.95)),
+        BenchStats::formatLatency(all_stats.getPercentile(0.99)),
+        BenchStats::formatLatency(all_stats.getMax()));
+}
+
+# ============================================================================
+# Test 5: timer_throughput
+# ============================================================================
+
+#! Timer callback throughput
+sub runTimerThroughput(hash<auto> opts) {
+    printf("\n--- timer_throughput ---\n");
+
+    # Part 1: Pure timer throughput
+    {
+        int n = opts.concurrency * 5;  # lots of timers
+        AsyncIoController ctrl(False);
+        ctrl.start();
+        on_exit ctrl.stop();
+
+        BenchStats stats(n < 1000000 ? n : 1000000);
+        Counter done(n);
+        Mutex timer_m();
+        int fired = 0;
+
+        ctrl.setTimerCallback(sub (hash<TimerEventInfo> info) {
+            date op_start = date(info.udata.start);
+            int latency = (now_us() - op_start).durationMicroseconds();
+            stats.record(latency);
+            {
+                AutoLock al(timer_m);
+                ++fired;
+            }
+            done.dec();
+        });
+
+        stats.markStart();
+        for (int i = 0; i < n; ++i) {
+            ctrl.addTimer(now_us() + 1ms, {"start": now_us(), "index": i});
+        }
+
+        int rc = done.waitForZero(60s);
+        stats.markEnd();
+
+        if (rc != 0) {
+            AutoLock al(timer_m);
+            printf("  Pure timers:  TIMEOUT (%d/%d fired)\n", fired, n);
+        } else {
+            printf("  Pure timers:  %s callbacks/sec\n", formatNum(int(stats.getOpsPerSec())));
+        }
+    }
+
+    # Part 2: Mixed I/O + timers
+    {
+        int n_io = opts.concurrency;
+        int n_timers = opts.concurrency;
+        AsyncIoController ctrl(False);
+        ctrl.start();
+        on_exit ctrl.stop();
+
+        BenchStats timer_stats(n_timers < 1000000 ? n_timers : 1000000);
+
+        # Create socket pairs for I/O operations
+        list<Socket> listeners = ();
+        list<Socket> servers = ();
+        list<Socket> clients = ();
+        # Only create up to 500 pairs to avoid fd exhaustion
+        int actual_io = n_io < 500 ? n_io : 500;
+        for (int i = 0; i < actual_io; ++i) {
+            Socket listener();
+            listener.bind("localhost:0");
+            listener.listen();
+            int port = listener.getSocketInfo().port;
+            Socket client();
+            client.connect("localhost:" + port);
+            Socket server = listener.accept(30s);
+            push listeners, listener;
+            push servers, server;
+            push clients, client;
+        }
+        on_exit {
+            for (int i = 0; i < actual_io; ++i) {
+                listeners[i].close();
+                servers[i].close();
+                clients[i].close();
+            }
+        }
+
+        # Submit recv ops that will stay pending (no data sent yet)
+        RecvBenchHelper recv_helper(ctrl, new BenchStats());
+        Counter io_done(actual_io);
+        for (int i = 0; i < actual_io; ++i) {
+            recv_helper.submitRecv(servers[i], io_done);
+        }
+
+        # Now submit timers while I/O ops are pending
+        Counter timer_done(n_timers);
+        Mutex tm();
+        int t_fired = 0;
+
+        ctrl.setTimerCallback(sub (hash<TimerEventInfo> info) {
+            date op_start = date(info.udata.start);
+            int latency = (now_us() - op_start).durationMicroseconds();
+            timer_stats.record(latency);
+            {
+                AutoLock al(tm);
+                ++t_fired;
+            }
+            timer_done.dec();
+        });
+
+        timer_stats.markStart();
+        for (int i = 0; i < n_timers; ++i) {
+            ctrl.addTimer(now_us() + 1ms, {"start": now_us(), "index": i});
+        }
+
+        int rc = timer_done.waitForZero(60s);
+        timer_stats.markEnd();
+
+        # Complete I/O ops so cleanup works
+        for (int i = 0; i < actual_io; ++i) {
+            clients[i].send("done");
+        }
+        io_done.waitForZero(10s);
+
+        if (rc != 0) {
+            AutoLock al(tm);
+            printf("  Mixed I/O+T:  TIMEOUT (%d/%d fired)\n", t_fired, n_timers);
+        } else {
+            printf("  Mixed I/O+T:  %s callbacks/sec (with %d concurrent I/O ops)\n",
+                formatNum(int(timer_stats.getOpsPerSec())), actual_io);
+        }
+    }
+}
+
+# ============================================================================
+# Main
+# ============================================================================
+
+hash<auto> opts = parseOpts();
+
+printf("=== AsyncIoController Heavy Benchmark ===\n");
+printf("Duration: %ds | Concurrency: %s | Threads: %d\n",
+    opts.duration, formatNum(opts.concurrency), opts.threads);
+printf("Date: %s\n", format_date("YYYY-MM-DD HH:mm:SS", now()));
+
+list<string> tests_to_run;
+if (opts.test) {
+    # Validate test name
+    bool found = False;
+    for (int i = 0; i < AllTests.size(); ++i) {
+        if (AllTests[i] == opts.test) {
+            found = True;
+            break;
+        }
+    }
+    if (!found) {
+        printf("ERROR: Unknown test '%s'. Available: %s\n",
+            opts.test, (foldl $1 + ", " + $2, AllTests));
+        exit(1);
+    }
+    tests_to_run = (opts.test,);
+} else {
+    tests_to_run = AllTests;
+}
+
+bool had_error = False;
+for (int i = 0; i < tests_to_run.size(); ++i) {
+    string test_name = tests_to_run[i];
+    try {
+        switch (test_name) {
+            case "submit_complete_throughput":
+                runSubmitCompleteThroughput(opts);
+                break;
+            case "concurrent_recv_scalability":
+                runConcurrentRecvScalability(opts);
+                break;
+            case "multi_thread_contention":
+                runMultiThreadContention(opts);
+                break;
+            case "mixed_workload_sustained":
+                runMixedWorkloadSustained(opts);
+                break;
+            case "timer_throughput":
+                runTimerThroughput(opts);
+                break;
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        printf("  FAILED: %s: %s\n", ex.err, ex.desc);
+        had_error = True;
+    }
+}
+
+printf("\n=== Benchmark Complete ===\n");
+exit(had_error ? 1 : 0);

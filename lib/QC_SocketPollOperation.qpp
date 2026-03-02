@@ -6,7 +6,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -122,4 +122,36 @@ SocketPollOperation::copy() {
 */
 *hash<SocketPollInfo> SocketPollOperation::continuePoll() {
     return op->continuePoll(xsink);
+}
+
+//! Initiates QUIC connection migration to a new network path (client-side active migration)
+/** @par Example:
+    @code{.py}
+    AbstractPollOperation op = sock.startPollQuicConnect(host, port);
+    # ... drive connection to ready ...
+    # Migrate to a new network path:
+    op.migrateQuicConnection();
+    @endcode
+
+    Creates a new connected UDP socket, initiates QUIC path migration via
+    ngtcp2_conn_initiate_immediate_migration(), and swaps the underlying file
+    descriptor. The old socket is closed. Path validation proceeds in the
+    background; if it fails, ngtcp2 automatically falls back to the previous path.
+
+    This method is only valid on QUIC client poll operations created by
+    @ref Socket::startPollQuicConnect().
+
+    @throw QUIC-MIGRATION-ERROR if the operation is not a QUIC client poll operation,
+    the session is not initialized, the socket is not open, or migration fails
+
+    @since %Qore 2.3
+*/
+nothing SocketPollOperation::migrateQuicConnection() [dom=NETWORK] {
+    auto* quic_op = dynamic_cast<SocketQuicClientPollOperation*>(op);
+    if (!quic_op) {
+        xsink->raiseException("QUIC-MIGRATION-ERROR",
+            "migrateQuicConnection() is only valid on QUIC client poll operations");
+        return QoreValue();
+    }
+    quic_op->migrateConnection(xsink);
 }

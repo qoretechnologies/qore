@@ -28,6 +28,7 @@ public class StreamNonBlockingTest inherits QUnit::Test {
     testBinaryInputStreamDefaults() {
         BinaryInputStream bis(<010203>);
         assertFalse(bis.supportsNonBlockingIo(), "BinaryInputStream not pollable");
+        assertTrue(bis.isIoThreadSafe(), "BinaryInputStream is I/O-thread-safe");
         assertEq(-1, bis.getPollableDescriptor(), "BinaryInputStream descriptor is -1");
 
         # readNonBlock delegates to read() for memory streams
@@ -44,6 +45,7 @@ public class StreamNonBlockingTest inherits QUnit::Test {
     testStringInputStreamDefaults() {
         StringInputStream sis("hello");
         assertFalse(sis.supportsNonBlockingIo(), "StringInputStream not pollable");
+        assertFalse(sis.isIoThreadSafe(), "StringInputStream not I/O-thread-safe");
         assertEq(-1, sis.getPollableDescriptor(), "StringInputStream descriptor is -1");
 
         *binary data = sis.readNonBlock(3);
@@ -70,6 +72,7 @@ public class StreamNonBlockingTest inherits QUnit::Test {
 
         FileInputStream fis(tmpfile);
         assertTrue(fis.supportsNonBlockingIo(), "FileInputStream supports non-blocking I/O");
+        assertTrue(fis.isIoThreadSafe(), "FileInputStream is I/O-thread-safe");
         assertTrue(fis.getPollableDescriptor() > 0, "FileInputStream has valid fd");
 
         # readNonBlock
@@ -111,12 +114,14 @@ public class StreamNonBlockingTest inherits QUnit::Test {
 
         FileOutputStream fos(tmpfile);
         assertTrue(fos.supportsNonBlockingIo(), "FileOutputStream supports non-blocking I/O");
+        assertTrue(fos.isIoThreadSafe(), "FileOutputStream is I/O-thread-safe");
         assertTrue(fos.getPollableDescriptor() > 0, "FileOutputStream has valid fd");
     }
 
     testOutputStreamDefaults() {
         StringOutputStream sos();
         assertFalse(sos.supportsNonBlockingIo(), "StringOutputStream not pollable");
+        assertFalse(sos.isIoThreadSafe(), "StringOutputStream not I/O-thread-safe");
         assertEq(-1, sos.getPollableDescriptor(), "StringOutputStream descriptor is -1");
     }
 

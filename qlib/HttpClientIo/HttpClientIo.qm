@@ -1,0 +1,298 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file HttpClientIo.qm Qore user module providing unified HTTP/2 and HTTP/3 multiplexed client I/O
+
+/*  HttpClientIo.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires Logger
+%requires AsyncSocketIo
+
+module HttpClientIo {
+    version = "1.0";
+    desc = "Unified HTTP/2 and HTTP/3 multiplexed client I/O";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # Module initialization
+    };
+}
+
+/** @mainpage HttpClientIo Module
+
+    @tableofcontents
+
+    @section httpclientiointro Introduction
+
+    The %HttpClientIo module provides a unified API for HTTP/2 and HTTP/3 multiplexed client I/O,
+    enabling multiple concurrent streams on a single connection regardless of the underlying
+    transport protocol.
+
+    Features:
+    - **Protocol auto-selection**: Try HTTP/3 (QUIC) first, fall back to HTTP/2 (TCP+TLS)
+    - **True multiplexing**: Multiple concurrent streams on a single connection
+    - **Connection pooling**: Shared connections across multiple clients
+    - **Sync and async APIs**: Blocking and callback-based interfaces
+    - **Streaming support**: WebSocket and SSE over HTTP/2
+    - **Connection migration**: QUIC connection migration for HTTP/3
+
+    @section httpclientio_components Components
+
+    - @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager" - Unified connection pool with protocol auto-selection
+    - @ref HttpClientIo::HttpClientConnection "HttpClientConnection" - Abstract base for protocol connections
+    - @ref HttpClientIo::Http2ClientConnection "Http2ClientConnection" - HTTP/2 connection (TCP + TLS)
+    - @ref HttpClientIo::Http3ClientConnection "Http3ClientConnection" - HTTP/3 connection (QUIC)
+    - @ref HttpClientIo::HttpClientStreamHandle "HttpClientStreamHandle" - Abstract base for stream handles
+    - @ref HttpClientIo::Http2ClientStreamHandle "Http2ClientStreamHandle" - HTTP/2 stream handle (+ streaming)
+    - @ref HttpClientIo::Http3ClientStreamHandle "Http3ClientStreamHandle" - HTTP/3 stream handle
+    - @ref HttpClientIo::HttpClientPollOperation "HttpClientPollOperation" - Abstract base for poll operations
+    - @ref HttpClientIo::Http2ClientPollOperation "Http2ClientPollOperation" - HTTP/2 poll operation
+    - @ref HttpClientIo::Http3ClientPollOperation "Http3ClientPollOperation" - HTTP/3 poll operation
+
+    @section httpclientio_usage Usage
+
+    @par Basic Usage (sync API, auto protocol selection)
+    @code{.py}
+%requires HttpClientIo
+
+# Create a connection manager (default: auto protocol selection)
+HttpClientConnectionManager manager();
+
+# Synchronous request - protocol selected automatically
+hash<HttpClientResponseInfo> resp = manager.request(
+    "https://example.com", "GET", "/api/resource");
+printf("Status: %d, Protocol: %s\n", resp.status_code, resp.protocol);
+    @endcode
+
+    @par Async Usage (callback API with controller)
+    @code{.py}
+%requires HttpClientIo
+%requires AsyncSocketIo
+
+# Create manager with async controller
+HttpClientConnectionManager manager();
+AsyncSocketIoController controller(False);
+manager.setController(controller);
+controller.start();
+
+# Submit async request with callback
+manager.submitRequestAsync("https://example.com", "GET", "/api/resource",
+    NOTHING, NOTHING,
+    sub (hash<auto> response, *hash<auto> error) {
+        if (error) {
+            printf("Error: %y\n", error);
+        } else {
+            printf("Response: %y\n", response);
+        }
+    });
+
+controller.stop();
+manager.closeAll();
+    @endcode
+
+    @par Forced Protocol Selection
+    @code{.py}
+%requires HttpClientIo
+
+# Force HTTP/2 only
+auto mgr_h2 = new HttpClientConnectionManager({"protocol": "h2"});
+
+# Force HTTP/3 only (HTTPS required)
+auto mgr_h3 = new HttpClientConnectionManager({"protocol": "h3"});
+    @endcode
+
+    @section httpclientio_relnotes Release Notes
+
+    @subsection httpclientio_v1_0 Version 1.0
+    - Initial release of unified HttpClientIo module
+    - Protocol auto-selection with HTTP/3 to HTTP/2 fallback
+    - Abstract base classes for protocol-agnostic code
+    - Connection pooling with configurable limits
+    - Sync and async request APIs
+    - HTTP/2 streaming support (WebSocket, SSE)
+    - HTTP/3 connection migration support
+*/
+
+#! Main namespace for HttpClientIo module
+public namespace HttpClientIo {
+    #! Default maximum connections per host
+    public const DefaultMaxConnectionsPerHost = 6;
+
+    #! Default maximum streams per connection
+    public const DefaultMaxStreamsPerConnection = 100;
+
+    #! Default connection idle timeout (60 seconds)
+    public const DefaultConnectionIdleTimeout = 60s;
+
+    #! Default connect timeout (30 seconds)
+    public const DefaultConnectTimeout = 30s;
+
+    #! Default request timeout (60 seconds)
+    public const DefaultRequestTimeout = 60s;
+
+    #! Connection state enum
+    public enum HttpClientConnectionState {
+        #! Connection is connecting
+        Connecting = 0,
+        #! Connection is ready for requests
+        Ready = 1,
+        #! Connection is draining (GOAWAY received)
+        Draining = 2,
+        #! Connection is closed
+        Closed = 3,
+    }
+
+    #! Stream state enum
+    public enum HttpClientStreamState {
+        #! Stream is pending (not yet submitted)
+        Pending = 0,
+        #! Stream is open (request submitted, awaiting response)
+        Open = 1,
+        #! Stream has received headers
+        HeadersReceived = 2,
+        #! Stream is receiving body data
+        ReceivingBody = 3,
+        #! Stream is complete (response fully received)
+        Complete = 4,
+        #! Stream was cancelled
+        Cancelled = 5,
+        #! Stream encountered an error
+        Error = 6,
+    }
+
+    #! Unified response info for HTTP client requests
+    public hashdecl HttpClientResponseInfo {
+        #! HTTP status code
+        int status_code;
+
+        #! Response headers
+        hash<auto> headers;
+
+        #! Response body (binary or string depending on content-type)
+        auto body;
+
+        #! Stream ID used for this request
+        int stream_id;
+
+        #! Protocol used: "h2" or "h3"
+        string protocol;
+
+        #! HTTP/2-only: timing info (NOTHING for HTTP/3)
+        *hash<auto> timing;
+    }
+
+    #! Unified error info for HTTP client operations
+    public hashdecl HttpClientErrorInfo {
+        #! Error code
+        string err;
+
+        #! Error description
+        string desc;
+
+        #! Stream ID (if stream-level error)
+        *int stream_id;
+
+        #! HTTP/2-only: protocol error code (NOTHING for HTTP/3)
+        *int h2_error_code;
+    }
+
+    #! Unified connection info for HTTP client connections
+    public hashdecl HttpClientConnectionInfo {
+        #! Host name
+        string host;
+
+        #! Port number
+        int port;
+
+        #! Connection state
+        HttpClientConnectionState state;
+
+        #! Number of active streams
+        int active_streams;
+
+        #! Maximum concurrent streams
+        int max_concurrent_streams;
+
+        #! Connection ID
+        int connection_id;
+
+        #! Protocol used: "h2" or "h3"
+        string protocol;
+
+        #! HTTP/2-only: whether SSL/TLS is used (always True for HTTP/3)
+        *bool ssl;
+    }
+
+    #! Unified request options for HTTP client requests
+    public hashdecl HttpClientRequestOptions {
+        #! Request timeout
+        *timeout timeout;
+
+        #! HTTP/2-only: priority weight (1-256)
+        *int priority_weight;
+
+        #! HTTP/2-only: stream dependency (stream ID)
+        *int depends_on;
+
+        #! HTTP/2-only: exclusive dependency flag
+        *bool exclusive_dependency;
+    }
+
+    #! Unified connection manager options
+    public hashdecl HttpClientConnectionManagerOptions {
+        #! Maximum connections per host
+        int max_connections_per_host = DefaultMaxConnectionsPerHost;
+
+        #! Maximum streams per connection
+        int max_streams_per_connection = DefaultMaxStreamsPerConnection;
+
+        #! Connection idle timeout
+        timeout idle_timeout = DefaultConnectionIdleTimeout;
+
+        #! Connect timeout
+        timeout connect_timeout = DefaultConnectTimeout;
+
+        #! Default request timeout
+        timeout request_timeout = DefaultRequestTimeout;
+
+        #! SSL/TLS verification mode
+        /** @see Qore::SSL_VERIFY_NONE, Qore::SSL_VERIFY_PEER, etc.
+        */
+        *int ssl_verify_mode;
+
+        #! Accept all SSL certificates including self-signed certificates
+        bool accept_all_certs = False;
+
+        #! Logger for connection manager
+        *Logger logger;
+
+        #! Protocol selection: "auto" (default), "h2", or "h3"
+        string protocol = "auto";
+
+        #! HTTP/3-only: client certificate for mutual TLS (mTLS)
+        *SSLCertificate client_cert;
+
+        #! HTTP/3-only: client private key for mutual TLS (mTLS)
+        *SSLPrivateKey client_pk;
+    }
+}

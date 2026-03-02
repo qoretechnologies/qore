@@ -1,0 +1,405 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/RestSchemaValidator.qm
+%requires ../../../../qlib/Swagger.qm
+%requires ../../../../qlib/OpenApi3.qm
+%requires ../../../../qlib/RestClient.qm
+%requires ../../../../qlib/HttpServerAsyncIo
+%requires ../../../../qlib/HttpServer.qm
+
+%try-module json >= 1.5
+%define NoJson
+%endtry
+
+%exec-class RestClientAsyncTest
+
+#! Simple handler that echoes the request body back with the specified content type
+class EchoHandler inherits AbstractHttpRequestHandler {
+    private {
+        string m_mime;
+    }
+
+    constructor(string mime) {
+        m_mime = mime;
+    }
+
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (hdr."do-error") {
+            return makeResponse(404, "test error", {"Content-Type": MimeTypeText});
+        }
+        if (hdr."do-auth-error") {
+            return makeResponse(401, "Unauthorized", {"Content-Type": MimeTypeText});
+        }
+        if (hdr."do-slow") {
+            sleep(2s);
+            return makeResponse(200, body ?? "ok", {"Content-Type": m_mime});
+        }
+        # echo back the body or a default response
+        *data resp_body;
+        if (body) {
+            resp_body = body;
+        } else {
+            switch (m_mime) {
+                case MimeTypeJson:
+                    resp_body = '{"status":"ok"}';
+                    break;
+                default:
+                    resp_body = "ok";
+                    break;
+            }
+        }
+        # return the method and path info in a header for verification
+        return makeResponse(200, resp_body, {
+            "Content-Type": m_mime,
+            "X-Request-Method": hdr.method,
+            "X-Request-Path": hdr.path,
+        });
+    }
+}
+
+#! Handler that returns 401 on first request, then 200 after token refresh
+class AuthRetryHandler inherits AbstractHttpRequestHandler {
+    private {
+        #! Counter to track requests
+        int request_count = 0;
+        Mutex m();
+    }
+
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        AutoLock al(m);
+        ++request_count;
+        # First request returns 401 to trigger token refresh
+        if (request_count == 1) {
+            return makeResponse(401, "Unauthorized", {"Content-Type": MimeTypeText});
+        }
+        # Subsequent requests succeed if they have an Authorization header
+%ifndef NoJson
+        return makeResponse(200, make_json({"status": "ok", "request": request_count}),
+            {"Content-Type": MimeTypeJson});
+%else
+        return makeResponse(200, "ok", {"Content-Type": MimeTypeText});
+%endif
+    }
+
+    int getRequestCount() {
+        AutoLock al(m);
+        return request_count;
+    }
+
+    resetCount() {
+        AutoLock al(m);
+        request_count = 0;
+    }
+}
+
+#! Mock OAuth2 token endpoint handler
+class MockTokenHandler inherits AbstractHttpRequestHandler {
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+%ifndef NoJson
+        return makeResponse(200, make_json({
+            "access_token": "new-token-" + get_random_string(8),
+            "token_type": "Bearer",
+            "expires_in": 3600,
+        }), {"Content-Type": MimeTypeJson});
+%else
+        return makeResponse(200, "ok", {"Content-Type": MimeTypeText});
+%endif
+    }
+}
+
+#! Handler that returns a JSON response with custom data
+class JsonDataHandler inherits AbstractHttpRequestHandler {
+    private {
+        hash<auto> m_data;
+    }
+
+    constructor(hash<auto> data) {
+        m_data = data;
+    }
+
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+%ifndef NoJson
+        return makeResponse(200, make_json(m_data), {"Content-Type": MimeTypeJson});
+%else
+        return makeResponse(200, "ok", {"Content-Type": MimeTypeText});
+%endif
+    }
+}
+
+public class RestClientAsyncTest inherits QUnit::Test {
+    private {
+        HttpServer m_http;
+        int port;
+        Logger logger;
+    }
+
+    constructor() : Test("RestClientAsyncTest", "1.0") {
+        addTestCase("async GET", \asyncGetTest());
+        addTestCase("async POST", \asyncPostTest());
+        addTestCase("async PUT", \asyncPutTest());
+        addTestCase("async DELETE", \asyncDelTest());
+        addTestCase("async PATCH", \asyncPatchTest());
+        addTestCase("async poll operation state machine", \asyncPollStateTest());
+        addTestCase("async error handling", \asyncErrorTest());
+        addTestCase("concurrent async requests", \concurrentAsyncTest());
+        addTestCase("async request info", \asyncRequestInfoTest());
+        addTestCase("async OAuth2 auth retry", \asyncOAuth2AuthRetryTest());
+
+        set_return_value(main());
+    }
+
+    setUp() {
+        logger = new Logger("test",
+            (m_options.verbose > 3 ? LoggerLevel::getLevelDebug() : LoggerLevel::getLevelInfo()));
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        };
+        m_http = new HttpServer(http_opts);
+        m_http.setHandler("/api_json", "/api_json", MimeTypeJson,
+            new EchoHandler(MimeTypeJson));
+        m_http.setHandler("/api_text", "/api_text", MimeTypeText,
+            new EchoHandler(MimeTypeText));
+        m_http.setHandler("/api_data", "/api_data", MimeTypeJson,
+            new JsonDataHandler({"items": (1, 2, 3), "count": 3}));
+        m_http.setHandler("/auth_retry", "/auth_retry", MimeTypeJson,
+            new AuthRetryHandler());
+        m_http.setHandler("/oauth2/token", "/oauth2/token", MimeTypeJson,
+            new MockTokenHandler());
+        port = m_http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+    }
+
+    tearDown() {
+        delete m_http;
+    }
+
+    #! Helper to drive a poll operation to completion with a deadline
+    private auto drivePoll(AbstractPollOperation poller, timeout deadline = 30s) {
+        date start = now_us();
+        while (*hash<SocketPollInfo> info = poller.continuePoll()) {
+            timeout elapsed = now_us() - start;
+            if (elapsed >= deadline) {
+                throw "TIMEOUT", sprintf("poll operation exceeded %d ms deadline", deadline);
+            }
+            timeout remaining = deadline - elapsed;
+            Socket::poll((info,), min(remaining, 1s));
+        }
+        assertTrue(poller.goalReached());
+        return poller.getOutput();
+    }
+
+    asyncGetTest() {
+%ifdef NoJson
+        testSkip("no json module");
+%endif
+        RestClient rest({"url": "http://127.0.0.1:" + port, "data": "json"});
+
+        # test async GET
+        RestRequestPollOperation poller = rest.startPollGet("/api_json");
+        assertEq("REST GET /api_json", poller.getGoal());
+        assertFalse(poller.goalReached());
+
+        hash<auto> result = drivePoll(poller);
+        assertEq(200, result.status_code);
+        assertEq("ok", result.body.status);
+    }
+
+    asyncPostTest() {
+%ifdef NoJson
+        testSkip("no json module");
+%endif
+        RestClient rest({"url": "http://127.0.0.1:" + port, "data": "json"});
+
+        hash<auto> send_data = {"name": "test", "value": 42};
+        RestRequestPollOperation poller = rest.startPollPost("/api_json", send_data);
+        hash<auto> result = drivePoll(poller);
+        assertEq(200, result.status_code);
+        assertEq("test", result.body.name);
+        assertEq(42, result.body.value);
+    }
+
+    asyncPutTest() {
+%ifdef NoJson
+        testSkip("no json module");
+%endif
+        RestClient rest({"url": "http://127.0.0.1:" + port, "data": "json"});
+
+        hash<auto> send_data = {"name": "updated", "value": 99};
+        RestRequestPollOperation poller = rest.startPollPut("/api_json", send_data);
+        hash<auto> result = drivePoll(poller);
+        assertEq(200, result.status_code);
+        assertEq("updated", result.body.name);
+        assertEq(99, result.body.value);
+    }
+
+    asyncDelTest() {
+%ifdef NoJson
+        testSkip("no json module");
+%endif
+        RestClient rest({"url": "http://127.0.0.1:" + port, "data": "json"});
+
+        RestRequestPollOperation poller = rest.startPollDel("/api_json");
+        hash<auto> result = drivePoll(poller);
+        assertEq(200, result.status_code);
+    }
+
+    asyncPatchTest() {
+%ifdef NoJson
+        testSkip("no json module");
+%endif
+        RestClient rest({"url": "http://127.0.0.1:" + port, "data": "json"});
+
+        hash<auto> send_data = {"name": "patched"};
+        RestRequestPollOperation poller = rest.startPollPatch("/api_json", send_data);
+        hash<auto> result = drivePoll(poller);
+        assertEq(200, result.status_code);
+        assertEq("patched", result.body.name);
+    }
+
+    asyncPollStateTest() {
+%ifdef NoJson
+        testSkip("no json module");
+%endif
+        RestClient rest({"url": "http://127.0.0.1:" + port, "data": "json"});
+
+        # test the poll operation state machine transitions
+        RestRequestPollOperation poller = rest.startPollGet("/api_data");
+        string initial_state = poller.getState();
+        assertTrue(initial_state.find("send-request") >= 0);
+
+        hash<auto> result = drivePoll(poller);
+        assertEq(200, result.status_code);
+        assertEq((1, 2, 3), result.body.items);
+        assertEq(3, result.body.count);
+    }
+
+    asyncErrorTest() {
+%ifdef NoJson
+        testSkip("no json module");
+%endif
+        RestClient rest({"url": "http://127.0.0.1:" + port, "data": "json"});
+
+        # test error response (404)
+        RestRequestPollOperation poller = rest.startPollGet("/api_json", NOTHING,
+            {"Do-Error": "1"});
+        assertThrows("REST-RESPONSE-ERROR", \drivePoll(), poller);
+
+        # test error passthrough
+        rest.setErrorPassthru(True);
+        poller = rest.startPollGet("/api_json", NOTHING, {"Do-Error": "1"});
+        hash<auto> result = drivePoll(poller);
+        assertEq(404, result.status_code);
+    }
+
+    concurrentAsyncTest() {
+%ifdef NoJson
+        testSkip("no json module");
+%endif
+        RestClient rest1({"url": "http://127.0.0.1:" + port, "data": "json"});
+        RestClient rest2({"url": "http://127.0.0.1:" + port, "data": "json"});
+        RestClient rest3({"url": "http://127.0.0.1:" + port, "data": "json"});
+
+        # start multiple async requests concurrently
+        RestRequestPollOperation poller1 = rest1.startPollGet("/api_json");
+        RestRequestPollOperation poller2 = rest2.startPollPost("/api_json", {"id": 1});
+        RestRequestPollOperation poller3 = rest3.startPollGet("/api_data");
+
+        # drive all poll operations
+        list<AbstractPollOperation> pollers = (poller1, poller2, poller3);
+        int max_iterations = 1000;
+        int iteration = 0;
+        while (pollers) {
+            if (++iteration > max_iterations) {
+                throw "TIMEOUT", "concurrent async test exceeded max iterations";
+            }
+            list<AbstractPollOperation> remaining = ();
+            for (int i = 0; i < pollers.size(); ++i) {
+                *hash<SocketPollInfo> info = pollers[i].continuePoll();
+                if (info) {
+                    Socket::poll((info,), 100ms);
+                    remaining += pollers[i];
+                }
+            }
+            pollers = remaining;
+        }
+
+        assertTrue(poller1.goalReached());
+        assertTrue(poller2.goalReached());
+        assertTrue(poller3.goalReached());
+
+        hash<auto> r1 = poller1.getOutput();
+        hash<auto> r2 = poller2.getOutput();
+        hash<auto> r3 = poller3.getOutput();
+
+        assertEq(200, r1.status_code);
+        assertEq(200, r2.status_code);
+        assertEq(200, r3.status_code);
+
+        assertEq("ok", r1.body.status);
+        assertEq(1, r2.body.id);
+        assertEq((1, 2, 3), r3.body.items);
+    }
+
+    asyncRequestInfoTest() {
+%ifdef NoJson
+        testSkip("no json module");
+%endif
+        RestClient rest({"url": "http://127.0.0.1:" + port, "data": "json"});
+
+        # test that request info is populated
+        RestRequestPollOperation poller = rest.startPollPost("/api_json", {"test": True});
+        drivePoll(poller);
+
+        hash<auto> info = poller.getInfo();
+        assertTrue(info.hasKey("request-body"));
+        assertTrue(info.hasKey("response-code"));
+        assertEq(200, info."response-code");
+    }
+
+    asyncOAuth2AuthRetryTest() {
+%ifdef NoJson
+        testSkip("no json module");
+%endif
+        string token_url = "http://127.0.0.1:" + port + "/oauth2/token";
+
+        # Create a RestClient with OAuth2 configuration and auto-refresh enabled
+        RestClient rest({
+            "url": "http://127.0.0.1:" + port,
+            "data": "json",
+            "oauth2_grant_type": "client_credentials",
+            "oauth2_token_url": token_url,
+            "oauth2_client_id": "test-client",
+            "oauth2_client_secret": "test-secret",
+            "oauth2_auto_refresh": True,
+        });
+
+        # startPollGet() calls checkLogin() which will synchronously acquire
+        # the initial token via /oauth2/token, then start the async request
+        # /auth_retry returns 401 on first request, triggering:
+        # 1. Async OAuth2 token refresh via /oauth2/token
+        # 2. Retry the request with new token → 200
+        RestRequestPollOperation poller = rest.startPollGet("/auth_retry");
+        assertTrue(rest.usingOAuth2());
+        assertTrue(rest.getToken().val());
+
+        hash<auto> result = drivePoll(poller);
+        assertEq(200, result.status_code);
+        assertEq("ok", result.body.status);
+
+        # Verify the retry happened (request_count should be >= 2)
+        assertGt(1, result.body.request);
+    }
+}

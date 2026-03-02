@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file ServerSentEventClient.qm SSE connection client
 
-/*  ServerSentEventClient.qm Copyright 2025 Qore Technologies, s.r.o.
+/*  ServerSentEventClient.qm Copyright 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -41,7 +41,7 @@
 %endtry
 
 module ServerSentEventClient {
-    version = "1.0";
+    version = "1.1";
     desc = "User module for handling SSE events on the client side";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -100,6 +100,14 @@ module ServerSentEventClient {
     All the public symbols in the module are defined in the ServerSentEventClient namespace.
 
     @section serversenteventclient_relnotes ServerSentEventClient Release History
+
+    @subsection serversenteventclient_v1_1 Version 1.1
+    - added @ref ServerSentEventClient::SseConnectPollOperation "SseConnectPollOperation" for async connect
+      support
+    - added @ref ServerSentEventClient::ServerSentEventConnection::supportsPollingApi()
+      "ServerSentEventConnection::supportsPollingApi()" and
+      @ref ServerSentEventClient::ServerSentEventConnection::startPollConnect()
+      "ServerSentEventConnection::startPollConnect()" for connection monitoring
 
     @subsection serversenteventclient_v1_0 Version 1.0
     - the initial version of the ServerSentEventClient module

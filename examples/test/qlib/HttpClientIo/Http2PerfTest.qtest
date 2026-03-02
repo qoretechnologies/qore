@@ -1,0 +1,570 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Http2PerfTest.qtest - HTTP/2 Client I/O Performance, Scalability, and Throughput Tests
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/HttpClientIo
+%requires ../../../../qlib/AsyncSocketIo
+%try-module json
+%define NoJson
+%endtry
+
+%exec-class Http2PerfTest
+
+#! Simple handler that returns "OK"
+class PerfSimpleHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, "OK", {"Content-Type": "text/plain"});
+    }
+}
+
+#! Handler that returns N bytes from /large/N
+class PerfLargeResponseHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        int size = 1000;
+        *list<*string> m = (hdr.path =~ x/large\/(\d+)/);
+        if (m) {
+            size = int(m[0]);
+        }
+        return makeResponse(200, strmul("X", size), {"Content-Type": "text/plain"});
+    }
+}
+
+#! Echo handler that returns the request body
+class PerfEchoHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        string resp_body = sprintf("method=%s path=%s", hdr.method, hdr.path);
+        if (body) {
+            if (body.typeCode() == NT_BINARY) {
+                resp_body += sprintf(" body_size=%d", body.size());
+            } else {
+                resp_body += sprintf(" body_size=%d", body.length());
+            }
+        }
+        return makeResponse(200, resp_body, {"Content-Type": "text/plain"});
+    }
+}
+
+class Http2PerfTest inherits QUnit::Test {
+    private {
+        HttpServer mServer;
+        int mSslPort;
+        string mSslUrl;
+        Logger mLogger;
+
+        const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIULwwY9Xmqwn7ZZIYgEu8otC1aRNMwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI1MTIzMTE4MjIyOVoXDTI2MTIz
+MTE4MjIyOVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEA0r/nka21DXdApKWXg6yoM64+RXZ/j2afHJjnnL7IGt87
+wOow8iZDyn3+S9h/J6FP5dGKCmqItq/OKmZxpL61sfUwpcYe3axnoAjKshkfbwSi
+ZKL0oFJcmXYSk9H/qIIbxdHbBre9ztoJsPaBLHWbcoc/too/o4wDW3FUSZaCzgy2
+Lpphnwi/gXNoD2qxQodv+pfkAzn2+nN0J7Yt+cWs15E2DZCxekhISrhT1ull+Afr
+UbHlcqA08AXyyzx61nENtcWpFyuVmfwhvcSPMTgRpoZ+/P+QrcgbmCe2hjZJtgiL
+aQqtsakV7KxvHpR8AgnFeshfnjZY+w8oRMlaMIb6IwIDAQABo1MwUTAdBgNVHQ4E
+FgQUWOgm+lMoLNS8ReH7mvffWJfreREwHwYDVR0jBBgwFoAUWOgm+lMoLNS8ReH7
+mvffWJfreREwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAxBG0
+3X0YIeNaf+3XDnoiZBtgMxpsRkxMtRy+lLoQZ3XO5f58eFjDmTq9InplX4IEW0Nx
+TpWr7suU4cFwgZfe6+cHfiU0PQ/pCA7XIetZb2n3GFrQkU4U1K7DgHeZ8HZ7vQ1T
+tVaefxRR3Y8CoIWmI9kYhXs0I0imKOopzpj2iScwGYKmFuasSGyfbkEQgRvg+hAl
+8oL2f4hCFLynTLkA8bWcd3cyBbGIhPzTffuSBjfNHLRqrI4hGPvTM8Xl4WcqmrmZ
+CP3wt6EiYaxJ2zRR2kUtxdm4xntxjc+nr5sjj1pVJvoN7AVmeihS7y4Awy156UCN
+cnhHffwhNhKl6MTonQ==
+-----END CERTIFICATE-----";
+
+        const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDSv+eRrbUNd0Ck
+pZeDrKgzrj5Fdn+PZp8cmOecvsga3zvA6jDyJkPKff5L2H8noU/l0YoKaoi2r84q
+ZnGkvrWx9TClxh7drGegCMqyGR9vBKJkovSgUlyZdhKT0f+oghvF0dsGt73O2gmw
+9oEsdZtyhz+2ij+jjANbcVRJloLODLYummGfCL+Bc2gParFCh2/6l+QDOfb6c3Qn
+ti35xazXkTYNkLF6SEhKuFPW6WX4B+tRseVyoDTwBfLLPHrWcQ21xakXK5WZ/CG9
+xI8xOBGmhn78/5CtyBuYJ7aGNkm2CItpCq2xqRXsrG8elHwCCcV6yF+eNlj7DyhE
+yVowhvojAgMBAAECggEAMLi64VvmQnGyWR4LNB7DWAdNUCPAA7f2ytaynPMiMcwv
+9T5vCFw+Sd7s3j3zz4akgP37SsMsTgfAwt6iITMRsE197KUr15WW81F1As16DeFl
+ZZyirzm7PKMmUlQ3JY7Guun0F858rAiOOwISBOQ/hq+r1BiL89RXpllB4i1Qmi+8
+Y7Y4mF9j3BDfdUCY+nG8aJ9zhZHZK2/cV40G9qrafFYwQEp86mM2BhtlRr24FCFe
+nWUboADvEAiOhlj7TQl5eMnfKuOPPU9oAZX1yTRkjTPQnBSqZbLaFkcnRKkZcgyg
+dC78RDl2iOB8JclXdLu/R9Dg8SQQ8M5clcKprR+4IQKBgQD7ubtmrFpRzvVMYiGJ
++JXf5AfSRB6OeXUMDaEw31XGZU9zZALqrh/98D4GVWGPSvXVbgH8KdxEc5GN5OJj
+HKxBldRZ0sw2gJLAE6UKH/qDNmp+2qWEdrDE8YcAeCQxo6rk+Ns5qqsvmn2SR14Y
+mvtgHHS1D+9lsqea5jUTSXrc0wKBgQDWVAwsZOtah2CHvsonqOyQXotnRtBool0u
+6rtGrRXoDFvwrjRsicBv6L1kf/npD+QhkaRe3ZkOBZxPsjv9Kfc974czLBAf1zeD
+rW931aSp1YiHyBo8+PmjTvbbiOK7K/8n79CN8W+zwr9plaU+HE1nLwwp/UmaCYtM
+fArq1jHbcQKBgFWnUVkSdHk5zsX67iaga38PfInTnAIm2ekMCjkzBWDIwEwnT8bD
+ESe7Q5+sFdJIU3YYRJylMcoo+PIrW80VyJdYgDVAQTSac1TgWlwjnX5gWcRoacG1
+EVkyRhmmx8oMQu4+r3nj1PQRwYCwwBfnRHnjtOKXVYJpVBalFpJFgoT5AoGAGTUx
+aVdFRxR9CfoqlJeNmz1DcBYoFOZjx0zcUeexl+U8OwaCK/HXrFHXVKaoofy4fCpB
+BtdRVRDb3ZO88n2pEqPFZwNbsiMB6H7RiWqbP05aDH5Ad8NguRBkgFWNNS5riCrw
+gIFQ/fd9w9FR6ggyIlyqNZYQvgk5VPmR3yTqIEECgYEA0akqJwH4M2aQb3mP6FGX
+MbQ5aconCeXHrT2u80LEhF4KzwQz8k8XX2K2XRZ+4LgWq3tOfeVnkEivkJBzFEao
+/g5l2ZjftRO2yAdYhP4Sbcws88pP+cr64tWDI6qK6tlGXI93EyfCVT1FSX5CC1aq
+Do+Sl1gfqlpgpszQaOMjR4M=
+-----END PRIVATE KEY-----";
+    }
+
+    constructor() : Test("Http2PerfTest", "1.0") {
+        @debug {
+            set_signal_handler(SIGUSR1, sub (int sig) {
+                printf("=== SIGUSR1 Thread Stacks ===\n%Y\n", get_all_thread_call_stacks());
+            });
+        }
+        addTestCase("sequential request throughput", \sequentialRequestThroughputTest());
+        addTestCase("multiplexed request throughput", \multiplexedRequestThroughputTest());
+        addTestCase("connection pool scalability", \connectionPoolScalabilityTest());
+        addTestCase("large response throughput", \largeResponseThroughputTest());
+        addTestCase("request latency distribution", \requestLatencyDistributionTest());
+        addTestCase("controller vs direct mode", \controllerVsDirectModeTest());
+
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        mLogger = new Logger("http2-perf-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            mLogger.addAppender(new StdoutAppender());
+        }
+
+        hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
+            "logger": mLogger,
+            "debug": True,
+            "async_mode": True,
+        };
+        mServer = new HttpServer(opts);
+
+        mServer.setHandler("simple", "/simple", NOTHING, new PerfSimpleHandler());
+        mServer.setHandler("large", "/large", NOTHING, new PerfLargeResponseHandler());
+        mServer.setHandler("echo", "/echo", NOTHING, new PerfEchoHandler());
+
+        mSslPort = mServer.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        }).port;
+        mSslUrl = "https://127.0.0.1:" + mSslPort;
+
+        mServer.waitForAsyncIo();
+
+        if (m_options.verbose > 2) {
+            printf("HTTPS test server on port %d\n", mSslPort);
+        }
+    }
+
+    globalTearDown() {
+        delete mServer;
+    }
+
+    #! Compute elapsed milliseconds from a start timestamp
+    private float elapsedMs(date start) {
+        return (now_us() - start).durationMicroseconds() / 1000.0;
+    }
+
+    #! Print latency statistics if verbose
+    private printLatencyStats(string label, list<float> latencies) {
+        if (m_options.verbose < 3 || !latencies) {
+            return;
+        }
+
+        float sum = 0.0;
+        float min_lat = latencies[0];
+        float max_lat = latencies[0];
+        foreach float lat in (latencies) {
+            sum += lat;
+            if (lat < min_lat) {
+                min_lat = lat;
+            }
+            if (lat > max_lat) {
+                max_lat = lat;
+            }
+        }
+        float avg = sum / latencies.size();
+
+        list<float> sorted = sort(latencies);
+        int p50_idx = max(0, (sorted.size() * 50 / 100) - 1);
+        int p95_idx = max(0, (sorted.size() * 95 / 100) - 1);
+        int p99_idx = max(0, (sorted.size() * 99 / 100) - 1);
+        float p50 = sorted[p50_idx];
+        float p95 = sorted[p95_idx];
+        float p99 = sorted[p99_idx];
+
+        printf("  %s: Avg: %.2f ms, Min: %.2f ms, Max: %.2f ms, P50: %.2f ms, P95: %.2f ms, P99: %.2f ms (%d samples)\n",
+            label, avg, min_lat, max_lat, p50, p95, p99, latencies.size());
+    }
+
+    #! Test 1: Sequential request throughput
+    /** N sequential GET requests on single connection, measuring per-request overhead.
+    */
+    sequentialRequestThroughputTest() {
+        int request_count = 200;
+
+        HttpClientIo::HttpClientConnectionManager manager(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h2",
+            "accept_all_certs": True,
+            "max_connections_per_host": 1,
+            "logger": mLogger,
+        });
+
+        list<float> latencies();
+        date start = now_us();
+        for (int i = 0; i < request_count; ++i) {
+            date req_start = now_us();
+            HttpClientIo::Http2ClientStreamHandle stream = manager.acquireStream(mSslUrl);
+            hash<auto> response = stream.request("GET", "/simple");
+            float lat = elapsedMs(req_start);
+            latencies += lat;
+
+            assertEq(200, response.status_code, sprintf("request %d status code", i));
+        }
+        float total_ms = elapsedMs(start);
+
+        float throughput = request_count * 1000.0 / total_ms;
+        assertTrue(throughput > 0, sprintf("throughput should be positive (got %.1f req/s)", throughput));
+
+        # Should reuse a single connection
+        hash<auto> stats = manager.getStats();
+        assertEq(1, stats.total_connections, "should use 1 connection for sequential requests");
+
+        printLatencyStats("sequential request latency", latencies);
+        if (m_options.verbose > 2) {
+            printf("  %d requests: %.1f ms total, %.1f req/s\n", request_count, total_ms, throughput);
+        }
+    }
+
+    #! Test 2: Multiplexed request throughput
+    /** N concurrent streams on single connection, measuring multiplexing efficiency.
+    */
+    multiplexedRequestThroughputTest() {
+        int request_count = 50;
+
+        HttpClientIo::HttpClientConnectionManager manager(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h2",
+            "accept_all_certs": True,
+            "max_connections_per_host": 1,
+            "logger": mLogger,
+        });
+
+        # Acquire all streams first
+        list<HttpClientIo::Http2ClientStreamHandle> streams();
+        for (int i = 0; i < request_count; ++i) {
+            streams += manager.acquireStream(mSslUrl);
+        }
+
+        # Submit all requests concurrently
+        Counter done(request_count);
+        Mutex resp_m();
+        list<hash<auto>> responses();
+        list<float> latencies();
+
+        date start = now_us();
+        for (int i = 0; i < request_count; ++i) {
+            HttpClientIo::Http2ClientStreamHandle stream = streams[i];
+            string path = sprintf("/simple?idx=%d", i);
+            background sub() {
+                on_exit done.dec();
+                try {
+                    date req_start = now_us();
+                    hash<auto> resp = stream.request("GET", path);
+                    float lat = (now_us() - req_start).durationMicroseconds() / 1000.0;
+                    resp_m.lock();
+                    on_exit resp_m.unlock();
+                    responses += resp;
+                    latencies += lat;
+                } catch (hash<ExceptionInfo> ex) {
+                    resp_m.lock();
+                    on_exit resp_m.unlock();
+                    responses += {"error": ex.err, "desc": ex.desc};
+                }
+            }();
+        }
+
+        int remaining = done.waitForZero(60s);
+        float total_ms = elapsedMs(start);
+
+        assertEq(0, remaining, "all requests should complete within timeout");
+        assertEq(request_count, responses.size(), "should receive all responses");
+
+        int success_count = 0;
+        foreach hash<auto> resp in (responses) {
+            if (!resp.hasKey("error") && resp.status_code == 200) {
+                ++success_count;
+            }
+        }
+
+        # At least 80% should succeed (some may fail under connection pressure)
+        assertGe(request_count * 4 / 5, success_count,
+            sprintf("at least 80%% should succeed (got %d/%d)", success_count, request_count));
+
+        float throughput = success_count * 1000.0 / total_ms;
+
+        # Should have used 1 connection (multiplexed)
+        hash<auto> stats = manager.getStats();
+        assertEq(1, stats.total_connections, "should use 1 multiplexed connection");
+
+        printLatencyStats("multiplexed request latency", latencies);
+        if (m_options.verbose > 2) {
+            printf("  %d concurrent requests: %.1f ms total, %.1f req/s, %d succeeded\n",
+                request_count, total_ms, throughput, success_count);
+        }
+    }
+
+    #! Test 3: Connection pool scalability
+    /** Multiple connections handling concurrent requests.
+    */
+    connectionPoolScalabilityTest() {
+        int max_connections = 4;
+        int request_count = 50;
+
+        HttpClientIo::HttpClientConnectionManager manager(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h2",
+            "accept_all_certs": True,
+            "max_connections_per_host": max_connections,
+            "logger": mLogger,
+        });
+
+        # Warm up the pool: establish the first connection before bursting concurrent
+        # requests.  HTTP/2 multiplexing can only reduce connection count when a
+        # connection is already established and ready to accept new streams.
+        {
+            HttpClientIo::Http2ClientStreamHandle warmup = manager.acquireStream(mSslUrl);
+            hash<auto> warmup_resp = warmup.request("GET", "/simple");
+            assertEq(200, warmup_resp.status_code, "warmup request should succeed");
+        }
+
+        Counter done(request_count);
+        Mutex resp_m();
+        list<hash<auto>> responses();
+        list<float> latencies();
+
+        date start = now_us();
+        for (int i = 0; i < request_count; ++i) {
+            background sub() {
+                on_exit done.dec();
+                try {
+                    date req_start = now_us();
+                    HttpClientIo::Http2ClientStreamHandle stream = manager.acquireStream(mSslUrl);
+                    hash<auto> resp = stream.request("GET", "/simple");
+                    float lat = (now_us() - req_start).durationMicroseconds() / 1000.0;
+                    resp_m.lock();
+                    on_exit resp_m.unlock();
+                    responses += resp;
+                    latencies += lat;
+                } catch (hash<ExceptionInfo> ex) {
+                    resp_m.lock();
+                    on_exit resp_m.unlock();
+                    responses += {"error": ex.err, "desc": ex.desc};
+                }
+            }();
+        }
+
+        int remaining = done.waitForZero(60s);
+        float total_ms = elapsedMs(start);
+
+        assertEq(0, remaining, "all requests should complete within timeout");
+
+        int success_count = 0;
+        foreach hash<auto> resp in (responses) {
+            if (!resp.hasKey("error") && resp.status_code == 200) {
+                ++success_count;
+            }
+        }
+
+        assertGe(request_count * 3 / 4, success_count,
+            sprintf("at least 75%% should succeed (got %d/%d)", success_count, request_count));
+
+        hash<auto> stats = manager.getStats();
+        assertTrue(stats.total_connections >= 1 && stats.total_connections <= max_connections,
+            sprintf("should use 1-%d connections (got %d)", max_connections, stats.total_connections));
+
+        float throughput = success_count * 1000.0 / total_ms;
+
+        printLatencyStats("connection pool latency", latencies);
+        if (m_options.verbose > 2) {
+            printf("  %d requests, max_connections=%d: %.1f ms total, %.1f req/s, connections=%d, %d succeeded\n",
+                request_count, max_connections, total_ms, throughput, stats.total_connections, success_count);
+        }
+    }
+
+    #! Test 4: Large response throughput
+    /** Tests data transfer rate for various response sizes.
+    */
+    largeResponseThroughputTest() {
+        list<int> sizes = (10240, 102400, 524288);
+
+        HttpClientIo::HttpClientConnectionManager manager(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h2",
+            "accept_all_certs": True,
+            "logger": mLogger,
+        });
+
+        foreach int size in (sizes) {
+            date req_start = now_us();
+            HttpClientIo::Http2ClientStreamHandle stream = manager.acquireStream(mSslUrl);
+            hash<auto> response = stream.request("GET", sprintf("/large/%d", size));
+            float ms = elapsedMs(req_start);
+
+            assertEq(200, response.status_code, sprintf("%dKB response: status code", size / 1024));
+
+            int body_size;
+            if (response.body.typeCode() == NT_BINARY) {
+                body_size = response.body.size();
+            } else {
+                body_size = response.body.length();
+            }
+            assertEq(size, body_size,
+                sprintf("%dKB response: body size should match (got %d)", size / 1024, body_size));
+
+            float throughput_mbps = (size / 1048576.0) / (ms / 1000.0);
+
+            if (m_options.verbose > 2) {
+                printf("  %dKB: %.2f ms, %.2f MB/s\n", size / 1024, ms, throughput_mbps);
+            }
+        }
+    }
+
+    #! Test 5: Request latency distribution
+    /** Measures P50/P95/P99 under moderate concurrent load.
+    */
+    requestLatencyDistributionTest() {
+        int request_count = 100;
+        int concurrency = 5;
+
+        HttpClientIo::HttpClientConnectionManager manager(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h2",
+            "accept_all_certs": True,
+            "max_connections_per_host": 2,
+            "logger": mLogger,
+        });
+
+        Counter done(request_count);
+        Mutex resp_m();
+        list<float> latencies();
+        int success_count = 0;
+
+        # Use a semaphore-like approach: only N requests in flight at once
+        Counter inflight(0);
+
+        date start = now_us();
+        for (int i = 0; i < request_count; ++i) {
+            # Wait if too many in flight
+            while (True) {
+                if (inflight.getCount() < concurrency) {
+                    break;
+                }
+                usleep(1ms);
+            }
+            inflight.inc();
+            background sub() {
+                on_exit {
+                    inflight.dec();
+                    done.dec();
+                }
+                try {
+                    date req_start = now_us();
+                    HttpClientIo::Http2ClientStreamHandle stream = manager.acquireStream(mSslUrl);
+                    hash<auto> resp = stream.request("GET", "/simple");
+                    float lat = (now_us() - req_start).durationMicroseconds() / 1000.0;
+                    resp_m.lock();
+                    on_exit resp_m.unlock();
+                    latencies += lat;
+                    if (resp.status_code == 200) {
+                        ++success_count;
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    # count as failed, no latency recorded
+                }
+            }();
+        }
+
+        int remaining = done.waitForZero(60s);
+        float total_ms = elapsedMs(start);
+
+        assertEq(0, remaining, "all requests should complete within timeout");
+        assertTrue(latencies.size() > 0, "should have latency measurements");
+
+        assertGe(request_count * 3 / 4, success_count,
+            sprintf("at least 75%% should succeed (got %d/%d)", success_count, request_count));
+
+        printLatencyStats("latency distribution", latencies);
+        if (m_options.verbose > 2) {
+            float throughput = success_count * 1000.0 / total_ms;
+            printf("  %d requests, concurrency=%d: %.1f ms total, %.1f req/s\n",
+                request_count, concurrency, total_ms, throughput);
+        }
+    }
+
+    #! Test 6: Controller vs direct mode comparison
+    /** Compares async I/O controller overhead against direct mode.
+    */
+    controllerVsDirectModeTest() {
+        int request_count = 50;
+
+        # Direct mode
+        HttpClientIo::HttpClientConnectionManager direct_manager(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h2",
+            "accept_all_certs": True,
+            "logger": mLogger,
+        });
+
+        list<float> direct_latencies();
+        date direct_start = now_us();
+        for (int i = 0; i < request_count; ++i) {
+            date req_start = now_us();
+            HttpClientIo::Http2ClientStreamHandle stream = direct_manager.acquireStream(mSslUrl);
+            hash<auto> resp = stream.request("GET", "/simple");
+            float lat = elapsedMs(req_start);
+            direct_latencies += lat;
+            assertEq(200, resp.status_code, sprintf("direct mode request %d", i));
+        }
+        float direct_total_ms = elapsedMs(direct_start);
+
+        # Controller mode
+        AsyncSocketIo::AsyncSocketIoController controller(False);
+        HttpClientIo::HttpClientConnectionManager ctrl_manager(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h2",
+            "accept_all_certs": True,
+            "logger": mLogger,
+        });
+        ctrl_manager.setController(controller);
+        controller.start();
+
+        on_exit {
+            controller.stop();
+            ctrl_manager.closeAll();
+        }
+
+        list<float> ctrl_latencies();
+        date ctrl_start = now_us();
+        for (int i = 0; i < request_count; ++i) {
+            date req_start = now_us();
+            hash<auto> resp = ctrl_manager.request(mSslUrl, "GET", "/simple");
+            float lat = elapsedMs(req_start);
+            ctrl_latencies += lat;
+            assertEq(200, resp.status_code, sprintf("controller mode request %d", i));
+        }
+        float ctrl_total_ms = elapsedMs(ctrl_start);
+
+        float direct_throughput = request_count * 1000.0 / direct_total_ms;
+        float ctrl_throughput = request_count * 1000.0 / ctrl_total_ms;
+
+        # Both modes should work; we just compare performance
+        assertTrue(direct_throughput > 0, "direct mode throughput positive");
+        assertTrue(ctrl_throughput > 0, "controller mode throughput positive");
+
+        printLatencyStats("direct mode", direct_latencies);
+        printLatencyStats("controller mode", ctrl_latencies);
+        if (m_options.verbose > 2) {
+            printf("  Direct: %.1f req/s (%.1f ms total)\n", direct_throughput, direct_total_ms);
+            printf("  Controller: %.1f req/s (%.1f ms total)\n", ctrl_throughput, ctrl_total_ms);
+            float ratio = ctrl_throughput / direct_throughput;
+            printf("  Ratio (controller/direct): %.2f\n", ratio);
+        }
+    }
+}

@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file RestClient.qm Qore user module for calling REST services
 
-/*  RestClient.qm Copyright (C) 2013 - 2025 Qore Technologies, s.r.o.
+/*  RestClient.qm Copyright (C) 2013 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -54,7 +54,7 @@
 %endtry
 
 module RestClient {
-    version = "2.3.3";
+    version = "2.4";
     desc = "user module for calling REST services";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -675,7 +675,8 @@ RestClient rest({"url": "http://localhost:8001/rest"});
         - \c headers: an optional hash of headers to send with every request, these can also be overridden in
           request method calls
         - \c http_version: HTTP version to use: \c "auto" (HTTP/2 if available, default), \c "1.0", \c "1.1",
-          or \c "2.0" (require HTTP/2, fail if unavailable)
+          \c "2.0" (require HTTP/2, fail if unavailable), or \c "3.0" (require HTTP/3 / QUIC, fail if
+          unavailable)
         - \c logger: any logger to use for the object
         - \c max_redirects: The maximum number of redirects before throwing an exception (the default is 5)
         - \c oauth2_alt_url_subst: URL substitution info for \c oauth2_alt_token_url
@@ -1464,6 +1465,13 @@ hash<auto> ans = rest.del("/orders/1");
     */
     bool usingOAuth2() {
         return oauth2_grant_type.val() && oauth2_grant_type != "none";
+    }
+
+    #! Returns True if the client uses custom token authentication
+    /** @since %RestClient 2.4
+    */
+    bool hasCustomTokenAuth() {
+        return custom_token_auth.val();
     }
 
     #! Returns True if the client requires an OAuth2 token
@@ -2515,6 +2523,180 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
         return rv;
     }
 
+    #! Starts an async REST request and returns a Future that will be resolved with the deserialized response
+    /** @par Example:
+        @code{.py}
+Future f = rest.asyncGet("/api/resource");
+hash<auto> result = f.get();
+        @endcode
+
+        @param m the HTTP method to use
+        @param path the URI path to send the request to
+        @param body an optional message body to send with the request
+        @param decode_errors decode error responses (default: True)
+        @param hdr an optional hash of headers to send with the request
+
+        @return a @ref RestRequestPollOperation for the async request
+
+        @since %RestClient 2.4
+    */
+    RestRequestPollOperation startPollDoRequest(string m, string path, auto body,
+            softbool decode_errors = True, *hash<auto> hdr) {
+        hash<auto> info = {};
+        checkLogin(\info);
+        # Phase 1: Prepare (synchronous — runs all subclass hooks)
+        prepareMsg(m, path, \body, \hdr);
+        if (exists body) {
+            info += {
+                "request-body": body,
+                "request-serialization": ds,
+            };
+        }
+
+        # prepare path
+        preparePath(\path);
+
+        # allow subclasses to sign / modify the request
+        prepareAsyncSend(m, path, body, \hdr);
+
+        # Phase 2: Create poll operation
+        return new RestRequestPollOperation(self, m, path, body, hdr, decode_errors, info);
+    }
+
+    #! Starts an async GET request
+    /** @par Example:
+        @code{.py}
+RestRequestPollOperation poller = rest.startPollGet("/api/resource");
+        @endcode
+
+        @param path the URI path to send the request to
+        @param body an optional message body to send with the request
+        @param hdr an optional hash of headers to send with the request
+
+        @return a @ref RestRequestPollOperation for the async request
+
+        @since %RestClient 2.4
+    */
+    RestRequestPollOperation startPollGet(string path, auto body, *hash<auto> hdr) {
+        return startPollDoRequest("GET", path, body, True, hdr);
+    }
+
+    #! Starts an async POST request
+    /** @par Example:
+        @code{.py}
+RestRequestPollOperation poller = rest.startPollPost("/api/resource", body);
+        @endcode
+
+        @param path the URI path to send the request to
+        @param body an optional message body to send with the request
+        @param hdr an optional hash of headers to send with the request
+
+        @return a @ref RestRequestPollOperation for the async request
+
+        @since %RestClient 2.4
+    */
+    RestRequestPollOperation startPollPost(string path, auto body, *hash<auto> hdr) {
+        return startPollDoRequest("POST", path, body, True, hdr);
+    }
+
+    #! Starts an async PUT request
+    /** @par Example:
+        @code{.py}
+RestRequestPollOperation poller = rest.startPollPut("/api/resource", body);
+        @endcode
+
+        @param path the URI path to send the request to
+        @param body an optional message body to send with the request
+        @param hdr an optional hash of headers to send with the request
+
+        @return a @ref RestRequestPollOperation for the async request
+
+        @since %RestClient 2.4
+    */
+    RestRequestPollOperation startPollPut(string path, auto body, *hash<auto> hdr) {
+        return startPollDoRequest("PUT", path, body, True, hdr);
+    }
+
+    #! Starts an async DELETE request
+    /** @par Example:
+        @code{.py}
+RestRequestPollOperation poller = rest.startPollDel("/api/resource");
+        @endcode
+
+        @param path the URI path to send the request to
+        @param body an optional message body to send with the request
+        @param hdr an optional hash of headers to send with the request
+
+        @return a @ref RestRequestPollOperation for the async request
+
+        @since %RestClient 2.4
+    */
+    RestRequestPollOperation startPollDel(string path, auto body, *hash<auto> hdr) {
+        return startPollDoRequest("DELETE", path, body, True, hdr);
+    }
+
+    #! Starts an async PATCH request
+    /** @par Example:
+        @code{.py}
+RestRequestPollOperation poller = rest.startPollPatch("/api/resource", body);
+        @endcode
+
+        @param path the URI path to send the request to
+        @param body an optional message body to send with the request
+        @param hdr an optional hash of headers to send with the request
+
+        @return a @ref RestRequestPollOperation for the async request
+
+        @since %RestClient 2.4
+    */
+    RestRequestPollOperation startPollPatch(string path, auto body, *hash<auto> hdr) {
+        return startPollDoRequest("PATCH", path, body, True, hdr);
+    }
+
+    #! Called after prepareMsg() + preparePath(), before creating the async poll operation
+    /** Default implementation calls signRequest(). Subclasses can override to add custom signing
+        (e.g., AWS Signature V4).
+
+        @param method the HTTP method
+        @param path the prepared URI path
+        @param body the prepared message body
+        @param hdr a reference to the headers hash, which can be modified
+
+        @since %RestClient 2.4
+    */
+    private prepareAsyncSend(string method, string path, *data body, reference<hash<auto>> hdr) {
+        signRequest(method, path, body, \hdr);
+    }
+
+    #! Called to process the raw HTTP response from the async poll operation
+    /** Default implementation calls processRestResponse(). Subclasses can override for custom
+        error wrapping (e.g., CDS or ServiceNow error extraction).
+
+        @param resp the raw HTTP response hash
+        @param method the HTTP method used
+        @param path the URI path used
+        @param info a reference to the info hash
+        @param decode_errors whether to decode error responses
+
+        @return the processed response hash
+
+        @since %RestClient 2.4
+    */
+    hash<auto> processAsyncResponse(hash<auto> resp, string method, string path,
+            reference<hash<auto>> info, bool decode_errors) {
+        return processRestResponse(resp, method, path, \info);
+    }
+
+    #! Tries to decode an error response for async operations
+    /** @param h a reference to the response hash
+        @param info a reference to the info hash
+
+        @since %RestClient 2.4
+    */
+    static decodeAsyncError(hash<auto> h, *reference<hash<auto>> info) {
+        decodeError(h, \info);
+    }
+
     #! Signs requests before sending
     private signRequest(string method, *string path, *data body, reference<hash<auto>> hdr) {
         # override in child classes to implement request signing
@@ -2576,7 +2758,7 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
       request method calls; also a string giving headers can be given in the format:
       <tt>header1=value, header2=value</tt>; the value will be parsed with
       \c Util::parse_to_qore_value() "parse_to_qore_value()"
-    - \c "http_version": HTTP version to use (\c "auto" (default), \c "1.0", \c "1.1", or \c "2.0")
+    - \c "http_version": HTTP version to use (\c "auto" (default), \c "1.0", \c "1.1", \c "2.0", or \c "3.0")
     - \c "max_redirects": maximum redirects to support
     - \c "oauth2_app": An OAuth2 app name for external programs handling OAuth2 calls for this client
     - \c "oauth2_auth_url": The OAuth2 authorization URL for the \c authorization_code grant type; ignored if the
@@ -4370,6 +4552,256 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation {
                 }
             }
         }
+    }
+}
+
+#! Poll operation for async REST requests
+/** Encapsulates a full REST request lifecycle including OAuth2 token refresh and auth retry.
+
+    The state machine follows:
+    - \c SEND_REQUEST: Send the HTTP request and receive the response
+    - \c AUTH_REFRESH: Refresh the OAuth2 token (if needed after a 401 response)
+    - \c AUTH_RETRY: Retry the request with the new token
+    - \c COMPLETE: The request is complete
+
+    @since %RestClient 2.4
+*/
+public class RestRequestPollOperation inherits Qore::AbstractPollOperation {
+    public {
+        #! Send request state
+        const SPS_SEND_REQUEST = "send-request";
+        #! OAuth2 token refresh state
+        const SPS_AUTH_REFRESH = "auth-refresh";
+        #! Auth retry state (re-send with new token)
+        const SPS_AUTH_RETRY = "auth-retry";
+        #! Complete state
+        const SPS_COMPLETE = "complete";
+    }
+
+    private {
+        #! The RestClient used for the request
+        RestClient rc;
+        #! HTTP method
+        string method;
+        #! URI path
+        string path;
+        #! Message body (serialized)
+        *data body;
+        #! Request headers
+        hash<auto> hdr;
+        #! Whether to decode error responses
+        bool decode_errors;
+        #! Request info hash
+        hash<auto> info;
+        #! Inner poll operation for the HTTP I/O
+        AbstractPollOperation poller;
+        #! Goal reached flag
+        bool goal_reached = False;
+        #! Output (deserialized response)
+        auto output;
+        #! Current state
+        string state;
+        #! Mutex for thread safety
+        Mutex m();
+        #! Auth refresh already attempted
+        bool auth_refreshed = False;
+    }
+
+    #! Creates a new RestRequestPollOperation
+    /** @param rc the RestClient object
+        @param method the HTTP method
+        @param path the prepared URI path
+        @param body the prepared (serialized) message body
+        @param hdr the prepared request headers
+        @param decode_errors whether to decode error responses
+        @param info the info hash from the prepare phase
+    */
+    constructor(RestClient rc, string method, string path, *data body, hash<auto> hdr,
+            bool decode_errors, hash<auto> info) {
+        self.rc = rc;
+        self.method = method;
+        self.path = path;
+        self.body = body;
+        self.hdr = hdr;
+        self.decode_errors = decode_errors;
+        self.info = info;
+
+        # check if OAuth2 token refresh is needed before sending
+        if (rc.requiresRefresh()) {
+            rc.detail("RestRequestPollOperation: token in expiry window; refreshing before request");
+            doStartAuthRefresh();
+        } else {
+            doStartSendRequest();
+        }
+    }
+
+    #! Returns the goal description
+    string getGoal() {
+        return sprintf("REST %s %s", method, path);
+    }
+
+    #! Returns the current state
+    string getState() {
+        return state + (poller ? ("-" + poller.getState()) : "");
+    }
+
+    #! Returns True if the goal has been reached
+    bool goalReached() {
+        return goal_reached;
+    }
+
+    #! Drives the poll operation forward
+    /** @return a @ref Qore::SocketPollInfo "SocketPollInfo" hash if the operation needs more I/O,
+        or @ref nothing if complete
+    */
+    *hash<SocketPollInfo> continuePoll() {
+        AutoLock al(m);
+
+        while (True) {
+            *hash<SocketPollInfo> pinfo = poller.continuePoll();
+            if (pinfo) {
+                return pinfo;
+            }
+
+            if (state == SPS_AUTH_REFRESH) {
+%ifdef NoJson
+                throw "REST-ASYNC-ERROR", "cannot process OAuth2 token without the json module";
+%else
+                # Auth token refresh completed; update headers with new token and retry
+                hash<auto> resp = poller.getOutput();
+                if ((resp."code" / 100) == 2) {
+                    string rbody = resp."response-body"
+                        ? resp."response-body".toString(resp.info.charset ?? "ISO-8859-1")
+                        : "";
+                    resp.info."response-headers"."content-type" =~ s/;.*//;
+                    auto parsed_body;
+                    switch (resp.info."response-headers"."content-type") {
+                        case MimeTypeJson:
+                            parsed_body = parse_json(rbody);
+                            break;
+                        case MimeTypeFormUrlEncoded:
+                            parsed_body = mime_parse_form_urlencoded_string(rbody);
+                            break;
+                        default:
+                            throw "REST-ASYNC-ERROR", sprintf("cannot parse OAuth2 token response with "
+                                "Content-Type: %y", resp.info."response-headers"."content-type");
+                    }
+                    rc.gotOAuth2LoginInfo(parsed_body, True);
+                    rc.detail("RestRequestPollOperation: got new token; sending request");
+                } else {
+                    throw "REST-ASYNC-ERROR", sprintf("OAuth2 token refresh failed: %d %y returned",
+                        resp."code", resp.info."response-uri");
+                }
+                # update authorization header from new token
+                hdr.Authorization = rc.getDefaultHeaders().Authorization;
+                doStartSendRequest();
+                continue;
+%endif
+            }
+
+            if (state == SPS_SEND_REQUEST || state == SPS_AUTH_RETRY) {
+                hash<auto> resp = poller.getOutput();
+                string rbody = resp."response-body"
+                    ? resp."response-body".toString(resp.info.charset ?? "ISO-8859-1")
+                    : "";
+
+                # check for auth errors and retry if possible
+                if (!auth_refreshed && rc.usingOAuth2() && rc.getToken()
+                        && (rc.getOAuth2Options().oauth2_auto_refresh ?? True)
+                        && rc.isAuthTokenError(resp."code", resp.info."response-headers", False,
+                            resp.info."body-content-type", rbody)) {
+                    rc.detail("RestRequestPollOperation: auth error in response; refreshing token");
+                    doStartAuthRefresh();
+                    continue;
+                }
+
+                # build response hash compatible with processRestResponse()
+                hash<auto> h = {
+                    "status_code": resp."code",
+                    "body": rbody,
+                    "content-type": resp.info."body-content-type",
+                } + resp.info."response-headers";
+
+                info."response-code" = resp."code";
+                info."response-body-raw" = rbody;
+                info += resp.info{"request-uri", "response-uri", "response-headers"};
+
+                # handle HTTP error codes when error_passthru is not set
+                if ((resp."code" / 100) != 2 && !rc.getErrorPassthru()) {
+                    if (decode_errors && rbody.val()) {
+                        RestClient::decodeAsyncError(h, \info);
+                    }
+                    throw "REST-RESPONSE-ERROR", sprintf("%d %s: %s (REST URL %s %s)", resp."code",
+                        resp.info."response-uri", rbody.val() ? rbody : "<empty>", method, path),
+                        h + {"decoded_body": info."response-body"};
+                }
+
+                try {
+                    output = rc.processAsyncResponse(h, method, path, \info, decode_errors);
+                } catch (hash<ExceptionInfo> ex) {
+                    if (decode_errors && ex.arg.body) {
+                        RestClient::decodeAsyncError(ex.arg, \info);
+                        ex.arg.deserialized_body = info."response-body";
+                    }
+                    rethrow ex.err, ex.desc, ex.arg;
+                }
+
+                # check deserialized body for auth errors
+                if (!auth_refreshed && rc.needsRestBodyAuthErrorCheck()
+                        && rc.isAuthTokenError(resp."code", resp.info."response-headers", True,
+                            resp.info."body-content-type", output.body)) {
+                    rc.detail("RestRequestPollOperation: auth error in response body; refreshing token");
+                    doStartAuthRefresh();
+                    continue;
+                }
+
+                goal_reached = True;
+                state = SPS_COMPLETE;
+                delete poller;
+                break;
+            }
+
+            throw "INVALID-STATE", sprintf("RestRequestPollOperation: invalid state %y", state);
+        }
+    }
+
+    #! Returns the deserialized response hash
+    /** Only valid after goalReached() returns True
+    */
+    auto getOutput() {
+        return output;
+    }
+
+    #! Returns the info hash with request/response details
+    hash<auto> getInfo() {
+        return info;
+    }
+
+    #! Aborts the operation
+    abort() {
+        if (poller) {
+            poller.abort();
+        }
+    }
+
+    private doStartSendRequest() {
+        state = auth_refreshed ? SPS_AUTH_RETRY : SPS_SEND_REQUEST;
+        rc.debug("RestRequestPollOperation: sending %s %s", method, path);
+        poller = rc.startPollSendRecv(method, path, body, hdr);
+    }
+
+    private doStartAuthRefresh() {
+        auth_refreshed = True;
+%ifdef NoJson
+        throw "REST-ASYNC-ERROR", "cannot refresh OAuth2 token without the json module";
+%else
+        state = SPS_AUTH_REFRESH;
+        if (rc.hasCustomTokenAuth()) {
+            poller = rc.startPollCustomGetToken();
+        } else {
+            poller = rc.startOAuth2PollRefreshToken();
+        }
+%endif
     }
 }
 }

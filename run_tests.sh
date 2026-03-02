@@ -174,6 +174,13 @@ fi
 
 LD_PRELOAD=$LIBQORE
 
+# Enable core dumps for crash diagnostics
+ulimit -c unlimited 2>/dev/null
+# Try to set core pattern to a writable location (may fail in containers)
+if [ -w /proc/sys/kernel/core_pattern ]; then
+    echo "/tmp/core.%p" > /proc/sys/kernel/core_pattern
+fi
+
 # Print info about used variables etc.
 echo "Using qore: $QORE"
 echo "Using libqore: $LIBQORE"
@@ -221,11 +228,34 @@ for test in $TESTS; do
         $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
     fi
 
-    if [ $? -eq 0 ]; then
+    TEST_EXIT=$?
+    if [ $TEST_EXIT -eq 0 ]; then
         PASSED_TEST_COUNT=`expr $PASSED_TEST_COUNT + 1`
     else
         FAILED_TEST_COUNT=`expr $FAILED_TEST_COUNT + 1`
         FAILED_TESTS="$FAILED_TESTS $test"
+        # If the test was killed by a signal (exit code > 128), try to capture diagnostics
+        if [ $TEST_EXIT -gt 128 ]; then
+            SIG_NUM=`expr $TEST_EXIT - 128`
+            echo "*** CRASH: test killed by signal $SIG_NUM (exit code $TEST_EXIT) ***"
+            # Check for core dump
+            CORE_FILE=""
+            for cf in core core.* /tmp/core.*; do
+                if [ -f "$cf" ] 2>/dev/null; then
+                    CORE_FILE="$cf"
+                    break
+                fi
+            done
+            if [ -n "$CORE_FILE" ] && command -v gdb > /dev/null 2>&1; then
+                echo "*** Core dump found: $CORE_FILE - extracting backtrace ***"
+                gdb -batch -ex "thread apply all bt" -ex "quit" "$QORE" "$CORE_FILE" 2>&1 | head -200
+                rm -f "$CORE_FILE"
+            elif command -v gdb > /dev/null 2>&1; then
+                echo "*** No core dump found; re-running under gdb to try to capture backtrace ***"
+                gdb -batch -ex run -ex "thread apply all bt" -ex quit \
+                    --args $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT 2>&1 | head -200
+            fi
+        fi
     fi
 
     i=`expr $i + 1`

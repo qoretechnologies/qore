@@ -41,11 +41,11 @@ class EventNotifierTest inherits QUnit::Test {
 
         # Notify and poll
         n.notify();
-        *list<hash<SocketPollInfo>> events = loop.poll(100ms);
+        *list<hash<EventPollInfo>> events = loop.poll(100ms);
         assertTrue(exists events, "Should get events after notify()");
         assertEq(1, events.size(), "Should get exactly one event");
 
-        hash<SocketPollInfo> ev = events[0];
+        hash<EventPollInfo> ev = events[0];
         assertTrue(ev.socket instanceof EventNotifier, "Socket should be EventNotifier");
         assertTrue((ev.events & SOCK_POLLIN) != 0, "Should have POLLIN event");
 
@@ -73,7 +73,7 @@ class EventNotifierTest inherits QUnit::Test {
         n.notify();
 
         # Should coalesce to one event
-        *list<hash<SocketPollInfo>> events = loop.poll(100ms);
+        *list<hash<EventPollInfo>> events = loop.poll(100ms);
         assertTrue(exists events, "Should get events");
         assertEq(1, events.size(), "Multiple notifications should coalesce to one event");
 

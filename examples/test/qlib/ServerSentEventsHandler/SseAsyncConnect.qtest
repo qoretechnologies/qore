@@ -1,0 +1,153 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/HttpServerAsyncIo
+%requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/ServerSentEventClient
+%requires ../../../../qlib/ServerSentEventHandler
+
+%exec-class SseAsyncConnectTest
+
+#! Handler that returns 200 with wrong Content-Type
+class WrongContentTypeHandler inherits AbstractHttpRequestHandler {
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, "not an SSE stream", {"Content-Type": MimeTypeJson});
+    }
+}
+
+#! Handler that returns 404
+class NotFoundHandler inherits AbstractHttpRequestHandler {
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(404, "not found", {"Content-Type": MimeTypeText});
+    }
+}
+
+public class SseAsyncConnectTest inherits QUnit::Test {
+    private {
+        HttpServer m_server;
+        HttpServer m_error_server;
+        ServerSentEventHandler sse_handler;
+        Logger logger;
+        int port;
+        int error_port;
+    }
+
+    constructor() : Test("SseAsyncConnectTest", "1.0") {
+        addTestCase("SseConnectPollOperation basic", \sseConnectPollTest());
+        addTestCase("SseConnectPollOperation poll state", \sseConnectPollStateTest());
+        addTestCase("ServerSentEventConnection polling API", \connectionPollingApiTest());
+        addTestCase("SseConnectPollOperation error handling", \sseConnectErrorTest());
+        addTestCase("SseConnectPollOperation non-200 response", \sseConnectNon200Test());
+        addTestCase("SseConnectPollOperation wrong Content-Type", \sseConnectWrongContentTypeTest());
+
+        logger = new Logger("test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        sse_handler = new ServerSentEventHandler({
+            "logger": logger,
+        });
+        hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        };
+        m_server = new HttpServer(http_opts);
+        m_server.setHandler("sse-handler", "", NOTHING, sse_handler);
+        m_server.setDefaultHandler("sse-handler", sse_handler);
+        port = m_server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+
+        # error server for non-SSE responses
+        m_error_server = new HttpServer(http_opts);
+        m_error_server.setHandler("/wrong-ct", "/wrong-ct", MimeTypeJson,
+            new WrongContentTypeHandler());
+        m_error_server.setDefaultHandler("not-found", new NotFoundHandler());
+        error_port = m_error_server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+
+        set_return_value(main());
+
+        m_server.stop();
+        m_error_server.stop();
+    }
+
+    #! Helper to drive a poll operation to completion with a deadline
+    private auto drivePoll(AbstractPollOperation poller, timeout deadline = 30s) {
+        date start = now_us();
+        while (!poller.goalReached()) {
+            timeout elapsed = now_us() - start;
+            if (elapsed >= deadline) {
+                throw "TIMEOUT", sprintf("poll operation exceeded %d ms deadline", deadline);
+            }
+            *hash<SocketPollInfo> info = poller.continuePoll();
+            if (info) {
+                timeout remaining = deadline - elapsed;
+                Socket::poll((info,), min(remaining, 1s));
+            }
+        }
+        return poller.getOutput();
+    }
+
+    sseConnectPollTest() {
+        # test SseConnectPollOperation directly
+        SseConnectPollOperation poller("http://127.0.0.1:" + port);
+        assertEq("sse-connect", poller.getGoal());
+        assertFalse(poller.goalReached());
+
+        hash<auto> result = drivePoll(poller);
+        assertTrue(poller.goalReached());
+        assertEq(200, result.code);
+    }
+
+    sseConnectPollStateTest() {
+        SseConnectPollOperation poller("http://127.0.0.1:" + port);
+
+        # check initial state
+        string initial_state = poller.getState();
+        assertTrue(initial_state.find("sse-connect") >= 0, "initial state contains 'sse-connect'");
+
+        drivePoll(poller);
+        assertEq("complete", poller.getState());
+    }
+
+    connectionPollingApiTest() {
+        # test via ServerSentEventConnection
+        ServerSentEventConnection conn("test-sse", "test SSE connection",
+            "sse://127.0.0.1:" + port);
+        assertTrue(conn.supportsPollingApi());
+
+        AbstractPollOperation poller = conn.startPollConnect(logger);
+        assertEq("sse-connect", poller.getGoal());
+
+        hash<auto> result = drivePoll(poller);
+        assertTrue(poller.goalReached());
+        assertEq(200, result.code);
+    }
+
+    sseConnectErrorTest() {
+        # test connection to a port that will reject
+        SseConnectPollOperation poller("http://127.0.0.1:1");
+        assertThrows("SOCKET-CONNECT-ERROR", \drivePoll(), poller);
+    }
+
+    sseConnectNon200Test() {
+        # test SSE connection to a server that returns 404
+        SseConnectPollOperation poller("http://127.0.0.1:" + error_port + "/not-found");
+        assertThrows("SSE-CONNECT-ERROR", "expected 200 OK, got 404", \drivePoll(), poller);
+    }
+
+    sseConnectWrongContentTypeTest() {
+        # test SSE connection to a server that returns wrong Content-Type
+        SseConnectPollOperation poller("http://127.0.0.1:" + error_port + "/wrong-ct");
+        assertThrows("SSE-CONNECT-ERROR", "text/event-stream", \drivePoll(), poller);
+    }
+}

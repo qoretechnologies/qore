@@ -3,7 +3,7 @@
 
 # @file rest example program for the RestClient module
 
-/*  Copyright 2013 - 2025 Qore Technologies, s.r.o.
+/*  Copyright 2013 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -86,6 +86,7 @@ class RestCmd {
             "lax":           "X,lax-parsing",
             "example":       "x,example:s",
             "tokentype":     "y,token-type=s",
+            "httpver":       "W,http-version=s",
 
             "help":          "h,help",
         };
@@ -277,6 +278,9 @@ class RestCmd {
                 if (opt.to) {
                     rest.setTimeout(opt.to * 1000);
                 }
+                if (opt.httpver) {
+                    rest.setHTTPVersion(opt.httpver);
+                }
             } catch (hash<ExceptionInfo> ex) {
                 if (opt.fullex) {
                     stderr.printf("%s\n", get_exception_string(ex));
@@ -314,6 +318,9 @@ class RestCmd {
                 opts.ssl_cert_path = opt.cert;
                 opts.ssl_key_path = opt.key ?? opt.cert;
                 opts.ssl_key_password = opt.keypass;
+            }
+            if (opt.httpver) {
+                opts.http_version = opt.httpver;
             }
             rest = new RestClient(opts);
         }
@@ -661,6 +668,7 @@ class RestCmd {
  -t, --token=ARG            an authorization token to use
  -u, --userpass=ARG         set the user and password for the connection in the format \"user:password\"
  -V, --verify-cert          require and verify X.509 certificates from the server
+ -W, --http-version=ARG     set HTTP version: auto, 1.0, 1.1, 2.0, 3.0
  -X, --lax-parsing          lax parsing of Swagger schemas
  -x, --example[=ARG]        generate an example message; ARG=
                               q: generate Qore example (default data)

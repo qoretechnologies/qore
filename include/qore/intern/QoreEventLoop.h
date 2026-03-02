@@ -35,6 +35,7 @@
 #include <qore/Qore.h>
 
 #include <vector>
+#include <set>
 #include <unordered_map>
 
 #ifdef DARWIN
@@ -53,12 +54,21 @@
 static constexpr int QORE_EV_READ  = (1 << 0);
 static constexpr int QORE_EV_WRITE = (1 << 1);
 static constexpr int QORE_EV_ERROR = (1 << 2);
+static constexpr int QORE_EV_TIMER = (1 << 3);
+
+//! Sentinel fd value for timer events in QoreEventInfo
+static constexpr int QORE_TIMER_FD = -2;
 
 //! Event information returned from poll operations
 struct QoreEventInfo {
-    int fd;         //!< File descriptor
-    int events;     //!< Events that occurred (QORE_EV_READ, QORE_EV_WRITE, QORE_EV_ERROR)
-    void* udata;    //!< User data associated with this fd
+    int fd;             //!< File descriptor (QORE_TIMER_FD for timer events)
+    int events;         //!< Events that occurred (QORE_EV_READ, QORE_EV_WRITE, QORE_EV_ERROR, QORE_EV_TIMER)
+    void* udata;        //!< User data associated with this fd
+    int64_t timer_id;   //!< Timer ID (only valid when events & QORE_EV_TIMER)
+
+    QoreEventInfo() : fd(0), events(0), udata(nullptr), timer_id(0) {}
+    QoreEventInfo(int fd, int events, void* udata, int64_t timer_id = 0)
+        : fd(fd), events(events), udata(udata), timer_id(timer_id) {}
 };
 
 //! Persistent event loop abstraction
@@ -144,21 +154,42 @@ public:
     */
     DLLLOCAL int poll(std::vector<QoreEventInfo>& events, int timeout_ms, ExceptionSink* xsink);
 
-    //! Returns the number of registered event sources
+    //! Adds a timer to the event loop
+    /** @param deadline_us absolute deadline in microseconds since the epoch
+        @param udata user data pointer to associate with this timer
+        @param preset_id if > 0, use this ID instead of auto-allocating
+
+        @return the timer ID
+    */
+    DLLLOCAL int64_t addTimer(int64_t deadline_us, void* udata, int64_t preset_id = 0);
+
+    //! Cancels a timer
+    /** @param id the timer ID returned by addTimer()
+
+        @return true if the timer was found and canceled, false if not found
+    */
+    DLLLOCAL bool cancelTimer(int64_t id);
+
+    //! Returns the number of active timers
+    DLLLOCAL size_t timerCount() const {
+        return timer_set.size();
+    }
+
+    //! Returns the number of registered event sources (fds + timers)
     DLLLOCAL size_t size() const {
 #ifdef DARWIN
-        return fd_map.size() + user_event_map.size();
+        return fd_map.size() + user_event_map.size() + timer_set.size();
 #else
-        return fd_map.size();
+        return fd_map.size() + timer_set.size();
 #endif
     }
 
-    //! Returns true if no event sources are registered
+    //! Returns true if no event sources are registered (no fds and no timers)
     DLLLOCAL bool empty() const {
 #ifdef DARWIN
-        return fd_map.empty() && user_event_map.empty();
+        return fd_map.empty() && user_event_map.empty() && timer_set.empty();
 #else
-        return fd_map.empty();
+        return fd_map.empty() && timer_set.empty();
 #endif
     }
 
@@ -195,6 +226,29 @@ private:
         void* udata;    //!< User data
     };
 
+    //! Timer entry for the sorted timer set
+    struct TimerEntry {
+        int64_t deadline_us;    //!< Absolute deadline (usec since epoch)
+        int64_t id;             //!< Unique timer ID
+        void* udata;            //!< Caller-managed user data
+
+        bool operator<(const TimerEntry& o) const {
+            if (deadline_us != o.deadline_us) {
+                return deadline_us < o.deadline_us;
+            }
+            return id < o.id;
+        }
+    };
+
+    //! Sorted set of timers (ordered by deadline, then ID)
+    std::set<TimerEntry> timer_set;
+
+    //! Map of timer ID -> iterator into timer_set for O(log n) cancel
+    std::unordered_map<int64_t, std::set<TimerEntry>::iterator> timer_id_map;
+
+    //! Next timer ID to allocate
+    int64_t next_timer_id = 1;
+
     //! Map of fd -> info
     std::unordered_map<int, FdInfo> fd_map;
 
@@ -205,6 +259,9 @@ private:
 #elif defined(__linux__)
     int event_fd = -1;  //!< epoll file descriptor
 #endif
+
+    //! Collect expired timers and append to events vector
+    DLLLOCAL void collectExpiredTimers(std::vector<QoreEventInfo>& events);
 
     // Non-copyable
     QoreEventLoop(const QoreEventLoop&) = delete;

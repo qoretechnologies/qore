@@ -39,9 +39,9 @@ public namespace AsyncSocketIo {
     read HTTP/2 frames and populate the stream buffer. The context only reads from the buffer
     via @ref Qore::Socket::readHttp2StreamData() "Socket::readHttp2StreamData()".
 
-    @since AsyncSocketIo 2.1
+    @since AsyncSocketIo 3.0
 */
-public class Http2StreamContext {
+public class Http2StreamContext inherits AbstractStreamContext {
     private {
         Socket sock;
         int stream_id;
@@ -67,6 +67,10 @@ public class Http2StreamContext {
             # and can trigger HTTP/2 frame reading from TCP
             sock.setHttp2ActiveStream(stream_id);
         }
+    }
+
+    string getProtocol() {
+        return "http2";
     }
 
     int getStreamId() {

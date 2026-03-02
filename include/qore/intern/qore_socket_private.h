@@ -45,6 +45,12 @@
 #include "qore/intern/QC_Queue.h"
 
 #include "qore/intern/Http2Session.h"
+// NOTE: QuicSession.h pulls in ngtcp2, nghttp3, and OpenSSL headers transitively.
+// A forward declaration would suffice for the shared_ptr members, but the inline
+// methods (addQuicSession, etc.) call QuicSession::getSessionId() and need the
+// full definition.  With single-compilation-unit builds this is not a concern.
+#include "qore/intern/QuicSession.h"
+#include "qore/intern/QoreDatagramDispatcher.h"
 #include "qore/intern/qore_thread_intern.h"
 
 #include <cctype>
@@ -90,9 +96,10 @@
 #define DEFAULT_SOCKET_MIN_THRESHOLD_BYTES 1024
 #endif
 
-static constexpr int SOCK_POLLIN  = (1 << 0);
-static constexpr int SOCK_POLLOUT = (1 << 1);
-static constexpr int SOCK_POLLERR = (1 << 2);
+static constexpr int SOCK_POLLIN    = (1 << 0);
+static constexpr int SOCK_POLLOUT   = (1 << 1);
+static constexpr int SOCK_POLLERR   = (1 << 2);
+static constexpr int SOCK_POLLTIMER = (1 << 3);
 
 DLLLOCAL void concat_target(QoreString& str, const struct sockaddr *addr, const char* type = "target");
 DLLLOCAL int do_read_error(ssize_t rc, const char* method_name, int timeout_ms, ExceptionSink* xsink);
@@ -508,6 +515,81 @@ private:
     DLLLOCAL int doRecv(ExceptionSink* xsink);
 };
 
+//! Non-blocking recvfrom() for UDP datagram sockets
+/** Receives a single datagram and captures the source address.
+    Returns data as a BinaryNode and source address info as a QoreHashNode
+    via takeOutput() (returns a list: [binary data, hash address_info]).
+
+    @since %Qore 2.3
+*/
+class SocketRecvFromPollState : public AbstractPollState {
+public:
+    DLLLOCAL SocketRecvFromPollState(ExceptionSink* xsink, qore_socket_private* sock, size_t max_size);
+
+    /** returns:
+        - SOCK_POLLIN = wait for read and call this again
+        - SOCK_POLLOUT = wait for write and call this again
+        - 0 = done
+        - < 0 = error (exception raised)
+    */
+    DLLLOCAL virtual int continuePoll(ExceptionSink* xsink);
+
+    //! Returns the received data as a DatagramInfo hash
+    DLLLOCAL virtual QoreValue takeOutput();
+
+    //! Returns the number of bytes received
+    DLLLOCAL size_t getBytesReceived() const {
+        return received;
+    }
+
+private:
+    qore_socket_private* sock;
+    SimpleRefHolder<BinaryNode> bin;
+    QoreHashNode* output = nullptr;     //!< Built in continuePoll() with the caller's xsink
+    size_t max_size;
+    size_t received = 0;
+    struct sockaddr_storage src_addr;
+    socklen_t src_addr_len = sizeof(struct sockaddr_storage);
+    bool io = false;
+
+    //! Build the typed DatagramInfo output hash (requires valid xsink)
+    DLLLOCAL void buildOutput(ExceptionSink* xsink);
+};
+
+//! Non-blocking sendto() for UDP datagram sockets
+/** Sends a datagram to the specified address.
+
+    @since %Qore 2.3
+*/
+class SocketSendToPollState : public AbstractPollState {
+public:
+    //! "bin" must be passed already referenced; this class takes ownership of the reference
+    DLLLOCAL SocketSendToPollState(ExceptionSink* xsink, qore_socket_private* sock, BinaryNode* bin,
+        const struct sockaddr* dest_addr, socklen_t dest_addr_len);
+
+    /** returns:
+        - SOCK_POLLIN = wait for read and call this again
+        - SOCK_POLLOUT = wait for write and call this again
+        - 0 = done
+        - < 0 = error (exception raised)
+    */
+    DLLLOCAL virtual int continuePoll(ExceptionSink* xsink);
+
+    //! Returns the number of bytes sent so far
+    DLLLOCAL size_t getBytesSent() const {
+        return sent;
+    }
+
+private:
+    qore_socket_private* sock;
+    SimpleRefHolder<BinaryNode> bin;    //!< Owns a reference to the data being sent
+    const char* data;
+    size_t size;
+    size_t sent = 0;
+    struct sockaddr_storage dest_addr;
+    socklen_t dest_addr_len;
+};
+
 
 struct qore_socket_private {
     friend class PrivateQoreSocketTimeoutHelper;
@@ -648,6 +730,119 @@ struct qore_socket_private {
     */
     std::function<void(int32_t, Http2StreamInfo*, ExceptionSink*)> h2_stream_complete_callback;
 
+    //! Connection-ID based datagram dispatcher for QUIC multi-connection support
+    /** Routes incoming UDP datagrams to the correct QuicSession based on DCID.
+        Used by SocketQuicServerPollOperation for CID-based packet routing.
+        Lazily initialized to avoid overhead for non-QUIC sockets.
+    */
+    std::unique_ptr<QoreDatagramDispatcher> quic_dispatcher;
+
+    //! Get or create the QUIC datagram dispatcher (lazy initialization)
+    /** Thread-safe: uses quic_sessions_lock to protect the lazy init.
+        Although typically called from the I/O thread (which holds sock->priv->m),
+        this lock makes it safe regardless of caller context.
+
+        @note The returned reference remains valid for the lifetime of the socket
+        because quic_dispatcher is only set once (lazy init) and never cleared
+        or moved.
+    */
+    DLLLOCAL QoreDatagramDispatcher& getQuicDispatcher() {
+        AutoLocker al(quic_sessions_lock);
+        if (!quic_dispatcher) {
+            quic_dispatcher = std::make_unique<QoreDatagramDispatcher>();
+        }
+        return *quic_dispatcher;
+    }
+
+    //! Authoritative map of session_id -> QuicSession for multi-connection support.
+    /** Multiple QUIC clients can connect to a single UDP socket.
+        Each session is identified by a unique session_id.
+        Protected by quic_sessions_lock; SocketQuicServerPollOperation::sessions_
+        is a single-threaded working copy used only from the I/O thread.
+    */
+    std::unordered_map<int64_t, std::shared_ptr<QuicSession>> quic_sessions;
+    //! Lock ordering: QoreSocketObject::priv->m → quic_sessions_lock → QuicSession::mtx_ (never reverse)
+    mutable QoreThreadLock quic_sessions_lock;
+
+    //! Add a QUIC session to the session map
+    DLLLOCAL void addQuicSession(const std::shared_ptr<QuicSession>& session) {
+        AutoLocker al(quic_sessions_lock);
+        quic_sessions[session->getSessionId()] = session;
+    }
+
+    //! Remove a QUIC session from the session map
+    DLLLOCAL void removeQuicSession(int64_t session_id) {
+        AutoLocker al(quic_sessions_lock);
+        quic_sessions.erase(session_id);
+    }
+
+    //! Get a QUIC session by session ID
+    /** Acquires quic_sessions_lock internally; caller may hold priv->m (safe per
+        lock ordering: priv->m → quic_sessions_lock → QuicSession::mtx_).
+    */
+    DLLLOCAL std::shared_ptr<QuicSession> getQuicSession(int64_t session_id) {
+        AutoLocker al(quic_sessions_lock);
+        auto it = quic_sessions.find(session_id);
+        return it != quic_sessions.end() ? it->second : nullptr;
+    }
+
+    //! Get the first QUIC session ID (for client connections with a single session)
+    /** @return session ID or 0 if no sessions exist (0 is never a valid session
+        ID since IDs start at 1)
+        @note Returns an arbitrary session from the unordered_map; used only for
+        single-session client sockets where exactly one session exists.
+    */
+    DLLLOCAL int64_t getFirstQuicSessionId(ExceptionSink* xsink = nullptr) const {
+        AutoLocker al(quic_sessions_lock);
+        if (quic_sessions.empty()) {
+            return 0;
+        }
+        if (quic_sessions.size() != 1) {
+            if (xsink) {
+                xsink->raiseException("QUIC-SESSION-ERROR",
+                    "getFirstQuicSessionId() is only valid for single-session client sockets; "
+                    "this socket has %d sessions", (int)quic_sessions.size());
+            }
+            return 0;
+        }
+        return quic_sessions.begin()->first;
+    }
+
+    //! Shared server SSL_CTX for QUIC sessions (for session ticket key continuity)
+    /** Session tickets are encrypted with the SSL_CTX's ticket key, so all
+        sessions for a listener must share one SSL_CTX. This ensures that a
+        ticket issued by one session can be decrypted by another, enabling
+        QUIC 0-RTT (early data).
+
+        Lazily initialized by getOrCreateQuicServerSslCtx(). Reference-counted
+        via SSL_CTX_up_ref()/SSL_CTX_free(); QuicSession holds a reference,
+        and this pointer holds the "master" reference. Cleaned up in destructor
+        and close_internal() via freeQuicServerSslCtx().
+    */
+    SSL_CTX* quic_server_ssl_ctx_ = nullptr;
+    std::mutex quic_server_ssl_ctx_lock_;  //!< protects lazy init of quic_server_ssl_ctx_
+
+    //! Get or create the shared server SSL_CTX for QUIC
+    /** Thread-safe: uses quic_server_ssl_ctx_lock_ internally. Creates the SSL_CTX
+        once with TLS 1.3, cert/key, ALPN callback, max_early_data=0xffffffff
+        (RFC 9001 §4.6.1), and 2 session tickets.
+        @param cert X.509 certificate
+        @param pk private key
+        @param xsink exception sink
+        @return SSL_CTX pointer (owned by this socket), or nullptr on error
+    */
+    DLLLOCAL SSL_CTX* getOrCreateQuicServerSslCtx(QoreSSLCertificate* cert, QoreSSLPrivateKey* pk,
+                                                   ExceptionSink* xsink);
+
+    //! Free the shared server SSL_CTX if allocated (thread-safe)
+    DLLLOCAL void freeQuicServerSslCtx() {
+        std::lock_guard<std::mutex> lock(quic_server_ssl_ctx_lock_);
+        if (quic_server_ssl_ctx_) {
+            SSL_CTX_free(quic_server_ssl_ctx_);
+            quic_server_ssl_ctx_ = nullptr;
+        }
+    }
+
 #ifdef DARWIN
     //! Write end of a notification pipe used by Socket::poll() on macOS
     /** When a socket FD is closed during a kqueue poll, macOS silently removes
@@ -664,7 +859,19 @@ struct qore_socket_private {
     }
 
     DLLLOCAL ~qore_socket_private() {
+        // Clear dispatcher references in all QUIC sessions before destroying the dispatcher
+        {
+            AutoLocker al(quic_sessions_lock);
+            for (auto& [id, session] : quic_sessions) {
+                session->clearDispatcher();
+            }
+        }
+
         close_internal();
+
+        // Free the shared server SSL_CTX after all sessions are destroyed
+        // (sessions hold their own SSL_CTX_up_ref'd references via SSL_new)
+        freeQuicServerSslCtx();
 
         // must be dereferenced and removed before deleting
         assert(!event_queue);
@@ -828,6 +1035,16 @@ struct qore_socket_private {
         }
         // Reset shared_ptr - will delete session if this is the last reference
         h2_session.reset();
+        // Clear dispatcher references before clearing sessions to avoid dangling pointers
+        {
+            AutoLocker al(quic_sessions_lock);
+            for (auto& [id, session] : quic_sessions) {
+                session->clearDispatcher();
+            }
+            quic_sessions.clear();
+        }
+        // Free shared server SSL_CTX after all sessions are released
+        freeQuicServerSslCtx();
         // Clear HTTP/2 client multiplexing state
         {
             AutoLocker al(h2_stream_callbacks_lock);
@@ -846,8 +1063,9 @@ struct qore_socket_private {
             }
 
             if (!socketname.empty()) {
-                if (del)
+                if (del) {
                     unlink(socketname.c_str());
+                }
                 socketname.clear();
             }
             do_close_event();
@@ -3753,7 +3971,7 @@ struct qore_socket_private {
                     "chunked/streaming responses are not supported via Socket::sendHTTPResponse() on HTTP/2");
                 return -1;
             }
-            std::map<std::string, std::string> hdr_map;
+            strcase_str_map_t hdr_map;
             if (headers) {
                 ConstHashIterator hi(headers);
                 while (hi.next()) {

@@ -35,6 +35,14 @@
 #include <cerrno>
 #include <cstring>
 #include <unistd.h>
+#include <poll.h>
+
+//! Returns the current time in microseconds since the epoch
+static int64_t q_epoch_us_fast() {
+    int us;
+    int64_t secs = q_epoch_us(us);
+    return secs * 1000000LL + us;
+}
 
 QoreEventLoop::QoreEventLoop(ExceptionSink* xsink) {
 #ifdef DARWIN
@@ -251,18 +259,71 @@ int QoreEventLoop::removeUserEvent(uintptr_t ident, ExceptionSink* xsink) {
 }
 #endif
 
+int64_t QoreEventLoop::addTimer(int64_t deadline_us, void* udata, int64_t preset_id) {
+    int64_t id = preset_id > 0 ? preset_id : next_timer_id++;
+    if (id >= next_timer_id) {
+        next_timer_id = id + 1;  // keep monotonic
+    }
+    TimerEntry entry{deadline_us, id, udata};
+    auto [it, ok] = timer_set.insert(entry);
+    if (ok) {
+        timer_id_map[id] = it;
+    }
+    return id;
+}
+
+bool QoreEventLoop::cancelTimer(int64_t id) {
+    auto it = timer_id_map.find(id);
+    if (it == timer_id_map.end()) {
+        return false;
+    }
+    timer_set.erase(it->second);
+    timer_id_map.erase(it);
+    return true;
+}
+
 int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, ExceptionSink* xsink) {
+    // Clamp timeout based on earliest timer deadline
+    int effective_timeout_ms = timeout_ms;
+    if (!timer_set.empty()) {
+        int64_t now_us = q_epoch_us_fast();
+        int64_t remaining_us = timer_set.begin()->deadline_us - now_us;
+        if (remaining_us <= 0) {
+            effective_timeout_ms = 0;
+        } else {
+            int timer_ms = (int)(remaining_us / 1000);
+            if (timer_ms == 0) {
+                timer_ms = 1;
+            }
+            if (effective_timeout_ms < 0 || timer_ms < effective_timeout_ms) {
+                effective_timeout_ms = timer_ms;
+            }
+        }
+    }
+
+    // Check if we have any fds to poll
+    bool has_fds;
 #ifdef DARWIN
-    if (fd_map.empty() && user_event_map.empty()) {
-        events.clear();
-        return 0;
-    }
+    has_fds = !fd_map.empty() || !user_event_map.empty();
 #else
-    if (fd_map.empty()) {
+    has_fds = !fd_map.empty();
+#endif
+
+    if (!has_fds && timer_set.empty()) {
         events.clear();
         return 0;
     }
-#endif
+
+    // Timer-only mode: sleep using portable poll(nullptr, 0, timeout)
+    if (!has_fds) {
+        if (effective_timeout_ms > 0) {
+            ::poll(nullptr, 0, effective_timeout_ms);
+        }
+        // Collect expired timers only
+        events.clear();
+        collectExpiredTimers(events);
+        return static_cast<int>(events.size());
+    }
 
 #ifdef DARWIN
     // kqueue: use kevent() to wait for events
@@ -273,9 +334,9 @@ int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, Exce
 
     struct timespec ts;
     struct timespec* pts = nullptr;
-    if (timeout_ms >= 0) {
-        ts.tv_sec = timeout_ms / 1000;
-        ts.tv_nsec = (timeout_ms % 1000) * 1000000;
+    if (effective_timeout_ms >= 0) {
+        ts.tv_sec = effective_timeout_ms / 1000;
+        ts.tv_nsec = (effective_timeout_ms % 1000) * 1000000;
         pts = &ts;
     }
 
@@ -349,6 +410,7 @@ int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, Exce
         }
     }
 
+    collectExpiredTimers(events);
     return static_cast<int>(events.size());
 
 #elif defined(__linux__)
@@ -357,7 +419,7 @@ int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, Exce
 
     int rc;
     while (true) {
-        rc = epoll_wait(event_fd, epevents.data(), epevents.size(), timeout_ms);
+        rc = epoll_wait(event_fd, epevents.data(), epevents.size(), effective_timeout_ms);
         if (rc >= 0 || errno != EINTR) {
             break;
         }
@@ -395,6 +457,7 @@ int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, Exce
         events.push_back({fd, ev, udata});
     }
 
+    collectExpiredTimers(events);
     return static_cast<int>(events.size());
 
 #else
@@ -418,7 +481,7 @@ int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, Exce
 
     int rc;
     while (true) {
-        rc = ::poll(pollfds.data(), pollfds.size(), timeout_ms);
+        rc = ::poll(pollfds.data(), pollfds.size(), effective_timeout_ms);
         if (rc >= 0 || errno != EINTR) {
             break;
         }
@@ -454,6 +517,19 @@ int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, Exce
         }
     }
 
+    collectExpiredTimers(events);
     return static_cast<int>(events.size());
 #endif
+}
+
+void QoreEventLoop::collectExpiredTimers(std::vector<QoreEventInfo>& events) {
+    if (!timer_set.empty()) {
+        int64_t now_us = q_epoch_us_fast();
+        while (!timer_set.empty() && timer_set.begin()->deadline_us <= now_us) {
+            auto it = timer_set.begin();
+            events.push_back({QORE_TIMER_FD, QORE_EV_TIMER, it->udata, it->id});
+            timer_id_map.erase(it->id);
+            timer_set.erase(it);
+        }
+    }
 }
