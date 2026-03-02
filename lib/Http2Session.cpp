@@ -1601,6 +1601,20 @@ int Http2Session::onStreamCloseCallback(nghttp2_session* session, int32_t stream
     }
     h2->pending_body_data.erase(stream_id);
     h2->pending_data_providers.erase(stream_id);
+    // If an InputStream is active for this stream, mark it EOF so
+    // processStreamInputStreams() will not attempt to call sendStreamData()
+    // after the stream is closed.  Without this, the next poll iteration
+    // would find the InputStream still registered, read a chunk from the
+    // file, and call sendStreamData() which raises "stream N not found"
+    // (because both getStream() and pending_data_providers return nothing),
+    // terminating the entire HTTP/2 connection and causing ERR_CONNECTION_CLOSED
+    // for all in-flight streams including unrelated ones (e.g. large file transfers).
+    {
+        auto iit = h2->stream_input_streams_.find(stream_id);
+        if (iit != h2->stream_input_streams_.end()) {
+            iit->second.eof = true;
+        }
+    }
     return 0;
 }
 
