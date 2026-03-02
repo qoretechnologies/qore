@@ -39,6 +39,7 @@
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/QC_Serializable.h"
 #include "qore/intern/ssl_constants.h"
+#include "qore/intern/QoreHttpClientObjectIntern.h"
 
 /** @defgroup http_url_codes HTTP URL Codes
 
