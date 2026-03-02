@@ -57,6 +57,11 @@ make install
 groupadd -o -g ${QORE_GID} qore
 useradd -o -m -d /home/qore -u ${QORE_UID} -g ${QORE_GID} qore
 
+# install gdb for crash diagnostics (captures backtraces on segfault)
+if ! command -v gdb > /dev/null 2>&1; then
+    apt-get update -qq && apt-get install -y -qq gdb > /dev/null 2>&1
+fi
+
 # own everything by the qore user
 chown -R qore:qore ${QORE_SRC_DIR}
 
