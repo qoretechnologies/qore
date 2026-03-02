@@ -95,7 +95,6 @@ public class WebSocketClientAsyncTest inherits QUnit::Test {
 
     asyncSendStringTest() {
         Queue response_queue();
-        Counter done(1);
 
         WebSocketClient wsc(sub (auto msg) {
             response_queue.push(msg);
