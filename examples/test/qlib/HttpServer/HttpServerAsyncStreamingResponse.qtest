@@ -131,6 +131,61 @@ class ShortInputStream inherits InputStream {
     }
 }
 
+#! Qore-only InputStream that lies about isIoThreadSafe() — overrides to True.
+#! The C++ gate should reject this and the handler-thread fallback should handle it.
+class LyingInputStream inherits InputStream {
+    private {
+        binary payload;
+        int pos = 0;
+    }
+
+    constructor(binary payload) {
+        self.payload = payload;
+    }
+
+    *binary read(int limit) {
+        if (pos >= payload.size()) {
+            return NOTHING;
+        }
+        int to_read = min(limit, payload.size() - pos);
+        binary chunk = payload.substr(pos, to_read);
+        pos += to_read;
+        return chunk;
+    }
+
+    int peek() {
+        return pos < payload.size() ? payload[pos] : -1;
+    }
+
+    #! Lies about I/O thread safety — the C++ gate should ignore this override
+    bool isIoThreadSafe() {
+        return True;
+    }
+}
+
+#! Handler that uses a LyingInputStream — the C++ gate should reject it
+#! and the handler-thread fallback should stream the body correctly
+class LyingStreamHandler inherits AbstractHttpRequestHandler {
+    private {
+        binary payload;
+    }
+
+    constructor(binary payload) {
+        self.payload = payload;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return <HttpResponseInfo>{
+            "code": 200,
+            "body": new LyingInputStream(payload),
+            "hdr": {
+                "Content-Type": "application/octet-stream",
+                "Content-Length": string(payload.size()),
+            },
+        };
+    }
+}
+
 #! Handler that claims Content-Length of 10000 but InputStream only provides 100 bytes
 class ShortStreamHandler inherits AbstractHttpRequestHandler {
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
@@ -272,6 +327,8 @@ l50Xb2GWQesIt9k5jF5IOw==
         addTestCase("HTTP/3 small in-memory response", \testH3SmallResponse());
         addTestCase("HTTP/3 large InputStream response", \testH3LargeStreamResponse());
         addTestCase("HTTP/3 concurrent multiplexed InputStream responses", \testH3ConcurrentStreams());
+        addTestCase("HTTP/2 lying isIoThreadSafe() override rejected by C++ gate", \testH2LyingStream());
+        addTestCase("HTTP/3 lying isIoThreadSafe() override rejected by C++ gate", \testH3LyingStream());
 
         set_return_value(main());
     }
@@ -295,6 +352,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         server.setHandler("small", "/small", NOTHING, new SmallHandler(mSmallPayload));
         server.setHandler("short-stream", "/short-stream", NOTHING, new ShortStreamHandler());
         server.setHandler("exact-stream", "/exact-stream", NOTHING, new ExactStreamHandler(mSmallPayload));
+        server.setHandler("lying-stream", "/lying-stream", NOTHING, new LyingStreamHandler(mLargePayload));
         server.waitForAsyncIo();
 
         # Add H2-only TLS listener
@@ -682,5 +740,46 @@ l50Xb2GWQesIt9k5jF5IOw==
             assertTrue(results[i].match,
                 sprintf("H3 concurrent request %d body matches", results[i].idx));
         }
+    }
+
+    #! Verifies that a Qore InputStream subclass overriding isIoThreadSafe() to True
+    #! is rejected by the C++ gate and falls back to handler-thread streaming
+    testH2LyingStream() {
+        hash<auto> setup = createServer();
+        HttpServer server = setup.server;
+        on_exit delete server;
+
+        HTTPClient client = createH2Client(setup.port);
+        on_exit client.disconnect();
+
+        # The LyingInputStream overrides isIoThreadSafe() to True, but the C++ gate
+        # should reject it (return 1) and the handler-thread fallback should work
+        hash<auto> resp = client.send(NOTHING, "GET", "/lying-stream");
+        assertEq(200, resp.status_code, "H2 lying stream response status");
+        binary resp_body = resp.body.typeCode() == NT_BINARY
+            ? resp.body : binary(resp.body);
+        assertEq(LargePayloadSize, resp_body.size(), "H2 lying stream response body size");
+        assertEq(mLargePayload, resp_body, "H2 lying stream response body matches");
+    }
+
+    #! Same test for HTTP/3
+    testH3LyingStream() {
+        if (mLargeTransferTime > 30s) {
+            testSkip(sprintf("skipping H3 lying stream test (single transfer: %y)", mLargeTransferTime));
+        }
+        hash<auto> setup = createServer({"enable_h3": True});
+        HttpServer server = setup.server;
+        on_exit delete server;
+
+        HttpClientIo::HttpClientConnectionManager mgr = createH3Manager();
+        on_exit delete mgr;
+
+        string url = sprintf("https://127.0.0.1:%d", setup.port);
+        hash<auto> resp = mgr.request(url, "GET", "/lying-stream");
+        assertEq(200, resp.status_code, "H3 lying stream response status");
+        binary resp_body = resp.body.typeCode() == NT_BINARY
+            ? resp.body : binary(resp.body);
+        assertEq(LargePayloadSize, resp_body.size(), "H3 lying stream response body size");
+        assertEq(mLargePayload, resp_body, "H3 lying stream response body matches");
     }
 }

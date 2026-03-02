@@ -110,8 +110,12 @@ public:
     /**
       * @brief Returns true if this stream's read() will never block.
       *
-      * This is used to determine if a stream can be safely read from an I/O thread without
-      * blocking. Memory-backed streams (like BinaryInputStream) override this to return true
+      * This C++ vtable method is the sole authority on whether a stream can be submitted
+      * to the I/O thread for non-blocking streaming. The C++ submit methods check this
+      * directly — Qore-level overrides of isIoThreadSafe() have no effect on I/O thread
+      * eligibility.
+      *
+      * Memory-backed streams (like BinaryInputStream) override this to return true
       * even though they don't have a pollable file descriptor.
       *
       * The default implementation returns supportsNonBlockingIo(), since fd-backed streams

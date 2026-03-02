@@ -1150,54 +1150,56 @@ public class HttpAsyncSocketIoController {
 
         if (result.code && !result.streaming) {
             try {
-                # I/O-thread-safe InputStream (e.g. FileInputStream, BinaryInputStream): submit to I/O thread
-                if (result.input_stream && result.input_stream.isIoThreadSafe()) {
+                if (result.input_stream) {
+                    # Try to submit to I/O thread; C++ enforces isIoThreadSafe() and
+                    # returns 1 if not safe (no headers sent yet), so we fall through
+                    # to handler-thread streaming
                     hash<auto> resp_hdr = result.hdr ?? {};
                     remove resp_hdr."Transfer-Encoding";
-                    cinfo.sock.submitQuicStreamingResponseWithStream(
+                    int rv = cinfo.sock.submitQuicStreamingResponseWithStream(
                         session_id, stream_id, result.code, resp_hdr, result.input_stream);
-                    controllers[cinfo.controller_idx].wake();
-                } else if (result.input_stream) {
-                    # Non-I/O-thread-safe InputStream: handler thread reads chunks and submits
-                    # them incrementally to the QUIC session with backpressure
-                    hash<auto> resp_hdr = result.hdr ?? {};
-                    remove resp_hdr."Transfer-Encoding";
-                    cinfo.sock.submitQuicResponseStreaming(
-                        session_id, stream_id, result.code, resp_hdr);
-                    controllers[cinfo.controller_idx].wake();
+                    if (!rv) {
+                        controllers[cinfo.controller_idx].wake();
+                    } else {
+                        # Not I/O-thread-safe (rv == 1): handler thread reads chunks and
+                        # submits them incrementally to the QUIC session with backpressure
+                        cinfo.sock.submitQuicResponseStreaming(
+                            session_id, stream_id, result.code, resp_hdr);
+                        controllers[cinfo.controller_idx].wake();
 
-                    result.input_stream.reassignThread();
-                    on_exit result.input_stream.unassignThread();
-                    bool stream_ok = True;
-                    try {
-                        while (*binary chunk = result.input_stream.read(65536)) {
-                            int retries = 0;
-                            while (cinfo.sock.submitQuicStreamData(
-                                    session_id, stream_id, chunk) == 1) {
-                                if (++retries > 200) {
-                                    throw "HTTP3-FLOW-CONTROL", sprintf("stream %d: buffer "
-                                        "not draining after %d retries", stream_id, retries);
+                        result.input_stream.reassignThread();
+                        on_exit result.input_stream.unassignThread();
+                        bool stream_ok = True;
+                        try {
+                            while (*binary chunk = result.input_stream.read(65536)) {
+                                int retries = 0;
+                                while (cinfo.sock.submitQuicStreamData(
+                                        session_id, stream_id, chunk) == 1) {
+                                    if (++retries > 200) {
+                                        throw "HTTP3-FLOW-CONTROL", sprintf("stream %d: buffer "
+                                            "not draining after %d retries", stream_id, retries);
+                                    }
+                                    controllers[cinfo.controller_idx].wake();
+                                    # CV-based wait: wakes immediately when I/O thread drains
+                                    # the buffer, falls back to 50ms timeout otherwise
+                                    cinfo.sock.waitForQuicStreamDrain(
+                                        session_id, stream_id, 50ms);
                                 }
                                 controllers[cinfo.controller_idx].wake();
-                                # CV-based wait: wakes immediately when I/O thread drains
-                                # the buffer, falls back to 50ms timeout otherwise
-                                cinfo.sock.waitForQuicStreamDrain(
-                                    session_id, stream_id, 50ms);
                             }
+                            cinfo.sock.submitQuicStreamData(
+                                session_id, stream_id, NOTHING, True);
                             controllers[cinfo.controller_idx].wake();
+                        } catch (hash<ExceptionInfo> ex) {
+                            stream_ok = False;
+                            log(LoggerLevel::ERROR,
+                                "HTTP/3 non-pollable stream error session=%d stream=%d on "
+                                "%y: %s: %s", session_id, stream_id, uh, ex.err, ex.desc);
+                            try {
+                                cinfo.sock.cancelQuicStream(session_id, stream_id);
+                                controllers[cinfo.controller_idx].wake();
+                            } catch () {}
                         }
-                        cinfo.sock.submitQuicStreamData(
-                            session_id, stream_id, NOTHING, True);
-                        controllers[cinfo.controller_idx].wake();
-                    } catch (hash<ExceptionInfo> ex) {
-                        stream_ok = False;
-                        log(LoggerLevel::ERROR,
-                            "HTTP/3 non-pollable stream error session=%d stream=%d on "
-                            "%y: %s: %s", session_id, stream_id, uh, ex.err, ex.desc);
-                        try {
-                            cinfo.sock.cancelQuicStream(session_id, stream_id);
-                            controllers[cinfo.controller_idx].wake();
-                        } catch () {}
                     }
                 } else {
                     cinfo.sock.submitQuicResponse(session_id, stream_id, result.code,
@@ -2424,26 +2426,24 @@ public class HttpAsyncSocketIoController {
         # send operation which would conflict with h2op's non-blocking mode management.
         if (result.code && !result.streaming) {
             try {
-                # I/O-thread-safe InputStream (e.g. FileInputStream, BinaryInputStream): submit
-                # headers and let the I/O thread stream body non-blockingly
-                if (result.input_stream && result.input_stream.isIoThreadSafe()) {
-                    log(LoggerLevel::DEBUG, "HTTP/2 stream %d: submitting I/O-thread-safe InputStream response (CL=%y)",
-                        stream_id, result.hdr."Content-Length");
-                    hash<auto> resp_hdr = result.hdr ?? {};
-                    remove resp_hdr."Transfer-Encoding";
-                    cinfo.sock.submitHttp2StreamingResponseWithStream(
-                        stream_id, result.code, resp_hdr, result.input_stream);
-                    controllers[cinfo.controller_idx].wake();
-                    return;
-                }
-
-                # Non-I/O-thread-safe InputStream (e.g. CallbackInputStream): the handler thread
-                # reads chunks and submits them incrementally to the H2 session.
-                # These Qore-level InputStreams cannot be passed to the I/O thread
-                # because the QoreObject may be destroyed before the I/O thread reads.
+                # Try to submit InputStream to I/O thread; C++ enforces isIoThreadSafe()
+                # and returns 1 if not safe (no headers sent yet), so we fall through
+                # to handler-thread streaming
                 if (result.input_stream) {
                     hash<auto> resp_hdr = result.hdr ?? {};
                     remove resp_hdr."Transfer-Encoding";
+                    int rv = cinfo.sock.submitHttp2StreamingResponseWithStream(
+                        stream_id, result.code, resp_hdr, result.input_stream);
+                    if (!rv) {
+                        log(LoggerLevel::DEBUG, "HTTP/2 stream %d: submitting I/O-thread-safe "
+                            "InputStream response (CL=%y)",
+                            stream_id, result.hdr."Content-Length");
+                        controllers[cinfo.controller_idx].wake();
+                        return;
+                    }
+
+                    # Not I/O-thread-safe (rv == 1): the handler thread reads chunks and
+                    # submits them incrementally to the H2 session
                     cinfo.sock.submitHttp2StreamingResponseHeaders(
                         stream_id, result.code, resp_hdr);
                     controllers[cinfo.controller_idx].wake();

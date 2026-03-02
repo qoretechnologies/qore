@@ -83,6 +83,10 @@ bool OutputStream::supportsNonBlockingIo() [flags=CONSTANT] {
 
 //! Returns @ref True if this stream's write() will never block
 /**
+    This is a read-only informational method. Overriding this method in a Qore subclass
+    has no effect on I/O thread eligibility — the C++ enforcement gate checks the C++
+    vtable directly.
+
     @return @ref True if write() will never block
 
     @see @ref Qore::InputStream::isIoThreadSafe() "InputStream::isIoThreadSafe()"

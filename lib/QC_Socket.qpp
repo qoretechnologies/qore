@@ -5066,20 +5066,33 @@ nothing Socket::submitHttp2StreamingResponseHeaders(int stream_id, int status_co
 /** Handler thread calls this and returns immediately. The I/O thread reads from the
     InputStream and sends DATA frames incrementally.
 
+    The C++ vtable is the sole authority on I/O thread eligibility. If the stream's C++
+    @ref InputStream::isIoThreadSafe() "isIoThreadSafe()" returns @ref False, this method
+    returns @ref 1 without submitting headers, so the caller can fall back to handler-thread
+    streaming.
+
     @param stream_id the HTTP/2 stream ID
     @param status_code the HTTP status code
     @param headers optional response headers
     @param body the InputStream to read the response body from
 
+    @return 0 = accepted for I/O thread streaming; 1 = not I/O-thread-safe, caller should
+    use handler-thread fallback
+
     @throw HTTP2-ERROR if no HTTP/2 session is available or submission fails
 
     @since %Qore 2.3
 */
-nothing Socket::submitHttp2StreamingResponseWithStream(int stream_id, int status_code,
+int Socket::submitHttp2StreamingResponseWithStream(int stream_id, int status_code,
         *hash<auto> headers, InputStream[InputStream] body) {
-    s->submitHttp2StreamingResponseWithStream((int32_t)stream_id, status_code, headers,
-        body.release(), xsink);
-    return QoreValue();
+    // Pass raw pointer; only release from SimpleRefHolder if C++ takes ownership (rv == 0).
+    // If rv == 1 (not I/O-thread-safe), the SimpleRefHolder destructor will deref the body.
+    int rv = s->submitHttp2StreamingResponseWithStream((int32_t)stream_id, status_code, headers,
+        *body, xsink);
+    if (!rv) {
+        body.release();
+    }
+    return rv;
 }
 
 //! Returns a poll operation for flushing pending HTTP/2 data
@@ -5824,48 +5837,54 @@ int Socket::submitQuicStreamData(int session_id, int stream_id, *data body,
 /** Handler thread calls this and returns immediately. The I/O thread reads from the
     InputStream and sends HTTP/3 DATA frames incrementally via the QUIC server poll operation.
 
+    The C++ vtable is the sole authority on I/O thread eligibility. If the stream's C++
+    @ref InputStream::isIoThreadSafe() "isIoThreadSafe()" returns @ref False, this method
+    returns @ref 1 without submitting headers, so the caller can fall back to handler-thread
+    streaming.
+
     @param session_id the QUIC session ID
     @param stream_id the HTTP/3 stream ID
     @param status_code the HTTP status code
     @param headers optional response headers
     @param body the InputStream to read the response body from
 
+    @return 0 = accepted for I/O thread streaming; 1 = not I/O-thread-safe, caller should
+    use handler-thread fallback
+
     @throw QUIC-ERROR if the session or stream is not found or submission fails
 
     @since %Qore 2.3
 */
-nothing Socket::submitQuicStreamingResponseWithStream(int session_id, int stream_id,
+int Socket::submitQuicStreamingResponseWithStream(int session_id, int stream_id,
         int status_code, *hash<auto> headers, InputStream[InputStream] body) {
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0",
             (long long)session_id);
-        return QoreValue();
+        return -1;
     }
     if (stream_id < 0) {
         xsink->raiseException("QUIC-ERROR", "invalid stream_id %lld: must be >= 0",
             (long long)stream_id);
-        return QoreValue();
+        return -1;
+    }
+
+    // C++ vtable is the sole authority on I/O thread eligibility.
+    // Return 1 (not accepted) so the caller can fall back to handler-thread streaming.
+    // Check BEFORE submitting headers — no partial response on rejection.
+    if (!body->isIoThreadSafe()) {
+        return 1;
     }
 
     // Submit response headers without closing the stream
     s->submitQuicResponseStreaming(session_id, stream_id, status_code, headers, xsink);
     if (*xsink) {
-        return QoreValue();
-    }
-
-    // Enforce at the C++ level: only streams whose C++ vtable reports isIoThreadSafe() can be
-    // submitted to the I/O thread.  This prevents Qore-level subclasses from overriding the
-    // method to return true while having a blocking read() that would stall the I/O thread.
-    if (!body->isIoThreadSafe()) {
-        xsink->raiseException("QUIC-ERROR",
-            "%s is not safe for I/O thread use; isIoThreadSafe() returned false", body->getName());
-        return QoreValue();
+        return -1;
     }
 
     // Transfer InputStream ownership to the session for I/O thread reading
     InputStream* body_ptr = body.release();
     s->setQuicStreamInputStream(session_id, stream_id, body_ptr, xsink);
-    return QoreValue();
+    return *xsink ? -1 : 0;
 }
 
 //! Waits for a streaming HTTP/3 body buffer to drain below the backpressure threshold

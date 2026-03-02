@@ -96,8 +96,13 @@ bool InputStream::supportsNonBlockingIo() [flags=CONSTANT] {
 
 //! Returns @ref True if this stream's read() will never block
 /**
-    This is used to determine if a stream can be safely read from an I/O thread without
-    blocking. Memory-backed streams (like @ref BinaryInputStream) return @ref True even though
+    This is a read-only informational method. The C++ vtable value of
+    @ref InputStream::isIoThreadSafe() is the sole authority on whether a stream can be
+    submitted to the I/O thread for non-blocking streaming. Overriding this method in a
+    Qore subclass has no effect on I/O thread eligibility — the C++ enforcement gate in
+    the submit methods checks the C++ vtable directly.
+
+    Memory-backed streams (like @ref BinaryInputStream) return @ref True even though
     they don't have a pollable file descriptor.
 
     The default implementation returns supportsNonBlockingIo(), since fd-backed streams

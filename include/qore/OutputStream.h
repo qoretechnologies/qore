@@ -132,6 +132,9 @@ public:
     /**
       * @brief Returns true if this stream's write() will never block.
       *
+      * This C++ vtable method is the sole authority on I/O thread eligibility.
+      * Qore-level overrides have no effect.
+      *
       * @see InputStream::isIoThreadSafe() for full documentation.
       *
       * @return true if write() will never block
