@@ -195,6 +195,8 @@ public class Http2Test inherits QUnit::Test {
             \testHttp2HeadersOnlyThenNormal());
         addTestCase("HTTP/2 client multiplex streaming data test",
             \testHttp2ClientMultiplexStreaming());
+        addTestCase("HTTP/2 RST_STREAM during InputStream streaming test",
+            \testHttp2RstStreamDuringInputStreamStreaming());
 
         set_return_value(main());
     }
@@ -4470,5 +4472,263 @@ public class Http2Test inherits QUnit::Test {
             }
         }
         assertTrue(has_status, "at least one response should include status_code");
+    }
+
+    #! Regression test: RST_STREAM received while server InputStream is active must not
+    #! kill the connection.
+    /** When the client cancels a stream (RST_STREAM CANCEL) while the server is in the
+        middle of streaming a large response via BinaryInputStream, onStreamCloseCallback()
+        cleans up pending_data_providers and pending_body_data for the cancelled stream.
+        Before the fix, processStreamInputStreams() would then call sendStreamData() for
+        that stream and hit "stream N not found" (both getStream() and pending_data_providers
+        returned nothing), raising an HTTP2-ERROR that killed the entire connection.
+
+        After the fix, onStreamCloseCallback() also marks stream_input_streams_ eof=true,
+        so processStreamInputStreams() skips the cancelled stream and the connection
+        survives to handle subsequent requests.
+    */
+    testHttp2RstStreamDuringInputStreamStreaming() {
+        if (skip_complex_tests) {
+            testSkip("Skipping complex HTTP/2 test on Alpine");
+            return;
+        }
+
+        Socket server_sock();
+        SSLCertificate cert(CertPem);
+        SSLPrivateKey key(KeyPem);
+        server_sock.setCertificate(cert);
+        server_sock.setPrivateKey(key);
+        server_sock.bind("localhost:0");
+        server_sock.listen();
+        int test_port = server_sock.getPort();
+
+        hash<auto> test_results;
+        Mutex result_mutex();
+
+        # 1 MB of data — enough to span many 65 KB chunks so the InputStream is
+        # still active when the RST_STREAM arrives
+        binary large_body = binary(strmul("R", 1024 * 1024));
+
+        Counter server_done(1);
+        Counter client_done(1);
+
+        # Server thread: reads two requests on the same connection.
+        # For request 1, streams a large BinaryInputStream response.
+        # The client will RST request 1 partway through and send request 2.
+        # The server must survive the RST and successfully serve request 2.
+        background sub() {
+            try {
+                Socket client = server_sock.accept();
+                client.setNoDelay(True);
+                client.setAlpnProtocols(("h2",));
+                client.upgradeServerToSSL();
+
+                # Read the first request
+                AbstractPollOperation read_op = client.startPollReadHttp2Request();
+                int iterations = 0;
+                while (!read_op.goalReached() && iterations < 500) {
+                    *hash<SocketPollInfo> info = read_op.continuePoll();
+                    if (!info) {
+                        break;
+                    }
+                    Socket::poll((info,), 10ms);
+                    ++iterations;
+                }
+                if (!read_op.goalReached()) {
+                    throw "SERVER-ERROR", sprintf("read_op did not reach goal after %d iterations",
+                        iterations);
+                }
+                auto req1 = read_op.getOutput();
+                {
+                    AutoLock al(result_mutex);
+                    test_results.server_req1_path = req1.path;
+                }
+
+                # Submit large streaming response via BinaryInputStream.
+                # BinaryInputStream::isIoThreadSafe() = True, so the I/O thread drives
+                # processStreamInputStreams() on every POLLOUT event.
+                BinaryInputStream is(large_body);
+                int rv = client.submitHttp2StreamingResponseWithStream(
+                    req1.stream_id, 200,
+                    {"content-type": "application/octet-stream"}, is);
+                {
+                    AutoLock al(result_mutex);
+                    test_results.server_submit_rv = rv;
+                }
+
+                # Keep driving the poll loop.  This causes:
+                #   1. processStreamInputStreams() to stream large_body to the client
+                #   2. receiveData() to receive and process the RST_STREAM CANCEL
+                #   3. After the fix: InputStream marked EOF, no exception raised
+                #   4. receiveData() to receive the client's second request
+                # Loop until we receive and respond to the second request.
+                bool got_req2 = False;
+                iterations = 0;
+                while (!got_req2 && iterations < 3000) {
+                    *hash<SocketPollInfo> info = read_op.continuePoll();
+                    if (!info && read_op.goalReached()) {
+                        auto req2 = read_op.getOutput();
+                        if (req2) {
+                            {
+                                AutoLock al(result_mutex);
+                                test_results.server_req2_path = req2.path;
+                            }
+                            # Respond to second request with a small body
+                            client.submitHttp2StreamingResponseHeaders(
+                                req2.stream_id, 200, {"content-type": "text/plain"});
+                            client.sendHttp2StreamData(req2.stream_id, binary("OK"), True);
+                            got_req2 = True;
+                            break;
+                        }
+                    }
+                    if (info) {
+                        Socket::poll((info,), 5ms);
+                    }
+                    ++iterations;
+                }
+
+                {
+                    AutoLock al(result_mutex);
+                    test_results.server_got_req2 = got_req2;
+                    test_results.server_ok = True;
+                }
+
+                # Wait for client to finish, then flush remaining data and close
+                client_done.waitForZero(5s);
+                AbstractPollOperation flush_op = client.startPollHttp2Flush();
+                iterations = 0;
+                while (iterations < 200) {
+                    *hash<SocketPollInfo> info = flush_op.continuePoll();
+                    if (!info) {
+                        break;
+                    }
+                    Socket::poll((info,), 10ms);
+                    ++iterations;
+                }
+                client.close();
+            } catch (hash<ExceptionInfo> ex) {
+                AutoLock al(result_mutex);
+                test_results.server_error = sprintf("%s: %s", ex.err, ex.desc);
+            }
+            server_done.dec();
+        }();
+
+        # Client thread: connects, sends request 1 with streaming=True, receives
+        # some data, cancels stream 1 (RST_STREAM), then sends request 2 and waits
+        # for a 200 response — proving the connection survived the RST.
+        background sub() {
+            try {
+                Socket sock();
+                sock.setAlpnProtocols(("h2",));
+                sock.acceptAllCertificates(True);
+                sock.setSslVerifyMode(SSL_VERIFY_NONE);
+                sock.setNoDelay(True);
+                sock.connectSSL("localhost:" + string(test_port));
+
+                AbstractPollOperation multiplex_op = sock.startPollHttp2ClientMultiplex();
+
+                # Submit request 1 with streaming=True so partial responses are delivered
+                int stream_id_1 = sock.submitHttp2Request({
+                    ":method": "GET",
+                    ":path": "/large-body",
+                    ":scheme": "https",
+                    ":authority": "localhost",
+                }, NOTHING, True);
+                # End the request stream immediately (no request body)
+                sock.sendHttp2StreamData(stream_id_1, NOTHING, True);
+
+                # Drive the poll loop until we receive at least the response headers
+                # for stream 1 (proves the server started sending)
+                bool got_headers = False;
+                int iterations = 0;
+                while (!got_headers && iterations < 500) {
+                    *hash<SocketPollInfo> info = multiplex_op.continuePoll();
+                    *hash<auto> output = multiplex_op.getOutput();
+                    if (output && exists output.status_code) {
+                        got_headers = True;
+                        {
+                            AutoLock al(result_mutex);
+                            test_results.client_got_headers = True;
+                            test_results.client_stream1_status = output.status_code;
+                        }
+                    }
+                    if (info) {
+                        Socket::poll((info,), 5ms);
+                    }
+                    ++iterations;
+                }
+
+                # Cancel stream 1 — sends RST_STREAM CANCEL to the server
+                sock.cancelHttp2Stream(stream_id_1);
+                {
+                    AutoLock al(result_mutex);
+                    test_results.client_cancelled = True;
+                }
+
+                # Submit request 2 on the same connection (stream survives if fix is in)
+                int stream_id_2 = sock.submitHttp2Request({
+                    ":method": "GET",
+                    ":path": "/second-request",
+                    ":scheme": "https",
+                    ":authority": "localhost",
+                });
+                {
+                    AutoLock al(result_mutex);
+                    test_results.client_stream_id_2 = stream_id_2;
+                }
+
+                # Drive poll until we get the response to request 2
+                bool got_resp2 = False;
+                iterations = 0;
+                while (!got_resp2 && iterations < 1000) {
+                    *hash<SocketPollInfo> info = multiplex_op.continuePoll();
+                    *hash<auto> output = multiplex_op.getOutput();
+                    if (output && output.end_stream && output.status_code == 200) {
+                        got_resp2 = True;
+                        {
+                            AutoLock al(result_mutex);
+                            test_results.client_got_resp2 = True;
+                            test_results.client_resp2_status = output.status_code;
+                        }
+                    }
+                    if (info) {
+                        Socket::poll((info,), 5ms);
+                    }
+                    ++iterations;
+                }
+
+                {
+                    AutoLock al(result_mutex);
+                    test_results.client_ok = True;
+                }
+                sock.close();
+            } catch (hash<ExceptionInfo> ex) {
+                AutoLock al(result_mutex);
+                test_results.client_error = sprintf("%s: %s", ex.err, ex.desc);
+            }
+            client_done.dec();
+        }();
+
+        server_done.waitForZero(20s);
+        client_done.waitForZero(20s);
+        server_sock.close();
+
+        assertFalse(exists test_results.server_error,
+            sprintf("server must not raise an error when client cancels a stream: %s",
+                test_results.server_error ?? "none"));
+        assertFalse(exists test_results.client_error,
+            sprintf("client error: %s", test_results.client_error ?? "none"));
+        assertTrue(test_results.client_got_headers ?? False,
+            "client should have received response headers for stream 1 before cancelling");
+        assertTrue(test_results.client_cancelled ?? False,
+            "client should have successfully cancelled stream 1");
+        assertTrue(test_results.server_got_req2 ?? False,
+            "server must handle request 2 — connection must survive the RST_STREAM");
+        assertTrue(test_results.client_got_resp2 ?? False,
+            "client must receive a response to request 2 on the surviving connection");
+        assertEq("/second-request", test_results.server_req2_path,
+            "server should have received the second request path");
+        assertEq(200, test_results.client_resp2_status,
+            "response to request 2 should be 200 OK");
     }
 }

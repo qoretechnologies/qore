@@ -208,6 +208,11 @@ Current usages to migrate:
 - New modules must have tests under:
   - `examples/test/qlib/<ModuleName>/`
 - Use `%try-module` patterns in tests to allow skipping when optional modules are not available.
+- Modules delivered with Qore itself (e.g., `HttpServer`, `Mime`, `Logger`, `HttpServerUtil`,
+  `DataProvider`, `ConnectionProvider`, `QUnit`) are always available and should use hard
+  `%requires` — they do not need the `%try-module` pattern. Only use `%try-module` for modules
+  from other external repos (e.g., `json` from module-json, `xml` from module-xml) that may not
+  be installed.
 
 ## Checklist
 
@@ -220,7 +225,7 @@ Current usages to migrate:
 - [ ] Docs module list (`doxygen/lang/120_modules.dox.tmpl`) updated when applicable
 - [ ] entry in `doxygen/lang/900_release_notes.dox.tmpl` for new modules or updates
 - [ ] Tests added/updated for the module
-- [ ] External module dependencies use `%try-module` (not `%requires`) — only in-repo modules use hard `%requires`
+- [ ] External module dependencies use `%try-module` (not `%requires`) — except modules delivered with Qore itself (e.g., `HttpServer`, `Mime`, `Logger`, `DataProvider`) which are always available and use hard `%requires`; only in-repo modules and Qore-delivered modules use hard `%requires`
 - [ ] Binary module `QoreNamespace` constructor uses full path (e.g., `"Qore::ML"`, not just `"ML"`)
 - [ ] QPP `ns=` attribute matches the full namespace path
 - [ ] all scripts have the execute bit set

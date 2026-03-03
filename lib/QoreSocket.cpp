@@ -398,6 +398,12 @@ int SSLSocketHelper::setIntern(ExceptionSink* xsink, const char* mname, int sd, 
     // turn on SSL_MODE_AUTO_RETRY for blocking I/O
     SSL_set_mode(ssl, SSL_MODE_AUTO_RETRY);
 
+    // Allow retrying SSL_write() with a moved buffer address (same contents).
+    // Without this, if SSL_write() returns SSL_ERROR_WANT_WRITE and the send
+    // buffer is reallocated before the retry (e.g. std::vector realloc in
+    // Http2Session::sendPendingData), OpenSSL raises SSL_R_BAD_WRITE_RETRY.
+    SSL_set_mode(ssl, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
+
     // set the socket file descriptor
     SSL_set_fd(ssl, sd);
 
@@ -2955,8 +2961,10 @@ int SSLSocketHelper::doNonBlockingIo(ExceptionSink* xsink, const char* mname, vo
             if (!qs.h2_session) {
                 qs.close();
             }
-            xsink->raiseErrnoException("SOCKET-SSL-ERROR", sock_get_error(), "error in Socket::%s(): the " \
-                "openssl library reported a fatal I/O error while calling %s()", mname, get_action_method(action));
+            if (!sslError(xsink, mname, get_action_method(action), action == WRITE)) {
+                xsink->raiseErrnoException("SOCKET-SSL-ERROR", sock_get_error(), "error in Socket::%s(): the " \
+                    "openssl library reported a fatal I/O error while calling %s()", mname, get_action_method(action));
+            }
             rc = QSE_SSL_ERR;
             break;
         } else {
@@ -3106,8 +3114,10 @@ int SSLSocketHelper::doSSLRW(ExceptionSink* xsink, const char* mname, void* buf,
             if (!qs.h2_session) {
                 qs.close();
             }
-            xsink->raiseErrnoException("SOCKET-SSL-ERROR", sock_get_error(), "error in Socket::%s(): the "
-                "openssl library reported a fatal I/O error while calling %s()", mname, get_action_method(action));
+            if (!sslError(xsink, mname, get_action_method(action), action == WRITE)) {
+                xsink->raiseErrnoException("SOCKET-SSL-ERROR", sock_get_error(), "error in Socket::%s(): the "
+                    "openssl library reported a fatal I/O error while calling %s()", mname, get_action_method(action));
+            }
             rc = QSE_SSL_ERR;
             break;
         } else {
