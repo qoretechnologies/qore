@@ -39,6 +39,7 @@
 #include "qore/intern/QoreLoggerBridge.h"
 #include "qore/intern/QoreEventLoop.h"
 #include "qore/intern/QoreEventNotifier.h"
+#include "qore/intern/QoreIoUring.h"
 
 #include <atomic>
 #include <deque>

@@ -34,6 +34,7 @@
 
 #include <qore/Qore.h>
 
+#include <memory>
 #include <vector>
 #include <set>
 #include <unordered_map>
@@ -42,6 +43,10 @@
 #include <sys/event.h>
 #elif defined(__linux__)
 #include <sys/epoll.h>
+#endif
+
+#if defined(__linux__) && defined(HAVE_IO_URING)
+#include "qore/intern/QoreIoUring.h"
 #endif
 
 #if defined HAVE_POLL
@@ -55,9 +60,14 @@ static constexpr int QORE_EV_READ  = (1 << 0);
 static constexpr int QORE_EV_WRITE = (1 << 1);
 static constexpr int QORE_EV_ERROR = (1 << 2);
 static constexpr int QORE_EV_TIMER = (1 << 3);
+//! io_uring completions are ready (Linux only)
+static constexpr int QORE_EV_IOURING = (1 << 4);
 
 //! Sentinel fd value for timer events in QoreEventInfo
 static constexpr int QORE_TIMER_FD = -2;
+
+//! Sentinel fd value for io_uring completion events
+static constexpr int QORE_IOURING_FD = -3;
 
 //! Event information returned from poll operations
 struct QoreEventInfo {
@@ -193,6 +203,13 @@ public:
 #endif
     }
 
+#if defined(__linux__) && defined(HAVE_IO_URING)
+    //! Returns the io_uring instance (nullptr if unavailable)
+    /** @since %Qore 2.3
+    */
+    DLLLOCAL QoreIoUring* getIoUring() { return io_uring_.get(); }
+#endif
+
 #ifdef DARWIN
     //! Returns the kqueue file descriptor (macOS only)
     /** Used by QoreEventNotifier to bind for EVFILT_USER optimization.
@@ -258,6 +275,10 @@ private:
     std::unordered_map<uintptr_t, void*> user_event_map;
 #elif defined(__linux__)
     int event_fd = -1;  //!< epoll file descriptor
+#if defined(HAVE_IO_URING)
+    //! Optional io_uring for async file I/O (nullptr if unavailable)
+    std::unique_ptr<QoreIoUring> io_uring_;
+#endif
 #endif
 
     //! Collect expired timers and append to events vector

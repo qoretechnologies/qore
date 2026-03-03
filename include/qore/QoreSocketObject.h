@@ -75,6 +75,7 @@ class QoreSocketObject : public AbstractPollableIoObjectBase {
     friend class SocketHttp2SendStreamingResponsePollOperation;
     friend class SocketHttp2FlushPollOperation;
     friend class SocketHttp2ClientMultiplexPollOperation;
+    friend class AsyncIoControllerPriv;
     friend class SocketSendAndReadHeaderPollOperation;
     friend class SocketSendStreamAndReadHeaderPollOperation;
     friend class SocketRecvFromPollOperation;

@@ -34,6 +34,7 @@
 #include <qore/Qore.h>
 
 #include "qore/intern/Http2Session.h"
+#include "qore/intern/QoreIoUring.h"
 #include "qore/intern/QuicCommon.h"
 #include "qore/intern/qore_socket_private.h"
 
@@ -66,6 +67,11 @@ Http2Session::Http2Session(qore_socket_private* sock, bool is_server, const char
 }
 
 Http2Session::~Http2Session() {
+    // No io_uring cleanup needed here — PendingRead holds a weak_ptr<Http2Session>,
+    // which expires naturally when this destructor runs. processCompletions() will
+    // skip delivery for expired sessions.
+    // InputStream cleanup (unassignThread) is handled by the I/O thread via
+    // processStreamInputStreams() during normal operation.
     if (session) {
         nghttp2_session_del(session);
     }
@@ -2190,6 +2196,22 @@ void Http2Session::processStreamInputStreams(ExceptionSink* xsink) {
             info.need_reassign = false;
         }
 
+#if defined(__linux__) && defined(HAVE_IO_URING)
+        // io_uring path for regular files — truly async kernel reads
+        if (info.is_regular_file && io_uring) {
+            if (!info.iouring_read_pending) {
+                int rv = io_uring->submitRead(info.stream_fd, info.file_offset,
+                                               65536, stream_id, shared_from_this());
+                if (rv == 0) {
+                    info.iouring_read_pending = true;
+                }
+                // If SQ full (rv == -1), try again next iteration
+            }
+            // Data delivery happens in handleAsyncReadCompletion()
+            continue;
+        }
+#endif
+
         // Read one chunk per stream per iteration
         if (info.is_pollable) {
             SimpleRefHolder<BinaryNode> chunk(new BinaryNode);
@@ -2234,6 +2256,11 @@ void Http2Session::processStreamInputStreams(ExceptionSink* xsink) {
     // Clean up completed streams (unassignThread + erase)
     for (auto it = stream_input_streams_.begin(); it != stream_input_streams_.end(); ) {
         if (it->second.eof) {
+#if defined(__linux__) && defined(HAVE_IO_URING)
+            if (io_uring && it->second.iouring_read_pending) {
+                io_uring->cancelStream(it->first, shared_from_this());
+            }
+#endif
             if (!it->second.need_reassign) {
                 ExceptionSink tmp;
                 it->second.input_stream->unassignThread(&tmp);
@@ -2249,16 +2276,6 @@ void Http2Session::processStreamInputStreams(ExceptionSink* xsink) {
     }
 }
 
-void Http2Session::cleanupStreamInputStreams(ExceptionSink* xsink) {
-    for (auto& [stream_id, info] : stream_input_streams_) {
-        if (!info.need_reassign) {
-            info.input_stream->unassignThread(xsink);
-        }
-    }
-    stream_input_streams_.clear();
-    has_active_input_streams_.store(false, std::memory_order_release);
-}
-
 void Http2Session::getExtraFds(std::vector<std::pair<int, int>>& extra_fds) const {
     std::lock_guard<std::recursive_mutex> lg(m);
     for (auto& [stream_id, info] : stream_input_streams_) {
@@ -2268,5 +2285,48 @@ void Http2Session::getExtraFds(std::vector<std::pair<int, int>>& extra_fds) cons
         }
     }
 }
+
+#if defined(__linux__) && defined(HAVE_IO_URING)
+void Http2Session::handleAsyncReadCompletion(int32_t stream_id, const char* data,
+                                              size_t length, int error,
+                                              ExceptionSink* xsink) {
+    std::lock_guard<std::recursive_mutex> lg(m);
+
+    auto it = stream_input_streams_.find(stream_id);
+    if (it == stream_input_streams_.end()) {
+        // Stream already closed/cancelled — ignore stale completion
+        return;
+    }
+
+    auto& info = it->second;
+    info.iouring_read_pending = false;
+
+    if (error) {
+        printd(2, "Http2Session::handleAsyncReadCompletion() stream=%d error=%s\n",
+            stream_id, strerror(error));
+        xsink->raiseException("FILE-READ-ERROR",
+            "async file read failed for stream %d: %s", stream_id, strerror(error));
+        info.eof = true;
+        return;
+    }
+
+    if (length == 0) {
+        // EOF
+        printd(5, "Http2Session::handleAsyncReadCompletion() stream=%d EOF\n", stream_id);
+        info.eof = true;
+        sendStreamData(stream_id, nullptr, 0, true, xsink);
+    } else {
+        // Advance file offset and send data
+        printd(5, "Http2Session::handleAsyncReadCompletion() stream=%d %zu bytes offset=%zu\n",
+            stream_id, length, info.file_offset);
+        info.file_offset += length;
+        sendStreamData(stream_id, data, length, false, xsink);
+        if (*xsink) {
+            // sendStreamData failed — stop the stream to prevent infinite retry
+            info.eof = true;
+        }
+    }
+}
+#endif
 
 // httpMultiHeadersToQoreHash is a template defined in Http2Session.h

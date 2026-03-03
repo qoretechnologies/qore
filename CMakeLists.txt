@@ -458,6 +458,32 @@ if (NOT (WIN32 OR MINGW OR MSYS))
     endif (Backtrace_FOUND)
 endif (NOT (WIN32 OR MINGW OR MSYS))
 
+# io_uring - async file I/O (Linux only, optional)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    pkg_check_modules(URING QUIET liburing>=2.0)
+    if(URING_FOUND)
+        message(STATUS "Found liburing: ${URING_VERSION}")
+        list(APPEND LIBQORE_OPTIONAL_LIBS ${URING_LIBRARIES})
+        list(APPEND LIBQORE_OPTIONAL_INCLUDE_DIRS ${URING_INCLUDE_DIRS})
+        set(HAVE_IO_URING TRUE)
+    else()
+        # Try to find liburing without pkg-config
+        find_path(URING_INCLUDE_DIR liburing.h)
+        find_library(URING_LIBRARY NAMES uring)
+        if(URING_INCLUDE_DIR AND URING_LIBRARY)
+            message(STATUS "Found liburing: ${URING_LIBRARY}")
+            list(APPEND LIBQORE_OPTIONAL_INCLUDE_DIRS ${URING_INCLUDE_DIR})
+            list(APPEND LIBQORE_OPTIONAL_LIBS ${URING_LIBRARY})
+            set(HAVE_IO_URING TRUE)
+        endif()
+    endif()
+    if(HAVE_IO_URING)
+        message(STATUS "io_uring support enabled")
+    else()
+        message(STATUS "io_uring support disabled (liburing >= 2.0 not found)")
+    endif()
+endif()
+
 # HTTP/2 support via nghttp2 (required)
 pkg_check_modules(NGHTTP2 QUIET libnghttp2)
 if (NGHTTP2_FOUND)
@@ -851,6 +877,7 @@ set(LIBQORE_CPP_SRC
     lib/QoreSocket.cpp
     lib/QoreEventLoop.cpp
     lib/QoreEventNotifier.cpp
+    lib/QoreIoUring.cpp
     lib/QoreLoggerBridge.cpp
     lib/QoreAsyncIoLogger.cpp
     lib/AsyncIoControllerPriv.cpp
@@ -1142,6 +1169,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreSocket.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreEventLoop.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreEventNotifier.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreIoUring.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreLoggerBridge.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreAsyncIoLogger.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/AsyncIoControllerPriv.cpp\"
