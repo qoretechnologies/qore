@@ -46,6 +46,10 @@
 // Forward declaration
 class Http2Session;
 
+//! Read buffer size for io_uring async reads — matches the chunk size used in
+//! Http2Session::processStreamInputStreams() for non-io_uring reads
+constexpr size_t IOURING_READ_SIZE = 65536;
+
 //! Async file I/O via io_uring, integrated with QoreEventLoop via eventfd
 /** This class provides truly asynchronous file reads on Linux using io_uring
     (kernel 5.6+). It is integrated with the epoll-based QoreEventLoop via an
@@ -103,7 +107,7 @@ public:
         @param length maximum bytes to read
         @param stream_id HTTP/2/3 stream identifier
         @param session pointer to Http2Session for completion delivery
-        @return 0 on success, -1 on error (SQ full or submission failure)
+        @return 0 on success (read in flight), -1 if SQ full (caller should retry)
     */
     DLLLOCAL int submitRead(int fd, size_t offset, size_t length,
                             int32_t stream_id, std::shared_ptr<Http2Session> session);

@@ -39,9 +39,6 @@
 #include <cerrno>
 #include <cstring>
 
-//! Read buffer size — matches the existing chunk size in processStreamInputStreams()
-constexpr size_t IOURING_READ_SIZE = 65536;
-
 #ifdef DEBUG
 std::atomic<unsigned> QoreIoUring::debug_submit_count{0};
 std::atomic<unsigned> QoreIoUring::debug_completion_count{0};
@@ -116,9 +113,11 @@ int QoreIoUring::submitRead(int fd, size_t offset, size_t length,
     io_uring_prep_read(sqe, fd, pending->buffer.get(), length, offset);
     io_uring_sqe_set_data64(sqe, id);
 
-    // Track the pending operation — count it immediately so processCompletions()
-    // can decrement when the CQE arrives (even if submit fails, the SQE may have
-    // been flushed to the shared ring and the kernel may generate a CQE)
+    // Track the pending operation before submit — io_uring_submit() flushes the
+    // SQE to the shared ring (io_uring_flush_sq) before calling io_uring_enter().
+    // Even if io_uring_enter() fails, the SQE is in the shared ring and the
+    // kernel will process it on the next successful io_uring_enter() call.
+    // The PendingRead must stay alive (the buffer is referenced by the SQE).
     pending_reads[id] = std::move(pending);
     ++pending_count;
 
@@ -131,12 +130,13 @@ int QoreIoUring::submitRead(int fd, size_t offset, size_t length,
         }
     }
     if (rv < 0) {
-        // The SQE may already be in the shared ring (flushed by __io_uring_flush_sq
-        // before io_uring_enter failed), so the kernel could still process it.
-        // Keep PendingRead alive until the CQE arrives — processCompletions() will
-        // skip delivery if the session's weak_ptr has expired.
-        printd(1, "QoreIoUring::submitRead() io_uring_submit() failed: %s\n", strerror(-rv));
-        return -1;
+        // io_uring_enter() failed but the SQE was already flushed to the shared
+        // ring by io_uring_flush_sq(). The kernel will process it on the next
+        // successful io_uring_enter(). Return 0 (not -1) so the caller marks the
+        // read as in-flight — this prevents a duplicate submission at the same
+        // file offset on the next processStreamInputStreams() iteration.
+        printd(1, "QoreIoUring::submitRead() io_uring_enter() failed: %s "
+            "(SQE in shared ring, CQE will arrive later)\n", strerror(-rv));
     }
 #ifdef DEBUG
     debug_submit_count.fetch_add(1, std::memory_order_relaxed);

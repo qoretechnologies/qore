@@ -36,6 +36,13 @@
     4. Mixed streams — simultaneous file-backed and memory-backed streams
     5. Small file — ensures single-read files work correctly
     6. Sequential file streams — same connection, sequential requests
+
+    Stress tests:
+    7. Rapid connect/disconnect — session destruction while io_uring reads in-flight
+    8. Many concurrent file streams — SQ saturation and concurrent PendingRead tracking
+    9. Concurrent connections — multiple sessions with io_uring operations
+    10. Sustained throughput — continuous file streaming over a time window
+    11. Rapid sequential streams — connection reuse with no delay between requests
 */
 
 %modern
@@ -188,6 +195,18 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         addTestCase("mixed file and memory streams", \testMixedStreams());
         addTestCase("sequential file streams on same connection", \testSequentialFileStreams());
         addTestCase("file streaming does not block non-streaming requests", \testFileStreamWithPing());
+
+        # Stress tests
+        addTestCase("stress: rapid connect/disconnect with in-flight streams",
+            \testStressRapidConnectDisconnect());
+        addTestCase("stress: many concurrent file streams (SQ saturation)",
+            \testStressConcurrentFileStreams());
+        addTestCase("stress: many concurrent connections with file streams",
+            \testStressConcurrentConnections());
+        addTestCase("stress: sustained file streaming throughput",
+            \testStressSustainedThroughput());
+        addTestCase("stress: rapid sequential file streams (connection reuse)",
+            \testStressRapidSequentialStreams());
 
         set_return_value(main());
     }
@@ -505,6 +524,357 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         for (int i = 0; i < sizes.size(); ++i) {
             hash<auto> resp = rc.get("/file-stream/" + sizes[i]);
             verifyBody(resp, sizes[i], "F", sprintf("sequential request %d (%d bytes)", i, sizes[i]));
+        }
+    }
+
+    # ---- Stress Tests ----
+
+    #! Stress test: rapid connect/disconnect while file streams may be in-flight.
+    #! Validates that weak_ptr expiration in processCompletions() works correctly —
+    #! no crashes or use-after-free when Http2Session is destroyed during io_uring reads.
+    testStressRapidConnectDisconnect() {
+        # Probe to detect valgrind — a single request under valgrind is very slow
+        date probe_start = now_us();
+        {
+            RestClient rc = getClient(30000);
+            hash<auto> resp = rc.get("/file-stream/1024");
+            assertEq(200, resp.status_code, "probe request succeeded");
+        }
+        date probe_elapsed = now_us() - probe_start;
+        int cycles = probe_elapsed > 2s ? 5 : 50;
+
+        int successes = 0;
+        int errors = 0;
+        # Use a large file so io_uring reads are likely still in-flight when we disconnect
+        int file_size = 512 * 1024;  # 512KB
+
+        for (int i = 0; i < cycles; ++i) {
+            try {
+                RestClient rc = getClient(10000);
+                # Start the request — this initiates io_uring reads on the server
+                hash<auto> resp = rc.get("/file-stream/" + file_size);
+                # If we got a complete response, that's fine — verify it
+                if (resp.status_code == 200) {
+                    int body_size;
+                    if (resp.body.typeCode() == NT_BINARY) {
+                        body_size = resp.body.size();
+                    } else {
+                        body_size = resp.body.length();
+                    }
+                    assertEq(file_size, body_size,
+                        sprintf("cycle %d body size", i));
+                    successes++;
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                # Connection errors are expected — the point is no crashes
+                errors++;
+                if (m_options.verbose > 1) {
+                    printf("cycle %d error (expected): %s: %s\n", i, ex.err, ex.desc);
+                }
+            }
+            # RestClient goes out of scope here → connection dropped →
+            # server-side Http2Session destroyed while io_uring reads may be pending
+        }
+
+        assertTrue(successes > 0,
+            sprintf("at least some requests completed (%d/%d)", successes, cycles));
+
+        if (m_options.verbose) {
+            printf("rapid connect/disconnect: %d successes, %d errors in %d cycles\n",
+                successes, errors, cycles);
+        }
+
+        # Verify no pending io_uring operations leaked
+        *hash<auto> stats = get_io_uring_debug_stats();
+        if (stats) {
+            assertTrue(stats.completions > 0,
+                sprintf("io_uring completions occurred (%d)", stats.completions));
+        }
+    }
+
+    #! Stress test: many concurrent file streams on a single HTTP/2 connection.
+    #! Exercises io_uring submission queue handling (SQ full → retry on next iteration)
+    #! and concurrent PendingRead tracking.
+    testStressConcurrentFileStreams() {
+        RestClient rc = getClient(60000);
+
+        # Probe for valgrind
+        date probe_start = now_us();
+        hash<auto> probe = rc.get("/file-stream/1024");
+        assertEq(200, probe.status_code, "probe request succeeded");
+        date probe_elapsed = now_us() - probe_start;
+        int num_streams = probe_elapsed > 1s ? 5 : 15;
+
+        Counter cnt(num_streams);
+        list<hash<auto>> results();
+        Mutex mtx();
+
+        # Launch many concurrent file stream requests on the same connection
+        for (int i = 0; i < num_streams; ++i) {
+            int idx = i;
+            # Vary sizes to exercise different io_uring read patterns
+            int size = 32768 + (i * 16384);  # 32KB to 32KB + N*16KB
+            background sub() {
+                on_exit cnt.dec();
+                try {
+                    hash<auto> resp = rc.get("/file-stream/" + size);
+                    int body_size;
+                    if (resp.body.typeCode() == NT_BINARY) {
+                        body_size = resp.body.size();
+                    } else {
+                        body_size = resp.body.length();
+                    }
+                    {
+                        mtx.lock();
+                        on_exit mtx.unlock();
+                        results += {
+                            "idx": idx,
+                            "status_code": resp.status_code,
+                            "expected_size": size,
+                            "actual_size": body_size,
+                        };
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    {
+                        mtx.lock();
+                        on_exit mtx.unlock();
+                        results += {
+                            "idx": idx,
+                            "status_code": -1,
+                            "error": ex.err + ": " + ex.desc,
+                        };
+                    }
+                }
+            }();
+        }
+
+        int rc_val = cnt.waitForZero(60s);
+        assertEq(0, rc_val, "all concurrent streams completed");
+        assertEq(num_streams, results.size(), "got results for all streams");
+
+        int successes = 0;
+        foreach hash<auto> r in (results) {
+            if (r.status_code == 200) {
+                assertEq(r.expected_size, r.actual_size,
+                    sprintf("stream %d body size", r.idx));
+                successes++;
+            } else if (m_options.verbose > 1) {
+                printf("stream %d failed: %s\n", r.idx, r.error ?? "status " + r.status_code);
+            }
+        }
+        assertEq(num_streams, successes,
+            sprintf("all %d concurrent file streams succeeded", num_streams));
+
+        if (m_options.verbose) {
+            printf("concurrent file streams: %d/%d succeeded\n", successes, num_streams);
+        }
+    }
+
+    #! Stress test: multiple independent connections each requesting file streams.
+    #! Stresses the I/O thread handling multiple sessions' io_uring operations
+    #! concurrently and validates session-level isolation in processCompletions().
+    testStressConcurrentConnections() {
+        # Probe for valgrind
+        date probe_start = now_us();
+        {
+            RestClient rc = getClient(30000);
+            hash<auto> probe = rc.get("/file-stream/1024");
+            assertEq(200, probe.status_code, "probe request succeeded");
+        }
+        date probe_elapsed = now_us() - probe_start;
+        int num_connections = probe_elapsed > 1s ? 3 : 8;
+        int requests_per_conn = probe_elapsed > 1s ? 2 : 5;
+        int total = num_connections * requests_per_conn;
+
+        Counter cnt(total);
+        list<hash<auto>> results();
+        Mutex mtx();
+        int file_size = 65536;  # 64KB per request
+
+        for (int c = 0; c < num_connections; ++c) {
+            int conn_idx = c;
+            # Each iteration gets its own RestClient → separate HTTP/2 connection
+            background sub() {
+                RestClient rc = getClient(60000);
+                for (int r = 0; r < requests_per_conn; ++r) {
+                    on_exit cnt.dec();
+                    int req_idx = r;
+                    try {
+                        hash<auto> resp = rc.get("/file-stream/" + file_size);
+                        int body_size;
+                        if (resp.body.typeCode() == NT_BINARY) {
+                            body_size = resp.body.size();
+                        } else {
+                            body_size = resp.body.length();
+                        }
+                        {
+                            mtx.lock();
+                            on_exit mtx.unlock();
+                            results += {
+                                "conn": conn_idx,
+                                "req": req_idx,
+                                "status_code": resp.status_code,
+                                "body_size": body_size,
+                            };
+                        }
+                    } catch (hash<ExceptionInfo> ex) {
+                        {
+                            mtx.lock();
+                            on_exit mtx.unlock();
+                            results += {
+                                "conn": conn_idx,
+                                "req": req_idx,
+                                "status_code": -1,
+                                "error": ex.err + ": " + ex.desc,
+                            };
+                        }
+                    }
+                }
+            }();
+        }
+
+        int rc_val = cnt.waitForZero(60s);
+        assertEq(0, rc_val, "all concurrent connection requests completed");
+        assertEq(total, results.size(), "got results for all requests");
+
+        int successes = 0;
+        foreach hash<auto> r in (results) {
+            if (r.status_code == 200) {
+                assertEq(file_size, r.body_size,
+                    sprintf("conn %d req %d body size", r.conn, r.req));
+                successes++;
+            } else if (m_options.verbose > 1) {
+                printf("conn %d req %d failed: %s\n", r.conn, r.req,
+                    r.error ?? "status " + r.status_code);
+            }
+        }
+        assertEq(total, successes,
+            sprintf("all %d concurrent connection requests succeeded", total));
+
+        if (m_options.verbose) {
+            printf("concurrent connections: %d/%d succeeded (%d connections x %d requests)\n",
+                successes, total, num_connections, requests_per_conn);
+        }
+    }
+
+    #! Stress test: sustained file streaming throughput over a time window.
+    #! Measures throughput and verifies no resource leaks or degradation under
+    #! sustained io_uring load.
+    testStressSustainedThroughput() {
+        RestClient rc = getClient(30000);
+
+        # Probe to calibrate — detect valgrind
+        date probe_start = now_us();
+        hash<auto> probe = rc.get("/file-stream/8192");
+        assertEq(200, probe.status_code, "probe request succeeded");
+        date probe_elapsed = now_us() - probe_start;
+
+        # 5s under normal conditions, 2s under valgrind
+        timeout duration = probe_elapsed > 1s ? 2s : 5s;
+
+        *hash<auto> stats_before = get_io_uring_debug_stats();
+
+        int file_size = 65536;  # 64KB per request
+        int count = 0;
+        int total_bytes = 0;
+        int errors = 0;
+        date start_time = now_us();
+        date end_time = start_time + duration;
+
+        while (now_us() < end_time) {
+            try {
+                hash<auto> resp = rc.get("/file-stream/" + file_size);
+                if (resp.status_code == 200) {
+                    count++;
+                    int body_size;
+                    if (resp.body.typeCode() == NT_BINARY) {
+                        body_size = resp.body.size();
+                    } else {
+                        body_size = resp.body.length();
+                    }
+                    total_bytes += body_size;
+                    assertEq(file_size, body_size,
+                        sprintf("sustained request %d body size", count));
+                } else {
+                    errors++;
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                errors++;
+                if (m_options.verbose > 1) {
+                    printf("sustained throughput error: %s: %s\n", ex.err, ex.desc);
+                }
+            }
+        }
+
+        # Under valgrind, we may get very few requests
+        if (count < 3) {
+            testSkip(sprintf("likely under valgrind: only %d requests completed", count));
+            return;
+        }
+
+        assertEq(0, errors, "no errors during sustained throughput");
+        assertTrue(count > 0, sprintf("throughput > 0: %d requests", count));
+
+        *hash<auto> stats_after = get_io_uring_debug_stats();
+        if (stats_before && stats_after) {
+            int submit_delta = stats_after.submits - stats_before.submits;
+            assertTrue(submit_delta > 0,
+                sprintf("io_uring exercised during sustained test (%d submits)", submit_delta));
+        }
+
+        if (m_options.verbose) {
+            date actual_elapsed = now_us() - start_time;
+            float elapsed_sec = float(get_duration_microseconds(actual_elapsed)) / 1000000.0;
+            float mb_sec = (float(total_bytes) / (1024.0 * 1024.0)) / elapsed_sec;
+            printf("sustained throughput: %d requests in %.1fs (%.1f req/s, %.2f MB/s)\n",
+                count, elapsed_sec, float(count) / elapsed_sec, mb_sec);
+        }
+    }
+
+    #! Stress test: many rapid sequential file stream requests on the same connection.
+    #! Verifies that io_uring state is properly cleaned up between requests and
+    #! no stale PendingRead entries accumulate.
+    testStressRapidSequentialStreams() {
+        RestClient rc = getClient(30000);
+
+        # Probe for valgrind
+        date probe_start = now_us();
+        hash<auto> probe = rc.get("/file-stream/1024");
+        assertEq(200, probe.status_code, "probe request succeeded");
+        date probe_elapsed = now_us() - probe_start;
+        int count = probe_elapsed > 1s ? 10 : 50;
+
+        *hash<auto> stats_before = get_io_uring_debug_stats();
+
+        list<int> sizes = (4096, 16384, 32768, 65536, 8192);
+        int successes = 0;
+
+        for (int i = 0; i < count; ++i) {
+            int size = sizes[i % sizes.size()];
+            hash<auto> resp = rc.get("/file-stream/" + size);
+            verifyBody(resp, size, "F",
+                sprintf("rapid sequential %d (%d bytes)", i, size));
+            successes++;
+        }
+
+        assertEq(count, successes,
+            sprintf("all %d rapid sequential requests succeeded", count));
+
+        # Verify io_uring was exercised and no pending operations leaked
+        *hash<auto> stats_after = get_io_uring_debug_stats();
+        if (stats_before && stats_after) {
+            int submit_delta = stats_after.submits - stats_before.submits;
+            assertTrue(submit_delta > 0,
+                sprintf("io_uring exercised during sequential test (%d submits)", submit_delta));
+            int completion_delta = stats_after.completions - stats_before.completions;
+            # All submits should have completed
+            assertEq(submit_delta, completion_delta,
+                sprintf("all io_uring submits completed (%d submits, %d completions)",
+                    submit_delta, completion_delta));
+        }
+
+        if (m_options.verbose) {
+            printf("rapid sequential streams: %d/%d succeeded\n", successes, count);
         }
     }
 

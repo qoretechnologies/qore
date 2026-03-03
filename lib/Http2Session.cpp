@@ -2199,9 +2199,27 @@ void Http2Session::processStreamInputStreams(ExceptionSink* xsink) {
 #if defined(__linux__) && defined(HAVE_IO_URING)
         // io_uring path for regular files — truly async kernel reads
         if (info.is_regular_file && io_uring) {
+            // First, try to deliver any pending buffer retained due to backpressure
+            if (info.pending_iouring_buf) {
+                int rv = sendStreamData(stream_id, info.pending_iouring_buf.get(),
+                    info.pending_iouring_len, false, xsink);
+                if (*xsink) {
+                    info.eof = true;
+                    continue;
+                }
+                if (rv == 1) {
+                    // Still full — skip this stream and try again next iteration
+                    continue;
+                }
+                // Successfully delivered — advance offset and release buffer
+                info.file_offset += info.pending_iouring_len;
+                info.pending_iouring_buf.reset();
+                info.pending_iouring_len = 0;
+            }
             if (!info.iouring_read_pending) {
                 int rv = io_uring->submitRead(info.stream_fd, info.file_offset,
-                                               65536, stream_id, shared_from_this());
+                                               IOURING_READ_SIZE, stream_id,
+                                               shared_from_this());
                 if (rv == 0) {
                     info.iouring_read_pending = true;
                 }
@@ -2289,6 +2307,7 @@ void Http2Session::getExtraFds(std::vector<std::pair<int, int>>& extra_fds) cons
 #if defined(__linux__) && defined(HAVE_IO_URING)
 void Http2Session::handleAsyncReadCompletion(int32_t stream_id, const char* data,
                                               size_t length, int error,
+                                              std::unique_ptr<char[]> buffer,
                                               ExceptionSink* xsink) {
     std::lock_guard<std::recursive_mutex> lg(m);
 
@@ -2316,14 +2335,23 @@ void Http2Session::handleAsyncReadCompletion(int32_t stream_id, const char* data
         info.eof = true;
         sendStreamData(stream_id, nullptr, 0, true, xsink);
     } else {
-        // Advance file offset and send data
+        // Try to send data; handle backpressure (buffer full)
         printd(5, "Http2Session::handleAsyncReadCompletion() stream=%d %zu bytes offset=%zu\n",
             stream_id, length, info.file_offset);
-        info.file_offset += length;
-        sendStreamData(stream_id, data, length, false, xsink);
+        int rv = sendStreamData(stream_id, data, length, false, xsink);
         if (*xsink) {
             // sendStreamData failed — stop the stream to prevent infinite retry
             info.eof = true;
+        } else if (rv == 1) {
+            // Buffer full — retain the buffer for retry in processStreamInputStreams()
+            // Do NOT advance file_offset until data is successfully delivered
+            printd(3, "Http2Session::handleAsyncReadCompletion() stream=%d backpressure, "
+                "retaining %zu bytes for later delivery\n", stream_id, length);
+            info.pending_iouring_buf = std::move(buffer);
+            info.pending_iouring_len = length;
+        } else {
+            // Successfully enqueued — advance file offset
+            info.file_offset += length;
         }
     }
 }

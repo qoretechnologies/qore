@@ -684,6 +684,10 @@ private:
         size_t file_offset = 0;
         //! True when an io_uring async read is in flight
         bool iouring_read_pending = false;
+        //! Buffer retained when sendStreamData() returns backpressure (buffer full)
+        std::unique_ptr<char[]> pending_iouring_buf;
+        //! Length of data in pending_iouring_buf
+        size_t pending_iouring_len = 0;
 
         StreamInputStreamInfo() = default;
         StreamInputStreamInfo(InputStream* is)
@@ -762,6 +766,7 @@ public:
     */
     DLLLOCAL void handleAsyncReadCompletion(int32_t stream_id, const char* data,
                                             size_t length, int error,
+                                            std::unique_ptr<char[]> buffer,
                                             ExceptionSink* xsink);
 #endif
 };

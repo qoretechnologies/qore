@@ -1170,19 +1170,23 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                             // Update extra fd registrations
                             updateExtraFds(result.key, poll_sock, result.new_poll_info, xsink);
 #if defined(__linux__) && defined(HAVE_IO_URING)
-                            // Pass io_uring to any Http2Session on this socket (once)
+                            // Pass io_uring to any Http2Session on this socket (once).
+                            // Use a local ExceptionSink to avoid hiding errors from
+                            // the caller's xsink.
                             if (loop->getIoUring()) {
+                                ExceptionSink uring_xsink;
                                 QoreSocketObject* so = static_cast<QoreSocketObject*>(
-                                    poll_sock->getReferencedPrivateData(CID_SOCKET, xsink));
+                                    poll_sock->getReferencedPrivateData(CID_SOCKET,
+                                        &uring_xsink));
                                 if (so) {
                                     Http2SessionPtr h2s = so->priv->socket->priv->h2_session;
                                     if (h2s && !h2s->hasIoUring()) {
                                         h2s->setIoUring(loop->getIoUring());
                                     }
-                                    so->deref(xsink);
+                                    so->deref(&uring_xsink);
                                 }
-                                if (*xsink) {
-                                    xsink->clear();
+                                if (uring_xsink) {
+                                    uring_xsink.clear();
                                 }
                             }
 #endif
@@ -1376,7 +1380,8 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
             for (auto& c : completions) {
                 ExceptionSink uring_xsink;
                 c.session->handleAsyncReadCompletion(
-                    c.stream_id, c.data, c.length, c.error, &uring_xsink);
+                    c.stream_id, c.data, c.length, c.error,
+                    std::move(c.buffer), &uring_xsink);
                 if (uring_xsink) {
                     // Log and clear — don't let one stream's error kill the loop
                     const QoreStringNode* err = uring_xsink.getExceptionErr()
