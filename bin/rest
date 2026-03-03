@@ -86,7 +86,7 @@ class RestCmd {
             "lax":           "X,lax-parsing",
             "example":       "x,example:s",
             "tokentype":     "y,token-type=s",
-            "httpver":       "W,http-version=s",
+            "httpver":       "A,http-version=s",
 
             "help":          "h,help",
         };
@@ -668,7 +668,7 @@ class RestCmd {
  -t, --token=ARG            an authorization token to use
  -u, --userpass=ARG         set the user and password for the connection in the format \"user:password\"
  -V, --verify-cert          require and verify X.509 certificates from the server
- -W, --http-version=ARG     set HTTP version: auto, 1.0, 1.1, 2.0, 3.0
+ -A, --http-version=ARG     set HTTP version: auto, 1.0, 1.1, 2.0, 3.0
  -X, --lax-parsing          lax parsing of Swagger schemas
  -x, --example[=ARG]        generate an example message; ARG=
                               q: generate Qore example (default data)
