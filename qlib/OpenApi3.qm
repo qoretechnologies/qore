@@ -5256,8 +5256,8 @@ public class OpenApi3SchemaTokenizer {
         const TokenSince = "@since";
         const TokenSee = "@see";
 
-        #! Pattern to match \@REST method declarations
-        const RestMethodPattern = "@REST\\s+(GET|POST|PUT|DELETE|PATCH|OPTIONS|HEAD)";
+        #! Pattern to match \@REST method declarations with optional path
+        const RestMethodPattern = "@REST\\s+(GET|POST|PUT|DELETE|PATCH|OPTIONS|HEAD)\\s*(/\\S+)?";
         #! Pattern to match action= declarations
         const ActionPattern = "action=([a-zA-Z_][a-zA-Z0-9_]*)";
     }
@@ -5463,12 +5463,13 @@ public class OpenApi3SchemaTokenizer {
         foreach auto match in (matches) {
             string block = match;
 
-            # Extract HTTP method
-            *list<string> method_match = (block =~ x/@REST\s+(GET|POST|PUT|DELETE|PATCH|OPTIONS|HEAD)/i);
+            # Extract HTTP method and optional path
+            *list<string> method_match = (block =~ x/@REST\s+(GET|POST|PUT|DELETE|PATCH|OPTIONS|HEAD)\s*(\/\S+)?/i);
             if (!method_match) {
                 continue;
             }
             string http_method = method_match[0].upr();
+            string path = method_match[1] ?? "";
 
             # Extract action if present
             *string action;
@@ -5490,7 +5491,7 @@ public class OpenApi3SchemaTokenizer {
             rv += <RestMethodInfo>{
                 "http_method": http_method,
                 "action": action,
-                "path": "",  # Path needs to be determined from class context
+                "path": path,
                 "schema": schema,
             };
         }
@@ -5927,12 +5928,21 @@ public class OpenApi3SchemaGenerator {
             return rv;
         }
 
-        schema.type = "object";
-        schema.properties = child_schema.properties;
-        if (child_schema.required) {
-            schema.required = child_schema.required;
+        # build a new hash to avoid type narrowing from mapType() return values
+        hash<auto> rv = {
+            "type": "object",
+            "properties": child_schema.properties,
+        };
+        if (schema.description) {
+            rv.description = schema.description;
         }
-        return schema;
+        if (schema.nullable) {
+            rv.nullable = schema.nullable;
+        }
+        if (child_schema.required) {
+            rv.required = child_schema.required;
+        }
+        return rv;
     }
 
     #! Builds an object schema from a list of param nodes
