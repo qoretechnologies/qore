@@ -641,6 +641,7 @@ class RestCmd {
 
     static usage() {
         printf("usage: %s [options] get|put|post|delete URL ['qore msg body']
+ -A, --http-version=ARG     set HTTP version: auto, 1.0, 1.1, 2.0, 3.0
  -c, --cert=ARG             client X.509 certificate to use
  -E, --full-exception       show full exception output
  -e, --send-encoding[=ARG]  set compression in outgoing request
@@ -668,7 +669,6 @@ class RestCmd {
  -t, --token=ARG            an authorization token to use
  -u, --userpass=ARG         set the user and password for the connection in the format \"user:password\"
  -V, --verify-cert          require and verify X.509 certificates from the server
- -A, --http-version=ARG     set HTTP version: auto, 1.0, 1.1, 2.0, 3.0
  -X, --lax-parsing          lax parsing of Swagger schemas
  -x, --example[=ARG]        generate an example message; ARG=
                               q: generate Qore example (default data)
