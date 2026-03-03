@@ -110,6 +110,13 @@ public class DataProvider {
             "ftppoller": "FtpPoller",
             "gcal": "GoogleCalendarDataProvider",
             "generator": "GeneratorDataProvider",
+
+            # provided by the geos module
+            "geoswkbread": "GEOSDataProvider",
+            "geoswkbwrite": "GEOSDataProvider",
+            "geoswktread": "GEOSDataProvider",
+            "geoswktwrite": "GEOSDataProvider",
+
             "gmail": "GmailDataProvider",
 
             # provided by the grpc module
