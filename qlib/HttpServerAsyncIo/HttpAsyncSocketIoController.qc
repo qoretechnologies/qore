@@ -1182,8 +1182,12 @@ public class HttpAsyncSocketIoController {
                                     controllers[cinfo.controller_idx].wake();
                                     # CV-based wait: wakes immediately when I/O thread drains
                                     # the buffer, falls back to 50ms timeout otherwise
-                                    cinfo.sock.waitForQuicStreamDrain(
+                                    int drain_rv = cinfo.sock.waitForQuicStreamDrain(
                                         session_id, stream_id, 50ms);
+                                    if (drain_rv == -1) {
+                                        throw "HTTP3-STREAM-ERROR", sprintf("stream %d: stream "
+                                            "removed while waiting for drain", stream_id);
+                                    }
                                 }
                                 controllers[cinfo.controller_idx].wake();
                             }

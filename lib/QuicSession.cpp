@@ -1872,7 +1872,10 @@ int QuicSession::sendStreamData(int64_t stream_id, const void* data, size_t len,
     // Check backpressure: if staging buffer > 1MB, signal caller to retry.
     // sent_bufs holds data already given to nghttp3/ngtcp2 (not counted here
     // because it will be freed via h3AckedStreamDataCallback).
-    if (sbd.data.size() > QUIC_MAX_STREAM_BODY) {
+    // Skip backpressure for FIN-only submissions (no data to append) — rejecting
+    // the FIN when the buffer is transiently above the threshold would leave the
+    // stream open forever if the caller has no retry loop for the FIN.
+    if (sbd.data.size() > QUIC_MAX_STREAM_BODY && (data && len > 0)) {
         printd(5, "QuicSession::sendStreamData() stream_id=" QLLD " BACKPRESSURE pending=%d\n",
             stream_id, (int)sbd.data.size());
         return 1;
