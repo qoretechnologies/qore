@@ -4961,6 +4961,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* result = builder->CreateCall(helper, {us_val, rel_val});
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
             return true;
         }
 
