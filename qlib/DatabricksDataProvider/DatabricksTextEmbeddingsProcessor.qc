@@ -48,6 +48,7 @@ public class DatabricksTextEmbeddingsProcessor inherits DatabricksDataProviderBa
                     "text embeddings (e.g., `databricks-bge-large-en`)",
                 "type": AbstractDataProviderTypeMap."string",
                 "required": True,
+                "ref_data": "serving_endpoints",
             },
             "text_field": <DataProviderOptionInfo>{
                 "display_name": "Text Field",

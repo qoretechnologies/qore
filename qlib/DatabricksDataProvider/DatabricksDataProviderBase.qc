@@ -96,9 +96,14 @@ public class DatabricksDataProviderBase inherits DataProvider::AbstractDataProvi
     constructor(*hash<auto> options) {
         if (options.databricksrestclient) {
             rest = options.databricksrestclient;
-        } else if (options.connection instanceof DatabricksRestClient::DatabricksRestConnection) {
-            conn = options.connection;
-            rest = conn.get(True);
+        } else if (options.connection) {
+            # Connection passed by the framework; use instanceof to store typed conn if possible,
+            # but always call get() to initialize the REST client (instanceof may fail across
+            # Qore program boundaries)
+            if (options.connection instanceof DatabricksRestClient::DatabricksRestConnection) {
+                conn = options.connection;
+            }
+            rest = options.connection.get(True);
         } else if (options.token || options.workspace || options.databricksrestclient_options) {
             hash<auto> client_opts = options.databricksrestclient_options ?? {};
             if (options.token) {
@@ -242,6 +247,46 @@ public class DatabricksDataProviderBase inherits DataProvider::AbstractDataProvi
             page_token = response.next_page_token;
         } while (page_token.val());
         return all_records;
+    }
+
+    #! Returns information on supported reference data
+    *hash<string, bool> getSupportedReferenceData() {
+        return {
+            "serving_endpoints": True,
+        };
+    }
+
+    #! Returns reference data for the given type
+    private *list<hash<AllowedValueInfo>> getReferenceDataImpl(string type, *hash<auto> action_opts) {
+        switch (type) {
+            case "serving_endpoints": return getReferenceServingEndpoints();
+        }
+    }
+
+    #! Returns available serving endpoints as reference data
+    private *list<hash<AllowedValueInfo>> getReferenceServingEndpoints() {
+        list<hash<AllowedValueInfo>> rv = ();
+        try {
+            hash<auto> response = doGet("api/2.0/serving-endpoints");
+            if (response.endpoints) {
+                foreach hash<auto> ep in (response.endpoints) {
+                    string name = ep.name;
+                    *string state = ep.state.ready;
+                    *string ep_type = ep.endpoint_type;
+                    string desc = sprintf("%s (type: %s, state: %s)", name, ep_type ?? "custom",
+                        state ?? "unknown");
+                    rv += <AllowedValueInfo>{
+                        "display_name": name,
+                        "short_desc": desc,
+                        "desc": desc,
+                        "value": name,
+                    };
+                }
+            }
+        } catch () {
+            # Silently ignore errors when fetching reference data
+        }
+        return rv;
     }
 
     #! Throws if the REST client is not initialized

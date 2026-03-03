@@ -47,6 +47,7 @@ public class DatabricksBatchModelPredictionProcessor inherits DatabricksDataProv
                 "desc": "The name of the Databricks Model Serving endpoint to use for predictions",
                 "type": AbstractDataProviderTypeMap."string",
                 "required": True,
+                "ref_data": "serving_endpoints",
             },
             "input_fields": <DataProviderOptionInfo>{
                 "display_name": "Input Fields",

@@ -98,9 +98,14 @@ public class BigMLDataProviderBase inherits DataProvider::AbstractDataProvider {
     constructor(*hash<auto> options) {
         if (options.bigmlrestclient) {
             rest = options.bigmlrestclient;
-        } else if (options.connection instanceof BigMLRestClient::BigMLRestConnection) {
-            conn = options.connection;
-            rest = conn.get(True);
+        } else if (options.connection) {
+            # Connection passed by the framework; use instanceof to store typed conn if possible,
+            # but always call get() to initialize the REST client (instanceof may fail across
+            # Qore program boundaries)
+            if (options.connection instanceof BigMLRestClient::BigMLRestConnection) {
+                conn = options.connection;
+            }
+            rest = options.connection.get(True);
         } else {
             hash<auto> client_opts = options.bigmlrestclient_options ?? {};
             if (options.token) {

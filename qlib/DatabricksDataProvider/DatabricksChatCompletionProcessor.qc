@@ -48,6 +48,7 @@ public class DatabricksChatCompletionProcessor inherits DatabricksDataProviderBa
                     "chat completions (e.g., `databricks-meta-llama-3-1-70b-instruct`)",
                 "type": AbstractDataProviderTypeMap."string",
                 "required": True,
+                "ref_data": "serving_endpoints",
             },
             "prompt_field": <DataProviderOptionInfo>{
                 "display_name": "Prompt Field",

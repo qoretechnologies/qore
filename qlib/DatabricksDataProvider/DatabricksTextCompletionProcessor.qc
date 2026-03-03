@@ -45,9 +45,10 @@ public class DatabricksTextCompletionProcessor inherits DatabricksDataProviderBa
                 "display_name": "Endpoint Name",
                 "short_desc": "Databricks Foundation Model Serving endpoint name",
                 "desc": "The name of the Databricks Foundation Model Serving endpoint to use for "
-                    "text completions (e.g., `databricks-mpt-7b-instruct`)",
+                    "text completions (e.g., `databricks-meta-llama-3-1-8b-instruct`)",
                 "type": AbstractDataProviderTypeMap."string",
                 "required": True,
+                "ref_data": "serving_endpoints",
             },
             "prompt_field": <DataProviderOptionInfo>{
                 "display_name": "Prompt Field",
@@ -134,11 +135,14 @@ public class DatabricksTextCompletionProcessor inherits DatabricksDataProviderBa
 
         string prompt_value = string(record{prompt_field} ?? "");
 
-        # Call serving endpoint with completion format
+        # Call serving endpoint with OpenAI-compatible chat format
+        # (Databricks Foundation Model endpoints only support the chat completions API)
         hash<auto> response = doPost(
             sprintf("serving-endpoints/%s/invocations", endpoint_name),
             {
-                "prompt": prompt_value,
+                "messages": (
+                    {"role": "user", "content": prompt_value},
+                ),
                 "max_tokens": max_tokens,
                 "temperature": temperature,
             },
@@ -146,7 +150,8 @@ public class DatabricksTextCompletionProcessor inherits DatabricksDataProviderBa
 
         return <DatabricksTextCompletionEventInfo>{
             "event_type": "databricks-text-completion",
-            "completion": response.choices.lsize() ? (response.choices[0].text ?? "") : "",
+            "completion": response.choices.lsize()
+                ? (response.choices[0].message.content ?? response.choices[0].text ?? "") : "",
             "usage": response.usage,
             "endpoint_name": endpoint_name,
             "prompt_value": prompt_value,
