@@ -926,6 +926,23 @@ class QoreAOTBinaryDeserializer {
 public:
     ~QoreAOTBinaryDeserializer() {
         delete type_resolver;
+        // Clean up any pending QoreValues that weren't transferred to the namespace tree
+        // (only fires on early-return error paths; normal path transfers ownership)
+        for (auto& class_members : pending_instance_members) {
+            for (auto& pim : class_members) {
+                pim.default_val.discard(nullptr);
+            }
+        }
+        for (auto& class_consts : pending_class_constants) {
+            for (auto& pcc : class_consts) {
+                pcc.value.discard(nullptr);
+            }
+        }
+        for (auto& hd_pair : pending_hashdecl_members) {
+            for (auto& phm : hd_pair.second) {
+                phm.default_val.discard(nullptr);
+            }
+        }
     }
 
     //! Deserialize binary metadata into a QoreProgram's namespace tree

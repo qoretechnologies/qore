@@ -1928,6 +1928,8 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
                 pim.access = maccess;
                 pim.default_val = default_val;
                 instance_members.push_back(std::move(pim));
+            } else if (default_val.hasNode()) {
+                default_val.discard(nullptr);
             }
         }
         pending_instance_members.push_back(std::move(instance_members));
@@ -1975,6 +1977,8 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
                 pcc.access = caccess;
                 pcc.value = cval;
                 class_constants.push_back(std::move(pcc));
+            } else if (cval.hasNode()) {
+                cval.discard(nullptr);
             }
         }
         pending_class_constants.push_back(std::move(class_constants));
@@ -2277,6 +2281,9 @@ bool QoreAOTBinaryDeserializer::deserializeHashDecls(std::string& error) {
         // Validate namespace index
         if (ns_idx >= ns_list.size() || !ns_list[ns_idx]) {
             printd(2, "AOT: skipping hashdecl '%s' - invalid namespace index %u\n", name, ns_idx);
+            for (auto& mi : members) {
+                mi.default_val.discard(nullptr);
+            }
             continue;
         }
 
@@ -2296,6 +2303,9 @@ bool QoreAOTBinaryDeserializer::deserializeHashDecls(std::string& error) {
         if (ns_list[ns_idx]->hashDeclList.add(hd) != 0) {
             printd(2, "AOT: hashdecl '%s' already exists in namespace\n", name);
             hdp->deref();
+            for (auto& mi : members) {
+                mi.default_val.discard(nullptr);
+            }
             continue;
         }
 
