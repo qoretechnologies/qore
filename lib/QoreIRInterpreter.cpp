@@ -3122,7 +3122,7 @@ load_local_done:
                         sv.getInternalNode()->deref(xsink);
                     }
                 }
-                int64_t result_val = target_val + source_val;
+                int64 result_val = target_val + source_val;
                 // Update slot cache (always)
                 if (fused_inst->target_slot_id < locals_slot_cache.size()) {
                     locals_slot_cache[fused_inst->target_slot_id] = QoreValue(result_val);
@@ -3177,7 +3177,7 @@ load_local_done:
                         lv.getInternalNode()->deref(xsink);
                     }
                 }
-                int64_t result_val = local_val + fused_inst->delta;
+                int64 result_val = local_val + fused_inst->delta;
                 // Update slot cache (always)
                 if (fused_inst->slot_id < locals_slot_cache.size()) {
                     locals_slot_cache[fused_inst->slot_id] = QoreValue(result_val);
