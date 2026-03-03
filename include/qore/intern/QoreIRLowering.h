@@ -213,6 +213,8 @@ private:
         QoreIROpcode arith_op, const QoreIRValue& right,
         const QoreValue& full_expr, const QoreProgramLocation* loc, std::string& error);
     QoreIRValue lowerConditionValue(const QoreValue& cond, std::string& error);
+    bool tryEmitFusedBranchIfLtLocalInt(const QoreValue& cond,
+        QoreIRBasicBlock* true_target, QoreIRBasicBlock* false_target);
     QoreIROpcode selectComparisonOpcode(const QoreValue& left, const QoreValue& right,
         QoreIROpcode int_op, QoreIROpcode float_op, QoreIROpcode any_op);
     bool expressionCanThrow(const QoreValue& expr) const;

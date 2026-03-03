@@ -83,6 +83,10 @@ struct QoreAOTContext {
     //! True if all body locals are IR-only (enables skipping instantiation in fast call path)
     bool all_body_locals_ir_only = false;
 
+    //! True if this context owns the regex_cases (created by buildContextFromSlotMap).
+    //! False when regex_cases are borrowed pointers from the IR function (buildAOTContext).
+    bool owns_regex_cases = true;
+
     //! Pre-resolved CallDirect targets indexed by expr slot.
     //! Populated during buildAOTContext() to avoid per-call dynamic_cast in qore_rt_call_direct_aot()
     //! Size == num_exprs; entries with func==nullptr are not CallDirect slots.

@@ -65,6 +65,13 @@ QoreValue AbstractMethodCallNode::exec(QoreObject* o, const char* c_str, const q
         }
 
         RuntimeConfig& rc = rc_get_current_ref();
+        // When tmp_args is true (clone from IR interpreter), use evalTmpArgs to preserve
+        // ReferenceNode values in the arg list. The eval() path goes through
+        // CodeEvaluationHelper with const args, which calls evalList() and dereferences
+        // ReferenceNodes.
+        if (tmp_args) {
+            return qore_method_private::evalTmpArgs(*method, xsink, rc, o, args, ctx);
+        }
         return variant
             ? qore_method_private::evalNormalVariant(*method, xsink, rc, o,
                 reinterpret_cast<const QoreExternalMethodVariant*>(variant), args)
@@ -73,6 +80,18 @@ QoreValue AbstractMethodCallNode::exec(QoreObject* o, const char* c_str, const q
     //printd(5, "AbstractMethodCallNode::exec() calling QoreObject::evalMethod() for %s::%s()\n", o->getClassName(),
     //    c_str);
     RuntimeConfig& rc = rc_get_current_ref();
+    if (tmp_args) {
+        // Dynamic dispatch with pre-evaluated args: look up the method on the actual class
+        // and use evalTmpArgs to preserve ReferenceNode values
+        const qore_class_private* priv = qore_class_private::get(*o->getClass());
+        const QoreMethod* w = priv->getMethodForEval(c_str, o->getProgram(), ctx, xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        if (w) {
+            return qore_method_private::evalTmpArgs(*w, xsink, rc, o, args, ctx);
+        }
+    }
     return qore_class_private::get(*o->getClass())->evalMethod(o, c_str, args, ctx, rc, xsink);
 }
 
@@ -649,6 +668,14 @@ AbstractQoreNode* ProgramFunctionCallNode::makeReferenceNodeAndDerefImpl() {
 NewObjectCallNode::NewObjectCallNode(const QoreClass* qc, QoreListNode* args)
         : AbstractQoreNode(NT_NEW_OBJECT, false, true),
         FunctionCallBase(nullptr, args), qc(qc) {
+    if (!qc) {
+        return;
+    }
+    // Skip variant resolution when there is no program context (e.g. during AOT registration)
+    QoreProgram* pgm = getProgram();
+    if (!pgm) {
+        return;
+    }
     const QoreMethod* constructor = qc->getConstructor();
     if (!constructor) {
         if (args && !args->empty()) {
@@ -659,7 +686,7 @@ NewObjectCallNode::NewObjectCallNode(const QoreClass* qc, QoreListNode* args)
     ExceptionSink xsink;
     variant = qore_method_private::get(*constructor)->getFunction()->runtimeFindVariant(&xsink, args, false, nullptr);
 
-    ExceptionSink* pxs = getProgram()->getParseExceptionSink();
+    ExceptionSink* pxs = pgm->getParseExceptionSink();
     if (pxs) {
         pxs->assimilate(xsink);
     } else {

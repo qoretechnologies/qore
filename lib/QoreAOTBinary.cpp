@@ -103,16 +103,28 @@ bool QoreAOTBinaryWriter::writeValue(const QoreValue& v) {
                 writeI64(static_cast<int64_t>(dt->getSecond()));
                 writeI64(static_cast<int64_t>(dt->getMicrosecond()));
             } else {
-                writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_ABS_DATE));
-                // For absolute dates, store epoch microseconds UTC + zone offset
-                writeI64(dt->getEpochMicrosecondsUTC());
-                // Store UTC offset in seconds for zone reconstruction
                 const AbstractQoreZoneInfo* zone = dt->getZone();
-                int utc_offset = 0;
-                if (zone) {
-                    utc_offset = AbstractQoreZoneInfo::getUTCOffset(zone);
+                const char* region = zone ? zone->getRegionName() : nullptr;
+                // Use region name for DST-aware zones (e.g., "Europe/Paris")
+                // Offset zones have names like "+01:00", "-06:00" — use fixed offset for those
+                if (region && region[0] != '+' && region[0] != '-' && strcmp(region, "UTC") != 0) {
+                    writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_ABS_DATE_REGION));
+                    writeI64(dt->getEpochMicrosecondsUTC());
+                    // Write region name as length-prefixed string in string pool
+                    uint32_t len = static_cast<uint32_t>(strlen(region));
+                    writeU32(len);
+                    writeStringRef(region, len);
+                } else {
+                    writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_ABS_DATE));
+                    // For absolute dates, store epoch microseconds UTC + zone offset
+                    writeI64(dt->getEpochMicrosecondsUTC());
+                    // Store UTC offset in seconds for zone reconstruction
+                    int utc_offset = 0;
+                    if (zone) {
+                        utc_offset = AbstractQoreZoneInfo::getUTCOffset(zone);
+                    }
+                    writeI64(static_cast<int64_t>(utc_offset));
                 }
-                writeI64(static_cast<int64_t>(utc_offset));
             }
             return true;
         }
@@ -475,6 +487,42 @@ QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end
             int us = static_cast<int>(epoch_us % 1000000);
             if (us < 0) {
                 // Handle negative microseconds (dates before epoch)
+                epoch_s -= 1;
+                us += 1000000;
+            }
+            return QoreValue(DateTimeNode::makeAbsolute(zone, epoch_s, us));
+        }
+
+        case QoreAOTValueTag::VT_ABS_DATE_REGION: {
+            if (ptr + 12 > end) {
+                error = "unexpected end of data reading abs_date_region value";
+                return QoreValue();
+            }
+            int64_t epoch_us = readI64(ptr);
+            uint32_t name_len = readU32(ptr);
+            if (ptr + 4 > end) {
+                error = "unexpected end of data reading region name offset";
+                return QoreValue();
+            }
+            // Read string pool offset (writeStringRef writes a pool offset)
+            uint32_t str_offset = readU32(ptr);
+            const char* region_name = getString(str_offset);
+            if (!region_name) {
+                error = "invalid string offset for region name";
+                return QoreValue();
+            }
+            // Look up region zone
+            ExceptionSink xsink;
+            const AbstractQoreZoneInfo* zone = QTZM.findLoadRegion(region_name, &xsink);
+            if (!zone || xsink) {
+                // Fallback to UTC if region not found
+                xsink.clear();
+                zone = nullptr;
+            }
+            // Convert epoch_us to seconds + microseconds
+            int64_t epoch_s = epoch_us / 1000000;
+            int us = static_cast<int>(epoch_us % 1000000);
+            if (us < 0) {
                 epoch_s -= 1;
                 us += 1000000;
             }
@@ -1675,6 +1723,10 @@ bool QoreAOTBinaryDeserializer::deserializeIntoProgram(QoreProgram* in_pgm, cons
     if (!resolveInstanceMembers(error)) {
         return false;
     }
+    // Import inherited members from base classes (must be after resolveInstanceMembers)
+    if (!importInheritedMembers(error)) {
+        return false;
+    }
     if (!resolveStaticMembers(error)) {
         return false;
     }
@@ -2745,24 +2797,47 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
             bool is_final = (mflags & 0x01) != 0;
             bool is_abstract = (mflags & 0x02) != 0;
 
-            // Create an empty UserMethodVariant (no body, no params)
-            UserMethodVariant* umv = new UserMethodVariant(
-                static_cast<ClassAccess>(access), is_final,
-                nullptr, 0, 0, QoreValue(), nullptr, false,
-                QCF_NO_FLAGS, is_abstract);
+            // Create the correct variant type for special methods:
+            // constructor → UserConstructorVariant, destructor → UserDestructorVariant,
+            // copy → UserCopyVariant, everything else → UserMethodVariant.
+            // This is critical because the runtime dispatches through type-specific
+            // virtual methods (evalConstructor, evalDestructor, evalCopy) via
+            // reinterpret_cast from the base MethodVariant pointer.
+            bool is_constructor = method_name && strcmp(method_name, "constructor") == 0;
+            bool is_destructor = method_name && strcmp(method_name, "destructor") == 0;
+            bool is_copy = method_name && strcmp(method_name, "copy") == 0;
+
+            MethodVariantBase* mvb;
+            if (is_constructor) {
+                mvb = new UserConstructorVariant(
+                    static_cast<ClassAccess>(access),
+                    nullptr, 0, 0, QoreValue(), nullptr, QCF_NO_FLAGS);
+            } else if (is_destructor) {
+                mvb = new UserDestructorVariant(nullptr, 0, 0);
+            } else if (is_copy) {
+                mvb = new UserCopyVariant(
+                    static_cast<ClassAccess>(access),
+                    nullptr, 0, 0, QoreValue(), nullptr, false);
+            } else {
+                mvb = new UserMethodVariant(
+                    static_cast<ClassAccess>(access), is_final,
+                    nullptr, 0, 0, QoreValue(), nullptr, false,
+                    QCF_NO_FLAGS, is_abstract);
+            }
 
             bool has_varargs = false;
+            UserVariantBase* umv = dynamic_cast<UserVariantBase*>(mvb);
+            assert(umv);
             if (!readAndSetupVariantSignature(reader, type_resolver, pgm, ptr, end,
                     umv, has_varargs, error, qc)) {
-                // Method variant will be deleted by addUserMethod on failure, or we need to clean up
-                delete umv;
+                delete mvb;
                 return false;
             }
 
             // Skip methods for classes that already existed from module loading
             // — they're already committed with all their methods
             if (skip_class) {
-                delete umv;
+                delete mvb;
                 continue;
             }
 
@@ -2770,7 +2845,7 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
             // method which checks signature.hasVarargs() directly
 
             // Add method to class
-            qore_class_private::addUserMethod(*qc, method_name, umv, is_static != 0);
+            qore_class_private::addUserMethod(*qc, method_name, mvb, is_static != 0);
         }
 
         printd(5, "AOT deser: %s method '%s::%s' (%s) with %d variant(s)\n",
@@ -2778,6 +2853,28 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
             qc->getName(), method_name, is_static ? "static" : "instance", num_variants);
     }
 
+    return true;
+}
+
+bool QoreAOTBinaryDeserializer::importInheritedMembers(std::string& error) {
+    // Import inherited members from base classes into newly deserialized classes.
+    // During normal parsing, BCNode::initializeMembers() calls parseImportMembers()
+    // to copy base class members into the derived class's member map. AOT deserialization
+    // skips this step, so derived classes can't access inherited members at runtime.
+    for (size_t i = 0; i < class_list.size(); ++i) {
+        if (preexisting_classes.count(i)) {
+            continue;  // already fully initialized from module loading
+        }
+        QoreClass* qc = class_list[i];
+        if (!qc) {
+            continue;
+        }
+        qore_class_private* priv = qore_class_private::get(*qc);
+        // initializeMembers() checks parse_resolve_class_members flag to avoid re-initialization,
+        // iterates base class list, and calls parseImportMembers() for each base class
+        priv->initializeMembers();
+        printd(5, "AOT deser: imported inherited members for class '%s'\n", qc->getName());
+    }
     return true;
 }
 
@@ -2796,6 +2893,8 @@ bool QoreAOTBinaryDeserializer::commitDeserializedClasses(std::string& error) {
         priv->initialized = true;
         // Commits all pending method variants (hm, shm maps); handles base-class recursion
         priv->parseCommit();
+        printd(5, "AOT deser: committed class '%s' constructor=%p hm.size=%d\n",
+            qc->getName(), (void*)priv->constructor, (int)priv->hm.size());
     }
     return true;
 }
@@ -2961,6 +3060,53 @@ bool readReexportModules(const uint8_t* data, uint32_t size, std::vector<std::st
             return false;
         }
         reexport_modules.push_back(mod_name);
+    }
+
+    return true;
+}
+
+void serializeProgramMetadata(QoreAOTBinaryWriter& writer, const char* exec_class_name) {
+    // Only create the section if there's metadata to write
+    if (!exec_class_name || !*exec_class_name) {
+        return;
+    }
+
+    uint32_t sec_idx = writer.beginSection(QoreAOTSectionType::PROGRAM_METADATA);
+
+    // Write exec-class flag (u8) and name (string ref)
+    writer.writeU8(1);  // has exec-class
+    writer.writeStringRef(exec_class_name);
+
+    writer.endSection(sec_idx);
+}
+
+bool readProgramMetadata(const uint8_t* data, uint32_t size, std::string& exec_class_name,
+        std::string& error) {
+    exec_class_name.clear();
+
+    QoreAOTBinaryReader reader;
+    if (!reader.open(data, size, error)) {
+        return false;
+    }
+
+    const QoreAOTSectionHeader* sec = reader.findSection(QoreAOTSectionType::PROGRAM_METADATA);
+    if (!sec) {
+        // No program metadata section — this is OK (older binaries won't have it)
+        return true;
+    }
+
+    const uint8_t* ptr = reader.getSectionData(*sec);
+    if (!ptr) {
+        error = "invalid PROGRAM_METADATA section data";
+        return false;
+    }
+
+    uint8_t has_exec_class = QoreAOTBinaryReader::readU8(ptr);
+    if (has_exec_class) {
+        const char* name = reader.readStringRef(ptr);
+        if (name && *name) {
+            exec_class_name = name;
+        }
     }
 
     return true;

@@ -1188,6 +1188,7 @@ LocalVarValue* thread_find_lvar(const char* id) {
     return td->tlpd->lvstack.findMaybe(id);
 }
 
+
 ClosureVarValue* thread_instantiate_closure_var(const char* n_id, const QoreTypeInfo* typeInfo, QoreValue& nval, bool assign) {
     ThreadLocalProgramData* tlpd = thread_data.get()->tlpd;
     // Get declaration order for this stack entry (issue #5168)
@@ -1655,6 +1656,11 @@ void update_runtime_statement_location(const AbstractStatement* stmt, const Qore
     ThreadData* td = thread_data.get();
     td->runtime_statement = stmt;
     td->runtime_loc = loc;
+}
+
+RuntimeLocationCache get_runtime_location_cache() {
+    ThreadData* td = thread_data.get();
+    return {&td->runtime_loc, &td->runtime_statement};
 }
 
 void set_parse_file_info(QoreProgramLocation& loc) {

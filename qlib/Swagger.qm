@@ -2831,7 +2831,6 @@ public class OperationObject inherits ParameterGroup, RestSchemaValidator::Abstr
 
             po.check(serialize, True, path, method, key, \headers{key});
         }
-
         # check body parameters
         {
             *AbstractSwaggerParameterObject body_po = self.body ?? pio.body;

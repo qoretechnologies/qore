@@ -232,7 +232,7 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
                 qc = qore_root_ns_private::runtimeFindClass(*pp->RootNS, ref1, found_ns);
             }
             if (!qc) {
-                printd(0, "AOT v2: cannot resolve class '%s' for self method '%s'\n",
+                printd(1, "AOT SLOT: cannot resolve class '%s' for self method '%s'\n",
                     ref1 ? ref1 : "(null)", ref2);
                 return 0;
             }
@@ -250,9 +250,10 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
                 }
             }
             if (!m) {
-                printd(0, "AOT v2: cannot find method '%s::%s'\n", ref1, ref2);
+                printd(1, "AOT SLOT: cannot find method '%s::%s'\n", ref1, ref2);
                 return 0;
             }
+            printd(5, "AOT SLOT: resolved self method '%s::%s' -> %p\n", ref1, ref2, m);
             SelfFunctionCallNode* sfcn = new SelfFunctionCallNode(&loc_builtin, strdup(ref2), nullptr, m,
                 m->getClass(), qore_class_private::get(*m->getClass()));
             return toBitsNB(QoreValue(sfcn));
@@ -393,7 +394,6 @@ class ExprTreeDeserializer {
     const uint8_t* end;
     QoreProgram* pgm;
     QoreAOTContext* ctx;
-    bool debug;
     bool failed = false;
 
     uint8_t readU8() {
@@ -551,6 +551,12 @@ class ExprTreeDeserializer {
                 readU16(); // num_children
                 if (slot < ctx->num_locals && ctx->locals[slot]) {
                     LocalVar* lv = ctx->locals[slot];
+                    // NOTE: always use false for in_closure — VT_LOCAL type calls
+                    // ref.id->eval() which internally checks closure_use and uses
+                    // the correct lookup (local stack vs closure stack).
+                    // VT_CLOSURE uses thread_get_runtime_closure_var() (pointer-based
+                    // runtime closure env lookup) which doesn't work for non-closure
+                    // variables that just happen to have closure_use=true.
                     return QoreValue(new VarRefNode(&loc_builtin, strdup(lv->getName()), lv, false));
                 }
                 printd(0, "AOT EXPR_TREE: invalid local slot %d\n", slot);
@@ -680,10 +686,12 @@ class ExprTreeDeserializer {
                     }
                 }
                 if (!m) {
-                    printd(0, "AOT EXPR_TREE: cannot find method '%s::%s'\n",
+                    printd(1, "AOT EXPR_TREE: cannot find method '%s::%s'\n",
                         class_name.c_str(), method_name.c_str());
                     return fail();
                 }
+                printd(5, "AOT EXPR_TREE: resolved self call '%s::%s' args=%d -> %p\n",
+                    class_name.c_str(), method_name.c_str(), (int)num_children, m);
                 SelfFunctionCallNode* sfcn = new SelfFunctionCallNode(&loc_builtin,
                     strdup(method_name.c_str()), pln.release(), m,
                     m->getClass(), qore_class_private::get(*m->getClass()));
@@ -1439,8 +1447,7 @@ class ExprTreeDeserializer {
 
 public:
     ExprTreeDeserializer(const uint8_t* data, uint32_t size, QoreProgram* p, QoreAOTContext* c)
-        : ptr(data), end(data + size), pgm(p), ctx(c),
-          debug(getenv("QORE_AOT_DEBUG") != nullptr) {
+        : ptr(data), end(data + size), pgm(p), ctx(c) {
     }
 
     //! Deserialize an expression tree from the blob and return NaN-boxed bits
@@ -1483,6 +1490,10 @@ static QoreAOTContext* buildContextFromSlotMap(
     uint16_t num_body_locals = QoreAOTBinaryReader::readU16(ptr);
     uint8_t has_unsupported = QoreAOTBinaryReader::readU8(ptr);
     QoreAOTBinaryReader::readU8(ptr); // padding
+
+    if (debug > 1 && has_unsupported) {
+        printd(5, "AOT buildCtx: '%s' has_unsupported=1 FROM BINARY (pre-flagged)\n", name);
+    }
 
     // Validate slot counts match the AOT function descriptor
     if (num_locals != aot_func.num_locals || num_globals != aot_func.num_globals
@@ -1586,6 +1597,13 @@ static QoreAOTContext* buildContextFromSlotMap(
         }
 
         if (lv) {
+            // If compile-time flags say closure_use but resolved LocalVar doesn't have it,
+            // propagate the flag (source-stripped binaries create new LocalVars without closure_use)
+            if ((lflags & 0x02) && !lv->closureUse()) {
+                printd(2, "AOT v2: '%s' local[%d] = '%s' closure_use mismatch: flags=0x%x, propagating\n",
+                    name, i, lname ? lname : "", lflags);
+                lv->setClosureUse();
+            }
             ctx->locals[i] = lv;
             printd(3, "AOT v2: '%s' local[%d] = '%s' (flags=0x%x param_idx=%d) -> %p\n",
                 name, i, lname ? lname : "", lflags, param_idx, (void*)lv);
@@ -1709,8 +1727,8 @@ static QoreAOTContext* buildContextFromSlotMap(
         if (bits) {
             ctx->exprs[i] = bits;
         } else if (kind != AOTExprKind::GENERIC_EVAL) {
-            printd(2, "AOT v2: unresolved expr slot %d (kind=%d) for '%s'\n",
-                i, (int)kind, name);
+            printd(2, "AOT buildCtx: '%s' unresolved expr[%d] kind=%d ref1='%s' ref2='%s'\n",
+                name, i, (int)kind, ref1 ? ref1 : "", ref2 ? ref2 : "");
             has_unsupported = true;
         }
     }
@@ -1729,10 +1747,12 @@ static QoreAOTContext* buildContextFromSlotMap(
         ctx->all_body_locals = stmt_locals;
     } else {
         // Toplevel path — create new LocalVars, reuse from ctx->locals[] where possible
-        std::unordered_map<std::string, LocalVar*> local_name_map;
+        // Use a deque map because nested scopes can have variables with the same name
+        // (e.g., 'h' in nested foreach loops). Consuming front-to-back gives correct matches.
+        std::unordered_map<std::string, std::deque<LocalVar*>> local_name_map;
         for (int i = 0; i < num_locals; ++i) {
             if (ctx->locals[i]) {
-                local_name_map[ctx->locals[i]->getName()] = ctx->locals[i];
+                local_name_map[ctx->locals[i]->getName()].push_back(ctx->locals[i]);
             }
         }
 
@@ -1745,8 +1765,9 @@ static QoreAOTContext* buildContextFromSlotMap(
             // Reuse LocalVar* from ctx->locals[] if same name exists
             if (blname) {
                 auto it = local_name_map.find(blname);
-                if (it != local_name_map.end()) {
-                    ctx->all_body_locals.push_back(it->second);
+                if (it != local_name_map.end() && !it->second.empty()) {
+                    ctx->all_body_locals.push_back(it->second.front());
+                    it->second.pop_front();
                     (void)bl_closure;
                     continue;
                 }
@@ -1806,14 +1827,15 @@ static QoreAOTContext* buildContextFromSlotMap(
                     ctx->stmts[i] = unique_stmts[i];
                 }
             } else {
-                printd(0, "AOT v2: stmt_slots count mismatch for '%s': expected %d, found %d from AST\n",
+                printd(2, "AOT buildCtx: '%s' stmt count mismatch: expected %d, got %d\n",
                     name, num_stmts, (int)unique_stmts.size());
                 has_unsupported = true;
             }
         } else {
             // Variant has no statement block (deserialized without body) — cannot resolve
             // stmt_slots. Must fall through to fallback path for consistent LocalVar* pointers.
-            printd(2, "AOT v2: '%s' has stmt_slots but no statement block, needs fallback\n", name);
+            printd(2, "AOT buildCtx: '%s' has %d stmt_slots but no statement block\n",
+                name, num_stmts);
             has_unsupported = true;
         }
     } else if (num_stmts > 0 && !uvb) {
@@ -1828,7 +1850,9 @@ static QoreAOTContext* buildContextFromSlotMap(
     // If any expression slots have unsupported types (e.g., closures), skip AOT
     // registration for this function — it will fall through to JIT at runtime
     if (has_unsupported) {
-        printd(2, "AOT v2: skipping '%s' due to unsupported expression slots\n", name);
+        printd(2, "AOT buildCtx: SKIP '%s' (unsupported) locals=%d globals=%d "
+            "exprs=%d stmts=%d body_locals=%d\n",
+            name, num_locals, num_globals, num_exprs, num_stmts, num_body_locals);
         delete ctx;
         return nullptr;
     }
@@ -2096,10 +2120,22 @@ static void registerAOTFunctionsFromSlotMaps(
             std::string class_name = fname_str.substr(0, sep);
             std::string method_name = fname_str.substr(sep + 2);
 
+            // Constructors need the fallback path to get the BCAList (base class
+            // constructor arguments). The AOT body only contains the constructor
+            // body code; the base constructor call is handled by constructorPrelude()
+            // which requires the BCAList from source parsing. Similarly, destructors
+            // and copy methods need their specific variant types with full AST context.
+            // Skip slot map registration for these; leave uvb=nullptr so buildContextFromSlotMap
+            // runs (to advance ptr) but registration is skipped.
+            bool skip_special_method = (method_name == "constructor"
+                || method_name == "destructor" || method_name == "copy");
+
             qore_program_private* pp = qore_program_private::get(*pgm);
             const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
                 *pp->RootNS, class_name.c_str());
-            if (qc) {
+            printd(5, "AOT slot-reg: method '%s'::'%s' class=%p\n",
+                class_name.c_str(), method_name.c_str(), (void*)qc);
+            if (qc && !skip_special_method) {
                 // Use parseFindLocalMethod/parseFindLocalStaticMethod instead of
                 // findMethod/findStaticMethod — the latter checks committedEmpty()
                 // which returns true for deserialized (pending) variants
@@ -2108,36 +2144,78 @@ static void registerAOTFunctionsFromSlotMaps(
                 if (!m) {
                     m = qcp->parseFindLocalStaticMethod(method_name.c_str());
                 }
+                printd(5, "AOT slot-reg: method lookup '%s' m=%p\n",
+                    method_name.c_str(), (void*)m);
                 if (m) {
+                    // Extract signature from the full func_name to match the correct
+                    // overloaded variant.  The func_name format is:
+                    //   ClassName::methodName(type1,type2,...)
+                    // We need the "(type1,type2,...)" part to match against each variant.
+                    std::string target_sig;
+                    {
+                        size_t p = std::string(func_name).find('(');
+                        if (p != std::string::npos) {
+                            target_sig = std::string(func_name).substr(p);
+                        } else {
+                            target_sig = "()";
+                        }
+                    }
+
                     MethodFunctionBase* mfb = qore_method_private::get(*m)->getFunction();
                     QoreFunctionIterator vi(*mfb);
+                    int var_count = 0;
                     while (vi.next()) {
-                        uvb = const_cast<UserVariantBase*>(
-                            dynamic_cast<const UserVariantBase*>(vi.getVariant()));
-                        if (uvb) {
+                        const AbstractQoreFunctionVariant* v = vi.getVariant();
+                        auto* candidate = const_cast<UserVariantBase*>(
+                            dynamic_cast<const UserVariantBase*>(v));
+                        ++var_count;
+                        if (!candidate) {
+                            continue;
+                        }
+
+                        // Build the signature key for this variant in the same format
+                        // as getVariantKey() uses during compilation
+                        std::string var_sig("(");
+                        AbstractFunctionSignature* sig = v->getSignature();
+                        if (sig) {
+                            const type_vec_t& types = sig->getTypeList();
+                            for (size_t ti = 0; ti < types.size(); ++ti) {
+                                if (ti > 0) {
+                                    var_sig.append(",");
+                                }
+                                var_sig.append(QoreTypeInfo::getPath(types[ti]));
+                            }
+                        }
+                        var_sig.append(")");
+
+                        if (var_sig == target_sig) {
+                            uvb = candidate;
                             break;
                         }
+                    }
+                    if (!uvb) {
+                        printd(2, "AOT slot-reg: no matching variant for '%s' "
+                            "sig='%s' in %d variants\n",
+                            func_name, target_sig.c_str(), var_count);
                     }
                 }
             }
         } else if (fname_str != "_toplevel") {
-            // Regular function
-            for (auto fi = root_ns->func_list.begin(), fe2 = root_ns->func_list.end(); fi != fe2; ++fi) {
-                FunctionEntry* fe_entry = fi->second;
-                QoreFunction* func = fe_entry->getFunction();
-                if (!func) {
-                    continue;
-                }
-                if (fname_str == func->getName()) {
-                    QoreFunctionIterator vi(*func);
-                    while (vi.next()) {
-                        uvb = const_cast<UserVariantBase*>(
-                            dynamic_cast<const UserVariantBase*>(vi.getVariant()));
-                        if (uvb) {
-                            break;
-                        }
+            // Regular function — search all namespaces using runtime lookup
+            qore_program_private* pp = qore_program_private::get(*pgm);
+            const qore_ns_private* found_ns = nullptr;
+            const QoreFunction* func = qore_root_ns_private::runtimeFindFunction(
+                *pp->RootNS, fname_str.c_str(), found_ns);
+            printd(5, "AOT slot-reg: function '%s' func=%p\n",
+                fname_str.c_str(), (void*)func);
+            if (func) {
+                QoreFunctionIterator vi(*const_cast<QoreFunction*>(func));
+                while (vi.next()) {
+                    uvb = const_cast<UserVariantBase*>(
+                        dynamic_cast<const UserVariantBase*>(vi.getVariant()));
+                    if (uvb) {
+                        break;
                     }
-                    break;
                 }
             }
         }
@@ -2149,13 +2227,15 @@ static void registerAOTFunctionsFromSlotMaps(
             ++registered;
             // Remove from func_map so fallback path won't re-register with wrong LocalVar*
             func_map.erase(func_name);
-            printd(2, "AOT v2: registered '%s' from slot map\n", func_name);
+            printd(2, "AOT slot-reg: registered '%s' from slot map\n", func_name);
         } else if (ctx) {
             // Toplevel or unresolved — handled separately
             delete ctx;
-            printd(2, "AOT v2: built context for '%s' but no variant found\n", func_name);
+            printd(2, "AOT slot-reg: context built for '%s' but no variant (uvb=%p)\n",
+                func_name, (void*)uvb);
         } else {
-            printd(2, "AOT v2: failed to build slot map context for '%s'\n", func_name);
+            printd(2, "AOT slot-reg: SKIP '%s' (unsupported) uvb=%p\n",
+                func_name, (void*)uvb);
         }
     }
 }
@@ -2270,6 +2350,101 @@ static void registerAOTFunctionsInNamespace(qore_ns_private* ns, QoreProgram* pg
         QoreNamespace* child_ns = ni->second;
         if (child_ns) {
             registerAOTFunctionsInNamespace(qore_ns_private::get(*child_ns), pgm, func_map, registered);
+        }
+    }
+}
+
+//! Transplant unserialized closure values from fallback-parsed classes to main classes.
+/** During AOT serialization, closure/code values are written as VT_NOTHING because
+    they can't be serialized. This affects both class constants (ConstantEntry::val)
+    and member default value expressions (QoreMemberInfo::exp). After fallback source
+    parsing, the fallback program has properly initialized values. This function copies
+    those to the main program's classes so they are available at runtime.
+*/
+static void transplantClassClosureValues(
+        qore_ns_private* fallback_ns,
+        qore_ns_private* main_ns,
+        QoreProgram* main_pgm) {
+    // Process classes in this namespace
+    ClassListIterator cli(main_ns->classList);
+    while (cli.next()) {
+        QoreClass* main_qc = cli.get();
+        if (!main_qc) {
+            continue;
+        }
+        qore_class_private* main_priv = qore_class_private::get(*main_qc);
+
+        // Find matching class in fallback namespace
+        QoreClass* fb_qc = fallback_ns->classList.find(main_qc->getName());
+        if (!fb_qc) {
+            continue;
+        }
+        qore_class_private* fb_priv = qore_class_private::get(*fb_qc);
+
+        // Iterate through main class constants looking for NOTHING values
+        ConstConstantListIterator main_ci(main_priv->constlist);
+        while (main_ci.next()) {
+            const ConstantEntry* main_ce = main_ci.getEntry();
+            if (!main_ce->isUser() || !main_ce->getValue().isNothing()) {
+                continue;  // skip system constants and non-NOTHING values
+            }
+
+            // Find corresponding constant in fallback class
+            const ConstantEntry* fb_ce = fb_priv->constlist.findEntry(main_ce->getName());
+            if (!fb_ce || fb_ce->getValue().isNothing()) {
+                continue;  // no fallback value available
+            }
+
+            // Transplant: set the main constant's value from the fallback constant.
+            // The fallback program lives until after the main program finishes running,
+            // so the referenced values (closures, etc.) remain valid.
+            ConstantEntry* writable_ce = const_cast<ConstantEntry*>(main_ce);
+            writable_ce->val = fb_ce->getReferencedValue();
+            writable_ce->init = true;
+            printd(5, "AOT: transplanted constant '%s::%s' from fallback\n",
+                main_qc->getName(), main_ce->getName());
+        }
+
+        // Transplant member default value expressions (closures can't be serialized).
+        // The member `exp` field stores the initialization expression evaluated at
+        // object construction time. For closures, writeValue() serializes them as
+        // VT_NOTHING. Copy the fallback's expression so member initialization works.
+        for (auto& mi : main_priv->members.member_list) {
+            if (!mi.second->local()) {
+                continue;  // only transplant locally-defined members
+            }
+            if (!mi.second->exp.isNothing()) {
+                continue;  // already has a valid default expression
+            }
+
+            // Find corresponding member in fallback class
+            QoreMemberInfo* fb_mi = fb_priv->members.find(mi.first);
+            if (!fb_mi || fb_mi->exp.isNothing()) {
+                continue;  // no fallback expression available
+            }
+
+            // Transplant: copy the expression reference from the fallback member.
+            // The expression is a parse tree node owned by the fallback program,
+            // which outlives the main program, so the pointer remains valid.
+            // We use refSelf() to get a referenced copy of the expression value.
+            mi.second->exp = fb_mi->exp.refSelf();
+            printd(5, "AOT: transplanted member default '%s::%s' from fallback\n",
+                main_qc->getName(), mi.first);
+        }
+    }
+
+    // Recurse into sub-namespaces
+    for (auto ni = main_ns->nsl.nsmap.begin(), ne = main_ns->nsl.nsmap.end();
+            ni != ne; ++ni) {
+        QoreNamespace* main_child = ni->second;
+        if (!main_child) {
+            continue;
+        }
+        auto fb_ni = fallback_ns->nsl.nsmap.find(ni->first);
+        if (fb_ni != fallback_ns->nsl.nsmap.end() && fb_ni->second) {
+            transplantClassClosureValues(
+                qore_ns_private::get(*fb_ni->second),
+                qore_ns_private::get(*main_child), main_pgm);
         }
     }
 }
@@ -2427,13 +2602,42 @@ static void registerFallbackFunctionsOnMainVariants(
                         main_m = main_qcp->parseFindLocalStaticMethod(meth->getName());
                     }
                     if (main_m) {
+                        // Extract target signature from variant_key to match the
+                        // correct overloaded variant in the main program
+                        std::string target_sig;
+                        {
+                            size_t p = variant_key.find('(');
+                            if (p != std::string::npos) {
+                                target_sig = variant_key.substr(p);
+                            } else {
+                                target_sig = "()";
+                            }
+                        }
                         MethodFunctionBase* main_mfb =
                             qore_method_private::get(*main_m)->getFunction();
                         QoreFunctionIterator mvi(*main_mfb);
                         while (mvi.next()) {
-                            main_uvb = const_cast<UserVariantBase*>(
-                                dynamic_cast<const UserVariantBase*>(mvi.getVariant()));
-                            if (main_uvb) {
+                            const AbstractQoreFunctionVariant* mv = mvi.getVariant();
+                            auto* candidate = const_cast<UserVariantBase*>(
+                                dynamic_cast<const UserVariantBase*>(mv));
+                            if (!candidate) {
+                                continue;
+                            }
+                            // Build signature for this variant
+                            std::string var_sig("(");
+                            AbstractFunctionSignature* msig = mv->getSignature();
+                            if (msig) {
+                                const type_vec_t& types = msig->getTypeList();
+                                for (size_t ti = 0; ti < types.size(); ++ti) {
+                                    if (ti > 0) {
+                                        var_sig.append(",");
+                                    }
+                                    var_sig.append(QoreTypeInfo::getPath(types[ti]));
+                                }
+                            }
+                            var_sig.append(")");
+                            if (var_sig == target_sig) {
+                                main_uvb = candidate;
                                 break;
                             }
                         }
@@ -2450,6 +2654,46 @@ static void registerFallbackFunctionsOnMainVariants(
                         }
                         main_sig->argvid = fb_sig->argvid;
                         main_sig->selfid = fb_sig->selfid;
+                    }
+                    // For constructors: transplant BCAList from fallback variant
+                    // The main variant was deserialized without BCA (base class constructor
+                    // arguments). The fallback source parse creates proper BCAList.
+                    // constructorPrelude() needs the BCAList to call parent constructors.
+                    if (strcmp(meth->getName(), "constructor") == 0 && main_qc) {
+                        // Transplant BCAList: find UserConstructorVariant in both
+                        // main and fallback constructor methods.
+                        UserConstructorVariant* main_ucv = nullptr;
+                        UserConstructorVariant* fb_ucv = nullptr;
+                        qore_class_private* mqcp = qore_class_private::get(
+                            *const_cast<QoreClass*>(main_qc));
+                        const QoreMethod* mc = mqcp->parseFindLocalMethod("constructor");
+                        if (mc) {
+                            MethodFunctionBase* mmfb =
+                                qore_method_private::get(*mc)->getFunction();
+                            QoreFunctionIterator mvi(*mmfb);
+                            while (mvi.next()) {
+                                main_ucv = const_cast<UserConstructorVariant*>(
+                                    dynamic_cast<const UserConstructorVariant*>(
+                                        mvi.getVariant()));
+                                if (main_ucv) {
+                                    break;
+                                }
+                            }
+                        }
+                        {
+                            QoreFunctionIterator fvi(*mfb);
+                            while (fvi.next()) {
+                                fb_ucv = const_cast<UserConstructorVariant*>(
+                                    dynamic_cast<const UserConstructorVariant*>(
+                                        fvi.getVariant()));
+                                if (fb_ucv) {
+                                    break;
+                                }
+                            }
+                        }
+                        if (main_ucv && fb_ucv) {
+                            main_ucv->transplantBCAList(fb_ucv);
+                        }
                     }
                     main_uvb->registerPrecompiledAOTFunction(aot_func->fn_ptr, ctx);
                     ++registered;
@@ -2500,13 +2744,20 @@ extern "C" DLLEXPORT int qore_aot_run(
     int64_t parse_options,
     const QoreAOTFunc* functions, int num_functions
 ) {
-    // Check for -b flag (disable signal handling, useful for valgrind)
+    // Parse AOT runtime flags before passing remaining args to the program
     bool init_signals = true;
     int first_arg = 1;
     for (int i = 1; i < argc; ++i) {
         if (strcmp(argv[i], "-b") == 0) {
             init_signals = false;
             first_arg = i + 1;
+        } else if (strcmp(argv[i], "-d") == 0) {
+            ++debug;
+            first_arg = i + 1;
+        } else if (strcmp(argv[i], "--enable-debug") == 0 || strcmp(argv[i], "-G") == 0) {
+            parse_options |= PO_ENABLE_DEBUG;
+            first_arg = i + 1;
+        } else {
             break;
         }
     }
@@ -2659,13 +2910,20 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
     int64_t parse_options,
     const QoreAOTFunc* functions, int num_functions
 ) {
-    // Check for -b flag (disable signal handling, useful for valgrind)
+    // Parse AOT runtime flags before passing remaining args to the program
     bool init_signals = true;
     int first_arg = 1;
     for (int i = 1; i < argc; ++i) {
         if (strcmp(argv[i], "-b") == 0) {
             init_signals = false;
             first_arg = i + 1;
+        } else if (strcmp(argv[i], "-d") == 0) {
+            ++debug;
+            first_arg = i + 1;
+        } else if (strcmp(argv[i], "--enable-debug") == 0 || strcmp(argv[i], "-G") == 0) {
+            parse_options |= PO_ENABLE_DEBUG;
+            first_arg = i + 1;
+        } else {
             break;
         }
     }
@@ -2727,7 +2985,7 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
             }
             if (!deserializer.deserializeIntoProgram(*qpgm,
                     metadata, static_cast<uint32_t>(metadata_len), deser_error)) {
-                fprintf(stderr, "AOT: metadata deserialization failed: %s\n", deser_error.c_str());
+                printd(0, "AOT: metadata deserialization failed: %s\n", deser_error.c_str());
                 qore_cleanup();
                 return 2;
             }
@@ -2801,6 +3059,14 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
                             fallback_root_ns, main_root_ns, *qpgm, func_map,
                             fallback_registered);
                         registered += fallback_registered;
+                    }
+
+                    // Transplant closure/code constants from fallback classes to main classes
+                    {
+                        qore_ns_private* fb_root = qore_ns_private::get(
+                            *qore_program_private::get(*fallback_pgm)->RootNS);
+                        qore_ns_private* main_root = qore_ns_private::get(*pp->RootNS);
+                        transplantClassClosureValues(fb_root, main_root, *qpgm);
                     }
                 }
             }
@@ -2967,13 +3233,22 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
             }
 
             printd(2, "AOT v2: registered %d/%d pre-compiled functions\n", registered, num_functions);
+
+            // Safety check: if functions weren't registered and no fallback source is available,
+            // they will exist as empty shells that crash when called. Warn early.
+            if (registered < num_functions && !deserializer.hasFallbackSource() && !fallback_pgm) {
+                int unregistered = num_functions - registered;
+                printd(0, "AOT ERROR: %d/%d functions could not be registered and no fallback "
+                    "source is available.\nRecompile with --include-source or update the AOT compiler "
+                    "to embed fallback sources automatically.\n", unregistered, num_functions);
+            }
         }
 
         // NOTE: Do NOT clean up fallback_pgm yet - it may contain StatementBlock* pointers
         // that are referenced by AOT contexts for on_exit/on_success/on_error blocks.
         // We must keep it alive until after the program finishes running.
 
-        // Run the program
+        // Run the v2 program
         QoreValue rv = qpgm->run(&xsink);
         rc = rv.getAsBigInt();
         rv.discard(&xsink);
@@ -3253,16 +3528,32 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
     // Construct full 128-bit parse options from lo+hi components
     QoreParseOptions parse_options(parse_options_lo, parse_options_hi);
 
-    // Check for -b flag (disable signal handling, useful for valgrind)
+    printd(2, "AOT v3: entry argc=%d metadata_len=%d num_functions=%d debug=%d\n",
+        argc, metadata_len, num_functions, debug);
+
+    // Parse AOT runtime flags before passing remaining args to the program
     bool init_signals = true;
     int first_arg = 1;
     for (int i = 1; i < argc; ++i) {
         if (strcmp(argv[i], "-b") == 0) {
+            // Disable signal handling (useful for valgrind)
             init_signals = false;
             first_arg = i + 1;
+        } else if (strcmp(argv[i], "-d") == 0) {
+            // Enable debug output (each -d increases debug level)
+            ++debug;
+            first_arg = i + 1;
+        } else if (strcmp(argv[i], "--enable-debug") == 0 || strcmp(argv[i], "-G") == 0) {
+            // Enable @debug and @assert statements (PO_ENABLE_DEBUG parse option)
+            parse_options |= PO_ENABLE_DEBUG;
+            first_arg = i + 1;
+        } else {
+            // First non-flag argument — rest goes to ARGV
             break;
         }
     }
+
+    printd(2, "AOT v3: after flag parsing debug=%d first_arg=%d\n", debug, first_arg);
 
     // Set up ARGV from command-line arguments
     qore_setup_argv(first_arg, argc, argv);
@@ -3283,6 +3574,28 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
 
         // Set JIT execution mode
         qpgm->setExecMode(QEM_JIT);
+
+        // Set script path so get_script_path() / get_script_dir() work correctly
+        if (label) {
+            qpgm->setScriptPath(label);
+        }
+
+        // Read and apply program-level metadata (exec-class name)
+        {
+            std::string exec_class_name;
+            std::string meta_error;
+            if (readProgramMetadata(metadata, static_cast<uint32_t>(metadata_len),
+                    exec_class_name, meta_error)) {
+                printd(2, "AOT v3: readProgramMetadata OK, exec_class_name='%s'\n",
+                    exec_class_name.c_str());
+                if (!exec_class_name.empty()) {
+                    qpgm->setExecClass(exec_class_name.c_str());
+                    printd(2, "AOT v3: exec-class set to '%s'\n", exec_class_name.c_str());
+                }
+            } else {
+                printd(0, "AOT v3: failed to read program metadata: %s\n", meta_error.c_str());
+            }
+        }
 
         printd(2, "AOT v3: parse_options=0x%llx|0x%llx, PO_MODERN=0x%llx, has_modern=%d\n",
             (long long)parse_options_lo, (long long)parse_options_hi, (long long)PO_MODERN,
@@ -3321,7 +3634,7 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
             }
             if (!deserializer.deserializeIntoProgram(*qpgm,
                     metadata, static_cast<uint32_t>(metadata_len), deser_error)) {
-                fprintf(stderr, "AOT: metadata deserialization failed: %s\n", deser_error.c_str());
+                printd(0, "AOT: metadata deserialization failed: %s\n", deser_error.c_str());
                 qore_cleanup();
                 return 2;
             }
@@ -3383,7 +3696,7 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
 
             // Use slot maps from the binary metadata to build contexts
             printd(2, "AOT v3: calling registerAOTFunctionsFromSlotMaps with %d func_map entries, "
-                "toplevel=%p\n", (int)func_map.size(), (void*)toplevel_func);
+                "toplevel=%p, debug=%d\n", (int)func_map.size(), (void*)toplevel_func, debug);
             registerAOTFunctionsFromSlotMaps(
                 deserializer.getReader(), root_ns, *qpgm, func_map, registered);
             printd(2, "AOT v3: after slot map registration: %d registered, %d remaining\n",
@@ -3393,6 +3706,8 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
             // Needed for: (1) functions with stmt_slots that couldn't resolve from slot map,
             // (2) _toplevel fallback if slot map registration failed,
             // (3) any functions that failed slot map registration.
+            printd(2, "AOT v3: hasFallbackSource=%d func_map.size=%d\n",
+                (int)deserializer.hasFallbackSource(), (int)func_map.size());
             if (deserializer.hasFallbackSource()) {
                 ExceptionSink wsink;
                 // Strip PO_NO_TOP_LEVEL_STATEMENTS from fallback parse options because the
@@ -3411,12 +3726,13 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
                     // Fallback source parsing failed (e.g., module class conflicts).
                     // This is non-fatal: module functions are available from runtime module
                     // loading, only test-local functions that failed compilation are lost.
-                    printd(2, "AOT v3: fallback source parse failed (non-fatal), "
-                        "module functions available from runtime loading\n");
+                    printd(0, "AOT v3: fallback source parse FAILED (exception)\n");
                     xsink.clear();
                     fallback_pgm->waitForTerminationAndDeref(nullptr);
                     fallback_pgm = nullptr;
                 } else {
+                    printd(2, "AOT v3: fallback source parsed OK, func_map.size=%d\n",
+                        (int)func_map.size());
                     // Register remaining functions from fallback via IR re-lowering.
                     // Build contexts from fallback AST but register on main program's variants
                     // for consistent LocalVar* pointer identity with the thread-local stack.
@@ -3428,7 +3744,18 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
                         registerFallbackFunctionsOnMainVariants(
                             fallback_root_ns, main_root_ns, *qpgm, func_map,
                             fallback_registered);
+                        printd(2, "AOT v3: fallback registered %d, func_map.size=%d\n",
+                            fallback_registered, (int)func_map.size());
                         registered += fallback_registered;
+                    }
+
+                    // Transplant closure/code constants from fallback classes to main classes.
+                    // These can't be serialized in the binary (written as VT_NOTHING).
+                    {
+                        qore_ns_private* fb_root = qore_ns_private::get(
+                            *qore_program_private::get(*fallback_pgm)->RootNS);
+                        qore_ns_private* main_root = qore_ns_private::get(*pp->RootNS);
+                        transplantClassClosureValues(fb_root, main_root, *qpgm);
                     }
                 }
             }
@@ -3595,14 +3922,26 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
             }
 
             printd(2, "AOT v3: registered %d/%d pre-compiled functions\n", registered, num_functions);
+
+            // Safety check: if functions weren't registered and no fallback source is available,
+            // they will exist as empty shells that crash when called. Warn early.
+            if (registered < num_functions && !deserializer.hasFallbackSource() && !fallback_pgm) {
+                int unregistered = num_functions - registered;
+                printd(0, "AOT ERROR: %d/%d functions could not be registered and no fallback "
+                    "source is available.\nRecompile with --include-source or update the AOT compiler "
+                    "to embed fallback sources automatically.\n", unregistered, num_functions);
+            }
         }
 
         // NOTE: Do NOT clean up fallback_pgm yet - it may contain StatementBlock* pointers
         // that are referenced by AOT contexts for on_exit/on_success/on_error blocks.
         // We must keep it alive until after the program finishes running.
 
-        // Run the program
+        // Run the v3 program
+        printd(2, "AOT v3: about to call qpgm->run()\n");
         QoreValue rv = qpgm->run(&xsink);
+        printd(2, "AOT v3: run() returned rc=%lld exception=%d\n",
+            (long long)rv.getAsBigInt(), (int)xsink.isException());
         rc = rv.getAsBigInt();
         rv.discard(&xsink);
 

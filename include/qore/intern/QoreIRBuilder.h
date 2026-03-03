@@ -199,6 +199,15 @@ public:
     QoreIRBranchInstruction* createBranch(QoreIRBasicBlock* target, const QoreProgramLocation* loc = nullptr);
     QoreIRBranchIfInstruction* createBranchIf(QoreIRValue cond, QoreIRBasicBlock* true_target,
         QoreIRBasicBlock* false_target, const QoreProgramLocation* loc = nullptr);
+
+    // Fused local int operations
+    QoreIRAddAssignLocalIntInstruction* createAddAssignLocalInt(LocalVar* target, LocalVar* source,
+        const QoreProgramLocation* loc = nullptr);
+    QoreIRIncrementLocalIntInstruction* createIncrementLocalInt(LocalVar* local, int64_t delta,
+        const QoreProgramLocation* loc = nullptr);
+    QoreIRBranchIfLtLocalIntInstruction* createBranchIfLtLocalInt(LocalVar* lhs, LocalVar* rhs,
+        QoreIRBasicBlock* true_target, QoreIRBasicBlock* false_target,
+        const QoreProgramLocation* loc = nullptr);
     QoreIRSwitchIntInstruction* createSwitchInt(QoreIRValue switch_val, QoreIRBasicBlock* default_target,
         const std::vector<QoreIRSwitchCase>& cases, const QoreProgramLocation* loc = nullptr);
     QoreIRSwitchStringInstruction* createSwitchString(QoreIRValue switch_val, QoreIRBasicBlock* default_target,

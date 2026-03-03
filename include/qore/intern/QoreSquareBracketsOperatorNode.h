@@ -53,6 +53,11 @@ public:
     DLLLOCAL static QoreValue doSquareBrackets(const QoreValue l, const QoreValue r, bool list_ok,
             ExceptionSink* xsink);
 
+    //! Returns true if the RHS is a list with a range (e.g., list[1..3])
+    DLLLOCAL bool hasRhsListRange() const {
+        return rhs_list_range;
+    }
+
 protected:
     const QoreTypeInfo* typeInfo = nullptr;
     // is the RHS a list with a range?

@@ -504,13 +504,19 @@ enum class QoreIROpcode : uint16_t {
     // operands[0] = list container, operands[1] = value to store, operands[2] = index
     ListIndexStore      = 337,
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (338, 339, ...)
+    // Fused local int operations (338-340) — reduce dispatch overhead for tight loops
+    // These fuse multiple instructions (load+op+store) into single opcodes.
+    AddAssignLocalInt   = 338,  // target_local += source_local (both typed int)
+    IncrementLocalInt   = 339,  // local += delta (typed int local, constant delta)
+    BranchIfLtLocalInt  = 340,  // if (lhs_local < rhs_local) goto true else goto false
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (341, 342, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
 //! Maximum opcode ID supported by this build (derived from the last enum value)
-constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::ListIndexStore);
-static_assert(QORE_IR_MAX_OPCODE == 337, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::BranchIfLtLocalInt);
+static_assert(QORE_IR_MAX_OPCODE == 340, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! Returns true if the opcode is a unary computation op (used by Invoke dispatch)
@@ -931,6 +937,9 @@ public:
     LocalVar* local = nullptr;
     bool auto_ref = true;  // For LoadLocal: if true, calls refSelf(); if false, loads without inflating refcount
     bool weak = false;  // For StoreLocal: if true, wraps object/hash/list in weak reference
+    bool is_closure = false;       // Pre-computed from local->closureUse() during IR analysis
+    bool is_ref = false;           // Pre-computed from local->isRef() during IR analysis
+    uint32_t slot_id = UINT32_MAX; // Pre-computed slot index into locals_slot_cache
 };
 
 
@@ -974,6 +983,7 @@ public:
 
     const VarRefNode* container;  //!< Container variable (for COW: get LocalVar* from ref.id)
     std::string key_name;
+    uint32_t container_slot_id = UINT32_MAX; // Pre-computed slot index for container variable
     // operands[0] = hash value (from LoadLocal on container)
     // operands[1] = new element value to store
 };
@@ -997,9 +1007,60 @@ public:
     }
 
     const VarRefNode* container;  //!< Container variable (for COW: get LocalVar* from ref.id)
+    uint32_t container_slot_id = UINT32_MAX; // Pre-computed slot index for container variable
     // operands[0] = list value (from LoadLocal on container)
     // operands[1] = new element value to store
     // operands[2] = index expression
+};
+
+//! Fused add-assign for two typed int locals: target += source
+//! Replaces LoadLocal(target) + LoadLocal(source) + AddAssignInt + StoreLocal(target)
+class QoreIRAddAssignLocalIntInstruction : public QoreIRInstruction {
+public:
+    QoreIRAddAssignLocalIntInstruction(LocalVar* n_target, LocalVar* n_source)
+            : QoreIRInstruction(QoreIROpcode::AddAssignLocalInt),
+              target(n_target), source(n_source) {
+    }
+
+    LocalVar* target;
+    LocalVar* source;
+    uint32_t target_slot_id = UINT32_MAX;  //!< Pre-computed slot index for target
+    uint32_t source_slot_id = UINT32_MAX;  //!< Pre-computed slot index for source
+    bool target_ir_only = false;  //!< True if target is IR-only (skip write-through)
+};
+
+//! Fused increment for typed int local: local += delta (constant int)
+//! Replaces LoadLocal + ConstInt(delta) + AddAssignInt + StoreLocal
+class QoreIRIncrementLocalIntInstruction : public QoreIRInstruction {
+public:
+    QoreIRIncrementLocalIntInstruction(LocalVar* n_local, int64_t n_delta)
+            : QoreIRInstruction(QoreIROpcode::IncrementLocalInt),
+              local(n_local), delta(n_delta) {
+    }
+
+    LocalVar* local;
+    int64_t delta;
+    uint32_t slot_id = UINT32_MAX;  //!< Pre-computed slot index for local
+    bool ir_only = false;  //!< True if local is IR-only (skip write-through)
+};
+
+//! Fused compare-and-branch for two typed int locals: if (lhs < rhs) goto true else goto false
+//! Replaces LoadLocal(lhs) + LoadLocal(rhs) + LtInt + BranchIf
+class QoreIRBranchIfLtLocalIntInstruction : public QoreIRInstruction {
+public:
+    QoreIRBranchIfLtLocalIntInstruction(LocalVar* n_lhs, LocalVar* n_rhs,
+            QoreIRBasicBlock* n_true_target, QoreIRBasicBlock* n_false_target)
+            : QoreIRInstruction(QoreIROpcode::BranchIfLtLocalInt),
+              lhs(n_lhs), rhs(n_rhs),
+              true_target(n_true_target), false_target(n_false_target) {
+    }
+
+    LocalVar* lhs;
+    LocalVar* rhs;
+    uint32_t lhs_slot_id = UINT32_MAX;   //!< Pre-computed slot index for lhs
+    uint32_t rhs_slot_id = UINT32_MAX;   //!< Pre-computed slot index for rhs
+    QoreIRBasicBlock* true_target;
+    QoreIRBasicBlock* false_target;
 };
 
 //! Map hash key instruction - fully specialized map over hash key access
@@ -1227,8 +1288,21 @@ public:
         lvalue.discard(nullptr);
     }
 
+    //! Sentinel value indicating the lvalue target is a known non-local variable
+    //! (member via SelfVarrefNode, static class var, global). No local cache
+    //! invalidation is needed for these targets.
+    static constexpr uint32_t LVALUE_NON_LOCAL = UINT32_MAX - 1;
+
+    //! Returns true if the lvalue target is a known local variable with a valid slot_id.
+    bool hasLocalTarget() const { return lvalue_slot_id < LVALUE_NON_LOCAL; }
+
     QoreValue lvalue;
     bool weak = false;  //!< true for weak (:=) assignment
+    //! Pre-computed slot_id for the lvalue target variable.
+    //! Valid slot_id (< LVALUE_NON_LOCAL): target is a local variable at this slot index.
+    //! LVALUE_NON_LOCAL: target is a known non-local (member, static, global) — skip local cache invalidation.
+    //! UINT32_MAX: unresolved target — full local cache wipe for safety.
+    uint32_t lvalue_slot_id = UINT32_MAX;
 };
 
 class QoreIRExprInstruction : public QoreIRInstruction {
@@ -1709,6 +1783,11 @@ public:
     std::unordered_map<const QoreIRInstruction*, std::unordered_set<const LocalVar*>>
         live_locals_after_call;
 
+    //! Compute slot IDs for local variables and embed them into instructions.
+    //! Also computes max_value_id for right-sizing the interpreter value vector.
+    //! Must be called after IR lowering and verification, before execution.
+    void computeSlotIdsAndEmbed();
+
     //! Analyze all instructions to classify locals as IR-only vs AST-visible.
     //! Must be called after IR lowering completes but before LLVM lowering/execution.
     void computeIROnlyLocals();
@@ -1768,6 +1847,7 @@ inline bool isTerminator(QoreIROpcode op) {
         case QoreIROpcode::Rethrow:
         case QoreIROpcode::InvokeSimError:
         case QoreIROpcode::ThreadExit:
+        case QoreIROpcode::BranchIfLtLocalInt:
             return true;
         default:
             return false;

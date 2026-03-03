@@ -1166,9 +1166,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_make_date(int64_t date_microseconds, int64
         dt->setRelativeDateSeconds(date_microseconds / 1000000,
             static_cast<int>(date_microseconds % 1000000));
     } else {
+        // date_microseconds is a UTC epoch from getEpochMicrosecondsUTC(); use makeAbsolute()
+        // which stores the epoch directly without local-to-UTC conversion (unlike DateTimeNode(s, ms)
+        // which goes through setLocalDate → setLocalIntern → subtracts timezone offset)
         int64_t epoch_seconds = date_microseconds / 1000000;
-        int ms = static_cast<int>((date_microseconds % 1000000) / 1000);
-        dt = new DateTimeNode(epoch_seconds, ms);
+        int us = static_cast<int>(date_microseconds % 1000000);
+        dt = DateTimeNode::makeAbsolute(currentTZ(), epoch_seconds, us);
     }
     return toBits(QoreValue(dt));
 }
@@ -2942,9 +2945,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast(const QoreFunction* func,
         return qore_rt_call_function_direct(func, variant, pgm, args, nargs, xsink);
     }
 
-    // If the callee is not JIT-compiled yet, fall back to the slow path.
+    // If the callee has neither JIT nor IR, fall back to the slow path.
     // This can happen in tiered compilation when the callee hasn't been promoted yet.
-    if (!uvb->hasCachedFunction()) {
+    if (!uvb->hasCachedFunction() && !uvb->getCachedIR()) {
         return qore_rt_call_function_direct(func, variant, pgm, args, nargs, xsink);
     }
 
@@ -3005,9 +3008,28 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast(const QoreFunction* func,
     QoreValue val{};
     {
         ArgvContextHelper argv_helper(argv.release(), xsink);
-        execJITWithDeopt(uvb, call_name, [uvb](ExceptionSink* xs, bool& inv) {
-            return uvb->execCachedFunction(xs, inv);
-        }, val, xsink);
+        if (uvb->hasCachedFunction()) {
+            // JIT/AOT fast path
+            execJITWithDeopt(uvb, call_name, [uvb](ExceptionSink* xs, bool& inv) {
+                return uvb->execCachedFunction(xs, inv);
+            }, val, xsink);
+        } else {
+            // IR fast path: execute IR directly without QoreListNode construction.
+            // Parameters are already instantiated on the thread-local variable stack
+            // from instantiateFastCallParams() above.
+            const QoreIRFunction* callee_ir = uvb->getCachedIR();
+            execJITWithDeopt(uvb, call_name, [callee_ir, uvb](ExceptionSink* xs, bool& inv) -> uint64_t {
+                QoreValue ir_return_value;
+                bool ok = QoreIRInterpreter::execute(*callee_ir, ir_return_value, xs, nullptr,
+                    nullptr, nullptr, callee_ir->cached_pre_instantiated, nullptr,
+                    uvb->getStatementBlock(), uvb->pgm);
+                if (!ok && !*xs) {
+                    inv = true;  // Request deopt to AST
+                    return 0;
+                }
+                return toBits(ir_return_value);
+            }, val, xsink);
+        }
     }
 
     if (sig->argvid) {
@@ -3242,8 +3264,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_method_direct(const QoreMethod* metho
     // Get runtime config
     RuntimeConfig& rc = rc_get_current_ref();
 
-    // Call the method directly through qore_method_private
-    QoreValue result = qore_method_private::eval(*method, xsink, rc, self, *arg_list);
+    // Call the method using evalTmpArgs to preserve reference nodes in the arg list.
+    // The eval() path goes through CodeEvaluationHelper with const args which calls
+    // evalList() and dereferences ReferenceNode values.
+    QoreValue result = qore_method_private::evalTmpArgs(*method, xsink, rc, self, *arg_list);
 
     return toBits(result);
 }
@@ -3265,9 +3289,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_method_fast(const QoreMethod* method,
         return qore_rt_call_method_direct(method, args, nargs, xsink);
     }
 
-    // If the callee is not JIT-compiled yet, fall back to the slow path.
+    // If the callee has neither JIT nor IR, fall back to the slow path.
     // This can happen in tiered compilation when the callee hasn't been promoted yet.
-    if (!uvb->hasCachedFunction()) {
+    if (!uvb->hasCachedFunction() && !uvb->getCachedIR()) {
         return qore_rt_call_method_direct(method, args, nargs, xsink);
     }
 
@@ -3343,9 +3367,26 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_method_fast(const QoreMethod* method,
     QoreValue val{};
     {
         ArgvContextHelper argv_helper(argv.release(), xsink);
-        execJITWithDeopt(uvb, call_name, [uvb](ExceptionSink* xs, bool& inv) {
-            return uvb->execCachedFunction(xs, inv);
-        }, val, xsink);
+        if (uvb->hasCachedFunction()) {
+            // JIT/AOT fast path
+            execJITWithDeopt(uvb, call_name, [uvb](ExceptionSink* xs, bool& inv) {
+                return uvb->execCachedFunction(xs, inv);
+            }, val, xsink);
+        } else {
+            // IR fast path: execute IR directly without QoreListNode construction.
+            const QoreIRFunction* callee_ir = uvb->getCachedIR();
+            execJITWithDeopt(uvb, call_name, [callee_ir, uvb](ExceptionSink* xs, bool& inv) -> uint64_t {
+                QoreValue ir_return_value;
+                bool ok = QoreIRInterpreter::execute(*callee_ir, ir_return_value, xs, nullptr,
+                    nullptr, nullptr, callee_ir->cached_pre_instantiated, nullptr,
+                    uvb->getStatementBlock(), uvb->pgm);
+                if (!ok && !*xs) {
+                    inv = true;  // Request deopt to AST
+                    return 0;
+                }
+                return toBits(ir_return_value);
+            }, val, xsink);
+        }
     }
 
     if (sig->argvid) {
@@ -3575,7 +3616,12 @@ extern "C" DLLEXPORT void qore_rt_clear_local_aot(QoreAOTContext* ctx, int32_t i
 
 extern "C" DLLEXPORT void qore_rt_uninstantiate_local_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
     assert(ctx && idx >= 0 && idx < ctx->num_locals);
-    qore_rt_uninstantiate_local(ctx->locals[idx], xsink);
+    // Use clear (del) instead of uninstantiate (pop) because AOT body locals
+    // are pre-instantiated by execJITWithDeopt() at function entry and will be
+    // uninstantiated at function exit.  The LLVM code's UninstantiateLocal
+    // corresponds to scope exit (like the end of a foreach loop body) and
+    // should only clear the value, not pop the variable from the stack.
+    qore_rt_clear_local(ctx->locals[idx], xsink);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_load_global_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
@@ -3746,6 +3792,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_regex_op_with_operand_aot(QoreAOTContext* 
 // The iterator_func parameter is optional (can be nullptr) for use with FunctionalOperator expressions.
 extern "C" DLLEXPORT void* qore_rt_iterator_create(uint64_t iterable_bits, void* iterator_func, ExceptionSink* xsink) {
     QoreValue iterable = fromBits(iterable_bits);
+
+    // (debug removed)
+
     FunctionalOperator::FunctionalValueType value_type;
     FunctionalOperatorInterface* iter = nullptr;
 
@@ -4007,7 +4056,7 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
         // Builtin method — fall back to slow path for proper soft type coercion
         return false;
     }
-    if (!uvb->hasCachedFunction()) {
+    if (!uvb->hasCachedFunction() && !uvb->getCachedIR()) {
         return false;
     }
     if (o->getClass() != qc && o->getClass() != method->getClass()) {
@@ -4079,9 +4128,27 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
     QoreValue val{};
     {
         ArgvContextHelper argv_helper(argv.release(), xsink);
-        execJITWithDeopt(uvb, call_name, [uvb](ExceptionSink* xs, bool& inv) {
-            return uvb->execCachedFunction(xs, inv);
-        }, val, xsink);
+        if (uvb->hasCachedFunction()) {
+            // JIT/AOT fast path
+            execJITWithDeopt(uvb, call_name, [uvb](ExceptionSink* xs, bool& inv) {
+                return uvb->execCachedFunction(xs, inv);
+            }, val, xsink);
+        } else {
+            // IR fast path: execute IR directly without QoreListNode construction.
+            // Parameters are already instantiated on the thread-local variable stack
+            // from instantiateFastCallParams() above.
+            execJITWithDeopt(uvb, call_name, [ir, uvb](ExceptionSink* xs, bool& inv) -> uint64_t {
+                QoreValue ir_return_value;
+                bool ok = QoreIRInterpreter::execute(*ir, ir_return_value, xs, nullptr,
+                    nullptr, nullptr, ir->cached_pre_instantiated, nullptr,
+                    uvb->getStatementBlock(), uvb->pgm);
+                if (!ok && !*xs) {
+                    inv = true;  // Request deopt to AST
+                    return 0;
+                }
+                return toBits(ir_return_value);
+            }, val, xsink);
+        }
     }
 
     if (sig->argvid) {
@@ -4118,20 +4185,26 @@ static uint64_t dispatch_method_on_object(QoreObject* o, const QoreMethod* metho
                 "already been deleted", qc->getName(), method->getName());
             return toBits(QoreValue());
         }
-        RuntimeConfig& rc = rc_get_current_ref();
-        return toBits(variant
-            ? qore_method_private::evalNormalVariant(*method, xsink, rc, o,
-                reinterpret_cast<const QoreExternalMethodVariant*>(variant), arg_list)
-            : qore_method_private::eval(*method, xsink, rc, o, arg_list));
+        // Use evalTmpArgs to preserve ReferenceNode values in the pre-evaluated arg list
+        // (eval/evalNormalVariant use const CodeEvaluationHelper which dereferences references)
+        return toBits(qore_method_private::evalTmpArgs(*method, xsink, rc_get_current_ref(), o, arg_list));
     }
     // Class mismatch — name-based lookup (virtual dispatch to the runtime class)
     // Pass the runtime class context so that private method access checks succeed
     // when a base class method calls a private method on self and the runtime type
     // is a derived class (mirrors AbstractMethodCallNode::exec() in AST mode)
     const qore_class_private* class_ctx = runtime_get_class();
+    const qore_class_private* priv = qore_class_private::get(*o->getClass());
+    const QoreMethod* w = priv->getMethodForEval(method->getName(), o->getProgram(), class_ctx, xsink);
+    if (*xsink) {
+        return toBits(QoreValue());
+    }
+    if (w) {
+        return toBits(qore_method_private::evalTmpArgs(*w, xsink, rc_get_current_ref(), o, arg_list, class_ctx));
+    }
+    // Fall back to evalMethod for member gate, etc.
     RuntimeConfig& rc = rc_get_current_ref();
-    return toBits(qore_class_private::get(*o->getClass())->evalMethod(o, method->getName(),
-        arg_list, class_ctx, rc, xsink));
+    return toBits(priv->evalMethod(o, method->getName(), arg_list, class_ctx, rc, xsink));
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_method_direct(uint64_t base_bits, const QoreMethod* method,
@@ -4223,13 +4296,21 @@ static uint64_t dot_eval_fallback_with_args(QoreValue base, const char* method_n
         return toBits(QoreValue());
     }
 
-    // For objects, use name-based method lookup
+    // For objects, use name-based method lookup with evalTmpArgs to preserve references
     if (base.getType() == NT_OBJECT) {
         QoreObject* o = const_cast<QoreObject*>(reinterpret_cast<const QoreObject*>(base.getInternalNode()));
         const qore_class_private* class_ctx = runtime_get_class();
+        const qore_class_private* priv = qore_class_private::get(*o->getClass());
+        const QoreMethod* w = priv->getMethodForEval(method_name, o->getProgram(), class_ctx, xsink);
+        if (*xsink) {
+            return toBits(QoreValue());
+        }
+        if (w) {
+            return toBits(qore_method_private::evalTmpArgs(*w, xsink, rc_get_current_ref(), o, *arg_list, class_ctx));
+        }
+        // Fall back to evalMethod for member gate, etc.
         RuntimeConfig& rc = rc_get_current_ref();
-        return toBits(qore_class_private::get(*o->getClass())->evalMethod(o, method_name,
-            *arg_list, class_ctx, rc, xsink));
+        return toBits(priv->evalMethod(o, method_name, *arg_list, class_ctx, rc, xsink));
     }
 
     // For non-objects, use pseudo-class lookup
@@ -4299,10 +4380,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_static_method_direct(const QoreMethod
     // (resolveExprSlot creates nodes without a resolved variant pointer).
     // Fall through to the slow path in that case.
     const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
-    if (!uvb || !uvb->hasCachedFunction()) {
+    if (!uvb || (!uvb->hasCachedFunction() && !uvb->getCachedIR())) {
+        // Use evalTmpArgs to preserve ReferenceNode values in pre-evaluated args
         ReferenceHolder<QoreListNode> arg_list(buildArgListFromNanBoxed(args, nargs, xsink), xsink);
-        RuntimeConfig& rc = rc_get_current_ref();
-        return toBits(qore_method_private::eval(*method, xsink, rc, nullptr, *arg_list));
+        return toBits(qore_method_private::evalTmpArgs(*method, xsink, rc_get_current_ref(), nullptr, *arg_list));
     }
 
     const UserSignature* sig = uvb->getUserSignature();
@@ -4354,9 +4435,26 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_static_method_direct(const QoreMethod
     QoreValue val{};
     {
         ArgvContextHelper argv_helper(argv.release(), xsink);
-        execJITWithDeopt(uvb, call_name, [uvb](ExceptionSink* xs, bool& inv) {
-            return uvb->execCachedFunction(xs, inv);
-        }, val, xsink);
+        if (uvb->hasCachedFunction()) {
+            // JIT/AOT fast path
+            execJITWithDeopt(uvb, call_name, [uvb](ExceptionSink* xs, bool& inv) {
+                return uvb->execCachedFunction(xs, inv);
+            }, val, xsink);
+        } else {
+            // IR fast path: execute IR directly without QoreListNode construction.
+            const QoreIRFunction* callee_ir = uvb->getCachedIR();
+            execJITWithDeopt(uvb, call_name, [callee_ir, uvb](ExceptionSink* xs, bool& inv) -> uint64_t {
+                QoreValue ir_return_value;
+                bool ok = QoreIRInterpreter::execute(*callee_ir, ir_return_value, xs, nullptr,
+                    nullptr, nullptr, callee_ir->cached_pre_instantiated, nullptr,
+                    uvb->getStatementBlock(), uvb->pgm);
+                if (!ok && !*xs) {
+                    inv = true;  // Request deopt to AST
+                    return 0;
+                }
+                return toBits(ir_return_value);
+            }, val, xsink);
+        }
     }
 
     if (sig->argvid) {

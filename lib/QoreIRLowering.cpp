@@ -151,6 +151,7 @@ static bool isTerminatorOpcode(QoreIROpcode op) {
     switch (op) {
         case QoreIROpcode::Br:
         case QoreIROpcode::BrIf:
+        case QoreIROpcode::BranchIfLtLocalInt:
         case QoreIROpcode::Invoke:
         case QoreIROpcode::IteratorNext:
         case QoreIROpcode::Return:
@@ -202,22 +203,42 @@ void QoreIRLowering::setParseContext(QoreParseContext* n_parse_context) {
 }
 
 QoreIRValue QoreIRLowering::lowerConditionValue(const QoreValue& cond, std::string& error) {
-    QoreIRValue lowered = lowerExpression(cond, error);
-    if (!lowered.isValid()) {
-        return QoreIRValue();
+    // BrIf calls getAsBool() on its operand, so ToBool is redundant here.
+    // Skip the ToBool emission to reduce instruction count.
+    return lowerExpression(cond, error);
+}
+
+bool QoreIRLowering::tryEmitFusedBranchIfLtLocalInt(const QoreValue& cond,
+        QoreIRBasicBlock* true_target, QoreIRBasicBlock* false_target) {
+    if (!cond.hasNode()) {
+        return false;
     }
-    if (cond.isBool()) {
-        return lowered;
+    auto* lt = dynamic_cast<const QoreLogicalLessThanOperatorNode*>(cond.getInternalNode());
+    if (!lt) {
+        return false;
     }
-    QoreParseAnalysis analysis;
-    if (getAnalysis(cond, analysis)) {
-        if (analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
-            && analysis.hasFlag(QoreParseAnalysis::NeverNothing)
-            && QoreTypeInfo::isType(analysis.known_type, NT_BOOLEAN)) {
-            return lowered;
-        }
+    // Both sides must be typed int local variables
+    QoreIROpcode op = selectComparisonOpcode(lt->getLeft(), lt->getRight(),
+        QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny);
+    if (op != QoreIROpcode::LtInt) {
+        return false;
     }
-    return lowerUnaryOpOrInvoke(QoreIROpcode::ToBool, cond, lowered, nullptr, error);
+    const AbstractQoreNode* left_node = lt->getLeft().getInternalNode();
+    const AbstractQoreNode* right_node = lt->getRight().getInternalNode();
+    auto* left_var = dynamic_cast<const VarRefNode*>(left_node);
+    auto* right_var = dynamic_cast<const VarRefNode*>(right_node);
+    if (!left_var || !right_var) {
+        return false;
+    }
+    if (left_var->getType() != VT_LOCAL || !left_var->ref.id) {
+        return false;
+    }
+    if (right_var->getType() != VT_LOCAL || !right_var->ref.id) {
+        return false;
+    }
+    builder.createBranchIfLtLocalInt(left_var->ref.id, right_var->ref.id,
+        true_target, false_target, lt->loc);
+    return true;
 }
 
 bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& error) {
@@ -573,11 +594,14 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         }
 
         builder.setBlock(cond_block);
-        QoreIRValue cond = lowerConditionValue(while_stmt->getCond(), error);
-        if (!cond.isValid()) {
-            return false;
+        // Try fused BranchIfLtLocalInt for int local < int local conditions
+        if (!tryEmitFusedBranchIfLtLocalInt(while_stmt->getCond(), body_block, exit_block)) {
+            QoreIRValue cond = lowerConditionValue(while_stmt->getCond(), error);
+            if (!cond.isValid()) {
+                return false;
+            }
+            builder.createBranchIf(cond, body_block, exit_block);
         }
-        builder.createBranchIf(cond, body_block, exit_block);
 
         builder.setBlock(body_block);
         flow_stack.push_back({exit_block, cond_block, false, catch_cleanup_depth, cleanup_stack.size(), QoreIRValue()});
@@ -628,16 +652,22 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
 
         builder.setBlock(cond_block);
         QoreValue cond_expr = for_stmt->getCond();
-        QoreIRValue cond_value;
-        if (!cond_expr || cond_expr.isNothing()) {
-            cond_value = builder.createConstBool(true)->result;
+        // Try fused BranchIfLtLocalInt for int local < int local conditions
+        if (cond_expr && !cond_expr.isNothing()
+                && tryEmitFusedBranchIfLtLocalInt(cond_expr, body_block, exit_block)) {
+            // Fused condition+branch emitted
         } else {
-            cond_value = lowerConditionValue(cond_expr, error);
-            if (!cond_value.isValid()) {
-                return false;
+            QoreIRValue cond_value;
+            if (!cond_expr || cond_expr.isNothing()) {
+                cond_value = builder.createConstBool(true)->result;
+            } else {
+                cond_value = lowerConditionValue(cond_expr, error);
+                if (!cond_value.isValid()) {
+                    return false;
+                }
             }
+            builder.createBranchIf(cond_value, body_block, exit_block);
         }
-        builder.createBranchIf(cond_value, body_block, exit_block);
 
         builder.setBlock(body_block);
         flow_stack.push_back({exit_block, iter_block, false, catch_cleanup_depth, cleanup_stack.size(), QoreIRValue()});
@@ -3276,6 +3306,9 @@ static bool opcodeNeverReturnsNothing(QoreIROpcode op) {
         // Constants always produce values
         case QoreIROpcode::ConstInt:
         case QoreIROpcode::ConstFloat:
+        // Fused local int operations always produce int values
+        case QoreIROpcode::AddAssignLocalInt:
+        case QoreIROpcode::IncrementLocalInt:
             return true;
         default:
             return false;
@@ -3518,6 +3551,33 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
         }
     }
     QoreValue right_expr(op->getRight());
+
+    // Fused local int operations: emit single instruction instead of LoadLocal+op+StoreLocal
+    if (force_int && left_var && left_var->getType() == VT_LOCAL && left_var->ref.id) {
+        const AbstractQoreNode* right_node = right_expr.getInternalNode();
+        auto* right_var = dynamic_cast<const VarRefNode*>(right_node);
+        if (right_var && right_var->getType() == VT_LOCAL && right_var->ref.id) {
+            // target += source (both typed int locals) → AddAssignLocalInt
+            auto* inst = builder.createAddAssignLocalInt(
+                left_var->ref.id, right_var->ref.id, op->loc);
+            if (parse_context) {
+                parse_context->markLocalAssignment(left_var->ref.id, true,
+                    left_var->getTypeInfo());
+            }
+            return inst->result;
+        }
+        if (right_expr.getType() == NT_INT) {
+            // local += const → IncrementLocalInt
+            auto* inst = builder.createIncrementLocalInt(
+                left_var->ref.id, right_expr.getAsBigInt(), op->loc);
+            if (parse_context) {
+                parse_context->markLocalAssignment(left_var->ref.id, true,
+                    left_var->getTypeInfo());
+            }
+            return inst->result;
+        }
+    }
+
     QoreIRValue right = lowerExpression(right_expr, error);
     if (!right.isValid()) {
         return QoreIRValue();
@@ -4177,10 +4237,20 @@ QoreIRValue QoreIRLowering::lowerPreIncrement(const QoreValue& expr, std::string
         error = "unsupported lvalue for pre-increment IR lowering";
         return QoreIRValue();
     }
-    // Typed int pre-increment on simple VarRef: lower to LoadLocal + AddAssignInt + StoreLocal
+    // Typed int pre-increment on simple VarRef
     if (dynamic_cast<const QoreIntPreIncrementOperatorNode*>(node)) {
         auto* var = dynamic_cast<const VarRefNode*>(lvexp.getInternalNode());
         if (var && var->getType() != VT_IMMEDIATE && !isRangeLValue(lvexp)) {
+            // Fused path: emit single IncrementLocalInt for VT_LOCAL
+            if (var->getType() == VT_LOCAL && var->ref.id) {
+                auto* inst = builder.createIncrementLocalInt(var->ref.id, 1, op->loc);
+                if (parse_context) {
+                    parse_context->markLocalAssignment(var->ref.id, true,
+                        var->getTypeInfo());
+                }
+                return inst->result;
+            }
+            // Fallback: LoadLocal + AddAssignInt + StoreLocal for closures/globals
             QoreIRValue loaded = loadVarRef(var, error, "pre-increment-int", lvexp);
             if (!loaded.isValid()) {
                 return QoreIRValue();
@@ -4301,10 +4371,20 @@ QoreIRValue QoreIRLowering::lowerPreDecrement(const QoreValue& expr, std::string
         error = "unsupported lvalue for pre-decrement IR lowering";
         return QoreIRValue();
     }
-    // Typed int pre-decrement on simple VarRef: lower to LoadLocal + SubAssignInt + StoreLocal
+    // Typed int pre-decrement on simple VarRef
     if (dynamic_cast<const QoreIntPreDecrementOperatorNode*>(node)) {
         auto* var = dynamic_cast<const VarRefNode*>(lvexp.getInternalNode());
         if (var && var->getType() != VT_IMMEDIATE && !isRangeLValue(lvexp)) {
+            // Fused path: emit single IncrementLocalInt(delta=-1) for VT_LOCAL
+            if (var->getType() == VT_LOCAL && var->ref.id) {
+                auto* inst = builder.createIncrementLocalInt(var->ref.id, -1, op->loc);
+                if (parse_context) {
+                    parse_context->markLocalAssignment(var->ref.id, true,
+                        var->getTypeInfo());
+                }
+                return inst->result;
+            }
+            // Fallback: LoadLocal + SubAssignInt + StoreLocal for closures/globals
             QoreIRValue loaded = loadVarRef(var, error, "pre-decrement-int", lvexp);
             if (!loaded.isValid()) {
                 return QoreIRValue();
@@ -5277,7 +5357,24 @@ QoreIRValue QoreIRLowering::lowerSquareBrackets(const QoreValue& expr, std::stri
     // reading from non-list types (binary, string, hash) works correctly;
     // LValueHelper only supports list-type lvalue access and would reject
     // binary[index] or string[index] with a RUNTIME-TYPE-ERROR.
-    std::vector<QoreIRValue> operands;
+
+    // For rhs_list_range (e.g., list[1..3]), the RHS contains unevaluated AST
+    // nodes with range operators that cannot be pre-evaluated — fall back to AST
+    if (op->hasRhsListRange()) {
+        std::vector<QoreIRValue> operands;
+        return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, op->loc, error);
+    }
+
+    // Lower both operands (container and index) for native execution
+    QoreIRValue lhs = lowerExpression(op->getLeft(), error);
+    if (!lhs.isValid()) {
+        return QoreIRValue();
+    }
+    QoreIRValue rhs = lowerExpression(op->getRight(), error);
+    if (!rhs.isValid()) {
+        return QoreIRValue();
+    }
+    std::vector<QoreIRValue> operands{lhs, rhs};
     return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, op->loc, error);
 }
 
@@ -5349,10 +5446,17 @@ QoreIRValue QoreIRLowering::lowerHashObjectDereference(const QoreValue& expr, st
     if (!guardLValueBase(lvalue, error)) {
         return QoreIRValue();
     }
-    // Use expression evaluation (Call) instead of LoadLValue so that both
-    // single-key access (h{"x"}) and multi-key slicing (h{("x","z")}) are
-    // handled correctly; LValueHelper only supports single string keys.
-    std::vector<QoreIRValue> operands;
+    // Dynamic key: lower both base and key expressions for native execution.
+    // Handles both single-key access (h{var}) and multi-key slicing (h{list}).
+    QoreIRValue base_val = lowerExpression(op->getLeft(), error);
+    if (!base_val.isValid()) {
+        return QoreIRValue();
+    }
+    QoreIRValue key_val = lowerExpression(op->getRight(), error);
+    if (!key_val.isValid()) {
+        return QoreIRValue();
+    }
+    std::vector<QoreIRValue> operands{base_val, key_val};
     return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, op->loc, error);
 }
 
@@ -5748,7 +5852,11 @@ QoreIRValue QoreIRLowering::lowerInstanceOf(const QoreValue& expr, std::string& 
     if (!op) {
         return QoreIRValue();
     }
-    std::vector<QoreIRValue> operands;
+    QoreIRValue operand = lowerExpression(op->getExp(), error);
+    if (!operand.isValid()) {
+        return QoreIRValue();
+    }
+    std::vector<QoreIRValue> operands{operand};
     return lowerExprOpOrInvoke(QoreIROpcode::InstanceOfBool, expr, operands, op->loc, error);
 }
 

@@ -379,6 +379,9 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::HashKeyStore: return "hash.key.store";
         case QoreIROpcode::ListIndexAccess: return "list.index.access";
         case QoreIROpcode::ListIndexStore: return "list.index.store";
+        case QoreIROpcode::AddAssignLocalInt: return "add.assign.local.int";
+        case QoreIROpcode::IncrementLocalInt: return "increment.local.int";
+        case QoreIROpcode::BranchIfLtLocalInt: return "br.if.lt.local.int";
     }
     return "unknown";
 }

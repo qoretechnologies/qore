@@ -349,6 +349,8 @@ static bool requiresResult(QoreIROpcode op) {
         case QoreIROpcode::RefForeachInit:
         case QoreIROpcode::RefForeachSize:
         case QoreIROpcode::RefForeachGetEntry:
+        case QoreIROpcode::AddAssignLocalInt:
+        case QoreIROpcode::IncrementLocalInt:
             return true;
         default:
             return false;
@@ -1597,6 +1599,29 @@ void QoreIRFunction::computeIROnlyLocals() {
                     all_locals.insert(reinterpret_cast<const void*>(linst->local));
                 }
             }
+            // Collect locals from fused local int instructions
+            if (inst->opcode == QoreIROpcode::AddAssignLocalInt) {
+                auto* fused = static_cast<const QoreIRAddAssignLocalIntInstruction*>(inst.get());
+                if (fused->target) {
+                    all_locals.insert(reinterpret_cast<const void*>(fused->target));
+                }
+                if (fused->source) {
+                    all_locals.insert(reinterpret_cast<const void*>(fused->source));
+                }
+            } else if (inst->opcode == QoreIROpcode::IncrementLocalInt) {
+                auto* fused = static_cast<const QoreIRIncrementLocalIntInstruction*>(inst.get());
+                if (fused->local) {
+                    all_locals.insert(reinterpret_cast<const void*>(fused->local));
+                }
+            } else if (inst->opcode == QoreIROpcode::BranchIfLtLocalInt) {
+                auto* fused = static_cast<const QoreIRBranchIfLtLocalIntInstruction*>(inst.get());
+                if (fused->lhs) {
+                    all_locals.insert(reinterpret_cast<const void*>(fused->lhs));
+                }
+                if (fused->rhs) {
+                    all_locals.insert(reinterpret_cast<const void*>(fused->rhs));
+                }
+            }
 
             // Lvalue operations: walk the lvalue AST expression for local references
             if (isLValueOp(inst->opcode)) {
@@ -1684,4 +1709,134 @@ void QoreIRFunction::computeIROnlyLocals() {
         }
     }
 
+}
+
+// Defined in QoreIRInterpreter.cpp
+extern const VarRefNode* extractLValueBaseVarRef(const QoreValue&);
+
+void QoreIRFunction::computeSlotIdsAndEmbed() {
+    // Pass 1: Compute max value ID for right-sizing interpreter value vector
+    // AND compute local variable slot IDs for flat array access in interpreter
+    uint32_t max_vid = 0;
+    std::unordered_map<const LocalVar*, uint32_t> slot_map;
+    uint32_t next_local_slot = 0;
+
+    for (const auto& block : blocks) {
+        for (const auto& inst : block->instructions) {
+            if (inst->result.isValid() && inst->result.id > max_vid) {
+                max_vid = inst->result.id;
+            }
+            for (const auto& operand : inst->operands) {
+                if (operand.isValid() && operand.id > max_vid) {
+                    max_vid = operand.id;
+                }
+            }
+
+            // Track LocalVar* pointers in LoadLocal/StoreLocal/UninstantiateLocal instructions
+            if (inst->opcode == QoreIROpcode::LoadLocal ||
+                inst->opcode == QoreIROpcode::StoreLocal ||
+                inst->opcode == QoreIROpcode::UninstantiateLocal) {
+                auto* local_inst = static_cast<QoreIRLocalInstruction*>(inst.get());
+                if (local_inst->local && slot_map.find(local_inst->local) == slot_map.end()) {
+                    slot_map[local_inst->local] = next_local_slot++;
+                }
+            }
+        }
+    }
+    max_value_id = max_vid;
+    local_var_slots = slot_map;
+    max_local_slot_id = next_local_slot > 0 ? next_local_slot - 1 : 0;
+
+    // Pass 2: embed pre-computed slot_id and is_closure in instructions
+    // to eliminate hash map lookups on the hot path in the interpreter
+    for (const auto& block : blocks) {
+        for (const auto& inst : block->instructions) {
+            if (inst->opcode == QoreIROpcode::LoadLocal
+                    || inst->opcode == QoreIROpcode::StoreLocal
+                    || inst->opcode == QoreIROpcode::UninstantiateLocal) {
+                auto* local_inst = static_cast<QoreIRLocalInstruction*>(inst.get());
+                if (local_inst->local) {
+                    auto it = slot_map.find(local_inst->local);
+                    if (it != slot_map.end()) {
+                        local_inst->slot_id = it->second;
+                    }
+                    local_inst->is_closure = local_inst->local->closureUse();
+                    local_inst->is_ref = QoreTypeInfo::isReference(local_inst->local->getTypeInfo());
+                }
+            } else if (inst->opcode == QoreIROpcode::HashKeyStore) {
+                auto* hks = static_cast<QoreIRHashKeyStoreInstruction*>(inst.get());
+                if (hks->container && hks->container->ref.id) {
+                    auto it = slot_map.find(
+                        reinterpret_cast<const LocalVar*>(hks->container->ref.id));
+                    if (it != slot_map.end()) {
+                        hks->container_slot_id = it->second;
+                    }
+                }
+            } else if (inst->opcode == QoreIROpcode::ListIndexStore) {
+                auto* lis = static_cast<QoreIRListIndexStoreInstruction*>(inst.get());
+                if (lis->container && lis->container->ref.id) {
+                    auto it = slot_map.find(
+                        reinterpret_cast<const LocalVar*>(lis->container->ref.id));
+                    if (it != slot_map.end()) {
+                        lis->container_slot_id = it->second;
+                    }
+                }
+            } else if (inst->opcode == QoreIROpcode::AddAssignLocalInt) {
+                auto* fused = static_cast<QoreIRAddAssignLocalIntInstruction*>(inst.get());
+                if (fused->target) {
+                    auto it = slot_map.find(fused->target);
+                    if (it != slot_map.end()) {
+                        fused->target_slot_id = it->second;
+                    }
+                }
+                if (fused->source) {
+                    auto it = slot_map.find(fused->source);
+                    if (it != slot_map.end()) {
+                        fused->source_slot_id = it->second;
+                    }
+                }
+            } else if (inst->opcode == QoreIROpcode::IncrementLocalInt) {
+                auto* fused = static_cast<QoreIRIncrementLocalIntInstruction*>(inst.get());
+                if (fused->local) {
+                    auto it = slot_map.find(fused->local);
+                    if (it != slot_map.end()) {
+                        fused->slot_id = it->second;
+                    }
+                }
+            } else if (inst->opcode == QoreIROpcode::BranchIfLtLocalInt) {
+                auto* fused = static_cast<QoreIRBranchIfLtLocalIntInstruction*>(inst.get());
+                if (fused->lhs) {
+                    auto it = slot_map.find(fused->lhs);
+                    if (it != slot_map.end()) {
+                        fused->lhs_slot_id = it->second;
+                    }
+                }
+                if (fused->rhs) {
+                    auto it = slot_map.find(fused->rhs);
+                    if (it != slot_map.end()) {
+                        fused->rhs_slot_id = it->second;
+                    }
+                }
+            } else if (static_cast<int>(inst->opcode) >= static_cast<int>(QoreIROpcode::LoadLValue)
+                    && static_cast<int>(inst->opcode) <= static_cast<int>(QoreIROpcode::SpliceLValue)) {
+                // Lvalue instruction: pre-compute the target variable's slot_id
+                auto* lval_inst = static_cast<QoreIRLValueInstruction*>(inst.get());
+                const VarRefNode* base_var = extractLValueBaseVarRef(lval_inst->lvalue);
+                if (base_var) {
+                    qore_var_t vtype = base_var->getType();
+                    if ((vtype == VT_LOCAL || vtype == VT_LOCAL_TS) && base_var->ref.id) {
+                        auto it = slot_map.find(
+                            reinterpret_cast<const LocalVar*>(base_var->ref.id));
+                        if (it != slot_map.end()) {
+                            lval_inst->lvalue_slot_id = it->second;
+                        }
+                    } else {
+                        lval_inst->lvalue_slot_id = QoreIRLValueInstruction::LVALUE_NON_LOCAL;
+                    }
+                } else {
+                    lval_inst->lvalue_slot_id = QoreIRLValueInstruction::LVALUE_NON_LOCAL;
+                }
+            }
+        }
+    }
 }

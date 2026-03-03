@@ -40,6 +40,7 @@
 #include "qore/intern/RuntimeConfig.h"
 #include "qore/intern/QoreIR.h"
 #include "qore/intern/QoreIRBuilder.h"
+#include <qore/intern/VarRefNode.h>
 #include "qore/intern/QoreIRLowering.h"
 #include "qore/intern/QoreIRInterpreter.h"
 #include "qore/intern/QoreIRVerifier.h"
@@ -2418,42 +2419,30 @@ void UserVariantBase::attemptIRLowering(const char* name) const {
         }
         return;
     }
-    // Compute max value ID for right-sizing interpreter value vector
-    // AND compute local variable slot IDs for flat array access in interpreter
-    uint32_t max_vid = 0;
-    std::unordered_map<const LocalVar*, uint32_t> local_var_slots;
-    uint32_t next_local_slot = 0;
-
-    for (const auto& block : func->blocks) {
-        for (const auto& inst : block->instructions) {
-            if (inst->result.isValid() && inst->result.id > max_vid) {
-                max_vid = inst->result.id;
-            }
-            for (const auto& operand : inst->operands) {
-                if (operand.isValid() && operand.id > max_vid) {
-                    max_vid = operand.id;
-                }
-            }
-
-            // Track LocalVar* pointers in LoadLocal/StoreLocal/UninstantiateLocal instructions
-            if (inst->opcode == QoreIROpcode::LoadLocal ||
-                inst->opcode == QoreIROpcode::StoreLocal ||
-                inst->opcode == QoreIROpcode::UninstantiateLocal) {
-                auto* local_inst = static_cast<QoreIRLocalInstruction*>(inst.get());
-                if (local_inst->local && local_var_slots.find(local_inst->local) == local_var_slots.end()) {
-                    local_var_slots[local_inst->local] = next_local_slot++;
-                }
-            }
-        }
-    }
-    func->max_value_id = max_vid;
-    func->local_var_slots = local_var_slots;
-    func->max_local_slot_id = next_local_slot > 0 ? next_local_slot - 1 : 0;
+    // Compute slot IDs, max_value_id, and embed pre-computed fields in instructions
+    func->computeSlotIdsAndEmbed();
 
     // Classify locals as IR-only vs AST-visible for optimization
     func->computeIROnlyLocals();
     // Check if all body locals are IR-only (enables skipping instantiation in fast call path)
     all_body_locals_ir_only = func->areAllBodyLocalsIROnly();
+
+    // Third pass: set ir_only flags on fused instructions using computed ir_only_locals
+    if (!func->ir_only_locals.empty()) {
+        for (const auto& block : func->blocks) {
+            for (const auto& inst : block->instructions) {
+                if (inst->opcode == QoreIROpcode::AddAssignLocalInt) {
+                    auto* fused = static_cast<QoreIRAddAssignLocalIntInstruction*>(inst.get());
+                    fused->target_ir_only = fused->target
+                        && func->ir_only_locals.count(reinterpret_cast<const void*>(fused->target));
+                } else if (inst->opcode == QoreIROpcode::IncrementLocalInt) {
+                    auto* fused = static_cast<QoreIRIncrementLocalIntInstruction*>(inst.get());
+                    fused->ir_only = fused->local
+                        && func->ir_only_locals.count(reinterpret_cast<const void*>(fused->local));
+                }
+            }
+        }
+    }
 
     // Conservative approach: assume argv and self are used if they exist
     // This allows the framework to skip ArgvContextHelper and SelfFunctionCallHelper
@@ -2718,20 +2707,13 @@ void UserVariantBase::eagerlyCompileForExecMode(const char* name, qore_exec_mode
         attemptIRLowering(name);
     });
 
-    // For JIT mode, synchronously compile to LLVM after IR lowering
+    // For JIT mode, set IR tier so function executes immediately, then enqueue
+    // for background JIT compilation. This avoids blocking startup while LLVM
+    // compiles each function synchronously (~23ms each).
     if (exec_mode == QEM_JIT && cached_ir) {
-        // Acquire compile lock for synchronous compilation
-        // Use compileFunctionLocked which is a public method that handles the lock
-        std::string error;
-        if (QoreJIT::instance().compileFunctionLocked(*cached_ir, error, const_cast<void*>(static_cast<const void*>(&deopt_count)))) {
-            // Mark tier as TIER_JIT so execution uses compiled code
-            current_tier.store(TIER_JIT, std::memory_order_release);
-            printd(3, "UserVariantBase::eagerlyCompileForExecMode() '%s' compiled to JIT (synchronous)\n", name);
-        } else {
-            printd(2, "UserVariantBase::eagerlyCompileForExecMode() '%s' failed to compile to JIT: %s\n", name, error.c_str());
-            // Stay at IR tier on failure
-            current_tier.store(TIER_IR, std::memory_order_release);
-        }
+        current_tier.store(TIER_IR, std::memory_order_release);
+        attemptJITCompilation();
+        printd(3, "UserVariantBase::eagerlyCompileForExecMode() '%s' enqueued for background JIT\n", name);
     } else if (exec_mode == QEM_IR && cached_ir) {
         // For IR mode, mark tier as TIER_IR (skip threshold-based promotion)
         current_tier.store(TIER_IR, std::memory_order_release);

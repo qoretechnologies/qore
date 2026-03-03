@@ -254,6 +254,17 @@ DLLLOCAL void swap_runtime_location(const QoreProgramLocation*loc, const Abstrac
 DLLLOCAL void update_runtime_statement_location(const AbstractStatement* stmt, const QoreProgramLocation* loc, const QoreParseOptions& po);
 DLLLOCAL void update_runtime_statement_location(const AbstractStatement* stmt, const QoreProgramLocation* loc);
 
+//! Cached runtime location pointers for hot-loop optimization.
+//! Avoids repeated TLS lookups (pthread_getspecific + std::map::find) per instruction.
+struct RuntimeLocationCache {
+    const QoreProgramLocation** loc_ptr;
+    const AbstractStatement** stmt_ptr;
+};
+
+//! Returns cached pointers to the current thread's runtime location fields.
+//! Call once at function entry, then write through the pointers directly.
+DLLLOCAL RuntimeLocationCache get_runtime_location_cache();
+
 DLLLOCAL void set_parse_file_info(QoreProgramLocation& loc);
 DLLLOCAL const char* get_parse_code();
 

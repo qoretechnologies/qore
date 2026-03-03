@@ -780,6 +780,29 @@ QoreIRBranchIfInstruction* QoreIRBuilder::createBranchIf(QoreIRValue cond, QoreI
     return inst;
 }
 
+QoreIRAddAssignLocalIntInstruction* QoreIRBuilder::createAddAssignLocalInt(LocalVar* target, LocalVar* source,
+        const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRAddAssignLocalIntInstruction>(target, source);
+    inst->loc = loc;
+    inst->result = func->createValue();
+    return inst;
+}
+
+QoreIRIncrementLocalIntInstruction* QoreIRBuilder::createIncrementLocalInt(LocalVar* local, int64_t delta,
+        const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRIncrementLocalIntInstruction>(local, delta);
+    inst->loc = loc;
+    inst->result = func->createValue();
+    return inst;
+}
+
+QoreIRBranchIfLtLocalIntInstruction* QoreIRBuilder::createBranchIfLtLocalInt(LocalVar* lhs, LocalVar* rhs,
+        QoreIRBasicBlock* true_target, QoreIRBasicBlock* false_target, const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRBranchIfLtLocalIntInstruction>(lhs, rhs, true_target, false_target);
+    inst->loc = loc;
+    return inst;
+}
+
 QoreIRSwitchIntInstruction* QoreIRBuilder::createSwitchInt(QoreIRValue switch_val, QoreIRBasicBlock* default_target,
         const std::vector<QoreIRSwitchCase>& cases, const QoreProgramLocation* loc) {
     auto inst = block->appendInstruction<QoreIRSwitchIntInstruction>();

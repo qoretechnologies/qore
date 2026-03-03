@@ -88,6 +88,7 @@ enum class QoreAOTSectionType : uint16_t {
     FUNC_SOURCES  = 13,
     DEPENDENCIES  = 14,  //!< Module dependencies (for strip-source modules)
     REEXPORT_MODULES = 15,  //!< Modules that should be reexported (for strip-source modules)
+    PROGRAM_METADATA = 16,  //!< Program-level metadata (exec-class name, etc.)
 };
 
 //! Value type tags for serialized constant values
@@ -108,6 +109,8 @@ enum class QoreAOTValueTag : uint8_t {
     //! and cannot be serialized as a constant value. Deserialized as boolean True
     //! to mark the parameter as optional in the function signature.
     VT_OPAQUE_DEFAULT = 12,
+    //! Absolute date with region name for DST-aware timezone reconstruction
+    VT_ABS_DATE_REGION = 13,
 };
 
 //! Section header in the binary format
@@ -543,6 +546,23 @@ void serializeReexportModules(QoreAOTBinaryWriter& writer, const std::vector<std
 */
 bool readReexportModules(const uint8_t* data, uint32_t size, std::vector<std::string>& reexport_modules, std::string& error);
 
+//! Serialize program-level metadata into the PROGRAM_METADATA binary section
+/** Writes exec-class name and other program-level settings.
+    @param writer the binary writer to write to
+    @param exec_class_name the exec-class name (empty string if not set)
+*/
+void serializeProgramMetadata(QoreAOTBinaryWriter& writer, const char* exec_class_name);
+
+//! Read program-level metadata from binary metadata
+/** Reads the PROGRAM_METADATA section from serialized binary metadata.
+    @param data pointer to the binary metadata blob
+    @param size size of the binary metadata blob
+    @param exec_class_name receives the exec-class name (empty if not set)
+    @param error receives error message on failure
+    @return true on success, false on failure (missing section is not an error)
+*/
+bool readProgramMetadata(const uint8_t* data, uint32_t size, std::string& exec_class_name, std::string& error);
+
 /** Read fallback source from a v2 AOT binary metadata blob without full deserialization.
     @param data pointer to the metadata blob
     @param size size of the metadata blob
@@ -887,6 +907,7 @@ class QoreAOTBinaryDeserializer {
     bool deserializeClasses(std::string& error);
     bool resolveClassBases(std::string& error);
     bool resolveInstanceMembers(std::string& error);
+    bool importInheritedMembers(std::string& error);
     bool resolveStaticMembers(std::string& error);
     bool resolveClassConstants(std::string& error);
     bool resolveHashdeclMembers(std::string& error);

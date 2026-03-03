@@ -215,10 +215,12 @@ public:
         if (val.getType() == NT_REFERENCE) {
             ReferenceNode* ref = const_cast<ReferenceNode*>(val.get<ReferenceNode>());
             LocalRefHelper<LocalVarValue> helper(this, *ref, xsink);
-            if (!helper)
+            if (!helper) {
                 return QoreValue();
+            }
 
-            ValueEvalOptimizedRefHolder erh(lvalue_ref::get(ref)->vexp, xsink);
+            lvalue_ref* lr = lvalue_ref::get(ref);
+            ValueEvalOptimizedRefHolder erh(lr->vexp, xsink);
             return erh.takeValue(needs_deref);
         }
 

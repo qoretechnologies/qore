@@ -826,6 +826,12 @@ static void eagerlyCompileAllFunctions(qore_ns_private* ns, qore_exec_mode_t exe
         }
     }
 
+    // NOTE: Class method eager compilation is deferred — eagerly compiling module class
+    // methods causes RUNTIME-OVERLOAD-ERROR when module classes are merged into the main
+    // program's namespace (getProgram() returns main_pgm for both). Class methods are
+    // still compiled lazily via the threshold mechanism during execution.
+    // TODO: Add class method eager compilation with proper module/user class discrimination.
+
     // Recursively compile functions in child namespaces
     for (auto ni = ns->nsl.nsmap.begin(), ne = ns->nsl.nsmap.end(); ni != ne; ++ni) {
         QoreNamespace* child_ns = ni->second;
@@ -1874,6 +1880,8 @@ QoreHashNode* QoreProgram::getThreadData() {
 }
 
 QoreValue QoreProgram::run(ExceptionSink* xsink) {
+    printd(5, "QoreProgram::run() exec_class_name='%s' empty=%d\n",
+        priv->exec_class_name.c_str(), (int)priv->exec_class_name.empty());
     if (!priv->exec_class_name.empty()) {
         runClass(priv->exec_class_name.c_str(), xsink);
         QoreValue rv = priv->exec_class_rv;
@@ -2081,6 +2089,7 @@ void QoreProgram::printIRFallbackReport() const {
 }
 
 void QoreProgram::runClass(const char* classname, ExceptionSink* xsink) {
+    printd(5, "QoreProgram::runClass('%s') entered\n", classname);
     ensureIrExecMode(priv);
     // find class
     const QoreClass* qc = qore_root_ns_private::runtimeFindClass(*priv->RootNS, classname);
@@ -2089,14 +2098,14 @@ void QoreProgram::runClass(const char* classname, ExceptionSink* xsink) {
         return;
     }
 
-    if (qore_class_private::runtimeCheckInstantiateClass(*qc, xsink))
+    if (qore_class_private::runtimeCheckInstantiateClass(*qc, xsink)) {
         return;
-
-    //printd(5, "QoreProgram::runClass(%s)\n", classname);
+    }
 
     ProgramThreadCountContextHelper tch(xsink, this, true);
-    if (!*xsink)
+    if (!*xsink) {
         discard(qc->execConstructor((QoreListNode*)0, xsink), xsink);
+    }
 }
 
 void QoreProgram::parseFileAndRunClass(const char* filename, const char* classname) {

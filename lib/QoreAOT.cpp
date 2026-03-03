@@ -36,6 +36,7 @@
 #include <qore/Qore.h>
 
 #include <sys/stat.h>
+#include <algorithm>
 #include <set>
 #include <unordered_set>
 
@@ -226,9 +227,13 @@ QoreAOTContext::~QoreAOTContext() {
         memcpy(&v, &exprs[i], sizeof(v));
         v.discard(nullptr);
     }
-    // Delete regex case objects
-    for (int i = 0; i < num_regex_cases; ++i) {
-        delete regex_cases[i];
+    // Delete regex case objects only if we own them (created by buildContextFromSlotMap).
+    // When built by buildAOTContext(), regex_cases are borrowed pointers from the IR
+    // function's SwitchStatement — the SwitchStatement owns and deletes them.
+    if (owns_regex_cases) {
+        for (int i = 0; i < num_regex_cases; ++i) {
+            delete regex_cases[i];
+        }
     }
     free(locals);
     free(globals);
@@ -431,13 +436,30 @@ static void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMa
         UserVariantBase* uvb, AOTSlotIdentities& out);
 
 //! Walk a namespace and compile all user functions to LLVM IR using AOT mode
+//! Check if an item should be skipped because it belongs to a different module
+/** @param item_module the module name from getModuleName() (nullptr if script-local)
+    @param compile_module the module being compiled (nullptr = compile all, "" = script-local only)
+    @return true if the item should be skipped
+*/
+static inline bool shouldSkipModuleItem(const char* item_module, const char* compile_module) {
+    if (!compile_module) {
+        return false;  // compile all
+    }
+    if (!item_module) {
+        return false;  // script-local items always included
+    }
+    // Skip items from modules different from the one being compiled
+    return strcmp(item_module, compile_module) != 0;
+}
+
 static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
         llvm::LLVMContext& ctx, llvm::Module& module,
         llvm::DIBuilder& di_builder, llvm::DICompileUnit* di_cu,
         std::vector<AOTCompiledFunc>& compiled_funcs,
         int& total_funcs, int& compiled_count, int& failed_count,
         size_t& total_ir_insts_all,
-        std::set<std::string>* compiled_keys = nullptr) {
+        std::set<std::string>* compiled_keys = nullptr,
+        const char* compile_module = nullptr) {
     // Track compiled variant keys to skip duplicates from iterator yielding
     // the same variant twice (committed + pending)
     std::set<std::string> local_keys;
@@ -445,11 +467,22 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
         compiled_keys = &local_keys;
     }
 
+    // Skip namespaces that belong to a different module
+    const char* ns_module = ns->getModuleName();
+    if (shouldSkipModuleItem(ns_module, compile_module)) {
+        return;
+    }
+
     // Walk functions
     for (auto i = ns->func_list.begin(), e = ns->func_list.end(); i != e; ++i) {
         FunctionEntry* fe = i->second;
         QoreFunction* func = fe->getFunction();
         if (!func) {
+            continue;
+        }
+
+        // Skip functions from other modules
+        if (shouldSkipModuleItem(func->getModuleName(), compile_module)) {
             continue;
         }
 
@@ -560,6 +593,11 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
             continue;
         }
         qore_class_private* qcp = qore_class_private::get(*qc);
+
+        // Skip classes from other modules
+        if (shouldSkipModuleItem(qcp->getModuleName(), compile_module)) {
+            continue;
+        }
         // Use namespace-qualified class path for unique LLVM symbol names
         const char* class_path = qc->getPath();
         const char* class_name = qc->getName();
@@ -628,6 +666,11 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         fprintf(stderr, "AOT: lowering method '%s' (blocks=%zu, insts=%zu)\n",
                             variant_key.c_str(), ir_func->blocks.size(), total_ir_insts);
                     }
+                    if (getenv("QORE_AOT_DUMP_IR")) {
+                        fprintf(stderr, "=== IR for %s ===\n", variant_key.c_str());
+                        QoreIRPrinter::print(*ir_func, std::cerr);
+                        fprintf(stderr, "=================\n");
+                    }
                     if (total_ir_insts > 5000) {
                         fprintf(stderr, "warning: method '%s' has %zu IR instructions; "
                             "LLVM compilation may take a long time; consider breaking this "
@@ -649,6 +692,12 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         cf.feature_flags = scanIRFeatureFlags(*ir_func);
                         compiled_funcs.push_back(std::move(cf));
                         ++compiled_count;
+                        if (getenv("QORE_AOT_DEBUG")) {
+                            fprintf(stderr, "AOT: compiled method '%s' to LLVM IR (locals=%d, globals=%d, exprs=%d, stmts=%d)\n",
+                                variant_key.c_str(), (int)slots.local_slots.size(),
+                                (int)slots.global_slots.size(), (int)slots.expr_slots.size(),
+                                (int)slots.stmt_slots.size());
+                        }
                         printd(2, "AOT: compiled method '%s' to LLVM IR (locals=%d, globals=%d, exprs=%d, stmts=%d)\n",
                             variant_key.c_str(), (int)slots.local_slots.size(),
                             (int)slots.global_slots.size(), (int)slots.expr_slots.size(),
@@ -692,7 +741,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
             compileNamespaceFunctions(qore_ns_private::get(*child_ns), pgm, ctx, module,
                 di_builder, di_cu,
                 compiled_funcs, total_funcs, compiled_count, failed_count,
-                total_ir_insts_all, compiled_keys);
+                total_ir_insts_all, compiled_keys, compile_module);
         }
     }
 }
@@ -1083,8 +1132,11 @@ bool QoreAOT::compile(QoreProgram* pgm,
 
     qore_program_private* pp = qore_program_private::get(*pgm);
     qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
+    // Pass "" as compile_module to filter out module-originated functions/classes;
+    // module functions are available at runtime via runTimeLoadModule()
     compileNamespaceFunctions(root_ns, pgm, ctx, *module, di_builder, di_cu,
-        compiled_funcs, total_funcs, compiled_count, failed_count, total_ir_insts_all);
+        compiled_funcs, total_funcs, compiled_count, failed_count, total_ir_insts_all,
+        nullptr, "");
 
     // Step 2: Try to compile top-level code with AOT mode
     {
@@ -1230,6 +1282,9 @@ bool QoreAOT::compile(QoreProgram* pgm,
         }
         serializeDependencies(writer, all_deps);
 
+        // Serialize program-level metadata (exec-class name)
+        serializeProgramMetadata(writer, pp->exec_class_name.c_str());
+
         // Serialize namespace tree - filter out module-originated items to avoid
         // deserializing private/internal module types that can't be resolved;
         // dependencies are loaded at runtime so their items will be available.
@@ -1256,9 +1311,37 @@ bool QoreAOT::compile(QoreProgram* pgm,
         }
         serializeSlotMaps(writer, func_slots);
 
-        // Serialize fallback sources only if --include-source was specified
-        if (include_source) {
-            serializeFallbackSources(writer, func_slots, source_text, source_len);
+        // Serialize fallback sources when needed: either explicitly requested via
+        // --include-source, or when any functions require AST fallback (unsupported
+        // expressions or statement slots). Without this, source-stripped binaries crash
+        // when calling functions that need AST evaluation but have no source to parse.
+        // Constructors, destructors, and copy methods also need source fallback to
+        // reconstruct BCAList (base class constructor arguments) at runtime.
+        {
+            bool has_fallback_funcs = std::any_of(func_slots.begin(), func_slots.end(),
+                [](const AOTCompiledFuncWithSlots& f) {
+                    if (f.slot_ids.has_unsupported_exprs || f.num_stmts > 0) {
+                        return true;
+                    }
+                    // Check if this is a constructor/destructor/copy method
+                    // Name format: "ClassName::methodName(...)"
+                    size_t sep = f.name.find("::");
+                    if (sep != std::string::npos) {
+                        std::string method = f.name.substr(sep + 2);
+                        size_t paren = method.find('(');
+                        if (paren != std::string::npos) {
+                            method = method.substr(0, paren);
+                        }
+                        if (method == "constructor" || method == "destructor"
+                                || method == "copy") {
+                            return true;
+                        }
+                    }
+                    return false;
+                });
+            if (has_fallback_funcs || include_source) {
+                serializeFallbackSources(writer, func_slots, source_text, source_len);
+            }
         }
 
         // Finalize metadata blob
@@ -2311,8 +2394,14 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
             func_slots.push_back(std::move(fws));
         }
         serializeSlotMaps(writer, func_slots);
-        if (include_source) {
-            serializeFallbackSources(writer, func_slots, source_text, source_len);
+        {
+            bool has_fallback_funcs = std::any_of(func_slots.begin(), func_slots.end(),
+                [](const AOTCompiledFuncWithSlots& f) {
+                    return f.slot_ids.has_unsupported_exprs || f.num_stmts > 0;
+                });
+            if (has_fallback_funcs || include_source) {
+                serializeFallbackSources(writer, func_slots, source_text, source_len);
+            }
         }
 
         std::vector<uint8_t> metadata;
@@ -2640,8 +2729,14 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
                 func_slots.push_back(std::move(fws));
             }
             serializeSlotMaps(writer, func_slots);
-            if (include_source) {
-                serializeFallbackSources(writer, func_slots, combined_source.c_str(), (int)combined_source.size());
+            {
+                bool has_fallback_funcs = std::any_of(func_slots.begin(), func_slots.end(),
+                    [](const AOTCompiledFuncWithSlots& f) {
+                        return f.slot_ids.has_unsupported_exprs || f.num_stmts > 0;
+                    });
+                if (has_fallback_funcs || include_source) {
+                    serializeFallbackSources(writer, func_slots, combined_source.c_str(), (int)combined_source.size());
+                }
             }
 
             std::vector<uint8_t> metadata;
@@ -3434,6 +3529,7 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
     ctx->num_exprs = num_exprs;
     ctx->num_stmts = num_stmts;
     ctx->num_regex_cases = num_regex_cases;
+    ctx->owns_regex_cases = false;  // borrowed pointers from IR function's SwitchStatement
     ctx->allocate();
 
     // Copy all_body_locals from the fresh IR
@@ -4157,7 +4253,7 @@ class ExprTreeSerializer {
         if (auto* no = dynamic_cast<const NewObjectCallNode*>(node)) {
             writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_NEW));
             const QoreClass* qc = no->getClass();
-            writeStr(qc ? qc->getName() : "");
+            writeStr(qc ? qc->getPath() : "");
             size_t count_pos = buf.size();
             writeU16(0);
             uint16_t arg_count = 0;
@@ -4172,7 +4268,7 @@ class ExprTreeSerializer {
         // ScopedObjectCallNode: new Namespace::ClassName(args)
         if (auto* so = dynamic_cast<const ScopedObjectCallNode*>(node)) {
             writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_SCOPED_NEW));
-            writeStr(so->oc ? so->oc->getName() : "");
+            writeStr(so->oc ? so->oc->getPath() : "");
             size_t count_pos = buf.size();
             writeU16(0);
             uint16_t arg_count = 0;
@@ -4782,10 +4878,10 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots) 
     }
 
     // NewObjectCallNode: constructor call
-    if (dynamic_cast<const NewObjectCallNode*>(node)) {
+    if (auto* no = dynamic_cast<const NewObjectCallNode*>(node)) {
         id.kind = AOTExprKind::NEW_OBJECT;
-        // NewObjectCallNode::getTypeName() returns class name via virtual dispatch
-        id.ref1 = node->getTypeName();
+        const QoreClass* qc = no->getClass();
+        id.ref1 = qc ? qc->getPath() : "";
         return id;
     }
 
@@ -4896,7 +4992,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots) 
     if (auto* sc = dynamic_cast<const ScopedObjectCallNode*>(node)) {
         id.kind = AOTExprKind::SCOPED_NEW_OBJECT;
         if (sc->oc) {
-            id.ref1 = sc->oc->getName();
+            id.ref1 = sc->oc->getPath();
         }
         return id;
     }

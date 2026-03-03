@@ -552,7 +552,7 @@ public:
             if (!assigned)
                 assigned = true;
             switch (type) {
-                case QV_Bool: v.b = false; return 0;
+                case QV_Bool: v.b = b; return 0;
                 case QV_Int: v.i = (int64)b; return 0;
                 case QV_Float: v.f = (double)b; return 0;
                 default: assert(false);

@@ -312,6 +312,7 @@ static bool isIRTerminatorOpcode(QoreIROpcode op) {
     switch (op) {
         case QoreIROpcode::Br:
         case QoreIROpcode::BrIf:
+        case QoreIROpcode::BranchIfLtLocalInt:
         case QoreIROpcode::Invoke:
         case QoreIROpcode::Return:
         case QoreIROpcode::ReturnNothing:
@@ -865,6 +866,8 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
                         qore_program_private::get(*pgm)->recordIRFallback(std::string("verification: ") + error);
                         return;
                     }
+                    // Compute slot IDs and embed them into instructions for fast array access
+                    func->computeSlotIdsAndEmbed();
                     // NOTE: do NOT call func->computeIROnlyLocals() for top-level code.
                     // Top-level locals are accessible by any called function/sub through the
                     // thread-local variable stack, but the IR-only analysis doesn't track

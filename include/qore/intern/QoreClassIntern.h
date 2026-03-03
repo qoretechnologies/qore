@@ -435,6 +435,18 @@ public:
         BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
 
     DLLLOCAL virtual int parseInit(QoreFunction* f);
+
+    //! Move BCAList from another constructor variant (for AOT fallback transplanting)
+    /** Takes ownership of the source's BCAList, leaving the source with nullptr.
+        This is needed when the main program's constructor was deserialized without
+        BCA (no source), and the fallback source parse provides the correct BCAList.
+    */
+    DLLLOCAL void transplantBCAList(UserConstructorVariant* src) {
+        if (src && src->bcal && !bcal) {
+            bcal = src->bcal;
+            src->bcal = nullptr;
+        }
+    }
 };
 
 #define UCONV(f) (reinterpret_cast<UserConstructorVariant*>(f))
