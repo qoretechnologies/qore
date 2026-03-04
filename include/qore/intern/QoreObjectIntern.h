@@ -99,10 +99,14 @@ private:
 public:
     DLLLOCAL AbstractPrivateData* getReferencedPrivateData(qore_classid_t key) const {
         keymap_t::const_iterator i = keymap.find(key);
-        if (i == keymap.end())
-            return 0;
+        if (i == keymap.end()) {
+            return nullptr;
+        }
 
         AbstractPrivateData* apd = i->second.first;
+        if (!apd) {
+            return nullptr;
+        }
         apd->ref();
         return apd;
     }
@@ -133,6 +137,16 @@ public:
         // we must clear the private data when this function is called or a crash will result
         AbstractPrivateData* rv = i->second.first;
         keymap.erase(i);
+        // also erase virtual mappings that alias the same private data, so that
+        // tryGetReferencedPrivateData() via a parent class ID cannot find a
+        // dangling pointer after the caller derefs the returned pointer
+        for (auto it = keymap.begin(); it != keymap.end(); ) {
+            if (it->second.second && it->second.first == rv) {
+                it = keymap.erase(it);
+            } else {
+                ++it;
+            }
+        }
         return rv;
     }
 
@@ -146,6 +160,14 @@ public:
         AbstractPrivateData* rv = i->second.first;
         //printd(5, "KeyList::getAndRemovePtr first: %p\n", i->second.first);
         i->second.first = 0;
+        // also clear virtual mappings that alias the same private data, so that
+        // tryGetReferencedPrivateData() via a parent class ID cannot find a
+        // dangling pointer after the caller derefs the returned pointer
+        for (auto& entry : keymap) {
+            if (entry.second.second && entry.second.first == rv) {
+                entry.second.first = nullptr;
+            }
+        }
         return rv;
     }
 

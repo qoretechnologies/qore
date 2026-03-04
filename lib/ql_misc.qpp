@@ -38,6 +38,9 @@
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QoreAsyncIoLogger.h"
+#if defined(__linux__) && defined(HAVE_IO_URING)
+#include "qore/intern/QoreIoUring.h"
+#endif
 
 #include <cerrno>
 #include <cstring>
@@ -3377,5 +3380,36 @@ int hash_size = get_value_byte_size({"a": 1, "b": "test"});  # returns ~13
 */
 int get_value_byte_size(auto val) [flags=CONSTANT] {
     return q_get_value_byte_size(val, xsink);
+}
+
+//! Returns io_uring debug statistics for verifying that the io_uring code path is exercised in tests
+/** This function is only available in debug builds on Linux with io_uring support.
+    In release builds or on non-Linux platforms, it returns @ref nothing.
+
+    @return a hash with the following keys, or @ref nothing if not available:
+    - \c submits: (int) cumulative count of successfully submitted io_uring reads
+    - \c completions: (int) cumulative count of delivered io_uring completions (excludes canceled)
+
+    @par Example:
+    @code{.py}
+*hash<auto> stats_before = get_io_uring_debug_stats();
+# ... perform file-backed streaming request ...
+*hash<auto> stats_after = get_io_uring_debug_stats();
+if (stats_before && stats_after) {
+    assertTrue(stats_after.submits > stats_before.submits);
+}
+    @endcode
+
+    @since %Qore 2.3
+*/
+*hash<auto> get_io_uring_debug_stats() {
+#if defined(DEBUG) && defined(__linux__) && defined(HAVE_IO_URING)
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("submits", (int64)QoreIoUring::getDebugSubmitCount(), xsink);
+    rv->setKeyValue("completions", (int64)QoreIoUring::getDebugCompletionCount(), xsink);
+    return rv.release();
+#else
+    return QoreValue();
+#endif
 }
 ///@}
