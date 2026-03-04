@@ -80,11 +80,13 @@ public class QoreGroupByProcessor inherits AbstractDataProvider {
         const ConstructorOptions = {
             "group_by": <DataProviderOptionInfo>{
                 "display_name": "Group By Fields",
-                "short_desc": "Comma-separated field names to group records by",
-                "desc": "A comma-separated list of field names to group records by; "
+                "short_desc": "Field names to group records by",
+                "desc": "A list of field names to group records by; "
                     "records with the same values for these fields are grouped together; "
-                    "if not provided, all records are aggregated into a single group",
-                "type": AbstractDataProviderTypeMap."*string",
+                    "if not provided, all records are aggregated into a single group; "
+                    "supports dot-notation for nested fields (e.g. `address.city`)",
+                "type": new SoftListDataType(AbstractDataProviderTypeMap."string", True),
+                "input_field_names": True,
             },
             "aggregates": <DataProviderOptionInfo>{
                 "display_name": "Aggregate Expressions",
@@ -138,7 +140,7 @@ public class QoreGroupByProcessor inherits AbstractDataProvider {
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
         # parse group_by fields
         if (copts.group_by.val()) {
-            group_by_fields = map trim($1), copts.group_by.split(","), trim($1).val();
+            group_by_fields = AbstractDataProvider::parseFieldList(copts.group_by);
         } else {
             group_by_fields = ();
         }
@@ -169,16 +171,15 @@ public class QoreGroupByProcessor inherits AbstractDataProvider {
         if (!configured) {
             throw "PROCESSOR-ERROR", "QoreGroupByProcessor: not configured; provide constructor options";
         }
-        # skip records missing any group-by field
-        foreach string field in (group_by_fields) {
-            if (!record.hasKey(field)) {
-                return;
-            }
-        }
         # build group key and capture group values
         hash<auto> gv;
         foreach string field in (group_by_fields) {
-            gv{field} = record{field};
+            auto val = AbstractDataProvider::getFieldValue(record, field);
+            if (!exists val) {
+                # skip records missing any group-by field
+                return;
+            }
+            gv{field} = val;
         }
         string key = group_by_fields ? sprintf("%y", gv) : "";
 
@@ -203,18 +204,20 @@ public class QoreGroupByProcessor inherits AbstractDataProvider {
             string agg_key = spec.output_name;
             hash<auto!> acc = agg{agg_key};
             if (spec.op == "first") {
-                if (!acc.set && record.hasKey(spec.field)) {
-                    acc.value = record{spec.field};
+                auto fv = AbstractDataProvider::getFieldValue(record, spec.field);
+                if (!acc.set && exists fv) {
+                    acc.value = fv;
                     acc.set = True;
                 }
             } else if (spec.op == "last") {
-                if (record.hasKey(spec.field)) {
-                    acc.value = record{spec.field};
+                auto fv = AbstractDataProvider::getFieldValue(record, spec.field);
+                if (exists fv) {
+                    acc.value = fv;
                     acc.set = True;
                 }
             } else {
                 # numeric operations: sum, avg, min, max
-                *float fval = coerceNumeric(record{spec.field});
+                *float fval = coerceNumeric(AbstractDataProvider::getFieldValue(record, spec.field));
                 if (!exists fval) {
                     continue;
                 }

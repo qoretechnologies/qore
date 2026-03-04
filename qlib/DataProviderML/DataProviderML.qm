@@ -30,7 +30,7 @@
 %requires ml
 
 module DataProviderML {
-    version = "1.0.0";
+    version = "1.1.0";
     desc = "user module providing ML-based data pipeline processors wrapping the ml binary module";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -490,6 +490,14 @@ module DataProviderML {
     decision-making.
 
     @section dataproviderml_relnotes Release Notes
+
+    @subsection dataproviderml_v1_1 DataProviderML v1.1
+    - changed \c fields option type from \c string to \c softlist<string> for multi-select UI
+      support; all processors accept both comma-separated strings and string lists for backward
+      compatibility
+    - added \c input_field_names marker to \c fields and \c target_field options for dynamic
+      allowed value population from pipeline input types
+    - all field-name-based options now support dot-notation for nested field access
 
     @subsection dataproviderml_v1_0 DataProviderML v1.0
     - initial release with 9 core ML pipeline processors and optional ONNX inference processor

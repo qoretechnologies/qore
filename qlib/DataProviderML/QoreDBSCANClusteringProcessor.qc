@@ -48,8 +48,9 @@ public class QoreDBSCANClusteringProcessor inherits DataProvider::AbstractDataPr
                 "desc": "A comma-separated list of numeric field names from the input records "
                     "to use for finding groups; for example: \"latitude,longitude\" or "
                     "\"revenue,customer_count\"; at least 1 field is required",
-                "type": AbstractDataProviderTypeMap."string",
+                "type": new SoftListDataType(AbstractDataProviderTypeMap."string", True),
                 "required": True,
+                "input_field_names": True,
             },
             "window_size": <DataProviderOptionInfo>{
                 "display_name": "Window Size",
@@ -139,7 +140,7 @@ public class QoreDBSCANClusteringProcessor inherits DataProvider::AbstractDataPr
     #! Creates the object with the given options
     constructor(hash<auto> options) {
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
-        fields = map trim($1), copts.fields.split(","), trim($1).val();
+        fields = DataProvider::AbstractDataProvider::parseFieldList(copts.fields);
         if (!fields) {
             throw "CONSTRUCTOR-ERROR", "no valid field names provided in 'fields' option";
         }
@@ -212,7 +213,7 @@ public class QoreDBSCANClusteringProcessor inherits DataProvider::AbstractDataPr
         foreach hash<auto> rec in (records) {
             list<float> row;
             foreach string f in (fields) {
-                push row, rec{f}.toFloat();
+                push row, DataProvider::AbstractDataProvider::getFieldValue(rec, f).toFloat();
             }
             push matrix, row;
         }
@@ -230,7 +231,7 @@ public class QoreDBSCANClusteringProcessor inherits DataProvider::AbstractDataPr
         for (int i = 0; i < records.lsize(); ++i) {
             hash<auto> record_values;
             foreach string f in (fields) {
-                record_values{f} = records[i]{f};
+                record_values{f} = DataProvider::AbstractDataProvider::getFieldValue(records[i], f);
             }
             push events, <DBSCANClusteringEventInfo>{
                 "event_type": "dbscan-clustering",

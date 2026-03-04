@@ -41,9 +41,11 @@ public class QoreSearchReplaceProcessor inherits AbstractDataProvider {
                 "display_name": "Field Name",
                 "short_desc": "Field to apply search and replace on",
                 "desc": "The name of the record field to apply the search and replace operation on; "
-                    "the field must contain a string value",
+                    "the field must contain a string value; "
+                    "supports dot-notation for nested fields (e.g. `address.street`)",
                 "type": AbstractDataProviderTypeMap."string",
                 "required": True,
+                "input_field_names": True,
             },
             "search": <DataProviderOptionInfo>{
                 "display_name": "Search Pattern",
@@ -142,10 +144,11 @@ public class QoreSearchReplaceProcessor inherits AbstractDataProvider {
                 "'search', and 'replace' options";
         }
         # if the field doesn't exist or is not a string, pass through unchanged
-        if (!record.hasKey(field) || record{field}.typeCode() != NT_STRING) {
+        auto field_val = AbstractDataProvider::getFieldValue(record, field);
+        if (!exists field_val || field_val.typeCode() != NT_STRING) {
             return record;
         }
-        string val = record{field};
+        string val = field_val;
         if (is_regex) {
             val = regex_subst(val, search, replace_str, regex_opts);
         } else {

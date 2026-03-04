@@ -49,8 +49,9 @@ public class QoreKMeansProcessor inherits DataProvider::AbstractDataProvider {
                 "desc": "A comma-separated list of numeric field names from the input records "
                     "to use for grouping; for example: \"age,income,spending_score\"; "
                     "at least 1 field is required",
-                "type": AbstractDataProviderTypeMap."string",
+                "type": new SoftListDataType(AbstractDataProviderTypeMap."string", True),
                 "required": True,
+                "input_field_names": True,
             },
             "window_size": <DataProviderOptionInfo>{
                 "display_name": "Window Size",
@@ -111,7 +112,7 @@ public class QoreKMeansProcessor inherits DataProvider::AbstractDataProvider {
     #! Creates the object with the given options
     constructor(hash<auto> options) {
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
-        fields = map trim($1), copts.fields.split(","), trim($1).val();
+        fields = DataProvider::AbstractDataProvider::parseFieldList(copts.fields);
         if (!fields) {
             throw "CONSTRUCTOR-ERROR", "no valid field names provided in 'fields' option";
         }
@@ -190,7 +191,7 @@ public class QoreKMeansProcessor inherits DataProvider::AbstractDataProvider {
         foreach hash<auto> rec in (records) {
             list<float> row;
             foreach string f in (fields) {
-                push row, rec{f}.toFloat();
+                push row, DataProvider::AbstractDataProvider::getFieldValue(rec, f).toFloat();
             }
             push matrix, row;
         }
@@ -214,7 +215,7 @@ public class QoreKMeansProcessor inherits DataProvider::AbstractDataProvider {
         for (int i = 0; i < records.lsize(); ++i) {
             hash<auto> record_values;
             foreach string f in (fields) {
-                record_values{f} = records[i]{f};
+                record_values{f} = DataProvider::AbstractDataProvider::getFieldValue(records[i], f);
             }
             push events, <KMeansClusteringEventInfo>{
                 "event_type": "kmeans-clustering",

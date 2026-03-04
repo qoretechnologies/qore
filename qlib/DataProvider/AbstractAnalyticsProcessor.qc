@@ -257,11 +257,13 @@ public class AbstractAnalyticsProcessor inherits AbstractDataProvider {
         const BaseConstructorOptions = {
             "fields": <DataProviderOptionInfo>{
                 "display_name": "Field Names",
-                "short_desc": "Comma-separated field names to analyze",
-                "desc": "A comma-separated list of field names to compute analytics for; "
-                    "each field must contain numeric values in the input records",
-                "type": AbstractDataProviderTypeMap."string",
+                "short_desc": "Field names to analyze",
+                "desc": "A list of field names to compute analytics for; "
+                    "each field must contain numeric values in the input records; "
+                    "supports dot-notation for nested fields (e.g. `sensor.temperature`)",
+                "type": new SoftListDataType(AbstractDataProviderTypeMap."string", True),
                 "required": True,
+                "input_field_names": True,
             },
             "window_size": <DataProviderOptionInfo>{
                 "display_name": "Window Size",
@@ -336,8 +338,8 @@ public class AbstractAnalyticsProcessor inherits AbstractDataProvider {
     */
     initAnalytics(hash<auto> options, hash<auto> constructor_options) {
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", constructor_options, options);
-        # parse comma-separated field names
-        fields = map trim($1), copts.fields.split(","), trim($1).val();
+        # parse field names (supports both comma-separated strings and lists)
+        fields = AbstractDataProvider::parseFieldList(copts.fields);
         if (!fields) {
             throw "CONSTRUCTOR-ERROR", "no valid field names provided in 'fields' option";
         }
@@ -366,10 +368,10 @@ public class AbstractAnalyticsProcessor inherits AbstractDataProvider {
         }
         list<auto> events;
         foreach string field in (fields) {
-            if (!record.hasKey(field)) {
+            auto raw = AbstractDataProvider::getFieldValue(record, field);
+            if (!exists raw) {
                 continue;
             }
-            auto raw = record{field};
             int tc = raw.typeCode();
             float value;
             if (tc == NT_INT || tc == NT_FLOAT || tc == NT_NUMBER) {

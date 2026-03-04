@@ -45,17 +45,21 @@ public class QoreCrossCorrelationProcessor inherits AbstractDataProvider {
             "field_x": <DataProviderOptionInfo>{
                 "display_name": "First Field",
                 "short_desc": "First numeric field name",
-                "desc": "The first numeric field for cross-correlation analysis",
+                "desc": "The first numeric field for cross-correlation analysis; "
+                    "supports dot-notation for nested fields (e.g. `sensor.temperature`)",
                 "type": AbstractDataProviderTypeMap."string",
                 "required": True,
+                "input_field_names": True,
             },
             "field_y": <DataProviderOptionInfo>{
                 "display_name": "Second Field",
                 "short_desc": "Second numeric field name",
                 "desc": "The second numeric field; positive lag means this field is "
-                    "delayed relative to `field_x`",
+                    "delayed relative to `field_x`; "
+                    "supports dot-notation for nested fields",
                 "type": AbstractDataProviderTypeMap."string",
                 "required": True,
+                "input_field_names": True,
             },
             "window_size": <DataProviderOptionInfo>{
                 "display_name": "Window Size",
@@ -182,8 +186,10 @@ public class QoreCrossCorrelationProcessor inherits AbstractDataProvider {
         list<float> x_vals;
         list<float> y_vals;
         foreach hash<auto> rec in (records) {
-            push x_vals, rec.hasKey(field_x) ? rec{field_x}.toFloat() : 0.0;
-            push y_vals, rec.hasKey(field_y) ? rec{field_y}.toFloat() : 0.0;
+            auto xv = AbstractDataProvider::getFieldValue(rec, field_x);
+            auto yv = AbstractDataProvider::getFieldValue(rec, field_y);
+            push x_vals, exists xv ? xv.toFloat() : 0.0;
+            push y_vals, exists yv ? yv.toFloat() : 0.0;
         }
 
         # compute means

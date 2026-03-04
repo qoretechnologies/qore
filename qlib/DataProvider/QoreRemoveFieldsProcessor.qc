@@ -39,10 +39,11 @@ public class QoreRemoveFieldsProcessor inherits AbstractDataProvider {
         const ConstructorOptions = {
             "fields": <DataProviderOptionInfo>{
                 "display_name": "Fields to Remove",
-                "short_desc": "Comma-separated field names to remove",
-                "desc": "A comma-separated list of field names to remove from each record",
-                "type": AbstractDataProviderTypeMap."string",
+                "short_desc": "Field names to remove",
+                "desc": "A list of field names to remove from each record",
+                "type": new SoftListDataType(AbstractDataProviderTypeMap."string", True),
                 "required": True,
+                "input_field_names": True,
             },
         };
     }
@@ -60,7 +61,7 @@ public class QoreRemoveFieldsProcessor inherits AbstractDataProvider {
     constructor(hash<auto> options) {
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
         if (copts.fields.val()) {
-            field_list = map trim($1), copts.fields.split(","), trim($1).val();
+            field_list = AbstractDataProvider::parseFieldList(copts.fields);
             if (!field_list) {
                 throw "CONSTRUCTOR-ERROR", "no valid field names found in 'fields' option";
             }
