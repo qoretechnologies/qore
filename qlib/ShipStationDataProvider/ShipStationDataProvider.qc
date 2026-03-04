@@ -97,9 +97,6 @@ public class ShipStationDataProvider inherits ShipStationDataProviderBase {
             "create-warehouse": Class::forName("ShipStationCreateWarehouseDataProvider"),
             "update-warehouse": Class::forName("ShipStationUpdateWarehouseDataProvider"),
 
-            # Utility providers
-            "make-api-call": Class::forName("ShipStationMakeApiCallDataProvider"),
-
             # Event providers
             "events": Class::forName("ShipStationEventsDataProvider"),
         };

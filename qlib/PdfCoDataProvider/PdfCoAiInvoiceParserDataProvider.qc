@@ -29,24 +29,34 @@ public namespace PdfCoDataProvider {
 public class PdfCoAiInvoiceParserRequestDataType inherits HashDataType {
     public {
         const Fields = {
+            "file": {
+                "type": FileOrNothingDataType,
+                "display_name": "File",
+                "short_desc": "File to process",
+                "desc": "File to process. Provide either this or a source URL.",
+                "required_groups": ("source",),
+                "preselected": True,
+            },
             "url": {
-                "type": StringType,
+                "type": StringOrNothingType,
                 "display_name": "Source URL",
                 "short_desc": "URL to the source invoice file",
                 "desc": "URL to the source invoice file (PDF, image, or scanned document)",
-                "required": True,
+                "required_groups": ("source",),
             },
             "customField": {
-                "type": StringOrNothingType,
+                "type": SoftListOrNothingType,
                 "display_name": "Custom Fields",
                 "short_desc": "Custom field names to extract",
-                "desc": "JSON string with custom field names to extract (camelCase format)",
+                "desc": "Custom field names to extract in camelCase format "
+                    "(e.g., `purchaseOrderNumber`, `taxId`, `vendorAddress`)",
             },
             "lineItemStructure": {
-                "type": StringOrNothingType,
+                "type": SoftListOrNothingType,
                 "display_name": "Line Item Structure",
-                "short_desc": "Custom line item schema",
-                "desc": "Custom schema defining line item structure as a JSON string",
+                "short_desc": "Custom line item column names",
+                "desc": "Column names defining the line item structure "
+                    "(e.g., `description`, `quantity`, `unitPrice`, `amount`)",
             },
             "async": {
                 "type": SoftBoolOrNothingType,
@@ -118,6 +128,13 @@ public class PdfCoAiInvoiceParserDataProvider inherits PdfCoDataProviderBase {
 
     #! Performs the request
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        req = uploadFileIfNeeded(req);
+        if (req.customField.typeCode() == NT_LIST) {
+            req.customField = (foldl $1 + "," + $2, req.customField);
+        }
+        if (req.lineItemStructure.typeCode() == NT_LIST) {
+            req.lineItemStructure = (foldl $1 + "," + $2, req.lineItemStructure);
+        }
         return doPost("ai-invoice-parser", req);
     }
 

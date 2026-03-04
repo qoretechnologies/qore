@@ -29,12 +29,20 @@ public namespace PdfCoDataProvider {
 public class PdfCoDocumentClassifierRequestDataType inherits HashDataType {
     public {
         const Fields = {
+            "file": {
+                "type": FileOrNothingDataType,
+                "display_name": "File",
+                "short_desc": "File to process",
+                "desc": "File to process. Provide either this or a source URL.",
+                "required_groups": ("source",),
+                "preselected": True,
+            },
             "url": {
-                "type": StringType,
+                "type": StringOrNothingType,
                 "display_name": "Source URL",
                 "short_desc": "URL to the source document",
                 "desc": "URL to the source document",
-                "required": True,
+                "required_groups": ("source",),
             },
             "caseSensitive": {
                 "type": SoftBoolOrNothingType,
@@ -46,7 +54,15 @@ public class PdfCoDocumentClassifierRequestDataType inherits HashDataType {
                 "type": StringOrNothingType,
                 "display_name": "Rules CSV",
                 "short_desc": "Custom classification rules in CSV format",
-                "desc": "Custom classification rules in CSV format",
+                "desc": "Custom classification rules in CSV format.\n\n"
+                    "**Format**: `className,logicType,keyword1,keyword2,...`\n\n"
+                    "- `className` — the class name returned on match\n"
+                    "- `logicType` — `OR` (match any keyword, default) or `AND` (match all)\n"
+                    "- Keywords support regex: `/pattern/flags`\n\n"
+                    "**Example**:\n"
+                    "`Invoice,OR,Invoice Number,Invoice #,Tax Invoice`\n"
+                    "`Purchase Order,OR,PO Number,Order Number`\n"
+                    "`Bank Statement,OR,/Account Statement/i,Business Checking`",
             },
             "rulescsvurl": {
                 "type": StringOrNothingType,
@@ -131,6 +147,7 @@ public class PdfCoDocumentClassifierDataProvider inherits PdfCoDataProviderBase 
 
     #! Performs the request
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        req = uploadFileIfNeeded(req);
         return doPost("pdf/classifier", req);
     }
 

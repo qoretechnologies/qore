@@ -29,12 +29,20 @@ public namespace PdfCoDataProvider {
 public class PdfCoMergePdfRequestDataType inherits HashDataType {
     public {
         const Fields = {
+            "file": {
+                "type": FileOrNothingDataType,
+                "display_name": "File",
+                "short_desc": "File to process",
+                "desc": "File to process. Provide either this or a source URL.",
+                "required_groups": ("source",),
+                "preselected": True,
+            },
             "url": {
-                "type": StringType,
+                "type": SoftListOrNothingType,
                 "display_name": "Source URLs",
-                "short_desc": "Comma-separated URLs to the source files to merge",
-                "desc": "Comma-separated URLs to the source files to merge",
-                "required": True,
+                "short_desc": "URLs of the source PDF files to merge",
+                "desc": "Source URLs of PDF files to merge",
+                "required_groups": ("source",),
             },
             "async": {
                 "type": SoftBoolOrNothingType,
@@ -129,6 +137,10 @@ public class PdfCoMergePdfDataProvider inherits PdfCoDataProviderBase {
 
     #! Performs the request
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        req = uploadFileIfNeeded(req);
+        if (req.url.typeCode() == NT_LIST) {
+            req.url = (foldl $1 + "," + $2, req.url);
+        }
         return doPost("pdf/merge2", req);
     }
 

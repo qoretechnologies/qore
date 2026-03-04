@@ -104,7 +104,7 @@ public class PdfCoRestClient inherits RestClient::RestClient {
         const DefaultPingMethod = "GET";
 
         #! Default PDF.co ping path (account credit balance - lightweight, always available)
-        const DefaultPingPath = "credit/balance";
+        const DefaultPingPath = "account/credit/balance";
 
         #! Default PDF.co ping headers
         const DefaultPingHeaders = {
@@ -270,7 +270,14 @@ public class PdfCoRestConnection inherits RestClient::RestConnection {
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option or attribute
     */
     constructor(hash<auto> config, *hash<auto> attr)
-            : RestConnection(config, attr) {
+            : RestConnection(PdfCoRestConnection::getConfig(config), attr) {
+    }
+
+    #! returns config for @ref PdfCoRestConnection::constructor()
+    private static hash<auto> getConfig(hash<auto> config) {
+        return config + {
+            "url": DefaultConnectionUrl,
+        };
     }
 
     #! returns \c "pdfco"

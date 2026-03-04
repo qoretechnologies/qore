@@ -29,12 +29,20 @@ public namespace PdfCoDataProvider {
 public class PdfCoAddPasswordRequestDataType inherits HashDataType {
     public {
         const Fields = {
+            "file": {
+                "type": FileOrNothingDataType,
+                "display_name": "File",
+                "short_desc": "File to process",
+                "desc": "File to process. Provide either this or a source URL.",
+                "required_groups": ("source",),
+                "preselected": True,
+            },
             "url": {
-                "type": StringType,
+                "type": StringOrNothingType,
                 "display_name": "Source URL",
                 "short_desc": "URL to the source PDF file",
                 "desc": "URL to the source PDF file",
-                "required": True,
+                "required_groups": ("source",),
             },
             "ownerPassword": {
                 "type": StringType,
@@ -137,6 +145,7 @@ public class PdfCoAddPasswordDataProvider inherits PdfCoDataProviderBase {
 
     #! Performs the request
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        req = uploadFileIfNeeded(req);
         return doPost("pdf/security/add", req);
     }
 

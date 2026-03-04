@@ -61,8 +61,6 @@ public class ShippoDataProvider inherits ShippoDataProviderBase {
             "get-transaction": Class::forName("ShippoGetTransactionDataProvider"),
             "get-order": Class::forName("ShippoGetOrderDataProvider"),
             "validate-address": Class::forName("ShippoValidateAddressDataProvider"),
-            "make-api-call": Class::forName("ShippoMakeApiCallDataProvider"),
-
             # Events container
             "events": Class::forName("ShippoEventsDataProvider"),
         };

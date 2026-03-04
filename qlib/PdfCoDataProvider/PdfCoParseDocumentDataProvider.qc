@@ -29,12 +29,20 @@ public namespace PdfCoDataProvider {
 public class PdfCoParseDocumentRequestDataType inherits HashDataType {
     public {
         const Fields = {
+            "file": {
+                "type": FileOrNothingDataType,
+                "display_name": "File",
+                "short_desc": "File to process",
+                "desc": "File to process. Provide either this or a source URL.",
+                "required_groups": ("source",),
+                "preselected": True,
+            },
             "url": {
-                "type": StringType,
+                "type": StringOrNothingType,
                 "display_name": "Source URL",
                 "short_desc": "URL to the source document",
                 "desc": "URL to the source document",
-                "required": True,
+                "required_groups": ("source",),
             },
             "templateId": {
                 "type": SoftIntOrNothingType,
@@ -46,7 +54,10 @@ public class PdfCoParseDocumentRequestDataType inherits HashDataType {
                 "type": StringOrNothingType,
                 "display_name": "Template",
                 "short_desc": "Raw template format for direct use",
-                "desc": "Raw template format for direct use (alternative to `templateId`)",
+                "desc": "Inline template definition for document parsing "
+                    "(alternative to `templateId`).\n\n"
+                    "Templates define extraction rules for specific document layouts. "
+                    "Create templates using the PDF.co Document Parser Template Editor.",
             },
             "outputFormat": {
                 "type": StringOrNothingType,
@@ -154,6 +165,7 @@ public class PdfCoParseDocumentDataProvider inherits PdfCoDataProviderBase {
 
     #! Performs the request
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        req = uploadFileIfNeeded(req);
         return doPost("pdf/documentparser", req);
     }
 

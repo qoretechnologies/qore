@@ -29,12 +29,22 @@ public namespace PdfCoDataProvider {
 public class PdfCoUploadFileRequestDataType inherits HashDataType {
     public {
         const Fields = {
+            "file": {
+                "type": FileOrNothingDataType,
+                "display_name": "File",
+                "short_desc": "File to upload",
+                "desc": "File to upload to PDF.co temporary storage. "
+                    "Provide either this or a source URL.",
+                "required_groups": ("source",),
+                "preselected": True,
+            },
             "url": {
-                "type": StringType,
+                "type": StringOrNothingType,
                 "display_name": "Source URL",
                 "short_desc": "URL of the file to upload",
-                "desc": "URL of the file to upload to PDF.co temporary storage",
-                "required": True,
+                "desc": "URL of the file to upload to PDF.co temporary storage. "
+                    "Provide either this or file content.",
+                "required_groups": ("source",),
             },
             "name": {
                 "type": StringOrNothingType,
@@ -62,8 +72,7 @@ public class PdfCoUploadFileDataProvider inherits PdfCoDataProviderBase {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
             "name": "upload-file",
-            "desc": "Uploads a file from a URL to PDF.co temporary storage for use with other API "
-                "actions",
+            "desc": "Uploads a file to PDF.co temporary storage for use with other API actions",
             "type": "PdfCoUploadFileDataProvider",
             "supports_request": True,
             "constructor_options": ConstructorOptions,
@@ -84,8 +93,7 @@ public class PdfCoUploadFileDataProvider inherits PdfCoDataProviderBase {
 
     #! Returns the provider description
     *string getDesc() {
-        return "Uploads a file from a URL to PDF.co temporary storage for use with other API "
-            "actions";
+        return "Uploads a file to PDF.co temporary storage for use with other API actions";
     }
 
     #! Returns the request type
@@ -100,6 +108,13 @@ public class PdfCoUploadFileDataProvider inherits PdfCoDataProviderBase {
 
     #! Performs the request
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        if (req.file) {
+            hash<auto> file = remove req.file;
+            return doPost("file/upload/base64", req + {
+                "file": file.content,
+                "name": file.name ?? req.name,
+            });
+        }
         return doPost("file/upload/url", req);
     }
 

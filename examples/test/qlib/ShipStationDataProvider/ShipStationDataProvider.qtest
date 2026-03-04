@@ -244,7 +244,6 @@ public class ShipStationDataProviderTest inherits QUnit::Test {
         assertTrue(children.contains("get-warehouse"));
         assertTrue(children.contains("create-warehouse"));
         assertTrue(children.contains("update-warehouse"));
-        assertTrue(children.contains("make-api-call"));
         assertTrue(children.contains("events"));
 
         # Check orders child provider
@@ -464,7 +463,6 @@ public class ShipStationDataProviderTest inherits QUnit::Test {
         # Other actions
         assertTrue(actionNames.contains("list-tags"));
         assertTrue(actionNames.contains("list-users"));
-        assertTrue(actionNames.contains("make-api-call"));
 
         # Trigger actions
         assertTrue(actionNames.contains("order-notify"));
@@ -562,8 +560,6 @@ public class ShipStationDataProviderTest inherits QUnit::Test {
         # Test assign/unassign user to order
         testUserAssignment();
 
-        # Test make-api-call action
-        testMakeApiCall();
     }
 
     #! Test API connectivity
@@ -1768,48 +1764,6 @@ public class ShipStationDataProviderTest inherits QUnit::Test {
 
         if (m_options.verbose) {
             printf("--- User Assignment tests completed ---\n");
-        }
-    }
-
-    #! Test make-api-call action
-    private testMakeApiCall() {
-        if (m_options.verbose) {
-            printf("\n--- Testing Make API Call Action ---\n");
-        }
-
-        ShipStationDataProvider::ShipStationDataProvider prov(client);
-
-        AbstractDataProvider makeApiCallProvider = prov.getChildProvider("make-api-call");
-
-        # Test GET request to carriers endpoint
-        auto result = makeApiCallProvider.doRequest({
-            "method": "GET",
-            "path": "/carriers",
-        });
-
-        assertTrue(result.typeCode() == NT_LIST || result.typeCode() == NT_HASH,
-            "make-api-call should return data");
-        if (m_options.verbose) {
-            printf("  GET /carriers returned %s with %d element(s)\n",
-                result.typeCode() == NT_LIST ? "list" : "hash",
-                result.typeCode() == NT_LIST ? elements result : elements keys result);
-        }
-
-        # Test with query parameters
-        auto warehouses = makeApiCallProvider.doRequest({
-            "method": "GET",
-            "path": "/warehouses",
-        });
-
-        assertTrue(warehouses.typeCode() == NT_LIST || warehouses.typeCode() == NT_HASH,
-            "make-api-call /warehouses should return data");
-        if (m_options.verbose) {
-            printf("  GET /warehouses returned %s\n",
-                warehouses.typeCode() == NT_LIST ? "list" : "hash");
-        }
-
-        if (m_options.verbose) {
-            printf("--- Make API Call tests completed ---\n");
         }
     }
 

@@ -29,19 +29,27 @@ public namespace PdfCoDataProvider {
 public class PdfCoFillPdfFormRequestDataType inherits HashDataType {
     public {
         const Fields = {
+            "file": {
+                "type": FileOrNothingDataType,
+                "display_name": "File",
+                "short_desc": "File to process",
+                "desc": "File to process. Provide either this or a source URL.",
+                "required_groups": ("source",),
+                "preselected": True,
+            },
             "url": {
-                "type": StringType,
+                "type": StringOrNothingType,
                 "display_name": "Source URL",
                 "short_desc": "URL to the source PDF form",
                 "desc": "URL to the source PDF form",
-                "required": True,
+                "required_groups": ("source",),
             },
             "fields": {
-                "type": StringType,
+                "type": new SoftListDataType("FormFieldValues",
+                    new PdfCoFormFieldValueDataType(), False),
                 "display_name": "Fields",
-                "short_desc": "JSON array of field name/value pairs to fill",
-                "desc": "JSON array of field name/value pairs to fill (e.g., "
-                    "`[{\"fieldName\": \"value\"}]`)",
+                "short_desc": "Form field name/value pairs to fill",
+                "desc": "Form field name/value pairs to fill in the PDF form",
                 "required": True,
                 "preselected": True,
             },
@@ -49,7 +57,9 @@ public class PdfCoFillPdfFormRequestDataType inherits HashDataType {
                 "type": StringOrNothingType,
                 "display_name": "Fields String",
                 "short_desc": "Pipe-delimited field name/value pairs",
-                "desc": "Pipe-delimited field name/value pairs (alternative to `fields`)",
+                "desc": "Pipe-delimited field name/value pairs (alternative to `fields`).\n\n"
+                    "**Format**: `page;fieldName;value` — multiple fields separated by `|`\n\n"
+                    "**Example**: `0;FirstName;John|0;LastName;Smith`",
             },
             "password": {
                 "type": StringOrNothingType,
@@ -134,6 +144,11 @@ public class PdfCoFillPdfFormDataProvider inherits PdfCoDataProviderBase {
     # NOTE: pdf/edit/add is the unified PDF.co endpoint for annotations, images, and form fields;
     # the request body (fields/fieldsString) determines behavior
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        req = uploadFileIfNeeded(req);
+        if (req.fields) {
+            req.fields = parseJsonField(req.fields);
+            req.fields = stripNilFields(req.fields);
+        }
         return doPost("pdf/edit/add", req);
     }
 

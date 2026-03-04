@@ -95,15 +95,82 @@ public class PdfCoDataProviderBase inherits DataProvider::AbstractDataProvider {
         rest.setLogger(logger);
     }
 
-    #! Makes a POST request to the PDF.co API
-    /** @param path the API path (relative to /v1)
+    #! Uploads file content if provided, replacing it with a temporary URL
+    /** If the request contains a \c file field (FileDataType hash with \c name, \c content,
+        \c mime_type), uploads the file via the \c /file/upload/base64 endpoint and replaces
+        it with the returned temporary URL in the \c url field.
+
+        @param req the request hash
+        @return the modified request hash with \c file replaced by \c url
+    */
+    hash<auto> uploadFileIfNeeded(hash<auto> req) {
+        if (req.file) {
+            hash<auto> upload_resp = doPost("file/upload/base64", {
+                "file": req.file.content,
+                "name": req.file.name,
+            });
+            req.url = upload_resp.url;
+            remove req.file;
+        }
+        return req;
+    }
+
+    #! Parses a JSON string field into a Qore data structure if needed
+    /** The PDF.co API expects \c annotations, \c images, and \c fields as JSON arrays
+        in the request body. When these fields are typed as strings, the REST client
+        sends them as JSON string values (double-serialized). This method parses the
+        JSON string into native Qore data so it serializes correctly.
+
+        @param val the field value (string or already-parsed data)
+        @return the parsed value
+    */
+    static auto parseJsonField(auto val) {
+        if (val.typeCode() == NT_STRING) {
+            return parse_json(val);
+        }
+        return val;
+    }
+
+    #! Removes keys with NOTHING values from each hash in a list
+    /** The PDF.co API rejects \c null values for optional string fields like \c pages.
+        This method strips any keys with NOTHING values from each element.
+
+        @param items list of hash items (annotations, images, fields, etc.)
+        @return the list with nil-valued keys removed from each hash
+    */
+    static list<auto> stripNilFields(list<auto> items) {
+        list<auto> result = ();
+        foreach hash<auto> item in (items) {
+            hash<auto> clean;
+            foreach string key in (keys item) {
+                if (exists item{key}) {
+                    clean{key} = item{key};
+                }
+            }
+            result += clean;
+        }
+        return result;
+    }
+
+    #! Makes a POST request to the PDF.co API and waits for async jobs to complete
+    /** If the response indicates the job is still processing (\c status \c "working"),
+        automatically polls \c job/check until the job completes or fails, unless the
+        caller explicitly requested async mode.
+
+        @param path the API path (relative to /v1)
         @param body the request body
         @return the response body
 
         @throw PDFCO-API-ERROR if the response indicates an error
+        @throw PDFCO-JOB-TIMEOUT if the job does not complete within the polling limit
     */
     hash<auto> doPost(string path, *hash<auto> body) {
-        return doRestRequest("POST", path, body);
+        hash<auto> resp = doRestRequest("POST", path, body);
+        # If async was explicitly requested, return the jobId immediately
+        if (body."async") {
+            return resp;
+        }
+        return waitForJobIfNeeded(resp);
     }
 
     #! Makes a GET request to the PDF.co API
@@ -114,6 +181,49 @@ public class PdfCoDataProviderBase inherits DataProvider::AbstractDataProvider {
     */
     hash<auto> doGet(string path) {
         return doRestRequest("GET", path);
+    }
+
+    #! Polls job/check if the response has a jobId but no result data
+    /** PDF.co may return a \c jobId with \c status \c 200 but no result data when
+        processing takes too long. This method detects incomplete responses and polls
+        \c job/check until the job completes.
+
+        @param resp the initial API response
+        @return the final response with completed job data
+
+        @throw PDFCO-JOB-TIMEOUT if the job does not complete within the polling limit
+        @throw PDFCO-JOB-FAILED if the job fails or is aborted
+    */
+    private hash<auto> waitForJobIfNeeded(hash<auto> resp) {
+        if (!resp.jobId) {
+            return resp;
+        }
+        # If the response already contains result data, no polling needed
+        if (exists resp.body || exists resp.url || exists resp.urls
+                || exists resp.info || exists resp.barcodes) {
+            return resp;
+        }
+        int attempts = 0;
+        while (attempts < MaxJobPollAttempts) {
+            ++attempts;
+            sleep(JobPollIntervalMs);
+            hash<auto> check = doRestRequest("POST", "job/check", {"jobId": resp.jobId});
+            switch (check.status) {
+                case "success":
+                    return check;
+                case "working":
+                    continue;
+                case "failed":
+                case "aborted":
+                    throw "PDFCO-JOB-FAILED", check.message ?? sprintf("Job %s %s",
+                        resp.jobId, check.status), check;
+                default:
+                    throw "PDFCO-JOB-FAILED", sprintf("unexpected job status: %y for job %s",
+                        check.status, resp.jobId), check;
+            }
+        }
+        throw "PDFCO-JOB-TIMEOUT", sprintf("job %s did not complete after %d polling attempts",
+            resp.jobId, MaxJobPollAttempts);
     }
 
     #! Makes a REST request with retry handling

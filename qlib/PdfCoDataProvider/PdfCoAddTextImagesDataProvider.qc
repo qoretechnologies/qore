@@ -29,36 +29,52 @@ public namespace PdfCoDataProvider {
 public class PdfCoAddTextImagesRequestDataType inherits HashDataType {
     public {
         const Fields = {
+            "file": {
+                "type": FileOrNothingDataType,
+                "display_name": "File",
+                "short_desc": "File to process",
+                "desc": "File to process. Provide either this or a source URL.",
+                "required_groups": ("source",),
+                "preselected": True,
+            },
             "url": {
-                "type": StringType,
+                "type": StringOrNothingType,
                 "display_name": "Source URL",
                 "short_desc": "URL to the source PDF file",
                 "desc": "URL to the source PDF file",
-                "required": True,
+                "required_groups": ("source",),
             },
             "annotations": {
-                "type": StringOrNothingType,
+                "type": new SoftListDataType("TextAnnotations",
+                    new PdfCoTextAnnotationDataType(), True),
                 "display_name": "Annotations",
-                "short_desc": "JSON array of text/form annotation objects to add",
-                "desc": "JSON array of text/form annotation objects to add",
+                "short_desc": "Text and form annotations to add",
+                "desc": "Text and form annotations to add to the PDF",
             },
             "images": {
-                "type": StringOrNothingType,
+                "type": new SoftListDataType("ImageAnnotations",
+                    new PdfCoImageAnnotationDataType(), True),
                 "display_name": "Images",
-                "short_desc": "JSON array of image objects to insert",
-                "desc": "JSON array of image objects to insert",
+                "short_desc": "Images to insert",
+                "desc": "Images to insert into the PDF",
             },
             "annotationsString": {
                 "type": StringOrNothingType,
                 "display_name": "Annotations String",
                 "short_desc": "Semicolon-delimited text objects",
-                "desc": "Semicolon-delimited text objects (alternative to `annotations`)",
+                "desc": "Semicolon-delimited text objects (alternative to `annotations`).\n\n"
+                    "**Format**: `x;y;pages;text;size+styles;fontName;color`\n\n"
+                    "Styles: `bold`, `italic`, `underline`, `strikeout` (joined with `+`)\n\n"
+                    "**Example**: `100;200;0;Hello;14+bold;Arial;#FF0000`",
             },
             "imagesString": {
                 "type": StringOrNothingType,
                 "display_name": "Images String",
                 "short_desc": "Pipe-delimited image objects",
-                "desc": "Pipe-delimited image objects (alternative to `images`)",
+                "desc": "Pipe-delimited image objects (alternative to `images`).\n\n"
+                    "**Format**: `x;y;pages;url` — multiple objects separated by `|`\n\n"
+                    "**Example**: "
+                    "`50;100;0;https://example.com/logo.png|300;100;0;https://example.com/sig.png`",
             },
             "password": {
                 "type": StringOrNothingType,
@@ -143,6 +159,15 @@ public class PdfCoAddTextImagesDataProvider inherits PdfCoDataProviderBase {
     # NOTE: pdf/edit/add is the unified PDF.co endpoint for annotations, images, and form fields;
     # the request body (annotations/images fields) determines behavior
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        req = uploadFileIfNeeded(req);
+        if (req.annotations) {
+            req.annotations = parseJsonField(req.annotations);
+            req.annotations = stripNilFields(req.annotations);
+        }
+        if (req.images) {
+            req.images = parseJsonField(req.images);
+            req.images = stripNilFields(req.images);
+        }
         return doPost("pdf/edit/add", req);
     }
 

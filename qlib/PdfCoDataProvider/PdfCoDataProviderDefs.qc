@@ -30,6 +30,12 @@ public namespace PdfCoDataProvider {
     #! Maximum number of retries for transient errors
     public const MaxRetries = 3;
 
+    #! Maximum number of job polling attempts before giving up
+    public const MaxJobPollAttempts = 60;
+
+    #! Initial polling interval in milliseconds
+    public const JobPollIntervalMs = 2000;
+
     #! Set of retriable socket errors
     public const RetrySet = {
         "SOCKET-CONNECT-ERROR": True,

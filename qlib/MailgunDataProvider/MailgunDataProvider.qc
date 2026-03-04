@@ -53,7 +53,6 @@ public class MailgunDataProvider inherits MailgunDataProviderBase {
             # Action providers
             "send-email": Class::forName("MailgunSendEmailDataProvider"),
             "validate-email": Class::forName("MailgunValidateEmailDataProvider"),
-            "make-api-call": Class::forName("MailgunMakeApiCallDataProvider"),
             "add-mailing-list-member": Class::forName("MailgunAddMailingListMemberDataProvider"),
             "delete-mailing-list-member": Class::forName("MailgunDeleteMailingListMemberDataProvider"),
             "get-mailing-list-member": Class::forName("MailgunGetMailingListMemberDataProvider"),

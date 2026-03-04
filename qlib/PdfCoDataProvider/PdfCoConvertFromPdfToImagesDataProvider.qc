@@ -29,12 +29,20 @@ public namespace PdfCoDataProvider {
 public class PdfCoConvertFromPdfToImagesRequestDataType inherits HashDataType {
     public {
         const Fields = {
+            "file": {
+                "type": FileOrNothingDataType,
+                "display_name": "File",
+                "short_desc": "File to process",
+                "desc": "File to process. Provide either this or a source URL.",
+                "required_groups": ("source",),
+                "preselected": True,
+            },
             "url": {
-                "type": StringType,
+                "type": StringOrNothingType,
                 "display_name": "Source URL",
                 "short_desc": "URL to the source PDF file",
                 "desc": "URL to the source PDF file",
-                "required": True,
+                "required_groups": ("source",),
             },
             "output_format": {
                 "type": StringType,
@@ -135,6 +143,7 @@ public class PdfCoConvertFromPdfToImagesDataProvider inherits PdfCoDataProviderB
 
     #! Performs the request
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        req = uploadFileIfNeeded(req);
         string output_format = remove req.output_format;
         *string path = ConvertToImageFormatMap{output_format};
         if (!path) {

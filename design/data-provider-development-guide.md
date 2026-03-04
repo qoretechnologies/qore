@@ -217,6 +217,61 @@ For very long descriptions with many items (e.g., 20+ draw commands), group rela
 | Missing opening backtick | `` field_name` `` | `` `field_name` `` |
 | Bare field reference | `see ssl_key_path` | `` see `ssl_key_path` `` |
 
+#### Data Examples in Descriptions
+
+When a field accepts structured data (JSON objects/arrays, CSV, delimited strings, regex patterns, or other format-specific syntax), the `desc` field **must** include:
+
+1. A summary sentence describing what the field expects
+2. A structured property list (for JSON objects) or format specification (for delimited strings)
+3. A concrete `**Example**:` with backtick-wrapped sample data
+
+```qore
+# Poor: generic description
+"desc": "JSON array of text annotation objects to add",
+
+# Good: structured with properties and example
+"desc": "JSON array of text annotation objects to add to the PDF.\n\n"
+    "**Annotation object properties**:\n"
+    "- `text` (required) — text to add\n"
+    "- `x`, `y` (required) — position coordinates in points\n"
+    "- `size` — font size (default: `12`)\n"
+    "- `fontName` — font name (default: `Arial`)\n\n"
+    "**Example**: `[{\"x\": 100, \"y\": 200, \"text\": \"Hello\", \"size\": 14}]`",
+```
+
+Fields that need data examples:
+- JSON object/array fields — document properties and provide a sample object
+- CSV/delimited format fields — document delimiter, column structure, and provide a sample
+- Regex/pattern fields — describe syntax and provide an example pattern
+- Fields with non-obvious format requirements (page ranges, coordinate systems, hex colors)
+
+#### List Types vs Delimited Strings
+
+When a field logically accepts multiple values of the same type (e.g., multiple URLs, IDs, tags), use a **list type** rather than a delimited string:
+
+```qore
+# Poor: comma-delimited string
+"url": {
+    "type": StringOrNothingType,
+    "desc": "Comma-separated URLs to process",
+},
+
+# Good: proper list type with join in doRequestImpl()
+"url": {
+    "type": SoftListOrNothingType,
+    "desc": "Source URLs to process",
+},
+
+# In doRequestImpl():
+if (req.url.typeCode() == NT_LIST) {
+    req.url = (foldl $1 + "," + $2, req.url);
+}
+```
+
+**Why**: List types render as proper list inputs in the UI (add/remove items). Delimited strings require users to manually concatenate values.
+
+**When to keep strings**: When the delimiter format includes structured sub-fields (e.g., `page;fieldName;value`) or range syntax (e.g., `0, 2-5, 7-`), keep as `StringOrNothingType` since list semantics don't apply.
+
 ### Base Class Pattern
 
 ```qore
@@ -1030,13 +1085,16 @@ Never describe allowed values in the `desc` or `short_desc` text. Always declare
 ### 11. Missing `options` or `output_type` in action registration
 Every `registerAction()` call **must** include `options` (generated via `getActionOptionFromFields()`) and `output_type`. Without `options`, the action shows an empty form and users cannot configure it. Without `output_type`, output fields are invisible. This is the primary user interface — actions without these fields are unusable.
 
-### 12. Single-key hash slicing
+### 12. Field ordering in request types
+Fields with `required_groups` must be declared first in the `Fields` constant, followed by required fields, then optional fields. This ensures the UI presents primary input options at the top of the form. When `required_groups` fields are scattered among optional fields, users may not see the main input choices without scrolling.
+
+### 13. Single-key hash slicing
 `Fields{"key"}` or `getFields(){"key"}` returns the value at that key (single-value dereference). For a single-key hash slice that returns a hash, use a trailing comma: `Fields{"key",}`. This is critical when passing fields to `getActionOptionFromFields()`, which expects a hash of field definitions — passing a single field's value instead of a hash causes `OPTION-ERROR` at module load time.
 
-### 13. Type classes outside namespace block
+### 14. Type classes outside namespace block
 Type classes declared in a `.qc` file **must** be inside the `public namespace ModuleName { ... }` block. If declared outside it (even in the same file), their class constants (e.g., `Fields`) cannot be resolved via `ClassName::ConstantName` from the `.qm` file, causing `PARSE-EXCEPTION: cannot resolve bareword` errors at module load time. See [Request Type Fields Pattern](#request-type-fields-pattern).
 
-### 14. Description formatting issues
+### 15. Description formatting issues
 `desc` fields are rendered as markdown in the UI. Common mistakes that degrade readability:
 - **Bare `True`/`False`/`NOTHING`**: Always wrap in backticks — `` `True` ``, `` `False` ``, `` `NOTHING` ``
 - **Bare field/option names**: Use backticks for cross-references — `` `ssl_key_path` ``, `` `header_names` ``

@@ -29,29 +29,39 @@ public namespace PdfCoDataProvider {
 public class PdfCoConvertHtmlToPdfRequestDataType inherits HashDataType {
     public {
         const Fields = {
-            "source_type": {
-                "type": StringType,
-                "display_name": "Source Type",
-                "short_desc": "Source type for conversion",
-                "desc": "Source type for conversion",
-                "required": True,
+            "file": {
+                "type": FileOrNothingDataType,
+                "display_name": "File",
+                "short_desc": "HTML file to convert",
+                "desc": "HTML file to convert to PDF. When provided, the file is uploaded and "
+                    "converted via URL.",
+                "required_groups": ("source",),
                 "preselected": True,
-                "allowed_values": (
-                    <AllowedValueInfo>{"value": "html", "desc": "Convert raw HTML code to PDF"},
-                    <AllowedValueInfo>{"value": "url", "desc": "Convert a web page URL to PDF"},
-                ),
             },
             "url": {
                 "type": StringOrNothingType,
                 "display_name": "URL",
                 "short_desc": "URL of the web page to convert",
-                "desc": "URL of the web page to convert (required when `source_type` is `url`)",
+                "desc": "URL of the web page to convert (requires `source_type` set to `url`)",
+                "required_groups": ("source",),
             },
             "html": {
                 "type": StringOrNothingType,
                 "display_name": "HTML",
                 "short_desc": "Raw HTML code to convert",
-                "desc": "Raw HTML code to convert (required when `source_type` is `html`)",
+                "desc": "Raw HTML code to convert (requires `source_type` set to `html`)",
+                "required_groups": ("source",),
+            },
+            "source_type": {
+                "type": StringOrNothingType,
+                "display_name": "Source Type",
+                "short_desc": "Source type for conversion",
+                "desc": "Source type for conversion. Not required when a file is provided.",
+                "preselected": True,
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "html", "desc": "Convert raw HTML code to PDF"},
+                    <AllowedValueInfo>{"value": "url", "desc": "Convert a web page URL to PDF"},
+                ),
             },
             "margins": {
                 "type": StringOrNothingType,
@@ -92,15 +102,23 @@ public class PdfCoConvertHtmlToPdfRequestDataType inherits HashDataType {
                 "type": StringOrNothingType,
                 "display_name": "Header",
                 "short_desc": "Custom HTML for page headers",
-                "desc": "Custom HTML for page headers (supports `pageNumber` and `totalPages` "
-                    "classes)",
+                "desc": "Custom HTML for page headers.\n\n"
+                    "Supports special CSS classes: `pageNumber` (current page) and "
+                    "`totalPages` (total pages).\n\n"
+                    "**Example**: `<div style=\"text-align:center\">"
+                    "<span class=\"pageNumber\"></span> of "
+                    "<span class=\"totalPages\"></span></div>`",
             },
             "footer": {
                 "type": StringOrNothingType,
                 "display_name": "Footer",
                 "short_desc": "Custom HTML for page footers",
-                "desc": "Custom HTML for page footers (supports `pageNumber` and `totalPages` "
-                    "classes)",
+                "desc": "Custom HTML for page footers.\n\n"
+                    "Supports special CSS classes: `pageNumber` (current page) and "
+                    "`totalPages` (total pages).\n\n"
+                    "**Example**: `<div style=\"text-align:center\">"
+                    "<span class=\"pageNumber\"></span> of "
+                    "<span class=\"totalPages\"></span></div>`",
             },
             "printBackground": {
                 "type": SoftBoolOrNothingType,
@@ -193,7 +211,12 @@ public class PdfCoConvertHtmlToPdfDataProvider inherits PdfCoDataProviderBase {
 
     #! Performs the request
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        string source_type = remove req.source_type;
+        # If file is provided, upload it and use URL source type
+        if (req.file) {
+            req = uploadFileIfNeeded(req);
+            req.source_type = "url";
+        }
+        string source_type = remove req.source_type ?? "html";
         *string path = HtmlToPdfSourceMap{source_type};
         if (!path) {
             throw "PDFCO-ERROR", sprintf("unsupported source type: %y; supported types: %y",

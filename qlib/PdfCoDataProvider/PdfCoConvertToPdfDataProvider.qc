@@ -29,13 +29,21 @@ public namespace PdfCoDataProvider {
 public class PdfCoConvertToPdfRequestDataType inherits HashDataType {
     public {
         const Fields = {
+            "file": {
+                "type": FileOrNothingDataType,
+                "display_name": "File",
+                "short_desc": "File to process",
+                "desc": "File to process. Provide either this or a source URL.",
+                "required_groups": ("source",),
+                "preselected": True,
+            },
             "url": {
-                "type": StringType,
+                "type": StringOrNothingType,
                 "display_name": "Source URL",
                 "short_desc": "URL to the source document",
                 "desc": "URL to the source document (DOC, DOCX, XLS, XLSX, PPT, PPTX, CSV, EML, "
                     "MSG, or image)",
-                "required": True,
+                "required_groups": ("source",),
             },
             "async": {
                 "type": SoftBoolOrNothingType,
@@ -111,6 +119,7 @@ public class PdfCoConvertToPdfDataProvider inherits PdfCoDataProviderBase {
 
     #! Performs the request
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        req = uploadFileIfNeeded(req);
         return doPost("pdf/convert/from/doc", req);
     }
 

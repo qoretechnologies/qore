@@ -248,9 +248,6 @@ public class UnleashedDataProviderTest inherits QUnit::Test {
         assertTrue(children.contains("update-credit-note-line"));
         assertTrue(children.contains("delete-credit-note-line"));
 
-        # Utility action
-        assertTrue(children.contains("make-api-call"));
-
         # Events provider
         assertTrue(children.contains("events"));
 
@@ -483,9 +480,6 @@ public class UnleashedDataProviderTest inherits QUnit::Test {
         assertTrue(actionNames.contains("delete-credit-note-line"));
         assertTrue(actionNames.contains("search-credit-notes"));
 
-        # Utility actions
-        assertTrue(actionNames.contains("make-api-call"));
-
         # Trigger actions
         assertTrue(actionNames.contains("new-customer"));
         assertTrue(actionNames.contains("new-sales-order"));
@@ -524,8 +518,6 @@ public class UnleashedDataProviderTest inherits QUnit::Test {
         # Test customer data integrity (create, fetch, verify)
         testCustomerDataIntegrity();
 
-        # Test make-api-call action
-        testMakeApiCall();
     }
 
     #! Test API connectivity
@@ -850,48 +842,6 @@ public class UnleashedDataProviderTest inherits QUnit::Test {
 
         if (m_options.verbose) {
             printf("--- Customer Data Integrity tests completed ---\n");
-        }
-    }
-
-    #! Test make-api-call action
-    private testMakeApiCall() {
-        if (m_options.verbose) {
-            printf("\n--- Testing Make API Call Action ---\n");
-        }
-
-        UnleashedDataProvider::UnleashedDataProvider prov(client);
-
-        AbstractDataProvider makeApiCallProvider = prov.getChildProvider("make-api-call");
-
-        # Test GET request to customers endpoint
-        auto result = makeApiCallProvider.doRequest({
-            "method": "GET",
-            "path": "/Customers",
-            "query_params": {"pageSize": 1},
-        });
-
-        assertTrue(result.hasKey("body"), "make-api-call should return body");
-        assertTrue(result.body.typeCode() == NT_HASH,
-            "make-api-call response body should be hash");
-        if (m_options.verbose) {
-            printf("  GET /Customers returned hash with %d key(s)\n",
-                elements keys result.body);
-        }
-
-        # Test with /Products endpoint
-        auto productsResult = makeApiCallProvider.doRequest({
-            "method": "GET",
-            "path": "/Products",
-            "query_params": {"pageSize": 1},
-        });
-
-        assertTrue(productsResult.hasKey("body"), "make-api-call /Products should return body");
-        if (m_options.verbose) {
-            printf("  GET /Products returned successfully\n");
-        }
-
-        if (m_options.verbose) {
-            printf("--- Make API Call tests completed ---\n");
         }
     }
 

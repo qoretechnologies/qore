@@ -32,6 +32,7 @@
 
 %requires(reexport) DataProvider
 %requires(reexport) PdfCoRestClient
+%requires json
 
 module PdfCoDataProvider {
     version = "1.0";
@@ -51,7 +52,7 @@ module PdfCoDataProvider {
             "desc": "PDF.co provides APIs for document processing including PDF conversion, "
                 "manipulation, data extraction, barcode generation and reading, document "
                 "classification, and more.\n\n"
-                "This integration supports 27 actions covering conversion, document operations, "
+                "This integration supports 26 actions covering conversion, document operations, "
                 "search and editing, AI-powered extraction, barcodes, security, and email.",
             "scheme": "pdfco",
             "logo": PdfCoDataProvider::PdfCoLogo,
@@ -75,13 +76,18 @@ module PdfCoDataProvider {
                 "Supported formats: CSV, JSON, JSON-AI, Text, XLS, XLSX, XML, HTML, JPG, PNG, TIFF.\n\n"
                 "The `output_format` option determines which conversion endpoint is used.",
             "action_code": DPAT_API,
-            "cls": "PdfCoConvertFromPdfDataProvider",
+
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                PdfCoConvertFromPdfRequestDataType::Fields, {
-                    "preselected": ("url", "output_format", "pages", "password", "async", "name",
-                        "expiration", "inline", "unwrap", "rect", "lang", "lineGrouping", "profiles"),
-                    "required": ("url", "output_format"),
+                PdfCoConvertFromPdfRequestDataType::Fields{"file",}, {
+                    "preselected": True,
                 },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                PdfCoConvertFromPdfRequestDataType::Fields{"output_format",}, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                PdfCoConvertFromPdfRequestDataType::Fields - ("file", "output_format"),
             ),
             "get_output_type": AbstractDataProviderType sub () {
                 return new PdfCoUrlResponseDataType();
@@ -100,13 +106,18 @@ module PdfCoDataProvider {
                 "Supported output formats: JPG, PNG.\n\n"
                 "The `output_format` option determines the image format.",
             "action_code": DPAT_API,
-            "cls": "PdfCoConvertFromPdfToImagesDataProvider",
+
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                PdfCoConvertFromPdfToImagesRequestDataType::Fields, {
-                    "preselected": ("url", "output_format", "pages", "password", "async", "name",
-                        "expiration", "profiles"),
-                    "required": ("url", "output_format"),
+                PdfCoConvertFromPdfToImagesRequestDataType::Fields{"file",}, {
+                    "preselected": True,
                 },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                PdfCoConvertFromPdfToImagesRequestDataType::Fields{"output_format",}, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                PdfCoConvertFromPdfToImagesRequestDataType::Fields - ("file", "output_format"),
             ),
             "get_output_type": AbstractDataProviderType sub () {
                 return new PdfCoUrlResponseDataType();
@@ -126,14 +137,13 @@ module PdfCoDataProvider {
                 "a web page.\n\n"
                 "Supports margins, paper size, orientation, headers, footers, and background printing.",
             "action_code": DPAT_API,
-            "cls": "PdfCoConvertHtmlToPdfDataProvider",
+
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                PdfCoConvertHtmlToPdfRequestDataType::Fields, {
-                    "preselected": ("source_type", "url", "html", "margins", "paperSize",
-                        "orientation", "header", "footer", "printBackground", "mediaType", "async",
-                        "name", "expiration", "profiles"),
-                    "required": ("source_type",),
+                PdfCoConvertHtmlToPdfRequestDataType::Fields{"file", "source_type"}, {
+                    "preselected": True,
                 },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                PdfCoConvertHtmlToPdfRequestDataType::Fields - ("file", "source_type"),
             ),
             "get_output_type": AbstractDataProviderType sub () {
                 return new PdfCoUrlResponseDataType();
@@ -152,12 +162,13 @@ module PdfCoDataProvider {
                 "The `url` parameter should contain the image URL(s). "
                 "Multiple images can be provided as comma-separated URLs.",
             "action_code": DPAT_API,
-            "cls": "PdfCoConvertImagesToPdfDataProvider",
+
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                PdfCoConvertImagesToPdfRequestDataType::Fields, {
+                PdfCoConvertImagesToPdfRequestDataType::Fields{"file",}, {
                     "preselected": True,
-                    "required": ("url",),
                 },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                PdfCoConvertImagesToPdfRequestDataType::Fields - "file",
             ),
             "get_output_type": AbstractDataProviderType sub () {
                 return new PdfCoUrlResponseDataType();
@@ -175,12 +186,13 @@ module PdfCoDataProvider {
             "desc": "Converts a document file to PDF format.\n\n"
                 "Supported input formats include DOC, DOCX, XLS, XLSX, RTF, TXT, and more.",
             "action_code": DPAT_API,
-            "cls": "PdfCoConvertToPdfDataProvider",
+
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                PdfCoConvertToPdfRequestDataType::Fields, {
+                PdfCoConvertToPdfRequestDataType::Fields{"file",}, {
                     "preselected": True,
-                    "required": ("url",),
                 },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                PdfCoConvertToPdfRequestDataType::Fields - "file",
             ),
             "get_output_type": AbstractDataProviderType sub () {
                 return new PdfCoUrlResponseDataType();
@@ -202,14 +214,13 @@ module PdfCoDataProvider {
             "desc": "Merges multiple PDF documents into a single PDF.\n\n"
                 "Provide multiple source URLs as comma-separated values in the `url` field.",
             "action_code": DPAT_API,
-            "cls": "PdfCoMergePdfDataProvider",
+
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                PdfCoMergePdfRequestDataType::Fields, {
-                    "preselected": ("url", "async", "name", "expiration",
-                        "RenameMatchingFieldsDuringMerge", "GenerateBookmarks",
-                        "MergedDocumentTitle", "profiles"),
-                    "required": ("url",),
+                PdfCoMergePdfRequestDataType::Fields{"file",}, {
+                    "preselected": True,
                 },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                PdfCoMergePdfRequestDataType::Fields - "file",
             ),
             "get_output_type": AbstractDataProviderType sub () {
                 return new PdfCoUrlResponseDataType();
@@ -227,13 +238,18 @@ module PdfCoDataProvider {
             "desc": "Splits a PDF document into multiple separate PDFs based on page ranges.\n\n"
                 "Specify page ranges in the `pages` option (e.g., `1-3,4-6`).",
             "action_code": DPAT_API,
-            "cls": "PdfCoSplitPdfDataProvider",
+
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                PdfCoSplitPdfRequestDataType::Fields, {
-                    "preselected": ("url", "pages", "password", "async", "name", "expiration",
-                        "profiles"),
-                    "required": ("url", "pages"),
+                PdfCoSplitPdfRequestDataType::Fields{"file",}, {
+                    "preselected": True,
                 },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                PdfCoSplitPdfRequestDataType::Fields{"pages",}, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                PdfCoSplitPdfRequestDataType::Fields - ("file", "pages"),
             ),
             "get_output_type": AbstractDataProviderType sub () {
                 return new PdfCoSplitResponseDataType();
@@ -251,12 +267,13 @@ module PdfCoDataProvider {
             "desc": "Compresses and optimizes a PDF document to reduce its file size.\n\n"
                 "Supports JPEG quality settings and custom compression profiles.",
             "action_code": DPAT_API,
-            "cls": "PdfCoCompressPdfDataProvider",
+
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                PdfCoCompressPdfRequestDataType::Fields, {
+                PdfCoCompressPdfRequestDataType::Fields{"file",}, {
                     "preselected": True,
-                    "required": ("url",),
                 },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                PdfCoCompressPdfRequestDataType::Fields - "file",
             ),
             "get_output_type": AbstractDataProviderType sub () {
                 return new PdfCoUrlResponseDataType();
@@ -272,16 +289,16 @@ module PdfCoDataProvider {
             "display_name": "Add Text and Images to a PDF",
             "short_desc": "Add text annotations and images to a PDF document",
             "desc": "Adds text annotations and/or images to an existing PDF document.\n\n"
-                "Use `annotations` and `images` for structured JSON input, or "
+                "Use `annotations` and `images` for structured input, or "
                 "`annotationsString` and `imagesString` for simplified string input.",
             "action_code": DPAT_API,
-            "cls": "PdfCoAddTextImagesDataProvider",
+
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                PdfCoAddTextImagesRequestDataType::Fields, {
-                    "preselected": ("url", "annotations", "images", "annotationsString",
-                        "imagesString", "password", "async", "name", "expiration", "profiles"),
-                    "required": ("url",),
+                PdfCoAddTextImagesRequestDataType::Fields{"file",}, {
+                    "preselected": True,
                 },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                PdfCoAddTextImagesRequestDataType::Fields - "file",
             ),
             "get_output_type": AbstractDataProviderType sub () {
                 return new PdfCoUrlResponseDataType();
@@ -297,16 +314,20 @@ module PdfCoDataProvider {
             "display_name": "Create Fillable PDF Form",
             "short_desc": "Create a fillable PDF form with form fields",
             "desc": "Creates a fillable PDF form by adding form field definitions "
-                "to an existing PDF document.\n\n"
-                "Form field definitions are provided as JSON in the `annotations` parameter.",
+                "to an existing PDF document.",
             "action_code": DPAT_API,
-            "cls": "PdfCoCreateFillableFormDataProvider",
+
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                PdfCoCreateFillableFormRequestDataType::Fields, {
-                    "preselected": ("url", "annotations", "password", "async", "name",
-                        "expiration", "profiles"),
-                    "required": ("url", "annotations"),
+                PdfCoCreateFillableFormRequestDataType::Fields{"file",}, {
+                    "preselected": True,
                 },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                PdfCoCreateFillableFormRequestDataType::Fields{"annotations",}, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                PdfCoCreateFillableFormRequestDataType::Fields - ("file", "annotations"),
             ),
             "get_output_type": AbstractDataProviderType sub () {
                 return new PdfCoUrlResponseDataType();
@@ -322,16 +343,21 @@ module PdfCoDataProvider {
             "display_name": "Fill a PDF Form",
             "short_desc": "Fill form fields in an existing PDF form",
             "desc": "Fills form fields in an existing PDF form document.\n\n"
-                "Provide field name-value pairs in the `fields` parameter as JSON, or "
+                "Provide field name-value pairs in the `fields` parameter, or "
                 "use `fieldsString` for simplified string input.",
             "action_code": DPAT_API,
-            "cls": "PdfCoFillPdfFormDataProvider",
+
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                PdfCoFillPdfFormRequestDataType::Fields, {
-                    "preselected": ("url", "fields", "fieldsString", "password", "async", "name",
-                        "expiration", "profiles"),
-                    "required": ("url", "fields"),
+                PdfCoFillPdfFormRequestDataType::Fields{"file",}, {
+                    "preselected": True,
                 },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                PdfCoFillPdfFormRequestDataType::Fields{"fields",}, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                PdfCoFillPdfFormRequestDataType::Fields - ("file", "fields"),
             ),
             "get_output_type": AbstractDataProviderType sub () {
                 return new PdfCoUrlResponseDataType();
@@ -349,12 +375,13 @@ module PdfCoDataProvider {
             "desc": "Retrieves detailed information about a PDF document including "
                 "page count, author, title, creation date, permissions, and other metadata.",
             "action_code": DPAT_API,
-            "cls": "PdfCoGetPdfInfoDataProvider",
+
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                PdfCoGetPdfInfoRequestDataType::Fields, {
+                PdfCoGetPdfInfoRequestDataType::Fields{"file",}, {
                     "preselected": True,
-                    "required": ("url",),
                 },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                PdfCoGetPdfInfoRequestDataType::Fields - "file",
             ),
             "get_output_type": AbstractDataProviderType sub () {
                 return new PdfCoPdfInfoResponseDataType();
@@ -376,13 +403,18 @@ module PdfCoDataProvider {
             "desc": "Searches for text occurrences in a PDF document and returns "
                 "the locations where the text was found.",
             "action_code": DPAT_API,
-            "cls": "PdfCoSearchTextDataProvider",
+
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                PdfCoSearchTextRequestDataType::Fields, {
-                    "preselected": ("url", "searchString", "pages", "password", "async", "name",
-                        "expiration", "profiles"),
-                    "required": ("url", "searchString"),
+                PdfCoSearchTextRequestDataType::Fields{"file",}, {
+                    "preselected": True,
                 },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                PdfCoSearchTextRequestDataType::Fields{"searchString",}, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                PdfCoSearchTextRequestDataType::Fields - ("file", "searchString"),
             ),
             "get_output_type": AbstractDataProviderType sub () {
                 return new PdfCoSearchTextResponseDataType();
@@ -399,13 +431,18 @@ module PdfCoDataProvider {
             "short_desc": "Find and delete text from a PDF document",
             "desc": "Searches for text in a PDF document and deletes all occurrences.",
             "action_code": DPAT_API,
-            "cls": "PdfCoSearchAndDeleteTextDataProvider",
+
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                PdfCoSearchAndDeleteTextRequestDataType::Fields, {
-                    "preselected": ("url", "searchString", "pages", "password", "async", "name",
-                        "expiration", "profiles"),
-                    "required": ("url", "searchString"),
+                PdfCoSearchAndDeleteTextRequestDataType::Fields{"file",}, {
+                    "preselected": True,
                 },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                PdfCoSearchAndDeleteTextRequestDataType::Fields{"searchString",}, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                PdfCoSearchAndDeleteTextRequestDataType::Fields - ("file", "searchString"),
             ),
             "get_output_type": AbstractDataProviderType sub () {
                 return new PdfCoUrlResponseDataType();
@@ -423,13 +460,18 @@ module PdfCoDataProvider {
             "desc": "Searches for text in a PDF document and replaces all occurrences "
                 "with the specified replacement text.",
             "action_code": DPAT_API,
-            "cls": "PdfCoSearchAndReplaceTextDataProvider",
+
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                PdfCoSearchAndReplaceTextRequestDataType::Fields, {
-                    "preselected": ("url", "searchString", "replaceString", "pages", "password",
-                        "async", "name", "expiration", "profiles"),
-                    "required": ("url", "searchString", "replaceString"),
+                PdfCoSearchAndReplaceTextRequestDataType::Fields{"file",}, {
+                    "preselected": True,
                 },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                PdfCoSearchAndReplaceTextRequestDataType::Fields{"searchString", "replaceString"}, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                PdfCoSearchAndReplaceTextRequestDataType::Fields - ("file", "searchString", "replaceString"),
             ),
             "get_output_type": AbstractDataProviderType sub () {
                 return new PdfCoUrlResponseDataType();
@@ -447,13 +489,19 @@ module PdfCoDataProvider {
             "desc": "Searches for text in a PDF document and replaces all occurrences "
                 "with the specified image.",
             "action_code": DPAT_API,
-            "cls": "PdfCoSearchAndReplaceWithImageDataProvider",
+
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                PdfCoSearchAndReplaceWithImageRequestDataType::Fields, {
-                    "preselected": ("url", "searchString", "replaceImage", "pages", "password",
-                        "async", "name", "expiration", "profiles"),
-                    "required": ("url", "searchString", "replaceImage"),
+                PdfCoSearchAndReplaceWithImageRequestDataType::Fields{"file",}, {
+                    "preselected": True,
                 },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                PdfCoSearchAndReplaceWithImageRequestDataType::Fields{"searchString", "replaceImage"}, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                PdfCoSearchAndReplaceWithImageRequestDataType::Fields
+                    - ("file", "searchString", "replaceImage"),
             ),
             "get_output_type": AbstractDataProviderType sub () {
                 return new PdfCoUrlResponseDataType();
@@ -476,12 +524,13 @@ module PdfCoDataProvider {
                 "including vendor information, customer details, invoice metadata, "
                 "and line items.",
             "action_code": DPAT_API,
-            "cls": "PdfCoAiInvoiceParserDataProvider",
+
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                PdfCoAiInvoiceParserRequestDataType::Fields, {
+                PdfCoAiInvoiceParserRequestDataType::Fields{"file",}, {
                     "preselected": True,
-                    "required": ("url",),
                 },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                PdfCoAiInvoiceParserRequestDataType::Fields - "file",
             ),
             "get_output_type": AbstractDataProviderType sub () {
                 return new PdfCoInvoiceParserResponseDataType();
@@ -500,13 +549,13 @@ module PdfCoDataProvider {
                 "to extract structured data.\n\n"
                 "Supports JSON, CSV, and XML output formats.",
             "action_code": DPAT_API,
-            "cls": "PdfCoParseDocumentDataProvider",
+
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                PdfCoParseDocumentRequestDataType::Fields, {
-                    "preselected": ("url", "templateId", "template", "outputFormat", "pages",
-                        "password", "inline", "async", "name", "expiration", "profiles"),
-                    "required": ("url",),
+                PdfCoParseDocumentRequestDataType::Fields{"file",}, {
+                    "preselected": True,
                 },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                PdfCoParseDocumentRequestDataType::Fields - "file",
             ),
             "get_output_type": AbstractDataProviderType sub () {
                 return new PdfCoDocumentParserResponseDataType();
@@ -525,13 +574,13 @@ module PdfCoDataProvider {
                 "Rules can be provided as inline CSV data (`rulescsv`) or as a URL "
                 "to a CSV file (`rulescsvurl`).",
             "action_code": DPAT_API,
-            "cls": "PdfCoDocumentClassifierDataProvider",
+
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                PdfCoDocumentClassifierRequestDataType::Fields, {
-                    "preselected": ("url", "rulescsv", "rulescsvurl", "caseSensitive", "password",
-                        "inline", "async", "profiles"),
-                    "required": ("url",),
+                PdfCoDocumentClassifierRequestDataType::Fields{"file",}, {
+                    "preselected": True,
                 },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                PdfCoDocumentClassifierRequestDataType::Fields - "file",
             ),
             "get_output_type": AbstractDataProviderType sub () {
                 return new PdfCoDocumentClassifierResponseDataType();
@@ -554,13 +603,14 @@ module PdfCoDataProvider {
                 "Supported types: QRCode, Code128, Code39, Datamatrix, PDF417, "
                 "EAN13, EAN8, UPCA, UPCE.",
             "action_code": DPAT_API,
-            "cls": "PdfCoGenerateBarcodeDataProvider",
+
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                PdfCoGenerateBarcodeRequestDataType::Fields, {
-                    "preselected": ("type", "value", "decorationImage", "async", "name",
-                        "expiration", "inline", "profiles"),
-                    "required": ("type", "value"),
+                PdfCoGenerateBarcodeRequestDataType::Fields{"type", "value"}, {
+                    "preselected": True,
+                    "required": True,
                 },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                PdfCoGenerateBarcodeRequestDataType::Fields - ("type", "value"),
             ),
             "get_output_type": AbstractDataProviderType sub () {
                 return new PdfCoUrlResponseDataType();
@@ -579,12 +629,13 @@ module PdfCoDataProvider {
                 "Supports multiple barcode types: QRCode, Code128, Code39, Datamatrix, "
                 "PDF417, EAN13, EAN8, UPCA, UPCE.",
             "action_code": DPAT_API,
-            "cls": "PdfCoReadBarcodeDataProvider",
+
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                PdfCoReadBarcodeRequestDataType::Fields, {
-                    "preselected": ("url", "type", "types", "pages", "async", "profiles"),
-                    "required": ("url",),
+                PdfCoReadBarcodeRequestDataType::Fields{"file",}, {
+                    "preselected": True,
                 },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                PdfCoReadBarcodeRequestDataType::Fields - "file",
             ),
             "get_output_type": AbstractDataProviderType sub () {
                 return new PdfCoBarcodeReadResponseDataType();
@@ -608,13 +659,18 @@ module PdfCoDataProvider {
                 "- `ownerPassword`: Controls document permissions (required)\n"
                 "- `userPassword`: Required to open the document (optional)",
             "action_code": DPAT_API,
-            "cls": "PdfCoAddPasswordDataProvider",
+
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                PdfCoAddPasswordRequestDataType::Fields, {
-                    "preselected": ("url", "ownerPassword", "userPassword", "encryptionAlgorithm",
-                        "async", "name", "expiration", "profiles"),
-                    "required": ("url", "ownerPassword"),
+                PdfCoAddPasswordRequestDataType::Fields{"file",}, {
+                    "preselected": True,
                 },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                PdfCoAddPasswordRequestDataType::Fields{"ownerPassword",}, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                PdfCoAddPasswordRequestDataType::Fields - ("file", "ownerPassword"),
             ),
             "get_output_type": AbstractDataProviderType sub () {
                 return new PdfCoUrlResponseDataType();
@@ -632,12 +688,18 @@ module PdfCoDataProvider {
             "desc": "Removes password protection and security from a PDF document.\n\n"
                 "Requires the current document `password` to decrypt.",
             "action_code": DPAT_API,
-            "cls": "PdfCoRemovePasswordDataProvider",
+
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                PdfCoRemovePasswordRequestDataType::Fields, {
-                    "preselected": ("url", "password", "async", "name", "expiration", "profiles"),
-                    "required": ("url", "password"),
+                PdfCoRemovePasswordRequestDataType::Fields{"file",}, {
+                    "preselected": True,
                 },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                PdfCoRemovePasswordRequestDataType::Fields{"password",}, {
+                    "preselected": True,
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                PdfCoRemovePasswordRequestDataType::Fields - ("file", "password"),
             ),
             "get_output_type": AbstractDataProviderType sub () {
                 return new PdfCoUrlResponseDataType();
@@ -660,15 +722,16 @@ module PdfCoDataProvider {
                 "Requires SMTP server configuration (server, port, username, password).\n\n"
                 "The `url` field is optional and specifies the attachment file URL.",
             "action_code": DPAT_API,
-            "cls": "PdfCoSendEmailDataProvider",
+
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                PdfCoSendEmailRequestDataType::Fields, {
-                    "preselected": ("from", "to", "subject", "bodytext", "bodyhtml", "url",
-                        "smtpserver", "smtpport", "smtpusername", "smtppassword", "async",
-                        "profiles"),
-                    "required": ("from", "to", "subject", "smtpserver", "smtpport",
-                        "smtpusername", "smtppassword"),
+                PdfCoSendEmailRequestDataType::Fields{"from", "to", "subject", "smtpserver",
+                    "smtpport", "smtpusername", "smtppassword"}, {
+                    "preselected": True,
+                    "required": True,
                 },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                PdfCoSendEmailRequestDataType::Fields - ("from", "to", "subject", "smtpserver",
+                    "smtpport", "smtpusername", "smtppassword"),
             ),
             "get_output_type": AbstractDataProviderType sub () {
                 return new PdfCoSendEmailResponseDataType();
@@ -690,12 +753,13 @@ module PdfCoDataProvider {
             "desc": "Uploads a file from a URL to PDF.co temporary storage.\n\n"
                 "Returns a temporary URL that can be used as input for other PDF.co actions.",
             "action_code": DPAT_API,
-            "cls": "PdfCoUploadFileDataProvider",
+
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                PdfCoUploadFileRequestDataType::Fields, {
+                PdfCoUploadFileRequestDataType::Fields{"file",}, {
                     "preselected": True,
-                    "required": ("url",),
                 },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                PdfCoUploadFileRequestDataType::Fields - "file",
             ),
             "get_output_type": AbstractDataProviderType sub () {
                 return new PdfCoUrlResponseDataType();
@@ -716,12 +780,14 @@ module PdfCoDataProvider {
                 "Returns the job status (`working`, `success`, or `failed`) and the "
                 "result URL when complete.",
             "action_code": DPAT_API,
-            "cls": "PdfCoJobCheckDataProvider",
+
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                PdfCoJobCheckRequestDataType::Fields, {
+                PdfCoJobCheckRequestDataType::Fields{"jobId",}, {
                     "preselected": True,
-                    "required": ("jobId",),
+                    "required": True,
                 },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                PdfCoJobCheckRequestDataType::Fields - "jobId",
             ),
             "get_output_type": AbstractDataProviderType sub () {
                 return new PdfCoJobCheckResponseDataType();
@@ -729,31 +795,6 @@ module PdfCoDataProvider {
             "groups": ("System",),
         });
 
-        # make-api-call
-        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": AppName,
-            "path": "/make-api-call",
-            "action": "make-api-call",
-            "display_name": "Make PDF.co API Call",
-            "short_desc": "Make a custom API call to any PDF.co endpoint",
-            "desc": "Makes a custom API call to any PDF.co endpoint.\n\n"
-                "Use this action for endpoints not covered by specific actions.\n\n"
-                "- `method`: HTTP method (`GET` or `POST`)\n"
-                "- `path`: API path relative to the base URL (e.g., `pdf/info`)\n"
-                "- `body`: JSON request body (for POST requests)",
-            "action_code": DPAT_API,
-            "cls": "PdfCoMakeApiCallDataProvider",
-            "options": DataProviderActionCatalog::getActionOptionFromFields(
-                PdfCoMakeApiCallRequestDataType::Fields, {
-                    "preselected": True,
-                    "required": ("method", "path"),
-                },
-            ),
-            "get_output_type": AbstractDataProviderType sub () {
-                return new PdfCoUrlResponseDataType();
-            },
-            "groups": ("System",),
-        });
     };
 }
 

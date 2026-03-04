@@ -59,7 +59,6 @@ public class PdfCoDataProvider inherits PdfCoDataProviderBase {
             "generate-barcode": Class::forName("PdfCoGenerateBarcodeDataProvider"),
             "get-pdf-info": Class::forName("PdfCoGetPdfInfoDataProvider"),
             "job-check": Class::forName("PdfCoJobCheckDataProvider"),
-            "make-api-call": Class::forName("PdfCoMakeApiCallDataProvider"),
             "merge-pdf": Class::forName("PdfCoMergePdfDataProvider"),
             "parse-document": Class::forName("PdfCoParseDocumentDataProvider"),
             "read-barcode": Class::forName("PdfCoReadBarcodeDataProvider"),
