@@ -206,7 +206,7 @@ public class PdfCoDataProviderBase inherits DataProvider::AbstractDataProvider {
         int attempts = 0;
         while (attempts < MaxJobPollAttempts) {
             ++attempts;
-            sleep(JobPollIntervalMs);
+            sleep(JobPollInterval);
             hash<auto> check = doRestRequest("POST", "job/check", {"jobId": resp.jobId});
             switch (check.status) {
                 case "success":

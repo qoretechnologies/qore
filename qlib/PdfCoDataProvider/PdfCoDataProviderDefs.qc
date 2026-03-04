@@ -33,8 +33,8 @@ public namespace PdfCoDataProvider {
     #! Maximum number of job polling attempts before giving up
     public const MaxJobPollAttempts = 60;
 
-    #! Initial polling interval in milliseconds
-    public const JobPollIntervalMs = 2000;
+    #! Initial polling interval
+    public const JobPollInterval = 2s;
 
     #! Set of retriable socket errors
     public const RetrySet = {
