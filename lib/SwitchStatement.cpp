@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include <qore/QoreEnumDecl.h>
 #include "qore/intern/SwitchStatement.h"
 #include "qore/intern/StatementBlock.h"
 #include "qore/intern/CaseNodeWithOperator.h"
@@ -45,7 +46,10 @@ bool CaseNode::isCaseNodeImpl() const {
 }
 
 bool CaseNode::matches(QoreValue lhs_value, ExceptionSink* xsink) {
-    return lhs_value.isEqualHard(val);
+    // Unwrap TAG_ENUM for switch/case comparison so enum constants match base type values
+    QoreValue lhs = lhs_value.isEnum() ? lhs_value.getEnumMember()->getValue() : lhs_value;
+    QoreValue rhs = val.isEnum() ? val.getEnumMember()->getValue() : val;
+    return lhs.isEqualHard(rhs);
 }
 
 bool CaseNode::isCaseNode() const {

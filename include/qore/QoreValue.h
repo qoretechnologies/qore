@@ -57,15 +57,8 @@ typedef unsigned char valtype_t;
 #define QV_Float (valtype_t)2  //!< for floating-point values
 #define QV_Node  (valtype_t)3  //!< for heap-allocated values
 #define QV_Ref   (valtype_t)4  //!< for references (when used with lvalues)
+#define QV_Enum  (valtype_t)5  //!< for enum values (stores const QoreEnumMember*)
 ///@}
-
-//! this is the union that stores values in QoreLValue (legacy - kept for QoreLValue compatibility)
-union qore_value_u {
-    bool b;               //!< for boolean values
-    int64 i;              //!< for integer values
-    double f;             //!< for double values
-    AbstractQoreNode* n;  //!< for all heap-allocated values
-};
 
 // Forward declarations
 class AbstractQoreNode;
@@ -75,6 +68,16 @@ class ExceptionSink;
 class QoreTypeInfo;
 class QoreValue;
 class RuntimeConfig;
+class QoreEnumMember;
+
+//! this is the union that stores values in QoreLValue (legacy - kept for QoreLValue compatibility)
+union qore_value_u {
+    bool b;                     //!< for boolean values
+    int64 i;                    //!< for integer values
+    double f;                   //!< for double values
+    AbstractQoreNode* n;        //!< for all heap-allocated values
+    const QoreEnumMember* em;   //!< for enum member pointers (QV_Enum)
+};
 
 // ============================================================================
 // QoreSimpleValue - Trivially copyable value type for unions and varargs
@@ -286,6 +289,8 @@ private:
     static constexpr uint64_t TAG_SPECIAL       = 0xFFFB000000000000ULL;
     //! Short strings: 0xFFC + (length in bits 48-50), so 0xFFC0-0xFFC6
     static constexpr uint64_t TAG_SHORTSTR_BASE = 0xFFFC000000000000ULL;
+    //! Enum values: stores pointer to QoreEnumMember, zero allocation, zero ref-counting
+    static constexpr uint64_t TAG_ENUM          = 0xFFFD000000000000ULL;
 
     // Masks
     static constexpr uint64_t TAG_MASK          = 0xFFFF000000000000ULL;
@@ -402,6 +407,11 @@ public:
     //! Returns true if the value is a short string stored inline
     DLLLOCAL bool isShortString() const {
         return (bits >> 52) == 0xFFC;
+    }
+
+    //! Returns true if the value is a TAG_ENUM value (inline enum member pointer)
+    DLLLOCAL bool isEnum() const {
+        return tag() == TAG_ENUM;
     }
 
     //! Returns true if the value is a boolean (true or false)
@@ -654,8 +664,13 @@ public:
 
     //! Returns the value as the given type (for pointer types, returns T directly)
     //! Returns nullptr if the value is not a pointer (e.g., NOTHING, inline int/float/bool)
+    //! For TAG_ENUM values, delegates to the base value's get<T>()
     template<typename T>
     DLLLOCAL typename std::enable_if<std::is_pointer<T>::value, T>::type get() {
+        if (isEnum()) {
+            QoreValue base = getEnumBaseValue();
+            return base.get<T>();
+        }
         if (!isPointer()) {
             return nullptr;
         }
@@ -665,8 +680,13 @@ public:
 
     //! Returns the value as T* (for non-pointer types like const ReferenceNode, returns pointer to T)
     //! Returns nullptr if the value is not a pointer (e.g., NOTHING, inline int/float/bool)
+    //! For TAG_ENUM values, delegates to the base value's get<T>()
     template<typename T>
     DLLLOCAL typename std::enable_if<!std::is_pointer<T>::value && std::is_class<T>::value, T*>::type get() {
+        if (isEnum()) {
+            QoreValue base = getEnumBaseValue();
+            return base.get<T>();
+        }
         if (!isPointer()) {
             return nullptr;
         }
@@ -676,8 +696,13 @@ public:
 
     //! Returns the value as T* const version (for non-pointer types like const ReferenceNode)
     //! Returns nullptr if the value is not a pointer (e.g., NOTHING, inline int/float/bool)
+    //! For TAG_ENUM values, delegates to the base value's get<T>()
     template<typename T>
     DLLLOCAL typename std::enable_if<!std::is_pointer<T>::value && std::is_class<T>::value, T*>::type get() const {
+        if (isEnum()) {
+            QoreValue base = getEnumBaseValue();
+            return base.get<T>();
+        }
         if (!isPointer()) {
             return nullptr;
         }
@@ -777,6 +802,22 @@ public:
 
     //! Creates a FALSE value
     DLLLOCAL static QoreValue makeFalse() { QoreValue v; v.bits = VAL_FALSE; return v; }
+
+    //! Creates a TAG_ENUM value from an enum member pointer (zero allocation, zero ref-counting)
+    DLLLOCAL static QoreValue makeEnum(const QoreEnumMember* member) {
+        QoreValue v;
+        v.bits = TAG_ENUM | (reinterpret_cast<uint64_t>(member) & PAYLOAD_MASK);
+        return v;
+    }
+
+    //! Extracts the QoreEnumMember pointer from a TAG_ENUM value (asserts if not an enum)
+    DLLLOCAL const QoreEnumMember* getEnumMember() const {
+        assert(isEnum());
+        return reinterpret_cast<const QoreEnumMember*>(payload());
+    }
+
+    //! Returns the base value of a TAG_ENUM value (defined in QoreValue.cpp to avoid incomplete type)
+    DLLEXPORT QoreValue getEnumBaseValue() const;
 
     // ========================================================================
     // Integer range constants

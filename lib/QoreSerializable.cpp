@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -39,6 +39,7 @@
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/qore_list_private.h"
 #include "qore/intern/RuntimeConfig.h"
+#include <qore/QoreEnumDecl.h>
 
 #include <string>
 #include <set>
@@ -49,11 +50,12 @@
 #include <memory>
 
 static QoreString QoreSerializationTypeString("QS");
-static QoreString QoreSerializationVersionString("1.1");
+static QoreString QoreSerializationVersionString("1.2");
 
 static std::vector<std::string> serialization_versions = {
     "1.0",
     "1.1",
+    "1.2",
 };
 
 typedef std::set<std::string> strset_t;
@@ -325,6 +327,21 @@ static QoreHashNode* serialization_get_index(imap_t::iterator i, bool weak) {
 
 QoreValue QoreSerializable::serializeValue(const QoreValue val, QoreInternalSerializationContext& context,
         ExceptionSink* xsink) {
+    if (val.isEnum()) {
+        const QoreEnumMember* member = val.getEnumMember();
+        const QoreEnumDecl* ed = member->getEnumDecl();
+        // Record module dependency
+        const char* module_name = ed->getModuleName();
+        if (module_name) {
+            context.mset.insert(module_name);
+        }
+        // Return hash with _enum path and _member name; using member name (not value) ensures
+        // unambiguous round-trip even if multiple members share the same value
+        ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+        rv->setKeyValue("_enum", new QoreStringNode(ed->getNamespacePath()), xsink);
+        rv->setKeyValue("_member", new QoreStringNode(member->getName()), xsink);
+        return rv.release();
+    }
     switch (val.getType()) {
         case NT_INT:
         case NT_STRING:
@@ -1113,10 +1130,48 @@ QoreValue QoreSerializable::deserializeIndexedWeakReference(const char* key,
     return new WeakListReferenceNode(const_cast<QoreListNode*>(i->second.get<QoreListNode>()));
 }
 
+QoreValue QoreSerializable::deserializeEnumData(const QoreStringNode& enum_path,
+        const QoreStringNode& member_name, ExceptionSink* xsink) {
+    const QoreNamespace* pns = nullptr;
+    const QoreEnumDecl* ed = getProgram()->findEnum(enum_path.c_str(), pns);
+    if (!ed) {
+        xsink->raiseException("DESERIALIZATION-ERROR", "'_enum' key indicates enum '%s' should be deserialized, "
+            "but no such enum could be found in the current Program object", enum_path.c_str());
+        return QoreValue();
+    }
+    const QoreEnumMember* member = ed->findMember(member_name.c_str());
+    if (!member) {
+        xsink->raiseException("DESERIALIZATION-ERROR", "'%s' is not a valid member of enum '%s'",
+            member_name.c_str(), enum_path.c_str());
+        return QoreValue();
+    }
+    return QoreValue::makeEnum(member);
+}
+
 QoreValue QoreSerializable::deserializeData(const QoreValue val, QoreInternalDeserializationContext& context,
         ExceptionSink* xsink) {
     if (val.getType() == NT_HASH) {
         const QoreHashNode* h = val.get<const QoreHashNode>();
+        // Check for enum type marker; require both _enum and _member to avoid
+        // collision with user data that happens to have an "_enum" key
+        QoreValue ev = h->getKeyValue("_enum");
+        if (ev) {
+            QoreValue mv = h->getKeyValue("_member");
+            if (mv) {
+                if (ev.getType() != NT_STRING) {
+                    xsink->raiseException("DESERIALIZATION-ERROR", "'_enum' key has invalid type '%s'; "
+                        "expecting 'string'", ev.getTypeName());
+                    return QoreValue();
+                }
+                if (mv.getType() != NT_STRING) {
+                    xsink->raiseException("DESERIALIZATION-ERROR", "'_member' key has invalid type '%s'; "
+                        "expecting 'string'", mv.getTypeName());
+                    return QoreValue();
+                }
+                return deserializeEnumData(*ev.get<const QoreStringNode>(),
+                    *mv.get<const QoreStringNode>(), xsink);
+            }
+        }
         QoreValue v = h->getKeyValue("_hash");
         if (v) {
             if (v.getType() != NT_STRING) {
@@ -1328,6 +1383,32 @@ int QoreSerializable::serializeValueToStream(const QoreValue val, OutputStream& 
 }
 
 int QoreSerializable::serializeValueToStream(const QoreValue val, StreamWriter& writer, ExceptionSink* xsink) {
+    if (val.isEnum()) {
+        const QoreEnumMember* member = val.getEnumMember();
+        const QoreEnumDecl* ed = member->getEnumDecl();
+        // NOTE: module dependency tracking for enums is handled by the hash-based
+        // serializeValue() path, which is called by the top-level serialize() before
+        // stream writing; this low-level method mirrors that design for other types
+        // Write ENUM type code
+        if (writer.writei1(qore_stream_type::ENUM, xsink)) {
+            return -1;
+        }
+        // Write enum namespace path as string
+        std::string path = ed->getNamespacePath();
+        if (serializeIntToStream(path.size(), writer, xsink)) {
+            return -1;
+        }
+        if (writer.write(path.c_str(), path.size(), xsink)) {
+            return -1;
+        }
+        // Write member name (not value) to ensure unambiguous round-trip
+        const char* name = member->getName();
+        size_t name_len = strlen(name);
+        if (serializeIntToStream(name_len, writer, xsink)) {
+            return -1;
+        }
+        return writer.write(name, name_len, xsink);
+    }
     switch (val.getType()) {
         case NT_HASH:
             return serializeHashToStream(*val.get<QoreHashNode>(), writer, xsink);
@@ -1797,12 +1878,44 @@ QoreValue QoreSerializable::deserializeValueFromStream(ExceptionSink* xsink, Str
         case qore_stream_type::NOTHING:
             return QoreValue();
 
+        case qore_stream_type::ENUM:
+            return deserializeEnumFromStream(xsink, reader);
+
         default:
             break;
     }
 
     xsink->raiseException("DESERIALIZATION-ERROR", "invalid serialization type code %d", (int)code);
     return QoreValue();
+}
+
+QoreValue QoreSerializable::deserializeEnumFromStream(ExceptionSink* xsink, StreamReader& reader) {
+    // Read enum path string
+    QoreString path_str;
+    if (readStringFromStream(reader, path_str, "enum path", xsink)) {
+        return QoreValue();
+    }
+    // Read member name string
+    QoreString member_str;
+    if (readStringFromStream(reader, member_str, "enum member name", xsink)) {
+        return QoreValue();
+    }
+    // Look up enum in current program
+    const QoreNamespace* pns = nullptr;
+    const QoreEnumDecl* ed = getProgram()->findEnum(path_str.c_str(), pns);
+    if (!ed) {
+        xsink->raiseException("DESERIALIZATION-ERROR", "stream data indicates enum '%s' should be deserialized, "
+            "but no such enum could be found in the current Program object", path_str.c_str());
+        return QoreValue();
+    }
+    // Find member by name
+    const QoreEnumMember* member = ed->findMember(member_str.c_str());
+    if (!member) {
+        xsink->raiseException("DESERIALIZATION-ERROR", "'%s' is not a valid member of enum '%s'",
+            member_str.c_str(), path_str.c_str());
+        return QoreValue();
+    }
+    return QoreValue::makeEnum(member);
 }
 
 int64 QoreSerializable::readIntFromStream(ExceptionSink* xsink, StreamReader& reader, const char* type, bool can_be_negative) {

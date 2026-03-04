@@ -102,86 +102,110 @@ class EnumTest inherits QUnit::Test {
         addTestCase("Test enum equality operators", \testEnumEqualityOperators());
         addTestCase("Test cast<enum<X>> functionality", \testEnumCast());
         addTestCase("Test enum type name resolution", \testEnumTypeNameResolution());
+        addTestCase("Test enum hash serialization", \testEnumSerialization());
+        addTestCase("Test enum stream serialization", \testEnumStreamSerialization());
+        addTestCase("Test enum serialization in container", \testEnumSerializationInContainer());
+        addTestCase("Test enum serialization backward compat", \testEnumSerializationBackwardCompat());
+        addTestCase("Test enum deserialization errors", \testEnumDeserializationErrors());
         set_return_value(main());
     }
 
     testBasicIntEnum() {
-        # Basic access
-        assertEq(1, ColorInt::Red);
-        assertEq(2, ColorInt::Green);
-        assertEq(3, ColorInt::Blue);
+        # Enum values have soft equality with their base values
+        assertTrue(ColorInt::Red == 1);
+        assertTrue(ColorInt::Green == 2);
+        assertTrue(ColorInt::Blue == 3);
 
-        # Assignment
+        # Same enum values are hard-equal
+        assertEq(ColorInt::Red, ColorInt::Red);
+        assertEq(ColorInt::Green, ColorInt::Green);
+
+        # Assignment to base type unwraps enum
         int c = ColorInt::Red;
         assertEq(1, c);
 
         # All priority values
-        assertEq(0, Priority::Low);
-        assertEq(5, Priority::Medium);
-        assertEq(10, Priority::High);
-        assertEq(100, Priority::Critical);
+        assertTrue(Priority::Low == 0);
+        assertTrue(Priority::Medium == 5);
+        assertTrue(Priority::High == 10);
+        assertTrue(Priority::Critical == 100);
     }
 
     testBasicStringEnum() {
-        # Basic access
-        assertEq("red", ColorString::Red);
-        assertEq("green", ColorString::Green);
-        assertEq("blue", ColorString::Blue);
+        # Soft equality with base values
+        assertTrue(ColorString::Red == "red");
+        assertTrue(ColorString::Green == "green");
+        assertTrue(ColorString::Blue == "blue");
 
-        # Assignment
+        # Assignment to base type unwraps enum
         string s = Status::Active;
         assertEq("active", s);
 
         # All status values
-        assertEq("active", Status::Active);
-        assertEq("inactive", Status::Inactive);
-        assertEq("pending", Status::Pending);
-        assertEq("deleted", Status::Deleted);
+        assertTrue(Status::Active == "active");
+        assertTrue(Status::Inactive == "inactive");
+        assertTrue(Status::Pending == "pending");
+        assertTrue(Status::Deleted == "deleted");
     }
 
     testFloatEnum() {
-        assertEq(0.5, Multiplier::Half);
-        assertEq(1.0, Multiplier::Normal);
-        assertEq(2.0, Multiplier::Double);
-        assertEq(3.0, Multiplier::Triple);
+        assertTrue(Multiplier::Half == 0.5);
+        assertTrue(Multiplier::Normal == 1.0);
+        assertTrue(Multiplier::Double == 2.0);
+        assertTrue(Multiplier::Triple == 3.0);
 
+        # Assignment to base type unwraps
         float m = Multiplier::Double;
         assertEq(2.0, m);
     }
 
     testNumberEnum() {
-        assertEq(1n, Precision::Low);
-        assertEq(1000n, Precision::Medium);
-        assertEq(1000000n, Precision::High);
-        assertEq(1000000000n, Precision::Extreme);
+        assertTrue(Precision::Low == 1n);
+        assertTrue(Precision::Medium == 1000n);
+        assertTrue(Precision::High == 1000000n);
+        assertTrue(Precision::Extreme == 1000000000n);
 
+        # Assignment to base type unwraps
         number n = Precision::High;
         assertEq(1000000n, n);
     }
 
     testEnumTypeChecking() {
-        # Type returns underlying type when assigned to auto
-        # This is expected behavior - the value is the underlying type value
+        # auto variables preserve TAG_ENUM — isEnum() returns True, fullType() returns "enum<X>"
         auto v = ColorInt::Red;
+        assertTrue(v.isEnum());
         assertEq("integer", v.type());
+        assertEq("enum<ColorInt>", v.fullType());
+        assertEq(NT_INT, v.typeCode());
 
         v = Status::Active;
-        assertEq("string", v.type());
+        assertTrue(v.isEnum());
+        assertEq("enum<Status>", v.fullType());
 
         v = Multiplier::Double;
-        assertEq("float", v.type());
+        assertTrue(v.isEnum());
+        assertEq("enum<Multiplier>", v.fullType());
+
+        # Assignment to base type loses enum identity
+        int c = ColorInt::Red;
+        assertFalse(c.isEnum());
+        assertEq("integer", c.type());
+
+        string s = Status::Active;
+        assertFalse(s.isEnum());
+        assertEq("string", s.type());
     }
 
     testEnumComparison() {
-        # Comparison with same enum values
+        # Comparison with same enum values (soft)
         assertTrue(ColorInt::Red == ColorInt::Red);
         assertFalse(ColorInt::Red == ColorInt::Green);
 
-        # Comparison with underlying type
+        # Comparison with underlying type (soft)
         assertTrue(ColorInt::Red == 1);
         assertTrue(1 == ColorInt::Red);
 
-        # String enum comparisons
+        # String enum comparisons (soft)
         assertTrue(Status::Active == "active");
         assertTrue("active" == Status::Active);
 
@@ -192,33 +216,39 @@ class EnumTest inherits QUnit::Test {
     }
 
     testNamespacedEnums() {
-        # Access enum in namespace
-        assertEq(0, Test::Level::Debug);
-        assertEq(1, Test::Level::Info);
-        assertEq(2, Test::Level::Warning);
-        assertEq(3, Test::Level::Error);
-        assertEq(4, Test::Level::Critical);
+        # Access enum in namespace — same enum values are hard-equal
+        assertEq(Test::Level::Debug, Test::Level::Debug);
+        assertEq(Test::Level::Info, Test::Level::Info);
 
-        assertEq("success", Test::Result::Success);
-        assertEq("failure", Test::Result::Failure);
-        assertEq("pending", Test::Result::Pending);
+        # Soft equality with base values
+        assertTrue(Test::Level::Debug == 0);
+        assertTrue(Test::Level::Info == 1);
+        assertTrue(Test::Level::Warning == 2);
+        assertTrue(Test::Level::Error == 3);
+        assertTrue(Test::Level::Critical == 4);
 
-        # Type returns underlying type when assigned to auto
+        assertTrue(Test::Result::Success == "success");
+        assertTrue(Test::Result::Failure == "failure");
+        assertTrue(Test::Result::Pending == "pending");
+
+        # auto preserves enum type
         auto v = Test::Level::Debug;
-        assertEq("integer", v.type());
+        assertTrue(v.isEnum());
+        assertEq("enum<Level>", v.fullType());
     }
 
     testNestedNamespaceEnums() {
-        # Access enum in nested namespace
-        assertEq(1, Outer::Type::TypeA);
-        assertEq(2, Outer::Type::TypeB);
+        # Soft equality with base values
+        assertTrue(Outer::Type::TypeA == 1);
+        assertTrue(Outer::Type::TypeB == 2);
 
-        assertEq(10, Outer::Inner::SubType::SubA);
-        assertEq(20, Outer::Inner::SubType::SubB);
+        assertTrue(Outer::Inner::SubType::SubA == 10);
+        assertTrue(Outer::Inner::SubType::SubB == 20);
 
-        # Type returns underlying type when assigned to auto
+        # auto preserves enum type
         auto v = Outer::Inner::SubType::SubA;
-        assertEq("integer", v.type());
+        assertTrue(v.isEnum());
+        assertEq("enum<SubType>", v.fullType());
     }
 
     testEnumReflection() {
@@ -258,19 +288,19 @@ class EnumTest inherits QUnit::Test {
         list<EnumMember> members = colorEnum.getMembers();
         assertEq(3, members.size());
 
-        # Check member names and values
+        # Check member names and values (reflection returns base values)
         hash<string, auto> memberMap;
         foreach EnumMember m in (members) {
             memberMap{m.getName()} = m.getValue();
         }
-        assertEq(1, memberMap.Red);
-        assertEq(2, memberMap.Green);
-        assertEq(3, memberMap.Blue);
+        assertTrue(memberMap.Red == 1);
+        assertTrue(memberMap.Green == 2);
+        assertTrue(memberMap.Blue == 3);
 
         # Get specific member
         EnumMember redMember = colorEnum.getMember("Red");
         assertEq("Red", redMember.getName());
-        assertEq(1, redMember.getValue());
+        assertTrue(redMember.getValue() == 1);
         assertFalse(redMember.isBuiltin());
         assertTrue(redMember.isUser());
 
@@ -284,7 +314,7 @@ class EnumTest inherits QUnit::Test {
         assertEq(4, statusMembers.size());
 
         EnumMember activeMember = statusEnum.getMember("Active");
-        assertEq("active", activeMember.getValue());
+        assertTrue(activeMember.getValue() == "active");
     }
 
     testNamespaceEnumeration() {
@@ -395,13 +425,18 @@ class EnumTest inherits QUnit::Test {
             "priority": Priority::High,
         };
 
-        assertEq(3, data.color);
-        assertEq("active", data.status);
-        assertEq(10, data.priority);
+        # hash<auto> preserves TAG_ENUM, use soft comparison
+        assertTrue(data.color == 3);
+        assertTrue(data.status == "active");
+        assertTrue(data.priority == 10);
+
+        # enum-to-enum comparison in hash
+        assertEq(ColorInt::Blue, data.color);
+        assertEq(Status::Active, data.status);
     }
 
     testEnumEqualityOperators() {
-        # Test === operator (strict equality)
+        # Test === operator (strict equality) — same enum members are hard-equal
         assertTrue(ColorInt::Red === ColorInt::Red);
         assertFalse(ColorInt::Red === ColorInt::Green);
 
@@ -409,9 +444,19 @@ class EnumTest inherits QUnit::Test {
         assertTrue(ColorInt::Red !== ColorInt::Green);
         assertFalse(ColorInt::Red !== ColorInt::Red);
 
-        # Cross-type comparison with ==
+        # Cross-type comparison with == (soft — enum vs base type)
         assertTrue(ColorInt::Red == 1);
         assertTrue(Status::Active == "active");
+
+        # Cross-type comparison with === (enum !== base type, strict type safety)
+        assertFalse(ColorInt::Red === 1);
+        assertFalse(Status::Active === "active");
+
+        # Different enum types with same base value must NOT be === equal
+        # (Priority::Low == 0, Test::Level::Debug == 0)
+        assertFalse(Priority::Low === Test::Level::Debug);
+        # Same enum type, same member must be === equal
+        assertTrue(Priority::Low === Priority::Low);
     }
 
     testEnumCast() {
@@ -419,11 +464,16 @@ class EnumTest inherits QUnit::Test {
         string s = "active";
         Status st = cast<enum<Status>>(s);
         assertEq(Status::Active, st);
+        assertTrue(st.isEnum());
+        assertEq("enum<Status>", st.fullType());
 
         # Cast valid int value to int-based enum
         int i = 2;
         ColorInt ci = cast<enum<ColorInt>>(i);
         assertEq(ColorInt::Green, ci);
+        assertTrue(ci.isEnum());
+        assertEq("enum<ColorInt>", ci.fullType());
+        assertTrue(ci === ColorInt::Green);
 
         # Cast valid float value to float-based enum
         float f = 2.0;
@@ -463,22 +513,212 @@ class EnumTest inherits QUnit::Test {
     testEnumTypeNameResolution() {
         # Test that enum names can be used directly as type names (without enum<> wrapper)
         Status st = Status::Active;
-        assertEq("active", st);
+        assertTrue(st == "active");
+        assertTrue(st.isEnum());
+        assertEq("enum<Status>", st.fullType());
 
         # Test with namespaced enum
         Test::Level lv = Test::Level::Info;
-        assertEq(1, lv);
+        assertTrue(lv == 1);
+        assertTrue(lv.isEnum());
+        assertEq("enum<Level>", lv.fullType());
 
         # Test with or_nothing variant
         *Status st2 = Status::Pending;
-        assertEq("pending", st2);
+        assertTrue(st2 == "pending");
 
         # Test function with enum parameter using direct type name
-        assertEq("active", getStatusString(Status::Active));
-        assertEq("inactive", getStatusString(Status::Inactive));
+        assertTrue(getStatusString(Status::Active) == "active");
+        assertTrue(getStatusString(Status::Inactive) == "inactive");
     }
 
     string getStatusString(Status s) {
         return string(s);
+    }
+
+    testEnumSerialization() {
+        # Serialize enum via hash path (serializeToData)
+        hash<SerializationInfo> h = Serializable::serializeToData(ColorInt::Red);
+        # The data should have _enum and _member keys
+        assertEq("::ColorInt", h._data._enum);
+        assertEq("Red", h._data._member);
+
+        # Deserialize back
+        auto result = Serializable::deserialize(h);
+        assertTrue(result.isEnum());
+        assertEq("enum<ColorInt>", result.fullType());
+        assertEq(ColorInt::Red, result);
+        assertTrue(result === ColorInt::Red);
+
+        # String enum round-trip
+        h = Serializable::serializeToData(Status::Active);
+        assertEq("::Status", h._data._enum);
+        assertEq("Active", h._data._member);
+        result = Serializable::deserialize(h);
+        assertTrue(result.isEnum());
+        assertEq("enum<Status>", result.fullType());
+        assertEq(Status::Active, result);
+
+        # Float enum round-trip
+        h = Serializable::serializeToData(Multiplier::Double);
+        result = Serializable::deserialize(h);
+        assertTrue(result.isEnum());
+        assertEq(Multiplier::Double, result);
+
+        # Number enum round-trip
+        h = Serializable::serializeToData(Precision::High);
+        result = Serializable::deserialize(h);
+        assertTrue(result.isEnum());
+        assertEq(Precision::High, result);
+
+        # Namespaced enum round-trip
+        h = Serializable::serializeToData(Test::Level::Warning);
+        assertEq("Test::Level", h._data._enum);
+        result = Serializable::deserialize(h);
+        assertTrue(result.isEnum());
+        assertEq("enum<Level>", result.fullType());
+        assertEq(Test::Level::Warning, result);
+    }
+
+    testEnumStreamSerialization() {
+        # Serialize enum via stream path (binary)
+        binary b = Serializable::serialize(ColorInt::Green);
+        auto result = Serializable::deserialize(b);
+        assertTrue(result.isEnum());
+        assertEq("enum<ColorInt>", result.fullType());
+        assertEq(ColorInt::Green, result);
+        assertTrue(result === ColorInt::Green);
+
+        # String enum stream round-trip
+        b = Serializable::serialize(Status::Pending);
+        result = Serializable::deserialize(b);
+        assertTrue(result.isEnum());
+        assertEq(Status::Pending, result);
+
+        # Float enum stream round-trip
+        b = Serializable::serialize(Multiplier::Half);
+        result = Serializable::deserialize(b);
+        assertTrue(result.isEnum());
+        assertEq(Multiplier::Half, result);
+
+        # Number enum stream round-trip
+        b = Serializable::serialize(Precision::Extreme);
+        result = Serializable::deserialize(b);
+        assertTrue(result.isEnum());
+        assertEq(Precision::Extreme, result);
+
+        # Namespaced enum stream round-trip
+        b = Serializable::serialize(Outer::Inner::SubType::SubA);
+        result = Serializable::deserialize(b);
+        assertTrue(result.isEnum());
+        assertEq(Outer::Inner::SubType::SubA, result);
+    }
+
+    testEnumSerializationInContainer() {
+        # Hash containing enums
+        hash<auto> data = {
+            "color": ColorInt::Blue,
+            "status": Status::Deleted,
+            "level": Test::Level::Error,
+            "value": 42,
+            "name": "test",
+        };
+
+        # Hash path round-trip
+        hash<SerializationInfo> h = Serializable::serializeToData(data);
+        auto result = Serializable::deserialize(h);
+        assertEq("hash<auto>", result.fullType());
+        assertTrue(result.color.isEnum());
+        assertEq(ColorInt::Blue, result.color);
+        assertTrue(result.status.isEnum());
+        assertEq(Status::Deleted, result.status);
+        assertTrue(result.level.isEnum());
+        assertEq(Test::Level::Error, result.level);
+        assertEq(42, result.value);
+        assertEq("test", result.name);
+
+        # Stream path round-trip
+        binary b = Serializable::serialize(data);
+        result = Serializable::deserialize(b);
+        assertTrue(result.color.isEnum());
+        assertEq(ColorInt::Blue, result.color);
+        assertTrue(result.status.isEnum());
+        assertEq(Status::Deleted, result.status);
+
+        # List containing enums
+        list<auto> lst = (ColorInt::Red, ColorInt::Green, ColorInt::Blue);
+        h = Serializable::serializeToData(lst);
+        result = Serializable::deserialize(h);
+        assertEq(3, result.size());
+        assertTrue(result[0].isEnum());
+        assertEq(ColorInt::Red, result[0]);
+        assertTrue(result[1].isEnum());
+        assertEq(ColorInt::Green, result[1]);
+        assertTrue(result[2].isEnum());
+        assertEq(ColorInt::Blue, result[2]);
+
+        # List stream round-trip
+        b = Serializable::serialize(lst);
+        result = Serializable::deserialize(b);
+        assertEq(3, result.size());
+        assertTrue(result[0].isEnum());
+        assertEq(ColorInt::Red, result[0]);
+    }
+
+    testEnumSerializationBackwardCompat() {
+        # Deserializing a bare int into auto should work (simulating old format)
+        hash<SerializationInfo> h = Serializable::serializeToData(42);
+        auto result = Serializable::deserialize(h);
+        assertEq(42, result);
+        assertFalse(result.isEnum());
+
+        # Deserializing a bare string into auto should work
+        h = Serializable::serializeToData("active");
+        result = Serializable::deserialize(h);
+        assertEq("active", result);
+        assertFalse(result.isEnum());
+
+        # Stream path: bare int
+        binary b = Serializable::serialize(42);
+        result = Serializable::deserialize(b);
+        assertEq(42, result);
+        assertFalse(result.isEnum());
+
+        # Stream path: bare string
+        b = Serializable::serialize("active");
+        result = Serializable::deserialize(b);
+        assertEq("active", result);
+        assertFalse(result.isEnum());
+    }
+
+    testEnumDeserializationErrors() {
+        # Unknown enum path in hash-based deserialization
+        hash<SerializationInfo> h = Serializable::serializeToData(ColorInt::Red);
+        # Tamper with the enum path to simulate unknown enum
+        h._data._enum = "::NoSuchEnum";
+        assertThrows("DESERIALIZATION-ERROR", "no such enum", sub () {
+            auto v = Serializable::deserialize(h);
+            remove v;
+        });
+
+        # Invalid member name in hash-based deserialization
+        h = Serializable::serializeToData(ColorInt::Red);
+        h._data._member = "NoSuchMember";
+        assertThrows("DESERIALIZATION-ERROR", "not a valid member", sub () {
+            auto v = Serializable::deserialize(h);
+            remove v;
+        });
+
+        # _enum key without _member should NOT be treated as enum marker
+        # (collision protection — user data with just "_enum" key passes through)
+        h = Serializable::serializeToData({"_enum": "some_value"});
+        auto result = Serializable::deserialize(h);
+        assertEq("some_value", result._enum);
+
+        # _enum + unrelated key (not _member) should also not trigger enum deserialization
+        h = Serializable::serializeToData({"_enum": "some_value", "other": 42});
+        result = Serializable::deserialize(h);
+        assertEq("some_value", result._enum);
+        assertEq(42, result.other);
     }
 }

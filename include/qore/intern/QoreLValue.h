@@ -117,6 +117,7 @@ public:
             case QV_Bool: v.b = old.v.b; break;
             case QV_Int: v.i = old.v.i; break;
             case QV_Float: v.f = old.v.f; break;
+            case QV_Enum: v.em = old.v.em; break;
             case QV_Node:
                 v.n = old.v.n ? old.v.n->refSelf() : nullptr;
                 if (!is_closure)
@@ -247,6 +248,13 @@ public:
                 return rv;
             }
 
+            case QV_Enum: {
+                int64 i = QoreValue::makeEnum(v.em).getAsBigInt();
+                v.i = i;
+                type = QV_Int;
+                return nullptr;
+            }
+
             case QV_Int:
                 break;
 
@@ -290,6 +298,13 @@ public:
                     check_lvalue_object_in_out(nullptr, rv);
                 }
                 return rv;
+            }
+
+            case QV_Enum: {
+                double f = QoreValue::makeEnum(v.em).getAsFloat();
+                v.f = f;
+                type = QV_Float;
+                return nullptr;
             }
 
             case QV_Float:
@@ -346,6 +361,19 @@ public:
                 return rv;
             }
 
+            case QV_Enum: {
+                QoreValue base = v.em->getValue();
+                QoreNumberNode* n;
+                if (base.getType() == NT_FLOAT) {
+                    n = new QoreNumberNode(base.getAsFloat());
+                } else {
+                    n = new QoreNumberNode(base.getAsBigInt());
+                }
+                v.n = n;
+                type = QV_Node;
+                return nullptr;
+            }
+
             default:
                 assert(false);
         }
@@ -364,6 +392,7 @@ public:
             case QV_Bool: return QoreValue(v.b);
             case QV_Int: return QoreValue(v.i);
             case QV_Float: return QoreValue(v.f);
+            case QV_Enum: return QoreValue::makeEnum(v.em);
             case QV_Node:
                 if (!is_closure)
                     check_lvalue_object_in_out(nullptr, v.n);
@@ -382,6 +411,7 @@ public:
             case QV_Bool: return QoreValue(v.b);
             case QV_Int: return QoreValue(v.i);
             case QV_Float: return QoreValue(v.f);
+            case QV_Enum: return QoreValue::makeEnum(v.em);
             case QV_Node: return v.n;
             default: assert(false);
                 // no break
@@ -397,6 +427,7 @@ public:
             case QV_Bool: return QoreValue(v.b);
             case QV_Int: return QoreValue(v.i);
             case QV_Float: return QoreValue(v.f);
+            case QV_Enum: return QoreValue::makeEnum(v.em);
             case QV_Node: return v.n;
             default: assert(false);
                 // no break
@@ -423,6 +454,7 @@ public:
             case QV_Bool: return QoreValue(v.b);
             case QV_Int: return QoreValue(v.i);
             case QV_Float: return QoreValue(v.f);
+            case QV_Enum: return QoreValue::makeEnum(v.em);
             default: assert(false);
                 // no break
         }
@@ -473,6 +505,9 @@ public:
                 needs_deref = result.isPointer();
                 return result;
             }
+            case QV_Enum:
+                needs_deref = false;
+                return QoreValue::makeEnum(v.em);
             default: assert(false);
             // no break
         }
@@ -499,6 +534,7 @@ public:
             case QV_Bool: return v.b;
             case QV_Int: return (bool)v.i;
             case QV_Float: return (bool)v.f;
+            case QV_Enum: return true;
             case QV_Node: return !is_nothing(v.n);
             default: assert(false);
             // no break
@@ -661,6 +697,11 @@ public:
                 n.v.f = val.getAsFloat();
                 break;
 
+            case QV_Enum:
+                v.em = n.v.em;
+                n.v.em = nullptr;
+                break;
+
             case QV_Node:
                 if (n.is_closure) {
                     assert(!is_closure);
@@ -690,6 +731,7 @@ public:
             case QV_Bool: v.b = n.v.b; n.v.b = false; break;
             case QV_Int: v.i = n.v.i; n.v.i = 0; break;
             case QV_Float: v.f = n.v.f; n.v.f = 0; break;
+            case QV_Enum: v.em = n.v.em; n.v.em = nullptr; break;
             case QV_Node:
                 if (n.is_closure) {
                     assert(!is_closure);
@@ -816,6 +858,15 @@ public:
         } else {
             assigned = true;
             rv = nullptr;
+        }
+
+        // Preserve TAG_ENUM identity for non-fixed-type variables
+        if (val.isEnum()) {
+            v.em = val.getEnumMember();
+            if (type != QV_Enum) {
+                type = QV_Enum;
+            }
+            return rv;
         }
 
         // Use QoreValue's type info via getType()
@@ -958,6 +1009,7 @@ public:
                 case QV_Bool: return v.b;
                 case QV_Int: return (bool)v.i;
                 case QV_Float: return (bool)v.f;
+                case QV_Enum: return QoreValue::makeEnum(v.em).getAsBool();
                 case QV_Node: return v.n ? v.n->getAsBool() : false;
                 default: assert(false);
                 // no break
@@ -972,6 +1024,7 @@ public:
                 case QV_Bool: return (int64)v.b;
                 case QV_Int: return v.i;
                 case QV_Float: return (int64)v.f;
+                case QV_Enum: return QoreValue::makeEnum(v.em).getAsBigInt();
                 case QV_Node: return v.n ? v.n->getAsBigInt() : 0;
                 default: assert(false);
                 // no break
@@ -986,6 +1039,7 @@ public:
                 case QV_Bool: return (double)v.b;
                 case QV_Int: return (double)v.i;
                 case QV_Float: return v.f;
+                case QV_Enum: return QoreValue::makeEnum(v.em).getAsFloat();
                 case QV_Node: return v.n ? v.n->getAsFloat() : 0.0;
                 default: assert(false);
                 // no break
@@ -1004,6 +1058,7 @@ public:
                 case QV_Bool: return NT_BOOLEAN;
                 case QV_Int: return NT_INT;
                 case QV_Float: return NT_FLOAT;
+                case QV_Enum: return QoreValue::makeEnum(v.em).getType();
                 case QV_Node: return v.n ? v.n->getType() : NT_NOTHING;
                 default: assert(false);
                 // no break
@@ -1017,6 +1072,7 @@ public:
                 case QV_Bool: return qoreBoolTypeName;
                 case QV_Int: return qoreIntTypeName;
                 case QV_Float: return qoreFloatTypeName;
+                case QV_Enum: return QoreValue::makeEnum(v.em).getTypeName();
                 case QV_Node: return get_type_name(v.n);
                 default: assert(false);
                 // no break
@@ -1490,6 +1546,8 @@ public:
                 return v.i;
             case QV_Float:
                 return v.f;
+            case QV_Enum:
+                return QoreValue::makeEnum(v.em);
             case QV_Node:
                 if (!is_closure)
                     check_lvalue_object_in_out(nullptr, v.n);
@@ -1525,6 +1583,8 @@ public:
                 return for_del ? QoreValue() : QoreValue(v.i);
             case QV_Float:
                 return for_del ? QoreValue() : QoreValue(v.f);
+            case QV_Enum:
+                return for_del ? QoreValue() : QoreValue::makeEnum(v.em);
             case QV_Node:
                 if (!is_closure)
                     check_lvalue_object_in_out(nullptr, v.n);

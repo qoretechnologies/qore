@@ -5492,7 +5492,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
             if (i.value.allowed_values && !i.value.allowed_values_creatable) {
                 bool ok = False;
                 foreach auto v in (i.value.allowed_values) {
-                    if (options{i.key} === v.value) {
+                    if (options{i.key} == v.value) {
                         ok = True;
                         break;
                     }
@@ -5506,7 +5506,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                 foreach auto opt in (options{i.key}) {
                     bool ok = False;
                     foreach auto v in (i.value.element_allowed_values) {
-                        if (opt === v.value) {
+                        if (opt == v.value) {
                             ok = True;
                             break;
                         }

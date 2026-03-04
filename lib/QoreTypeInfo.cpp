@@ -1627,14 +1627,9 @@ qore_type_result_e QoreTypeSpec::match(const QoreTypeSpec& t, bool& may_not_matc
                     return QTI_NOT_EQUAL;
                 }
                 case QTS_TYPE: {
-                    // Check if the base type matches (for compatibility with underlying type)
-                    qore_type_t bt = QoreTypeInfo::getBaseType(u.ed->getBaseTypeInfo());
-                    if (t.u.t == bt) {
-                        // Base type matches - enum values have the base type at runtime,
-                        // so accept as ambiguous for parse-time compatibility
-                        max_result = QTI_IDENT;
-                        return QTI_AMBIGUOUS;
-                    }
+                    // This is the "incoming" direction: can type t be accepted by this enum?
+                    // base type → enum: REJECT (require explicit cast<enum<X>>())
+                    // Only NT_ALL (auto) is accepted to allow runtime flexibility
                     if (t.u.t == NT_ALL) {
                         may_not_match = true;
                         max_result = QTI_IDENT;
@@ -2026,6 +2021,12 @@ bool QoreTypeSpec::acceptInput(ExceptionSink* xsink, const QoreTypeInfo& typeInf
         }
         case QTS_TYPE: {
             qore_type_t t = n.getType();
+            // Unwrap TAG_ENUM to base type for typed (non-auto) targets
+            if (n.isEnum() && u.t != NT_ALL) {
+                QoreValue base_val = n.getEnumMember()->getValue();
+                base_val.ref();
+                n = base_val;
+            }
             // special handling for objects; check for object validity; if it's already been deleted,
             // then we use NT_NOTHING
             if (t == NT_OBJECT && !n.get<QoreObject>()->isValid()) {
@@ -2045,11 +2046,14 @@ bool QoreTypeSpec::acceptInput(ExceptionSink* xsink, const QoreTypeInfo& typeInf
             break;
 
         case QTS_ENUM: {
-            // Enum values at runtime have the base type, so check if the value type matches
-            qore_type_t bt = QoreTypeInfo::getBaseType(u.ed->getBaseTypeInfo());
-            if (n.getType() == bt) {
-                // Value has the right base type - accept it
-                ok = true;
+            // Accept TAG_ENUM values from same enum declaration
+            if (n.isEnum()) {
+                const QoreEnumMember* member = n.getEnumMember();
+                if (member->getEnumDecl() == u.ed
+                    || qore_enum_decl_private::get(*member->getEnumDecl())->parseEqual(
+                        *qore_enum_decl_private::get(*u.ed))) {
+                    ok = true;
+                }
             }
             break;
         }
@@ -2268,11 +2272,14 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValue(const QoreValue& n, bool ex
             break;
 
         case QTS_ENUM: {
-            // Enum values at runtime have the base type, so check if the value type matches
-            qore_type_t bt = QoreTypeInfo::getBaseType(u.ed->getBaseTypeInfo());
-            if (ot == bt) {
-                // Value has the right base type - at runtime we trust it's a valid enum value
-                return exact ? QTI_IDENT : QTI_AMBIGUOUS;
+            // Accept TAG_ENUM values from same enum declaration
+            if (n.isEnum()) {
+                const QoreEnumMember* member = n.getEnumMember();
+                if (member->getEnumDecl() == u.ed
+                    || qore_enum_decl_private::get(*member->getEnumDecl())->parseEqual(
+                        *qore_enum_decl_private::get(*u.ed))) {
+                    return exact ? QTI_IDENT : QTI_AMBIGUOUS;
+                }
             }
             return QTI_NOT_EQUAL;
         }

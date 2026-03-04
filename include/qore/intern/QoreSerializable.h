@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -71,6 +71,7 @@ enum qore_stream_type : unsigned char {
     RELDATE = 15,
     SQLNULL = 16,
     NOTHING = 17,
+    ENUM = 18,
 };
 }
 
@@ -264,6 +265,10 @@ protected:
     DLLLOCAL static DateTimeNode* deserializeRelDateFromStream(StreamReader& reader, ExceptionSink* xsink);
 
     DLLLOCAL static BinaryNode* deserializeBinaryFromStream(StreamReader& reader, ExceptionSink* xsink);
+
+    DLLLOCAL static QoreValue deserializeEnumData(const QoreStringNode& enum_path,
+        const QoreStringNode& member_name, ExceptionSink* xsink);
+    DLLLOCAL static QoreValue deserializeEnumFromStream(ExceptionSink* xsink, StreamReader& reader);
 };
 
 #endif // _QORE_CLASS_INTERN_QORESERIALIZABLE_H

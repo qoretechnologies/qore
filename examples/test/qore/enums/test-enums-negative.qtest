@@ -18,6 +18,10 @@ class EnumNegativeTest inherits QUnit::Test {
         addTestCase("Test namespace getEnum error", \testNamespaceGetEnumError());
         addTestCase("Test cast<enum<X>> parse-time type mismatch", \testCastParseTimeMismatch());
         addTestCase("Test cast<enum<X>> with unknown enum", \testCastUnknownEnum());
+        addTestCase("Test base-type to enum rejection", \testBaseToEnumRejection());
+        addTestCase("Test base-type to enum param rejection", \testBaseToEnumParamRejection());
+        addTestCase("Test enum to base type allowed", \testEnumToBaseAllowed());
+        addTestCase("Test enum hard comparison with base type", \testEnumHardComparison());
         set_return_value(main());
     }
 
@@ -103,5 +107,74 @@ sub test() {
 ";
         Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES);
         assertThrows("PARSE-EXCEPTION", \p.parse(), (code, "test"));
+    }
+
+    testBaseToEnumRejection() {
+        # Test that assigning a bare base-type value to an enum variable is rejected at parse time
+        string code = "
+%modern
+public enum Color : int {
+    Red = 1,
+    Green = 2,
+}
+sub test() {
+    Color c = 42;
+}
+";
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES);
+        assertThrows("PARSE-TYPE-ERROR", \p.parse(), (code, "test"));
+    }
+
+    testBaseToEnumParamRejection() {
+        # Test that passing a bare base-type value to an enum parameter is rejected at parse time
+        string code = "
+%modern
+public enum Color : int {
+    Red = 1,
+    Green = 2,
+}
+sub foo(Color c) {}
+sub test() {
+    foo(42);
+}
+";
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES);
+        assertThrows("PARSE-TYPE-ERROR", \p.parse(), (code, "test"));
+    }
+
+    testEnumToBaseAllowed() {
+        # Test that assigning an enum value to a base-type variable is allowed
+        string code = "
+%modern
+public enum Color : int {
+    Red = 1,
+    Green = 2,
+}
+sub test() {
+    int x = Color::Red;
+}
+";
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES);
+        # Should NOT throw — enum to base type is allowed
+        p.parse(code, "test");
+    }
+
+    testEnumHardComparison() {
+        # Test that hard comparison between enum and base type returns false (strict type safety)
+        string code = "
+%modern
+public enum Color : int {
+    Red = 1,
+    Green = 2,
+}
+bool sub test() {
+    return Color::Red === 1;
+}
+";
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES);
+        p.parse(code, "test");
+        p.run();
+        # enum !== base type — different types are never ===
+        assertFalse(p.callFunction("test"));
     }
 }
