@@ -1379,8 +1379,11 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
             uring->processCompletions(completions);
             for (auto& c : completions) {
                 ExceptionSink uring_xsink;
+                // Save data pointer before moving buffer — c.data points into
+                // c.buffer and C++ does not guarantee argument evaluation order
+                const char* data = c.data;
                 c.session->handleAsyncReadCompletion(
-                    c.stream_id, c.data, c.length, c.error,
+                    c.stream_id, data, c.length, c.error,
                     std::move(c.buffer), &uring_xsink);
                 if (uring_xsink) {
                     // Log and clear — don't let one stream's error kill the loop
