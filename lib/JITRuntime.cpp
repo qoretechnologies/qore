@@ -1368,6 +1368,18 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_get_value(uint64_t list_val, int64_t 
     return toBits(QoreValue());
 }
 
+extern "C" DLLEXPORT uint64_t qore_rt_list_get_value_noref(uint64_t list_val, int64_t index, ExceptionSink* xsink) {
+    // Read-only element access — returns borrowed reference (no refSelf)
+    QoreValue v = fromBits(list_val);
+    if (v.getType() == NT_LIST) {
+        const QoreListNode* l = v.get<const QoreListNode>();
+        if (index >= 0 && static_cast<size_t>(index) < l->size()) {
+            return toBits(l->retrieveEntry(static_cast<size_t>(index)));
+        }
+    }
+    return toBits(QoreValue());
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_create_sized_list(int64_t capacity, ExceptionSink* xsink) {
     QoreListNode* list = new QoreListNode(autoTypeInfo);
     if (capacity > 0) {

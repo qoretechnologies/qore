@@ -220,6 +220,16 @@ QoreIRInstruction* QoreIRBuilder::createListGetValue(QoreIRValue list, QoreIRVal
     return inst;
 }
 
+QoreIRInstruction* QoreIRBuilder::createListGetValueNoRef(QoreIRValue list, QoreIRValue index,
+        const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::ListGetValueNoRef);
+    inst->loc = loc;
+    inst->result = func->createValue();
+    inst->operands.push_back(list);
+    inst->operands.push_back(index);
+    return inst;
+}
+
 QoreIRInstruction* QoreIRBuilder::createListSetInt(QoreIRValue list, QoreIRValue index, QoreIRValue value,
         const QoreProgramLocation* loc) {
     auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::ListSetInt);

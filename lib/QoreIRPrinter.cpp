@@ -60,6 +60,7 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::ListGetInt: return "list.get.int";
         case QoreIROpcode::ListGetFloat: return "list.get.float";
         case QoreIROpcode::ListGetValue: return "list.get.value";
+        case QoreIROpcode::ListGetValueNoRef: return "list.get.value.noref";
         case QoreIROpcode::ListSetInt: return "list.set.int";
         case QoreIROpcode::ListSetFloat: return "list.set.float";
         case QoreIROpcode::ListSetValue: return "list.set.value";

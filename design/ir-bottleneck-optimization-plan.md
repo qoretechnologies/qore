@@ -278,14 +278,27 @@ that goes through AST delegation. Two optimizations:
 
 ---
 
-## Implementation Priority
+## Implementation Priority & Status
 
-1. **Phase 1a+1b**: `AddAssignLocalInt` + `IncrementLocalInt` (highest impact,
-   benefits all int-heavy loops including build_data)
-2. **Phase 1c**: `BranchIfLtLocalInt` (completes the loop optimization)
-3. **Phase 2a**: Inline int fast path in AddAssignLValue (targeted, low risk)
-4. **Phase 3b**: `ListGetValueNoRef` (requires careful safety analysis)
-5. **Phase 3c**: Hash/push fast paths (moderate impact, moderate complexity)
+1. **Phase 1a+1b**: `AddAssignLocalInt` + `IncrementLocalInt` — **DONE**
+2. **Phase 1c**: `BranchIfLtLocalInt` — **DONE**
+3. **Phase 2a**: Inline int fast path in AddAssignLValue — **DONE**
+4. **Phase 2b**: Extend int fast path to all compound assignments — **DONE** (2026-03-04)
+   - Sub/Mul/Div/Mod/And/Or/Xor/Shl/Shr all have inline int fast paths
+   - UnshiftLValue kept on generic path (list operation, not arithmetic)
+5. **Phase 3b**: `ListGetValueNoRef` opcode — **DONE** (2026-03-04, interpreter-only)
+   - Opcode added across all layers (IR, verifier, printer, builder, interpreter, LLVM, runtime)
+   - LLVM/JIT path falls back to ListGetValue with refSelf + cleanup tracking
+     (JIT cleanup model requires owned references; borrowed refs cause use-after-free)
+   - Lowering not yet updated to emit ListGetValueNoRef (safe only when IR interpreter
+     is the target; requires per-target opcode selection or a separate lowering pass)
+6. **Phase 3c**: Hash pre-allocation — **DROPPED** (no reserve() API on hash internals)
+   - List push fast path — **DEFERRED** (touches lvalue mechanics, separate follow-up)
+7. **Thread-local AOT**: `classifyExpression()` VT_THREAD_LOCAL support — **DONE** (2026-03-04)
+   - One-line fix; infrastructure (slot maps, serialization, LLVM helpers) already existed
+8. **Full JIT/AOT debug support for ListGetValueNoRef** — **PENDING**
+   - Implement safe borrowed-reference support in LLVM/JIT cleanup model
+   - Update lowering to emit ListGetValueNoRef with per-target opcode selection
 
 ## Verification
 

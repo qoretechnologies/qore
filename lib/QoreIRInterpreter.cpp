@@ -65,7 +65,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 341,
+static_assert(QORE_IR_MAX_OPCODE == 342,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -2266,6 +2266,24 @@ next_instruction:
                 if (result.hasNode()) {
                     cleanup.push_back(inst->result.id);
                 }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::ListGetValueNoRef: {
+                // Read-only list element access — borrowed reference (no refSelf)
+                // Safe when the list outlives the use of the returned element
+                QoreValue list_val = getIRValue(values, inst->operands[0]);
+                QoreValue idx_val = getIRValue(values, inst->operands[1]);
+                int64_t index = idx_val.getAsBigInt();
+                QoreValue result;
+                if (list_val.getType() == NT_LIST) {
+                    const QoreListNode* l = list_val.get<const QoreListNode>();
+                    if (index >= 0 && static_cast<size_t>(index) < l->size()) {
+                        result = l->retrieveEntry(static_cast<size_t>(index));
+                    }
+                }
+                setValueSlot(values, inst->result.id, result, xsink);
+                // Do NOT add to cleanup — no owned reference (borrowed from list)
                 ++ip;
                 break;
             }
@@ -5199,8 +5217,94 @@ load_local_done:
             case QoreIROpcode::OrAssignLValue:
             case QoreIROpcode::XorAssignLValue:
             case QoreIROpcode::ShlAssignLValue:
-            case QoreIROpcode::ShrAssignLValue:
+            case QoreIROpcode::ShrAssignLValue: {
+                // Inlined int fast path for arithmetic compound assignments
+                auto* lval_inst = static_cast<QoreIRLValueInstruction*>(inst);
+                if (lval_inst->operands.empty()) {
+                    if (xsink) {
+                        xsink->raiseException("IR-EXEC-ERROR", "lvalue binary op missing operand");
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
+                QoreValue right = getIRValue(values, lval_inst->operands[0]);
+                // Targeted cache invalidation BEFORE the lvalue operation
+                if (lval_inst->hasLocalTarget()) {
+                    if (lval_inst->lvalue_slot_id < locals_slot_cache.size()) {
+                        locals_slot_cache[lval_inst->lvalue_slot_id].discard(xsink);
+                        locals_slot_cache[lval_inst->lvalue_slot_id] = QoreValue();
+                    }
+                    clearLoadSlots(lval_inst->lvalue_slot_id);
+                } else if (lval_inst->lvalue_slot_id == UINT32_MAX) {
+                    for (size_t i = 0; i < locals_slot_cache.size(); ++i) {
+                        locals_slot_cache[i].discard(xsink);
+                        locals_slot_cache[i] = QoreValue();
+                    }
+                }
+                // Int fast path: probe type under lock, do direct operation if int
+                QoreValue res;
+                bool fast_path_done = false;
+                {
+                    LValueHelper v(lval_inst->lvalue, xsink);
+                    if (v && v.getType() == NT_INT) {
+                        int64 rhs = right.getAsBigInt();
+                        switch (inst->opcode) {
+                            case QoreIROpcode::SubAssignLValue:
+                                v.minusEqualsBigInt(rhs);
+                                break;
+                            case QoreIROpcode::MulAssignLValue:
+                                v.multiplyEqualsBigInt(rhs);
+                                break;
+                            case QoreIROpcode::DivAssignLValue:
+                                v.divideEqualsBigInt(rhs);
+                                break;
+                            case QoreIROpcode::ModAssignLValue:
+                                v.modulaEqualsBigInt(rhs);
+                                break;
+                            case QoreIROpcode::AndAssignLValue:
+                                v.andEqualsBigInt(rhs);
+                                break;
+                            case QoreIROpcode::OrAssignLValue:
+                                v.orEqualsBigInt(rhs);
+                                break;
+                            case QoreIROpcode::XorAssignLValue:
+                                v.xorEqualsBigInt(rhs);
+                                break;
+                            case QoreIROpcode::ShlAssignLValue:
+                                v.shiftLeftEqualsBigInt(rhs);
+                                break;
+                            case QoreIROpcode::ShrAssignLValue:
+                                v.shiftRightEqualsBigInt(rhs);
+                                break;
+                            default:
+                                assert(false);
+                                break;
+                        }
+                        if (!*xsink) {
+                            res = v.getReferencedValue();
+                        }
+                        fast_path_done = true;
+                    }
+                }
+                // Non-int: fall back to full evalLValueBinary (LValueHelper released above)
+                if (!fast_path_done && !*xsink) {
+                    res = evalLValueBinary(inst->opcode, lval_inst->lvalue, right, xsink);
+                }
+                if (xsink && *xsink) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
+                setValueSlot(values, lval_inst->result.id, res, xsink);
+                if (res.hasNode()) {
+                    cleanup.push_back(lval_inst->result.id);
+                }
+                ++ip;
+                break;
+            }
             case QoreIROpcode::UnshiftLValue: {
+                // UnshiftLValue is a list operation — no int fast path
                 auto* lval_inst = static_cast<QoreIRLValueInstruction*>(inst);
                 if (lval_inst->operands.empty()) {
                     if (xsink) {

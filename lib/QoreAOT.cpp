@@ -4978,7 +4978,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots) 
                 id.ref1 = std::to_string(it->second); // Store slot index as string
                 return id;
             }
-        } else if (varref->getType() == VT_GLOBAL) {
+        } else if (varref->getType() == VT_GLOBAL || varref->getType() == VT_THREAD_LOCAL) {
             // Phase 6a: Global variable reference - use existing global_slots infrastructure
             Var* global_var = varref->ref.var;  // Global variables use .var field (Var*)
             if (global_var) {
@@ -4990,7 +4990,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots) 
                 return id;
             }
         }
-        // Thread-local and other types fall through to GENERIC_EVAL for now
+        // Other variable types fall through to GENERIC_EVAL
     }
 
     // QoreClosureParseNode: closure/lambda creation

@@ -69,6 +69,8 @@ public:
         const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createListGetValue(QoreIRValue list, QoreIRValue index,
         const QoreProgramLocation* loc = nullptr);
+    QoreIRInstruction* createListGetValueNoRef(QoreIRValue list, QoreIRValue index,
+        const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createListSetInt(QoreIRValue list, QoreIRValue index, QoreIRValue value,
         const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createListSetFloat(QoreIRValue list, QoreIRValue index, QoreIRValue value,

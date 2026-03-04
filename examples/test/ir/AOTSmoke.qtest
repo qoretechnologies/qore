@@ -87,6 +87,7 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT v1 feature flags", \testFeatureFlagsNonZero());
         addTestCase("AOT subscript compound assign", \testSubscriptCompoundAssign());
         addTestCase("AOT hash compound native", \testHashCompoundNative());
+        addTestCase("AOT thread-local vars", \testThreadLocalVars());
         set_return_value(main());
     }
 
@@ -2437,5 +2438,31 @@ printf(\"%d %.1f\\n\", h{\"i\"}, h{\"f\"});
         string interp_out = runInterpreted(code);
         assertEq(interp_out, result.run_out, "hash compound native output matches interpreter");
         assertEq(result.run_out, "28 10.5\n");
+    }
+
+    testThreadLocalVars() {
+        # Thread-local variables should be fully pre-compiled in AOT mode
+        string code = "%modern
+thread_local int tl_counter = 0;
+thread_local string tl_label = \"start\";
+
+tl_counter = 10;
+tl_label = \"main\";
+tl_counter += 5;
+int r1 = tl_counter;
+tl_counter += 3;
+int r2 = tl_counter;
+printf(\"%d %d %s\\n\", r1, r2, tl_label);
+
+# Test thread-local in closure expression
+code get_counter = int sub() { return tl_counter; };
+printf(\"%d\\n\", get_counter());
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "thread-local AOT: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "thread-local AOT output matches interpreter");
+        assertEq(result.run_out, "15 18 main\n18\n");
     }
 }

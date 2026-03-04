@@ -37,7 +37,7 @@
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 341,
+static_assert(QORE_IR_MAX_OPCODE == 342,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 #include "qore/intern/QoreLibIntern.h"
@@ -5856,6 +5856,24 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             return true;
         }
         case QoreIROpcode::ListGetValue: {
+            auto* list = getVal(inst->operands[0].id, error);
+            if (!list) { return false; }
+            auto* idx = getVal(inst->operands[1].id, error);
+            if (!idx) { return false; }
+            llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
+            llvm::Value* idx_int = ensureIntTypeInline(idx, inst->operands[1].id);
+            auto helper = module.getOrInsertFunction("qore_rt_list_get_value",
+                    llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
+            llvm::Value* result = builder->CreateCall(helper, {list_boxed, idx_int, xsink_arg});
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            return true;
+        }
+        case QoreIROpcode::ListGetValueNoRef: {
+            // In LLVM/JIT mode, treat as ListGetValue (with refSelf + cleanup tracking)
+            // because the JIT cleanup model requires owned references.
+            // The noref optimization is only safe in the interpreter path.
             auto* list = getVal(inst->operands[0].id, error);
             if (!list) { return false; }
             auto* idx = getVal(inst->operands[1].id, error);

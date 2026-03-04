@@ -234,6 +234,7 @@ static bool requiresResult(QoreIROpcode op) {
         case QoreIROpcode::ListGetInt:
         case QoreIROpcode::ListGetFloat:
         case QoreIROpcode::ListGetValue:
+        case QoreIROpcode::ListGetValueNoRef:
         case QoreIROpcode::GetObjectClass:
         case QoreIROpcode::CallClosureDirect:
         case QoreIROpcode::CastAny:
@@ -385,7 +386,8 @@ static int expectedOperands(QoreIROpcode op) {
         case QoreIROpcode::ListAppend:    // 2 operands: list and value to append
         case QoreIROpcode::ListGetInt:    // 2 operands: list and index
         case QoreIROpcode::ListGetFloat:  // 2 operands: list and index
-        case QoreIROpcode::ListGetValue:  // 2 operands: list and index
+        case QoreIROpcode::ListGetValue:       // 2 operands: list and index
+        case QoreIROpcode::ListGetValueNoRef:  // 2 operands: list and index (borrowed ref)
         case QoreIROpcode::AddInt:
         case QoreIROpcode::AddFloat:
         case QoreIROpcode::AddAny:

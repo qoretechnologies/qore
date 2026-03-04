@@ -512,7 +512,12 @@ enum class QoreIROpcode : uint16_t {
     BranchIfLtLocalInt  = 340,  // if (lhs_local < rhs_local) goto true else goto false
     ConstEnum           = 341,  // TAG_ENUM constant from QoreEnumMember*
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (342, 343, ...)
+    // Read-only list element access (342) — borrowed reference, no refSelf
+    // operands[0] = list container, operands[1] = index
+    // Safe when the list outlives the use of the returned element (e.g., map/select loops)
+    ListGetValueNoRef   = 342,
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (343, 344, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -520,8 +525,8 @@ enum class QoreIROpcode : uint16_t {
 //! NOTE: Both QoreIRInterpreter.cpp and QoreIRToLLVM.cpp have matching
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
-constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::ConstEnum);
-static_assert(QORE_IR_MAX_OPCODE == 341, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::ListGetValueNoRef);
+static_assert(QORE_IR_MAX_OPCODE == 342, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! Returns true if the opcode is a unary computation op (used by Invoke dispatch)
