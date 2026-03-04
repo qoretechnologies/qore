@@ -1253,14 +1253,14 @@ public class HttpServer inherits HttpServer::AbstractLogger {
     }
 
     #! stops all listeners; does not wait for all connections on the listeners to close
-    /** do not call stop() after calling stopNoWait(); it can cause a deadlock
-     */
     stopNoWait() {
         # stop all listeners
-        lm.enter();
-        on_exit lm.exit();
+        {
+            lm.enter();
+            on_exit lm.exit();
 
-        map $1.stopNoWait(), listeners.iterator();
+            map $1.stopNoWait(), listeners.iterator();
+        }
 
         threadPool.stop();
     }
@@ -1332,8 +1332,6 @@ public class HttpServer inherits HttpServer::AbstractLogger {
     }
 
     #! stops all listeners; only returns when all connections are closed on all listeners
-    /** do not call stop() after calling stopNoWait(); it can cause a deadlock
-     */
     stop() {
         {
             AutoLock al(stop_m);
@@ -1376,12 +1374,18 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         }
 
         # Shutdown all listeners - stop accepting new connections
-        lm.enter();
-        on_exit {
-            lm.exit();
+        {
+            lm.enter();
+            on_exit {
+                lm.exit();
+            }
+
+            map $1.stop(), listeners.iterator();
         }
 
-        map $1.stop(), listeners.iterator();
+        # Wait for all listener stopped callbacks outside of lm scope to avoid deadlock
+        # with background listener stop threads from stopNoWait() that need lm to call
+        # listenerStopped() -> c.done()
         c.wait();
 
         threadPool.stop();
