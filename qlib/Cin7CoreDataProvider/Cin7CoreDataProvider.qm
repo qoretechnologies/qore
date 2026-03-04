@@ -608,22 +608,6 @@ module Cin7CoreDataProvider {
             },
         });
 
-        # ========== UTILITY ACTIONS ==========
-
-        # Make API Call
-        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": Cin7CoreDataProvider::AppName,
-            "path": "/make-api-call",
-            "action": "make-api-call",
-            "groups": "Utility",
-            "display_name": "Make API Call",
-            "short_desc": "Make a generic API call",
-            "desc": "Make a generic API call to the Cin7Core API. This allows accessing API endpoints "
-                "not covered by other actions.",
-            "action_code": DPAT_API,
-            "data_provider_info": Cin7CoreMakeApiCallDataProvider::ProviderInfo,
-        });
-
         # ========== TRIGGER ACTIONS (POLLING EVENTS) ==========
 
         # New Payment Trigger

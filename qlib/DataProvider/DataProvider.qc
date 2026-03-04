@@ -148,6 +148,7 @@ public class DataProvider {
             "mqtt": "MqttDataProvider",
 
             "openai": "OpenAiDataProvider",
+            "pdfco": "PdfCoDataProvider",
             "pop3": "Pop3ClientDataProvider",
             "qdrant": "QdrantDataProvider",
             "redis": "RedisDataProvider",

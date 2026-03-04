@@ -787,20 +787,6 @@ module ShipStationDataProvider {
             },
         });
 
-        # Make API Call
-        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": ShipStationDataProvider::AppName,
-            "path": "/make-api-call",
-            "action": "make-api-call",
-            "groups": "Utility",
-            "display_name": "Make API Call",
-            "short_desc": "Make a generic API call",
-            "desc": "Make a generic API call to the ShipStation API. This allows accessing API endpoints "
-                "not covered by other actions.",
-            "action_code": DPAT_API,
-            "data_provider_info": ShipStationMakeApiCallDataProvider::ProviderInfo,
-        });
-
         # ========== TRIGGER ACTIONS (EVENTS) ==========
 
         # Order Notify Event Trigger

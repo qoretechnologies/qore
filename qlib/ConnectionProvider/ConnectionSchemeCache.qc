@@ -149,6 +149,8 @@ public class ConnectionSchemeCache {
 
             "openai": "OpenAiRestClient",
 
+            "pdfco": "PdfCoRestClient",
+
             "pop3": "Pop3Client",
             "pop3s": "Pop3Client",
 

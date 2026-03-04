@@ -68,6 +68,11 @@ See also: [data-provider-development-guide.md](data-provider-development-guide.m
 - [ ] `searchRecordsImpl()` handles all `SearchOptions`
 - [ ] DPAT_FIND_SINGLE points to collection provider (e.g., `/items`, not `/items/get`)
 
+### Field Ordering in Request Types
+- [ ] Fields with `required_groups` are declared first in the `Fields` constant
+- [ ] Followed by required fields, then optional fields
+- [ ] No optional fields are interleaved between `required_groups` fields
+
 ### DPAT_API Actions
 - [ ] Provider has `"supports_request": True` in `ProviderInfo`
 - [ ] Provider implements `doRequestImpl()`
@@ -400,6 +405,22 @@ Short `desc` values (1-2 simple sentences) are fine as-is — don't add markdown
 - Descriptions listing multiple options or alternatives
 - Descriptions with code references, field names, or API values
 - Descriptions explaining complex behavior with conditions or caveats
+
+---
+
+## 17. Data Examples and List Types
+
+### Data Examples
+- [ ] Fields accepting JSON objects/arrays include property list and example in `desc`
+- [ ] Fields accepting CSV/delimited formats document the delimiter, column structure, and an example
+- [ ] Fields accepting regex/pattern syntax describe the syntax and provide an example
+- [ ] Fields with non-obvious format requirements (page ranges, coordinate systems, color formats) include format description and example
+- [ ] Examples use backtick wrapping for inline code
+
+### List Types vs Delimited Strings
+- [ ] Fields accepting multiple homogeneous values (URLs, IDs, tags) use list types (`SoftListOrNothingType`) instead of delimited strings
+- [ ] The provider joins list values to the expected delimiter format in `doRequestImpl()` before sending to the API
+- [ ] Fields with structured sub-fields or range syntax within delimiters (e.g., `page;fieldName;value`, `0, 2-5, 7-`) remain as `StringOrNothingType`
 
 ---
 

@@ -446,22 +446,6 @@ module UnleashedDataProvider {
             "data_provider_info": UnleashedDeleteCreditNoteLineDataProvider::ProviderInfo,
         });
 
-        # ========== UTILITY ACTIONS ==========
-
-        # Make API Call
-        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": UnleashedDataProvider::AppName,
-            "path": "/make-api-call",
-            "action": "make-api-call",
-            "groups": "Utility",
-            "display_name": "Make API Call",
-            "short_desc": "Make a generic API call",
-            "desc": "Make a generic API call to the Unleashed API. This allows accessing API endpoints "
-                "not covered by other actions.",
-            "action_code": DPAT_API,
-            "data_provider_info": UnleashedMakeApiCallDataProvider::ProviderInfo,
-        });
-
         # ========== TRIGGER ACTIONS (POLLING EVENTS) ==========
 
         # New Customer Trigger

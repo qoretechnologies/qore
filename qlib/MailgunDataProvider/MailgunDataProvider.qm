@@ -97,20 +97,6 @@ module MailgunDataProvider {
             "data_provider_info": MailgunValidateEmailDataProvider::ProviderInfo,
         });
 
-        # Make API Call
-        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": MailgunDataProvider::AppName,
-            "path": "/make-api-call",
-            "action": "make-api-call",
-            "groups": "Utility",
-            "display_name": "Make API Call",
-            "short_desc": "Make a generic API call",
-            "desc": "Make a generic API call to the Mailgun API. This allows accessing API endpoints "
-                "not covered by other actions.",
-            "action_code": DPAT_API,
-            "data_provider_info": MailgunMakeApiCallDataProvider::ProviderInfo,
-        });
-
         # ========== MAILING LIST ACTIONS ==========
 
         # Add Mailing List Member
