@@ -1469,24 +1469,25 @@ QoreHashNode* SocketQuicServerPollOperation::continuePoll(ExceptionSink* xsink) 
                         cleanupClosedSessions();
                     }
 
-                    // Register for POLLIN always; add POLLOUT if any session has pending writes
-                    // or active InputStreams
+                    // Register for POLLIN always; add POLLOUT only when the UDP
+                    // socket itself has backpressure (sendto returned EAGAIN).
+                    // Do NOT add POLLOUT for hasPendingWrite() — UDP sockets are
+                    // always writable, so POLLOUT would cause a busy-loop spinning
+                    // between continuePoll() and poll() while waiting for ACKs to
+                    // open the congestion window.  POLLIN (for ACKs) plus the QUIC
+                    // timer timeout (for PTO retransmission) is sufficient.
                     int events = SOCK_POLLIN;
                     if (srv == SOCK_POLLOUT) {
                         events |= SOCK_POLLOUT;
-                    } else {
-                        for (auto& entry : sessions_) {
-                            if (entry.second->hasPendingWrite()
-                                    || entry.second->hasActiveStreamInputStreams()) {
-                                events |= SOCK_POLLOUT;
-                                break;
-                            }
-                        }
                     }
 
                     // Collect extra fds from all sessions with active pollable InputStreams
                     std::vector<std::pair<int, int>> extra_fds;
+                    bool has_active_input_streams = false;
                     for (auto& entry : sessions_) {
+                        if (entry.second->hasActiveStreamInputStreams()) {
+                            has_active_input_streams = true;
+                        }
                         entry.second->getExtraFds(extra_fds);
                     }
 
@@ -1499,6 +1500,18 @@ QoreHashNode* SocketQuicServerPollOperation::continuePoll(ExceptionSink* xsink) 
                     }
                     if (poll_info) {
                         setPollTimeoutFromExpiry(poll_info, min_expiry, xsink);
+                        // If there are non-pollable active InputStreams (no extra
+                        // fds to watch), use a small poll timeout so the I/O thread
+                        // reads from them periodically without busy-looping.
+                        if (has_active_input_streams && extra_fds.empty()) {
+                            QoreValue ptv = poll_info->getKeyValue("poll_timeout_ms");
+                            int64_t current_ms = ptv.isNullOrNothing() ? INT64_MAX
+                                : ptv.getAsBigInt();
+                            if (current_ms > 1) {
+                                poll_info->setKeyValue("poll_timeout_ms",
+                                    static_cast<int64_t>(1), xsink);
+                            }
+                        }
                     }
                     return poll_info;
                 }
