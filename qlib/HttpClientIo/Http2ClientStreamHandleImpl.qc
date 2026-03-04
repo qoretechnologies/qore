@@ -171,13 +171,20 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
             if (!streaming) {
                 throw "HTTPCLIENT-STATE-ERROR", "not in streaming mode";
             }
-            if (state == HttpClientStreamState::Complete
-                    || state == HttpClientStreamState::Error
-                    || state == HttpClientStreamState::Cancelled) {
-                if (data_channel.empty()) {
-                    throw "HTTPCLIENT-STREAM-CLOSED", "stream is closed";
-                }
+            # For Error/Cancelled, state is set before any channel write, so an
+            # empty channel means no data will ever arrive
+            if ((state == HttpClientStreamState::Error
+                    || state == HttpClientStreamState::Cancelled)
+                    && data_channel.empty()) {
+                throw "HTTPCLIENT-STREAM-CLOSED", "stream is closed";
             }
+        }
+        # For Complete, state is set before end_stream is enqueued; use isClosed()
+        # to detect when all data (including end_stream) has been delivered to the
+        # channel — avoids a race where isDone() returns True before end_stream
+        # is readable, causing premature HTTPCLIENT-STREAM-CLOSED
+        if (data_channel.isClosed() && data_channel.empty()) {
+            throw "HTTPCLIENT-STREAM-CLOSED", "stream is closed";
         }
 
         if (controller_mode) {
@@ -296,19 +303,22 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
         }
 
         if (is_end) {
-            try {
-                data_channel.send({"end_stream": True});
-            } catch (hash<ExceptionInfo> ex2) {
-                if (ex2.err != "CHANNEL-CLOSED") {
-                    rethrow;
-                }
-            }
-            # Set Complete state AFTER data is enqueued
+            # Set Complete state BEFORE enqueuing end_stream so that isDone()
+            # returns True as soon as the reader consumes end_stream from the
+            # channel (avoiding a race on slow/ARM machines where the reader
+            # sees end_stream before the state transition completes)
             {
                 AutoLock al(lock);
                 if (state < HttpClientStreamState::Complete) {
                     state = HttpClientStreamState::Complete;
                     response = resp;
+                }
+            }
+            try {
+                data_channel.send({"end_stream": True});
+            } catch (hash<ExceptionInfo> ex2) {
+                if (ex2.err != "CHANNEL-CLOSED") {
+                    rethrow;
                 }
             }
             data_channel.close();
