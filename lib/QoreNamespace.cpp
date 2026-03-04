@@ -3346,8 +3346,13 @@ void qore_ns_private::scanMergeCommittedNamespace(const qore_ns_private& mns, Qo
             if (!cli.isUserPublic()) {
                 continue;
             }
-            if (constant.inList(cli.getName())) {
-                qmc.error("duplicate constant %s::%s", name.c_str(), cli.getName().c_str());
+            const ConstantEntry* existing = constant.findEntry(cli.getName().c_str());
+            if (existing) {
+                // Identity check: same bits means same refSelf'd node (same module re-imported
+                // via different dependency paths, e.g. QUnit -> Util and FsUtil -> Util)
+                if (!existing->val.isEqualValue(cli.getValue())) {
+                    qmc.error("duplicate constant %s::%s", name.c_str(), cli.getName().c_str());
+                }
             }
         }
     }

@@ -62,6 +62,12 @@
 #include <qore/intern/QoreLogicalLessThanOperatorNode.h>
 #include <qore/intern/QoreLogicalLessThanOrEqualsOperatorNode.h>
 #include <qore/intern/QoreIR.h>
+// Compile-time guard: forces review of interpreter dispatch when opcodes change.
+// Update this value after verifying the new opcode is handled (or deliberately
+// falls through to the default case).
+static_assert(QORE_IR_MAX_OPCODE == 340,
+    "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
+    "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
 #include <qore/intern/QoreOperatorNode.h>
 #include <qore/intern/QoreHashObjectDereferenceOperatorNode.h>
@@ -1589,6 +1595,24 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // Used to cleanup references when UninstantiateLocal is processed
     // Indexed by slot_id (from local_var_slots) for O(1) access
     size_t local_slot_count = func.max_local_slot_id > 0 ? func.max_local_slot_id + 1 : 0;
+
+    // Precompute bitmask of IR-only local slots.  After function calls (without
+    // reference args), only non-IR-only slots need cache invalidation because callees
+    // can access non-IR-only locals through the TLS variable stack (Qore's scoping
+    // allows inner functions to access outer locals).  IR-only locals exist only in
+    // the slot cache and cannot be accessed through TLS, so they stay valid.
+    std::vector<bool> locals_ir_only(local_slot_count, false);
+    bool has_non_ir_only_locals = false;
+    for (auto& [lvar, sid] : func.local_var_slots) {
+        if (lvar && sid < local_slot_count) {
+            if (func.ir_only_locals.count(reinterpret_cast<const void*>(lvar))) {
+                locals_ir_only[sid] = true;
+            } else {
+                has_non_ir_only_locals = true;
+            }
+        }
+    }
+
     // Fast O(1) instantiation check indexed by slot_id.
     // Mirrors instantiated_locals but avoids hash lookups for variables with valid slot_ids.
     // Must be kept in sync with instantiated_locals + locally_uninstantiated.
@@ -1716,12 +1740,24 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
 
     // Lightweight cache invalidation for after external calls (function/method calls).
     // Called functions run in their own frame and cannot modify the caller's local
-    // variables, so the locals slot cache remains valid.  Only globals, thread-locals,
-    // and closure variables might have been modified by the called code.
+    // variables directly.  Only globals, thread-locals, and closure variables might
+    // have been modified by the called code.  Additionally, locals that are
+    // closure-bound must be invalidated since the callee may have captured and
+    // accessed through the TLS variable stack.  IR-only locals are safe since they
+    // exist only in the slot cache and cannot be reached by callees.
     auto invalidateExternalCaches = [&]() {
         cleanupStoredValues(globals, xsink);
         cleanupStoredValues(threadlocals, xsink);
         cleanupStoredValues(closures, xsink);
+        // Invalidate non-IR-only local slots: callees can modify these through TLS
+        if (has_non_ir_only_locals) {
+            for (size_t i = 0; i < locals_ir_only.size(); ++i) {
+                if (!locals_ir_only[i]) {
+                    locals_slot_cache[i].discard(xsink);
+                    locals_slot_cache[i] = QoreValue();
+                }
+            }
+        }
     };
 
     // Helper: discard all LoadLocal result slots for a given local variable,
@@ -2589,9 +2625,10 @@ next_instruction:
                             }
                         }
                         on_block_exit_handlers.resize(scope_start);
-                        // Invalidate all caches after handler execution (both AST and compiled
-                        // handlers can modify any variable type on the thread-local variable stack)
-                        cleanupLocalCaches();
+                        // Handler execution can modify globals, threadlocals, closures, and
+                        // non-IR-only locals through TLS.  IR-only locals are unreachable
+                        // by handlers and stay valid in the slot cache.
+                        invalidateExternalCaches();
                     }
                 }
                 ++ip;
@@ -3762,33 +3799,49 @@ load_local_done:
                         && local_inst->slot_id != UINT32_MAX
                         && local_inst->slot_id < locals_slot_cache.size()) {
                     if (!val.hasNode()) {
-                        // Simple type (int/float/bool/nothing): no coercion risk from
-                        // acceptAssignment(), so pre-populate the cache to avoid a
-                        // cache miss on the next LoadLocal
-                        locals_slot_cache[local_inst->slot_id].discard(xsink);
-                        locals_slot_cache[local_inst->slot_id] = val;
-                        // Use cached LocalVarValue* for direct write-through (avoids TLS lookup)
-                        if (local_inst->slot_id < locals_lvar_cache.size()) {
-                            LocalVarValue*& lvv = locals_lvar_cache[local_inst->slot_id];
-                            if (!lvv) {
-                                lvv = thread_find_lvar(local_inst->local->getName());
+                        // Simple type (int/float/bool/nothing): check that the target
+                        // variable's declared type accepts this value type before using
+                        // the direct write-through fast path (which bypasses runtime
+                        // type checking via acceptAssignment())
+                        const QoreTypeInfo* target_ti = local_inst->local
+                            ? local_inst->local->getTypeInfo() : nullptr;
+                        if (!QoreTypeInfo::parseAcceptsReturns(target_ti, val.getType())) {
+                            // Type mismatch: invalidate caches and use full
+                            // type-checking path (will raise RUNTIME-TYPE-ERROR)
+                            locals_slot_cache[local_inst->slot_id].discard(xsink);
+                            locals_slot_cache[local_inst->slot_id] = QoreValue();
+                            if (local_inst->slot_id < locals_lvar_cache.size()) {
+                                locals_lvar_cache[local_inst->slot_id] = nullptr;
                             }
-                            if (lvv) {
-                                qore_type_t vt = val.getType();
-                                if (vt == NT_INT) {
-                                    discard(lvv->val.assign(val.getAsBigInt()), xsink);
-                                } else if (vt == NT_FLOAT) {
-                                    discard(lvv->val.assign(val.getAsFloat()), xsink);
-                                } else if (vt == NT_BOOLEAN) {
-                                    discard(lvv->val.assign(val.getAsBool()), xsink);
+                            assignLocalVarValue(local_inst->local, val, xsink);
+                        } else {
+                            // Type is compatible: pre-populate the cache to avoid a
+                            // cache miss on the next LoadLocal
+                            locals_slot_cache[local_inst->slot_id].discard(xsink);
+                            locals_slot_cache[local_inst->slot_id] = val;
+                            // Use cached LocalVarValue* for direct write-through (avoids TLS lookup)
+                            if (local_inst->slot_id < locals_lvar_cache.size()) {
+                                LocalVarValue*& lvv = locals_lvar_cache[local_inst->slot_id];
+                                if (!lvv) {
+                                    lvv = thread_find_lvar(local_inst->local->getName());
+                                }
+                                if (lvv) {
+                                    qore_type_t vt = val.getType();
+                                    if (vt == NT_INT) {
+                                        discard(lvv->val.assign(val.getAsBigInt()), xsink);
+                                    } else if (vt == NT_FLOAT) {
+                                        discard(lvv->val.assign(val.getAsFloat()), xsink);
+                                    } else if (vt == NT_BOOLEAN) {
+                                        discard(lvv->val.assign(val.getAsBool()), xsink);
+                                    } else {
+                                        assignLocalVarValue(local_inst->local, val, xsink);
+                                    }
                                 } else {
                                     assignLocalVarValue(local_inst->local, val, xsink);
                                 }
                             } else {
                                 assignLocalVarValue(local_inst->local, val, xsink);
                             }
-                        } else {
-                            assignLocalVarValue(local_inst->local, val, xsink);
                         }
                     } else {
                         // Complex type: invalidate because assignLocalVarValue() →
@@ -4585,11 +4638,11 @@ load_local_done:
                         }
                         // Remove executed handlers
                         on_block_exit_handlers.resize(scope_start);
-                        // Handler execution (both AST and compiled IR) can modify any local,
-                        // global, thread-local, or closure variable on the thread-local stack.
-                        // Clear all caches (including slot cache) so subsequent variable reads
-                        // re-fetch from the runtime.
-                        cleanupLocalCaches();
+                        // Handler execution (both AST and compiled IR) can modify globals,
+                        // threadlocals, closures, and non-IR-only locals through the TLS
+                        // variable stack.  IR-only locals exist only in the slot cache and
+                        // are unreachable by handlers, so they stay valid.
+                        invalidateExternalCaches();
                     }
                 }
                 ++ip;

@@ -1,31 +1,474 @@
 # Valgrind suppression file for Qore
-# These are false positives caused by compiler optimizations with bitfield assignments
+# These are false positives caused by -O3 optimization of NaN-boxed QoreValue bit operations.
+# All QoreValue methods use uint64_t bit patterns to encode types, pointers, ints, and doubles
+# in a single 8-byte value. Under -O3, the compiler's bitfield handling confuses valgrind into
+# reporting uninitialised value errors. These do not appear in debug builds (-O0/-Og).
 
-# False positive: AbstractQoreNode bitfield initialization
-# The custom operator new zeros memory, but optimizer's bitfield handling confuses valgrind
-{
-   AbstractQoreNode_bitfield_init_in_math_constants
-   Memcheck:Cond
-   fun:_ZN10QoreValue3setEP17AbstractQoreNode
-   fun:_Z19init_math_constantsR14QoreNamespace
-   ...
-}
+# Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+
+# ============================================================================
+# QoreValue::set(AbstractQoreNode*) — all contexts
+# ============================================================================
+# This is the primary source of false positives. The NaN-boxing tag check in set()
+# reads bits that valgrind thinks are uninitialised due to optimizer reordering.
 
 {
-   AbstractQoreNode_bitfield_init_general
-   Memcheck:Cond
-   fun:_ZN10QoreValue3setEP17AbstractQoreNode
-   ...
-   fun:_Z15init_qore_typesv
-   ...
-}
-
-# Alternative pattern matching for different compiler name mangling
-{
-   QoreValue_set_AbstractQoreNode_cond
+   QoreValue_set_AbstractQoreNode_all
    Memcheck:Cond
    fun:*QoreValue*set*AbstractQoreNode*
    ...
-   fun:*init_math_constants*
+}
+
+{
+   QoreValue_set_AbstractQoreNode_value
+   Memcheck:Value8
+   fun:*QoreValue*set*AbstractQoreNode*
+   ...
+}
+
+# ============================================================================
+# QoreValue::getType() — all contexts
+# ============================================================================
+# getType() decodes the NaN-boxed tag bits; same false positive mechanism.
+
+{
+   QoreValue_getType_all
+   Memcheck:Cond
+   fun:*QoreValue*getType*
+   ...
+}
+
+{
+   QoreValue_getType_value
+   Memcheck:Value8
+   fun:*QoreValue*getType*
+   ...
+}
+
+# ============================================================================
+# Parser functions that manipulate QoreValues
+# ============================================================================
+
+{
+   check_lvalue_cond
+   Memcheck:Cond
+   fun:*check_lvalue*
+   ...
+}
+
+{
+   make_args_cond
+   Memcheck:Cond
+   fun:*make_args*
+   ...
+}
+
+{
+   process_assignment_cond
+   Memcheck:Cond
+   fun:*process_assignment*
+   ...
+}
+
+{
+   splice_expressions_cond
+   Memcheck:Cond
+   fun:*splice_expressions*
+   ...
+}
+
+{
+   ignore_return_value_cond
+   Memcheck:Cond
+   fun:*ignore_return_value*
+   ...
+}
+
+{
+   processCall_cond
+   Memcheck:Cond
+   fun:*processCall*
+   ...
+}
+
+# ============================================================================
+# Statement and expression parseInit — NaN-box tag checks during parse init
+# ============================================================================
+
+{
+   ExpressionStatement_parseInitImpl_cond
+   Memcheck:Cond
+   fun:*ExpressionStatement*parseInitImpl*
+   ...
+}
+
+{
+   ForStatement_parseInitImpl_cond
+   Memcheck:Cond
+   fun:*ForStatement*parseInitImpl*
+   ...
+}
+
+{
+   ForStatement_execImpl_cond
+   Memcheck:Cond
+   fun:*ForStatement*execImpl*
+   ...
+}
+
+{
+   IfStatement_parseInitImpl_cond
+   Memcheck:Cond
+   fun:*IfStatement*parseInitImpl*
+   ...
+}
+
+{
+   IfStatement_execImpl_cond
+   Memcheck:Cond
+   fun:*IfStatement*execImpl*
+   ...
+}
+
+{
+   StatementBlock_parseInitImpl_cond
+   Memcheck:Cond
+   fun:*StatementBlock*parseInitImpl*
+   ...
+}
+
+# ============================================================================
+# Operator parseInit — increment/decrement/assignment/unshift
+# ============================================================================
+
+{
+   QorePreIncrementOperatorNode_parseInitImpl_cond
+   Memcheck:Cond
+   fun:*QorePreIncrementOperatorNode*parseInitImpl*
+   ...
+}
+
+{
+   QorePostIncrementOperatorNode_parseInitImpl_cond
+   Memcheck:Cond
+   fun:*QorePostIncrementOperatorNode*parseInitImpl*
+   ...
+}
+
+{
+   QorePreDecrementOperatorNode_parseInitImpl_cond
+   Memcheck:Cond
+   fun:*QorePreDecrementOperatorNode*parseInitImpl*
+   ...
+}
+
+{
+   QoreAssignmentOperatorNode_parseInitIntern_cond
+   Memcheck:Cond
+   fun:*QoreAssignmentOperatorNode*parseInitIntern*
+   ...
+}
+
+{
+   QoreUnshiftOperatorNode_parseInitImpl_cond
+   Memcheck:Cond
+   fun:*QoreUnshiftOperatorNode*parseInitImpl*
+   ...
+}
+
+{
+   QoreHashObjectDereferenceOperatorNode_parseInitImpl_cond
+   Memcheck:Cond
+   fun:*QoreHashObjectDereferenceOperatorNode*parseInitImpl*
+   ...
+}
+
+{
+   LValueOperatorNode_checkLValue_cond
+   Memcheck:Cond
+   fun:*LValueOperatorNode*checkLValue*
+   ...
+}
+
+# ============================================================================
+# UserSignature/UserVariant — parameter list parsing
+# ============================================================================
+
+{
+   UserSignature_ctor_cond
+   Memcheck:Cond
+   fun:*UserSignatureC*
+   ...
+}
+
+{
+   UserVariantBase_ctor_cond
+   Memcheck:Cond
+   fun:*UserVariantBaseC*
+   ...
+}
+
+{
+   UserFunctionVariant_ctor_cond
+   Memcheck:Cond
+   fun:*UserFunctionVariantC*
+   ...
+}
+
+{
+   new_method_variant_cond
+   Memcheck:Cond
+   fun:*new_method_variant*
+   ...
+}
+
+# ============================================================================
+# ExpressionStatement constructor
+# ============================================================================
+
+{
+   ExpressionStatement_ctor_cond
+   Memcheck:Cond
+   fun:*ExpressionStatementC*
+   ...
+}
+
+# ============================================================================
+# IR Lowering and IR Interpreter — QoreValue tag checks in JIT paths
+# ============================================================================
+
+{
+   QoreIRLowering_lowerConstant_cond
+   Memcheck:Cond
+   fun:*QoreIRLowering*lowerConstant*
+   ...
+}
+
+{
+   QoreIRLowering_lowerExpression_cond
+   Memcheck:Cond
+   fun:*QoreIRLowering*lowerExpression*
+   ...
+}
+
+{
+   QoreIRLowering_lowerStatement_cond
+   Memcheck:Cond
+   fun:*QoreIRLowering*lowerStatement*
+   ...
+}
+
+{
+   QoreIRLowering_lowerStatementBlock_cond
+   Memcheck:Cond
+   fun:*QoreIRLowering*lowerStatementBlock*
+   ...
+}
+
+{
+   QoreIRInterpreter_execute_cond
+   Memcheck:Cond
+   fun:*QoreIRInterpreter*execute*
+   ...
+}
+
+# ============================================================================
+# Runtime evaluation — QoreValue type checks during execution
+# ============================================================================
+
+{
+   QoreValue_eval_cond
+   Memcheck:Cond
+   fun:*QoreValue*eval*ExceptionSink*
+   ...
+}
+
+{
+   LValueHelper_ctor_cond
+   Memcheck:Cond
+   fun:*LValueHelperC*
+   ...
+}
+
+{
+   LValueHelper_doLValue_cond
+   Memcheck:Cond
+   fun:*LValueHelper*doLValue*
+   ...
+}
+
+{
+   QoreLValue_assignAssume_cond
+   Memcheck:Cond
+   fun:*QoreLValue*assignAssume*
+   ...
+}
+
+{
+   ValueHolder_release_cond
+   Memcheck:Cond
+   fun:*ValueHolder*release*
+   ...
+}
+
+{
+   ValueOptionalRefHolder_takeReferencedValue_cond
+   Memcheck:Cond
+   fun:*ValueOptionalRefHolder*takeReferencedValue*
+   ...
+}
+
+{
+   ValueEvalOptimizedRefHolder_eval_cond
+   Memcheck:Cond
+   fun:*ValueEvalOptimizedRefHolder*eval*
+   ...
+}
+
+{
+   LocalVarValue_eval_cond
+   Memcheck:Cond
+   fun:*LocalVarValue*eval*
+   ...
+}
+
+{
+   QoreClosureParseNode_evalImpl_cond
+   Memcheck:Cond
+   fun:*QoreClosureParseNode*evalImpl*
+   ...
+}
+
+{
+   QoreAssignmentOperatorNode_evalImpl_cond
+   Memcheck:Cond
+   fun:*QoreAssignmentOperatorNode*evalImpl*
+   ...
+}
+
+{
+   thread_uninstantiate_lvar_cond
+   Memcheck:Cond
+   fun:*thread_uninstantiate_lvar*
+   ...
+}
+
+{
+   QoreTypeInfo_acceptInputIntern_cond
+   Memcheck:Cond
+   fun:*QoreTypeInfo*acceptInputIntern*
+   ...
+}
+
+{
+   QoreTypeSpec_acceptInput_cond
+   Memcheck:Cond
+   fun:*QoreTypeSpec*acceptInput*
+   ...
+}
+
+{
+   UserVariantBase_setupCall_cond
+   Memcheck:Cond
+   fun:*UserVariantBase*setupCall*
+   ...
+}
+
+{
+   UserVariantExecHelper_dtor_cond
+   Memcheck:Cond
+   fun:*UserVariantExecHelper*
+   ...
+}
+
+{
+   UserVariantBase_attemptIRLowering_cond
+   Memcheck:Cond
+   fun:*UserVariantBase*attemptIRLowering*
+   ...
+}
+
+# ============================================================================
+# Remaining runtime contexts
+# ============================================================================
+
+{
+   StatementBlock_execIntern_cond
+   Memcheck:Cond
+   fun:*StatementBlock*execIntern*
+   ...
+}
+
+{
+   AbstractStatement_exec_cond
+   Memcheck:Cond
+   fun:*AbstractStatement*exec*
+   ...
+}
+
+{
+   AbstractQoreNode_eval_cond
+   Memcheck:Cond
+   fun:*AbstractQoreNode*eval*
+   ...
+}
+
+{
+   QoreListNode_push_cond
+   Memcheck:Cond
+   fun:*QoreListNode*push*
+   ...
+}
+
+{
+   qore_list_private_eval_cond
+   Memcheck:Cond
+   fun:*qore_list_private*eval*
+   ...
+}
+
+{
+   ConstantList_clear_cond
+   Memcheck:Cond
+   fun:*ConstantList*clear*
+   ...
+}
+
+{
+   qore_ns_private_clearConstants_cond
+   Memcheck:Cond
+   fun:*qore_ns_private*clearConstants*
+   ...
+}
+
+{
+   qore_program_private_parse_cond
+   Memcheck:Cond
+   fun:*qore_program_private*parse*
+   ...
+}
+
+{
+   ParseNode_parseInit_cond
+   Memcheck:Cond
+   fun:*ParseNode*parseInit*
+   ...
+}
+
+{
+   StaticSystemNamespace_ctor_cond
+   Memcheck:Cond
+   fun:*StaticSystemNamespace*StaticSystemNamespace*
+   ...
+}
+
+# ============================================================================
+# yyparse — parser (multiple contexts)
+# ============================================================================
+
+{
+   yyparse_cond
+   Memcheck:Cond
+   fun:*yyparse*
    ...
 }

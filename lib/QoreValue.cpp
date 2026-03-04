@@ -422,7 +422,7 @@ bool QoreValue::isEqualSoft(const QoreValue& other, ExceptionSink* xsink) const 
     return QoreLogicalEqualsOperatorNode::softEqual(*this, other, xsink);
 }
 
-bool QoreValue::isEqualValue(const QoreValue& other) {
+bool QoreValue::isEqualValue(const QoreValue& other) const {
     // Check if exactly the same value (for nodes, same pointer)
     return bits == other.bits;
 }

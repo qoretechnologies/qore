@@ -645,17 +645,16 @@ static bool checkRefArgs(const AbstractQoreFunctionVariant* variant) {
     if (!uvb) return false;
     auto* sig = uvb->getUserSignature();
     if (!sig) return false;
-    // Check if any parameter is a reference type
-    // Parameters 0..n-1 are the declared parameters
+    // Check if any declared parameter is a reference type.
+    // Only declared reference<T> params create callee→caller bindings that
+    // can modify the caller's local variables.  The implicit argv parameter
+    // contains copies/values of extra arguments (not lvalue bindings), so it
+    // does not need full locals cache invalidation.
     for (size_t i = 0; i < sig->numParams(); ++i) {
         auto pinfo = sig->getParamTypeInfo(i);
         if (pinfo && QoreTypeInfo::isReference(pinfo)) {
             return true;
         }
-    }
-    // Check if *argv is used (splat parameter) — argv can contain reference-typed values
-    if (sig->argvid) {
-        return true;  // Conservative: argv may contain reference types
     }
     return false;
 }

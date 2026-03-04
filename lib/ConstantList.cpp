@@ -64,7 +64,7 @@ ConstantEntry::ConstantEntry(const QoreProgramLocation* loc, const char* n, Qore
 ConstantEntry::ConstantEntry(const ConstantEntry& old)
         : loc(old.loc), pwo(old.pwo), name(old.name),
         typeInfo(old.typeInfo), val(old.val.refSelf()),
-        in_init(false), pub(old.builtin), init(true), builtin(old.builtin), delayed_eval(old.delayed_eval),
+        in_init(false), pub(old.pub), init(true), builtin(old.builtin), delayed_eval(old.delayed_eval),
         saved_val(old.saved_val.refSelf()),
         access(old.access), from_module(old.from_module) {
     assert(!old.in_init);
@@ -384,7 +384,12 @@ void ConstantList::mergeUserPublic(const ConstantList& src) {
             continue;
         }
 
-        assert(!inList(i->first));
+        // skip constants that already exist (same module re-imported via different dependency paths,
+        // e.g. QUnit -> Util and FsUtil -> Util); scanMergeCommittedNamespace already validated
+        // that any existing constant has the same identity
+        if (inList(i->first)) {
+            continue;
+        }
 
         ConstantEntry* n = new ConstantEntry(*i->second);
         cnemap[n->getName()] = n;

@@ -3546,14 +3546,18 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
         if (QoreTypeInfo::getUniqueReturnClass(ti) != nullptr
                 || QoreTypeInfo::isListType(ti)
                 || QoreTypeInfo::isHashType(ti)
-                || QoreTypeInfo::getBaseType(ti) == NT_BINARY) {
+                || QoreTypeInfo::getBaseType(ti) == NT_BINARY
+                || QoreTypeInfo::isReference(ti)) {
             left_var = nullptr;  // Force lvalue path
         }
     }
     QoreValue right_expr(op->getRight());
 
-    // Fused local int operations: emit single instruction instead of LoadLocal+op+StoreLocal
-    if (force_int && left_var && left_var->getType() == VT_LOCAL && left_var->ref.id) {
+    // Fused local int operations: emit single instruction instead of LoadLocal+op+StoreLocal.
+    // Exclude reference-typed locals: they need lvalue semantics to write through to the
+    // target variable.
+    if (force_int && left_var && left_var->getType() == VT_LOCAL && left_var->ref.id
+            && !QoreTypeInfo::isReference(left_var->getTypeInfo())) {
         const AbstractQoreNode* right_node = right_expr.getInternalNode();
         auto* right_var = dynamic_cast<const VarRefNode*>(right_node);
         if (right_var && right_var->getType() == VT_LOCAL && right_var->ref.id) {
@@ -3673,6 +3677,11 @@ QoreIRValue QoreIRLowering::lowerMinusEquals(const QoreValue& expr, std::string&
     bool force_int = dynamic_cast<const QoreIntMinusEqualsOperatorNode*>(node) != nullptr;
     const AbstractQoreNode* left_node = op->getLeft().getInternalNode();
     auto* left_var = dynamic_cast<const VarRefNode*>(left_node);
+    // Reference-typed locals need lvalue semantics for write-through
+    if (left_var && left_var->getTypeInfo()
+            && QoreTypeInfo::isReference(left_var->getTypeInfo())) {
+        left_var = nullptr;
+    }
     QoreValue right_expr(op->getRight());
     QoreIRValue right = lowerExpression(right_expr, error);
     if (!right.isValid()) {
@@ -3768,6 +3777,11 @@ QoreIRValue QoreIRLowering::lowerMultiplyEquals(const QoreValue& expr, std::stri
 
     const AbstractQoreNode* left_node = op->getLeft().getInternalNode();
     auto* left_var = dynamic_cast<const VarRefNode*>(left_node);
+    // Reference-typed locals need lvalue semantics for write-through
+    if (left_var && left_var->getTypeInfo()
+            && QoreTypeInfo::isReference(left_var->getTypeInfo())) {
+        left_var = nullptr;
+    }
     QoreValue right_expr(op->getRight());
     QoreIRValue right = lowerExpression(right_expr, error);
     if (!right.isValid()) {
@@ -3860,6 +3874,11 @@ QoreIRValue QoreIRLowering::lowerDivideEquals(const QoreValue& expr, std::string
 
     const AbstractQoreNode* left_node = op->getLeft().getInternalNode();
     auto* left_var = dynamic_cast<const VarRefNode*>(left_node);
+    // Reference-typed locals need lvalue semantics for write-through
+    if (left_var && left_var->getTypeInfo()
+            && QoreTypeInfo::isReference(left_var->getTypeInfo())) {
+        left_var = nullptr;
+    }
     QoreValue right_expr(op->getRight());
     QoreIRValue right = lowerExpression(right_expr, error);
     if (!right.isValid()) {
@@ -3953,6 +3972,11 @@ QoreIRValue QoreIRLowering::lowerModuloEquals(const QoreValue& expr, std::string
     bool force_int = dynamic_cast<const QoreBinaryIntLValueOperatorNode*>(node) != nullptr;
     const AbstractQoreNode* left_node = op->getLeft().getInternalNode();
     auto* left_var = dynamic_cast<const VarRefNode*>(left_node);
+    // Reference-typed locals need lvalue semantics for write-through
+    if (left_var && left_var->getTypeInfo()
+            && QoreTypeInfo::isReference(left_var->getTypeInfo())) {
+        left_var = nullptr;
+    }
     QoreValue right_expr(op->getRight());
     QoreIRValue right = lowerExpression(right_expr, error);
     if (!right.isValid()) {
@@ -4025,6 +4049,11 @@ QoreIRValue QoreIRLowering::lowerAndEquals(const QoreValue& expr, std::string& e
     bool force_int = dynamic_cast<const QoreBinaryIntLValueOperatorNode*>(node) != nullptr;
     const AbstractQoreNode* left_node = op->getLeft().getInternalNode();
     auto* left_var = dynamic_cast<const VarRefNode*>(left_node);
+    // Reference-typed locals need lvalue semantics for write-through
+    if (left_var && left_var->getTypeInfo()
+            && QoreTypeInfo::isReference(left_var->getTypeInfo())) {
+        left_var = nullptr;
+    }
     QoreValue right_expr(op->getRight());
     QoreIRValue right = lowerExpression(right_expr, error);
     if (!right.isValid()) {
@@ -4097,6 +4126,11 @@ QoreIRValue QoreIRLowering::lowerOrEquals(const QoreValue& expr, std::string& er
     bool force_int = dynamic_cast<const QoreBinaryIntLValueOperatorNode*>(node) != nullptr;
     const AbstractQoreNode* left_node = op->getLeft().getInternalNode();
     auto* left_var = dynamic_cast<const VarRefNode*>(left_node);
+    // Reference-typed locals need lvalue semantics for write-through
+    if (left_var && left_var->getTypeInfo()
+            && QoreTypeInfo::isReference(left_var->getTypeInfo())) {
+        left_var = nullptr;
+    }
     QoreValue right_expr(op->getRight());
     QoreIRValue right = lowerExpression(right_expr, error);
     if (!right.isValid()) {
@@ -4169,6 +4203,11 @@ QoreIRValue QoreIRLowering::lowerXorEquals(const QoreValue& expr, std::string& e
     bool force_int = dynamic_cast<const QoreBinaryIntLValueOperatorNode*>(node) != nullptr;
     const AbstractQoreNode* left_node = op->getLeft().getInternalNode();
     auto* left_var = dynamic_cast<const VarRefNode*>(left_node);
+    // Reference-typed locals need lvalue semantics for write-through
+    if (left_var && left_var->getTypeInfo()
+            && QoreTypeInfo::isReference(left_var->getTypeInfo())) {
+        left_var = nullptr;
+    }
     QoreValue right_expr(op->getRight());
     QoreIRValue right = lowerExpression(right_expr, error);
     if (!right.isValid()) {
@@ -4237,10 +4276,11 @@ QoreIRValue QoreIRLowering::lowerPreIncrement(const QoreValue& expr, std::string
         error = "unsupported lvalue for pre-increment IR lowering";
         return QoreIRValue();
     }
-    // Typed int pre-increment on simple VarRef
+    // Typed int pre-increment on simple VarRef (exclude references — need lvalue write-through)
     if (dynamic_cast<const QoreIntPreIncrementOperatorNode*>(node)) {
         auto* var = dynamic_cast<const VarRefNode*>(lvexp.getInternalNode());
-        if (var && var->getType() != VT_IMMEDIATE && !isRangeLValue(lvexp)) {
+        if (var && var->getType() != VT_IMMEDIATE && !isRangeLValue(lvexp)
+                && !QoreTypeInfo::isReference(var->getTypeInfo())) {
             // Fused path: emit single IncrementLocalInt for VT_LOCAL
             if (var->getType() == VT_LOCAL && var->ref.id) {
                 auto* inst = builder.createIncrementLocalInt(var->ref.id, 1, op->loc);
@@ -4312,10 +4352,11 @@ QoreIRValue QoreIRLowering::lowerPostIncrement(const QoreValue& expr, std::strin
         error = "unsupported lvalue for post-increment IR lowering";
         return QoreIRValue();
     }
-    // Typed int post-increment on simple VarRef: lower to LoadLocal + AddAssignInt + StoreLocal
+    // Typed int post-increment on simple VarRef (exclude references — need lvalue write-through)
     if (dynamic_cast<const QoreIntPostIncrementOperatorNode*>(node)) {
         auto* var = dynamic_cast<const VarRefNode*>(lvexp.getInternalNode());
-        if (var && var->getType() != VT_IMMEDIATE && !isRangeLValue(lvexp)) {
+        if (var && var->getType() != VT_IMMEDIATE && !isRangeLValue(lvexp)
+                && !QoreTypeInfo::isReference(var->getTypeInfo())) {
             QoreIRValue old_value = loadVarRef(var, error, "post-increment-int", lvexp);
             if (!old_value.isValid()) {
                 return QoreIRValue();
@@ -4372,9 +4413,11 @@ QoreIRValue QoreIRLowering::lowerPreDecrement(const QoreValue& expr, std::string
         return QoreIRValue();
     }
     // Typed int pre-decrement on simple VarRef
+    // Exclude references — need lvalue write-through
     if (dynamic_cast<const QoreIntPreDecrementOperatorNode*>(node)) {
         auto* var = dynamic_cast<const VarRefNode*>(lvexp.getInternalNode());
-        if (var && var->getType() != VT_IMMEDIATE && !isRangeLValue(lvexp)) {
+        if (var && var->getType() != VT_IMMEDIATE && !isRangeLValue(lvexp)
+                && !QoreTypeInfo::isReference(var->getTypeInfo())) {
             // Fused path: emit single IncrementLocalInt(delta=-1) for VT_LOCAL
             if (var->getType() == VT_LOCAL && var->ref.id) {
                 auto* inst = builder.createIncrementLocalInt(var->ref.id, -1, op->loc);
@@ -4446,10 +4489,11 @@ QoreIRValue QoreIRLowering::lowerPostDecrement(const QoreValue& expr, std::strin
         error = "unsupported lvalue for post-decrement IR lowering";
         return QoreIRValue();
     }
-    // Typed int post-decrement on simple VarRef: lower to LoadLocal + SubAssignInt + StoreLocal
+    // Typed int post-decrement on simple VarRef (exclude references — need lvalue write-through)
     if (dynamic_cast<const QoreIntPostDecrementOperatorNode*>(node)) {
         auto* var = dynamic_cast<const VarRefNode*>(lvexp.getInternalNode());
-        if (var && var->getType() != VT_IMMEDIATE && !isRangeLValue(lvexp)) {
+        if (var && var->getType() != VT_IMMEDIATE && !isRangeLValue(lvexp)
+                && !QoreTypeInfo::isReference(var->getTypeInfo())) {
             QoreIRValue old_value = loadVarRef(var, error, "post-decrement-int", lvexp);
             if (!old_value.isValid()) {
                 return QoreIRValue();

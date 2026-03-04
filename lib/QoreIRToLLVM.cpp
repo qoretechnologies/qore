@@ -34,6 +34,12 @@
 #include "qore/intern/LocalVar.h"
 #include "qore/intern/QoreAOT.h"
 #include "qore/intern/QoreIR.h"
+// Compile-time guard: forces review of LLVM lowering when opcodes change.
+// Update this value after verifying the new opcode is handled (or deliberately
+// falls through to the default case).
+static_assert(QORE_IR_MAX_OPCODE == 340,
+    "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
+    "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 #include "qore/intern/QoreLibIntern.h"
 #include "qore/intern/OnBlockExitStatement.h"
 #include "qore/intern/CaseNodeRegex.h"
@@ -690,6 +696,53 @@ void QoreIRToLLVM::collectLocals(const QoreIRFunction& func) {
                     if (is_first_block && !block_scoped_locals.count(key)) {
                         entry_locals.push_back(linst->local);
                         entry_locals_set.insert(key);
+                    }
+                }
+            }
+            // Fused local int opcodes reference locals directly (not via
+            // LoadLocal/StoreLocal); ensure they are discovered for alloca creation
+            if (inst->opcode == QoreIROpcode::AddAssignLocalInt) {
+                const auto* fused = static_cast<const QoreIRAddAssignLocalIntInstruction*>(inst);
+                for (LocalVar* var : {fused->target, fused->source}) {
+                    if (var && seen.insert(var).second) {
+                        auto key = reinterpret_cast<const void*>(var);
+                        if (pre_instantiated_locals && !pre_instantiated_locals->count(key)) {
+                            continue;
+                        }
+                        function_locals.push_back(var);
+                        if (is_first_block && !block_scoped_locals.count(key)) {
+                            entry_locals.push_back(var);
+                            entry_locals_set.insert(key);
+                        }
+                    }
+                }
+            }
+            if (inst->opcode == QoreIROpcode::IncrementLocalInt) {
+                const auto* fused = static_cast<const QoreIRIncrementLocalIntInstruction*>(inst);
+                if (fused->local && seen.insert(fused->local).second) {
+                    auto key = reinterpret_cast<const void*>(fused->local);
+                    if (!pre_instantiated_locals || pre_instantiated_locals->count(key)) {
+                        function_locals.push_back(fused->local);
+                        if (is_first_block && !block_scoped_locals.count(key)) {
+                            entry_locals.push_back(fused->local);
+                            entry_locals_set.insert(key);
+                        }
+                    }
+                }
+            }
+            if (inst->opcode == QoreIROpcode::BranchIfLtLocalInt) {
+                const auto* fused = static_cast<const QoreIRBranchIfLtLocalIntInstruction*>(inst);
+                for (LocalVar* var : {fused->lhs, fused->rhs}) {
+                    if (var && seen.insert(var).second) {
+                        auto key = reinterpret_cast<const void*>(var);
+                        if (pre_instantiated_locals && !pre_instantiated_locals->count(key)) {
+                            continue;
+                        }
+                        function_locals.push_back(var);
+                        if (is_first_block && !block_scoped_locals.count(key)) {
+                            entry_locals.push_back(var);
+                            entry_locals_set.insert(key);
+                        }
                     }
                 }
             }
@@ -3357,6 +3410,148 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             builder->CreateCondBr(cond, t_it->second, f_it->second);
             return true;
         }
+        case QoreIROpcode::AddAssignLocalInt: {
+            const auto* fused = static_cast<const QoreIRAddAssignLocalIntInstruction*>(inst);
+            auto target_key = reinterpret_cast<const void*>(fused->target);
+            auto source_key = reinterpret_cast<const void*>(fused->source);
+            auto target_it = local_allocas.find(target_key);
+            auto source_it = local_allocas.find(source_key);
+            if (target_it == local_allocas.end() || source_it == local_allocas.end()) {
+                error = "AddAssignLocalInt: local alloca not found";
+                return false;
+            }
+            bool target_native = native_int_locals.count(target_key) > 0;
+            bool source_native = native_int_locals.count(source_key) > 0;
+            // Load and unbox values to native int
+            llvm::Value* target_raw = builder->CreateLoad(i64_type, target_it->second, "add.target");
+            llvm::Value* source_raw = builder->CreateLoad(i64_type, source_it->second, "add.source");
+            llvm::Value* target_int = target_raw;
+            llvm::Value* source_int = source_raw;
+            if (!target_native) {
+                auto to_int = module.getOrInsertFunction("qore_rt_to_int",
+                        llvm::FunctionType::get(i64_type, {i64_type}, false));
+                target_int = builder->CreateCall(to_int, {target_raw});
+            }
+            if (!source_native) {
+                auto to_int = module.getOrInsertFunction("qore_rt_to_int",
+                        llvm::FunctionType::get(i64_type, {i64_type}, false));
+                source_int = builder->CreateCall(to_int, {source_raw});
+            }
+            llvm::Value* result = builder->CreateAdd(target_int, source_int, "add.result");
+            // Store back: box if non-native, store raw if native
+            if (target_native) {
+                builder->CreateStore(result, target_it->second);
+            } else {
+                llvm::Value* boxed = boxIntInline(result);
+                builder->CreateStore(boxed, target_it->second);
+                // Sync to runtime stack for non-ir-only locals
+                bool is_ir_only = ir_only_locals_set && ir_only_locals_set->count(target_key);
+                if (!is_ir_only) {
+                    if (aot_mode) {
+                        auto assign_fn = module.getOrInsertFunction("qore_rt_assign_local_aot",
+                                llvm::FunctionType::get(void_type,
+                                        {ptr_type, i32_type, i64_type, ptr_type}, false));
+                        int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(target_key);
+                        builder->CreateCall(assign_fn, {aot_ctx_arg,
+                                llvm::ConstantInt::get(i32_type, slot), boxed, xsink_arg});
+                    } else {
+                        auto assign_fn = module.getOrInsertFunction("qore_rt_assign_local",
+                                llvm::FunctionType::get(void_type,
+                                        {ptr_type, i64_type, ptr_type}, false));
+                        llvm::Value* var_ptr = llvm::ConstantInt::get(i64_type,
+                                reinterpret_cast<uint64_t>(fused->target));
+                        llvm::Value* var_as_ptr = builder->CreateIntToPtr(var_ptr, ptr_type);
+                        builder->CreateCall(assign_fn, {var_as_ptr, boxed, xsink_arg});
+                    }
+                }
+            }
+            if (inst->result.isValid()) {
+                values[inst->result.id] = result;
+                // NOT nanboxed — native int result
+            }
+            return true;
+        }
+        case QoreIROpcode::IncrementLocalInt: {
+            const auto* fused = static_cast<const QoreIRIncrementLocalIntInstruction*>(inst);
+            auto key = reinterpret_cast<const void*>(fused->local);
+            auto it = local_allocas.find(key);
+            if (it == local_allocas.end()) {
+                error = "IncrementLocalInt: local alloca not found";
+                return false;
+            }
+            bool is_native = native_int_locals.count(key) > 0;
+            llvm::Value* local_raw = builder->CreateLoad(i64_type, it->second, "inc.val");
+            llvm::Value* local_int = local_raw;
+            if (!is_native) {
+                auto to_int = module.getOrInsertFunction("qore_rt_to_int",
+                        llvm::FunctionType::get(i64_type, {i64_type}, false));
+                local_int = builder->CreateCall(to_int, {local_raw});
+            }
+            llvm::Value* result = builder->CreateAdd(local_int,
+                    llvm::ConstantInt::get(i64_type, fused->delta), "inc.result");
+            if (is_native) {
+                builder->CreateStore(result, it->second);
+            } else {
+                llvm::Value* boxed = boxIntInline(result);
+                builder->CreateStore(boxed, it->second);
+                bool is_ir_only = ir_only_locals_set && ir_only_locals_set->count(key);
+                if (!is_ir_only) {
+                    if (aot_mode) {
+                        auto assign_fn = module.getOrInsertFunction("qore_rt_assign_local_aot",
+                                llvm::FunctionType::get(void_type,
+                                        {ptr_type, i32_type, i64_type, ptr_type}, false));
+                        int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
+                        builder->CreateCall(assign_fn, {aot_ctx_arg,
+                                llvm::ConstantInt::get(i32_type, slot), boxed, xsink_arg});
+                    } else {
+                        auto assign_fn = module.getOrInsertFunction("qore_rt_assign_local",
+                                llvm::FunctionType::get(void_type,
+                                        {ptr_type, i64_type, ptr_type}, false));
+                        llvm::Value* var_ptr = llvm::ConstantInt::get(i64_type,
+                                reinterpret_cast<uint64_t>(fused->local));
+                        llvm::Value* var_as_ptr = builder->CreateIntToPtr(var_ptr, ptr_type);
+                        builder->CreateCall(assign_fn, {var_as_ptr, boxed, xsink_arg});
+                    }
+                }
+            }
+            return true;
+        }
+        case QoreIROpcode::BranchIfLtLocalInt: {
+            const auto* fused = static_cast<const QoreIRBranchIfLtLocalIntInstruction*>(inst);
+            auto t_it = block_map.find(fused->true_target);
+            auto f_it = block_map.find(fused->false_target);
+            if (t_it == block_map.end() || f_it == block_map.end()) {
+                error = "branch target block not found";
+                return false;
+            }
+            auto lhs_key = reinterpret_cast<const void*>(fused->lhs);
+            auto rhs_key = reinterpret_cast<const void*>(fused->rhs);
+            auto lhs_it = local_allocas.find(lhs_key);
+            auto rhs_it = local_allocas.find(rhs_key);
+            if (lhs_it == local_allocas.end() || rhs_it == local_allocas.end()) {
+                error = "BranchIfLtLocalInt: local alloca not found";
+                return false;
+            }
+            bool lhs_native = native_int_locals.count(lhs_key) > 0;
+            bool rhs_native = native_int_locals.count(rhs_key) > 0;
+            llvm::Value* lhs_raw = builder->CreateLoad(i64_type, lhs_it->second, "lt.lhs");
+            llvm::Value* rhs_raw = builder->CreateLoad(i64_type, rhs_it->second, "lt.rhs");
+            llvm::Value* lhs_int = lhs_raw;
+            llvm::Value* rhs_int = rhs_raw;
+            if (!lhs_native) {
+                auto to_int = module.getOrInsertFunction("qore_rt_to_int",
+                        llvm::FunctionType::get(i64_type, {i64_type}, false));
+                lhs_int = builder->CreateCall(to_int, {lhs_raw});
+            }
+            if (!rhs_native) {
+                auto to_int = module.getOrInsertFunction("qore_rt_to_int",
+                        llvm::FunctionType::get(i64_type, {i64_type}, false));
+                rhs_int = builder->CreateCall(to_int, {rhs_raw});
+            }
+            llvm::Value* cmp = builder->CreateICmpSLT(lhs_int, rhs_int, "lt.cmp");
+            builder->CreateCondBr(cmp, t_it->second, f_it->second);
+            return true;
+        }
         case QoreIROpcode::SwitchInt: {
             const auto* sw = static_cast<const QoreIRSwitchIntInstruction*>(inst);
             auto* switch_val = getVal(sw->switch_val.id, error);
@@ -4485,11 +4680,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
             }
 
-            // Calls can modify local variables through side effects IF they have
-            // reference-typed parameters. Skip reload for calls with no ref args.
-            if (expr_inst->has_ref_args) {
-                reloadAllLocalsFromRuntime(module, llvm_func);
-            }
+            // Qore's scoping allows callees to access the caller's non-IR-only
+            // locals through the TLS variable stack, so we must reload after every
+            // call.  reloadAllLocalsFromRuntime already skips IR-only locals.
+            reloadAllLocalsFromRuntime(module, llvm_func);
 
             values[inst->result.id] = call_result;
             nanboxed_values.insert(inst->result.id);
@@ -4630,11 +4824,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         args_array, llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
             }
 
-            // Calls can modify local variables through side effects IF they have
-            // reference-typed parameters. Skip reload for calls with no ref args.
-            if (direct_inst->has_ref_args) {
-                reloadAllLocalsFromRuntime(module, llvm_func);
-            }
+            // Qore's scoping allows callees to access the caller's non-IR-only
+            // locals through the TLS variable stack, so we must reload after every
+            // call.  reloadAllLocalsFromRuntime already skips IR-only locals.
+            reloadAllLocalsFromRuntime(module, llvm_func);
 
             values[inst->result.id] = call_result;
             nanboxed_values.insert(inst->result.id);
@@ -4702,11 +4895,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
             }
 
-            // Calls can modify local variables through side effects IF they have
-            // reference-typed parameters. Skip reload for calls with no ref args.
-            if (direct_inst->has_ref_args) {
-                reloadAllLocalsFromRuntime(module, llvm_func);
-            }
+            // Qore's scoping allows callees to access the caller's non-IR-only
+            // locals through the TLS variable stack, so we must reload after every
+            // call.  reloadAllLocalsFromRuntime already skips IR-only locals.
+            reloadAllLocalsFromRuntime(module, llvm_func);
 
             values[inst->result.id] = call_result;
             nanboxed_values.insert(inst->result.id);
@@ -4774,10 +4966,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
             }
 
-            // Reload locals only if callee may modify them through reference parameters
-            if (invoke_inst->has_ref_args) {
-                reloadAllLocalsFromRuntime(module, llvm_func);
-            }
+            // Qore's scoping allows callees to access the caller's non-IR-only
+            // locals through the TLS variable stack, so we must reload after every
+            // call.  reloadAllLocalsFromRuntime already skips IR-only locals.
+            reloadAllLocalsFromRuntime(module, llvm_func);
 
             values[inst->result.id] = call_result;
             nanboxed_values.insert(inst->result.id);
@@ -4844,11 +5036,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
             }
 
-            // Calls can modify local variables through side effects IF they have
-            // reference-typed parameters. Skip reload for calls with no ref args.
-            if (direct_inst->has_ref_args) {
-                reloadAllLocalsFromRuntime(module, llvm_func);
-            }
+            // Qore's scoping allows callees to access the caller's non-IR-only
+            // locals through the TLS variable stack, so we must reload after every
+            // call.  reloadAllLocalsFromRuntime already skips IR-only locals.
+            reloadAllLocalsFromRuntime(module, llvm_func);
 
             values[inst->result.id] = call_result;
             nanboxed_values.insert(inst->result.id);
@@ -4909,10 +5100,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         xsink_arg});
             }
 
-            // Reload locals only if callee may modify them through reference parameters
-            if (direct_inst->has_ref_args) {
-                reloadAllLocalsFromRuntime(module, llvm_func);
-            }
+            // Qore's scoping allows callees to access the caller's non-IR-only
+            // locals through the TLS variable stack, so we must reload after every
+            // call.  reloadAllLocalsFromRuntime already skips IR-only locals.
+            reloadAllLocalsFromRuntime(module, llvm_func);
 
             values[inst->result.id] = call_result;
             nanboxed_values.insert(inst->result.id);
@@ -4974,10 +5165,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         xsink_arg});
             }
 
-            // Reload locals only if callee may modify them through reference parameters
-            if (invoke_inst->has_ref_args) {
-                reloadAllLocalsFromRuntime(module, llvm_func);
-            }
+            // Qore's scoping allows callees to access the caller's non-IR-only
+            // locals through the TLS variable stack, so we must reload after every
+            // call.  reloadAllLocalsFromRuntime already skips IR-only locals.
+            reloadAllLocalsFromRuntime(module, llvm_func);
 
             values[inst->result.id] = call_result;
             nanboxed_values.insert(inst->result.id);

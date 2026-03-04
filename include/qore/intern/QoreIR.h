@@ -515,6 +515,9 @@ enum class QoreIROpcode : uint16_t {
 };
 
 //! Maximum opcode ID supported by this build (derived from the last enum value)
+//! NOTE: Both QoreIRInterpreter.cpp and QoreIRToLLVM.cpp have matching
+//! static_assert guards that will break when this value changes, forcing
+//! review of their dispatch switches.
 constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::BranchIfLtLocalInt);
 static_assert(QORE_IR_MAX_OPCODE == 340, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");

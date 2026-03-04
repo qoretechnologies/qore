@@ -562,7 +562,7 @@ public:
     DLLEXPORT bool isEqualSoft(const QoreValue& other, ExceptionSink* xsink) const;
 
     //! Value comparison (checks if same pointer for nodes)
-    DLLEXPORT bool isEqualValue(const QoreValue& other);
+    DLLEXPORT bool isEqualValue(const QoreValue& other) const;
 
     // ========================================================================
     // Value assignment and manipulation
