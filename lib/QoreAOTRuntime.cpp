@@ -41,6 +41,7 @@
 #include "qore/intern/FunctionList.h"
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/qore_enum_decl_private.h"
+#include <qore/QoreEnumDecl.h>
 #include "qore/intern/StatementBlock.h"
 #include "qore/intern/Function.h"
 #include "qore/intern/QoreIR.h"
@@ -378,6 +379,27 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
             // Fall through to generic evaluation for now
             printd(1, "AOT v2: complex typed construction needs source fallback\n");
             return 0;
+
+        case AOTExprKind::CONST_ENUM: {
+            if (!ref1 || !ref2) {
+                return 0;
+            }
+            const QoreNamespace* pns = nullptr;
+            const QoreEnumDecl* ed = pgm->findEnum(ref1, pns);
+            if (!ed) {
+                printd(0, "AOT v2: cannot resolve enum '%s' for const enum\n", ref1);
+                return 0;
+            }
+            const QoreEnumMember* member = ed->findMember(ref2);
+            if (!member) {
+                printd(0, "AOT v2: cannot find enum member '%s::%s'\n", ref1, ref2);
+                return 0;
+            }
+            QoreValue enum_val = QoreValue::makeEnum(member);
+            uint64_t bits;
+            memcpy(&bits, &enum_val, sizeof(bits));
+            return bits;
+        }
 
         case AOTExprKind::GENERIC_EVAL:
         default:
@@ -1663,6 +1685,7 @@ static QoreAOTContext* buildContextFromSlotMap(
             case AOTExprKind::SELF_METHOD_CALL:
             case AOTExprKind::STATIC_METHOD_CALL:
             case AOTExprKind::STATIC_VARREF:
+            case AOTExprKind::CONST_ENUM:
                 ref1 = reader.readStringRef(ptr);
                 ref2 = reader.readStringRef(ptr);
                 break;

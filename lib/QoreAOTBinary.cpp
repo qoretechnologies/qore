@@ -41,6 +41,7 @@
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/typed_hash_decl_private.h"
 #include "qore/intern/qore_enum_decl_private.h"
+#include <qore/QoreEnumDecl.h>
 
 #include <cassert>
 #include <cstring>
@@ -54,6 +55,20 @@ bool QoreAOTBinaryWriter::writeValue(const QoreValue& v) {
     }
     if (v.isNull()) {
         writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_NULL));
+        return true;
+    }
+    // Must check isEnum() before getType() because getType() on TAG_ENUM
+    // returns the base type (e.g., NT_INT), which would serialize the wrong thing
+    if (v.isEnum()) {
+        writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_ENUM));
+        const QoreEnumMember* member = v.getEnumMember();
+        std::string path = member->getEnumDecl()->getNamespacePath();
+        writeU32(static_cast<uint32_t>(path.size()));
+        writeStringRef(path.c_str(), path.size());
+        const char* name = member->getName();
+        uint32_t name_len = static_cast<uint32_t>(strlen(name));
+        writeU32(name_len);
+        writeStringRef(name, name_len);
         return true;
     }
 
@@ -632,6 +647,43 @@ QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end
             // as optional in the function signature. The actual default is evaluated
             // by the compiled function code at runtime.
             return QoreValue(true);
+
+        case QoreAOTValueTag::VT_ENUM: {
+            if (ptr + 8 > end) {
+                error = "unexpected end of data reading enum path";
+                return QoreValue();
+            }
+            uint32_t path_len = readU32(ptr);
+            uint32_t path_offset = readU32(ptr);
+            const char* path = getString(path_offset);
+            if (!path) {
+                error = "invalid string offset for enum path";
+                return QoreValue();
+            }
+            if (ptr + 8 > end) {
+                error = "unexpected end of data reading enum member name";
+                return QoreValue();
+            }
+            uint32_t name_len = readU32(ptr);
+            uint32_t name_offset = readU32(ptr);
+            const char* member_name = getString(name_offset);
+            if (!member_name) {
+                error = "invalid string offset for enum member name";
+                return QoreValue();
+            }
+            const QoreNamespace* pns = nullptr;
+            const QoreEnumDecl* ed = getProgram()->findEnum(path, pns);
+            if (!ed) {
+                error = std::string("enum not found: ") + path;
+                return QoreValue();
+            }
+            const QoreEnumMember* member = ed->findMember(member_name);
+            if (!member) {
+                error = std::string("enum member not found: ") + std::string(path) + "::" + member_name;
+                return QoreValue();
+            }
+            return QoreValue::makeEnum(member);
+        }
 
         default:
             error = "unknown value tag: " + std::to_string(static_cast<int>(tag))
@@ -1592,7 +1644,8 @@ void serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
                 case AOTExprKind::SELF_METHOD_CALL:
                 case AOTExprKind::STATIC_METHOD_CALL:
                 case AOTExprKind::STATIC_VARREF:
-                    // ref1 = class path, ref2 = method/var name
+                case AOTExprKind::CONST_ENUM:
+                    // ref1 = class path/enum path, ref2 = method/var/member name
                     writer.writeStringRef(expr.ref1.c_str());
                     writer.writeStringRef(expr.ref2.c_str());
                     break;

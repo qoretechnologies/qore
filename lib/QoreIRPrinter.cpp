@@ -38,6 +38,7 @@
 #include <qore/intern/NewComplexTypeNode.h>
 #include <qore/intern/Variable.h>
 #include <qore/QoreClass.h>
+#include <qore/QoreEnumDecl.h>
 
 static const char* opcodeName(QoreIROpcode op) {
     switch (op) {
@@ -48,6 +49,7 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::ConstNull: return "const.null";
         case QoreIROpcode::ConstString: return "const.string";
         case QoreIROpcode::ConstDate: return "const.date";
+        case QoreIROpcode::ConstEnum: return "const.enum";
         case QoreIROpcode::MakeList: return "make.list";
         case QoreIROpcode::MakeHash: return "make.hash";
         case QoreIROpcode::CreateEmptyList: return "create.empty.list";
@@ -409,6 +411,14 @@ static void printConstant(const QoreIRConstInstruction& inst, std::ostream& out)
         case QoreIRConstant::Kind::Date:
             out << (inst.constant.date_is_relative ? "rel:" : "abs:") << inst.constant.date_microseconds;
             break;
+        case QoreIRConstant::Kind::Enum:
+            if (inst.constant.enum_member) {
+                out << inst.constant.enum_member->getEnumDecl()->getNamespacePath()
+                    << "::" << inst.constant.enum_member->getName();
+            } else {
+                out << "<null-enum>";
+            }
+            break;
     }
 }
 
@@ -619,7 +629,8 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                     || inst->opcode == QoreIROpcode::ConstNothing
                     || inst->opcode == QoreIROpcode::ConstNull
                     || inst->opcode == QoreIROpcode::ConstString
-                    || inst->opcode == QoreIROpcode::ConstDate) {
+                    || inst->opcode == QoreIROpcode::ConstDate
+                    || inst->opcode == QoreIROpcode::ConstEnum) {
                 auto* cinst = dynamic_cast<const QoreIRConstInstruction*>(inst.get());
                 if (cinst) {
                     out << " = ";

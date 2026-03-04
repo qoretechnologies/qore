@@ -360,7 +360,7 @@ bool qore_jit_deopt_requested() {
 extern "C" DLLEXPORT uint64_t qore_rt_invoke_expr(uint64_t expr_bits, ExceptionSink* xsink) {
     QoreValue expr = fromBits(expr_bits);
     if (!expr.hasNode()) {
-        return toBits(QoreValue());
+        return expr_bits;  // Return inline value as-is (TAG_ENUM, etc.)
     }
     bool needs_deref = true;
     QoreValue ref_expr = expr.refSelf();

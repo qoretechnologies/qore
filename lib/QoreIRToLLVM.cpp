@@ -5232,12 +5232,23 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         // === ConstEnum ===
         case QoreIROpcode::ConstEnum: {
             const auto* cinst = static_cast<const QoreIRConstInstruction*>(inst);
-            // Embed the QoreEnumMember pointer as a constant and call qore_rt_make_enum()
-            llvm::Value* member_ptr = llvm::ConstantInt::get(i64_type,
-                    reinterpret_cast<uint64_t>(cinst->constant.enum_member));
-            auto helper = module.getOrInsertFunction("qore_rt_make_enum",
-                    llvm::FunctionType::get(i64_type, {i64_type}, false));
-            llvm::Value* result = builder->CreateCall(helper, {member_ptr});
+            llvm::Value* result;
+            if (aot_mode) {
+                QoreValue enum_val = QoreValue::makeEnum(cinst->constant.enum_member);
+                uint64_t expr_bits;
+                std::memcpy(&expr_bits, &enum_val, sizeof(expr_bits));
+                int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
+                auto helper = module.getOrInsertFunction("qore_rt_invoke_expr_aot",
+                        llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type}, false));
+                result = builder->CreateCall(helper, {aot_ctx_arg,
+                        llvm::ConstantInt::get(i32_type, slot), xsink_arg});
+            } else {
+                llvm::Value* member_ptr = llvm::ConstantInt::get(i64_type,
+                        reinterpret_cast<uint64_t>(cinst->constant.enum_member));
+                auto helper = module.getOrInsertFunction("qore_rt_make_enum",
+                        llvm::FunctionType::get(i64_type, {i64_type}, false));
+                result = builder->CreateCall(helper, {member_ptr});
+            }
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             // TAG_ENUM values are zero-allocation, no cleanup needed

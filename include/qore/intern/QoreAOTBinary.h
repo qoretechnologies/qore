@@ -111,6 +111,8 @@ enum class QoreAOTValueTag : uint8_t {
     VT_OPAQUE_DEFAULT = 12,
     //! Absolute date with region name for DST-aware timezone reconstruction
     VT_ABS_DATE_REGION = 13,
+    //! Enum value: namespace path + member name
+    VT_ENUM = 14,
 };
 
 //! Section header in the binary format
@@ -595,6 +597,7 @@ enum class AOTExprKind : uint8_t {
     HASHDECL_NEW       = 16,  //!< Hashdecl construction: ref1=hashdecl_path
     COMPLEX_HASH_NEW   = 17,  //!< Complex hash construction: ref1=type_path
     COMPLEX_LIST_NEW   = 18,  //!< Complex list construction: ref1=type_path
+    CONST_ENUM         = 19,  //!< Enum constant: ref1=enum_path, ref2=member_name
     EXPR_TREE          = 0xFE, //!< Recursive expression tree: binary blob (inline bytes)
     GENERIC_EVAL       = 0xFF //!< Unsupported expression — function needs source fallback
 };

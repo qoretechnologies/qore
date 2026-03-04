@@ -34,6 +34,7 @@
 #include "qore/intern/QoreDir.h"
 
 #include <qore/Qore.h>
+#include <qore/QoreEnumDecl.h>
 
 #include <sys/stat.h>
 #include <algorithm>
@@ -3128,6 +3129,14 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                     slots.getLocalSlot(reinterpret_cast<const void*>(lis->container->ref.id));
                     break;
                 }
+                case QoreIROpcode::ConstEnum: {
+                    auto* cinst = static_cast<QoreIRConstInstruction*>(inst.get());
+                    QoreValue enum_val = QoreValue::makeEnum(cinst->constant.enum_member);
+                    uint64_t bits;
+                    memcpy(&bits, &enum_val, sizeof(bits));
+                    slots.getExprSlot(bits);
+                    break;
+                }
                 default:
                     break;
             }
@@ -3498,6 +3507,16 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                         if (seen_regex_cases.insert(key).second) {
                             ++regex_count;
                         }
+                    }
+                    break;
+                }
+                case QoreIROpcode::ConstEnum: {
+                    auto* cinst = static_cast<QoreIRConstInstruction*>(inst.get());
+                    QoreValue enum_val = QoreValue::makeEnum(cinst->constant.enum_member);
+                    uint64_t bits;
+                    memcpy(&bits, &enum_val, sizeof(bits));
+                    if (seen_exprs.insert(bits).second) {
+                        ++expr_count;
                     }
                     break;
                 }
@@ -3937,6 +3956,17 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                         if (seen_regex_cases.insert(key).second) {
                             ctx->regex_cases[regex_idx++] = const_cast<CaseNodeRegex*>(ri->regex_case);
                         }
+                    }
+                    break;
+                }
+                case QoreIROpcode::ConstEnum: {
+                    auto* cinst = static_cast<QoreIRConstInstruction*>(inst.get());
+                    QoreValue enum_val = QoreValue::makeEnum(cinst->constant.enum_member);
+                    uint64_t bits;
+                    memcpy(&bits, &enum_val, sizeof(bits));
+                    if (seen_exprs.insert(bits).second) {
+                        // TAG_ENUM is inline (no ref-counting), no ref() needed
+                        ctx->exprs[expr_idx++] = bits;
                     }
                     break;
                 }
@@ -4831,6 +4861,13 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots) 
     memcpy(&v, &bits, sizeof(v));
 
     if (!v.hasNode()) {
+        if (v.isEnum()) {
+            const QoreEnumMember* member = v.getEnumMember();
+            id.kind = AOTExprKind::CONST_ENUM;
+            id.ref1 = member->getEnumDecl()->getNamespacePath();
+            id.ref2 = member->getName();
+            return id;
+        }
         // Scalar constant — shouldn't normally appear in expression slots
         id.kind = AOTExprKind::GENERIC_EVAL;
         return id;
