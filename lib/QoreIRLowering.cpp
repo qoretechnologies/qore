@@ -2914,6 +2914,11 @@ QoreIRBasicBlock* QoreIRLowering::createBlock(const std::string& prefix) {
 }
 
 QoreIRValue QoreIRLowering::lowerConstant(const QoreValue& expr, std::string& error) {
+    // TAG_ENUM must be checked first: getType() returns the base type (e.g., NT_INT),
+    // so base-type-specific paths below would strip enum identity
+    if (expr.isEnum()) {
+        return builder.createConstEnum(expr.getEnumMember())->result;
+    }
     if (expr.isNothing()) {
         return builder.createConstNothing()->result;
     }
@@ -2981,9 +2986,6 @@ QoreIRValue QoreIRLowering::lowerConstant(const QoreValue& expr, std::string& er
     }
     if (expr.isNull()) {
         return builder.createConstNull()->result;
-    }
-    if (expr.isEnum()) {
-        return builder.createConstEnum(expr.getEnumMember())->result;
     }
     return QoreIRValue();
 }
