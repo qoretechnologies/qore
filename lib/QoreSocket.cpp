@@ -332,8 +332,11 @@ SSLSocketHelperHelper::~SSLSocketHelperHelper() {
 }
 
 void SSLSocketHelperHelper::error() {
-    ssl->deref();
+    // s->ssl may already be nullptr if handleErrorIntern() → qs.close() was called
+    // during SSL negotiation, which derefs ssl and nulls s->ssl; in that case the
+    // SSLSocketReferenceHelper in setIntern() already deleted the object on deref
     if (s->ssl) {
+        ssl->deref();
         s->ssl = nullptr;
     }
 }
@@ -447,6 +450,7 @@ int SSLSocketHelper::setClient(ExceptionSink* xsink, const char* mname, const ch
     if (!rc && sni_target_host) {
         // issue #3053 set TLS server name for servers that require SNI
         assert(ssl);
+        SSLSocketReferenceHelper ssrh(this);
         ERR_clear_error();
         if (!SSL_set_tlsext_host_name(ssl, sni_target_host)) {
             sslError(xsink, mname, "SSL_set_tlsext_host_name");
@@ -2957,13 +2961,15 @@ int SSLSocketHelper::doNonBlockingIo(ExceptionSink* xsink, const char* mname, vo
             rc = *xsink ? QSE_SSL_ERR : 0;
             break;
         } else if (err == SSL_ERROR_SSL) {
-            // For HTTP/2, let the HTTP/2 layer handle connection lifecycle
-            if (!qs.h2_session) {
-                qs.close();
-            }
+            // must call sslError() before qs.close() — close_internal() derefs ssl which would
+            // bring refs down to 1, violating sslError()'s assert(refs > 1) invariant
             if (!sslError(xsink, mname, get_action_method(action), action == WRITE)) {
                 xsink->raiseErrnoException("SOCKET-SSL-ERROR", sock_get_error(), "error in Socket::%s(): the " \
                     "openssl library reported a fatal I/O error while calling %s()", mname, get_action_method(action));
+            }
+            // For HTTP/2, let the HTTP/2 layer handle connection lifecycle
+            if (!qs.h2_session) {
+                qs.close();
             }
             rc = QSE_SSL_ERR;
             break;
@@ -3109,14 +3115,16 @@ int SSLSocketHelper::doSSLRW(ExceptionSink* xsink, const char* mname, void* buf,
             rc = !*xsink ? 0 : QSE_SSL_ERR;
             break;
         } else if (err == SSL_ERROR_SSL) {
+            // must call sslError() before qs.close() — close_internal() derefs ssl which would
+            // bring refs down to 1, violating sslError()'s assert(refs > 1) invariant
+            if (!sslError(xsink, mname, get_action_method(action), action == WRITE)) {
+                xsink->raiseErrnoException("SOCKET-SSL-ERROR", sock_get_error(), "error in Socket::%s(): the "
+                    "openssl library reported a fatal I/O error while calling %s()", mname, get_action_method(action));
+            }
             // close the socket unconditionally
             // For HTTP/2, let the HTTP/2 layer handle connection lifecycle
             if (!qs.h2_session) {
                 qs.close();
-            }
-            if (!sslError(xsink, mname, get_action_method(action), action == WRITE)) {
-                xsink->raiseErrnoException("SOCKET-SSL-ERROR", sock_get_error(), "error in Socket::%s(): the "
-                    "openssl library reported a fatal I/O error while calling %s()", mname, get_action_method(action));
             }
             rc = QSE_SSL_ERR;
             break;

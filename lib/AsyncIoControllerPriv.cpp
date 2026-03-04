@@ -32,6 +32,8 @@
 #include <qore/Qore.h>
 #include <qore/QoreSocketObject.h>
 #include "qore/intern/AsyncIoControllerPriv.h"
+#include "qore/intern/Http2Session.h"
+#include "qore/intern/QC_Socket.h"
 #include "qore/intern/qore_socket_private.h"
 #include "qore/intern/QoreLibIntern.h"
 #include "qore/intern/QoreAsyncIoLogger.h"
@@ -1167,6 +1169,27 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                                 xsink);
                             // Update extra fd registrations
                             updateExtraFds(result.key, poll_sock, result.new_poll_info, xsink);
+#if defined(__linux__) && defined(HAVE_IO_URING)
+                            // Pass io_uring to any Http2Session on this socket (once).
+                            // Use a local ExceptionSink to avoid hiding errors from
+                            // the caller's xsink.
+                            if (loop->getIoUring()) {
+                                ExceptionSink uring_xsink;
+                                QoreSocketObject* so = static_cast<QoreSocketObject*>(
+                                    poll_sock->getReferencedPrivateData(CID_SOCKET,
+                                        &uring_xsink));
+                                if (so) {
+                                    Http2SessionPtr h2s = so->priv->socket->priv->h2_session;
+                                    if (h2s && !h2s->hasIoUring()) {
+                                        h2s->setIoUring(loop->getIoUring());
+                                    }
+                                    so->deref(&uring_xsink);
+                                }
+                                if (uring_xsink) {
+                                    uring_xsink.clear();
+                                }
+                            }
+#endif
                         }
 
                         // Update poll deadline
@@ -1341,6 +1364,42 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
         if (cb_snapshot) {
             cb_snapshot->deref(xsink);
         }
+
+#if defined(__linux__) && defined(HAVE_IO_URING)
+        // Process io_uring completions for async file reads
+        // NOTE: always call processCompletions() when uring exists, not just when
+        // getPendingCount() > 0 — cancel operations (cancelStream) reset the weak_ptr
+        // in PendingRead but don't erase the entry or decrement pending_count until
+        // processCompletions() sees the CQE.  Cancel SQEs and expired-session CQEs
+        // still fire the eventfd.  If we skip draining the eventfd, epoll_wait returns
+        // immediately on every iteration, causing a busy loop.
+        QoreIoUring* uring = loop->getIoUring();
+        if (uring) {
+            std::vector<QoreIoUring::CompletedRead> completions;
+            uring->processCompletions(completions);
+            for (auto& c : completions) {
+                ExceptionSink uring_xsink;
+                // Save data pointer before moving buffer — c.data points into
+                // c.buffer and C++ does not guarantee argument evaluation order
+                const char* data = c.data;
+                c.session->handleAsyncReadCompletion(
+                    c.stream_id, data, c.length, c.error,
+                    std::move(c.buffer), &uring_xsink);
+                if (uring_xsink) {
+                    // Log and clear — don't let one stream's error kill the loop
+                    const QoreStringNode* err = uring_xsink.getExceptionErr()
+                        .get<const QoreStringNode>();
+                    const QoreStringNode* desc = uring_xsink.getExceptionDesc()
+                        .get<const QoreStringNode>();
+                    log(QORE_LOG_LEVEL_ERROR,
+                        "io_uring completion error (stream %d): %s: %s",
+                        c.stream_id, err ? err->c_str() : "?",
+                        desc ? desc->c_str() : "?");
+                    uring_xsink.clear();
+                }
+            }
+        }
+#endif
     }
 
     // Cleanup on exit

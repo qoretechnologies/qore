@@ -146,6 +146,7 @@ class QoreSocket {
     friend class SocketHttp2SendStreamingResponsePollOperation;
     friend class SocketHttp2FlushPollOperation;
     friend class SocketHttp2ClientMultiplexPollOperation;
+    friend class AsyncIoControllerPriv;
     friend class SocketQuicClientPollOperation;
     friend class SocketQuicServerPollOperation;
     friend class SocketQuicSendResponsePollOperation;

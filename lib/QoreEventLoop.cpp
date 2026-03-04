@@ -55,11 +55,45 @@ QoreEventLoop::QoreEventLoop(ExceptionSink* xsink) {
     if (event_fd < 0) {
         xsink->raiseErrnoException("EVENT-LOOP-ERROR", errno, "epoll_create1() failed");
     }
+#if defined(HAVE_IO_URING)
+    if (event_fd >= 0) {
+        // Initialize io_uring (non-fatal if it fails — e.g., old kernel, seccomp)
+        ExceptionSink uring_xsink;
+        io_uring_ = std::make_unique<QoreIoUring>(64, &uring_xsink);
+        if (!io_uring_->isValid()) {
+            printd(1, "QoreEventLoop: io_uring unavailable, "
+                "file I/O will use blocking reads in the event loop\n");
+            uring_xsink.clear();
+            io_uring_.reset();
+        } else {
+            // Register io_uring's eventfd with epoll
+            struct epoll_event ev;
+            memset(&ev, 0, sizeof(ev));
+            ev.events = EPOLLIN;
+            ev.data.fd = io_uring_->getEventFd();
+            if (epoll_ctl(event_fd, EPOLL_CTL_ADD, ev.data.fd, &ev) < 0) {
+                printd(0, "QoreEventLoop: failed to register io_uring eventfd "
+                    "with epoll: %s\n", strerror(errno));
+                io_uring_.reset();
+            } else {
+                printd(2, "QoreEventLoop: io_uring enabled, eventfd=%d\n",
+                    io_uring_->getEventFd());
+            }
+        }
+    }
+#endif // HAVE_IO_URING
 #endif
     // poll-based implementation doesn't need initialization
 }
 
 QoreEventLoop::~QoreEventLoop() {
+#if defined(__linux__) && defined(HAVE_IO_URING)
+    // Remove io_uring eventfd from epoll and destroy io_uring before closing epoll fd
+    if (io_uring_ && event_fd >= 0) {
+        epoll_ctl(event_fd, EPOLL_CTL_DEL, io_uring_->getEventFd(), nullptr);
+        io_uring_.reset();
+    }
+#endif
 #if defined(DARWIN) || defined(__linux__)
     if (event_fd >= 0) {
         ::close(event_fd);
@@ -305,6 +339,9 @@ int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, Exce
     bool has_fds;
 #ifdef DARWIN
     has_fds = !fd_map.empty() || !user_event_map.empty();
+#elif defined(__linux__) && defined(HAVE_IO_URING)
+    // io_uring eventfd is registered with epoll but not in fd_map
+    has_fds = !fd_map.empty() || (io_uring_ != nullptr);
 #else
     has_fds = !fd_map.empty();
 #endif
@@ -415,7 +452,14 @@ int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, Exce
 
 #elif defined(__linux__)
     // epoll: use epoll_wait()
-    std::vector<struct epoll_event> epevents(fd_map.size());
+    // +1 for the io_uring eventfd which is registered with epoll but not in fd_map
+    size_t epoll_size = fd_map.size();
+#if defined(HAVE_IO_URING)
+    if (io_uring_) {
+        ++epoll_size;
+    }
+#endif
+    std::vector<struct epoll_event> epevents(epoll_size);
 
     int rc;
     while (true) {
@@ -436,6 +480,17 @@ int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, Exce
 
     for (int i = 0; i < rc; ++i) {
         int ev = 0;
+        // Get the fd directly from epoll_event data
+        int fd = epevents[i].data.fd;
+
+#if defined(HAVE_IO_URING)
+        // Check if this is the io_uring eventfd
+        if (io_uring_ && fd == io_uring_->getEventFd()) {
+            events.push_back({QORE_IOURING_FD, QORE_EV_IOURING, nullptr});
+            continue;
+        }
+#endif
+
         if (epevents[i].events & (EPOLLERR | EPOLLHUP)) {
             ev = QORE_EV_ERROR;
         } else {
@@ -446,9 +501,6 @@ int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, Exce
                 ev |= QORE_EV_WRITE;
             }
         }
-
-        // Get the fd directly from epoll_event data
-        int fd = epevents[i].data.fd;
 
         // Look up udata from our fd_map
         auto it = fd_map.find(fd);

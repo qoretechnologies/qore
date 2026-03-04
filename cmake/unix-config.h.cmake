@@ -215,6 +215,9 @@
 #cmakedefine HAVE_ZSTD
 #cmakedefine HAVE_LZ4
 
+/* io_uring - async file I/O (Linux only) */
+#cmakedefine HAVE_IO_URING
+
 /* the rest */
 #cmakedefine HAVE_ATOMIC_COMPILE_ONLY
 #cmakedefine HAVE_CXX11

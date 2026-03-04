@@ -48,6 +48,10 @@
 #include <string>
 #include <sys/stat.h>
 #include <unordered_map>
+
+#if defined(__linux__) && defined(HAVE_IO_URING)
+class QoreIoUring;
+#endif
 #include <vector>
 
 // Forward declarations
@@ -149,7 +153,7 @@ struct Http2Settings {
 };
 
 //! HTTP/2 Session wrapper using nghttp2
-class Http2Session {
+class Http2Session : public std::enable_shared_from_this<Http2Session> {
 public:
     //! Compaction threshold for the send buffer (bytes consumed before erasing)
     /** When send_offset exceeds this value, the consumed prefix is erased.
@@ -672,8 +676,18 @@ private:
         bool is_pollable = false;
         //! True if the fd can be monitored by epoll/kqueue (not a regular file)
         bool is_epoll_compatible = false;
+        //! True for regular files — uses io_uring path on Linux when available
+        bool is_regular_file = false;
         bool need_reassign = true;
         bool eof = false;
+        //! Current read offset for io_uring async reads
+        size_t file_offset = 0;
+        //! True when an io_uring async read is in flight
+        bool iouring_read_pending = false;
+        //! Buffer retained when sendStreamData() returns backpressure (buffer full)
+        std::unique_ptr<char[]> pending_iouring_buf;
+        //! Length of data in pending_iouring_buf
+        size_t pending_iouring_len = 0;
 
         StreamInputStreamInfo() = default;
         StreamInputStreamInfo(InputStream* is)
@@ -684,7 +698,17 @@ private:
                 // epoll on Linux (EPERM) — only include truly async fds (sockets,
                 // pipes, etc.) in the event loop's extra fd set
                 struct stat st;
-                is_epoll_compatible = !(fstat(stream_fd, &st) == 0 && S_ISREG(st.st_mode));
+                if (fstat(stream_fd, &st) == 0 && S_ISREG(st.st_mode)) {
+                    is_regular_file = true;
+                    is_epoll_compatible = false;
+                    // Get initial file offset
+                    off_t pos = lseek(stream_fd, 0, SEEK_CUR);
+                    if (pos >= 0) {
+                        file_offset = static_cast<size_t>(pos);
+                    }
+                } else {
+                    is_epoll_compatible = true;
+                }
             }
         }
     };
@@ -692,6 +716,11 @@ private:
 
     //! Atomic flag for lock-free hasActiveStreamInputStreams() checks in the I/O hot path
     std::atomic<bool> has_active_input_streams_{false};
+
+#if defined(__linux__) && defined(HAVE_IO_URING)
+    //! Non-owning pointer to io_uring instance (owned by QoreEventLoop)
+    QoreIoUring* io_uring = nullptr;
+#endif
 
 public:
     //! Store an InputStream for a stream (I/O thread will read from it)
@@ -711,15 +740,35 @@ public:
     */
     DLLLOCAL void processStreamInputStreams(ExceptionSink* xsink);
 
-    //! Clean up all InputStreams (called on session destruction)
-    /** @since %Qore 2.3
-    */
-    DLLLOCAL void cleanupStreamInputStreams(ExceptionSink* xsink);
-
     //! Get extra fds for all active pollable InputStreams
     /** @since %Qore 2.3
     */
     DLLLOCAL void getExtraFds(std::vector<std::pair<int, int>>& extra_fds) const;
+
+#if defined(__linux__) && defined(HAVE_IO_URING)
+    //! Set the io_uring instance for async file reads
+    /** @param u pointer to QoreIoUring (non-owning, owned by QoreEventLoop)
+        @since %Qore 2.3
+    */
+    DLLLOCAL void setIoUring(QoreIoUring* u) { io_uring = u; }
+
+    //! Returns true if io_uring is already set
+    DLLLOCAL bool hasIoUring() const { return io_uring != nullptr; }
+
+    //! Handle a completed io_uring read for a stream
+    /** Called by the I/O thread after processCompletions() delivers a result.
+        @param stream_id the HTTP/2 stream ID
+        @param data pointer to the read data (nullptr on EOF/error)
+        @param length bytes read
+        @param error errno value (0 on success)
+        @param xsink exception sink
+        @since %Qore 2.3
+    */
+    DLLLOCAL void handleAsyncReadCompletion(int32_t stream_id, const char* data,
+                                            size_t length, int error,
+                                            std::unique_ptr<char[]> buffer,
+                                            ExceptionSink* xsink);
+#endif
 };
 
 //! Shared pointer type for Http2Session with thread-safe atomic reference counting
