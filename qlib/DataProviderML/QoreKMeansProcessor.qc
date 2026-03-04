@@ -76,7 +76,7 @@ public class QoreKMeansProcessor inherits DataProvider::AbstractDataProvider {
                 "desc": "When enabled, the first batch of records creates the initial model "
                     "and each subsequent batch refines it, allowing the groups to evolve over "
                     "time; when disabled, each batch creates a completely new model; "
-                    "default: True (enabled)",
+                    "default: `True` (enabled)",
                 "type": AbstractDataProviderTypeMap."*bool",
             },
         };

@@ -117,7 +117,7 @@ public class QoreHoltWintersProcessor inherits DataProvider::AbstractAnalyticsPr
                 "short_desc": "Limit trend growth in long-range forecasts",
                 "desc": "When enabled, the trend gradually flattens out for distant future "
                     "predictions instead of growing indefinitely; this produces more "
-                    "conservative long-range forecasts; default: False (disabled)",
+                    "conservative long-range forecasts; default: `False` (disabled)",
                 "type": AbstractDataProviderTypeMap."*bool",
             },
             "phi": <DataProviderOptionInfo>{

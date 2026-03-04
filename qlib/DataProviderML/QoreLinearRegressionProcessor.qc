@@ -77,7 +77,7 @@ public class QoreLinearRegressionProcessor inherits DataProvider::AbstractDataPr
                 "short_desc": "Include a baseline constant in the model",
                 "desc": "When enabled, the model includes a baseline constant (intercept); "
                     "this should almost always be enabled unless you know the target is "
-                    "zero when all inputs are zero; default: True (enabled)",
+                    "zero when all inputs are zero; default: `True` (enabled)",
                 "type": AbstractDataProviderTypeMap."*bool",
             },
             "normalize": <DataProviderOptionInfo>{
@@ -86,7 +86,7 @@ public class QoreLinearRegressionProcessor inherits DataProvider::AbstractDataPr
                 "desc": "When enabled, input fields are scaled to have similar ranges before "
                     "fitting; this can improve accuracy when input fields have very different "
                     "units or magnitudes (e.g., mixing square feet and number of rooms); "
-                    "default: False (disabled)",
+                    "default: `False` (disabled)",
                 "type": AbstractDataProviderTypeMap."*bool",
             },
         };
