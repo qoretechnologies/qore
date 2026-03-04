@@ -90,8 +90,20 @@ module DataProvider {
                 "expressions": DataProviderGenericExpressions,
             },
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                QoreFilterRecordsProcessor::ConstructorOptions, {
+                {
+                    "where_cond": <DataProviderOptionInfo>{
+                        "display_name": "Filter Expression",
+                        "short_desc": "A boolean filter expression",
+                        "desc": "A boolean expression to filter records; matching records pass "
+                            "through, non-matching records are dropped",
+                        "type": AbstractDataProviderTypeMap."*bool",
+                        "required": True,
+                    },
+                }, {
                     "loc": "constructor",
+                    "supports_templates": False,
+                    "supports_custom_values": False,
+                    "default_view": UiOptionView::Expression,
                 }
             ),
         });

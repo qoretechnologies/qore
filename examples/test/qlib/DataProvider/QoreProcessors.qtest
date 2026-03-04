@@ -475,6 +475,14 @@ class QoreProcessorsTest inherits QUnit::Test {
                 sprintf("action %y should have processor_capabilities", action_name));
         }
 
+        # verify filter-records where_cond option type is *bool (not *hash from ConstructorOptions)
+        # this ensures validation uses the correct UI-facing type
+        assertEq("bool", actions."filter-records".options.where_cond.type.getBaseTypeName());
+        # verify expression builder UI attributes are set
+        assertEq(False, actions."filter-records".options.where_cond.supports_templates);
+        assertEq(False, actions."filter-records".options.where_cond.supports_custom_values);
+        assertEq(UiOptionView::Expression, actions."filter-records".options.where_cond.default_view);
+
         # verify filter actions have DPC_FILTER capability
         assertEq(DPC_FILTER, actions."filter-records".processor_capabilities);
         assertEq(DPC_FILTER, actions."record-limit".processor_capabilities);
