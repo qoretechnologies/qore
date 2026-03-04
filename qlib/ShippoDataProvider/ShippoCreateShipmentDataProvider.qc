@@ -127,7 +127,7 @@ public class ShippoCreateShipmentDataProvider inherits ShippoDataProviderBase {
 
 #! Request data type for creating shipments
 public class ShippoCreateShipmentRequestDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions
         const Fields = {
             "address_from": {
@@ -145,17 +145,17 @@ public class ShippoCreateShipmentRequestDataType inherits HashDataType {
                 "required": True,
             },
             "parcels": {
-                "type": SoftAutoListType,
+                "type": new ListDataType("parcels", new ShippoParcelInputDataType()),
                 "display_name": "Parcels",
                 "short_desc": "Package details",
                 "desc": "Array of parcel objects describing the packages to ship",
                 "required": True,
             },
             "address_return": {
-                "type": AutoHashOrNothingType,
+                "type": new ShippoAddressInputDataType(AutoHashOrNothingType),
                 "display_name": "Return Address",
                 "short_desc": "Return address",
-                "desc": "The return address (defaults to address_from if not specified)",
+                "desc": "The return address (defaults to `address_from` if not specified)",
             },
             "shipment_date": {
                 "type": SoftDateOrNothingType,
@@ -164,10 +164,11 @@ public class ShippoCreateShipmentRequestDataType inherits HashDataType {
                 "desc": "The date the shipment will be sent. Defaults to current date.",
             },
             "extra": {
-                "type": AutoHashOrNothingType,
+                "type": new ShippoShipmentExtraDataType(AutoHashOrNothingType),
                 "display_name": "Extra Options",
                 "short_desc": "Additional options",
-                "desc": "Extra shipment options like insurance, signature confirmation, etc.",
+                "desc": "Extra shipment options including insurance, signature confirmation, "
+                    "billing, COD, and more",
             },
             "customs_declaration": {
                 "type": SoftStringOrNothingType,
@@ -185,7 +186,7 @@ public class ShippoCreateShipmentRequestDataType inherits HashDataType {
                 "type": SoftBoolOrNothingType,
                 "display_name": "Async",
                 "short_desc": "Asynchronous processing",
-                "desc": "If true, rates will be generated asynchronously. Default is false.",
+                "desc": "If `True`, rates will be generated asynchronously. Default is `False`.",
             },
         };
     }

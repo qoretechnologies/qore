@@ -93,10 +93,10 @@ public class ShippoParcelDataType inherits HashDataType {
                 "desc": "A parcel template is a predefined package used by a carrier (e.g., USPS_FlatRateEnvelope)",
             },
             "extra": {
-                "type": AutoHashOrNothingType,
+                "type": new ShippoParcelExtraDataType(AutoHashOrNothingType),
                 "display_name": "Extra",
                 "short_desc": "Extra options",
-                "desc": "Additional options for the parcel (e.g., COD, insurance)",
+                "desc": "Additional options for the parcel including COD, insurance, and label references",
             },
             "metadata": {
                 "type": SoftStringOrNothingType,
@@ -199,10 +199,10 @@ public class ShippoParcelInputDataType inherits HashDataType {
                 "desc": "A parcel template is a predefined package used by a carrier (e.g., USPS_FlatRateEnvelope)",
             },
             "extra": {
-                "type": AutoHashOrNothingType,
+                "type": new ShippoParcelExtraDataType(AutoHashOrNothingType),
                 "display_name": "Extra",
                 "short_desc": "Extra options",
-                "desc": "Additional options for the parcel (e.g., COD, insurance)",
+                "desc": "Additional options for the parcel including COD, insurance, and label references",
             },
             "metadata": {
                 "type": SoftStringOrNothingType,

@@ -50,6 +50,7 @@ public class ShippoShipmentsDataProvider inherits ShippoDataProviderBase {
                 "short_desc": "Filter by creation date (after)",
                 "type": AbstractDataProviderType::get(DateOrNothingType),
                 "desc": "Return shipments created after this date/time",
+                "preselected": True,
             },
             "object_created_lt": <DataProviderOptionInfo>{
                 "display_name": "Created Before",
@@ -68,6 +69,7 @@ public class ShippoShipmentsDataProvider inherits ShippoDataProviderBase {
                 "short_desc": "Results per page",
                 "type": AbstractDataProviderType::get(IntOrNothingType),
                 "desc": "Number of results per page (default 25, max 100)",
+                "preselected": True,
             },
         };
     }
