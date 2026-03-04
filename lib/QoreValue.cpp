@@ -34,7 +34,9 @@
 #include <qore/Qore.h>
 #include <qore/QoreBigIntNode.h>
 #include <qore/QoreBigFloatNode.h>
+#include <qore/QoreEnumDecl.h>
 #include "qore/intern/qore_string_private.h"
+#include "qore/intern/qore_enum_decl_private.h"
 
 #include "qore/intern/QoreLogicalEqualsOperatorNode.h"
 
@@ -179,6 +181,9 @@ int64 QoreValue::getAsBigInt() const {
     if (isBool()) {
         return getBool() ? 1 : 0;
     }
+    if (isEnum()) {
+        return getEnumMember()->getValue().getAsBigInt();
+    }
     if (isPointer()) {
         AbstractQoreNode* n = getPointerUnsafe();
         return n ? n->getAsBigInt() : 0;
@@ -202,6 +207,9 @@ double QoreValue::getAsFloat() const {
     if (isBool()) {
         return getBool() ? 1.0 : 0.0;
     }
+    if (isEnum()) {
+        return getEnumMember()->getValue().getAsFloat();
+    }
     if (isPointer()) {
         AbstractQoreNode* n = getPointerUnsafe();
         return n ? n->getAsFloat() : 0.0;
@@ -224,6 +232,9 @@ bool QoreValue::getAsBool() const {
     }
     if (isFloat()) {
         return getDouble() != 0.0;
+    }
+    if (isEnum()) {
+        return getEnumMember()->getValue().getAsBool();
     }
     if (isPointer()) {
         AbstractQoreNode* n = getPointerUnsafe();
@@ -252,6 +263,10 @@ qore_type_t QoreValue::getType() const {
     if (isBool()) {
         return NT_BOOLEAN;
     }
+    if (isEnum()) {
+        // Return the base type for C++ dispatch compatibility
+        return getEnumMember()->getValue().getType();
+    }
     if (isNothing()) {
         return NT_NOTHING;
     }
@@ -277,6 +292,10 @@ const char* QoreValue::getTypeName() const {
     }
     if (isBool()) {
         return qoreBoolTypeName;
+    }
+    if (isEnum()) {
+        // Return base type name for internal use / backward compatibility
+        return getEnumMember()->getValue().getTypeName();
     }
     if (isShortString()) {
         return "string";
@@ -364,6 +383,11 @@ bool QoreValue::derefCanThrowException() const {
 
 // ============================================================================
 // Comparison operations
+QoreValue QoreValue::getEnumBaseValue() const {
+    assert(isEnum());
+    return getEnumMember()->getValue();
+}
+
 // ============================================================================
 
 bool QoreValue::isEqualHard(const QoreValue& other) const {
@@ -375,6 +399,15 @@ bool QoreValue::isEqualHard(const QoreValue& other) const {
             return v == v;  // NaN != NaN, so this returns false for NaN
         }
         return true;
+    }
+
+    // TAG_ENUM hard comparison: enums are only === to the same enum member
+    if (isEnum() || other.isEnum()) {
+        if (isEnum() && other.isEnum()) {
+            return getEnumMember() == other.getEnumMember();
+        }
+        // enum !== non-enum (strict type safety)
+        return false;
     }
 
     // Get types
@@ -633,6 +666,9 @@ AbstractQoreNode* QoreValue::takeIfNode() {
 // ============================================================================
 
 int QoreValue::getAsString(QoreString& str, int format_offset, ExceptionSink* xsink) const {
+    if (isEnum()) {
+        return getEnumMember()->getValue().getAsString(str, format_offset, xsink);
+    }
     if (isNothing()) {
         qore_string_private::get(str)->concat(
             (format_offset == FMT_YAML_SHORT || format_offset <= FMT_YAML_LONG)
@@ -662,6 +698,9 @@ int QoreValue::getAsString(QoreString& str, int format_offset, ExceptionSink* xs
 }
 
 QoreString* QoreValue::getAsString(bool& del, int format_offset, ExceptionSink* xsink) const {
+    if (isEnum()) {
+        return getEnumMember()->getValue().getAsString(del, format_offset, xsink);
+    }
     if (isNothing()) {
         del = false;
         return (format_offset == FMT_YAML_SHORT || format_offset <= FMT_YAML_LONG)
@@ -763,6 +802,9 @@ const QoreTypeInfo* QoreValue::getTypeInfo() const {
     if (isBool()) {
         return boolTypeInfo;
     }
+    if (isEnum()) {
+        return getEnumMember()->getEnumDecl()->getTypeInfo();
+    }
     if (isShortString()) {
         return stringTypeInfo;
     }
@@ -773,6 +815,9 @@ const QoreTypeInfo* QoreValue::getTypeInfo() const {
 }
 
 const QoreTypeInfo* QoreValue::getFullTypeInfo() const {
+    if (isEnum()) {
+        return getEnumMember()->getEnumDecl()->getTypeInfo();
+    }
     qore_type_t t = getType();
     if (t == NT_OBJECT && isPointer()) {
         const QoreObject* obj = reinterpret_cast<const QoreObject*>(getPointerUnsafe());
@@ -793,6 +838,12 @@ const QoreTypeInfo* QoreValue::getFullTypeInfo() const {
 }
 
 const char* QoreValue::getFullTypeName() const {
+    if (isEnum()) {
+        thread_local QoreString scratch;
+        scratch.clear();
+        scratch.sprintf("enum<%s>", getEnumMember()->getEnumDecl()->getName());
+        return scratch.c_str();
+    }
     if (isFloat()) {
         return qoreFloatTypeName;
     }
@@ -812,6 +863,16 @@ const char* QoreValue::getFullTypeName() const {
 }
 
 const char* QoreValue::getFullTypeName(bool with_namespaces) const {
+    if (isEnum()) {
+        thread_local QoreString scratch;
+        scratch.clear();
+        if (with_namespaces) {
+            scratch.sprintf("enum<%s>", getEnumMember()->getEnumDecl()->getNamespacePath(true).c_str());
+        } else {
+            scratch.sprintf("enum<%s>", getEnumMember()->getEnumDecl()->getName());
+        }
+        return scratch.c_str();
+    }
     if (isFloat()) {
         return qoreFloatTypeName;
     }
@@ -831,6 +892,14 @@ const char* QoreValue::getFullTypeName(bool with_namespaces) const {
 }
 
 const char* QoreValue::getFullTypeName(bool with_namespaces, QoreString& scratch) const {
+    if (isEnum()) {
+        if (with_namespaces) {
+            scratch.sprintf("enum<%s>", getEnumMember()->getEnumDecl()->getNamespacePath(true).c_str());
+        } else {
+            scratch.sprintf("enum<%s>", getEnumMember()->getEnumDecl()->getName());
+        }
+        return scratch.c_str();
+    }
     if (isFloat()) {
         return qoreFloatTypeName;
     }

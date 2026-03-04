@@ -67,6 +67,7 @@ union qore_gvar_ref_u {
     int64 i;
     double f;
     AbstractQoreNode* n;
+    const QoreEnumMember* em;  //!< for enum member pointers (QV_Enum)
     // note that the "readonly" flag is stored in bit 0 of this pointer - do not read directly
     size_t _refptr;
 

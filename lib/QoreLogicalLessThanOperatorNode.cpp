@@ -134,21 +134,25 @@ bool QoreLogicalLessThanOperatorNode::bigIntLessThan(ExceptionSink* xsink) const
 
 bool QoreLogicalLessThanOperatorNode::doLessThan(const QoreValue& lh, const QoreValue& rh,
         ExceptionSink* xsink) {
-    qore_type_t lt = lh.getType();
-    qore_type_t rt = rh.getType();
+    // Unwrap TAG_ENUM to base values for soft comparison
+    QoreValue l = lh.isEnum() ? lh.getEnumMember()->getValue() : lh;
+    QoreValue r = rh.isEnum() ? rh.getEnumMember()->getValue() : rh;
+
+    qore_type_t lt = l.getType();
+    qore_type_t rt = r.getType();
 
     if (lt == NT_NUMBER) {
         switch (rt) {
             case NT_NUMBER:
-                return lh.get<const QoreNumberNode>()->lessThan(*rh.get<const QoreNumberNode>());
+                return l.get<const QoreNumberNode>()->lessThan(*r.get<const QoreNumberNode>());
             case NT_FLOAT:
-                return lh.get<const QoreNumberNode>()->lessThan(rh.getAsFloat());
+                return l.get<const QoreNumberNode>()->lessThan(r.getAsFloat());
             case NT_BOOLEAN:
             case NT_INT:
-                return lh.get<const QoreNumberNode>()->lessThan(rh.getAsBigInt());
+                return l.get<const QoreNumberNode>()->lessThan(r.getAsBigInt());
             default: {
-                ReferenceHolder<QoreNumberNode> rn(new QoreNumberNode(rh.getInternalNode()), xsink);
-                return lh.get<const QoreNumberNode>()->lessThan(**rn);
+                ReferenceHolder<QoreNumberNode> rn(new QoreNumberNode(r.getInternalNode()), xsink);
+                return l.get<const QoreNumberNode>()->lessThan(**rn);
             }
         }
     }
@@ -157,36 +161,39 @@ bool QoreLogicalLessThanOperatorNode::doLessThan(const QoreValue& lh, const Qore
         assert(lt != NT_NUMBER);
         switch (lt) {
             case NT_FLOAT:
-                return rh.get<const QoreNumberNode>()->greaterThan(lh.getAsFloat());
+                return r.get<const QoreNumberNode>()->greaterThan(l.getAsFloat());
             case NT_BOOLEAN:
             case NT_INT:
-                return rh.get<const QoreNumberNode>()->greaterThan(lh.getAsBigInt());
+                return r.get<const QoreNumberNode>()->greaterThan(l.getAsBigInt());
             default: {
-                ReferenceHolder<QoreNumberNode> ln(new QoreNumberNode(lh.getInternalNode()), xsink);
-                return rh.get<const QoreNumberNode>()->greaterThan(**ln);
+                ReferenceHolder<QoreNumberNode> ln(new QoreNumberNode(l.getInternalNode()), xsink);
+                return r.get<const QoreNumberNode>()->greaterThan(**ln);
             }
         }
     }
 
-    if (lt == NT_FLOAT || rt == NT_FLOAT)
-        return lh.getAsFloat() < rh.getAsFloat();
+    if (lt == NT_FLOAT || rt == NT_FLOAT) {
+        return l.getAsFloat() < r.getAsFloat();
+    }
 
-    if (lt == NT_INT || rt == NT_INT)
-        return lh.getAsBigInt() < rh.getAsBigInt();
+    if (lt == NT_INT || rt == NT_INT) {
+        return l.getAsBigInt() < r.getAsBigInt();
+    }
 
     if (lt == NT_STRING || rt == NT_STRING) {
-        QoreStringValueHelper ls(lh);
-        QoreStringValueHelper rs(rh, ls->getEncoding(), xsink);
-        if (*xsink)
+        QoreStringValueHelper ls(l);
+        QoreStringValueHelper rs(r, ls->getEncoding(), xsink);
+        if (*xsink) {
             return false;
+        }
         return ls->compare(*rs) < 0;
     }
 
     if (lt == NT_DATE || rt == NT_DATE) {
-        DateTimeValueHelper ld(lh);
-        DateTimeValueHelper rd(rh);
+        DateTimeValueHelper ld(l);
+        DateTimeValueHelper rd(r);
         return DateTime::compareDates(*ld, *rd) < 0;
     }
 
-    return lh.getAsFloat() < rh.getAsFloat();
+    return l.getAsFloat() < r.getAsFloat();
 }

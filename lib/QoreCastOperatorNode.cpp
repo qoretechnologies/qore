@@ -638,6 +638,17 @@ int QoreEnumCastOperatorNode::checkValue(ExceptionSink* xsink, const QoreValue& 
         return 0;
     }
 
+    // Handle TAG_ENUM input: re-casting same enum = accept; different enum = extract base value
+    if (val.isEnum()) {
+        const QoreEnumMember* member = val.getEnumMember();
+        if (member->getEnumDecl() == ed) {
+            // Same enum - already valid
+            return 0;
+        }
+        // Different enum - check base value against target enum
+        return checkValue(xsink, member->getValue(), lvalue);
+    }
+
     // Check that the value's type matches the enum's base type
     qore_type_t base_type = QoreTypeInfo::getBaseType(ed->getBaseTypeInfo());
     if (val.getType() != base_type) {
@@ -674,7 +685,24 @@ QoreValue QoreEnumCastOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* x
         return QoreValue();
     }
 
-    return rv.takeValue(needs_deref);
+    // or-nothing cast with NOTHING value: return NOTHING
+    if (rv->isNothing()) {
+        needs_deref = false;
+        return QoreValue();
+    }
+
+    // If already a TAG_ENUM of the same enum, return as-is
+    if (rv->isEnum() && rv->getEnumMember()->getEnumDecl() == ed) {
+        needs_deref = false;
+        return *rv;
+    }
+
+    // Find the member by value and return a TAG_ENUM
+    QoreValue base_val = rv->isEnum() ? rv->getEnumMember()->getValue() : *rv;
+    const QoreEnumMember* member = ed->findMemberByValue(base_val);
+    assert(member);
+    needs_deref = false;
+    return QoreValue::makeEnum(member);
 }
 
 QoreValue QoreEnumCastOperatorNode::castValue(QoreValue inner, ExceptionSink* xsink) const {

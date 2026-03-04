@@ -31,6 +31,7 @@
 */
 
 #include <qore/Qore.h>
+#include <qore/QoreEnumDecl.h>
 
 #include "qore/intern/qore_string_private.h"
 
@@ -403,6 +404,10 @@ const QoreString* QoreNodeAsStringHelper::operator*() {
 }
 
 void QoreStringValueHelper::setup(ExceptionSink* xsink, const QoreValue n, const QoreEncoding* enc) {
+    if (n.isEnum()) {
+        setup(xsink, n.getEnumMember()->getValue(), enc);
+        return;
+    }
     qore_type_t t = n.getType();
     if (t == NT_BOOLEAN || t == NT_INT) {
         str = new QoreStringMaker(QLLD, n.getAsBigInt());
@@ -491,6 +496,10 @@ bool QoreStringValueHelper::is_temp() const {
 }
 
 void QoreStringNodeValueHelper::setup(ExceptionSink* xsink, const QoreValue n, const QoreEncoding* enc) {
+    if (n.isEnum()) {
+        setup(xsink, n.getEnumBaseValue(), enc);
+        return;
+    }
     qore_type_t t = n.getType();
     if (t == NT_BOOLEAN || t == NT_INT) {
         str = new QoreStringNodeMaker(QLLD, n.getAsBigInt());

@@ -1556,6 +1556,11 @@ assertEq(5, function_that_should_return_five());
         ++num_asserts;
 
         if (expected !== actual) {
+            # enum values wrap a base type; use soft comparison for enum-to-base-type equality
+            if ((expected.isEnum() || actual.isEnum()) && expected == actual) {
+                assertionOk(name);
+                return;
+            }
             throw "TEST-EXCEPTION", printUnexpectedData(expected, actual), ("name": name, "pos": NOTHING);
         } else {
             assertionOk(name);
@@ -1581,6 +1586,11 @@ assertNeq(5, function_that_should_return_five());
         if (expected === actual) {
             throw "TEST-EXCEPTION", printUnexpectedData(expected, actual, True), ("name": name, "pos": NOTHING);
         } else {
+            # enum values wrap a base type; use soft comparison to detect value equality
+            if ((expected.isEnum() || actual.isEnum()) && expected == actual) {
+                throw "TEST-EXCEPTION", printUnexpectedData(expected, actual, True),
+                    ("name": name, "pos": NOTHING);
+            }
             assertionOk(name);
         }
     }

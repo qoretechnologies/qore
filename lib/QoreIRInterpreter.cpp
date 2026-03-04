@@ -65,7 +65,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 340,
+static_assert(QORE_IR_MAX_OPCODE == 341,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -2070,6 +2070,14 @@ next_instruction:
                 ++ip;
                 break;
             }
+            case QoreIROpcode::ConstEnum: {
+                auto* cinst = static_cast<QoreIRConstInstruction*>(inst);
+                // TAG_ENUM values are zero-allocation, zero-refcount inline values
+                setValueSlot(values, cinst->result.id,
+                    QoreValue::makeEnum(cinst->constant.enum_member), xsink);
+                ++ip;
+                break;
+            }
             case QoreIROpcode::MakeList: {
                 ReferenceHolder<QoreListNode> list(new QoreListNode(autoTypeInfo), xsink);
                 const QoreTypeInfo* vtype = nullptr;
@@ -3798,11 +3806,13 @@ load_local_done:
                         && !local_inst->is_ref
                         && local_inst->slot_id != UINT32_MAX
                         && local_inst->slot_id < locals_slot_cache.size()) {
-                    if (!val.hasNode()) {
+                    if (!val.hasNode() && !val.isEnum()) {
                         // Simple type (int/float/bool/nothing): check that the target
                         // variable's declared type accepts this value type before using
                         // the direct write-through fast path (which bypasses runtime
                         // type checking via acceptAssignment())
+                        // NOTE: TAG_ENUM values also have hasNode()=false, but must go
+                        // through the full path to preserve enum identity and type checking
                         const QoreTypeInfo* target_ti = local_inst->local
                             ? local_inst->local->getTypeInfo() : nullptr;
                         if (!QoreTypeInfo::parseAcceptsReturns(target_ti, val.getType())) {

@@ -65,6 +65,7 @@ class NewHashDeclNode;
 class NewComplexHashNode;
 class NewComplexListNode;
 class VarRefNewObjectNode;
+class QoreEnumMember;
 
 /** IR opcode identifiers.
 
@@ -509,8 +510,9 @@ enum class QoreIROpcode : uint16_t {
     AddAssignLocalInt   = 338,  // target_local += source_local (both typed int)
     IncrementLocalInt   = 339,  // local += delta (typed int local, constant delta)
     BranchIfLtLocalInt  = 340,  // if (lhs_local < rhs_local) goto true else goto false
+    ConstEnum           = 341,  // TAG_ENUM constant from QoreEnumMember*
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (341, 342, ...)
+    // NOTE: When adding new opcodes, assign the next sequential ID (342, 343, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -518,8 +520,8 @@ enum class QoreIROpcode : uint16_t {
 //! NOTE: Both QoreIRInterpreter.cpp and QoreIRToLLVM.cpp have matching
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
-constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::BranchIfLtLocalInt);
-static_assert(QORE_IR_MAX_OPCODE == 340, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::ConstEnum);
+static_assert(QORE_IR_MAX_OPCODE == 341, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! Returns true if the opcode is a unary computation op (used by Invoke dispatch)
@@ -726,10 +728,11 @@ struct QoreIRConstant {
         Int,
         Float,
         Bool,
-    Nothing,
-    Null,
+        Nothing,
+        Null,
         String,
         Date,
+        Enum,
     };
 
     Kind kind = Kind::Nothing;
@@ -739,6 +742,7 @@ struct QoreIRConstant {
     std::string string_value;
     int64_t date_microseconds = 0;
     bool date_is_relative = false;
+    const QoreEnumMember* enum_member = nullptr;
 };
 
 class QoreIRBasicBlock;

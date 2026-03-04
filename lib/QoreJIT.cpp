@@ -304,6 +304,9 @@ bool QoreJIT::registerRuntimeSymbols(std::string& error) {
     // Date construction helper
     addSymbol("qore_rt_make_date", reinterpret_cast<void*>(&qore_rt_make_date));
 
+    // Enum construction helper
+    addSymbol("qore_rt_make_enum", reinterpret_cast<void*>(&qore_rt_make_enum));
+
     // Specialized access helpers (Phase 5b)
     addSymbol("qore_rt_hash_key_access", reinterpret_cast<void*>(&qore_rt_hash_key_access));
     addSymbol("qore_rt_list_index_access", reinterpret_cast<void*>(&qore_rt_list_index_access));

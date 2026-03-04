@@ -129,6 +129,17 @@ QoreIRConstInstruction* QoreIRBuilder::createConstDate(int64_t microseconds, boo
     return inst;
 }
 
+QoreIRConstInstruction* QoreIRBuilder::createConstEnum(const QoreEnumMember* member,
+        const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRConstInstruction>();
+    inst->opcode = QoreIROpcode::ConstEnum;
+    inst->loc = loc;
+    inst->result = func->createValue();
+    inst->constant.kind = QoreIRConstant::Kind::Enum;
+    inst->constant.enum_member = member;
+    return inst;
+}
+
 QoreIRInstruction* QoreIRBuilder::createMakeList(const std::vector<QoreIRValue>& values,
         const QoreProgramLocation* loc) {
     auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::MakeList);

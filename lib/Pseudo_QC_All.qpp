@@ -146,6 +146,26 @@ string <value>::fullType(*bool with_namespaces) [flags=CONSTANT] {
     return new QoreStringNode(v.getFullTypeName(with_namespaces));
 }
 
+//! Returns @ref True if the value is an enum value, @ref False if not
+/** @par Example:
+    @code{.py}
+auto v = ColorInt::Red;
+if (v.isEnum())
+    printf("%y: is an enum value: %s\n", v, v.fullType());
+    @endcode
+
+    @return @ref True if the value is an enum value, @ref False if not
+
+    @see
+    - <value>::fullType()
+    - <value>::type()
+
+    @since %Qore 2.1
+*/
+bool <value>::isEnum() [flags=CONSTANT] {
+    return v.isEnum();
+}
+
 //! Returns @ref True; this method will be reimplemented in container types where it may return @ref False
 /** This pseudo-method will return @ref False in all non-container types; use <value>::val() to check if a generic
     expression that might not be a container type has a value instead.

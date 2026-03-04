@@ -116,80 +116,83 @@ int QoreLogicalComparisonOperatorNode::parseInitImpl(QoreValue& val, QoreParseCo
 
 int QoreLogicalComparisonOperatorNode::doComparison(const QoreValue& left, const QoreValue& right,
         ExceptionSink* xsink) {
-    qore_type_t lt = left.getType();
-    qore_type_t rt = right.getType();
+    // Unwrap TAG_ENUM to base values for soft comparison
+    QoreValue l = left.isEnum() ? left.getEnumMember()->getValue() : left;
+    QoreValue r = right.isEnum() ? right.getEnumMember()->getValue() : right;
+
+    qore_type_t lt = l.getType();
+    qore_type_t rt = r.getType();
 
     if (lt == NT_STRING) {
-        const QoreStringNode* l = left.get<const QoreStringNode>();
+        const QoreStringNode* ls = l.get<const QoreStringNode>();
         if (rt == NT_STRING) {
-            const QoreStringNode* r = right.get<const QoreStringNode>();
-            if (l->getEncoding() != r->getEncoding()) {
-                QoreStringValueHelper rstr(r, l->getEncoding(), xsink);
-                if (*xsink)
+            const QoreStringNode* rs = r.get<const QoreStringNode>();
+            if (ls->getEncoding() != rs->getEncoding()) {
+                QoreStringValueHelper rstr(rs, ls->getEncoding(), xsink);
+                if (*xsink) {
                     return 0;
-                return l->compare(*rstr);
+                }
+                return ls->compare(*rstr);
             }
-            return l->compare(r);
+            return ls->compare(rs);
         }
-        QoreStringValueHelper r(right, l->getEncoding(), xsink);
-        if (*xsink)
+        QoreStringValueHelper rs(r, ls->getEncoding(), xsink);
+        if (*xsink) {
             return 0;
-        return l->compare(*r);
-    }
-    else if (rt == NT_STRING) {
-        const QoreStringNode* r = right.get<const QoreStringNode>();
-        QoreStringValueHelper l(left, r->getEncoding(), xsink);
-        if (*xsink)
+        }
+        return ls->compare(*rs);
+    } else if (rt == NT_STRING) {
+        const QoreStringNode* rs = r.get<const QoreStringNode>();
+        QoreStringValueHelper ls(l, rs->getEncoding(), xsink);
+        if (*xsink) {
             return 0;
-        return l->compare(r);
+        }
+        return ls->compare(rs);
     }
 
     if (lt == NT_NUMBER) {
-        const QoreNumberNode* l = left.get<const QoreNumberNode>();
-        if (l->nan()) {
+        const QoreNumberNode* ln = l.get<const QoreNumberNode>();
+        if (ln->nan()) {
             xsink->raiseException("NAN-COMPARE-ERROR", "NaN in arbitrary-precision value on left hand side of logical comparison operator");
             return 0;
         }
         switch (rt) {
             case NT_NUMBER: {
-                const QoreNumberNode* r = right.get<const QoreNumberNode>();
-                if (r->nan()) {
+                const QoreNumberNode* rn = r.get<const QoreNumberNode>();
+                if (rn->nan()) {
                     xsink->raiseException("NAN-COMPARE-ERROR", "NaN in arbitrary-precision value on right hand side of logical comparison operator");
                     return 0;
                 }
-                if (l->lessThan(*r))
+                if (ln->lessThan(*rn)) {
                     return -1;
-
-                return l->equals(*r) ? 0 : 1;
+                }
+                return ln->equals(*rn) ? 0 : 1;
             }
             case NT_FLOAT: {
-                float f = right.getAsFloat();
+                float f = r.getAsFloat();
                 if (std::isnan(f)) {
                     xsink->raiseException("NAN-COMPARE-ERROR", "NaN in floating-point value on right hand side of logical comparison operator");
                     return 0;
                 }
-
-                if (l->lessThan(f))
+                if (ln->lessThan(f)) {
                     return -1;
-
-                return l->equals(f) ? 0 : 1;
+                }
+                return ln->equals(f) ? 0 : 1;
             }
             case NT_INT:
             case NT_BOOLEAN: {
-                int64 r = right.getAsBigInt();
-
-                if (l->lessThan(r))
+                int64 ri = r.getAsBigInt();
+                if (ln->lessThan(ri)) {
                     return -1;
-
-                return l->equals(r) ? 0 : 1;
+                }
+                return ln->equals(ri) ? 0 : 1;
             }
             default: {
-                ReferenceHolder<QoreNumberNode> rn(new QoreNumberNode(right), xsink);
-
-                if (l->lessThan(**rn))
+                ReferenceHolder<QoreNumberNode> rn(new QoreNumberNode(r), xsink);
+                if (ln->lessThan(**rn)) {
                     return -1;
-
-                return l->equals(**rn) ? 0 : 1;
+                }
+                return ln->equals(**rn) ? 0 : 1;
             }
         }
     }
@@ -197,74 +200,72 @@ int QoreLogicalComparisonOperatorNode::doComparison(const QoreValue& left, const
     if (rt == NT_NUMBER) {
         assert(lt != NT_NUMBER);
 
-        const QoreNumberNode* r = right.get<const QoreNumberNode>();
-        if (r->nan()) {
+        const QoreNumberNode* rn = r.get<const QoreNumberNode>();
+        if (rn->nan()) {
             xsink->raiseException("NAN-COMPARE-ERROR", "NaN in arbitrary-precision value on right hand side of logical comparison operator");
             return 0;
         }
 
         switch (lt) {
             case NT_FLOAT: {
-                float l = left.getAsFloat();
-                if (std::isnan(l)) {
+                float lf = l.getAsFloat();
+                if (std::isnan(lf)) {
                     xsink->raiseException("NAN-COMPARE-ERROR", "NaN in floating-point value on left hand side of logical comparison operator");
                     return 0;
                 }
-
-                if (r->greaterThan(l))
+                if (rn->greaterThan(lf)) {
                     return -1;
-
-                return r->equals(l) ? 0 : 1;
+                }
+                return rn->equals(lf) ? 0 : 1;
             }
             case NT_INT:
             case NT_BOOLEAN: {
-                int64 l = left.getAsBigInt();
-
-                if (r->greaterThan(l))
+                int64 li = l.getAsBigInt();
+                if (rn->greaterThan(li)) {
                     return -1;
-
-                return r->equals(l) ? 0 : 1;
+                }
+                return rn->equals(li) ? 0 : 1;
             }
             default: {
-                ReferenceHolder<QoreNumberNode> ln(new QoreNumberNode(left), xsink);
-
-                if (ln->lessThan(*r))
+                ReferenceHolder<QoreNumberNode> ln(new QoreNumberNode(l), xsink);
+                if (ln->lessThan(*rn)) {
                     return -1;
-
-                return ln->equals(*r) ? 0 : 1;
+                }
+                return ln->equals(*rn) ? 0 : 1;
             }
         }
     }
 
     if (lt == NT_FLOAT || rt == NT_FLOAT) {
-        float l = left.getAsFloat();
-        if (std::isnan(l)) {
+        float lf = l.getAsFloat();
+        if (std::isnan(lf)) {
             xsink->raiseException("NAN-COMPARE-ERROR", "NaN in floating-point value on left hand side of logical comparison operator");
             return 0;
         }
 
-        float r = right.getAsFloat();
-        if (std::isnan(r)) {
+        float rf = r.getAsFloat();
+        if (std::isnan(rf)) {
             xsink->raiseException("NAN-COMPARE-ERROR", "NaN in floating-point value on right hand side of logical comparison operator");
             return 0;
         }
 
-        if (l < r)
+        if (lf < rf) {
             return -1;
-        return l == r ? 0 : 1;
+        }
+        return lf == rf ? 0 : 1;
     }
 
     if (lt == NT_INT || rt == NT_INT) {
-        int64 l = left.getAsBigInt();
-        int64 r = right.getAsBigInt();
-
-        if (l < r)
+        int64 li = l.getAsBigInt();
+        int64 ri = r.getAsBigInt();
+        if (li < ri) {
             return -1;
-        return l == r ? 0 : 1;
+        }
+        return li == ri ? 0 : 1;
     }
 
-    DateTimeValueHelper l(left);
-    DateTimeValueHelper r(right);
+    DateTimeValueHelper ld(l);
+    DateTimeValueHelper rd(r);
 
-    return (int)DateTime::compareDates(*l, *r);
+    return (int)DateTime::compareDates(*ld, *rd);
 }

@@ -45,12 +45,15 @@ class QoreEnumOrNothingTypeInfo;
 
 // Internal representation of an enum member
 class qore_enum_member_private {
+    friend class qore_enum_decl_private;
 public:
     //! Creates a new enum member; takes ownership of the value (caller must pass an already-referenced value)
-    DLLLOCAL qore_enum_member_private(const char* n, QoreValue v) : name(n), val(v) {
+    DLLLOCAL qore_enum_member_private(const char* n, QoreValue v, const QoreEnumDecl* parent = nullptr)
+            : name(n), val(v), parent_enum(parent) {
     }
 
-    DLLLOCAL qore_enum_member_private(const qore_enum_member_private& old) : name(old.name), val(old.val) {
+    DLLLOCAL qore_enum_member_private(const qore_enum_member_private& old, const QoreEnumDecl* parent = nullptr)
+            : name(old.name), val(old.val), parent_enum(parent) {
         val.ref();
     }
 
@@ -66,9 +69,18 @@ public:
         return val;
     }
 
+    DLLLOCAL const QoreEnumDecl* getEnumDecl() const {
+        return parent_enum;
+    }
+
+    DLLLOCAL void setEnumDecl(const QoreEnumDecl* ed) {
+        parent_enum = ed;
+    }
+
 private:
     std::string name;
     QoreValue val;
+    const QoreEnumDecl* parent_enum = nullptr;
 };
 
 class qore_enum_decl_private {

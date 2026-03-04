@@ -319,6 +319,11 @@ int64_t qore_rt_guard_type(uint64_t val, const QoreTypeInfo* type_info);
 //! Create a DateTimeNode from epoch microseconds and relative flag; returns NaN-boxed
 uint64_t qore_rt_make_date(int64_t date_microseconds, int64_t is_relative);
 
+// --- Enum construction helper ---
+
+//! Create a TAG_ENUM QoreValue from a QoreEnumMember pointer; returns NaN-boxed
+uint64_t qore_rt_make_enum(int64_t member_ptr);
+
 // --- Constant loading helper ---
 
 class RuntimeConstantRefNode;

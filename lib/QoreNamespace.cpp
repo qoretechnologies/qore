@@ -347,8 +347,7 @@ void QoreNamespace::addSystemEnum(QoreEnumDecl* enumdecl) {
         if (enum_ns_priv->constant.inList(member->getName())) {
             continue;
         }
-        QoreValue val = member->getValue();
-        val.ref();
+        QoreValue val = QoreValue::makeEnum(member);
         enum_ns_priv->constant.add(member->getName(), val, enum_priv->getTypeInfo());
     }
 
@@ -2784,8 +2783,13 @@ int qore_ns_private::parseInitConstants() {
 
    NamespaceParseContextHelper nspch(this);
 
+   // resolve enum member expressions (e.g. -1) before constant init
+   int err = enumList.parseInit();
+
    // do 2nd stage parse initialization on new constants
-   int err = constant.parseInit();
+   if (constant.parseInit() && !err) {
+       err = -1;
+   }
    if (nsl.parseInitConstants() && !err) {
        err = -1;
    }
@@ -3278,12 +3282,10 @@ int qore_ns_private::parseAddPendingEnum(const QoreProgramLocation* loc, QoreEnu
         ens_priv->setPublic();
     }
 
-    // Add enum members as constants in the namespace with enum type info
-    // This ensures enum constants have the enum type, not the base type
+    // Add enum members as TAG_ENUM constants in the namespace with enum type info
     const std::vector<QoreEnumMember*>& members = priv->getMembers();
     for (auto* member : members) {
-        QoreValue val = member->getValue();
-        val.ref();  // Add a reference for the constant
+        QoreValue val = QoreValue::makeEnum(member);
         ens_priv->constant.add(member->getName(), val, priv->getTypeInfo());
     }
 
@@ -3552,15 +3554,14 @@ void qore_ns_private::copyMergeCommittedNamespace(const qore_ns_private& mns) {
             } else {
                 ens_priv = qore_ns_private::get(*enum_ns);
             }
-            // Add enum members as constants in the namespace
+            // Add enum members as TAG_ENUM constants in the namespace
             qore_enum_decl_private* enum_priv = qore_enum_decl_private::get(*local_ed);
             const std::vector<QoreEnumMember*>& members = enum_priv->getMembers();
             for (auto* member : members) {
                 if (ens_priv->constant.inList(member->getName())) {
                     continue;
                 }
-                QoreValue val = member->getValue();
-                val.ref();
+                QoreValue val = QoreValue::makeEnum(member);
                 ens_priv->constant.add(member->getName(), val, enum_priv->getTypeInfo());
             }
             // Rebuild indexes for the new namespace

@@ -91,11 +91,11 @@ QoreEnumOrNothingTypeInfo::QoreEnumOrNothingTypeInfo(const QoreEnumDecl* ed, con
 // QoreEnumTypeInfo::getDefaultQoreValueImpl() implementation
 QoreValue QoreEnumTypeInfo::getDefaultQoreValueImpl() const {
     const QoreEnumDecl* ed = accept_vec[0].spec.getEnum();
-    // Return the value of the first member if there are any
+    // Return a TAG_ENUM value of the first member if there are any
     if (ed->getMemberCount() > 0) {
         QoreEnumMemberIterator it(*ed);
         if (it.next()) {
-            return it.getValue().refSelf();
+            return QoreValue::makeEnum(it.getMember());
         }
     }
     // Otherwise return the default value for the base type
@@ -103,7 +103,8 @@ QoreValue QoreEnumTypeInfo::getDefaultQoreValueImpl() const {
 }
 
 // QoreEnumMember implementation
-QoreEnumMember::QoreEnumMember(const char* name, QoreValue val) : priv(new qore_enum_member_private(name, val)) {
+QoreEnumMember::QoreEnumMember(const char* name, QoreValue val, const QoreEnumDecl* parent)
+        : priv(new qore_enum_member_private(name, val, parent)) {
 }
 
 QoreEnumMember::~QoreEnumMember() {
@@ -116,6 +117,10 @@ const char* QoreEnumMember::getName() const {
 
 QoreValue QoreEnumMember::getValue() const {
     return priv->getValue();
+}
+
+const QoreEnumDecl* QoreEnumMember::getEnumDecl() const {
+    return priv->getEnumDecl();
 }
 
 // qore_enum_decl_private implementation
@@ -135,7 +140,7 @@ qore_enum_decl_private::qore_enum_decl_private(const qore_enum_decl_private& old
           pub(old.pub), sys(old.sys) {
     // Copy members - must ref the value since constructor takes ownership
     for (auto* member : old.members) {
-        QoreEnumMember* new_member = new QoreEnumMember(member->getName(), member->getValue().refSelf());
+        QoreEnumMember* new_member = new QoreEnumMember(member->getName(), member->getValue().refSelf(), ed);
         members.push_back(new_member);
         member_map[new_member->getName()] = new_member;
     }
@@ -186,8 +191,25 @@ int qore_enum_decl_private::parseInit() {
         return 0;
     }
     parse_init_done = true;
-    // Nothing special to do for enum parseInit
-    return 0;
+
+    int err = 0;
+    // Evaluate expression-valued members (e.g. "Default = -1" stores a unary minus expression)
+    for (auto* member : members) {
+        QoreValue& val = member->priv->val;
+        if (val.needsEval()) {
+            ExceptionSink xsink;
+            ValueEvalOptimizedRefHolder v(val, &xsink);
+            if (xsink) {
+                qore_program_private::addParseException(getProgram(), xsink);
+                err = -1;
+                continue;
+            }
+            // Replace expression with resolved value
+            val.discard(nullptr);
+            val = v.takeReferencedValue();
+        }
+    }
+    return err;
 }
 
 void qore_enum_decl_private::parseAddMember(const char* name, QoreValue val) {
@@ -195,14 +217,14 @@ void qore_enum_decl_private::parseAddMember(const char* name, QoreValue val) {
         // Duplicate member error - handled at parse time
         return;
     }
-    QoreEnumMember* member = new QoreEnumMember(name, val);
+    QoreEnumMember* member = new QoreEnumMember(name, val, ed);
     members.push_back(member);
     member_map[name] = member;
 }
 
 void qore_enum_decl_private::addMember(const char* name, QoreValue val) {
     assert(!hasMember(name));
-    QoreEnumMember* member = new QoreEnumMember(name, val);
+    QoreEnumMember* member = new QoreEnumMember(name, val, ed);
     members.push_back(member);
     member_map[name] = member;
 }
@@ -216,6 +238,16 @@ const QoreEnumMember* qore_enum_decl_private::findMember(const char* name) const
 }
 
 const QoreEnumMember* qore_enum_decl_private::findMemberByValue(const QoreValue& val) const {
+    // Handle TAG_ENUM input: compare member pointers first
+    if (val.isEnum()) {
+        const QoreEnumMember* input_member = val.getEnumMember();
+        // If from the same enum, find by pointer
+        if (input_member->getEnumDecl() == ed) {
+            return input_member;
+        }
+        // Different enum: compare by base value
+        return findMemberByValue(input_member->getValue());
+    }
     for (const auto* member : members) {
         if (member->getValue().isEqualHard(val)) {
             return member;
@@ -225,6 +257,15 @@ const QoreEnumMember* qore_enum_decl_private::findMemberByValue(const QoreValue&
 }
 
 bool qore_enum_decl_private::isValidValue(const QoreValue& val) const {
+    // Handle TAG_ENUM input
+    if (val.isEnum()) {
+        const QoreEnumMember* member = val.getEnumMember();
+        if (member->getEnumDecl() == ed) {
+            return true;
+        }
+        // Different enum: check the base value
+        return findMemberByValue(member->getValue()) != nullptr;
+    }
     return findMemberByValue(val) != nullptr;
 }
 

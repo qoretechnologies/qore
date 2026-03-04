@@ -2773,7 +2773,8 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
         std::vector<QoreIRValue> operands;
         return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, nullptr, error);
     }
-    error = std::string("unsupported expression node for IR lowering: ") + node->getTypeName();
+    error = std::string("unsupported expression node for IR lowering: ")
+        + (node ? node->getTypeName() : expr.getTypeName());
     return QoreIRValue();
 }
 
@@ -2980,6 +2981,9 @@ QoreIRValue QoreIRLowering::lowerConstant(const QoreValue& expr, std::string& er
     }
     if (expr.isNull()) {
         return builder.createConstNull()->result;
+    }
+    if (expr.isEnum()) {
+        return builder.createConstEnum(expr.getEnumMember())->result;
     }
     return QoreIRValue();
 }

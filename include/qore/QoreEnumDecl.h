@@ -42,6 +42,7 @@ class QoreNamespace;
 class QoreTypeInfo;
 class QoreValue;
 class ExceptionSink;
+class QoreEnumDecl;
 
 //! Represents an enum member with name and value
 /** @since %Qore 2.1
@@ -56,8 +57,11 @@ public:
     //! returns the member value
     DLLEXPORT QoreValue getValue() const;
 
+    //! returns the parent enum declaration
+    DLLEXPORT const QoreEnumDecl* getEnumDecl() const;
+
 private:
-    DLLLOCAL QoreEnumMember(const char* name, QoreValue val);
+    DLLLOCAL QoreEnumMember(const char* name, QoreValue val, const QoreEnumDecl* parent = nullptr);
     DLLLOCAL ~QoreEnumMember();
 
     class qore_enum_member_private* priv;

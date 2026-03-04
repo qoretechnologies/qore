@@ -52,6 +52,8 @@ public:
     QoreIRConstInstruction* createConstString(const std::string& value, const QoreProgramLocation* loc = nullptr);
     QoreIRConstInstruction* createConstDate(int64_t microseconds, bool is_relative,
         const QoreProgramLocation* loc = nullptr);
+    QoreIRConstInstruction* createConstEnum(const QoreEnumMember* member,
+        const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createMakeList(const std::vector<QoreIRValue>& values,
         const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createMakeHash(const std::vector<QoreIRValue>& values,

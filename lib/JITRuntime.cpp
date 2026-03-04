@@ -1176,6 +1176,13 @@ extern "C" DLLEXPORT uint64_t qore_rt_make_date(int64_t date_microseconds, int64
     return toBits(QoreValue(dt));
 }
 
+// --- Enum construction helper ---
+
+extern "C" DLLEXPORT uint64_t qore_rt_make_enum(int64_t member_ptr) {
+    const QoreEnumMember* member = reinterpret_cast<const QoreEnumMember*>(member_ptr);
+    return toBits(QoreValue::makeEnum(member));
+}
+
 // --- Specialized access helpers (Phase 5b optimizations) ---
 
 extern "C" DLLEXPORT uint64_t qore_rt_hash_key_access(uint64_t hash_val, const char* key, ExceptionSink* xsink) {

@@ -118,43 +118,49 @@ int QoreLogicalEqualsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContex
 
 bool QoreLogicalEqualsOperatorNode::softEqual(const QoreValue& left, const QoreValue& right,
         ExceptionSink *xsink) {
-    qore_type_t lt = left.getType();
-    qore_type_t rt = right.getType();
+    // Unwrap TAG_ENUM to base values for soft comparison
+    QoreValue l = left.isEnum() ? left.getEnumMember()->getValue() : left;
+    QoreValue r = right.isEnum() ? right.getEnumMember()->getValue() : right;
+
+    qore_type_t lt = l.getType();
+    qore_type_t rt = r.getType();
 
     //printf("QoreLogicalEqualsOperatorNode::softEqual() lt: %d rt: %d (%d %s)\n", lt, rt, right.type,
     //  right.getTypeName());
 
     if (lt == NT_STRING) {
-        const QoreStringNode* l = left.get<const QoreStringNode>();
-        if (rt == NT_STRING)
-            return l->equalSoft(*right.get<const QoreStringNode>(), xsink);
-        QoreStringValueHelper r(right, l->getEncoding(), xsink);
-        if (*xsink)
+        const QoreStringNode* ls = l.get<const QoreStringNode>();
+        if (rt == NT_STRING) {
+            return ls->equalSoft(*r.get<const QoreStringNode>(), xsink);
+        }
+        QoreStringValueHelper rs(r, ls->getEncoding(), xsink);
+        if (*xsink) {
             return false;
-        //printf("QoreLogicalEqualsOperatorNode::softEqual() l: '%s' converted r: '%s'\n", l->c_str(), r->c_str());
-        return l->equal(*r);
+        }
+        return ls->equal(*rs);
     }
 
     if (rt == NT_STRING) {
-        const QoreStringNode* r = right.get<const QoreStringNode>();
-        QoreStringValueHelper l(left, r->getEncoding(), xsink);
-        if (*xsink)
+        const QoreStringNode* rs = r.get<const QoreStringNode>();
+        QoreStringValueHelper ls(l, rs->getEncoding(), xsink);
+        if (*xsink) {
             return false;
-        return l->equal(*r);
+        }
+        return ls->equal(*rs);
     }
 
     if (lt == NT_NUMBER) {
         switch (rt) {
             case NT_NUMBER:
-                return left.get<const QoreNumberNode>()->equals(*right.get<const QoreNumberNode>());
+                return l.get<const QoreNumberNode>()->equals(*r.get<const QoreNumberNode>());
             case NT_FLOAT:
-                return left.get<const QoreNumberNode>()->equals(right.getAsFloat());
+                return l.get<const QoreNumberNode>()->equals(r.getAsFloat());
             case NT_INT:
             case NT_BOOLEAN:
-                return left.get<const QoreNumberNode>()->equals(right.getAsBigInt());
+                return l.get<const QoreNumberNode>()->equals(r.getAsBigInt());
             default: {
-                ReferenceHolder<QoreNumberNode> rn(new QoreNumberNode(right.getInternalNode()), xsink);
-                return left.get<const QoreNumberNode>()->equals(**rn);
+                ReferenceHolder<QoreNumberNode> rn(new QoreNumberNode(r.getInternalNode()), xsink);
+                return l.get<const QoreNumberNode>()->equals(**rn);
             }
         }
     }
@@ -163,36 +169,43 @@ bool QoreLogicalEqualsOperatorNode::softEqual(const QoreValue& left, const QoreV
         assert(lt != NT_NUMBER);
         switch (lt) {
             case NT_FLOAT:
-                return right.get<const QoreNumberNode>()->equals(left.getAsFloat());
+                return r.get<const QoreNumberNode>()->equals(l.getAsFloat());
             case NT_INT:
             case NT_BOOLEAN:
-                return right.get<const QoreNumberNode>()->equals(left.getAsBigInt());
+                return r.get<const QoreNumberNode>()->equals(l.getAsBigInt());
             default: {
-                ReferenceHolder<QoreNumberNode> ln(new QoreNumberNode(left.getInternalNode()), xsink);
-                return right.get<const QoreNumberNode>()->equals(**ln);
+                ReferenceHolder<QoreNumberNode> ln(new QoreNumberNode(l.getInternalNode()), xsink);
+                return r.get<const QoreNumberNode>()->equals(**ln);
             }
         }
     }
 
-    if (lt == NT_FLOAT || rt == NT_FLOAT)
-        return left.getAsFloat() == right.getAsFloat();
-
-    if (lt == NT_INT || rt == NT_INT)
-        return left.getAsBigInt() == right.getAsBigInt();
-
-    if (lt == NT_BOOLEAN || rt == NT_BOOLEAN)
-        return left.getAsBool() == right.getAsBool();
-
-    if (lt == NT_DATE || rt == NT_DATE) {
-        DateTimeValueHelper l(left);
-        DateTimeValueHelper r(right);
-        return l->isEqual(*r);
+    if (lt == NT_FLOAT || rt == NT_FLOAT) {
+        return l.getAsFloat() == r.getAsFloat();
     }
 
-    const AbstractQoreNode* ln = left.getInternalNode();
-    if (!ln) ln = &Nothing;
-    const AbstractQoreNode* rn = right.getInternalNode();
-    if (!rn) rn = &Nothing;
+    if (lt == NT_INT || rt == NT_INT) {
+        return l.getAsBigInt() == r.getAsBigInt();
+    }
+
+    if (lt == NT_BOOLEAN || rt == NT_BOOLEAN) {
+        return l.getAsBool() == r.getAsBool();
+    }
+
+    if (lt == NT_DATE || rt == NT_DATE) {
+        DateTimeValueHelper ld(l);
+        DateTimeValueHelper rd(r);
+        return ld->isEqual(*rd);
+    }
+
+    const AbstractQoreNode* ln = l.getInternalNode();
+    if (!ln) {
+        ln = &Nothing;
+    }
+    const AbstractQoreNode* rn = r.getInternalNode();
+    if (!rn) {
+        rn = &Nothing;
+    }
 
     return ln->is_equal_soft(rn, xsink);
 }
