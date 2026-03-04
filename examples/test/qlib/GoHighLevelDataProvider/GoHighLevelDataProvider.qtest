@@ -1,0 +1,891 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  GoHighLevelDataProvider.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/RestClient.qm
+
+%try-module json
+%define NoJson
+%endtry
+
+%requires ../../../../qlib/GoHighLevelRestClient.qm
+%requires ../../../../qlib/GoHighLevelDataProvider
+
+%exec-class GoHighLevelDataProviderTest
+
+public class GoHighLevelDataProviderTest inherits QUnit::Test {
+    private {
+        #! GoHighLevel REST client for integration tests
+        *GoHighLevelRestClient::GoHighLevelRestClient client;
+
+        #! Logger for verbose output
+        Logger logger;
+
+        #! Custom command-line options
+        const MyOpts = Opts + {
+            "client_id": "i,client-id=s",
+            "client_secret": "s,client-secret=s",
+            "apikey": "t,apikey=s",
+            "location_id": "L,location-id=s",
+            "conn": "c,connection=s",
+        };
+
+        #! Test contact ID (created during test)
+        *string testContactId;
+
+        #! Test opportunity ID (created during test)
+        *string testOpportunityId;
+
+        #! Test task ID (created during test)
+        *string testTaskId;
+
+        #! Pipeline ID for opportunity tests
+        *string pipelineId;
+    }
+
+    constructor() : Test("GoHighLevelDataProvider Test", "1.0", \ARGV, MyOpts) {
+        logger = new Logger("test", LoggerLevel::getLevelInfo());
+
+        # Unit tests (always run, no credentials needed)
+        addTestCase("sanity tests", \sanityTests());
+        addTestCase("factory tests", \factoryTests());
+        addTestCase("metadata tests", \metadataTests());
+        addTestCase("child provider tests", \childProviderTests());
+        addTestCase("data type tests", \dataTypeTests());
+        addTestCase("trigger example data tests", \triggerExampleDataTests());
+        addTestCase("negative tests", \negativeTests());
+        addTestCase("connection tests", \connectionTests());
+
+        # Integration tests (require GoHighLevel credentials)
+        addTestCase("integration tests", \integrationTests());
+
+        # Try to set up connection for integration tests
+        try {
+            setupConnection();
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("Connection setup failed: %s: %s\n", ex.err, ex.desc);
+            }
+        }
+
+        set_return_value(main());
+    }
+
+    #! Sets up the GoHighLevel client for integration tests
+    private setupConnection() {
+        # Try to use a connection from Qorus if specified
+        *string conn_name = m_options.conn ?? ENV.GHL_CONNECTION;
+        if (conn_name) {
+            if (m_options.verbose) {
+                printf("Using connection: %s\n", conn_name);
+            }
+            client = get_connection(conn_name).get();
+            return;
+        }
+
+        *string apikey = m_options.apikey ?? ENV.GHL_ACCESS_TOKEN;
+        *string client_id = m_options.client_id ?? ENV.GHL_CLIENT_ID;
+        *string client_secret = m_options.client_secret ?? ENV.GHL_CLIENT_SECRET;
+        *string location_id = m_options.location_id ?? ENV.GHL_LOCATION_ID;
+
+        if (!apikey && (!client_id || !client_secret)) {
+            if (m_options.verbose) {
+                printf("Missing GoHighLevel credentials. Required:\n");
+                printf("  - GHL_CONNECTION or -c option (Qorus connection name)\n");
+                printf("Or:\n");
+                printf("  - GHL_ACCESS_TOKEN or -t option (access token / API key)\n");
+                printf("  - GHL_LOCATION_ID or -L option (location ID)\n");
+                printf("Or:\n");
+                printf("  - GHL_CLIENT_ID or -i option\n");
+                printf("  - GHL_CLIENT_SECRET or -s option\n");
+                printf("  - GHL_LOCATION_ID or -L option\n");
+            }
+            return;
+        }
+
+        if (!location_id) {
+            if (m_options.verbose) {
+                printf("Missing GHL_LOCATION_ID - required for all API calls\n");
+            }
+            return;
+        }
+
+        # Token-only mode
+        if (apikey && (!client_id || !client_secret)) {
+            if (m_options.verbose) {
+                printf("Using API key mode (no OAuth2 refresh)\n");
+            }
+            client = new GoHighLevelRestClient::GoHighLevelRestClient({
+                "apikey": apikey,
+                "location_id": location_id,
+            });
+            return;
+        }
+
+        # Full OAuth2 mode
+        hash<auto> opts = {
+            "oauth2_client_id": client_id,
+            "oauth2_client_secret": client_secret,
+            "location_id": location_id,
+        };
+        if (apikey) {
+            opts.apikey = apikey;
+        }
+        client = new GoHighLevelRestClient::GoHighLevelRestClient(opts);
+    }
+
+    #! Check if json module is available
+    private checkJson() {
+%ifdef NoJson
+        testSkip("no json module present");
+%endif
+    }
+
+    #! Basic sanity tests - provider instantiation
+    sanityTests() {
+        checkJson();
+        try {
+            GoHighLevelDataProvider::GoHighLevelDataProvider prov({
+                "gohighlevelrestclient_options": {
+                    "apikey": "fake-token",
+                    "location_id": "fake-location-id",
+                },
+            });
+            assertEq("gohighlevel", prov.getName());
+            assertTrue(prov.getDesc().val());
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "OAUTH2-ERROR") {
+                testSkip("OAuth2 requires manual authorization - skipping sanity tests");
+            }
+            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
+                    || ex.err == "QOREADDRINFO-GETINFO-ERROR") {
+                testSkip(sprintf("cannot connect to GoHighLevel API: %s", ex.desc));
+            }
+            rethrow;
+        }
+    }
+
+    #! Factory tests - verify factory registration
+    factoryTests() {
+        checkJson();
+        AbstractDataProviderFactory factory = DataProvider::getFactory("gohighlevel");
+        assertEq("gohighlevel", factory.getInfo().name);
+        assertTrue(factory.getInfo().children_can_support_apis);
+        assertTrue(factory.getInfo().children_can_support_records);
+        assertTrue(factory.getInfo().children_can_support_observers);
+
+        hash<auto> factoryOpts = factory.getInfo().provider_info.constructor_options;
+        assertTrue(factoryOpts.hasKey("gohighlevelrestclient"));
+    }
+
+    #! Metadata tests - verify provider info structure
+    metadataTests() {
+        checkJson();
+        try {
+            GoHighLevelDataProvider::GoHighLevelDataProvider prov({
+                "gohighlevelrestclient_options": {
+                    "apikey": "fake-token",
+                    "location_id": "fake-location-id",
+                },
+            });
+            hash<DataProviderInfo> info = prov.getInfo();
+
+            assertTrue(info.supports_children);
+            assertTrue(info.children_can_support_apis);
+            assertTrue(info.children_can_support_records);
+            assertTrue(info.children_can_support_observers);
+            assertEq("GoHighLevelDataProvider", info.type);
+
+            assertTrue(info.constructor_options.hasKey("gohighlevelrestclient"));
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "OAUTH2-ERROR") {
+                testSkip("OAuth2 requires manual authorization - skipping metadata tests");
+            }
+            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
+                    || ex.err == "QOREADDRINFO-GETINFO-ERROR") {
+                testSkip(sprintf("cannot connect to GoHighLevel API: %s", ex.desc));
+            }
+            rethrow;
+        }
+    }
+
+    #! Child provider tests - verify hierarchy
+    childProviderTests() {
+        checkJson();
+        GoHighLevelDataProvider::GoHighLevelDataProvider prov;
+        try {
+            prov = new GoHighLevelDataProvider::GoHighLevelDataProvider({
+                "gohighlevelrestclient_options": {
+                    "apikey": "fake-token",
+                    "location_id": "fake-location-id",
+                },
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "OAUTH2-ERROR") {
+                testSkip("OAuth2 requires manual authorization - skipping child provider tests");
+            }
+            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
+                    || ex.err == "QOREADDRINFO-GETINFO-ERROR") {
+                testSkip(sprintf("cannot connect to GoHighLevel API: %s", ex.desc));
+            }
+            rethrow;
+        }
+
+        # Check child provider names
+        list<string> children = prov.getChildProviderNames();
+
+        # Verify collection providers exist
+        assertTrue(children.contains("contacts"));
+        assertTrue(children.contains("opportunities"));
+        assertTrue(children.contains("tasks"));
+        assertTrue(children.contains("create-account"));
+        assertTrue(children.contains("execute-api-call"));
+        assertTrue(children.contains("events"));
+
+        # Check contacts child provider
+        AbstractDataProvider contacts = prov.getChildProvider("contacts");
+        assertEq("contacts", contacts.getName());
+        hash<DataProviderInfo> contactsInfo = contacts.getInfo();
+        assertTrue(contactsInfo.supports_read);
+        assertTrue(contactsInfo.supports_native_search);
+        assertTrue(contactsInfo.supports_children);
+
+        # Verify contacts has action children
+        list<string> contactChildren = contacts.getChildProviderNames();
+        assertTrue(contactChildren.contains("create"));
+        assertTrue(contactChildren.contains("update"));
+        assertTrue(contactChildren.contains("delete"));
+        assertTrue(contactChildren.contains("add-to-campaign"));
+        assertTrue(contactChildren.contains("remove-from-campaign"));
+        assertTrue(contactChildren.contains("add-note"));
+
+        # Check opportunities child provider
+        AbstractDataProvider opportunities = prov.getChildProvider("opportunities");
+        assertEq("opportunities", opportunities.getName());
+        hash<DataProviderInfo> oppsInfo = opportunities.getInfo();
+        assertTrue(oppsInfo.supports_read);
+        assertTrue(oppsInfo.supports_native_search);
+
+        # Verify opportunities has action children
+        list<string> oppChildren = opportunities.getChildProviderNames();
+        assertTrue(oppChildren.contains("create"));
+        assertTrue(oppChildren.contains("update"));
+        assertTrue(oppChildren.contains("delete"));
+
+        # Check tasks child provider
+        AbstractDataProvider tasks = prov.getChildProvider("tasks");
+        assertEq("tasks", tasks.getName());
+        hash<DataProviderInfo> tasksInfo = tasks.getInfo();
+        assertTrue(tasksInfo.supports_read);
+        assertTrue(tasksInfo.supports_native_search);
+
+        # Verify tasks has action children
+        list<string> taskChildren = tasks.getChildProviderNames();
+        assertTrue(taskChildren.contains("create"));
+        assertTrue(taskChildren.contains("update"));
+        assertTrue(taskChildren.contains("delete"));
+
+        # Check events child provider and triggers
+        AbstractDataProvider events = prov.getChildProvider("events");
+        assertEq("events", events.getName());
+        hash<DataProviderInfo> eventsInfo = events.getInfo();
+        assertTrue(eventsInfo.supports_children);
+        assertTrue(eventsInfo.children_can_support_observers);
+
+        list<string> eventChildren = events.getChildProviderNames();
+        assertTrue(eventChildren.contains("new-contact"));
+        assertTrue(eventChildren.contains("new-appointment"));
+        assertTrue(eventChildren.contains("new-message"));
+
+        # Verify event providers have correct info
+        AbstractDataProvider newContact = events.getChildProvider("new-contact");
+        assertEq("new-contact", newContact.getName());
+        hash<DataProviderInfo> newContactInfo = newContact.getInfo();
+        assertTrue(newContactInfo.supports_observable);
+    }
+
+    #! Data type tests - verify record type definitions
+    dataTypeTests() {
+        checkJson();
+        # Test contact data type
+        GoHighLevelDataProvider::GoHighLevelContactDataType contactType();
+        hash<string, AbstractDataField> contactFields = contactType.getFields();
+        assertTrue(contactFields.hasKey("id"));
+        assertTrue(contactFields.hasKey("firstName"));
+        assertTrue(contactFields.hasKey("lastName"));
+        assertTrue(contactFields.hasKey("email"));
+        assertTrue(contactFields.hasKey("phone"));
+        assertTrue(contactFields.hasKey("companyName"));
+        assertTrue(contactFields.hasKey("tags"));
+        assertTrue(contactFields.hasKey("dateAdded"));
+        assertTrue(contactFields.hasKey("dateUpdated"));
+        assertTrue(contactFields.hasKey("locationId"));
+
+        # Test opportunity data type
+        GoHighLevelDataProvider::GoHighLevelOpportunityDataType oppType();
+        hash<string, AbstractDataField> oppFields = oppType.getFields();
+        assertTrue(oppFields.hasKey("id"));
+        assertTrue(oppFields.hasKey("name"));
+        assertTrue(oppFields.hasKey("monetaryValue"));
+        assertTrue(oppFields.hasKey("pipelineId"));
+        assertTrue(oppFields.hasKey("pipelineStageId"));
+        assertTrue(oppFields.hasKey("status"));
+        assertTrue(oppFields.hasKey("contactId"));
+        assertTrue(oppFields.hasKey("createdAt"));
+        assertTrue(oppFields.hasKey("updatedAt"));
+
+        # Test task data type
+        GoHighLevelDataProvider::GoHighLevelTaskDataType taskType();
+        hash<string, AbstractDataField> taskFields = taskType.getFields();
+        assertTrue(taskFields.hasKey("id"));
+        assertTrue(taskFields.hasKey("title"));
+        assertTrue(taskFields.hasKey("body"));
+        assertTrue(taskFields.hasKey("dueDate"));
+        assertTrue(taskFields.hasKey("completed"));
+        assertTrue(taskFields.hasKey("contactId"));
+
+        # Test appointment data type
+        GoHighLevelDataProvider::GoHighLevelAppointmentDataType apptType();
+        hash<string, AbstractDataField> apptFields = apptType.getFields();
+        assertTrue(apptFields.hasKey("id"));
+        assertTrue(apptFields.hasKey("calendarId"));
+        assertTrue(apptFields.hasKey("contactId"));
+        assertTrue(apptFields.hasKey("title"));
+        assertTrue(apptFields.hasKey("startTime"));
+        assertTrue(apptFields.hasKey("endTime"));
+        assertTrue(apptFields.hasKey("status"));
+        assertTrue(apptFields.hasKey("assignedUserId"));
+        assertTrue(apptFields.hasKey("locationId"));
+
+        # Test message data type
+        GoHighLevelDataProvider::GoHighLevelMessageDataType msgType();
+        hash<string, AbstractDataField> msgFields = msgType.getFields();
+        assertTrue(msgFields.hasKey("id"));
+        assertTrue(msgFields.hasKey("type"));
+        assertTrue(msgFields.hasKey("body"));
+        assertTrue(msgFields.hasKey("direction"));
+        assertTrue(msgFields.hasKey("status"));
+        assertTrue(msgFields.hasKey("contactId"));
+        assertTrue(msgFields.hasKey("conversationId"));
+        assertTrue(msgFields.hasKey("dateAdded"));
+        assertTrue(msgFields.hasKey("messageType"));
+        assertTrue(msgFields.hasKey("locationId"));
+
+        # Test custom field data type
+        GoHighLevelDataProvider::GoHighLevelCustomFieldDataType cfType();
+        hash<string, AbstractDataField> cfFields = cfType.getFields();
+        assertTrue(cfFields.hasKey("id"));
+        assertTrue(cfFields.hasKey("field_value"));
+    }
+
+    #! Trigger example data tests
+    triggerExampleDataTests() {
+        checkJson();
+        GoHighLevelDataProvider::GoHighLevelDataProvider prov;
+        try {
+            prov = new GoHighLevelDataProvider::GoHighLevelDataProvider({
+                "gohighlevelrestclient_options": {
+                    "apikey": "fake-token",
+                    "location_id": "fake-location-id",
+                },
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "OAUTH2-ERROR") {
+                testSkip("OAuth2 requires manual authorization - skipping trigger tests");
+            }
+            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
+                    || ex.err == "QOREADDRINFO-GETINFO-ERROR") {
+                testSkip(sprintf("cannot connect to GoHighLevel API: %s", ex.desc));
+            }
+            rethrow;
+        }
+
+        AbstractDataProvider events = prov.getChildProvider("events");
+        list<string> triggerNames = (
+            "new-contact",
+            "new-appointment",
+            "new-message",
+        );
+
+        foreach string triggerName in (triggerNames) {
+            AbstractDataProvider triggerProvider = events.getChildProvider(triggerName);
+
+            # Verify event types are defined
+            hash<string, hash<DataProviderMessageInfo>> eventTypes = triggerProvider.getEventTypes();
+            assertTrue(eventTypes.hasKey(triggerName),
+                sprintf("%s should define event type '%s'", triggerName, triggerName));
+
+            # Verify event type has a data type
+            assertTrue(eventTypes{triggerName}.type instanceof AbstractDataProviderType,
+                sprintf("%s event type should have a data type", triggerName));
+
+            # Get example event data (will fall back to fake data since we have fake credentials)
+            auto exampleData = triggerProvider.getExampleEventData(triggerName);
+            assertTrue(exampleData instanceof hash,
+                sprintf("%s getExampleEventData() should return a hash", triggerName));
+        }
+    }
+
+    #! Negative tests - test error handling and invalid inputs
+    negativeTests() {
+        checkJson();
+        GoHighLevelDataProvider::GoHighLevelDataProvider prov;
+        try {
+            prov = new GoHighLevelDataProvider::GoHighLevelDataProvider({
+                "gohighlevelrestclient_options": {
+                    "apikey": "fake-token",
+                    "location_id": "fake-location-id",
+                },
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "OAUTH2-ERROR") {
+                testSkip("OAuth2 requires manual authorization - skipping negative tests");
+            }
+            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
+                    || ex.err == "QOREADDRINFO-GETINFO-ERROR") {
+                testSkip(sprintf("cannot connect to GoHighLevel API: %s", ex.desc));
+            }
+            rethrow;
+        }
+
+        # Test getting non-existent child provider
+        assertThrows("INVALID-CHILD-PROVIDER", sub() {
+            prov.getChildProviderEx("nonexistent");
+        });
+
+        # Test execute-api-call has request support
+        AbstractDataProvider apiCall = prov.getChildProvider("execute-api-call");
+        hash<DataProviderInfo> apiCallInfo = apiCall.getInfo();
+        assertTrue(apiCallInfo.supports_request);
+    }
+
+    #! Connection tests - verify REST connection
+    connectionTests() {
+        checkJson();
+        # Verify the scheme is registered
+        hash<auto> scheme = ConnectionSchemeCache::getScheme("gohighlevelres");
+        assertTrue(scheme.schemes.gohighlevelres);
+        assertTrue(scheme.auto_url);
+
+        # Verify scheme has required options
+        assertTrue(scheme.options.hasKey("oauth2_auth_url"));
+        assertTrue(scheme.options.hasKey("oauth2_token_url"));
+        assertTrue(scheme.options.hasKey("oauth2_client_id"));
+        assertTrue(scheme.options.hasKey("oauth2_client_secret"));
+        assertTrue(scheme.options.hasKey("location_id"));
+    }
+
+    #! Integration tests - require real GoHighLevel credentials
+    integrationTests() {
+        checkJson();
+
+        if (!client) {
+            testSkip("No GoHighLevel credentials available - skipping integration tests");
+            return;
+        }
+
+        if (m_options.verbose) {
+            printf("Running GoHighLevel integration tests...\n");
+        }
+
+        # Test 1: Search contacts
+        testSearchContacts();
+
+        # Test 2: Create contact
+        testCreateContact();
+
+        # Test 3: Get contact by ID
+        testGetContact();
+
+        # Test 4: Update contact
+        testUpdateContact();
+
+        # Test 5: Search opportunities (get pipeline ID)
+        testSearchOpportunities();
+
+        # Test 6: Create opportunity (if pipeline found)
+        testCreateOpportunity();
+
+        # Test 7: Update opportunity
+        testUpdateOpportunity();
+
+        # Test 8: Create task on contact
+        testCreateTask();
+
+        # Test 9: Update task
+        testUpdateTask();
+
+        # Test 10: Add note
+        testAddNote();
+
+        # Test 11: Execute API call
+        testExecuteApiCall();
+
+        # Cleanup
+        cleanup();
+    }
+
+    #! Test searching contacts
+    private testSearchContacts() {
+        GoHighLevelDataProvider::GoHighLevelDataProvider prov(client);
+        AbstractDataProvider contacts = prov.getChildProvider("contacts");
+
+        # Search with limit
+        AbstractDataProviderRecordIterator iter = contacts.searchRecords(NOTHING, {"limit": 5});
+        int count = 0;
+        while (iter.next()) {
+            hash<auto> record = iter.getValue();
+            assertTrue(record.hasKey("id"), "Contact should have 'id' field");
+            ++count;
+        }
+
+        if (m_options.verbose) {
+            printf("Listed %d contacts\n", count);
+        }
+        assertTrue(True, "Search contacts completed without error");
+    }
+
+    #! Test creating a contact
+    private testCreateContact() {
+        GoHighLevelDataProvider::GoHighLevelDataProvider prov(client);
+        AbstractDataProvider createAction = prov.getChildProvider("contacts").getChildProvider("create");
+
+        string unique = now_us().format("YYYYMMDDHHmmssxxxxxx");
+        hash<auto> result = createAction.doRequest({
+            "firstName": "Test",
+            "lastName": "User_" + unique,
+            "email": sprintf("test_%s@example.com", unique),
+            "phone": "+15551234567",
+        });
+
+        assertTrue(result.hasKey("id") || result.hasKey("contact"),
+            "Created contact response should have 'id' or 'contact' field");
+        # GHL may return {contact: {id: ...}} or {id: ...}
+        if (result.contact) {
+            testContactId = result.contact.id;
+        } else {
+            testContactId = result.id;
+        }
+        assertTrue(testContactId.val(), "Contact ID should be non-empty");
+
+        if (m_options.verbose) {
+            printf("Created contact: %s\n", testContactId);
+        }
+
+        # Verify data persistence - retrieve the contact and verify fields
+        AbstractDataProvider contacts = prov.getChildProvider("contacts");
+        AbstractDataProviderRecordIterator iter = contacts.searchRecords(NOTHING, {
+            "contact_id": testContactId,
+        });
+        assertTrue(iter.next(), "Should find created contact by ID");
+        hash<auto> fetched = iter.getValue();
+        assertEq("Test", fetched.firstName, "Contact firstName should match");
+    }
+
+    #! Test getting a single contact by ID
+    private testGetContact() {
+        if (!testContactId) {
+            testSkip("No test contact created");
+            return;
+        }
+
+        GoHighLevelDataProvider::GoHighLevelDataProvider prov(client);
+        AbstractDataProvider contacts = prov.getChildProvider("contacts");
+
+        AbstractDataProviderRecordIterator iter = contacts.searchRecords(NOTHING, {
+            "contact_id": testContactId,
+        });
+        assertTrue(iter.next(), "Should find contact by ID");
+        hash<auto> record = iter.getValue();
+        assertEq(testContactId, record.id, "Contact ID should match");
+        assertTrue(record.hasKey("firstName"), "Contact should have firstName");
+    }
+
+    #! Test updating a contact
+    private testUpdateContact() {
+        if (!testContactId) {
+            testSkip("No test contact created");
+            return;
+        }
+
+        GoHighLevelDataProvider::GoHighLevelDataProvider prov(client);
+        AbstractDataProvider updateAction = prov.getChildProvider("contacts")
+            .getChildProvider("update");
+
+        hash<auto> result = updateAction.doRequest({
+            "contact_id": testContactId,
+            "companyName": "Integration Test Corp",
+        });
+
+        assertTrue(result.hasKey("id") || result.hasKey("contact"),
+            "Updated contact should have 'id' or 'contact' field");
+
+        # Verify the update persisted
+        AbstractDataProvider contacts = prov.getChildProvider("contacts");
+        AbstractDataProviderRecordIterator iter = contacts.searchRecords(NOTHING, {
+            "contact_id": testContactId,
+        });
+        assertTrue(iter.next(), "Should find updated contact");
+        hash<auto> fetched = iter.getValue();
+        assertEq("Integration Test Corp", fetched.companyName, "Contact companyName should be updated");
+    }
+
+    #! Test searching opportunities (and discover pipeline ID)
+    private testSearchOpportunities() {
+        GoHighLevelDataProvider::GoHighLevelDataProvider prov(client);
+        AbstractDataProvider opps = prov.getChildProvider("opportunities");
+
+        AbstractDataProviderRecordIterator iter = opps.searchRecords(NOTHING, {"limit": 5});
+        int count = 0;
+        while (iter.next()) {
+            hash<auto> record = iter.getValue();
+            assertTrue(record.hasKey("id"), "Opportunity should have 'id' field");
+            if (!pipelineId && record.pipelineId) {
+                pipelineId = record.pipelineId;
+            }
+            ++count;
+        }
+
+        if (m_options.verbose) {
+            printf("Listed %d opportunities, pipeline: %s\n", count, pipelineId ?? "none found");
+        }
+        assertTrue(True, "Search opportunities completed without error");
+    }
+
+    #! Test creating an opportunity
+    private testCreateOpportunity() {
+        if (!testContactId) {
+            testSkip("No test contact created");
+            return;
+        }
+        if (!pipelineId) {
+            testSkip("No pipeline ID found - cannot create opportunity");
+            return;
+        }
+
+        GoHighLevelDataProvider::GoHighLevelDataProvider prov(client);
+        AbstractDataProvider createAction = prov.getChildProvider("opportunities")
+            .getChildProvider("create");
+
+        hash<auto> result = createAction.doRequest({
+            "pipelineId": pipelineId,
+            "name": "Test Opportunity",
+            "status": "open",
+            "contactId": testContactId,
+        });
+
+        assertTrue(result.hasKey("id") || result.hasKey("opportunity"),
+            "Created opportunity should have 'id' or 'opportunity'");
+        if (result.opportunity) {
+            testOpportunityId = result.opportunity.id;
+        } else {
+            testOpportunityId = result.id;
+        }
+
+        if (m_options.verbose) {
+            printf("Created opportunity: %s\n", testOpportunityId);
+        }
+    }
+
+    #! Test updating an opportunity
+    private testUpdateOpportunity() {
+        if (!testOpportunityId) {
+            testSkip("No test opportunity created");
+            return;
+        }
+
+        GoHighLevelDataProvider::GoHighLevelDataProvider prov(client);
+        AbstractDataProvider updateAction = prov.getChildProvider("opportunities")
+            .getChildProvider("update");
+
+        hash<auto> result = updateAction.doRequest({
+            "opportunity_id": testOpportunityId,
+            "name": "Test Opportunity Updated",
+            "monetaryValue": 1500.0,
+        });
+
+        assertTrue(result.hasKey("id") || result.hasKey("opportunity"),
+            "Updated opportunity response should have 'id' or 'opportunity'");
+    }
+
+    #! Test creating a task on a contact
+    private testCreateTask() {
+        if (!testContactId) {
+            testSkip("No test contact created");
+            return;
+        }
+
+        GoHighLevelDataProvider::GoHighLevelDataProvider prov(client);
+        AbstractDataProvider createAction = prov.getChildProvider("tasks")
+            .getChildProvider("create");
+
+        hash<auto> result = createAction.doRequest({
+            "contact_id": testContactId,
+            "title": "Test Task",
+            "body": "Integration test task - safe to delete",
+            "completed": False,
+        });
+
+        assertTrue(result.hasKey("id") || result.hasKey("task"),
+            "Created task should have 'id' or 'task'");
+        if (result.task) {
+            testTaskId = result.task.id;
+        } else {
+            testTaskId = result.id;
+        }
+
+        if (m_options.verbose) {
+            printf("Created task: %s\n", testTaskId);
+        }
+    }
+
+    #! Test updating a task
+    private testUpdateTask() {
+        if (!testContactId || !testTaskId) {
+            testSkip("No test contact or task created");
+            return;
+        }
+
+        GoHighLevelDataProvider::GoHighLevelDataProvider prov(client);
+        AbstractDataProvider updateAction = prov.getChildProvider("tasks")
+            .getChildProvider("update");
+
+        hash<auto> result = updateAction.doRequest({
+            "contact_id": testContactId,
+            "task_id": testTaskId,
+            "title": "Test Task Updated",
+            "completed": True,
+        });
+
+        assertTrue(result.hasKey("id") || result.hasKey("task"),
+            "Updated task response should have 'id' or 'task'");
+    }
+
+    #! Test adding a note to a contact
+    private testAddNote() {
+        if (!testContactId) {
+            testSkip("No test contact created");
+            return;
+        }
+
+        GoHighLevelDataProvider::GoHighLevelDataProvider prov(client);
+        AbstractDataProvider addNote = prov.getChildProvider("contacts")
+            .getChildProvider("add-note");
+
+        hash<auto> result = addNote.doRequest({
+            "contact_id": testContactId,
+            "body": "Integration test note",
+        });
+
+        assertTrue(result.hasKey("id") || result.hasKey("note"),
+            "Add note response should have 'id' or 'note'");
+
+        if (m_options.verbose) {
+            printf("Added note to contact %s\n", testContactId);
+        }
+    }
+
+    #! Test execute API call
+    private testExecuteApiCall() {
+        GoHighLevelDataProvider::GoHighLevelDataProvider prov(client);
+        AbstractDataProvider apiCall = prov.getChildProvider("execute-api-call");
+
+        hash<auto> result = apiCall.doRequest({
+            "method": "GET",
+            "path": "calendars",
+        });
+
+        assertTrue(result.hasKey("calendars"), "API call should return calendars");
+        if (m_options.verbose) {
+            printf("Execute API call returned %d calendars\n",
+                result.calendars ? result.calendars.size() : 0);
+        }
+    }
+
+    #! Cleanup test data
+    private cleanup() {
+        GoHighLevelDataProvider::GoHighLevelDataProvider prov(client);
+
+        # Delete test task
+        if (testContactId && testTaskId) {
+            try {
+                AbstractDataProvider deleteTask = prov.getChildProvider("tasks")
+                    .getChildProvider("delete");
+                deleteTask.doRequest({
+                    "contact_id": testContactId,
+                    "task_id": testTaskId,
+                });
+                if (m_options.verbose) {
+                    printf("Test task deleted\n");
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (m_options.verbose) {
+                    printf("Warning: task cleanup failed: %s: %s\n", ex.err, ex.desc);
+                }
+            }
+        }
+
+        # Delete test opportunity
+        if (testOpportunityId) {
+            try {
+                AbstractDataProvider deleteOpp = prov.getChildProvider("opportunities")
+                    .getChildProvider("delete");
+                deleteOpp.doRequest({
+                    "opportunity_id": testOpportunityId,
+                });
+                if (m_options.verbose) {
+                    printf("Test opportunity deleted\n");
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (m_options.verbose) {
+                    printf("Warning: opportunity cleanup failed: %s: %s\n", ex.err, ex.desc);
+                }
+            }
+        }
+
+        # Delete test contact
+        if (testContactId) {
+            try {
+                AbstractDataProvider deleteContact = prov.getChildProvider("contacts")
+                    .getChildProvider("delete");
+                deleteContact.doRequest({
+                    "contact_id": testContactId,
+                });
+                if (m_options.verbose) {
+                    printf("Test contact deleted\n");
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (m_options.verbose) {
+                    printf("Warning: contact cleanup failed: %s: %s\n", ex.err, ex.desc);
+                }
+            }
+        }
+    }
+}

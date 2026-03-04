@@ -924,6 +924,23 @@ cargo install tree-sitter-cli@0.26.5
       - polling-based event triggers for customers, orders, products, carts, shipments, and addresses
       - action catalog integration with 13 actions and 11 triggers
       - connection support with \c bigcommerceres:// URL scheme
+    - @ref gohighlevelrestclientintro "GoHighLevelRestClient" module
+      - new module providing a REST client for GoHighLevel's CRM and marketing automation API
+      - supports OAuth2 authentication with bearer tokens
+      - auto-appends locationId to all API requests
+      - provides GoHighLevelRestConnection for connection management with \c gohighlevelres:// URL scheme
+    - @ref gohighleveldataproviderintro "GoHighLevelDataProvider" module
+      - new module providing a data provider API for GoHighLevel CRM
+      - contact management (create, update, delete, search, get by ID)
+      - opportunity management (create, update, delete, search, get by ID)
+      - task management (create, update, delete, list, get by ID)
+      - note creation for contacts
+      - campaign management (add/remove contacts)
+      - account (location) creation
+      - generic API call execution
+      - polling-based event triggers for new contacts, appointments, and messages
+      - action catalog integration with 20 actions and 3 triggers
+      - connection support with \c gohighlevelres:// URL scheme
     - @ref squarerestclientintro "SquareRestClient" module
       - new module providing a REST client for Square's payments and commerce API
       - supports OAuth2 authentication with bearer tokens

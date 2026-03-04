@@ -1,0 +1,1205 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore GoHighLevelDataProvider module definition
+
+/*  GoHighLevelDataProvider.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%modern
+# require type definitions everywhere
+# strict argument handling
+# enable all warnings
+
+%requires(reexport) DataProvider
+%requires(reexport) GoHighLevelRestClient
+%requires uuid
+%try-module json
+%define NoJson
+%endtry
+
+module GoHighLevelDataProvider {
+    version = "1.0";
+    desc = "User module providing a data provider API for GoHighLevel CRM";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # Register the data provider factory
+        DataProvider::registerFactory(new GoHighLevelDataProviderFactory());
+
+        # Register the application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": GoHighLevelDataProvider::AppName,
+            "display_name": "GoHighLevel",
+            "short_desc": "GoHighLevel CRM and marketing automation platform",
+            "desc": "GoHighLevel is a comprehensive CRM and marketing automation platform for "
+                "contacts, opportunities, tasks, calendars, conversations, and campaigns.\n\n"
+                "This integration supports contact management, opportunity tracking, task management, "
+                "campaign automation, and event triggers.",
+            "scheme": "gohighlevelres",
+            "logo": GoHighLevelLogo,
+            "logo_file_name": "gohighlevel-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::CrmSales, DataProvider::AppGroup::Marketing),
+        });
+
+        # ========== CONTACT ACTIONS ==========
+
+        # Search Contacts
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoHighLevelDataProvider::AppName,
+            "path": "/contacts",
+            "action": "search-contacts",
+            "groups": "Contacts",
+            "display_name": "Search Contacts",
+            "short_desc": "Search for contacts",
+            "desc": "Search for contacts in GoHighLevel with optional filtering",
+            "action_code": DPAT_FIND,
+            "options": {
+                "contact_id": <ActionOptionInfo>{
+                    "display_name": "Contact ID",
+                    "short_desc": "Filter by contact ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter results by a specific contact ID",
+                    "preselected": True,
+                    "ref_data": "contacts",
+                },
+                "query": <ActionOptionInfo>{
+                    "display_name": "Search Query",
+                    "short_desc": "Search query string",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Search query to filter contacts by name, email, or phone",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "Maximum number of results to return",
+                },
+            },
+        });
+
+        # Get a Contact
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoHighLevelDataProvider::AppName,
+            "path": "/contacts",
+            "action": "get-contact",
+            "groups": "Contacts",
+            "display_name": "Get a Contact",
+            "short_desc": "Get a single contact by ID",
+            "desc": "Retrieve a single contact by ID from GoHighLevel",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "contact_id": <ActionOptionInfo>{
+                    "display_name": "Contact ID",
+                    "short_desc": "The contact ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "contacts",
+                },
+            },
+        });
+
+        # Create a Contact
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoHighLevelDataProvider::AppName,
+            "path": "/contacts/create",
+            "action": "create-contact",
+            "groups": "Contacts",
+            "display_name": "Create a Contact",
+            "short_desc": "Create a new contact",
+            "desc": "Create a new contact in GoHighLevel",
+            "action_code": DPAT_API,
+            "output_type": new GoHighLevelContactDataType(),
+            "options": {
+                "firstName": <ActionOptionInfo>{
+                    "display_name": "First Name",
+                    "short_desc": "Contact first name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "First name of the contact",
+                    "example_value": "John",
+                    "preselected": True,
+                },
+                "lastName": <ActionOptionInfo>{
+                    "display_name": "Last Name",
+                    "short_desc": "Contact last name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Last name of the contact",
+                    "example_value": "Doe",
+                    "preselected": True,
+                },
+                "name": <ActionOptionInfo>{
+                    "display_name": "Full Name",
+                    "short_desc": "Contact full name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Full name of the contact",
+                },
+                "email": <ActionOptionInfo>{
+                    "display_name": "Email",
+                    "short_desc": "Contact email",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Email address of the contact",
+                    "example_value": "john@example.com",
+                    "preselected": True,
+                },
+                "phone": <ActionOptionInfo>{
+                    "display_name": "Phone",
+                    "short_desc": "Phone number",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Phone number of the contact",
+                    "preselected": True,
+                },
+                "companyName": <ActionOptionInfo>{
+                    "display_name": "Company Name",
+                    "short_desc": "Company name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Company name of the contact",
+                },
+                "address1": <ActionOptionInfo>{
+                    "display_name": "Address",
+                    "short_desc": "Street address",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Street address of the contact",
+                },
+                "city": <ActionOptionInfo>{
+                    "display_name": "City",
+                    "short_desc": "City",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "City of the contact",
+                },
+                "state": <ActionOptionInfo>{
+                    "display_name": "State",
+                    "short_desc": "State or province",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "State or province of the contact",
+                },
+                "country": <ActionOptionInfo>{
+                    "display_name": "Country",
+                    "short_desc": "Country",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Country of the contact",
+                },
+                "postalCode": <ActionOptionInfo>{
+                    "display_name": "Postal Code",
+                    "short_desc": "Postal/ZIP code",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Postal or ZIP code of the contact",
+                },
+                "website": <ActionOptionInfo>{
+                    "display_name": "Website",
+                    "short_desc": "Website URL",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Website URL of the contact",
+                },
+                "timezone": <ActionOptionInfo>{
+                    "display_name": "Timezone",
+                    "short_desc": "Timezone",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Timezone of the contact (e.g. `America/New_York`)",
+                },
+                "tags": <ActionOptionInfo>{
+                    "display_name": "Tags",
+                    "short_desc": "Contact tags",
+                    "type": AbstractDataProviderTypeMap."*softlist",
+                    "desc": "List of tags to assign to the contact",
+                },
+                "source": <ActionOptionInfo>{
+                    "display_name": "Source",
+                    "short_desc": "Lead source",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Source of the contact (e.g. `website`, `referral`)",
+                },
+                "assignedTo": <ActionOptionInfo>{
+                    "display_name": "Assigned To",
+                    "short_desc": "Assigned user",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "User ID to assign the contact to",
+                    "ref_data": "users",
+                },
+                "dnd": <ActionOptionInfo>{
+                    "display_name": "Do Not Disturb",
+                    "short_desc": "DND status",
+                    "type": AbstractDataProviderTypeMap."*softbool",
+                    "desc": "Whether the contact is on Do Not Disturb (`True` or `False`)",
+                },
+            },
+        });
+
+        # Update a Contact
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoHighLevelDataProvider::AppName,
+            "path": "/contacts/update",
+            "action": "update-contact",
+            "groups": "Contacts",
+            "display_name": "Update a Contact",
+            "short_desc": "Update an existing contact",
+            "desc": "Update an existing contact in GoHighLevel",
+            "action_code": DPAT_API,
+            "output_type": new GoHighLevelContactDataType(),
+            "options": {
+                "contact_id": <ActionOptionInfo>{
+                    "display_name": "Contact ID",
+                    "short_desc": "The contact to update",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "contacts",
+                },
+                "firstName": <ActionOptionInfo>{
+                    "display_name": "First Name",
+                    "short_desc": "Contact first name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "First name of the contact",
+                },
+                "lastName": <ActionOptionInfo>{
+                    "display_name": "Last Name",
+                    "short_desc": "Contact last name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Last name of the contact",
+                },
+                "name": <ActionOptionInfo>{
+                    "display_name": "Full Name",
+                    "short_desc": "Contact full name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Full name of the contact",
+                },
+                "email": <ActionOptionInfo>{
+                    "display_name": "Email",
+                    "short_desc": "Contact email",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Email address of the contact",
+                },
+                "phone": <ActionOptionInfo>{
+                    "display_name": "Phone",
+                    "short_desc": "Phone number",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Phone number of the contact",
+                },
+                "companyName": <ActionOptionInfo>{
+                    "display_name": "Company Name",
+                    "short_desc": "Company name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Company name of the contact",
+                },
+                "address1": <ActionOptionInfo>{
+                    "display_name": "Address",
+                    "short_desc": "Street address",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Street address of the contact",
+                },
+                "city": <ActionOptionInfo>{
+                    "display_name": "City",
+                    "short_desc": "City",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "City of the contact",
+                },
+                "state": <ActionOptionInfo>{
+                    "display_name": "State",
+                    "short_desc": "State or province",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "State or province of the contact",
+                },
+                "country": <ActionOptionInfo>{
+                    "display_name": "Country",
+                    "short_desc": "Country",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Country of the contact",
+                },
+                "postalCode": <ActionOptionInfo>{
+                    "display_name": "Postal Code",
+                    "short_desc": "Postal/ZIP code",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Postal or ZIP code of the contact",
+                },
+                "website": <ActionOptionInfo>{
+                    "display_name": "Website",
+                    "short_desc": "Website URL",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Website URL of the contact",
+                },
+                "timezone": <ActionOptionInfo>{
+                    "display_name": "Timezone",
+                    "short_desc": "Timezone",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Timezone of the contact (e.g. `America/New_York`)",
+                },
+                "tags": <ActionOptionInfo>{
+                    "display_name": "Tags",
+                    "short_desc": "Contact tags",
+                    "type": AbstractDataProviderTypeMap."*softlist",
+                    "desc": "List of tags to assign to the contact",
+                },
+                "source": <ActionOptionInfo>{
+                    "display_name": "Source",
+                    "short_desc": "Lead source",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Source of the contact",
+                },
+                "assignedTo": <ActionOptionInfo>{
+                    "display_name": "Assigned To",
+                    "short_desc": "Assigned user",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "User ID to assign the contact to",
+                    "ref_data": "users",
+                },
+                "dnd": <ActionOptionInfo>{
+                    "display_name": "Do Not Disturb",
+                    "short_desc": "DND status",
+                    "type": AbstractDataProviderTypeMap."*softbool",
+                    "desc": "Whether the contact is on Do Not Disturb (`True` or `False`)",
+                },
+            },
+        });
+
+        # Delete a Contact
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoHighLevelDataProvider::AppName,
+            "path": "/contacts/delete",
+            "action": "delete-contact",
+            "groups": "Contacts",
+            "display_name": "Delete a Contact",
+            "short_desc": "Delete a contact",
+            "desc": "Delete a contact from GoHighLevel",
+            "action_code": DPAT_API,
+            "output_type": AbstractDataProviderTypeMap."hash",
+            "options": {
+                "contact_id": <ActionOptionInfo>{
+                    "display_name": "Contact ID",
+                    "short_desc": "The contact to delete",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "contacts",
+                },
+            },
+        });
+
+        # Add Contact to Campaign
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoHighLevelDataProvider::AppName,
+            "path": "/contacts/add-to-campaign",
+            "action": "add-contact-to-campaign",
+            "groups": "Contacts",
+            "display_name": "Add a Contact to a Campaign",
+            "short_desc": "Add a contact to a campaign",
+            "desc": "Add a contact to a campaign in GoHighLevel",
+            "action_code": DPAT_API,
+            "output_type": AbstractDataProviderTypeMap."hash",
+            "options": {
+                "contact_id": <ActionOptionInfo>{
+                    "display_name": "Contact ID",
+                    "short_desc": "The contact",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "contacts",
+                },
+                "campaign_id": <ActionOptionInfo>{
+                    "display_name": "Campaign ID",
+                    "short_desc": "The campaign",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The ID of the campaign to add the contact to",
+                    "ref_data": "campaigns",
+                },
+            },
+        });
+
+        # Remove Contact from Campaign
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoHighLevelDataProvider::AppName,
+            "path": "/contacts/remove-from-campaign",
+            "action": "remove-contact-from-campaign",
+            "groups": "Contacts",
+            "display_name": "Remove a Contact from a Campaign",
+            "short_desc": "Remove a contact from a campaign",
+            "desc": "Remove a contact from a campaign in GoHighLevel",
+            "action_code": DPAT_API,
+            "output_type": AbstractDataProviderTypeMap."hash",
+            "options": {
+                "contact_id": <ActionOptionInfo>{
+                    "display_name": "Contact ID",
+                    "short_desc": "The contact",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "contacts",
+                },
+                "campaign_id": <ActionOptionInfo>{
+                    "display_name": "Campaign ID",
+                    "short_desc": "The campaign",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The ID of the campaign to remove the contact from",
+                    "ref_data": "campaigns",
+                },
+            },
+        });
+
+        # Add Note to Contact
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoHighLevelDataProvider::AppName,
+            "path": "/contacts/add-note",
+            "action": "add-note",
+            "groups": "Contacts",
+            "display_name": "Add a Note to the Contact",
+            "short_desc": "Add a note to a contact",
+            "desc": "Add a note to a contact in GoHighLevel",
+            "action_code": DPAT_API,
+            "output_type": AbstractDataProviderTypeMap."hash",
+            "options": {
+                "contact_id": <ActionOptionInfo>{
+                    "display_name": "Contact ID",
+                    "short_desc": "The contact",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "contacts",
+                },
+                "body": <ActionOptionInfo>{
+                    "display_name": "Note Body",
+                    "short_desc": "Note content",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The body text of the note",
+                },
+                "userId": <ActionOptionInfo>{
+                    "display_name": "User ID",
+                    "short_desc": "Note author",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The user ID of the note author",
+                    "ref_data": "users",
+                },
+            },
+        });
+
+        # ========== OPPORTUNITY ACTIONS ==========
+
+        # Search Opportunities
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoHighLevelDataProvider::AppName,
+            "path": "/opportunities",
+            "action": "search-opportunities",
+            "groups": "Opportunities",
+            "display_name": "Search Opportunities",
+            "short_desc": "Search for opportunities",
+            "desc": "Search for opportunities in GoHighLevel with optional filtering",
+            "action_code": DPAT_FIND,
+            "options": {
+                "opportunity_id": <ActionOptionInfo>{
+                    "display_name": "Opportunity ID",
+                    "short_desc": "Filter by opportunity ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter results by a specific opportunity ID",
+                    "preselected": True,
+                    "ref_data": "opportunities",
+                },
+                "q": <ActionOptionInfo>{
+                    "display_name": "Search Query",
+                    "short_desc": "Search query",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Search query to filter opportunities",
+                },
+                "pipeline_id": <ActionOptionInfo>{
+                    "display_name": "Pipeline ID",
+                    "short_desc": "Filter by pipeline",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter by pipeline ID",
+                    "ref_data": "pipelines",
+                },
+                "pipeline_stage_id": <ActionOptionInfo>{
+                    "display_name": "Pipeline Stage ID",
+                    "short_desc": "Filter by pipeline stage",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter by pipeline stage ID",
+                },
+                "contact_id": <ActionOptionInfo>{
+                    "display_name": "Contact ID",
+                    "short_desc": "Filter by contact",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter by contact ID",
+                    "ref_data": "contacts",
+                },
+                "status": <ActionOptionInfo>{
+                    "display_name": "Status",
+                    "short_desc": "Filter by status",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter by opportunity status",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "open", "display_name": "Open"},
+                        <AllowedValueInfo>{"value": "won", "display_name": "Won"},
+                        <AllowedValueInfo>{"value": "lost", "display_name": "Lost"},
+                        <AllowedValueInfo>{"value": "abandoned", "display_name": "Abandoned"},
+                        <AllowedValueInfo>{"value": "all", "display_name": "All"},
+                    ),
+                },
+                "assigned_to": <ActionOptionInfo>{
+                    "display_name": "Assigned To",
+                    "short_desc": "Filter by assignee",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter by assigned user ID",
+                    "ref_data": "users",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "Maximum number of results to return",
+                },
+            },
+        });
+
+        # Get an Opportunity
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoHighLevelDataProvider::AppName,
+            "path": "/opportunities",
+            "action": "get-opportunity",
+            "groups": "Opportunities",
+            "display_name": "Get an Opportunity",
+            "short_desc": "Get a single opportunity by ID",
+            "desc": "Retrieve a single opportunity by ID from GoHighLevel",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "opportunity_id": <ActionOptionInfo>{
+                    "display_name": "Opportunity ID",
+                    "short_desc": "The opportunity ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "opportunities",
+                },
+            },
+        });
+
+        # Create an Opportunity
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoHighLevelDataProvider::AppName,
+            "path": "/opportunities/create",
+            "action": "create-opportunity",
+            "groups": "Opportunities",
+            "display_name": "Create an Opportunity",
+            "short_desc": "Create a new opportunity",
+            "desc": "Create a new opportunity in GoHighLevel",
+            "action_code": DPAT_API,
+            "output_type": new GoHighLevelOpportunityDataType(),
+            "options": {
+                "pipelineId": <ActionOptionInfo>{
+                    "display_name": "Pipeline ID",
+                    "short_desc": "The pipeline",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The ID of the pipeline for this opportunity",
+                    "ref_data": "pipelines",
+                },
+                "name": <ActionOptionInfo>{
+                    "display_name": "Name",
+                    "short_desc": "Opportunity name",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "Name of the opportunity",
+                },
+                "status": <ActionOptionInfo>{
+                    "display_name": "Status",
+                    "short_desc": "Opportunity status",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "Status of the opportunity",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "open", "display_name": "Open"},
+                        <AllowedValueInfo>{"value": "won", "display_name": "Won"},
+                        <AllowedValueInfo>{"value": "lost", "display_name": "Lost"},
+                        <AllowedValueInfo>{"value": "abandoned", "display_name": "Abandoned"},
+                    ),
+                },
+                "contactId": <ActionOptionInfo>{
+                    "display_name": "Contact ID",
+                    "short_desc": "The contact",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The ID of the contact for this opportunity",
+                    "ref_data": "contacts",
+                },
+                "pipelineStageId": <ActionOptionInfo>{
+                    "display_name": "Pipeline Stage ID",
+                    "short_desc": "Pipeline stage",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The ID of the pipeline stage",
+                },
+                "monetaryValue": <ActionOptionInfo>{
+                    "display_name": "Monetary Value",
+                    "short_desc": "Deal value",
+                    "type": AbstractDataProviderTypeMap."*softfloat",
+                    "desc": "Monetary value of the opportunity",
+                },
+                "assignedTo": <ActionOptionInfo>{
+                    "display_name": "Assigned To",
+                    "short_desc": "Assigned user",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "User ID to assign the opportunity to",
+                    "ref_data": "users",
+                },
+            },
+        });
+
+        # Update an Opportunity
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoHighLevelDataProvider::AppName,
+            "path": "/opportunities/update",
+            "action": "update-opportunity",
+            "groups": "Opportunities",
+            "display_name": "Update an Opportunity",
+            "short_desc": "Update an existing opportunity",
+            "desc": "Update an existing opportunity in GoHighLevel",
+            "action_code": DPAT_API,
+            "output_type": new GoHighLevelOpportunityDataType(),
+            "options": {
+                "opportunity_id": <ActionOptionInfo>{
+                    "display_name": "Opportunity ID",
+                    "short_desc": "The opportunity to update",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "opportunities",
+                },
+                "name": <ActionOptionInfo>{
+                    "display_name": "Name",
+                    "short_desc": "Opportunity name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Name of the opportunity",
+                },
+                "status": <ActionOptionInfo>{
+                    "display_name": "Status",
+                    "short_desc": "Opportunity status",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Status of the opportunity",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "open", "display_name": "Open"},
+                        <AllowedValueInfo>{"value": "won", "display_name": "Won"},
+                        <AllowedValueInfo>{"value": "lost", "display_name": "Lost"},
+                        <AllowedValueInfo>{"value": "abandoned", "display_name": "Abandoned"},
+                    ),
+                },
+                "pipelineStageId": <ActionOptionInfo>{
+                    "display_name": "Pipeline Stage ID",
+                    "short_desc": "Pipeline stage",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The ID of the pipeline stage",
+                },
+                "monetaryValue": <ActionOptionInfo>{
+                    "display_name": "Monetary Value",
+                    "short_desc": "Deal value",
+                    "type": AbstractDataProviderTypeMap."*softfloat",
+                    "desc": "Monetary value of the opportunity",
+                },
+                "assignedTo": <ActionOptionInfo>{
+                    "display_name": "Assigned To",
+                    "short_desc": "Assigned user",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "User ID to assign the opportunity to",
+                    "ref_data": "users",
+                },
+            },
+        });
+
+        # Delete an Opportunity
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoHighLevelDataProvider::AppName,
+            "path": "/opportunities/delete",
+            "action": "delete-opportunity",
+            "groups": "Opportunities",
+            "display_name": "Delete an Opportunity",
+            "short_desc": "Delete an opportunity",
+            "desc": "Delete an opportunity from GoHighLevel",
+            "action_code": DPAT_API,
+            "output_type": AbstractDataProviderTypeMap."hash",
+            "options": {
+                "opportunity_id": <ActionOptionInfo>{
+                    "display_name": "Opportunity ID",
+                    "short_desc": "The opportunity to delete",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "opportunities",
+                },
+            },
+        });
+
+        # ========== TASK ACTIONS ==========
+
+        # List Tasks
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoHighLevelDataProvider::AppName,
+            "path": "/tasks",
+            "action": "list-tasks",
+            "groups": "Tasks",
+            "display_name": "List Tasks",
+            "short_desc": "List tasks for a contact",
+            "desc": "List tasks for a contact in GoHighLevel",
+            "action_code": DPAT_FIND,
+            "options": {
+                "contact_id": <ActionOptionInfo>{
+                    "display_name": "Contact ID",
+                    "short_desc": "The contact",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The contact ID to list tasks for",
+                    "ref_data": "contacts",
+                },
+                "task_id": <ActionOptionInfo>{
+                    "display_name": "Task ID",
+                    "short_desc": "Filter by task ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter results by a specific task ID",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "Maximum number of results to return",
+                },
+            },
+        });
+
+        # Get a Task
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoHighLevelDataProvider::AppName,
+            "path": "/tasks",
+            "action": "get-task",
+            "groups": "Tasks",
+            "display_name": "Get a Task",
+            "short_desc": "Get a single task by ID",
+            "desc": "Retrieve a single task by ID from GoHighLevel",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "contact_id": <ActionOptionInfo>{
+                    "display_name": "Contact ID",
+                    "short_desc": "The contact",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The contact ID the task belongs to",
+                    "ref_data": "contacts",
+                },
+                "task_id": <ActionOptionInfo>{
+                    "display_name": "Task ID",
+                    "short_desc": "The task ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The ID of the task to retrieve",
+                },
+            },
+        });
+
+        # Create a Task
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoHighLevelDataProvider::AppName,
+            "path": "/tasks/create",
+            "action": "create-task",
+            "groups": "Tasks",
+            "display_name": "Create a Task",
+            "short_desc": "Create a new task",
+            "desc": "Create a new task for a contact in GoHighLevel",
+            "action_code": DPAT_API,
+            "output_type": new GoHighLevelTaskDataType(),
+            "options": {
+                "contact_id": <ActionOptionInfo>{
+                    "display_name": "Contact ID",
+                    "short_desc": "The contact",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The contact ID to create the task for",
+                    "ref_data": "contacts",
+                },
+                "title": <ActionOptionInfo>{
+                    "display_name": "Title",
+                    "short_desc": "Task title",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "Title of the task",
+                    "example_value": "Follow up call",
+                },
+                "body": <ActionOptionInfo>{
+                    "display_name": "Body",
+                    "short_desc": "Task description",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Description or body text of the task",
+                },
+                "dueDate": <ActionOptionInfo>{
+                    "display_name": "Due Date",
+                    "short_desc": "Due date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Due date for the task (ISO 8601 format)",
+                },
+                "assignedTo": <ActionOptionInfo>{
+                    "display_name": "Assigned To",
+                    "short_desc": "Assigned user",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "User ID to assign the task to",
+                    "ref_data": "users",
+                },
+                "completed": <ActionOptionInfo>{
+                    "display_name": "Completed",
+                    "short_desc": "Completion status",
+                    "type": AbstractDataProviderTypeMap."*softbool",
+                    "desc": "Whether the task is completed (`True` or `False`)",
+                },
+            },
+        });
+
+        # Update a Task
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoHighLevelDataProvider::AppName,
+            "path": "/tasks/update",
+            "action": "update-task",
+            "groups": "Tasks",
+            "display_name": "Update a Task",
+            "short_desc": "Update an existing task",
+            "desc": "Update an existing task in GoHighLevel",
+            "action_code": DPAT_API,
+            "output_type": new GoHighLevelTaskDataType(),
+            "options": {
+                "contact_id": <ActionOptionInfo>{
+                    "display_name": "Contact ID",
+                    "short_desc": "The contact",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The contact ID the task belongs to",
+                    "ref_data": "contacts",
+                },
+                "task_id": <ActionOptionInfo>{
+                    "display_name": "Task ID",
+                    "short_desc": "The task to update",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The ID of the task to update",
+                },
+                "title": <ActionOptionInfo>{
+                    "display_name": "Title",
+                    "short_desc": "Task title",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Title of the task",
+                },
+                "body": <ActionOptionInfo>{
+                    "display_name": "Body",
+                    "short_desc": "Task description",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Description or body text of the task",
+                },
+                "dueDate": <ActionOptionInfo>{
+                    "display_name": "Due Date",
+                    "short_desc": "Due date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Due date for the task (ISO 8601 format)",
+                },
+                "assignedTo": <ActionOptionInfo>{
+                    "display_name": "Assigned To",
+                    "short_desc": "Assigned user",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "User ID to assign the task to",
+                    "ref_data": "users",
+                },
+                "completed": <ActionOptionInfo>{
+                    "display_name": "Completed",
+                    "short_desc": "Completion status",
+                    "type": AbstractDataProviderTypeMap."*softbool",
+                    "desc": "Whether the task is completed (`True` or `False`)",
+                },
+            },
+        });
+
+        # Delete a Task
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoHighLevelDataProvider::AppName,
+            "path": "/tasks/delete",
+            "action": "delete-task",
+            "groups": "Tasks",
+            "display_name": "Delete a Task",
+            "short_desc": "Delete a task",
+            "desc": "Delete a task from GoHighLevel",
+            "action_code": DPAT_API,
+            "output_type": AbstractDataProviderTypeMap."hash",
+            "options": {
+                "contact_id": <ActionOptionInfo>{
+                    "display_name": "Contact ID",
+                    "short_desc": "The contact",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The contact ID the task belongs to",
+                    "ref_data": "contacts",
+                },
+                "task_id": <ActionOptionInfo>{
+                    "display_name": "Task ID",
+                    "short_desc": "The task to delete",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The ID of the task to delete",
+                },
+            },
+        });
+
+        # ========== ACCOUNT ACTIONS ==========
+
+        # Create Account
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoHighLevelDataProvider::AppName,
+            "path": "/create-account",
+            "action": "create-account",
+            "groups": "Accounts",
+            "display_name": "Add an Account",
+            "short_desc": "Create a new location/sub-account",
+            "desc": "Create a new location or sub-account in GoHighLevel",
+            "action_code": DPAT_API,
+            "output_type": AbstractDataProviderTypeMap."hash",
+            "options": {
+                "name": <ActionOptionInfo>{
+                    "display_name": "Name",
+                    "short_desc": "Account name",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "Name of the account/location",
+                },
+                "email": <ActionOptionInfo>{
+                    "display_name": "Email",
+                    "short_desc": "Account email",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "Email address for the account",
+                    "example_value": "admin@example.com",
+                },
+                "phone": <ActionOptionInfo>{
+                    "display_name": "Phone",
+                    "short_desc": "Phone number",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "Phone number for the account",
+                },
+                "address": <ActionOptionInfo>{
+                    "display_name": "Address",
+                    "short_desc": "Street address",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Street address of the account",
+                },
+                "city": <ActionOptionInfo>{
+                    "display_name": "City",
+                    "short_desc": "City",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "City of the account",
+                },
+                "state": <ActionOptionInfo>{
+                    "display_name": "State",
+                    "short_desc": "State or province",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "State or province of the account",
+                },
+                "postalCode": <ActionOptionInfo>{
+                    "display_name": "Postal Code",
+                    "short_desc": "Postal/ZIP code",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Postal or ZIP code of the account",
+                },
+                "country": <ActionOptionInfo>{
+                    "display_name": "Country",
+                    "short_desc": "Country",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Country of the account",
+                },
+                "timezone": <ActionOptionInfo>{
+                    "display_name": "Timezone",
+                    "short_desc": "Timezone",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Timezone for the account (e.g. `America/New_York`)",
+                },
+            },
+        });
+
+        # ========== GENERIC ACTIONS ==========
+
+        # Execute API Call
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoHighLevelDataProvider::AppName,
+            "path": "/execute-api-call",
+            "action": "execute-api-call",
+            "groups": "API",
+            "display_name": "Make an API Call",
+            "short_desc": "Make an arbitrary authorized API call",
+            "desc": "Make an arbitrary authorized API call to GoHighLevel",
+            "action_code": DPAT_API,
+            "output_type": AbstractDataProviderTypeMap."hash",
+            "options": {
+                "method": <ActionOptionInfo>{
+                    "display_name": "HTTP Method",
+                    "short_desc": "HTTP method",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The HTTP method to use",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "GET", "display_name": "GET"},
+                        <AllowedValueInfo>{"value": "POST", "display_name": "POST"},
+                        <AllowedValueInfo>{"value": "PUT", "display_name": "PUT"},
+                        <AllowedValueInfo>{"value": "DELETE", "display_name": "DELETE"},
+                    ),
+                },
+                "path": <ActionOptionInfo>{
+                    "display_name": "API Path",
+                    "short_desc": "API endpoint path",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The API endpoint path (e.g. `contacts`)",
+                    "example_value": "contacts",
+                },
+                "body": <ActionOptionInfo>{
+                    "display_name": "Request Body",
+                    "short_desc": "Request body",
+                    "type": AbstractDataProviderTypeMap."*hash",
+                    "desc": "The request body as a hash (for POST/PUT requests)",
+                },
+                "query_params": <ActionOptionInfo>{
+                    "display_name": "Query Parameters",
+                    "short_desc": "Query parameters",
+                    "type": AbstractDataProviderTypeMap."*hash",
+                    "desc": "Query parameters as a hash",
+                },
+            },
+        });
+
+        # ========== EVENT TRIGGERS ==========
+
+        # New Contact
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoHighLevelDataProvider::AppName,
+            "path": "/events/" + EVENT_NEW_CONTACT,
+            "action": EVENT_NEW_CONTACT,
+            "groups": "Triggers",
+            "display_name": "New Contact",
+            "short_desc": "Trigger when a new contact is created",
+            "desc": "Fires when a new contact is created in GoHighLevel. "
+                "Uses polling to detect new records.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_CONTACT,
+            "options": {
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "Polling interval in seconds",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "How often to check for new records (minimum 30 seconds)",
+                    "default_value": DefaultPollInterval,
+                },
+            },
+        });
+
+        # New Appointment
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoHighLevelDataProvider::AppName,
+            "path": "/events/" + EVENT_NEW_APPOINTMENT,
+            "action": EVENT_NEW_APPOINTMENT,
+            "groups": "Triggers",
+            "display_name": "New Appointment",
+            "short_desc": "Trigger when a new appointment is created",
+            "desc": "Fires when a new appointment is created in GoHighLevel. "
+                "Uses polling to detect new records.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_APPOINTMENT,
+            "options": {
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "Polling interval in seconds",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "How often to check for new records (minimum 30 seconds)",
+                    "default_value": DefaultPollInterval,
+                },
+            },
+        });
+
+        # New Message
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GoHighLevelDataProvider::AppName,
+            "path": "/events/" + EVENT_NEW_MESSAGE,
+            "action": EVENT_NEW_MESSAGE,
+            "groups": "Triggers",
+            "display_name": "New Message",
+            "short_desc": "Trigger when a new message is received",
+            "desc": "Fires when a new message is received in GoHighLevel. "
+                "Uses polling to detect new records.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_MESSAGE,
+            "options": {
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "Polling interval in seconds",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "How often to check for new records (minimum 30 seconds)",
+                    "default_value": DefaultPollInterval,
+                },
+            },
+        });
+    };
+}
+
+/** @mainpage GoHighLevelDataProvider Module
+
+    @tableofcontents
+
+    @section gohighleveldataproviderintro GoHighLevelDataProvider Introduction
+
+    The %GoHighLevelDataProvider module provides a data provider API for GoHighLevel CRM services.
+
+    To use this module, use \c "%requires GoHighLevelDataProvider" in your code.
+
+    All the public symbols in the module are defined in the GoHighLevelDataProvider namespace.
+
+    The main classes are:
+    - @ref GoHighLevelDataProvider::GoHighLevelDataProvider "GoHighLevelDataProvider":
+      the root data provider for GoHighLevel
+    - @ref GoHighLevelDataProvider::GoHighLevelDataProviderFactory "GoHighLevelDataProviderFactory":
+      the data provider factory for GoHighLevel
+
+    @section gohighleveldataproviderrelnotes Release Notes
+
+    @subsection gohighleveldataproviderv1_0 GoHighLevelDataProvider v1.0
+    - the initial version of the %GoHighLevelDataProvider module
+*/
+
+#! Contains all public definitions in the GoHighLevelDataProvider module
+public namespace GoHighLevelDataProvider {
+}
