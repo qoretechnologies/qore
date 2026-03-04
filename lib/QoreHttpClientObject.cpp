@@ -6009,6 +6009,24 @@ static int driveQuicIo(QuicSession* session, int fd,
             if (*xsink) {
                 return -1;
             }
+
+            // handleExpiry() sets pending_write_ for retransmission/PTO probes;
+            // send them immediately so the server receives probes promptly instead
+            // of waiting until the next driveQuicIo() iteration (up to 100ms delay)
+            pkt_batch.clear();
+            nw = session->writePackets(pkt_batch, xsink);
+            if (nw < 0 || *xsink) {
+                return -1;
+            }
+            if (!pkt_batch.empty()) {
+                int sent = sendQuicPacketsBatch(fd, pkt_batch, nullptr, 0);
+                if (sent < 0) {
+                    xsink->raiseException("HTTP3-IO-ERROR",
+                        "failed to send QUIC packets after expiry: %s",
+                        strerror(errno));
+                    return -1;
+                }
+            }
         }
     }
 
