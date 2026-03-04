@@ -39,11 +39,13 @@ public class QoreSelectFieldsProcessor inherits AbstractDataProvider {
         const ConstructorOptions = {
             "fields": <DataProviderOptionInfo>{
                 "display_name": "Field List",
-                "short_desc": "Comma-separated field specs to select",
-                "desc": "A comma-separated list of field specifications; use `name` to keep a field as-is, "
-                    "or `new_name=old_name` to rename a field (e.g. `name,email,customer_name=name`)",
-                "type": AbstractDataProviderTypeMap."string",
+                "short_desc": "Field specs to select",
+                "desc": "A list of field specifications; use `name` to keep a field as-is, "
+                    "or `new_name=old_name` to rename a field (e.g. `name`, `email`, "
+                    "`customer_name=name`)",
+                "type": new SoftListDataType(AbstractDataProviderTypeMap."string", True),
                 "required": True,
+                "input_field_names": True,
             },
         };
     }
@@ -63,6 +65,29 @@ public class QoreSelectFieldsProcessor inherits AbstractDataProvider {
         if (copts.fields.val()) {
             field_map = QoreSelectFieldsProcessor::parseFieldSpec(copts.fields);
         }
+    }
+
+    #! Parses a field specification from either a string or list into a mapping hash
+    static hash<string, string> parseFieldSpec(auto fields) {
+        # normalize to a flat list of spec strings
+        list<string> specs = AbstractDataProvider::parseFieldList(fields);
+        hash<string, string> result;
+        foreach string spec in (specs) {
+            int eq_pos = spec.find("=");
+            if (eq_pos >= 0) {
+                string output_name = trim(spec.substr(0, eq_pos));
+                string input_name = trim(spec.substr(eq_pos + 1));
+                if (output_name.val() && input_name.val()) {
+                    result{output_name} = input_name;
+                }
+            } else {
+                result{spec} = spec;
+            }
+        }
+        if (!result) {
+            throw "CONSTRUCTOR-ERROR", "no valid field specifications found in 'fields' option";
+        }
+        return result;
     }
 
     #! Returns the name of this data provider
@@ -89,7 +114,7 @@ public class QoreSelectFieldsProcessor inherits AbstractDataProvider {
         }
         hash<auto> result;
         foreach hash<auto> i in (field_map.pairIterator()) {
-            result{i.key} = record{i.value};
+            result{i.key} = AbstractDataProvider::getFieldValue(record, i.value);
         }
         return result;
     }
@@ -104,30 +129,5 @@ public class QoreSelectFieldsProcessor inherits AbstractDataProvider {
         return DPC_TRANSFORM;
     }
 
-    #! Parses a field specification string into a mapping hash
-    static hash<string, string> parseFieldSpec(string fields) {
-        hash<string, string> result;
-        list<string> specs = fields.split(",");
-        foreach string spec in (specs) {
-            spec = trim(spec);
-            if (!spec.val()) {
-                continue;
-            }
-            int eq_pos = spec.find("=");
-            if (eq_pos >= 0) {
-                string output_name = trim(spec.substr(0, eq_pos));
-                string input_name = trim(spec.substr(eq_pos + 1));
-                if (output_name.val() && input_name.val()) {
-                    result{output_name} = input_name;
-                }
-            } else {
-                result{spec} = spec;
-            }
-        }
-        if (!result) {
-            throw "CONSTRUCTOR-ERROR", "no valid field specifications found in 'fields' option";
-        }
-        return result;
-    }
 }
 }

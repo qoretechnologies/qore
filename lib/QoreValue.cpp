@@ -307,10 +307,16 @@ const char* QoreValue::getTypeName() const {
 }
 
 AbstractQoreNode* QoreValue::getInternalNode() {
+    if (isEnum()) {
+        return getEnumMember()->getValue().getInternalNode();
+    }
     return isPointer() ? getPointerUnsafe() : nullptr;
 }
 
 const AbstractQoreNode* QoreValue::getInternalNode() const {
+    if (isEnum()) {
+        return getEnumMember()->getValue().getInternalNode();
+    }
     return isPointer() ? getPointerUnsafe() : nullptr;
 }
 
@@ -839,10 +845,7 @@ const QoreTypeInfo* QoreValue::getFullTypeInfo() const {
 
 const char* QoreValue::getFullTypeName() const {
     if (isEnum()) {
-        thread_local QoreString scratch;
-        scratch.clear();
-        scratch.sprintf("enum<%s>", getEnumMember()->getEnumDecl()->getName());
-        return scratch.c_str();
+        return QoreTypeInfo::getName(getEnumMember()->getEnumDecl()->getTypeInfo());
     }
     if (isFloat()) {
         return qoreFloatTypeName;
@@ -864,14 +867,8 @@ const char* QoreValue::getFullTypeName() const {
 
 const char* QoreValue::getFullTypeName(bool with_namespaces) const {
     if (isEnum()) {
-        thread_local QoreString scratch;
-        scratch.clear();
-        if (with_namespaces) {
-            scratch.sprintf("enum<%s>", getEnumMember()->getEnumDecl()->getNamespacePath(true).c_str());
-        } else {
-            scratch.sprintf("enum<%s>", getEnumMember()->getEnumDecl()->getName());
-        }
-        return scratch.c_str();
+        const QoreTypeInfo* ti = getEnumMember()->getEnumDecl()->getTypeInfo();
+        return with_namespaces ? QoreTypeInfo::getPath(ti) : QoreTypeInfo::getName(ti);
     }
     if (isFloat()) {
         return qoreFloatTypeName;
@@ -893,12 +890,8 @@ const char* QoreValue::getFullTypeName(bool with_namespaces) const {
 
 const char* QoreValue::getFullTypeName(bool with_namespaces, QoreString& scratch) const {
     if (isEnum()) {
-        if (with_namespaces) {
-            scratch.sprintf("enum<%s>", getEnumMember()->getEnumDecl()->getNamespacePath(true).c_str());
-        } else {
-            scratch.sprintf("enum<%s>", getEnumMember()->getEnumDecl()->getName());
-        }
-        return scratch.c_str();
+        const QoreTypeInfo* ti = getEnumMember()->getEnumDecl()->getTypeInfo();
+        return with_namespaces ? QoreTypeInfo::getPath(ti) : QoreTypeInfo::getName(ti);
     }
     if (isFloat()) {
         return qoreFloatTypeName;

@@ -78,8 +78,9 @@ public class QoreOnnxModelProcessor inherits DataProvider::AbstractDataProvider 
                 "desc": "A comma-separated list of numeric field names from the input records "
                     "to pass to the model as input features; the fields are provided to the "
                     "model in the order listed; for example: \"feature1,feature2,feature3\"",
-                "type": AbstractDataProviderTypeMap."string",
+                "type": new SoftListDataType(AbstractDataProviderTypeMap."string", True),
                 "required": True,
+                "input_field_names": True,
             },
             "window_size": <DataProviderOptionInfo>{
                 "display_name": "Batch Size",
@@ -192,7 +193,7 @@ public class QoreOnnxModelProcessor inherits DataProvider::AbstractDataProvider 
     #! Creates the object with the given options
     constructor(hash<auto> options) {
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
-        fields = map trim($1), copts.fields.split(","), trim($1).val();
+        fields = DataProvider::AbstractDataProvider::parseFieldList(copts.fields);
         if (!fields) {
             throw "CONSTRUCTOR-ERROR", "no valid field names provided in 'fields' option";
         }
@@ -312,7 +313,7 @@ public class QoreOnnxModelProcessor inherits DataProvider::AbstractDataProvider 
         foreach hash<auto> rec in (records) {
             list<float> row;
             foreach string f in (fields) {
-                push row, rec{f}.toFloat();
+                push row, DataProvider::AbstractDataProvider::getFieldValue(rec, f).toFloat();
             }
             push matrix, row;
         }
@@ -325,7 +326,7 @@ public class QoreOnnxModelProcessor inherits DataProvider::AbstractDataProvider 
         for (int i = 0; i < records.lsize(); ++i) {
             hash<auto> record_values;
             foreach string f in (fields) {
-                record_values{f} = records[i]{f};
+                record_values{f} = DataProvider::AbstractDataProvider::getFieldValue(records[i], f);
             }
             # Build per-record output from model outputs
             hash<auto> model_output;

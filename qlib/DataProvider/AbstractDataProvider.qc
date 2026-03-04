@@ -123,6 +123,14 @@ public hashdecl BaseOptionInfo inherits DisplayDescInfo {
     /** @since %DataProvider 3.3
     */
     bool server_expression_handling = False;
+
+    #! If True, allowed values should be populated from the pipeline input type's field names
+    /** This marker tells Qorus which options should get dynamic field-name allowed values from the
+        preceding pipeline state's output type.
+
+        @since %DataProvider 3.4
+    */
+    *bool input_field_names;
 }
 
 #! Data provider option info
@@ -6977,6 +6985,65 @@ list<hash<DataProviderDebugInfo>> info = collector.getAll();
     */
     private int getProcessorCapabilitiesImpl() {
         return 0;
+    }
+
+    #! Returns the value of a field in a record, supporting dot-notation for nested hash access
+    /** @param record the record hash to read from
+        @param field_path the field name or dot-notation path (e.g. \c "address.city")
+
+        @return the field value, or @ref NOTHING if any intermediate is not a hash or the field is missing
+
+        @since %DataProvider 3.4
+    */
+    static auto getFieldValue(hash<auto> record, string field_path) {
+        int dot = field_path.find(".");
+        if (dot < 0) {
+            return record{field_path};
+        }
+        # traverse dot-notation path
+        auto current = record;
+        list<string> parts = field_path.split(".");
+        foreach string part in (parts) {
+            if (current.typeCode() != NT_HASH) {
+                return;
+            }
+            current = current{part};
+        }
+        return current;
+    }
+
+    #! Parses a field list from either a comma-separated string or a list of strings
+    /** Provides backward compatibility for the transition from string to softlist\<string\> field options.
+
+        @param fields a string with comma-separated field names or a list of strings
+
+        @return a list of trimmed, non-empty field name strings
+
+        @since %DataProvider 3.4
+    */
+    static list<string> parseFieldList(auto fields) {
+        list<string> result = ();
+        if (fields.typeCode() == NT_LIST) {
+            foreach auto elem in (fields) {
+                if (elem.typeCode() == NT_STRING) {
+                    # split each element on commas for backward compat with comma-separated strings
+                    foreach string part in (elem.split(",")) {
+                        string trimmed = trim(part);
+                        if (trimmed.val()) {
+                            push result, trimmed;
+                        }
+                    }
+                }
+            }
+        } else if (fields.typeCode() == NT_STRING) {
+            foreach string part in (fields.split(",")) {
+                string trimmed = trim(part);
+                if (trimmed.val()) {
+                    push result, trimmed;
+                }
+            }
+        }
+        return result;
     }
 }
 }

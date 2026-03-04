@@ -42,7 +42,7 @@
 %endtry
 
 module DataProvider {
-    version = "3.3.0";
+    version = "3.4.0";
     desc = "user module for data integration patterns and data and API introspection";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -986,6 +986,28 @@ if (errors) {
     @endcode
 
     @section dataprovider_relnotes Release Notes
+
+    @subsection dataprovider_v3_4 DataProvider v3.4
+    - added \c input_field_names boolean field to
+      @ref DataProvider::BaseOptionInfo "BaseOptionInfo" to mark pipeline processor options whose
+      allowed values should be dynamically populated from the preceding pipeline state's output
+      type field names
+    - added @ref DataProvider::AbstractDataProviderType::getFieldNamesAsAllowedValues()
+      "AbstractDataProviderType::getFieldNamesAsAllowedValues()" static method to recursively
+      enumerate field names from a data provider type as allowed value entries, including
+      dot-notation paths for nested hash fields
+    - added @ref DataProvider::AbstractDataProvider::getFieldValue()
+      "AbstractDataProvider::getFieldValue()" static method for dot-notation field access in
+      record hashes (e.g. \c "address.city")
+    - added @ref DataProvider::AbstractDataProvider::parseFieldList()
+      "AbstractDataProvider::parseFieldList()" static method for backward-compatible parsing of
+      field lists from both comma-separated strings and string lists
+    - changed multi-field processor options (\c fields, \c group_by) from \c string to
+      \c softlist<string> for multi-select UI support; all processors accept both formats for
+      backward compatibility
+    - added \c input_field_names marker to single-field options (\c field, \c field_x, \c field_y,
+      \c target_field) for dynamic allowed value population
+    - all field-name-based processor options now support dot-notation for nested field access
 
     @subsection dataprovider_v3_3 DataProvider v3.3
     - fixed @ref DataProvider::DataProviderPipeline "DataProviderPipeline"

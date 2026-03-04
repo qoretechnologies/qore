@@ -49,8 +49,9 @@ public class QoreLinearRegressionProcessor inherits DataProvider::AbstractDataPr
                     "to predict the target; for example, if predicting price, the input "
                     "fields might be \"square_feet,bedrooms,bathrooms\"; at least 1 field "
                     "is required",
-                "type": AbstractDataProviderTypeMap."string",
+                "type": new SoftListDataType(AbstractDataProviderTypeMap."string", True),
                 "required": True,
+                "input_field_names": True,
             },
             "target_field": <DataProviderOptionInfo>{
                 "display_name": "Target Field",
@@ -60,6 +61,7 @@ public class QoreLinearRegressionProcessor inherits DataProvider::AbstractDataPr
                     "the input records",
                 "type": AbstractDataProviderTypeMap."string",
                 "required": True,
+                "input_field_names": True,
             },
             "window_size": <DataProviderOptionInfo>{
                 "display_name": "Window Size",
@@ -120,7 +122,7 @@ public class QoreLinearRegressionProcessor inherits DataProvider::AbstractDataPr
     #! Creates the object with the given options
     constructor(hash<auto> options) {
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
-        fields = map trim($1), copts.fields.split(","), trim($1).val();
+        fields = DataProvider::AbstractDataProvider::parseFieldList(copts.fields);
         if (!fields) {
             throw "CONSTRUCTOR-ERROR", "no valid field names provided in 'fields' option";
         }
@@ -197,10 +199,10 @@ public class QoreLinearRegressionProcessor inherits DataProvider::AbstractDataPr
         foreach hash<auto> rec in (records) {
             list<float> row;
             foreach string f in (fields) {
-                push row, rec{f}.toFloat();
+                push row, DataProvider::AbstractDataProvider::getFieldValue(rec, f).toFloat();
             }
             push matrix, row;
-            push targets, rec{target_field}.toFloat();
+            push targets, DataProvider::AbstractDataProvider::getFieldValue(rec, target_field).toFloat();
         }
 
         # create and fit model
@@ -218,9 +220,9 @@ public class QoreLinearRegressionProcessor inherits DataProvider::AbstractDataPr
         for (int i = 0; i < records.lsize(); ++i) {
             hash<auto> record_values;
             foreach string f in (fields) {
-                record_values{f} = records[i]{f};
+                record_values{f} = DataProvider::AbstractDataProvider::getFieldValue(records[i], f);
             }
-            record_values{target_field} = records[i]{target_field};
+            record_values{target_field} = DataProvider::AbstractDataProvider::getFieldValue(records[i], target_field);
             push events, <LinearRegressionEventInfo>{
                 "event_type": "linear-regression",
                 "prediction": predictions[i].prediction,

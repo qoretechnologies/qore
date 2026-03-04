@@ -876,6 +876,46 @@ public class AbstractDataProviderType inherits Qore::Serializable {
     private setOptionIntern(string opt, auto value) {
         options{opt} = value;
     }
+
+    #! Returns a list of allowed value entries for all field names in the given type
+    /** Recursively walks the type's fields, building dot-notation paths for nested hash fields.
+
+        @param type the data provider type to enumerate fields from
+        @param prefix the current dot-notation prefix (empty for top-level)
+        @param visited a set of type unique IDs already visited (to guard against circular types)
+
+        @return a list of AllowedValueInfo hashes with field names as values
+
+        @since %DataProvider 3.4
+    */
+    static list<hash<AllowedValueInfo>> getFieldNamesAsAllowedValues(AbstractDataProviderType type,
+            string prefix = "", *hash<string, bool> visited) {
+        list<hash<AllowedValueInfo>> result = ();
+        *hash<string, AbstractDataField> fields = type.getFields();
+        if (!fields) {
+            return result;
+        }
+        string uid = type.uniqueHash();
+        if (visited{uid}) {
+            return result;
+        }
+        visited{uid} = True;
+        foreach hash<auto> i in (fields.pairIterator()) {
+            string full_name = prefix.val() ? prefix + "." + i.key : i.key;
+            AbstractDataProviderType field_type = i.value.getType();
+            string type_name = field_type.getName();
+            push result, <AllowedValueInfo>{
+                "value": full_name,
+                "display_name": full_name,
+                "desc": sprintf("field '%s' (%s)", full_name, type_name),
+            };
+            # recurse into hash-type fields for dot-notation access
+            if (field_type.getBaseTypeCode() == NT_HASH) {
+                result += AbstractDataProviderType::getFieldNamesAsAllowedValues(field_type, full_name, visited);
+            }
+        }
+        return result;
+    }
 }
 }
 

@@ -50,8 +50,9 @@ public class QorePCAProcessor inherits DataProvider::AbstractDataProvider {
                     "to compress into fewer dimensions; for example, 50 sensor readings can be "
                     "reduced to 3 combined values that capture the most important patterns; "
                     "at least 2 fields are required",
-                "type": AbstractDataProviderTypeMap."string",
+                "type": new SoftListDataType(AbstractDataProviderTypeMap."string", True),
                 "required": True,
+                "input_field_names": True,
             },
             "window_size": <DataProviderOptionInfo>{
                 "display_name": "Window Size",
@@ -110,7 +111,7 @@ public class QorePCAProcessor inherits DataProvider::AbstractDataProvider {
     #! Creates the object with the given options
     constructor(hash<auto> options) {
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
-        fields = map trim($1), copts.fields.split(","), trim($1).val();
+        fields = DataProvider::AbstractDataProvider::parseFieldList(copts.fields);
         if (fields.lsize() < 2) {
             throw "CONSTRUCTOR-ERROR",
                 sprintf("at least 2 fields are required for PCA; got %d", fields.lsize());
@@ -183,7 +184,7 @@ public class QorePCAProcessor inherits DataProvider::AbstractDataProvider {
         foreach hash<auto> rec in (records) {
             list<float> row;
             foreach string f in (fields) {
-                push row, rec{f}.toFloat();
+                push row, DataProvider::AbstractDataProvider::getFieldValue(rec, f).toFloat();
             }
             push matrix, row;
         }
@@ -205,7 +206,7 @@ public class QorePCAProcessor inherits DataProvider::AbstractDataProvider {
         for (int i = 0; i < records.lsize(); ++i) {
             hash<auto> record_values;
             foreach string f in (fields) {
-                record_values{f} = records[i]{f};
+                record_values{f} = DataProvider::AbstractDataProvider::getFieldValue(records[i], f);
             }
             push events, <PCAEventInfo>{
                 "event_type": "pca",

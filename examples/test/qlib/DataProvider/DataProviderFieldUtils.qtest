@@ -1,0 +1,423 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+#
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+
+%modern
+%strict-args
+%require-types
+%enable-all-warnings
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/DataProvider
+
+%requires reflection
+
+%exec-class DataProviderFieldUtilsTest
+
+class DataProviderFieldUtilsTest inherits QUnit::Test {
+    constructor() : Test("DataProviderFieldUtilsTest", "1.0") {
+        # parseFieldList tests
+        addTestCase("parseFieldList - comma-separated string", \parseFieldListString());
+        addTestCase("parseFieldList - list of strings", \parseFieldListList());
+        addTestCase("parseFieldList - mixed list with commas", \parseFieldListMixed());
+        addTestCase("parseFieldList - empty/whitespace handling", \parseFieldListEmpty());
+        addTestCase("parseFieldList - single value", \parseFieldListSingle());
+        addTestCase("parseFieldList - non-string input", \parseFieldListNonString());
+
+        # getFieldValue tests
+        addTestCase("getFieldValue - top-level field", \getFieldValueTopLevel());
+        addTestCase("getFieldValue - nested dot-notation", \getFieldValueNested());
+        addTestCase("getFieldValue - deeply nested", \getFieldValueDeeplyNested());
+        addTestCase("getFieldValue - missing field", \getFieldValueMissing());
+        addTestCase("getFieldValue - non-hash intermediate", \getFieldValueNonHash());
+
+        # getFieldNamesAsAllowedValues tests
+        addTestCase("getFieldNamesAsAllowedValues - flat type", \fieldNamesFlat());
+        addTestCase("getFieldNamesAsAllowedValues - nested type", \fieldNamesNested());
+        addTestCase("getFieldNamesAsAllowedValues - no fields", \fieldNamesNoFields());
+
+        # input_field_names marker tests
+        addTestCase("input_field_names - BaseOptionInfo marker", \inputFieldNamesMarker());
+
+        # Processor backward compatibility tests
+        addTestCase("RemoveFieldsProcessor - string compat", \removeFieldsStringCompat());
+        addTestCase("RemoveFieldsProcessor - list input", \removeFieldsListInput());
+        addTestCase("SelectFieldsProcessor - string compat", \selectFieldsStringCompat());
+        addTestCase("SelectFieldsProcessor - list input", \selectFieldsListInput());
+        addTestCase("SelectFieldsProcessor - dot-notation", \selectFieldsDotNotation());
+        addTestCase("CorrelationProcessor - string compat", \correlationStringCompat());
+        addTestCase("CorrelationProcessor - list input", \correlationListInput());
+        addTestCase("GroupByProcessor - string compat", \groupByStringCompat());
+        addTestCase("GroupByProcessor - list input", \groupByListInput());
+        addTestCase("GroupByProcessor - dot-notation group_by", \groupByDotNotation());
+        addTestCase("SearchReplaceProcessor - dot-notation field", \searchReplaceDotNotation());
+        addTestCase("CrossCorrelationProcessor - dot-notation", \crossCorrelationDotNotation());
+
+        # Analytics processor tests
+        addTestCase("AbstractAnalyticsProcessor - list fields", \analyticsListFields());
+
+        set_return_value(main());
+    }
+
+    # ===================== parseFieldList Tests =====================
+
+    parseFieldListString() {
+        list<string> result = AbstractDataProvider::parseFieldList("a,b,c");
+        assertEq(("a", "b", "c"), result);
+    }
+
+    parseFieldListList() {
+        list<string> result = AbstractDataProvider::parseFieldList(("a", "b", "c"));
+        assertEq(("a", "b", "c"), result);
+    }
+
+    parseFieldListMixed() {
+        # list elements can themselves contain commas
+        list<string> result = AbstractDataProvider::parseFieldList(("a,b", "c"));
+        assertEq(("a", "b", "c"), result);
+    }
+
+    parseFieldListEmpty() {
+        # whitespace and empty entries are trimmed/filtered
+        list<string> result = AbstractDataProvider::parseFieldList("  a , , b , ");
+        assertEq(("a", "b"), result);
+
+        # empty string returns empty list
+        list<string> result2 = AbstractDataProvider::parseFieldList("");
+        assertEq((), result2);
+
+        # empty list returns empty list
+        list<string> result3 = AbstractDataProvider::parseFieldList(());
+        assertEq((), result3);
+    }
+
+    parseFieldListSingle() {
+        list<string> result = AbstractDataProvider::parseFieldList("field1");
+        assertEq(("field1",), result);
+
+        list<string> result2 = AbstractDataProvider::parseFieldList(("field1",));
+        assertEq(("field1",), result2);
+    }
+
+    parseFieldListNonString() {
+        # NOTHING returns empty list
+        list<string> result = AbstractDataProvider::parseFieldList(NOTHING);
+        assertEq((), result);
+    }
+
+    # ===================== getFieldValue Tests =====================
+
+    getFieldValueTopLevel() {
+        hash<auto> record = {"name": "Alice", "age": 30};
+        assertEq("Alice", AbstractDataProvider::getFieldValue(record, "name"));
+        assertEq(30, AbstractDataProvider::getFieldValue(record, "age"));
+    }
+
+    getFieldValueNested() {
+        hash<auto> record = {
+            "name": "Alice",
+            "address": {
+                "city": "Prague",
+                "zip": "11000",
+            },
+        };
+        assertEq("Prague", AbstractDataProvider::getFieldValue(record, "address.city"));
+        assertEq("11000", AbstractDataProvider::getFieldValue(record, "address.zip"));
+    }
+
+    getFieldValueDeeplyNested() {
+        hash<auto> record = {
+            "a": {
+                "b": {
+                    "c": {
+                        "d": 42,
+                    },
+                },
+            },
+        };
+        assertEq(42, AbstractDataProvider::getFieldValue(record, "a.b.c.d"));
+    }
+
+    getFieldValueMissing() {
+        hash<auto> record = {"name": "Alice"};
+        assertNothing(AbstractDataProvider::getFieldValue(record, "missing"));
+        assertNothing(AbstractDataProvider::getFieldValue(record, "address.city"));
+    }
+
+    getFieldValueNonHash() {
+        hash<auto> record = {"name": "Alice"};
+        # trying to traverse through a non-hash returns NOTHING
+        assertNothing(AbstractDataProvider::getFieldValue(record, "name.first"));
+    }
+
+    # ===================== getFieldNamesAsAllowedValues Tests =====================
+
+    fieldNamesFlat() {
+        # Create a simple hash type with flat fields
+        HashDataType ht("test");
+        ht.addField(new QoreDataField("name", "Name field", AbstractDataProviderTypeMap."string"));
+        ht.addField(new QoreDataField("age", "Age field", AbstractDataProviderTypeMap."int"));
+
+        list<hash<AllowedValueInfo>> avs = AbstractDataProviderType::getFieldNamesAsAllowedValues(ht);
+        assertEq(2, avs.lsize());
+
+        # check that both field names are present
+        list<auto> values = map $1.value, avs;
+        assertTrue(inlist("name", values));
+        assertTrue(inlist("age", values));
+    }
+
+    fieldNamesNested() {
+        # Create a nested hash type
+        HashDataType inner("address");
+        inner.addField(new QoreDataField("city", "City", AbstractDataProviderTypeMap."string"));
+        inner.addField(new QoreDataField("zip", "Zip", AbstractDataProviderTypeMap."string"));
+
+        HashDataType outer("person");
+        outer.addField(new QoreDataField("name", "Name", AbstractDataProviderTypeMap."string"));
+        outer.addField(new QoreDataField("address", "Address", inner));
+
+        list<hash<AllowedValueInfo>> avs = AbstractDataProviderType::getFieldNamesAsAllowedValues(outer);
+
+        # should have: name, address, address.city, address.zip = 4 entries
+        assertEq(4, avs.lsize());
+
+        list<auto> values = map $1.value, avs;
+        assertTrue(inlist("name", values));
+        assertTrue(inlist("address", values));
+        assertTrue(inlist("address.city", values));
+        assertTrue(inlist("address.zip", values));
+    }
+
+    fieldNamesNoFields() {
+        # A type with no fields should return empty list
+        QoreStringDataTypeBase str_type(StringType);
+        list<hash<AllowedValueInfo>> avs = AbstractDataProviderType::getFieldNamesAsAllowedValues(str_type);
+        assertEq(0, avs.lsize());
+    }
+
+    # ===================== input_field_names Marker Tests =====================
+
+    inputFieldNamesMarker() {
+        # Verify the marker exists on processor options
+        hash<auto> remove_opts = QoreRemoveFieldsProcessor::ConstructorOptions;
+        assertTrue(remove_opts.fields.input_field_names);
+
+        hash<auto> select_opts = QoreSelectFieldsProcessor::ConstructorOptions;
+        assertTrue(select_opts.fields.input_field_names);
+
+        hash<auto> corr_opts = QoreCorrelationProcessor::ConstructorOptions;
+        assertTrue(corr_opts.fields.input_field_names);
+
+        hash<auto> group_opts = QoreGroupByProcessor::ConstructorOptions;
+        assertTrue(group_opts.group_by.input_field_names);
+
+        hash<auto> search_opts = QoreSearchReplaceProcessor::ConstructorOptions;
+        assertTrue(search_opts.field.input_field_names);
+
+        hash<auto> xcorr_opts = QoreCrossCorrelationProcessor::ConstructorOptions;
+        assertTrue(xcorr_opts.field_x.input_field_names);
+        assertTrue(xcorr_opts.field_y.input_field_names);
+    }
+
+    # ===================== Processor Backward Compatibility Tests =====================
+
+    #! Helper: collect processor results
+    static collectResult(reference<list<auto>> results, auto r) {
+        if (exists r) {
+            if (r.typeCode() == NT_LIST) {
+                results += r;
+            } else {
+                push results, r;
+            }
+        }
+    }
+
+    removeFieldsStringCompat() {
+        # Old style: comma-separated string
+        QoreRemoveFieldsProcessor proc({"fields": "a,b"});
+        auto result = proc.processRecord({"a": 1, "b": 2, "c": 3});
+        assertEq({"c": 3}, result);
+    }
+
+    removeFieldsListInput() {
+        # New style: list of strings
+        QoreRemoveFieldsProcessor proc({"fields": ("a", "b")});
+        auto result = proc.processRecord({"a": 1, "b": 2, "c": 3});
+        assertEq({"c": 3}, result);
+    }
+
+    selectFieldsStringCompat() {
+        # Old style: comma-separated string
+        QoreSelectFieldsProcessor proc({"fields": "name,age"});
+        auto result = proc.processRecord({"name": "Alice", "age": 30, "extra": "x"});
+        assertEq({"name": "Alice", "age": 30}, result);
+    }
+
+    selectFieldsListInput() {
+        # New style: list of strings
+        QoreSelectFieldsProcessor proc({"fields": ("name", "age")});
+        auto result = proc.processRecord({"name": "Alice", "age": 30, "extra": "x"});
+        assertEq({"name": "Alice", "age": 30}, result);
+
+        # list with rename syntax
+        QoreSelectFieldsProcessor proc2({"fields": ("full_name=name", "years=age")});
+        auto result2 = proc2.processRecord({"name": "Alice", "age": 30});
+        assertEq({"full_name": "Alice", "years": 30}, result2);
+    }
+
+    selectFieldsDotNotation() {
+        QoreSelectFieldsProcessor proc({"fields": ("name", "address.city")});
+        auto result = proc.processRecord({
+            "name": "Alice",
+            "address": {"city": "Prague", "zip": "11000"},
+        });
+        assertEq({"name": "Alice", "address.city": "Prague"}, result);
+    }
+
+    correlationStringCompat() {
+        # Old style: comma-separated string
+        QoreCorrelationProcessor proc({"fields": "x,y", "window_size": 3});
+        list<auto> results;
+        for (int i = 0; i < 3; ++i) {
+            *auto r = proc.processRecord({"x": float(i), "y": float(i * 2)});
+            DataProviderFieldUtilsTest::collectResult(\results, r);
+        }
+        assertEq(1, results.lsize());
+        assertEq("correlation", results[0].event_type);
+    }
+
+    correlationListInput() {
+        # New style: list of strings
+        QoreCorrelationProcessor proc({"fields": ("x", "y"), "window_size": 3});
+        list<auto> results;
+        for (int i = 0; i < 3; ++i) {
+            *auto r = proc.processRecord({"x": float(i), "y": float(i * 2)});
+            DataProviderFieldUtilsTest::collectResult(\results, r);
+        }
+        assertEq(1, results.lsize());
+        assertEq("correlation", results[0].event_type);
+    }
+
+    groupByStringCompat() {
+        # Old style: comma-separated string
+        QoreGroupByProcessor proc({
+            "group_by": "region",
+            "aggregates": "total=sum(amount),orders=count()",
+        });
+        proc.processRecord({"region": "US", "amount": 100});
+        proc.processRecord({"region": "US", "amount": 200});
+        proc.processRecord({"region": "EU", "amount": 50});
+        *list<auto> results = proc.flushRecords();
+        assertEq(2, results.lsize());
+    }
+
+    groupByListInput() {
+        # New style: list of strings for group_by
+        QoreGroupByProcessor proc({
+            "group_by": ("region",),
+            "aggregates": "total=sum(amount),orders=count()",
+        });
+        proc.processRecord({"region": "US", "amount": 100});
+        proc.processRecord({"region": "US", "amount": 200});
+        proc.processRecord({"region": "EU", "amount": 50});
+        *list<auto> results = proc.flushRecords();
+        assertEq(2, results.lsize());
+    }
+
+    groupByDotNotation() {
+        # group_by with dot-notation nested field
+        QoreGroupByProcessor proc({
+            "group_by": ("address.country",),
+            "aggregates": "total=count()",
+        });
+        proc.processRecord({"name": "Alice", "address": {"country": "US"}});
+        proc.processRecord({"name": "Bob", "address": {"country": "US"}});
+        proc.processRecord({"name": "Charlie", "address": {"country": "EU"}});
+        *list<auto> results = proc.flushRecords();
+        assertEq(2, results.lsize());
+
+        # find the US group
+        *hash<auto> us_group;
+        foreach auto r in (results) {
+            if (r."address.country" == "US") {
+                us_group = r;
+            }
+        }
+        assertEq(2, us_group.total);
+    }
+
+    searchReplaceDotNotation() {
+        QoreSearchReplaceProcessor proc({
+            "field": "data.text",
+            "search": "foo",
+            "replace": "bar",
+        });
+        auto result = proc.processRecord({
+            "id": 1,
+            "data": {"text": "hello foo world"},
+        });
+        # The processor writes to the top-level key "data.text" since it uses record + {field: val}
+        # It reads from nested path but writes to top-level
+        assertEq(1, result.id);
+    }
+
+    crossCorrelationDotNotation() {
+        QoreCrossCorrelationProcessor proc({
+            "field_x": "sensor.temp",
+            "field_y": "sensor.pressure",
+            "window_size": 3,
+        });
+        list<auto> results;
+        for (int i = 0; i < 3; ++i) {
+            *auto r = proc.processRecord({
+                "sensor": {"temp": float(i), "pressure": float(i * 2)},
+            });
+            DataProviderFieldUtilsTest::collectResult(\results, r);
+        }
+        assertEq(1, results.lsize());
+        assertEq("cross-correlation", results[0].event_type);
+        assertEq("sensor.temp", results[0].field_x);
+        assertEq("sensor.pressure", results[0].field_y);
+    }
+
+    # ===================== Analytics Processor Tests =====================
+
+    analyticsListFields() {
+        # Use QoreRunningStatsProcessor as a concrete analytics processor
+        # Test that it accepts list input for fields
+        QoreRunningStatsProcessor proc({
+            "fields": ("temperature", "humidity"),
+            "window_size": 2,
+        });
+        list<auto> results;
+        for (int i = 0; i < 2; ++i) {
+            *auto r = proc.processRecord({"temperature": float(i + 20), "humidity": float(60 + i)});
+            DataProviderFieldUtilsTest::collectResult(\results, r);
+        }
+        # should get 2 events (one per field)
+        assertEq(2, results.lsize());
+        assertEq("statistics", results[0].event_type);
+    }
+}

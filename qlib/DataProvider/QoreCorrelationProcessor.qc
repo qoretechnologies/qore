@@ -44,11 +44,13 @@ public class QoreCorrelationProcessor inherits AbstractDataProvider {
         const ConstructorOptions = {
             "fields": <DataProviderOptionInfo>{
                 "display_name": "Field Names",
-                "short_desc": "Comma-separated numeric field names (at least 2)",
-                "desc": "A comma-separated list of numeric field names to compute correlations "
-                    "between; at least 2 fields are required",
-                "type": AbstractDataProviderTypeMap."string",
+                "short_desc": "Numeric field names (at least 2)",
+                "desc": "A list of numeric field names to compute correlations "
+                    "between; at least 2 fields are required; "
+                    "supports dot-notation for nested fields (e.g. `sensor.temperature`)",
+                "type": new SoftListDataType(AbstractDataProviderTypeMap."string", True),
                 "required": True,
+                "input_field_names": True,
             },
             "window_size": <DataProviderOptionInfo>{
                 "display_name": "Window Size",
@@ -85,7 +87,7 @@ public class QoreCorrelationProcessor inherits AbstractDataProvider {
     #! Creates the object with the given options
     constructor(hash<auto> options) {
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
-        fields = map trim($1), copts.fields.split(","), trim($1).val();
+        fields = AbstractDataProvider::parseFieldList(copts.fields);
         if (fields.lsize() < 2) {
             throw "CONSTRUCTOR-ERROR",
                 sprintf("at least 2 fields are required for correlation; got %d", fields.lsize());
@@ -156,11 +158,8 @@ public class QoreCorrelationProcessor inherits AbstractDataProvider {
         }
         foreach hash<auto> rec in (records) {
             foreach string f in (fields) {
-                if (rec.hasKey(f)) {
-                    push field_values{f}, rec{f}.toFloat();
-                } else {
-                    push field_values{f}, 0.0;
-                }
+                auto val = AbstractDataProvider::getFieldValue(rec, f);
+                push field_values{f}, exists val ? val.toFloat() : 0.0;
             }
         }
 
