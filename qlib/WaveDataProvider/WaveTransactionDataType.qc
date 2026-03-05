@@ -110,23 +110,102 @@ public class WaveTransactionCreateDataType inherits HashDataType {
                 "example_value": "Office supplies purchase",
             },
             "lineItems": {
-                "type": AutoListOrNothingType,
+                "type": new ListDataType("TransactionLineItemInputList", new WaveTransactionLineItemInputDataType(), True),
                 "display_name": "Line Items",
                 "short_desc": "The transaction line items",
-                "desc": "The line items for the transaction (list of line item input objects with "
-                    "accountId, amount, balance type)",
+                "desc": "The line items for the transaction (accountId, amount, balance type)",
             },
             "anchor": {
-                "type": AutoHashOrNothingType,
+                "type": new WaveTransactionAnchorInputDataType(),
                 "display_name": "Anchor",
                 "short_desc": "The anchor account",
-                "desc": "The anchor account for the transaction (hash with accountId and amount)",
+                "desc": "The anchor account for the transaction (accountId, amount, direction)",
             },
         };
     }
 
     #! Creates the type
     constructor() {
+        addQoreFields(Fields);
+    }
+}
+
+#! Wave transaction line item input type (for lineItems in transaction create mutations)
+public class WaveTransactionLineItemInputDataType inherits HashDataType {
+    private {
+        #! Field definitions for transaction line item inputs
+        const Fields = {
+            "accountId": {
+                "type": StringType,
+                "display_name": "Account ID",
+                "short_desc": "The account ID (required)",
+                "desc": "The ID of the account for this line item",
+                "required": True,
+            },
+            "amount": {
+                "type": FloatType,
+                "display_name": "Amount",
+                "short_desc": "The line item amount (required)",
+                "desc": "The monetary amount for this line item",
+                "example_value": 100.0,
+                "required": True,
+            },
+            "balance": {
+                "type": StringType,
+                "display_name": "Balance",
+                "short_desc": "The balance type (required)",
+                "desc": "The balance type for this line item (`DEBIT` or `CREDIT`)",
+                "example_value": "DEBIT",
+                "required": True,
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "DEBIT", "desc": "Debit entry"},
+                    <AllowedValueInfo>{"value": "CREDIT", "desc": "Credit entry"},
+                ),
+            },
+        };
+    }
+
+    constructor() : HashDataType("TransactionLineItemInput") {
+        addQoreFields(Fields);
+    }
+}
+
+#! Wave transaction anchor input type (for the anchor in transaction create mutations)
+public class WaveTransactionAnchorInputDataType inherits HashDataType {
+    private {
+        #! Field definitions for transaction anchor inputs
+        const Fields = {
+            "accountId": {
+                "type": StringType,
+                "display_name": "Account ID",
+                "short_desc": "The anchor account ID (required)",
+                "desc": "The ID of the anchor account for the transaction",
+                "required": True,
+            },
+            "amount": {
+                "type": FloatType,
+                "display_name": "Amount",
+                "short_desc": "The anchor amount (required)",
+                "desc": "The monetary amount for the anchor entry",
+                "example_value": 100.0,
+                "required": True,
+            },
+            "direction": {
+                "type": StringType,
+                "display_name": "Direction",
+                "short_desc": "The anchor direction (required)",
+                "desc": "The direction of the anchor entry (`DEPOSIT` or `WITHDRAWAL`)",
+                "example_value": "DEPOSIT",
+                "required": True,
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "DEPOSIT", "desc": "Deposit entry"},
+                    <AllowedValueInfo>{"value": "WITHDRAWAL", "desc": "Withdrawal entry"},
+                ),
+            },
+        };
+    }
+
+    constructor() : HashDataType("TransactionAnchorInput") {
         addQoreFields(Fields);
     }
 }
