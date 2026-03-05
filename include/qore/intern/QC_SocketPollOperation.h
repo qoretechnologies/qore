@@ -1157,6 +1157,7 @@ enum class QCS : int {
     FLUSHING = 8,        //!< flushing pending QUIC packets
     SENT = 9,            //!< response sent
     CLOSED = 10,         //!< connection closed
+    HEADERS_READY = 11,  //!< HTTP/3 headers received (headers-only mode)
 };
 
 //! Poll operation for QUIC client: handshake + HTTP/3 request/response
@@ -1199,9 +1200,10 @@ public:
         // Hold socket lock for the entire abort to prevent races with
         // concurrent socket destruction (lock ordering: priv->m → quic_sessions_lock)
         AutoLocker al(sock->priv->m);
-        // Remove session from socket's session map and release our reference;
-        // QuicSession destructor handles ngtcp2/nghttp3 cleanup
+        // Wake handler threads blocked in waitForStreamData()/waitForStreamDrain()
+        // BEFORE removing the session from the socket map
         if (quic_session) {
+            quic_session->markClosed();
             sock->priv->socket->priv->removeQuicSession(quic_session->getSessionId());
             quic_session.reset();
         }
@@ -1297,7 +1299,7 @@ public:
     }
 
     DLLLOCAL virtual bool goalReached() const override {
-        return qcs_state == QCS::REQUEST_READY;
+        return qcs_state == QCS::REQUEST_READY || qcs_state == QCS::HEADERS_READY;
     }
 
     DLLLOCAL virtual const char* getStateImpl() const override;
@@ -1313,9 +1315,10 @@ public:
         // Hold socket lock for the entire abort to prevent races with
         // concurrent socket destruction (lock ordering: priv->m → quic_sessions_lock)
         AutoLocker al(sock->priv->m);
-        // Clean up local session map and remove sessions from the authoritative map;
-        // without a poll operation driving timers/ACKs, orphaned sessions would leak
+        // Wake handler threads blocked in waitForStreamData()/waitForStreamDrain()
+        // BEFORE removing sessions from the socket map
         for (auto& [id, session] : sessions_) {
+            session->markClosed();
             sock->priv->socket->priv->removeQuicSession(id);
         }
         sessions_.clear();
@@ -1336,12 +1339,20 @@ public:
     //! (clients will retry or time out).
     static constexpr size_t MAX_QUIC_SERVER_SESSIONS = 10000;
 
+    //! Set headers-only dispatch mode
+    /** When true, requests are dispatched as soon as headers are received,
+        before the full body arrives.  The handler reads body data incrementally
+        via readQuicStreamDataBlock().
+    */
+    DLLLOCAL void setHeadersOnly(bool v);
+
 private:
     //! Cached completed stream with session ID and session pointer (for peer address extraction)
     struct CachedStream {
         int64_t session_id;
         std::unique_ptr<QuicStreamInfo> stream;
         std::shared_ptr<QuicSession> session;
+        std::shared_ptr<StreamNotifier> notifier;  //!< per-stream notifier for targeted wakeup
     };
 
     //! Local session map — single-threaded working copy used only from the I/O
@@ -1351,6 +1362,9 @@ private:
     std::unordered_map<int64_t, std::shared_ptr<QuicSession>> sessions_;
 
     QCS qcs_state = QCS::NONE;
+
+    //! Headers-only mode flag
+    bool headers_only_ = false;
 
     //! Cached completed stream info; mutable so getOutput() (const) can consume it.
     //! Thread safety: the poll framework serializes continuePoll() and getOutput()
@@ -1365,6 +1379,12 @@ private:
     //! avoids per-datagram getsockname() syscall
     struct sockaddr_storage local_addr_{};
     socklen_t local_addrlen_ = 0;
+
+    //! Check for headers-only dispatch during READING state
+    /** @param handled set to true if a dispatch occurred
+        @return nullptr if goal reached, poll info hash if I/O needed
+    */
+    DLLLOCAL QoreHashNode* checkHeadersOnlyDispatch(bool& handled, ExceptionSink* xsink);
 
     //! Coalesced timer + write + send for all sessions in a single pass
     /** Replaces separate processTimers() + sendAllPendingPackets() + getMinExpiry()

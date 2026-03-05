@@ -803,7 +803,7 @@ public class HttpAsyncSocketIoController {
                 }
             }
 
-            Http2PollOperation h2op(sock);
+            Http2PollOperation h2op(sock, True);
 
             # Opt #5/#7: Merge round-robin + connection creation into single lock scope
             hash<HttpActiveConnectionInfo> new_cinfo = <HttpActiveConnectionInfo>{
@@ -879,7 +879,8 @@ public class HttpAsyncSocketIoController {
         string op_key = sprintf("quic-accept:%s:%d", owner, seq);
 
         Http3ServerPollOperation h3op(listener, pool_opts.quic_drain_timeout
-            ?? Http3ServerPollOperation::DefaultDrainTimeout);
+            ?? Http3ServerPollOperation::DefaultDrainTimeout,
+            pool_opts.quic_headers_only ?? False);
 
         log(LoggerLevel::DEBUG, "submitQuicAcceptOp: key=%s listener=%s", op_key, owner);
 
@@ -1062,6 +1063,9 @@ public class HttpAsyncSocketIoController {
                 hdr."accept-encoding".split(",");
         }
 
+        # Detect headers-only dispatch
+        bool body_streaming = request.hdr && !request.headers_end_stream;
+
         # Convert to HttpConnectionInfo (same dispatch chain as HTTP/2)
         hash<HttpConnectionInfo> conn_info = <HttpConnectionInfo>{
             "sock": listener,
@@ -1072,7 +1076,9 @@ public class HttpAsyncSocketIoController {
                 "stream_id": stream_id,
                 "is_websocket_connect": is_websocket_connect,
                 "accept-encoding": accept_encoding,
-                "body": request.body,
+                "body": body_streaming ? NOTHING : request.body,
+                "body_streaming": body_streaming,
+                "headers_end_stream": request.headers_end_stream ?? False,
             },
             "listener": linfo.http_listener,
             "cx": new_cinfo.cx,
@@ -1083,6 +1089,15 @@ public class HttpAsyncSocketIoController {
         # Dispatch to handler thread pool
         try {
             handler_pool.submit(sub () {
+                # Clean up dispatched stream state after handler completes
+                # (applies to all headers-only dispatched streams, not just body_streaming)
+                # NOTE: on_exit must be at closure scope (not inside if-block), otherwise
+                # the cleanup fires immediately when the if-block exits
+                on_exit if (request.hdr) {
+                    try {
+                        listener.cleanupQuicStream(session_id, stream_id);
+                    } catch () {}
+                }
                 try {
                     hash<HttpRequestResultInfo> result = target.onHttpRequest(conn_info);
                     handleHttp3MultiplexedResult(uh, new_cinfo, session_id, stream_id, result);
@@ -1112,6 +1127,12 @@ public class HttpAsyncSocketIoController {
                     "stream=%d: %s: %s", session_id, stream_id, ex2.err, ex2.desc);
             }
             controllers[new_cinfo.controller_idx].wake();
+            # Clean up dispatched stream state for headers-only dispatch
+            if (request.hdr) {
+                try {
+                    listener.cleanupQuicStream(session_id, stream_id);
+                } catch () {}
+            }
         }
     }
 
@@ -1345,7 +1366,7 @@ public class HttpAsyncSocketIoController {
         try {
             hash<HttpActiveConnectionInfo> cinfo;
             if (is_http2) {
-                Http2PollOperation h2op(sock);
+                Http2PollOperation h2op(sock, True);
                 {
                     AutoWriteLock al(m);
                     # Check if connection still exists (may have been removed during shutdown)
@@ -2213,24 +2234,6 @@ public class HttpAsyncSocketIoController {
         log(LoggerLevel::DEBUG, "HTTP/2 request ready: %y stream=%d %s %s",
             uh, stream_id, request.method, request.path);
 
-        # Continue reading on h2op immediately — do NOT hold it for the handler
-        h2op.continueReading();
-        hash<HttpActiveConnectionInfo> new_cinfo;
-        {
-            AutoWriteLock al(m);
-            # Check if connection still exists
-            if (!connections.hasKey(uh)) {
-                try { cinfo.sock.close(); } catch () {}
-                return;
-            }
-            # Cast to typed hash to update fields and assign back
-            hash<HttpActiveConnectionInfo> conn_info = cast<hash<HttpActiveConnectionInfo>>(connections{uh});
-            conn_info.stream_op = h2op;
-            conn_info.state = HttpConnectionState::Http2;
-            new_cinfo = connections{uh} = conn_info;
-        }
-        submitConnectionOp(uh, new_cinfo);
-
         # Build header hash
         hash<auto> hdr = request.headers;
         hdr.method = request.method;
@@ -2247,8 +2250,40 @@ public class HttpAsyncSocketIoController {
                 hdr."accept-encoding".split(",");
         }
 
+        # In headers-only mode, check if the HEADERS frame itself had END_STREAM.
+        # If not, body data is expected and the handler thread gets exclusive socket access.
+        # NOTE: We use headers_end_stream (set by C++) rather than isHttp2StreamComplete()
+        # because DATA+END_STREAM can arrive in the same receiveData() call as HEADERS,
+        # making isHttp2StreamComplete() return True even when body data exists.
+        bool body_streaming = request.hdr.toBool()
+            && !request.headers_end_stream.toBool();
+
+        # For requests with END_STREAM on HEADERS (no body), clean up the dispatch map entry
+        if (request.hdr.toBool() && !body_streaming) {
+            cinfo.sock.cleanupHttp2Stream(stream_id);
+        }
+
+        if (!body_streaming) {
+            # Normal path: resume h2op immediately for multiplexing.
+            # The handler thread sends responses via submitHttp2Response().
+            h2op.continueReading();
+            hash<HttpActiveConnectionInfo> new_cinfo;
+            {
+                AutoWriteLock al(m);
+                if (!connections.hasKey(uh)) {
+                    try { cinfo.sock.close(); } catch () {}
+                    return;
+                }
+                hash<HttpActiveConnectionInfo> conn_info_upd =
+                    cast<hash<HttpActiveConnectionInfo>>(connections{uh});
+                conn_info_upd.stream_op = h2op;
+                conn_info_upd.state = HttpConnectionState::Http2;
+                new_cinfo = connections{uh} = conn_info_upd;
+            }
+            submitConnectionOp(uh, new_cinfo);
+        }
+
         # Convert HTTP/2 request to HttpConnectionInfo format
-        # Note: h2op is NOT passed to the handler — it stays on the I/O thread
         hash<HttpConnectionInfo> conn_info = <HttpConnectionInfo>{
             "sock": cinfo.sock,
             "hdr": hdr,
@@ -2256,26 +2291,61 @@ public class HttpAsyncSocketIoController {
                 "http2": True,
                 "stream_id": stream_id,
                 "accept-encoding": accept_encoding,
-                "body": request.body,
+                "body": body_streaming ? NOTHING : request.body,
+                "body_streaming": body_streaming,
+                "headers_end_stream": request.headers_end_stream ?? False,
+                "io_wake": sub () { controllers[cinfo.controller_idx].wake(); },
             },
             "listener": cinfo.listener,
             "cx": cinfo.cx,
             "keep_alive": True,
             "ssl": cinfo.sock.isSecure(),
         };
-
         # Dispatch to handler thread pool
         try {
             handler_pool.submit(sub () {
                 try {
                     hash<HttpRequestResultInfo> result = cinfo.target.onHttpRequest(conn_info);
+                    if (body_streaming) {
+                        # Body streaming is complete; resume h2op for continued multiplexing.
+                        # The handler had exclusive socket access for body reading.
+                        h2op.continueReading();
+                        hash<HttpActiveConnectionInfo> resumed_cinfo;
+                        {
+                            AutoWriteLock al(m);
+                            if (connections.hasKey(uh)) {
+                                hash<HttpActiveConnectionInfo> conn_info_upd =
+                                    cast<hash<HttpActiveConnectionInfo>>(connections{uh});
+                                conn_info_upd.stream_op = h2op;
+                                conn_info_upd.state = HttpConnectionState::Http2;
+                                resumed_cinfo = connections{uh} = conn_info_upd;
+                            }
+                        }
+                        # Use freshly-updated cinfo (not the stale closure capture)
+                        submitConnectionOp(uh, resumed_cinfo);
+                    }
                     handleHttp2MultiplexedResult(uh, cinfo, stream_id, result);
                 } catch (hash<ExceptionInfo> ex) {
                     log(LoggerLevel::ERROR, "Error handling HTTP/2 request stream=%d: %s: %s",
                         stream_id, ex.err, ex.desc);
-                    # NOTE: do NOT call cinfo.target.onError() here — that closes the shared
-                    # connection socket which breaks all other streams.  In HTTP/2 multiplexed
-                    # mode, a handler error affects only this stream; send a 500 response.
+                    if (body_streaming) {
+                        # Resume h2op even on error
+                        try {
+                            h2op.continueReading();
+                            hash<HttpActiveConnectionInfo> resumed_cinfo;
+                            {
+                                AutoWriteLock al(m);
+                                if (connections.hasKey(uh)) {
+                                    hash<HttpActiveConnectionInfo> conn_info_upd =
+                                        cast<hash<HttpActiveConnectionInfo>>(connections{uh});
+                                    conn_info_upd.stream_op = h2op;
+                                    conn_info_upd.state = HttpConnectionState::Http2;
+                                    resumed_cinfo = connections{uh} = conn_info_upd;
+                                }
+                            }
+                            submitConnectionOp(uh, resumed_cinfo);
+                        } catch () {}
+                    }
                     try {
                         cinfo.sock.submitHttp2Response(stream_id, 500,
                             {"content-type": "text/plain"},
@@ -2287,7 +2357,25 @@ public class HttpAsyncSocketIoController {
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::ERROR, "Failed to submit HTTP/2 multiplexed handler for stream=%d "
                 "on %y: %s: %s", stream_id, uh, ex.err, ex.desc);
-            # h2op is still on the I/O thread reading — send error response for this stream
+            if (body_streaming) {
+                # Resume h2op — it was not resumed before submit in body_streaming mode
+                try {
+                    h2op.continueReading();
+                    hash<HttpActiveConnectionInfo> resumed_cinfo;
+                    {
+                        AutoWriteLock al(m);
+                        if (connections.hasKey(uh)) {
+                            hash<HttpActiveConnectionInfo> conn_info_upd =
+                                cast<hash<HttpActiveConnectionInfo>>(connections{uh});
+                            conn_info_upd.stream_op = h2op;
+                            conn_info_upd.state = HttpConnectionState::Http2;
+                            resumed_cinfo = connections{uh} = conn_info_upd;
+                        }
+                    }
+                    submitConnectionOp(uh, resumed_cinfo);
+                } catch () {}
+            }
+            # Send error response for this stream
             try {
                 cinfo.sock.submitHttp2Response(stream_id, 503,
                     {"content-type": "text/plain"},

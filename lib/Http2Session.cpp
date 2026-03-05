@@ -1408,6 +1408,7 @@ int Http2Session::onFrameRecvCallback(nghttp2_session* session,
                         stream->headers_complete = true;
                         // For requests without a body (like GET), END_STREAM is on the HEADERS frame
                         if (frame->hd.flags & NGHTTP2_FLAG_END_STREAM) {
+                            stream->headers_end_stream = true;
                             stream->body_complete = true;
                             // Mark as complete so the handler is called
                             // For CONNECT streams, markStreamComplete() keeps the stream in the map

@@ -517,6 +517,42 @@ public hashdecl HttpServerOptionInfo {
         @since HttpServer 1.6
     */
     timeout quic_drain_timeout = 5s;
+
+    #! Enable HTTP/3 headers-only dispatch mode
+    /** When @ref True "True", HTTP/3 (and HTTP/2) requests are dispatched to handlers as
+        soon as headers arrive, before the full body is received.  Handlers that override
+        @ref AbstractHttpRequestHandler::wantsBodyStreaming() "wantsBodyStreaming()" and
+        return @ref True "True" can read body data incrementally via
+        @ref Qore::Socket::readQuicStreamDataBlock() (HTTP/3) or
+        @ref Qore::Socket::readHttp2StreamDataBlock() (HTTP/2).
+
+        Handlers that do @b not override \c wantsBodyStreaming() are unaffected — the
+        framework automatically buffers the full body before calling \c handleRequest(),
+        maintaining backward compatibility.
+
+        This enables bidirectional streaming for gRPC-style, Connect protocol, and
+        chunked upload use cases where processing should begin before the full body arrives.
+
+        @par Example
+        @code{.py}
+        HttpServer server(<HttpServerOptionInfo>{
+            "async_mode": True,
+            "quic_headers_only": True,
+        });
+        server.setHandler("upload", "/upload", NOTHING, new MyStreamingHandler());
+        server.addListener(<HttpListenerOptionInfo>{
+            "service": 8443,
+            "cert": cert,
+            "key": key,
+            "enable_h3": True,
+        });
+        @endcode
+
+        @see @ref AbstractHttpRequestHandler::wantsBodyStreaming()
+
+        @since HttpServer 1.6
+    */
+    bool quic_headers_only = False;
 }
 
 #! The HttpServer class implements a multithreaded HTTP server
@@ -2064,6 +2100,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                 "min_idle_handler_threads": opts.min_idle_handler_threads,
                 "max_idle_handler_threads": opts.max_idle_handler_threads,
                 "quic_drain_timeout": opts.quic_drain_timeout,
+                "quic_headers_only": opts.quic_headers_only,
             });
             asyncIo.start();
         }
@@ -2470,9 +2507,112 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             s.setMaxChunkedBodySize(max_body);
             s.setHttp2MaxRequestBodySize(max_body);
 
+            # Check if handler wants body streaming (bidi) for HTTP/2 or HTTP/3
+            bool want_streaming = cx."header-info".body_streaming
+                && handler
+                && handler.wantsBodyStreaming(cx, hdr);
+
             *data body;
-            # For HTTP/2 and HTTP/3, body is already read by poll operation and stored in header-info
-            if ((cx."header-info".http2 || cx."header-info".http3) && cx."header-info".body) {
+            if (cx."header-info".body_streaming && !want_streaming) {
+                # Handler doesn't support streaming — buffer body on handler thread
+                # for backward compatibility (body was previously read by I/O thread)
+                int sid = cx."header-info".stream_id;
+                binary body_data = binary();
+                if (cx."header-info".http3) {
+                    # HTTP/3: use QUIC stream data methods (CV-based; I/O thread stays active)
+                    int session_id = cx."header-info".session_id;
+                    try {
+                        while (True) {
+                            *binary chunk = s.readQuicStreamDataBlock(session_id, sid, 30s);
+                            if (!chunk) {
+                                break;
+                            }
+                            body_data += chunk;
+                            # Incremental size check: reject early instead of buffering the full body
+                            if (max_body > 0 && body_data.size() > max_body) {
+                                break;
+                            }
+                        }
+                    } catch (hash<ExceptionInfo> ex) {
+                        if (ex.err == "QUIC-STREAM-TIMEOUT") {
+                            listener.logError("HTTP/3 request body read timeout from %s",
+                                cx."peer-info".address_desc);
+                            cx.close = True;
+                            if (async_response_out) {
+                                async_response_out = buildAsyncErrorResponse(408,
+                                    "Request Timeout", cx, listener, s, !is_multiplexed);
+                            } else {
+                                sendHttpError(listener, cx, s, 408, "Request Timeout",
+                                    NOTHING, NOTHING, cx."response-encoding",
+                                    hdr.method == "HEAD");
+                            }
+                            return;
+                        }
+                        rethrow;
+                    }
+                    # NOTE: cleanupQuicStream is called by the controller's on_exit handler
+                } else {
+                    # HTTP/2: use H2 stream data methods
+                    # Use readHttp2StreamDataBlock() return value as loop control:
+                    # it returns data if available (even if stream is already complete),
+                    # and NOTHING when no more data is available. This handles the case
+                    # where DATA+END_STREAM arrived in the same batch as HEADERS.
+                    while (True) {
+                        *binary chunk = s.readHttp2StreamDataBlock(sid, 30s);
+                        if (!chunk) {
+                            break;
+                        }
+                        body_data += chunk;
+                        # Incremental size check: reject early instead of buffering the full body
+                        if (max_body > 0 && body_data.size() > max_body) {
+                            break;
+                        }
+                    }
+                    # readHttp2StreamDataBlock() returns NOTHING on both timeout and stream
+                    # completion — check isHttp2StreamComplete() to distinguish.
+                    # Only treat as timeout if we didn't exit due to max_body.
+                    bool h2_complete = s.isHttp2StreamComplete(sid);
+                    s.cleanupHttp2Stream(sid);
+                    if (!h2_complete && !(max_body > 0 && body_data.size() > max_body)) {
+                        listener.logError("HTTP/2 request body read timeout from %s",
+                            cx."peer-info".address_desc);
+                        cx.close = True;
+                        if (async_response_out) {
+                            async_response_out = buildAsyncErrorResponse(408,
+                                "Request Timeout", cx, listener, s, !is_multiplexed);
+                        } else {
+                            sendHttpError(listener, cx, s, 408, "Request Timeout",
+                                NOTHING, NOTHING, cx."response-encoding",
+                                hdr.method == "HEAD");
+                        }
+                        return;
+                    }
+                }
+                # Apply max body size check
+                if (max_body > 0 && body_data.size() > max_body) {
+                    string etxt = sprintf("%s request body size %d exceeds maximum allowed body size %d",
+                        cx."header-info".http3 ? "HTTP/3" : "HTTP/2",
+                        body_data.size(), max_body);
+                    listener.logError("%s: from %s", etxt, cx."peer-info".address_desc);
+                    cx.close = True;
+                    if (async_response_out) {
+                        async_response_out = buildAsyncErrorResponse(413, etxt, cx,
+                            listener, s, !is_multiplexed);
+                    } else {
+                        sendHttpError(listener, cx, s, 413, etxt, NOTHING, NOTHING,
+                            cx."response-encoding", hdr.method == "HEAD");
+                    }
+                    return;
+                }
+                if (body_data.size()) {
+                    if (hdr."content-encoding" || hdr."content-type" == MimeTypeOctetStream) {
+                        body = body_data;
+                    } else {
+                        body = body_data.toString();
+                    }
+                }
+            } else if ((cx."header-info".http2 || cx."header-info".http3) && cx."header-info".body) {
+                # For HTTP/2 and HTTP/3, body is already read by poll operation and stored in header-info
                 # Check body size against limit (body was already read by the C++
                 # layer; this is a secondary check in case the C++ limit was not set)
                 if (max_body > 0 && cx."header-info".body.size() > max_body) {
@@ -2631,6 +2771,17 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                         cx.persistent = True;
                     }
                 }
+            }
+
+            # Handle HTTP/2 bidirectional streaming: the handler managed the stream
+            # lifecycle directly (read body data, sent response).  Mark as dedicated
+            # so the controller leaves the stream alone.
+            if (want_streaming && cx."response-sent") {
+                request_helper.setDedicatedExternal();
+                if (async_response_out) {
+                    delete async_response_out;
+                }
+                return;
             }
 
             if (rv.reply_sent) {
@@ -4500,6 +4651,11 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
         # Set user context and header info
         cx.uctx = get_thread_data("uctx");
+        # For body_streaming, expose the socket so handlers can read body data
+        # incrementally via readQuicStreamDataBlock()
+        if (header_info.body_streaming) {
+            header_info.sock = s;
+        }
         cx."header-info" = header_info;
 
         # Add client certificate if requested and available

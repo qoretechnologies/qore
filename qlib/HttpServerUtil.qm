@@ -1932,6 +1932,111 @@ public class AbstractHttpRequestHandler {
         stream = n_stream;
     }
 
+    #! Returns @ref True "True" if this handler wants to receive streaming requests without waiting for the full
+    #! request body
+    /** When @ref True "True" and the request has \c body_streaming set in \c header_info, the handler is called
+        immediately when headers arrive, before the request body has been fully received.  The handler reads
+        body data incrementally using protocol-specific methods:
+
+        - <b>HTTP/3</b>: use @ref Qore::Socket::readQuicStreamDataBlock() with \c session_id and \c stream_id
+          from \c cx."header-info".  The I/O thread drives the shared UDP socket; the handler waits on a
+          per-stream condition variable for data.
+        - <b>HTTP/2</b>: use @ref Qore::Socket::readHttp2StreamDataBlock() with \c stream_id from
+          \c cx."header-info".  The handler thread drives the TCP socket directly.
+
+        Check \c cx."header-info".http3 to determine which protocol is in use.
+
+        @par Context Keys Available to Streaming Handlers
+        When \c body_streaming is \c True, the following keys are available in \c cx."header-info":
+        - \c body_streaming (\c bool): \c True — body data must be read incrementally
+        - \c headers_end_stream (\c bool): \c True if END_STREAM was set on the HEADERS frame
+          (e.g., GET with no body) — the handler should not attempt to read body data
+        - \c session_id (\c int): QUIC session ID (HTTP/3 only)
+        - \c stream_id (\c int): HTTP/2 or HTTP/3 stream ID
+        - \c sock (\c Socket): the socket object for calling stream data methods
+        - \c http3 (\c bool): \c True for HTTP/3 requests
+        - \c http2 (\c bool): \c True for HTTP/2 requests
+
+        @par Complete HTTP/3 Streaming Handler Example
+        @code{.py}
+        class StreamingUploadHandler inherits AbstractHttpRequestHandler {
+            bool wantsBodyStreaming(hash<auto> cx, hash<auto> hdr) {
+                # Only opt in for POST/PUT requests
+                return hdr.method == "POST" || hdr.method == "PUT";
+            }
+
+            hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+                # Check if this is actually a streaming request
+                bool body_streaming = cx."header-info".body_streaming ?? False;
+                bool headers_end_stream = cx."header-info".headers_end_stream ?? False;
+
+                if (!body_streaming || headers_end_stream) {
+                    # Non-streaming path (GET, or body already buffered)
+                    return makeResponse(200, body ?? "no body");
+                }
+
+                int session_id = cx."header-info".session_id;
+                int stream_id = cx."header-info".stream_id;
+                Socket sock = cx."header-info".sock;
+
+                # Read body data incrementally
+                binary accumulated = binary();
+                while (True) {
+                    *binary chunk;
+                    if (cx."header-info".http3) {
+                        chunk = sock.readQuicStreamDataBlock(session_id, stream_id, 30s);
+                    } else {
+                        chunk = sock.readHttp2StreamDataBlock(stream_id, 30s);
+                    }
+                    if (!exists chunk) {
+                        break;  # END_STREAM — no more data
+                    }
+                    accumulated += chunk;
+                    # Optional: process chunks as they arrive for streaming use cases
+                }
+
+                return makeResponse(200, sprintf("received %d bytes", accumulated.size()));
+            }
+        }
+        @endcode
+
+        @par Backward Compatibility
+        If this method returns @ref False "False" (the default), the framework automatically buffers
+        the full request body using @ref Qore::Socket::readQuicStreamDataBlock() (HTTP/3) or
+        @ref Qore::Socket::readHttp2StreamDataBlock() (HTTP/2) before calling
+        @ref handleRequest() with the complete body in the \c body parameter.  This maintains
+        full backward compatibility — existing handlers work without modification when
+        \c quic_headers_only is enabled on the server.
+
+        @par Error Handling
+        If a streaming read times out, the handler can catch the \c QUIC-STREAM-TIMEOUT exception
+        (HTTP/3) and return an appropriate error response:
+        @code{.py}
+        try {
+            *binary chunk = sock.readQuicStreamDataBlock(session_id, stream_id, 10s);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "QUIC-STREAM-TIMEOUT") {
+                return makeResponse(408, "Request Timeout");
+            }
+            rethrow;
+        }
+        @endcode
+
+        @param cx the connection context
+        @param hdr the HTTP headers
+
+        @return @ref True "True" to receive the streaming request, @ref False "False" to buffer
+        the body first
+
+        @see @ref Qore::Socket::readQuicStreamDataBlock()
+        @see @ref Qore::Socket::readHttp2StreamDataBlock()
+
+        @since HttpServerUtil 2.1
+    */
+    bool wantsBodyStreaming(hash<auto> cx, hash<auto> hdr) {
+        return False;
+    }
+
     #! Returns @ref True "True" if the current connection is persistent, @ref False "False" if not
     /** Persistent mode means that subsequent requests on the same connection will be handled
         by the same thread, providing thread affinity for thread-local resources.

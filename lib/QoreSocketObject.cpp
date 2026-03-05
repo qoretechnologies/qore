@@ -1449,6 +1449,97 @@ QoreValue QoreSocketObject::readQuicConnectStreamData(int64_t session_id, int64_
     return session->readConnectStreamData(stream_id, xsink);
 }
 
+BinaryNode* QoreSocketObject::readQuicStreamDataBlock(int64_t session_id, int64_t stream_id,
+        int timeout_ms, ExceptionSink* xsink) {
+    // Get the session WITHOUT holding the socket lock — the session is reference-counted
+    // and we need to avoid holding the socket lock while blocking on the CV
+    std::shared_ptr<QuicSession> session;
+    {
+        AutoLocker al(priv->m);
+        qore_socket_private* sp = qore_socket_private::get(*priv->socket);
+        session = sp->getQuicSession(session_id);
+    }
+    if (!session) {
+        xsink->raiseException("QUIC-ERROR", "no QUIC session with id %lld on this socket",
+            (long long)session_id);
+        return nullptr;
+    }
+    // Use a deadline to avoid timeout reset when data arrives incrementally
+    int64 deadline_ms = timeout_ms >= 0
+        ? q_clock_getmillis() + timeout_ms
+        : -1;
+
+    // Get per-stream notifier for targeted wakeup (avoids thundering herd)
+    std::shared_ptr<StreamNotifier> notifier = session->getStreamNotifier(stream_id);
+
+    while (true) {
+        // Check if session has been torn down (abort)
+        if (session->isMarkedClosed()) {
+            xsink->raiseException("QUIC-ERROR",
+                "QUIC session closed during stream read (session %lld, stream %lld)",
+                (long long)session_id, (long long)stream_id);
+            return nullptr;
+        }
+
+        // 1. Atomically check stream buffer AND completion status under one lock
+        // This eliminates the TOCTOU race where data could arrive between separate
+        // takeStreamData() and isStreamComplete() calls
+        bool complete = false;
+        QoreValue data = session->takeStreamData(stream_id, complete);
+        if (data.getType() == NT_BINARY) {
+            return data.get<BinaryNode>();
+        }
+        if (complete) {
+            return nullptr;
+        }
+
+        // 3. Calculate remaining timeout from deadline
+        int remaining_ms;
+        if (deadline_ms >= 0) {
+            remaining_ms = (int)(deadline_ms - q_clock_getmillis());
+            if (remaining_ms <= 0) {
+                // Timeout — raise exception so callers can distinguish from stream completion
+                xsink->raiseException("QUIC-STREAM-TIMEOUT",
+                    "timeout reading QUIC stream data (session %lld, stream %lld)",
+                    (long long)session_id, (long long)stream_id);
+                return nullptr;
+            }
+        } else {
+            remaining_ms = -1;
+        }
+
+        // 4. Wait for stream data or completion — per-stream notifier avoids thundering herd
+        if (notifier) {
+            notifier->wait(remaining_ms);
+        } else {
+            session->waitForStreamData(remaining_ms);
+        }
+    }
+}
+
+bool QoreSocketObject::isQuicStreamComplete(int64_t session_id, int64_t stream_id) const {
+    AutoLocker al(priv->m);
+    qore_socket_private* sp = qore_socket_private::get(*priv->socket);
+    std::shared_ptr<QuicSession> session = sp->getQuicSession(session_id);
+    if (!session) {
+        return true;  // Session not found, treat as complete
+    }
+    return session->isStreamComplete(stream_id);
+}
+
+void QoreSocketObject::cleanupQuicStream(int64_t session_id, int64_t stream_id,
+        ExceptionSink* xsink) {
+    AutoLocker al(priv->m);
+    qore_socket_private* sp = qore_socket_private::get(*priv->socket);
+    std::shared_ptr<QuicSession> session = sp->getQuicSession(session_id);
+    if (!session) {
+        xsink->raiseException("QUIC-ERROR", "no QUIC session with id %lld on this socket",
+            (long long)session_id);
+        return;
+    }
+    session->cleanupStream(stream_id);
+}
+
 bool my_socket_priv::hasQuicSession() const {
     qore_socket_private* sp = qore_socket_private::get(*socket);
     AutoLocker al(sp->quic_sessions_lock);

@@ -988,8 +988,44 @@ const char* SocketQuicServerPollOperation::getStateImpl() const {
         case QCS::HANDSHAKE_RECV: return "handshake-recv";
         case QCS::READING: return "reading";
         case QCS::REQUEST_READY: return "request-ready";
+        case QCS::HEADERS_READY: return "headers-ready";
         default: return "unknown";
     }
+}
+
+void SocketQuicServerPollOperation::setHeadersOnly(bool v) {
+    headers_only_ = v;
+    for (auto& [id, session] : sessions_) {
+        session->setHeadersOnlyMode(v);
+    }
+}
+
+QoreHashNode* SocketQuicServerPollOperation::checkHeadersOnlyDispatch(bool& handled,
+        ExceptionSink* xsink) {
+    handled = false;
+    if (!headers_only_) {
+        return nullptr;
+    }
+    // Iterate sessions to find one with a headers-ready stream
+    for (auto& [id, session] : sessions_) {
+        std::shared_ptr<StreamNotifier> notifier;
+        auto stream = session->takeHeadersReadyStreamCopy(&notifier);
+        if (stream) {
+            handled = true;
+            cached_stream_ = std::make_unique<CachedStream>();
+            cached_stream_->session_id = session->getSessionId();
+            cached_stream_->stream = std::move(stream);
+            cached_stream_->session = session;
+            cached_stream_->notifier = std::move(notifier);
+            qcs_state = QCS::HEADERS_READY;
+            // Restore OS-level blocking mode
+            sock->priv->socket->priv->set_non_blocking(false, xsink);
+            sock->priv->clearNonBlock();
+            set_non_block = false;
+            return nullptr;  // goal reached
+        }
+    }
+    return nullptr;
 }
 
 QoreValue SocketQuicServerPollOperation::getOutput() const {
@@ -1068,6 +1104,12 @@ QoreValue SocketQuicServerPollOperation::getOutput() const {
         SimpleRefHolder<BinaryNode> body(new BinaryNode());
         body->append(cached_stream_->stream->body.data(), cached_stream_->stream->body.size());
         h->setKeyValue("body", body.release(), nullptr);
+    }
+
+    // Indicate headers-only dispatch (stream still in map for incremental reading)
+    if (qcs_state == QCS::HEADERS_READY) {
+        h->setKeyValue("hdr", true, nullptr);
+        h->setKeyValue("headers_end_stream", cached_stream_->stream->headers_end_stream, nullptr);
     }
 
     // Consume the cached stream so subsequent calls return NOTHING
@@ -1252,6 +1294,10 @@ int SocketQuicServerPollOperation::recvAndProcessPacket(ExceptionSink* xsink, Qu
         // Store in both local and qore_socket_private session maps
         sessions_[new_session->getSessionId()] = new_session;
         sock->priv->socket->priv->addQuicSession(new_session);
+        // Propagate headers-only mode to new sessions
+        if (headers_only_) {
+            new_session->setHeadersOnlyMode(true);
+        }
 
         target_session = new_session.get();
     }
@@ -1379,6 +1425,18 @@ QoreHashNode* SocketQuicServerPollOperation::continuePoll(ExceptionSink* xsink) 
             }
 
             case QCS::READING: {
+                // Headers-only mode: check for streams with HEADERS complete but not yet dispatched
+                {
+                    bool handled = false;
+                    QoreHashNode* rv = checkHeadersOnlyDispatch(handled, xsink);
+                    if (*xsink) {
+                        return nullptr;
+                    }
+                    if (handled) {
+                        return rv;
+                    }
+                }
+
                 // Check ALL sessions for completed streams
                 for (auto& entry : sessions_) {
                     auto& session = entry.second;
@@ -1517,8 +1575,23 @@ QoreHashNode* SocketQuicServerPollOperation::continuePoll(ExceptionSink* xsink) 
                 }
             }
 
-            case QCS::REQUEST_READY: {
+            case QCS::REQUEST_READY:
+            case QCS::HEADERS_READY: {
                 // Already reached goal; if called again, go back to reading
+                // Check for headers-only dispatch first
+                if (headers_only_) {
+                    for (auto& entry : sessions_) {
+                        auto stream = entry.second->takeHeadersReadyStreamCopy();
+                        if (stream) {
+                            cached_stream_ = std::make_unique<CachedStream>();
+                            cached_stream_->session_id = entry.second->getSessionId();
+                            cached_stream_->stream = std::move(stream);
+                            cached_stream_->session = entry.second;
+                            qcs_state = QCS::HEADERS_READY;
+                            return nullptr;
+                        }
+                    }
+                }
                 // Check all sessions for more completed streams
                 for (auto& entry : sessions_) {
                     auto& session = entry.second;
@@ -1528,6 +1601,7 @@ QoreHashNode* SocketQuicServerPollOperation::continuePoll(ExceptionSink* xsink) 
                         cached_stream_->session_id = session->getSessionId();
                         cached_stream_->stream = std::move(stream);
                         cached_stream_->session = session;
+                        qcs_state = QCS::REQUEST_READY;
                         return nullptr;
                     }
                 }
