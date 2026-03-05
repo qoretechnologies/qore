@@ -2656,6 +2656,13 @@ static std::vector<QoreJIT::BatchCallee> collectDirectCallees(const QoreIRFuncti
 void UserVariantBase::attemptJITCompilation() const {
     assert(cached_ir);
 
+    // Atomically claim JIT compilation (CAS 0→1).
+    // This is the single point of guard — callers should NOT do their own CAS.
+    int expected = 0;
+    if (!jit_compile_state.compare_exchange_strong(expected, 1)) {
+        return;  // Already enqueued or completed
+    }
+
     // Enqueue for background JIT compilation instead of compiling synchronously.
     // This allows I/O threads and other critical threads to continue executing IR code
     // while the background thread performs expensive LLVM compilation.
@@ -3023,17 +3030,11 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
         // OSR: hot loop detected by IR interpreter — trigger JIT compilation early
         if (cached_ir->osr_jit_requested && !jit_compile_failed) {
             cached_ir->osr_jit_requested = false;  // Reset flag
-            int expected = 0;
-            if (jit_compile_state.compare_exchange_strong(expected, 1)) {
-                printd(2, "evalTiered OSR: promoting '%s' to JIT tier (hot loop detected)\n",
-                    cached_ir->name.c_str());
-                attemptJITCompilation();
-            }
+            printd(2, "evalTiered OSR: promoting '%s' to JIT tier (hot loop detected)\n",
+                cached_ir->name.c_str());
+            attemptJITCompilation();
         } else if (count >= QoreJIT::getJITThreshold() && !jit_compile_failed) {
-            int expected = 0;
-            if (jit_compile_state.compare_exchange_strong(expected, 1)) {
-                attemptJITCompilation();
-            }
+            attemptJITCompilation();
         }
 
         if (!*xsink) {
@@ -3053,10 +3054,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
 
     // Check for JIT promotion (IR already cached from a previous call)
     if (count >= QoreJIT::getJITThreshold() && cached_ir && !jit_compile_failed) {
-        int expected = 0;
-        if (jit_compile_state.compare_exchange_strong(expected, 1)) {
-            attemptJITCompilation();
-        }
+        attemptJITCompilation();
         // If promotion succeeded, dispatch to JIT on next call; for now, continue with IR or AST
     }
 

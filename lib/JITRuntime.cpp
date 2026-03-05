@@ -55,6 +55,7 @@
 #include <qore/intern/FunctionalOperatorInterface.h>
 #include <qore/intern/QoreClassIntern.h>
 #include <qore/intern/CaseNodeRegex.h>
+#include <qore/intern/SwitchStatement.h>
 #include <qore/intern/ConstantList.h>
 #include <qore/intern/QoreClosureParseNode.h>
 #include <qore/intern/QoreClosureNode.h>
@@ -4546,4 +4547,13 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_method_direct_aot(QoreAOTContext* ctx
         return toBits(QoreValue());
     }
     return qore_rt_call_method_direct(method, args, nargs, xsink);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_switch_case_match(const void* case_node_ptr, uint64_t switch_val_bits,
+        ExceptionSink* xsink) {
+    const CaseNode* cn = reinterpret_cast<const CaseNode*>(case_node_ptr);
+    QoreValue switch_val;
+    std::memcpy(&switch_val, &switch_val_bits, sizeof(switch_val));
+    bool match = cn->matches(switch_val, xsink);
+    return toBits(QoreValue(match));
 }

@@ -65,7 +65,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 342,
+static_assert(QORE_IR_MAX_OPCODE == 343,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -5936,6 +5936,27 @@ load_local_done:
                 return false;
             }
             setValueSlot(values, regex_inst->result.id, res, xsink);
+            ++ip;
+            break;
+        }
+        case QoreIROpcode::SwitchCaseMatch: {
+            // Handle switch case match using CaseNode::matches() which unwraps TAG_ENUM
+            auto* case_inst = static_cast<QoreIRSwitchCaseMatchInstruction*>(inst);
+            QoreValue res;
+            if (!case_inst->operands.empty() && case_inst->case_node) {
+                QoreValue switch_val = getIRValue(values, case_inst->operands[0]);
+                bool match = case_inst->case_node->matches(switch_val, xsink);
+                res = QoreValue(match);
+            } else {
+                res = QoreValue(false);
+            }
+            if (xsink && *xsink) {
+                executeOnBlockExitHandlers(on_block_exit_handlers, xsink);
+                cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                cleanupLocalCaches();
+                return false;
+            }
+            setValueSlot(values, case_inst->result.id, res, xsink);
             ++ip;
             break;
         }

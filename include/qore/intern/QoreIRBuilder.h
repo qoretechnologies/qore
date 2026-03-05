@@ -263,6 +263,8 @@ public:
         const QoreProgramLocation* loc = nullptr);
     QoreIRSwitchRegexMatchInstruction* createSwitchRegexMatch(const CaseNodeRegex* regex_case,
         QoreIRValue switch_val, const QoreProgramLocation* loc = nullptr);
+    QoreIRSwitchCaseMatchInstruction* createSwitchCaseMatch(const CaseNode* case_node,
+        QoreIRValue switch_val, const QoreProgramLocation* loc = nullptr);
 
 private:
     QoreIRFunction* func = nullptr;

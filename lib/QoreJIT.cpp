@@ -351,6 +351,9 @@ bool QoreJIT::registerRuntimeSymbols(std::string& error) {
     addSymbol("qore_rt_regex_op_with_operand", reinterpret_cast<void*>(&qore_rt_regex_op_with_operand));
     addSymbol("qore_rt_regex_op_with_operand_aot", reinterpret_cast<void*>(&qore_rt_regex_op_with_operand_aot));
 
+    // Switch case match helper (enum-aware)
+    addSymbol("qore_rt_switch_case_match", reinterpret_cast<void*>(&qore_rt_switch_case_match));
+
     auto err = jd.define(llvm::orc::absoluteSymbols(std::move(symbols)));
     if (err) {
         error = "failed to register JIT runtime symbols: " + llvm::toString(std::move(err));
@@ -941,8 +944,10 @@ void QoreJIT::bgCompileThreadLoop() {
 
 void QoreJIT::enqueueBgCompile(const UserVariantBase* uvb, const QoreIRFunction* ir_func,
         void* deopt_counter, const std::vector<BatchCallee>* callees) {
-    // IR-only mode should never attempt JIT compilation
-    // Skip background thread creation if LLVM is not initialized
+    // Skip if LLVM is not initialized (IR-only or tiered mode without explicit JIT).
+    // LLVM is initialized by compileFunction/compileFunctionBatch (called from
+    // --exec-mode=jit eager path or executeWithFallback). Tiered mode stays at IR
+    // tier unless LLVM was already initialized by one of those paths.
     if (!jit) {
         return;
     }
@@ -950,14 +955,8 @@ void QoreJIT::enqueueBgCompile(const UserVariantBase* uvb, const QoreIRFunction*
     // Ensure background thread is running
     startBackgroundThread();
 
-    // Check if compilation was already enqueued (jit_compile_state is already 1)
-    // to avoid duplicate work
-    int expected = 0;
-    if (!const_cast<UserVariantBase*>(uvb)->jit_compile_state.compare_exchange_strong(
-            expected, 1, std::memory_order_acq_rel)) {
-        // Already enqueued or completed
-        return;
-    }
+    // NOTE: callers (evalTiered) already guard with CAS 0→1 on jit_compile_state
+    // so we do NOT re-check here — the state is already 1 when we're called.
 
     // Increment active work counter before adding to queue
     bg_active_work.fetch_add(1, std::memory_order_relaxed);

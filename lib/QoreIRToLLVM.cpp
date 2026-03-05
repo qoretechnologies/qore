@@ -37,7 +37,7 @@
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 342,
+static_assert(QORE_IR_MAX_OPCODE == 343,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 #include "qore/intern/QoreLibIntern.h"
@@ -8764,6 +8764,26 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             return true;
         }
 
+        case QoreIROpcode::SwitchCaseMatch: {
+            // operands[0] = switch value (NaN-boxed)
+            // case_node = pointer to CaseNode (compile-time constant)
+            auto* case_inst = static_cast<const QoreIRSwitchCaseMatchInstruction*>(inst);
+            auto* switch_val = getVal(inst->operands[0].id, error);
+            if (!switch_val) { return false; }
+            llvm::Value* switch_boxed = boxValue(switch_val, inst->operands[0].id);
+            // Pass CaseNode* as an i64 constant (pointer embedded at compile time)
+            auto* case_node_ptr = llvm::ConstantInt::get(i64_type,
+                reinterpret_cast<uint64_t>(case_inst->case_node));
+            auto* case_node_val = builder->CreateIntToPtr(case_node_ptr, ptr_type);
+            auto helper = module.getOrInsertFunction("qore_rt_switch_case_match",
+                    llvm::FunctionType::get(i64_type, {ptr_type, i64_type, ptr_type}, false));
+            auto* result = builder->CreateCall(helper, {case_node_val, switch_boxed, xsink_arg});
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            emitExceptionCheck(module, llvm_func, inst);
+            return true;
+        }
+
         default:
             error = "unsupported IR opcode for LLVM lowering: " + std::to_string(static_cast<int>(inst->opcode));
             return false;
@@ -8819,8 +8839,11 @@ bool QoreIRToLLVM::tryEmitHashKeyAccess(const QoreIRInstruction* inst, llvm::Mod
                 // For optional types (*hash<auto>), pseudo-methods may not be resolved at
                 // parse time. Check if the name matches a hash pseudo-method to avoid
                 // incorrectly treating e.g. h.keys() as hash key access "keys".
-                QoreClass* pqc = nullptr;
-                if (!pseudo_classes_find_method(NT_HASH, m->getRawName(), pqc)) {
+                // Use qore_pseudo_get_class + findLocalMethod instead of
+                // pseudo_classes_find_method to avoid runtime_get_class() TLS access,
+                // which crashes when called from the background JIT compilation thread.
+                const QoreClass* pqc = qore_pseudo_get_class(NT_HASH);
+                if (!pqc || !pqc->findLocalMethod(m->getRawName())) {
                     key_str = m->getRawName();
                 }
             }

@@ -259,6 +259,7 @@ static bool requiresResult(QoreIROpcode op) {
         case QoreIROpcode::RegexMatchBool:
         case QoreIROpcode::RegexNMatchBool:
         case QoreIROpcode::SwitchRegexMatch:    // Returns bool for switch regex case match
+        case QoreIROpcode::SwitchCaseMatch:     // Returns bool for switch case match (enum-aware)
         case QoreIROpcode::RegexExtractAny:
         case QoreIROpcode::RegexExtractList:
         case QoreIROpcode::RegexSubstAny:
@@ -565,6 +566,7 @@ static int expectedOperands(QoreIROpcode op) {
         case QoreIROpcode::RegexMatchBool:
         case QoreIROpcode::RegexNMatchBool:
         case QoreIROpcode::SwitchRegexMatch:  // 1 operand: switch value
+        case QoreIROpcode::SwitchCaseMatch:   // 1 operand: switch value
         case QoreIROpcode::RegexExtractAny:
         case QoreIROpcode::RegexExtractList:
         case QoreIROpcode::RegexSubstAny:
@@ -1078,6 +1080,12 @@ bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
                 auto* regex_inst = dynamic_cast<const QoreIRSwitchRegexMatchInstruction*>(inst.get());
                 if (!regex_inst || !regex_inst->regex_case) {
                     error = "SwitchRegexMatch instruction missing regex_case";
+                    return false;
+                }
+            } else if (inst->opcode == QoreIROpcode::SwitchCaseMatch) {
+                auto* case_inst = dynamic_cast<const QoreIRSwitchCaseMatchInstruction*>(inst.get());
+                if (!case_inst || !case_inst->case_node) {
+                    error = "SwitchCaseMatch instruction missing case_node";
                     return false;
                 }
             } else if (inst->opcode == QoreIROpcode::Invoke) {

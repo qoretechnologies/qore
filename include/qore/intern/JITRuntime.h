@@ -644,6 +644,14 @@ uint64_t qore_rt_cast_with_inner(uint64_t cast_expr_bits, uint64_t inner_bits, E
 uint64_t qore_rt_cast_with_inner_aot(QoreAOTContext* ctx, int32_t slot, uint64_t inner_bits,
     ExceptionSink* xsink);
 
+//! Switch case match: calls CaseNode::matches() which unwraps TAG_ENUM before isEqualHard()
+//! \param case_node_ptr pointer to the CaseNode (cast to void* for C ABI)
+//! \param switch_val_bits NaN-boxed switch value
+//! \param xsink exception sink
+//! \returns NaN-boxed bool result
+uint64_t qore_rt_switch_case_match(const void* case_node_ptr, uint64_t switch_val_bits,
+    ExceptionSink* xsink);
+
 } // extern "C"
 
 #endif

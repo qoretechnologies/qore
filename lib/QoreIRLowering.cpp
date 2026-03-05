@@ -1491,18 +1491,14 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                     return false;
                 }
             } else {
-                QoreIRValue case_val = lowerExpression(node->val, error);
-                if (!case_val.isValid()) {
-                    return false;
+                // Use SwitchCaseMatch which calls CaseNode::matches() —
+                // this unwraps TAG_ENUM from both sides before isEqualHard(),
+                // matching the AST switch statement behavior
+                auto* inst = builder.createSwitchCaseMatch(node, switch_val, node->loc);
+                if (!exception_stack.empty()) {
+                    inst->exception_target = exception_stack.back();
                 }
-                QoreValue cmp_expr(new QoreLogicalAbsoluteEqualsOperatorNode(node->loc, switch_expr.refSelf(),
-                    node->val.refSelf()));
-                ValueHolder cmp_holder(cmp_expr, nullptr);
-                match_value = lowerBinaryOpOrInvoke(QoreIROpcode::EqHard, cmp_expr, switch_val, case_val, node->loc,
-                    error);
-                if (!match_value.isValid()) {
-                    return false;
-                }
+                match_value = inst->result;
             }
 
             builder.createBranchIf(match_value, cases[i].block, next_check);

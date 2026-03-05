@@ -52,6 +52,7 @@ class DebugStatement;
 class AssertStatement;
 class ContextStatement;
 class SummarizeStatement;
+class CaseNode;
 class CaseNodeRegex;
 class QoreTypeInfo;
 class QoreMethod;
@@ -517,7 +518,12 @@ enum class QoreIROpcode : uint16_t {
     // Safe when the list outlives the use of the returned element (e.g., map/select loops)
     ListGetValueNoRef   = 342,
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (343, 344, ...)
+    // Switch case match with enum unwrapping (343)
+    // operands[0] = switch expression value
+    // Uses CaseNode::matches() which unwraps TAG_ENUM before hard comparison
+    SwitchCaseMatch     = 343,
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (344, 345, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -525,8 +531,8 @@ enum class QoreIROpcode : uint16_t {
 //! NOTE: Both QoreIRInterpreter.cpp and QoreIRToLLVM.cpp have matching
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
-constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::ListGetValueNoRef);
-static_assert(QORE_IR_MAX_OPCODE == 342, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::SwitchCaseMatch);
+static_assert(QORE_IR_MAX_OPCODE == 343, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! Returns true if the opcode is a unary computation op (used by Invoke dispatch)
@@ -1671,6 +1677,19 @@ public:
 
     const CaseNodeRegex* regex_case = nullptr;  //!< The regex case node containing the regex
     bool owns_regex_case = false;  //!< true when deserialized (we own the CaseNodeRegex)
+};
+
+//! Switch case match instruction - tests if switch value matches a case value with enum unwrapping
+//! Uses CaseNode::matches() which unwraps TAG_ENUM from both sides before isEqualHard()
+//! operands[0] is the switch value to test
+//! result is a bool indicating match
+class QoreIRSwitchCaseMatchInstruction : public QoreIRInstruction {
+public:
+    explicit QoreIRSwitchCaseMatchInstruction(const CaseNode* n_case_node)
+            : QoreIRInstruction(QoreIROpcode::SwitchCaseMatch), case_node(n_case_node) {
+    }
+
+    const CaseNode* case_node = nullptr;  //!< The case node for match evaluation
 };
 
 //! Reference foreach init instruction — stores the ParseReferenceNode expression

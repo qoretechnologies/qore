@@ -1071,3 +1071,12 @@ QoreIRSwitchRegexMatchInstruction* QoreIRBuilder::createSwitchRegexMatch(const C
     inst->result = func->createValue();
     return inst;
 }
+
+QoreIRSwitchCaseMatchInstruction* QoreIRBuilder::createSwitchCaseMatch(const CaseNode* case_node,
+        QoreIRValue switch_val, const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRSwitchCaseMatchInstruction>(case_node);
+    inst->operands.push_back(switch_val);
+    inst->loc = loc;
+    inst->result = func->createValue();
+    return inst;
+}
