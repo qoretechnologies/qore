@@ -49,8 +49,6 @@ public class GoHighLevelDataProvider inherits GoHighLevelDataProviderBase {
             "contacts": Class::forName("GoHighLevelContactsDataProvider"),
             "opportunities": Class::forName("GoHighLevelOpportunitiesDataProvider"),
             "tasks": Class::forName("GoHighLevelTasksDataProvider"),
-            "create-account": Class::forName("GoHighLevelCreateAccountDataProvider"),
-            "execute-api-call": Class::forName("GoHighLevelExecuteApiCallDataProvider"),
             "events": Class::forName("GoHighLevelEventsDataProvider"),
         };
     }

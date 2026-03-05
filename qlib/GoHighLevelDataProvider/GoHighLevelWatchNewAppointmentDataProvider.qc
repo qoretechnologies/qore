@@ -57,13 +57,13 @@ public class GoHighLevelAppointmentDataType inherits HashDataType {
                 "desc": "The appointment title",
             },
             "startTime": {
-                "type": StringOrNothingType,
+                "type": DateOrNothingType,
                 "display_name": "Start Time",
                 "short_desc": "The appointment start time",
                 "desc": "The appointment start time in ISO 8601 format",
             },
             "endTime": {
-                "type": StringOrNothingType,
+                "type": DateOrNothingType,
                 "display_name": "End Time",
                 "short_desc": "The appointment end time",
                 "desc": "The appointment end time in ISO 8601 format",
@@ -73,6 +73,14 @@ public class GoHighLevelAppointmentDataType inherits HashDataType {
                 "display_name": "Status",
                 "short_desc": "The appointment status",
                 "desc": "Appointment status: `new`, `confirmed`, `cancelled`, `showed`, `noshow`, `invalid`",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "new", "desc": "New appointment"},
+                    <AllowedValueInfo>{"value": "confirmed", "desc": "Confirmed appointment"},
+                    <AllowedValueInfo>{"value": "cancelled", "desc": "Cancelled appointment"},
+                    <AllowedValueInfo>{"value": "showed", "desc": "Contact showed up"},
+                    <AllowedValueInfo>{"value": "noshow", "desc": "Contact did not show up"},
+                    <AllowedValueInfo>{"value": "invalid", "desc": "Invalid appointment"},
+                ),
             },
             "assignedUserId": {
                 "type": StringOrNothingType,

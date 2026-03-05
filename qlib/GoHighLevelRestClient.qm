@@ -76,7 +76,7 @@ GoHighLevelRestClient ghl({
     "oauth2_client_id": ENV.GHL_CLIENT_ID,
     "oauth2_client_secret": ENV.GHL_CLIENT_SECRET,
     "oauth2_refresh_token": ENV.GHL_REFRESH_TOKEN,
-    "location_id": ENV.GHL_LOCATION_ID,
+    # location_id is automatically extracted from OAuth2 token response
 });
 hash<auto> result = ghl.get("calendars");
 printf("Calendars: %y\n", result.body.calendars);
@@ -104,7 +104,8 @@ public namespace GoHighLevelRestClient {
 
     @par Important:
     All API calls require a \c locationId parameter for location-scoped operations. This client
-    automatically appends the \c locationId query parameter to all requests.
+    automatically appends the \c locationId query parameter to all requests. When using OAuth2,
+    the location ID is automatically extracted from the token response.
 */
 public class GoHighLevelRestClient inherits RestClient::RestClient {
     public {
@@ -126,8 +127,8 @@ public class GoHighLevelRestClient inherits RestClient::RestClient {
         #! Default ping method
         const DefaultPingMethod = "GET";
 
-        #! Default ping path (no leading slash)
-        const DefaultPingPath = "calendars";
+        #! Default ping path (trailing slash required by GHL API)
+        const DefaultPingPath = "calendars/";
 
         #! Default ping headers
         const DefaultPingHeaders = {
@@ -145,11 +146,8 @@ public class GoHighLevelRestClient inherits RestClient::RestClient {
         const DefaultScopes = (
             "contacts.readonly", "contacts.write",
             "opportunities.readonly", "opportunities.write",
-            "calendars.readonly", "calendars.write",
-            "calendars/events.readonly", "calendars/events.write",
-            "conversations.readonly", "conversations.write",
-            "conversations/message.readonly", "conversations/message.write",
-            "locations.readonly", "locations.write",
+            "calendars.readonly", "calendars/events.readonly",
+            "conversations.readonly",
             "users.readonly",
             "campaigns.readonly",
         );
@@ -181,8 +179,8 @@ public class GoHighLevelRestClient inherits RestClient::RestClient {
     }
 
     private {
-        #! The location ID - required for location-scoped API calls
-        string location_id;
+        #! The location ID - automatically extracted from OAuth2 login, or set manually
+        *string location_id;
     }
 
     #! creates the object with the given options
@@ -193,14 +191,14 @@ GoHighLevelRestClient ghl({
     "oauth2_client_id": "your-client-id",
     "oauth2_client_secret": "your-client-secret",
     "oauth2_refresh_token": "your-refresh-token",
-    "location_id": "your-location-id",
+    # location_id is automatically extracted from OAuth2 token response
 });
         @endcode
 
         @param opts valid options are all the options for the @ref RestClient::RestClient "RestClient" class
         plus:
-        - \c apikey: the GoHighLevel API key or access token for bearer token authentication
-        - \c location_id: the GoHighLevel location/sub-account ID (required for most operations)
+        - \c location_id: (optional) the GoHighLevel location/sub-account ID; automatically
+          extracted from OAuth2 login
 
         @param do_not_connect if \c False (the default), then a connection will be immediately established to the
         remote server
@@ -217,7 +215,7 @@ GoHighLevelRestClient ghl({
     }
 
     #! Returns the location ID
-    string getLocationId() {
+    *string getLocationId() {
         return location_id;
     }
 
@@ -226,42 +224,101 @@ GoHighLevelRestClient ghl({
         location_id = loc_id;
     }
 
-    #! Overrides doRequest to automatically add locationId parameter
-    /** The locationId is automatically appended to all API paths except for
-        /oauth which is used for token management, and paths that already contain locationId.
+    #! Overrides doRequest to automatically add location ID parameter
+    /** For GET and DELETE requests, location_id is added as a query parameter.
+        For POST requests, locationId is added to the request body. PUT requests
+        do not get location ID injected (endpoints reject it).
+
+        The location ID is not added for /oauth paths or when already present.
     */
     hash<auto> doRequest(string method, string path, auto body,
             *reference<hash<auto>> info, softbool decode_errors = True, *hash<auto> hdr) {
-        # Append locationId to all requests except /oauth (with or without leading slash)
-        # Also skip if locationId is already in the path (to avoid duplicates)
-        if (location_id && path !~ /^\/?oauth($|\?)/ && path !~ /locationId=/) {
-            if (path !~ /\?/) {
-                path += "?locationId=" + location_id;
-            } else {
-                path += "&locationId=" + location_id;
+        if (location_id && path !~ /^\/?oauth($|\?)/) {
+            if (method == "GET" || method == "DELETE") {
+                # Add location ID as query parameter for GET/DELETE
+                # GHL API uses camelCase "locationId" for most GET endpoints,
+                # but "location_id" (snake_case) for opportunities/search
+                if (path !~ /location/) {
+                    string loc_param = needsSnakeCaseLocationId(path)
+                        ? "location_id" : "locationId";
+                    if (path !~ /\?/) {
+                        path += "?" + loc_param + "=" + location_id;
+                    } else {
+                        path += "&" + loc_param + "=" + location_id;
+                    }
+                }
+            } else if (method == "POST" && body.typeCode() == NT_HASH && !body.locationId) {
+                # Add locationId to POST body only for top-level endpoints (e.g., contacts,
+                # contacts/search, opportunities) — resource-scoped endpoints like
+                # contacts/{id}/notes reject it
+                string clean_path = (path =~ x/^([^?]+)/)[0] ?? path;
+                clean_path =~ s/^\///;
+                # Count path segments — top-level = 1-2 segments (e.g., "contacts/search")
+                list<string> segments = clean_path.split("/");
+                if (segments.size() <= 2) {
+                    body.locationId = location_id;
+                }
             }
         }
         return RestClient::doRequest(method, path, body, \info, decode_errors, hdr);
+    }
+
+    #! Returns True if the given path requires snake_case "location_id" query parameter
+    /** Most GHL GET endpoints use camelCase "locationId", but the opportunities/search
+        endpoint requires snake_case "location_id".
+    */
+    private bool needsSnakeCaseLocationId(string path) {
+        return path =~ /opportunities\/search/;
+    }
+
+    #! Checks if a login is necessary; if so, then the login is performed
+    private checkLogin(*reference<hash<auto>> info) {
+        if (oauth2_grant_type && !token) {
+            loginIntern(\info);
+        }
+    }
+
+    #! Sets options from the OAuth2 login response on the local object
+    /** Extracts locationId from the GoHighLevel OAuth2 token response.
+        The token response includes: locationId, companyId, userType, userId.
+    */
+    private setOAuth2LoginInfo(hash<auto> h) {
+        RestClient::setOAuth2LoginInfo(h);
+        if (h.locationId && h.locationId != location_id) {
+            location_id = h.locationId;
+            debug("GoHighLevelRestClient: set location ID to %y from OAuth2 response", h.locationId);
+        }
+    }
+
+    #! Returns options to update after an OAuth2 login
+    /** Persists the locationId back to the connection options so it survives restarts.
+    */
+    private *hash<auto> getUpdateOptionsAfterLogin(hash<auto> h, *bool refresh) {
+        *hash<auto> new_opts = RestClient::getUpdateOptionsAfterLogin(h, refresh);
+        if (h.locationId) {
+            if (h.locationId != location_id) {
+                new_opts.location_id = location_id = h.locationId;
+            }
+        }
+        return new_opts;
     }
 
     #! returns options for @ref GoHighLevelRestClient::GoHighLevelRestClient::constructor()
     static hash<auto> getOptions(hash<auto> opts) {
         hash<auto> rv = DefaultOptions + opts;
 
-        # Check if token-only mode (apikey provided without OAuth2 credentials)
-        bool token_only = opts.apikey && !opts.oauth2_client_id && !opts.oauth2_client_secret
-            && !opts.oauth2_refresh_token;
-
-        if (!token_only && opts.oauth2_client_id) {
+        if (opts.oauth2_client_id) {
             rv += OAuth2Options;
-        } else if (opts.apikey) {
-            # Bearer token mode
-            rv.headers.Authorization = "Bearer " + opts.apikey;
+            # GoHighLevel requires version_id in the auth URL; it is derived from the
+            # client_id by taking the portion before the first hyphen
+            *string version_id = (opts.oauth2_client_id =~ x/^([0-9a-f]{24})-/)[0];
+            if (version_id) {
+                rv.oauth2_auth_args += {"version_id": version_id};
+            }
         }
 
         # Remove custom options that RestClient doesn't understand
         remove rv.location_id;
-        remove rv.apikey;
 
         return rv;
     }
@@ -294,15 +351,6 @@ public class GoHighLevelRestConnection inherits RestClient::RestConnection {
                 "https": "gohighlevelres",
             },
             "options": RestConnection::ConnectionScheme.options + {
-                "apikey": <ConnectionOptionInfo>{
-                    "display_name": "API Key",
-                    "short_desc": "GoHighLevel API key or access token",
-                    "type": "string",
-                    "desc": "The GoHighLevel API key or access token for bearer token authentication. "
-                        "Use this for direct API access without OAuth2. If OAuth2 credentials are "
-                        "also provided, this value is ignored.",
-                    "sensitive": True,
-                },
                 "data": RestConnection::ConnectionScheme.options."data"
                 + <ConnectionOptionInfo>{
                     "default_value": GoHighLevelRestClient::DefaultData,
@@ -312,8 +360,8 @@ public class GoHighLevelRestConnection inherits RestClient::RestConnection {
                     "short_desc": "GoHighLevel location/sub-account ID",
                     "type": "string",
                     "desc": "The GoHighLevel location (sub-account) ID for scoping API requests. "
-                        "This is provided during the OAuth2 authorization flow when the user "
-                        "selects their location.",
+                        "Automatically extracted from the OAuth2 token response after the user "
+                        "selects their location during authorization.",
                 },
                 "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
                 + <ConnectionOptionInfo>{
@@ -348,7 +396,7 @@ public class GoHighLevelRestConnection inherits RestClient::RestConnection {
                     "default_value": GoHighLevelRestClient::DefaultTokenUrl,
                 },
             },
-            "required_options": "location_id",
+            "required_options": "oauth2_client_id,oauth2_client_secret",
         };
     }
 
@@ -394,24 +442,6 @@ public class GoHighLevelRestConnection inherits RestClient::RestConnection {
         return "gohighlevelres";
     }
 
-    #! Returns connection options
-    *hash<auto> getConnectionOptions(*hash<auto> rtopts) {
-        hash<auto> rv = RestConnection::getConnectionOptions(rtopts);
-        # Always set OAuth2 URLs
-        rv.oauth2_auth_url = GoHighLevelRestClient::DefaultAuthUrl;
-        rv.oauth2_token_url = GoHighLevelRestClient::DefaultTokenUrl;
-        if (!rv.oauth2_grant_type) {
-            rv.oauth2_grant_type = GoHighLevelRestClient::DefaultGrantType;
-        }
-        if (!rv.oauth2_scopes) {
-            rv.oauth2_scopes = GoHighLevelRestClient::DefaultScopes;
-        }
-        if (!rv.oauth2_auth_args) {
-            rv.oauth2_auth_args = GoHighLevelRestClient::DefaultAuthArgs;
-        }
-        return rv;
-    }
-
     #! returns @ref True as this connection returns a data provider with the @ref getDataProvider() method
     bool hasDataProvider() {
         return True;
@@ -451,10 +481,51 @@ public class GoHighLevelRestConnection inherits RestClient::RestConnection {
             if (opts.ping_path =~ /^\//) {
                 update.ping_path = opts.ping_path.substr(1);
             }
+            # Ensure ping_path includes locationId (needed for async polling ping which
+            # bypasses doRequest — camelCase required by calendars/ endpoint)
+            if (opts.location_id) {
+                *string pp = update.ping_path ?? opts.ping_path;
+                if (pp && pp !~ /locationId=/) {
+                    update.ping_path = pp + (pp =~ /\?/ ? "&" : "?")
+                        + "locationId=" + opts.location_id;
+                }
+            }
             if (update) {
                 doUpdateOptions(self, update);
             }
         }
+    }
+
+    #! Returns the OAuth2 authorization code request URI with GoHighLevel's version_id parameter
+    /** GoHighLevel requires a \c version_id parameter in the authorization URL when using the
+        \c /oauth/chooselocation endpoint. The \c version_id is derived from the \c client_id
+        by taking the portion before the first hyphen (a 24-character hex MongoDB ObjectId).
+    */
+    string getAuthorizationCodeRequest(hash<AuthCodeInfo> info = <AuthCodeInfo>{}) {
+        # Inject version_id into oauth2_auth_args if not already present
+        if (opts.oauth2_client_id && !opts.oauth2_auth_args.version_id) {
+            *string version_id = (opts.oauth2_client_id =~ x/^([0-9a-f]{24})-/)[0];
+            if (version_id) {
+                opts.oauth2_auth_args.version_id = version_id;
+            }
+        }
+        return RestConnection::getAuthorizationCodeRequest(info);
+    }
+
+    #! Processes OAuth2 login responses and returns updated options
+    /** Extracts \c locationId from the GoHighLevel OAuth2 token response and persists it
+        as the \c location_id connection option.
+    */
+    private *hash<auto> processOAuth2TokenResponseImpl(hash<auto> resp) {
+        *hash<auto> new_opts = RestConnection::processOAuth2TokenResponseImpl(resp);
+        if (resp.locationId && resp.locationId != real_opts.location_id) {
+            new_opts.location_id = resp.locationId;
+            # Update ping_path to include locationId (needed for async polling ping
+            # which bypasses GoHighLevelRestClient::doRequest)
+            string ping_path = GoHighLevelRestClient::DefaultPingPath;
+            new_opts.ping_path = ping_path + "?locationId=" + resp.locationId;
+        }
+        return new_opts;
     }
 
     #! returns a @ref GoHighLevelRestClient object

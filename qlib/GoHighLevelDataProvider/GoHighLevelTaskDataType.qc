@@ -51,7 +51,7 @@ public class GoHighLevelTaskDataType inherits HashDataType {
                 "desc": "The task body/description",
             },
             "dueDate": {
-                "type": StringOrNothingType,
+                "type": DateOrNothingType,
                 "display_name": "Due Date",
                 "short_desc": "The task due date",
                 "desc": "The task due date",

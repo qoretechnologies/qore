@@ -243,6 +243,13 @@ module GoHighLevelDataProvider {
                     "type": AbstractDataProviderTypeMap."*softbool",
                     "desc": "Whether the contact is on Do Not Disturb (`True` or `False`)",
                 },
+                "customFields": <ActionOptionInfo>{
+                    "display_name": "Custom Fields",
+                    "short_desc": "Custom field values for the contact",
+                    "type": new ListDataType(new GoHighLevelCustomFieldDataType(), True),
+                    "desc": "Custom field values for the contact; each entry has an `id` "
+                        "(custom field ID) and `field_value`",
+                },
             },
         });
 
@@ -368,6 +375,13 @@ module GoHighLevelDataProvider {
                     "short_desc": "DND status",
                     "type": AbstractDataProviderTypeMap."*softbool",
                     "desc": "Whether the contact is on Do Not Disturb (`True` or `False`)",
+                },
+                "customFields": <ActionOptionInfo>{
+                    "display_name": "Custom Fields",
+                    "short_desc": "Custom field values for the contact",
+                    "type": new ListDataType(new GoHighLevelCustomFieldDataType(), True),
+                    "desc": "Custom field values for the contact; each entry has an `id` "
+                        "(custom field ID) and `field_value`",
                 },
             },
         });
@@ -859,7 +873,7 @@ module GoHighLevelDataProvider {
                 "dueDate": <ActionOptionInfo>{
                     "display_name": "Due Date",
                     "short_desc": "Due date",
-                    "type": AbstractDataProviderTypeMap."*string",
+                    "type": AbstractDataProviderTypeMap."*date",
                     "desc": "Due date for the task (ISO 8601 format)",
                 },
                 "assignedTo": <ActionOptionInfo>{
@@ -922,7 +936,7 @@ module GoHighLevelDataProvider {
                 "dueDate": <ActionOptionInfo>{
                     "display_name": "Due Date",
                     "short_desc": "Due date",
-                    "type": AbstractDataProviderTypeMap."*string",
+                    "type": AbstractDataProviderTypeMap."*date",
                     "desc": "Due date for the task (ISO 8601 format)",
                 },
                 "assignedTo": <ActionOptionInfo>{
@@ -969,136 +983,6 @@ module GoHighLevelDataProvider {
                     "required": True,
                     "preselected": True,
                     "desc": "The ID of the task to delete",
-                },
-            },
-        });
-
-        # ========== ACCOUNT ACTIONS ==========
-
-        # Create Account
-        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": GoHighLevelDataProvider::AppName,
-            "path": "/create-account",
-            "action": "create-account",
-            "groups": "Accounts",
-            "display_name": "Add an Account",
-            "short_desc": "Create a new location/sub-account",
-            "desc": "Create a new location or sub-account in GoHighLevel",
-            "action_code": DPAT_API,
-            "output_type": AbstractDataProviderTypeMap."hash",
-            "options": {
-                "name": <ActionOptionInfo>{
-                    "display_name": "Name",
-                    "short_desc": "Account name",
-                    "type": AbstractDataProviderTypeMap."string",
-                    "required": True,
-                    "preselected": True,
-                    "desc": "Name of the account/location",
-                },
-                "email": <ActionOptionInfo>{
-                    "display_name": "Email",
-                    "short_desc": "Account email",
-                    "type": AbstractDataProviderTypeMap."string",
-                    "required": True,
-                    "preselected": True,
-                    "desc": "Email address for the account",
-                    "example_value": "admin@example.com",
-                },
-                "phone": <ActionOptionInfo>{
-                    "display_name": "Phone",
-                    "short_desc": "Phone number",
-                    "type": AbstractDataProviderTypeMap."string",
-                    "required": True,
-                    "preselected": True,
-                    "desc": "Phone number for the account",
-                },
-                "address": <ActionOptionInfo>{
-                    "display_name": "Address",
-                    "short_desc": "Street address",
-                    "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "Street address of the account",
-                },
-                "city": <ActionOptionInfo>{
-                    "display_name": "City",
-                    "short_desc": "City",
-                    "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "City of the account",
-                },
-                "state": <ActionOptionInfo>{
-                    "display_name": "State",
-                    "short_desc": "State or province",
-                    "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "State or province of the account",
-                },
-                "postalCode": <ActionOptionInfo>{
-                    "display_name": "Postal Code",
-                    "short_desc": "Postal/ZIP code",
-                    "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "Postal or ZIP code of the account",
-                },
-                "country": <ActionOptionInfo>{
-                    "display_name": "Country",
-                    "short_desc": "Country",
-                    "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "Country of the account",
-                },
-                "timezone": <ActionOptionInfo>{
-                    "display_name": "Timezone",
-                    "short_desc": "Timezone",
-                    "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "Timezone for the account (e.g. `America/New_York`)",
-                },
-            },
-        });
-
-        # ========== GENERIC ACTIONS ==========
-
-        # Execute API Call
-        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": GoHighLevelDataProvider::AppName,
-            "path": "/execute-api-call",
-            "action": "execute-api-call",
-            "groups": "API",
-            "display_name": "Make an API Call",
-            "short_desc": "Make an arbitrary authorized API call",
-            "desc": "Make an arbitrary authorized API call to GoHighLevel",
-            "action_code": DPAT_API,
-            "output_type": AbstractDataProviderTypeMap."hash",
-            "options": {
-                "method": <ActionOptionInfo>{
-                    "display_name": "HTTP Method",
-                    "short_desc": "HTTP method",
-                    "type": AbstractDataProviderTypeMap."string",
-                    "required": True,
-                    "preselected": True,
-                    "desc": "The HTTP method to use",
-                    "allowed_values": (
-                        <AllowedValueInfo>{"value": "GET", "display_name": "GET"},
-                        <AllowedValueInfo>{"value": "POST", "display_name": "POST"},
-                        <AllowedValueInfo>{"value": "PUT", "display_name": "PUT"},
-                        <AllowedValueInfo>{"value": "DELETE", "display_name": "DELETE"},
-                    ),
-                },
-                "path": <ActionOptionInfo>{
-                    "display_name": "API Path",
-                    "short_desc": "API endpoint path",
-                    "type": AbstractDataProviderTypeMap."string",
-                    "required": True,
-                    "preselected": True,
-                    "desc": "The API endpoint path (e.g. `contacts`)",
-                    "example_value": "contacts",
-                },
-                "body": <ActionOptionInfo>{
-                    "display_name": "Request Body",
-                    "short_desc": "Request body",
-                    "type": AbstractDataProviderTypeMap."*hash",
-                    "desc": "The request body as a hash (for POST/PUT requests)",
-                },
-                "query_params": <ActionOptionInfo>{
-                    "display_name": "Query Parameters",
-                    "short_desc": "Query parameters",
-                    "type": AbstractDataProviderTypeMap."*hash",
-                    "desc": "Query parameters as a hash",
                 },
             },
         });

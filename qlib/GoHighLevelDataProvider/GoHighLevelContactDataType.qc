@@ -135,13 +135,13 @@ public class GoHighLevelContactDataType inherits HashDataType {
                 "desc": "User ID the contact is assigned to",
             },
             "dateAdded": {
-                "type": StringOrNothingType,
+                "type": DateOrNothingType,
                 "display_name": "Date Added",
                 "short_desc": "Timestamp when the contact was created",
                 "desc": "Timestamp when the contact was created",
             },
             "dateUpdated": {
-                "type": StringOrNothingType,
+                "type": DateOrNothingType,
                 "display_name": "Date Updated",
                 "short_desc": "Timestamp when the contact was last updated",
                 "desc": "Timestamp when the contact was last updated",

@@ -452,7 +452,7 @@ public class GoHighLevelDataProviderBase inherits DataProvider::AbstractDataProv
     private *list<hash<AllowedValueInfo>> getReferenceContacts() {
         list<hash<AllowedValueInfo>> rv = ();
         try {
-            hash<auto> response = doGet("contacts", {"limit": DefaultPageSize});
+            hash<auto> response = doPost("contacts/search", {"query": "", "pageLimit": DefaultPageSize});
             if (response.contacts) {
                 foreach hash<auto> contact in (response.contacts) {
                     string display_name = trim(sprintf("%s %s",
@@ -522,7 +522,7 @@ public class GoHighLevelDataProviderBase inherits DataProvider::AbstractDataProv
     private *list<hash<AllowedValueInfo>> getReferenceUsers() {
         list<hash<AllowedValueInfo>> rv = ();
         try {
-            hash<auto> response = doGet("users");
+            hash<auto> response = doGet("users/");
             if (response.users) {
                 foreach hash<auto> user in (response.users) {
                     string display_name = trim(sprintf("%s %s",
@@ -547,7 +547,7 @@ public class GoHighLevelDataProviderBase inherits DataProvider::AbstractDataProv
 
     #! Formats a date for GoHighLevel API parameters (ISO 8601)
     static string formatDateTimeGHL(date dt) {
-        return dt.format("YYYY-MM-DDTHH:mm:ss.xxxZ");
+        return format_date("YYYY-MM-DDTHH:mm:SS", gmtime(dt)) + "Z";
     }
 }
 

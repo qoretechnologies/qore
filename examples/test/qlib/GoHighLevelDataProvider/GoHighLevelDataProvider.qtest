@@ -52,9 +52,9 @@ public class GoHighLevelDataProviderTest inherits QUnit::Test {
         const MyOpts = Opts + {
             "client_id": "i,client-id=s",
             "client_secret": "s,client-secret=s",
-            "apikey": "t,apikey=s",
             "location_id": "L,location-id=s",
             "conn": "c,connection=s",
+            "token": "t,token=s",
         };
 
         #! Test contact ID (created during test)
@@ -68,6 +68,12 @@ public class GoHighLevelDataProviderTest inherits QUnit::Test {
 
         #! Pipeline ID for opportunity tests
         *string pipelineId;
+
+        #! Pipeline stage ID for opportunity tests
+        *string pipelineStageId;
+
+        #! Campaign ID for campaign tests
+        *string campaignId;
     }
 
     constructor() : Test("GoHighLevelDataProvider Test", "1.0", \ARGV, MyOpts) {
@@ -110,53 +116,52 @@ public class GoHighLevelDataProviderTest inherits QUnit::Test {
             return;
         }
 
-        *string apikey = m_options.apikey ?? ENV.GHL_ACCESS_TOKEN;
-        *string client_id = m_options.client_id ?? ENV.GHL_CLIENT_ID;
-        *string client_secret = m_options.client_secret ?? ENV.GHL_CLIENT_SECRET;
+        # Token mode - use a pre-obtained Bearer token directly
+        *string token = m_options.token ?? ENV.GHL_TOKEN;
         *string location_id = m_options.location_id ?? ENV.GHL_LOCATION_ID;
 
-        if (!apikey && (!client_id || !client_secret)) {
-            if (m_options.verbose) {
-                printf("Missing GoHighLevel credentials. Required:\n");
-                printf("  - GHL_CONNECTION or -c option (Qorus connection name)\n");
-                printf("Or:\n");
-                printf("  - GHL_ACCESS_TOKEN or -t option (access token / API key)\n");
-                printf("  - GHL_LOCATION_ID or -L option (location ID)\n");
-                printf("Or:\n");
-                printf("  - GHL_CLIENT_ID or -i option\n");
-                printf("  - GHL_CLIENT_SECRET or -s option\n");
-                printf("  - GHL_LOCATION_ID or -L option\n");
+        if (token) {
+            if (!location_id) {
+                if (m_options.verbose) {
+                    printf("GHL_TOKEN requires GHL_LOCATION_ID\n");
+                }
+                return;
             }
-            return;
-        }
-
-        if (!location_id) {
             if (m_options.verbose) {
-                printf("Missing GHL_LOCATION_ID - required for all API calls\n");
-            }
-            return;
-        }
-
-        # Token-only mode
-        if (apikey && (!client_id || !client_secret)) {
-            if (m_options.verbose) {
-                printf("Using API key mode (no OAuth2 refresh)\n");
+                printf("Using token mode with location_id: %s\n", location_id);
             }
             client = new GoHighLevelRestClient::GoHighLevelRestClient({
-                "apikey": apikey,
+                "token": token,
+                "token_type": "Bearer",
                 "location_id": location_id,
             });
             return;
         }
 
-        # Full OAuth2 mode
+        *string client_id = m_options.client_id ?? ENV.GHL_CLIENT_ID;
+        *string client_secret = m_options.client_secret ?? ENV.GHL_CLIENT_SECRET;
+
+        if (!client_id || !client_secret) {
+            if (m_options.verbose) {
+                printf("Missing GoHighLevel credentials. Required:\n");
+                printf("  - GHL_CONNECTION or -c option (Qorus connection name)\n");
+                printf("Or:\n");
+                printf("  - GHL_TOKEN + GHL_LOCATION_ID (pre-obtained Bearer token)\n");
+                printf("Or:\n");
+                printf("  - GHL_CLIENT_ID or -i option\n");
+                printf("  - GHL_CLIENT_SECRET or -s option\n");
+                printf("  - GHL_LOCATION_ID or -L option (optional - auto-extracted from OAuth2)\n");
+            }
+            return;
+        }
+
+        # OAuth2 mode - location_id is optional (auto-extracted from token response)
         hash<auto> opts = {
             "oauth2_client_id": client_id,
             "oauth2_client_secret": client_secret,
-            "location_id": location_id,
         };
-        if (apikey) {
-            opts.apikey = apikey;
+        if (location_id) {
+            opts.location_id = location_id;
         }
         client = new GoHighLevelRestClient::GoHighLevelRestClient(opts);
     }
@@ -174,8 +179,6 @@ public class GoHighLevelDataProviderTest inherits QUnit::Test {
         try {
             GoHighLevelDataProvider::GoHighLevelDataProvider prov({
                 "gohighlevelrestclient_options": {
-                    "apikey": "fake-token",
-                    "location_id": "fake-location-id",
                 },
             });
             assertEq("gohighlevel", prov.getName());
@@ -211,8 +214,6 @@ public class GoHighLevelDataProviderTest inherits QUnit::Test {
         try {
             GoHighLevelDataProvider::GoHighLevelDataProvider prov({
                 "gohighlevelrestclient_options": {
-                    "apikey": "fake-token",
-                    "location_id": "fake-location-id",
                 },
             });
             hash<DataProviderInfo> info = prov.getInfo();
@@ -243,8 +244,6 @@ public class GoHighLevelDataProviderTest inherits QUnit::Test {
         try {
             prov = new GoHighLevelDataProvider::GoHighLevelDataProvider({
                 "gohighlevelrestclient_options": {
-                    "apikey": "fake-token",
-                    "location_id": "fake-location-id",
                 },
             });
         } catch (hash<ExceptionInfo> ex) {
@@ -265,8 +264,6 @@ public class GoHighLevelDataProviderTest inherits QUnit::Test {
         assertTrue(children.contains("contacts"));
         assertTrue(children.contains("opportunities"));
         assertTrue(children.contains("tasks"));
-        assertTrue(children.contains("create-account"));
-        assertTrue(children.contains("execute-api-call"));
         assertTrue(children.contains("events"));
 
         # Check contacts child provider
@@ -412,8 +409,6 @@ public class GoHighLevelDataProviderTest inherits QUnit::Test {
         try {
             prov = new GoHighLevelDataProvider::GoHighLevelDataProvider({
                 "gohighlevelrestclient_options": {
-                    "apikey": "fake-token",
-                    "location_id": "fake-location-id",
                 },
             });
         } catch (hash<ExceptionInfo> ex) {
@@ -460,8 +455,6 @@ public class GoHighLevelDataProviderTest inherits QUnit::Test {
         try {
             prov = new GoHighLevelDataProvider::GoHighLevelDataProvider({
                 "gohighlevelrestclient_options": {
-                    "apikey": "fake-token",
-                    "location_id": "fake-location-id",
                 },
             });
         } catch (hash<ExceptionInfo> ex) {
@@ -480,10 +473,6 @@ public class GoHighLevelDataProviderTest inherits QUnit::Test {
             prov.getChildProviderEx("nonexistent");
         });
 
-        # Test execute-api-call has request support
-        AbstractDataProvider apiCall = prov.getChildProvider("execute-api-call");
-        hash<DataProviderInfo> apiCallInfo = apiCall.getInfo();
-        assertTrue(apiCallInfo.supports_request);
     }
 
     #! Connection tests - verify REST connection
@@ -515,41 +504,38 @@ public class GoHighLevelDataProviderTest inherits QUnit::Test {
             printf("Running GoHighLevel integration tests...\n");
         }
 
-        # Test 1: Search contacts
+        # Ensure cleanup runs even if tests fail
+        on_exit cleanup();
+
+        # --- Contacts CRUD ---
         testSearchContacts();
-
-        # Test 2: Create contact
         testCreateContact();
-
-        # Test 3: Get contact by ID
         testGetContact();
-
-        # Test 4: Update contact
         testUpdateContact();
 
-        # Test 5: Search opportunities (get pipeline ID)
-        testSearchOpportunities();
-
-        # Test 6: Create opportunity (if pipeline found)
-        testCreateOpportunity();
-
-        # Test 7: Update opportunity
-        testUpdateOpportunity();
-
-        # Test 8: Create task on contact
-        testCreateTask();
-
-        # Test 9: Update task
-        testUpdateTask();
-
-        # Test 10: Add note
+        # --- Notes ---
         testAddNote();
 
-        # Test 11: Execute API call
-        testExecuteApiCall();
+        # --- Tasks CRUD ---
+        testCreateTask();
+        testListTasks();
+        testGetTask();
+        testUpdateTask();
+        testDeleteTask();
 
-        # Cleanup
-        cleanup();
+        # --- Opportunities CRUD ---
+        testSearchOpportunities();
+        testCreateOpportunity();
+        testGetOpportunity();
+        testUpdateOpportunity();
+        testDeleteOpportunity();
+
+        # --- Campaigns ---
+        testAddContactToCampaign();
+        testRemoveContactFromCampaign();
+
+        # --- Delete contact (last, since other tests depend on it) ---
+        testDeleteContact();
     }
 
     #! Test searching contacts
@@ -578,11 +564,13 @@ public class GoHighLevelDataProviderTest inherits QUnit::Test {
         AbstractDataProvider createAction = prov.getChildProvider("contacts").getChildProvider("create");
 
         string unique = now_us().format("YYYYMMDDHHmmssxxxxxx");
+        # Use unique phone to avoid GHL duplicate contact rejection
+        string phone = sprintf("+1555%s", unique.substr(-7));
         hash<auto> result = createAction.doRequest({
             "firstName": "Test",
             "lastName": "User_" + unique,
             "email": sprintf("test_%s@example.com", unique),
-            "phone": "+15551234567",
+            "phone": phone,
         });
 
         assertTrue(result.hasKey("id") || result.hasKey("contact"),
@@ -669,12 +657,29 @@ public class GoHighLevelDataProviderTest inherits QUnit::Test {
             assertTrue(record.hasKey("id"), "Opportunity should have 'id' field");
             if (!pipelineId && record.pipelineId) {
                 pipelineId = record.pipelineId;
+                pipelineStageId = record.pipelineStageId;
             }
             ++count;
         }
 
+        # If no pipeline found from opportunities, fetch from pipelines API
+        if (!pipelineId) {
+            try {
+                hash<auto> response = client.get("opportunities/pipelines");
+                if (response.body.pipelines && response.body.pipelines.size()) {
+                    pipelineId = response.body.pipelines[0].id;
+                    if (response.body.pipelines[0].stages && response.body.pipelines[0].stages.size()) {
+                        pipelineStageId = response.body.pipelines[0].stages[0].id;
+                    }
+                }
+            } catch () {
+                # Ignore errors
+            }
+        }
+
         if (m_options.verbose) {
-            printf("Listed %d opportunities, pipeline: %s\n", count, pipelineId ?? "none found");
+            printf("Listed %d opportunities, pipeline: %s, stage: %s\n", count,
+                pipelineId ?? "none found", pipelineStageId ?? "none found");
         }
         assertTrue(True, "Search opportunities completed without error");
     }
@@ -694,12 +699,16 @@ public class GoHighLevelDataProviderTest inherits QUnit::Test {
         AbstractDataProvider createAction = prov.getChildProvider("opportunities")
             .getChildProvider("create");
 
-        hash<auto> result = createAction.doRequest({
+        hash<auto> req = {
             "pipelineId": pipelineId,
             "name": "Test Opportunity",
             "status": "open",
             "contactId": testContactId,
-        });
+        };
+        if (pipelineStageId) {
+            req.pipelineStageId = pipelineStageId;
+        }
+        hash<auto> result = createAction.doRequest(req);
 
         assertTrue(result.hasKey("id") || result.hasKey("opportunity"),
             "Created opportunity should have 'id' or 'opportunity'");
@@ -750,6 +759,7 @@ public class GoHighLevelDataProviderTest inherits QUnit::Test {
             "contact_id": testContactId,
             "title": "Test Task",
             "body": "Integration test task - safe to delete",
+            "dueDate": now() + 7D,
             "completed": False,
         });
 
@@ -812,21 +822,210 @@ public class GoHighLevelDataProviderTest inherits QUnit::Test {
         }
     }
 
-    #! Test execute API call
-    private testExecuteApiCall() {
-        GoHighLevelDataProvider::GoHighLevelDataProvider prov(client);
-        AbstractDataProvider apiCall = prov.getChildProvider("execute-api-call");
+    #! Test listing tasks for a contact
+    private testListTasks() {
+        if (!testContactId) {
+            testSkip("No test contact created");
+            return;
+        }
 
-        hash<auto> result = apiCall.doRequest({
-            "method": "GET",
-            "path": "calendars",
+        GoHighLevelDataProvider::GoHighLevelDataProvider prov(client);
+        AbstractDataProvider tasks = prov.getChildProvider("tasks");
+
+        AbstractDataProviderRecordIterator iter = tasks.searchRecords(NOTHING, {
+            "contact_id": testContactId,
+        });
+        int count = 0;
+        while (iter.next()) {
+            hash<auto> record = iter.getValue();
+            assertTrue(record.hasKey("id"), "Task should have 'id' field");
+            ++count;
+        }
+
+        if (m_options.verbose) {
+            printf("Listed %d tasks for contact %s\n", count, testContactId);
+        }
+        assertTrue(count > 0, "Should have at least one task (we just created one)");
+    }
+
+    #! Test getting a single task by ID
+    private testGetTask() {
+        if (!testContactId || !testTaskId) {
+            testSkip("No test contact or task created");
+            return;
+        }
+
+        GoHighLevelDataProvider::GoHighLevelDataProvider prov(client);
+        AbstractDataProvider tasks = prov.getChildProvider("tasks");
+
+        AbstractDataProviderRecordIterator iter = tasks.searchRecords(NOTHING, {
+            "contact_id": testContactId,
+            "task_id": testTaskId,
+        });
+        assertTrue(iter.next(), "Should find task by ID");
+        hash<auto> record = iter.getValue();
+        assertEq(testTaskId, record.id, "Task ID should match");
+        assertTrue(record.hasKey("title"), "Task should have title");
+
+        if (m_options.verbose) {
+            printf("Got task: %s (%s)\n", testTaskId, record.title);
+        }
+    }
+
+    #! Test deleting a task
+    private testDeleteTask() {
+        if (!testContactId || !testTaskId) {
+            testSkip("No test contact or task created");
+            return;
+        }
+
+        GoHighLevelDataProvider::GoHighLevelDataProvider prov(client);
+        AbstractDataProvider deleteAction = prov.getChildProvider("tasks")
+            .getChildProvider("delete");
+
+        deleteAction.doRequest({
+            "contact_id": testContactId,
+            "task_id": testTaskId,
         });
 
-        assertTrue(result.hasKey("calendars"), "API call should return calendars");
+        assertTrue(True, "Task deleted successfully");
+
         if (m_options.verbose) {
-            printf("Execute API call returned %d calendars\n",
-                result.calendars ? result.calendars.size() : 0);
+            printf("Deleted task: %s\n", testTaskId);
         }
+        # Clear so cleanup doesn't try to delete again
+        testTaskId = NOTHING;
+    }
+
+    #! Test getting a single opportunity by ID
+    private testGetOpportunity() {
+        if (!testOpportunityId) {
+            testSkip("No test opportunity created");
+            return;
+        }
+
+        GoHighLevelDataProvider::GoHighLevelDataProvider prov(client);
+        AbstractDataProvider opps = prov.getChildProvider("opportunities");
+
+        AbstractDataProviderRecordIterator iter = opps.searchRecords(NOTHING, {
+            "opportunity_id": testOpportunityId,
+        });
+        assertTrue(iter.next(), "Should find opportunity by ID");
+        hash<auto> record = iter.getValue();
+        assertEq(testOpportunityId, record.id, "Opportunity ID should match");
+
+        if (m_options.verbose) {
+            printf("Got opportunity: %s (%s)\n", testOpportunityId, record.name ?? "unnamed");
+        }
+    }
+
+    #! Test deleting an opportunity
+    private testDeleteOpportunity() {
+        if (!testOpportunityId) {
+            testSkip("No test opportunity created");
+            return;
+        }
+
+        GoHighLevelDataProvider::GoHighLevelDataProvider prov(client);
+        AbstractDataProvider deleteAction = prov.getChildProvider("opportunities")
+            .getChildProvider("delete");
+
+        deleteAction.doRequest({
+            "opportunity_id": testOpportunityId,
+        });
+
+        assertTrue(True, "Opportunity deleted successfully");
+
+        if (m_options.verbose) {
+            printf("Deleted opportunity: %s\n", testOpportunityId);
+        }
+        # Clear so cleanup doesn't try to delete again
+        testOpportunityId = NOTHING;
+    }
+
+    #! Test adding a contact to a campaign
+    private testAddContactToCampaign() {
+        if (!testContactId) {
+            testSkip("No test contact created");
+            return;
+        }
+
+        # Find a campaign ID via the REST client
+        try {
+            hash<auto> result = client.get("campaigns");
+            if (result.body.campaigns && result.body.campaigns.size() > 0) {
+                campaignId = result.body.campaigns[0].id;
+            }
+        } catch () {
+            # Campaigns endpoint may not be available
+        }
+
+        if (!campaignId) {
+            testSkip("No campaigns found in account");
+            return;
+        }
+
+        GoHighLevelDataProvider::GoHighLevelDataProvider prov(client);
+        AbstractDataProvider addAction = prov.getChildProvider("contacts")
+            .getChildProvider("add-to-campaign");
+
+        addAction.doRequest({
+            "contact_id": testContactId,
+            "campaign_id": campaignId,
+        });
+
+        assertTrue(True, "Contact added to campaign successfully");
+
+        if (m_options.verbose) {
+            printf("Added contact %s to campaign %s\n", testContactId, campaignId);
+        }
+    }
+
+    #! Test removing a contact from a campaign
+    private testRemoveContactFromCampaign() {
+        if (!testContactId || !campaignId) {
+            testSkip("No test contact or campaign available");
+            return;
+        }
+
+        GoHighLevelDataProvider::GoHighLevelDataProvider prov(client);
+        AbstractDataProvider removeAction = prov.getChildProvider("contacts")
+            .getChildProvider("remove-from-campaign");
+
+        removeAction.doRequest({
+            "contact_id": testContactId,
+            "campaign_id": campaignId,
+        });
+
+        assertTrue(True, "Contact removed from campaign successfully");
+
+        if (m_options.verbose) {
+            printf("Removed contact %s from campaign %s\n", testContactId, campaignId);
+        }
+    }
+
+    #! Test deleting a contact
+    private testDeleteContact() {
+        if (!testContactId) {
+            testSkip("No test contact created");
+            return;
+        }
+
+        GoHighLevelDataProvider::GoHighLevelDataProvider prov(client);
+        AbstractDataProvider deleteAction = prov.getChildProvider("contacts")
+            .getChildProvider("delete");
+
+        deleteAction.doRequest({
+            "contact_id": testContactId,
+        });
+
+        assertTrue(True, "Contact deleted successfully");
+
+        if (m_options.verbose) {
+            printf("Deleted contact: %s\n", testContactId);
+        }
+        # Clear so cleanup doesn't try to delete again
+        testContactId = NOTHING;
     }
 
     #! Cleanup test data

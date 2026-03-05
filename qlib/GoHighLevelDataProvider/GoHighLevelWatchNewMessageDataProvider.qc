@@ -43,6 +43,14 @@ public class GoHighLevelMessageDataType inherits HashDataType {
                 "display_name": "Type",
                 "short_desc": "The message type",
                 "desc": "Message type: `SMS`, `Email`, `WhatsApp`, `FB`, `IG`, `Live_Chat`",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "SMS", "desc": "SMS message"},
+                    <AllowedValueInfo>{"value": "Email", "desc": "Email message"},
+                    <AllowedValueInfo>{"value": "WhatsApp", "desc": "WhatsApp message"},
+                    <AllowedValueInfo>{"value": "FB", "desc": "Facebook message"},
+                    <AllowedValueInfo>{"value": "IG", "desc": "Instagram message"},
+                    <AllowedValueInfo>{"value": "Live_Chat", "desc": "Live chat message"},
+                ),
             },
             "body": {
                 "type": StringOrNothingType,
@@ -54,7 +62,11 @@ public class GoHighLevelMessageDataType inherits HashDataType {
                 "type": StringOrNothingType,
                 "display_name": "Direction",
                 "short_desc": "The message direction",
-                "desc": "The message direction (inbound or outbound)",
+                "desc": "The message direction (`inbound` or `outbound`)",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "inbound", "desc": "Inbound message"},
+                    <AllowedValueInfo>{"value": "outbound", "desc": "Outbound message"},
+                ),
             },
             "status": {
                 "type": StringOrNothingType,
@@ -75,7 +87,7 @@ public class GoHighLevelMessageDataType inherits HashDataType {
                 "desc": "The conversation this message belongs to",
             },
             "dateAdded": {
-                "type": StringOrNothingType,
+                "type": DateOrNothingType,
                 "display_name": "Date Added",
                 "short_desc": "Timestamp when the message was created",
                 "desc": "Timestamp when the message was created",

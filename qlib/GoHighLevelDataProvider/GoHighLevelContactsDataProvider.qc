@@ -124,7 +124,7 @@ public class GoHighLevelContactsDataProvider inherits GoHighLevelDataProviderBas
         # Search contacts via POST
         hash<auto> body = {
             "query": search_options.query ?? "",
-            "limit": search_options.limit ?? DefaultPageSize,
+            "pageLimit": search_options.limit ?? DefaultPageSize,
         };
         hash<auto> response = doPost("contacts/search", body);
         return new DefaultRecordIterator(new ListHashIterator(response.contacts ?? ()),

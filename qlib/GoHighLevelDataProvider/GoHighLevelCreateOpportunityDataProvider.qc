@@ -136,7 +136,7 @@ public class GoHighLevelCreateOpportunityDataProvider inherits GoHighLevelDataPr
 
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        return doPost("opportunities", req).opportunity;
+        return doPost("opportunities/", req).opportunity;
     }
 
     #! Returns static provider info

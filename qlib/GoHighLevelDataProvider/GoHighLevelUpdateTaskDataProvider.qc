@@ -59,7 +59,7 @@ public class GoHighLevelUpdateTaskRequestDataType inherits HashDataType {
                 "desc": "Task description",
             },
             "dueDate": {
-                "type": StringOrNothingType,
+                "type": DateOrNothingType,
                 "display_name": "Due Date",
                 "short_desc": "Due date in ISO 8601 format",
                 "desc": "Due date in ISO 8601 format",
@@ -129,6 +129,10 @@ public class GoHighLevelUpdateTaskDataProvider inherits GoHighLevelDataProviderB
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         string contact_id = remove req.contact_id;
         string task_id = remove req.task_id;
+        # GHL requires dueDate as an ISO 8601 string
+        if (req.dueDate.typeCode() == NT_DATE) {
+            req.dueDate = formatDateTimeGHL(req.dueDate);
+        }
         return doPut("contacts/" + contact_id + "/tasks/" + task_id, req).task;
     }
 

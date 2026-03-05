@@ -59,7 +59,7 @@ public class GoHighLevelWatchNewContactDataProvider inherits GoHighLevelWatchDat
     private list<hash<auto>> fetchRecords(date since) {
         hash<auto> body = {
             "query": "",
-            "limit": DefaultPageSize,
+            "pageLimit": DefaultPageSize,
         };
         list<hash<auto>> all_contacts = fetchAllPagesPost("contacts/search", "contacts", body, 1000);
 
