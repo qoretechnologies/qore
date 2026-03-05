@@ -27,7 +27,7 @@ public namespace FreshBooksDataProvider {
 
 #! Data type for FreshBooks webhook/polling event payloads
 public class FreshBooksWebhookEventDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for FreshBooks webhook events
         const Fields = {
             "id": {

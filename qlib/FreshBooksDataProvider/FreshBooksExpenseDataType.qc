@@ -27,7 +27,7 @@ public namespace FreshBooksDataProvider {
 
 #! FreshBooks expense record type
 public class FreshBooksExpenseDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for FreshBooks expenses
         const Fields = {
             "id": {
@@ -52,7 +52,7 @@ public class FreshBooksExpenseDataType inherits HashDataType {
                 "type": AutoHashType,
                 "display_name": "Amount",
                 "short_desc": "The expense amount",
-                "desc": "The amount of the expense (hash with 'amount' and 'code' keys)",
+                "desc": "The amount of the expense (hash with `amount` and `code` keys)",
             },
             "vendor": {
                 "type": StringOrNothingType,
@@ -76,13 +76,24 @@ public class FreshBooksExpenseDataType inherits HashDataType {
                 "type": IntOrNothingType,
                 "display_name": "Status",
                 "short_desc": "The expense status",
-                "desc": "The status of the expense (0=internal, 1=outstanding, 2=invoiced, 4=recouped)",
+                "desc": "The status of the expense",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": 0, "desc": "Internal"},
+                    <AllowedValueInfo>{"value": 1, "desc": "Outstanding"},
+                    <AllowedValueInfo>{"value": 2, "desc": "Invoiced"},
+                    <AllowedValueInfo>{"value": 4, "desc": "Recouped"},
+                ),
             },
             "vis_state": {
                 "type": IntOrNothingType,
                 "display_name": "Visibility State",
                 "short_desc": "The visibility state",
-                "desc": "The visibility state of the expense (0=active, 1=deleted, 2=archived)",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": 0, "desc": "Active"},
+                    <AllowedValueInfo>{"value": 1, "desc": "Deleted"},
+                    <AllowedValueInfo>{"value": 2, "desc": "Archived"},
+                ),
+                "desc": "The visibility state of the expense",
             },
             "taxName1": {
                 "type": StringOrNothingType,
@@ -119,7 +130,7 @@ public class FreshBooksExpenseDataType inherits HashDataType {
 
 #! FreshBooks expense create request type
 public class FreshBooksExpenseCreateDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for creating expenses
         const Fields = FreshBooksDataProviderBase::AccountIdField + {
             "staffid": {
@@ -139,7 +150,7 @@ public class FreshBooksExpenseCreateDataType inherits HashDataType {
                 "type": AutoHashType,
                 "display_name": "Amount",
                 "short_desc": "The expense amount (required)",
-                "desc": "The amount of the expense (hash with 'amount' and 'code' keys)",
+                "desc": "The amount of the expense (hash with `amount` and `code` keys)",
                 "required": True,
             },
             "vendor": {
@@ -183,7 +194,7 @@ public class FreshBooksExpenseCreateDataType inherits HashDataType {
 
 #! FreshBooks expense update request type
 public class FreshBooksExpenseUpdateDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for updating expenses
         const Fields = FreshBooksDataProviderBase::AccountIdField + {
             "id": {
@@ -203,7 +214,7 @@ public class FreshBooksExpenseUpdateDataType inherits HashDataType {
                 "type": AutoHashOrNothingType,
                 "display_name": "Amount",
                 "short_desc": "The expense amount",
-                "desc": "The new amount of the expense (hash with 'amount' and 'code' keys)",
+                "desc": "The new amount of the expense (hash with `amount` and `code` keys)",
             },
             "vendor": {
                 "type": StringOrNothingType,
@@ -245,7 +256,12 @@ public class FreshBooksExpenseUpdateDataType inherits HashDataType {
                 "type": IntOrNothingType,
                 "display_name": "Visibility State",
                 "short_desc": "The visibility state",
-                "desc": "The new visibility state of the expense (0=active, 1=deleted, 2=archived)",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": 0, "desc": "Active"},
+                    <AllowedValueInfo>{"value": 1, "desc": "Deleted"},
+                    <AllowedValueInfo>{"value": 2, "desc": "Archived"},
+                ),
+                "desc": "The new visibility state of the expense",
             },
         };
     }

@@ -27,7 +27,7 @@ public namespace FreshBooksDataProvider {
 
 #! FreshBooks client record type
 public class FreshBooksClientDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for FreshBooks clients
         const Fields = {
             "id": {
@@ -128,7 +128,12 @@ public class FreshBooksClientDataType inherits HashDataType {
                 "type": IntOrNothingType,
                 "display_name": "Visibility State",
                 "short_desc": "The visibility state",
-                "desc": "The visibility state of the client (0=active, 1=deleted, 2=archived)",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": 0, "desc": "Active"},
+                    <AllowedValueInfo>{"value": 1, "desc": "Deleted"},
+                    <AllowedValueInfo>{"value": 2, "desc": "Archived"},
+                ),
+                "desc": "The visibility state of the client",
             },
         };
     }
@@ -141,7 +146,7 @@ public class FreshBooksClientDataType inherits HashDataType {
 
 #! FreshBooks client create request type
 public class FreshBooksClientCreateDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for creating clients
         const Fields = FreshBooksDataProviderBase::AccountIdField + {
             "fname": {
@@ -239,7 +244,12 @@ public class FreshBooksClientCreateDataType inherits HashDataType {
                 "type": IntOrNothingType,
                 "display_name": "Visibility State",
                 "short_desc": "The visibility state",
-                "desc": "The visibility state of the client (0=active, 1=deleted, 2=archived)",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": 0, "desc": "Active"},
+                    <AllowedValueInfo>{"value": 1, "desc": "Deleted"},
+                    <AllowedValueInfo>{"value": 2, "desc": "Archived"},
+                ),
+                "desc": "The visibility state of the client",
             },
         };
     }
@@ -252,7 +262,7 @@ public class FreshBooksClientCreateDataType inherits HashDataType {
 
 #! FreshBooks client update request type
 public class FreshBooksClientUpdateDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for updating clients
         const Fields = FreshBooksDataProviderBase::AccountIdField + {
             "id": {
@@ -354,7 +364,12 @@ public class FreshBooksClientUpdateDataType inherits HashDataType {
                 "type": IntOrNothingType,
                 "display_name": "Visibility State",
                 "short_desc": "The visibility state",
-                "desc": "The new visibility state of the client (0=active, 1=deleted, 2=archived)",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": 0, "desc": "Active"},
+                    <AllowedValueInfo>{"value": 1, "desc": "Deleted"},
+                    <AllowedValueInfo>{"value": 2, "desc": "Archived"},
+                ),
+                "desc": "The new visibility state of the client",
             },
         };
     }
