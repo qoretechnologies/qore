@@ -77,8 +77,8 @@ public class QoreRateOfChangeProcessor inherits AbstractAnalyticsProcessor {
 
     #! Returns the data provider description
     *string getDesc() {
-        return "Computes the rate of change (first derivative), acceleration (second derivative), "
-            "and percentage change for each configured numeric field per record";
+        return "Computes the `rate_of_change` (first derivative), `acceleration` (second "
+            "derivative), and `percent_change` for each configured numeric field per record";
     }
 
     #! Returns data provider static info

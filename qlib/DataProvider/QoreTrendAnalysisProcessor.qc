@@ -81,8 +81,8 @@ public class QoreTrendAnalysisProcessor inherits AbstractAnalyticsProcessor {
 
     #! Returns the data provider description
     *string getDesc() {
-        return "Computes linear regression trend analysis (slope, intercept, r-squared, direction) over a "
-            "window of records for each configured numeric field";
+        return "Computes linear regression trend analysis (`slope`, `intercept`, `r_squared`, "
+            "`direction`) over a window of records for each configured numeric field";
     }
 
     #! Returns data provider static info

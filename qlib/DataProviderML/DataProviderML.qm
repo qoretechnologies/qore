@@ -65,11 +65,12 @@ module DataProviderML {
             "short_desc": "Finds anomalies by isolating unusual records from normal ones",
             "desc": "Catches fraudulent transactions, sensor malfunctions, and security "
                 "intrusions by flagging records that stand out from normal data. For example, "
-                "a $50,000 transaction when most are under $500 scores near 1.0 (highly "
-                "anomalous), while a typical $45 purchase scores near 0.0. Records accumulate "
-                "in a window; when full, all are scored together. Each record receives output "
-                "fields: anomaly_score (0.0 = normal, 1.0 = highly unusual) and is_anomaly "
-                "(True/False based on the threshold).",
+                "a $50,000 transaction when most are under $500 scores near `1.0` (highly "
+                "anomalous), while a typical $45 purchase scores near `0.0`.\n\n"
+                "Records accumulate in a window; when full, all are scored together. Each "
+                "record receives:\n"
+                "- `anomaly_score` — `0.0` (normal) to `1.0` (highly unusual)\n"
+                "- `is_anomaly` — `True`/`False` based on the threshold",
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProviderML::QoreIsolationForestProcessor",
@@ -100,9 +101,11 @@ module DataProviderML {
                 "hotspots by automatically finding natural groups in data — without needing "
                 "to specify how many groups exist. For example, given GPS coordinates of 5,000 "
                 "deliveries, it might find 12 distinct delivery zones of varying shapes, plus "
-                "label scattered outlier locations as noise. Records accumulate in a window; "
-                "when full, all are clustered. Each record receives: cluster (group number, or "
-                "-1 for noise) and is_noise (True if the record doesn't belong to any group).",
+                "label scattered outlier locations as noise.\n\n"
+                "Records accumulate in a window; when full, all are clustered. Each record "
+                "receives:\n"
+                "- `cluster` — group number, or `-1` for noise\n"
+                "- `is_noise` — `True` if the record doesn't belong to any group",
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProviderML::QoreDBSCANClusteringProcessor",
@@ -131,12 +134,15 @@ module DataProviderML {
             "short_desc": "Assigns each record to one of a specified number of groups",
             "desc": "Segments customers into spending tiers, classifies products into price "
                 "categories, or groups sensor readings into operational modes. You specify how "
-                "many groups you want (e.g., k=5 for 5 customer tiers), and the algorithm "
+                "many groups you want (e.g., `k=5` for 5 customer tiers), and the algorithm "
                 "finds the best grouping. Supports incremental learning: once 10,000 customers "
                 "are segmented into 5 tiers, new batches refine the tiers without starting "
-                "over. Records accumulate in a window; when full, all are grouped. Each record "
-                "receives: cluster (group number) and distance (how far from the group center "
-                "— records with large distances are borderline members).",
+                "over.\n\n"
+                "Records accumulate in a window; when full, all are grouped. Each record "
+                "receives:\n"
+                "- `cluster` — group number\n"
+                "- `distance` — how far from the group center (large distances = borderline "
+                "members)",
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProviderML::QoreKMeansProcessor",
@@ -165,9 +171,11 @@ module DataProviderML {
                 "downstream analysis by compressing many fields into fewer meaningful values. "
                 "For example, 50 sensor readings per machine can be reduced to 3 combined "
                 "values that capture 95%% of the variance — making it practical to plot "
-                "equipment health on a single chart. Records accumulate in a window; when "
-                "full, all are transformed. Each record receives: pc1, pc2, ... (principal "
-                "component values) and explained_variance (how much information is retained).",
+                "equipment health on a single chart.\n\n"
+                "Records accumulate in a window; when full, all are transformed. Each record "
+                "receives:\n"
+                "- `pc1`, `pc2`, ... — principal component values\n"
+                "- `explained_variance` — how much information is retained",
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProviderML::QorePCAProcessor",
@@ -194,11 +202,14 @@ module DataProviderML {
             "short_desc": "Predicts future values accounting for trends and seasonal patterns",
             "desc": "Forecasts monthly revenue, daily server load, or weekly inventory needs "
                 "by learning trends and seasonal patterns from historical data. For example, "
-                "with period=12 (monthly data), it learns that revenue peaks every December "
+                "with `period=12` (monthly data), it learns that revenue peaks every December "
                 "and grows 5%% annually, then forecasts next month's value. After an initial "
-                "learning period of 2 x period records, each new record produces a forecast. "
-                "Each record receives: forecast (predicted next value), trend (long-term "
-                "direction), and seasonal (cyclical component).",
+                "learning period of 2 x `period` records, each new record produces a "
+                "forecast.\n\n"
+                "Each record receives:\n"
+                "- `forecast` — predicted next value\n"
+                "- `trend` — long-term direction\n"
+                "- `seasonal` — cyclical component",
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_ANALYTICS,
             "cls": "DataProviderML::QoreHoltWintersProcessor",
@@ -229,10 +240,13 @@ module DataProviderML {
             "desc": "Predicts property prices from square footage and location, estimates "
                 "delivery times from distance and package weight, or forecasts demand from "
                 "advertising spend — by learning the best straight-line relationship between "
-                "input fields and a target value. Records accumulate in a window; when full, "
-                "the model learns and produces predictions. Each record receives: prediction "
-                "(estimated target value), r_squared (model accuracy, e.g., 0.92 means 92%% "
-                "of variance explained), and coefficients (how much each input matters).",
+                "input fields and a target value.\n\n"
+                "Records accumulate in a window; when full, the model learns and produces "
+                "predictions. Each record receives:\n"
+                "- `prediction` — estimated target value\n"
+                "- `r_squared` — model accuracy (e.g., `0.92` means 92%% of variance "
+                "explained)\n"
+                "- `coefficients` — how much each input matters",
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProviderML::QoreLinearRegressionProcessor",
@@ -265,10 +279,11 @@ module DataProviderML {
                 "sensor readings that are anomalous for a particular equipment type — even "
                 "when they look normal across all data. For example, a $200 purchase is "
                 "normal for premium customers but suspicious for budget customers; LOF "
-                "catches this by comparing each point's density to its neighbors. Records "
-                "accumulate in a window; when full, all are scored. Each record receives: "
-                "lof_score (1.0 = normal, higher = more unusual) and is_anomaly (True/False "
-                "based on the threshold).",
+                "catches this by comparing each point's density to its neighbors.\n\n"
+                "Records accumulate in a window; when full, all are scored. Each record "
+                "receives:\n"
+                "- `lof_score` — `1.0` = normal, higher = more unusual\n"
+                "- `is_anomaly` — `True`/`False` based on the threshold",
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProviderML::QoreLOFProcessor",
@@ -297,10 +312,12 @@ module DataProviderML {
                 "uncertainty, or detects mixed populations — where each record gets a "
                 "probability for each group rather than a hard assignment. For example, a "
                 "customer might be 70%% 'budget shopper' and 30%% 'impulse buyer,' reflecting "
-                "real overlap. Records accumulate in a window; when full, all are grouped "
-                "with probabilities. Each record receives: cluster (most likely group), "
-                "max_probability (confidence, e.g., 0.70), and probabilities (full breakdown "
-                "for all groups).",
+                "real overlap.\n\n"
+                "Records accumulate in a window; when full, all are grouped with "
+                "probabilities. Each record receives:\n"
+                "- `cluster` — most likely group\n"
+                "- `max_probability` — confidence (e.g., `0.70`)\n"
+                "- `probabilities` — full breakdown for all groups",
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProviderML::QoreGMMProcessor",
@@ -368,12 +385,14 @@ module DataProviderML {
             "display_name": "Separate Trends and Seasonal Patterns",
             "short_desc": "Breaks time series data into trend, seasonal, and leftover parts",
             "desc": "Answers 'is this increase real growth or just a seasonal spike?' by "
-                "separating a time series into trend (long-term direction), seasonal pattern "
-                "(e.g., holiday shopping cycles), and residual (random noise). For example, "
-                "monthly sales of $120K might decompose into $100K trend + $25K seasonal "
-                "holiday boost - $5K random dip. Records accumulate per field in a window; "
-                "when full, all values are decomposed. Each record receives: trend, seasonal, "
-                "and residual values for each configured field.",
+                "separating a time series into its component parts. For example, monthly sales "
+                "of $120K might decompose into $100K trend + $25K seasonal holiday boost - "
+                "$5K random dip.\n\n"
+                "Records accumulate per field in a window; when full, all values are "
+                "decomposed. Each record receives:\n"
+                "- `trend` — long-term direction\n"
+                "- `seasonal` — cyclical pattern (e.g., holiday shopping cycles)\n"
+                "- `residual` — random noise remaining after removing trend and seasonal",
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_ANALYTICS,
             "cls": "DataProviderML::QoreSeasonalDecompositionProcessor",

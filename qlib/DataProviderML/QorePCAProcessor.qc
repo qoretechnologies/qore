@@ -74,11 +74,11 @@ public class QorePCAProcessor inherits DataProvider::AbstractDataProvider {
             "variance_threshold": <DataProviderOptionInfo>{
                 "display_name": "Information Preservation",
                 "short_desc": "How much of the original information to preserve",
-                "desc": "A value between 0.0 and 1.0 specifying what fraction of the total "
-                    "information (variance) must be preserved; the algorithm keeps just enough "
-                    "output dimensions to meet this threshold; 0.95 means keep 95%% of the "
-                    "information; only used when the number of output dimensions is not set "
-                    "explicitly; default: 0.95",
+                "desc": "A value between `0.0` and `1.0` specifying what fraction of the "
+                    "total information (variance) must be preserved; the algorithm keeps just "
+                    "enough output dimensions to meet this threshold; `0.95` means keep 95%% "
+                    "of the information; only used when the number of output dimensions is "
+                    "not set explicitly; default: `0.95`",
                 "type": AbstractDataProviderTypeMap."*float",
             },
         };

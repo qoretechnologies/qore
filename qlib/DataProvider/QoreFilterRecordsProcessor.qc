@@ -80,7 +80,7 @@ public class QoreFilterRecordsProcessor inherits AbstractDataProvider {
 
     #! Returns the data provider description
     *string getDesc() {
-        return "Filters records based on a where_cond expression; "
+        return "Filters records based on a `where_cond` expression; "
             "records matching the condition are passed through, non-matching records are dropped";
     }
 

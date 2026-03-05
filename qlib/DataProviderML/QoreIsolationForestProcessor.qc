@@ -68,7 +68,7 @@ public class QoreIsolationForestProcessor inherits DataProvider::AbstractDataPro
                 "short_desc": "More trees give more stable results",
                 "desc": "The number of random decision trees used to detect anomalies; "
                     "more trees produce more reliable anomaly scores but take longer to "
-                    "compute; default: 100",
+                    "compute; default: `100`",
                 "type": AbstractDataProviderTypeMap."*int",
             },
             "sample_size": <DataProviderOptionInfo>{
@@ -76,16 +76,16 @@ public class QoreIsolationForestProcessor inherits DataProvider::AbstractDataPro
                 "short_desc": "Records sampled per tree",
                 "desc": "The number of records randomly sampled to build each tree; smaller "
                     "values make it easier to detect anomalies but may reduce accuracy for "
-                    "subtle outliers; should be less than the window size; default: 256",
+                    "subtle outliers; should be less than the window size; default: `256`",
                 "type": AbstractDataProviderTypeMap."*int",
             },
             "threshold": <DataProviderOptionInfo>{
                 "display_name": "Anomaly Threshold",
                 "short_desc": "Score cutoff for flagging anomalies",
-                "desc": "A value between 0.0 and 1.0 that determines when a record is "
+                "desc": "A value between `0.0` and `1.0` that determines when a record is "
                     "flagged as anomalous; records scoring at or above this threshold are "
                     "classified as anomalies; lower values flag more records as anomalous, "
-                    "higher values flag fewer; default: 0.5",
+                    "higher values flag fewer; default: `0.5`",
                 "type": AbstractDataProviderTypeMap."*float",
             },
         };

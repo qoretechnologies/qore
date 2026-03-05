@@ -48,7 +48,7 @@ public class QoreSeasonalDecompositionProcessor inherits DataProvider::AbstractA
                 "display_name": "Seasonal Period",
                 "short_desc": "Records per seasonal cycle",
                 "desc": "The number of records that make up one complete repeating cycle; "
-                    "for example, 7 for daily data with weekly patterns, 12 for monthly "
+                    "for example, `7` for daily data with weekly patterns, `12` for monthly "
                     "data with yearly patterns; the window size must be at least twice this "
                     "value; must be at least 2",
                 "type": AbstractDataProviderTypeMap."int",
@@ -58,7 +58,7 @@ public class QoreSeasonalDecompositionProcessor inherits DataProvider::AbstractA
                 "display_name": "Decomposition Type",
                 "short_desc": "How seasonal patterns combine with the trend",
                 "desc": "Controls how the seasonal component relates to the trend; "
-                    "default: additive",
+                    "default: `additive`",
                 "type": AbstractDataProviderTypeMap."*string",
                 "allowed_values": (
                     <AllowedValueInfo>{

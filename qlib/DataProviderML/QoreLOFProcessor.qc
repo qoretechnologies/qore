@@ -68,16 +68,16 @@ public class QoreLOFProcessor inherits DataProvider::AbstractDataProvider {
                 "desc": "The number of closest data points used to define each point's local "
                     "neighborhood; larger values consider wider neighborhoods, making the "
                     "algorithm less sensitive to small local variations; must be smaller "
-                    "than the window size; default: 20",
+                    "than the window size; default: `20`",
                 "type": AbstractDataProviderTypeMap."*int",
             },
             "threshold": <DataProviderOptionInfo>{
                 "display_name": "Anomaly Threshold",
                 "short_desc": "Score cutoff for flagging anomalies",
-                "desc": "The outlier score cutoff; a score of 1.0 means a point has the "
+                "desc": "The outlier score cutoff; a score of `1.0` means a point has the "
                     "same density as its neighbors (normal); scores significantly above "
-                    "1.0 indicate the point is in a less dense region than its neighbors "
-                    "(anomalous); lower thresholds flag more records; default: 1.5",
+                    "`1.0` indicate the point is in a less dense region than its neighbors "
+                    "(anomalous); lower thresholds flag more records; default: `1.5`",
                 "type": AbstractDataProviderTypeMap."*float",
             },
         };

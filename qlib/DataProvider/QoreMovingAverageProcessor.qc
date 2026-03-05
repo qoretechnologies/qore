@@ -89,8 +89,8 @@ public class QoreMovingAverageProcessor inherits AbstractAnalyticsProcessor {
 
     #! Returns the data provider description
     *string getDesc() {
-        return "Computes simple moving average (SMA) and exponential moving average (EMA) for each "
-            "configured numeric field, emitting one event per record";
+        return "Computes simple moving average (`SMA`) and exponential moving average (`EMA`) for "
+            "each configured numeric field, emitting one event per record";
     }
 
     #! Returns data provider static info

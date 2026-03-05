@@ -107,8 +107,8 @@ public class QoreHistogramProcessor inherits AbstractAnalyticsProcessor {
     #! Returns the data provider description
     *string getDesc() {
         return "Computes frequency distribution histograms over a window of records "
-            "for each configured numeric field; supports uniform (equal-width) and "
-            "quantile (equal-count) binning methods";
+            "for each configured numeric field; supports `uniform` (equal-width) and "
+            "`quantile` (equal-count) binning methods";
     }
 
     #! Returns data provider static info

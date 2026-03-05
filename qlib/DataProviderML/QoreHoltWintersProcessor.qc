@@ -49,8 +49,8 @@ public class QoreHoltWintersProcessor inherits DataProvider::AbstractAnalyticsPr
                 "display_name": "Seasonal Period",
                 "short_desc": "Records per seasonal cycle",
                 "desc": "The number of records that make up one complete repeating cycle; "
-                    "for example, 7 for daily data with weekly patterns, 12 for monthly "
-                    "data with yearly patterns, or 24 for hourly data with daily patterns; "
+                    "for example, `7` for daily data with weekly patterns, `12` for monthly "
+                    "data with yearly patterns, or `24` for hourly data with daily patterns; "
                     "must be at least 2",
                 "type": AbstractDataProviderTypeMap."int",
                 "required": True,
@@ -59,7 +59,7 @@ public class QoreHoltWintersProcessor inherits DataProvider::AbstractAnalyticsPr
                 "display_name": "Level Sensitivity",
                 "short_desc": "How fast the baseline adapts to changes",
                 "desc": "Controls how quickly the baseline level responds to new data; "
-                    "a value between 0.0 and 1.0; higher values react faster to recent "
+                    "a value between `0.0` and `1.0`; higher values react faster to recent "
                     "changes but may be noisier; lower values produce smoother forecasts; "
                     "default: automatically selected",
                 "type": AbstractDataProviderTypeMap."*float",
@@ -68,7 +68,7 @@ public class QoreHoltWintersProcessor inherits DataProvider::AbstractAnalyticsPr
                 "display_name": "Trend Sensitivity",
                 "short_desc": "How fast the trend adapts to changes",
                 "desc": "Controls how quickly the upward or downward trend responds to new "
-                    "data; a value between 0.0 and 1.0; higher values track trend changes "
+                    "data; a value between `0.0` and `1.0`; higher values track trend changes "
                     "more aggressively; default: automatically selected",
                 "type": AbstractDataProviderTypeMap."*float",
             },
@@ -76,7 +76,7 @@ public class QoreHoltWintersProcessor inherits DataProvider::AbstractAnalyticsPr
                 "display_name": "Seasonal Sensitivity",
                 "short_desc": "How fast seasonal patterns adapt to changes",
                 "desc": "Controls how quickly the repeating seasonal pattern adjusts to new "
-                    "observations; a value between 0.0 and 1.0; higher values allow the "
+                    "observations; a value between `0.0` and `1.0`; higher values allow the "
                     "seasonal pattern to change more quickly over time; "
                     "default: automatically selected",
                 "type": AbstractDataProviderTypeMap."*float",
@@ -85,15 +85,15 @@ public class QoreHoltWintersProcessor inherits DataProvider::AbstractAnalyticsPr
                 "display_name": "Forecast Steps",
                 "short_desc": "How many future values to predict",
                 "desc": "The number of future time steps to predict for each record; "
-                    "for example, with daily data and forecast_steps = 7, it predicts "
-                    "the next 7 days; default: 1",
+                    "for example, with daily data and `forecast_steps` = `7`, it predicts "
+                    "the next 7 days; default: `1`",
                 "type": AbstractDataProviderTypeMap."*int",
             },
             "seasonal_type": <DataProviderOptionInfo>{
                 "display_name": "Seasonal Type",
                 "short_desc": "How seasonal patterns combine with the trend",
                 "desc": "Controls how seasonal patterns are applied to the underlying trend; "
-                    "default: additive",
+                    "default: `additive`",
                 "type": AbstractDataProviderTypeMap."*string",
                 "allowed_values": (
                     <AllowedValueInfo>{
@@ -123,9 +123,9 @@ public class QoreHoltWintersProcessor inherits DataProvider::AbstractAnalyticsPr
             "phi": <DataProviderOptionInfo>{
                 "display_name": "Damping Strength",
                 "short_desc": "How quickly the trend flattens out",
-                "desc": "A value between 0.0 and 1.0 controlling how rapidly the trend "
-                    "flattens in long-range forecasts; values closer to 1.0 allow the trend "
-                    "to persist longer; values closer to 0.0 flatten the trend more quickly; "
+                "desc": "A value between `0.0` and `1.0` controlling how rapidly the trend "
+                    "flattens in long-range forecasts; values closer to `1.0` allow the trend "
+                    "to persist longer; values closer to `0.0` flatten the trend more quickly; "
                     "only used when damped trend is enabled; default: automatically selected",
                 "type": AbstractDataProviderTypeMap."*float",
             },

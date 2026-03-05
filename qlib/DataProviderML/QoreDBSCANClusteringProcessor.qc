@@ -76,7 +76,7 @@ public class QoreDBSCANClusteringProcessor inherits DataProvider::AbstractDataPr
                 "desc": "The minimum number of nearby points required to start a cluster; "
                     "points with fewer neighbors than this are labeled as noise (not "
                     "belonging to any cluster); higher values require denser groups; "
-                    "default: 5",
+                    "default: `5`",
                 "type": AbstractDataProviderTypeMap."*int",
             },
             "metric": <DataProviderOptionInfo>{
@@ -84,7 +84,7 @@ public class QoreDBSCANClusteringProcessor inherits DataProvider::AbstractDataPr
                 "short_desc": "How to measure distance between data points",
                 "desc": "The method used to measure how far apart two data points are; "
                     "this affects how clusters are shaped and which points are considered "
-                    "neighbors; default: euclidean",
+                    "neighbors; default: `euclidean`",
                 "type": AbstractDataProviderTypeMap."*string",
                 "allowed_values": (
                     <AllowedValueInfo>{

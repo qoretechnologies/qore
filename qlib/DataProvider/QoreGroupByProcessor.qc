@@ -157,8 +157,8 @@ public class QoreGroupByProcessor inherits AbstractDataProvider {
     #! Returns the data provider description
     *string getDesc() {
         return "Groups records by one or more field values and computes aggregate functions "
-            "(count, sum, avg, min, max, first, last) per group; emits one output record per "
-            "group on flush";
+            "(`count`, `sum`, `avg`, `min`, `max`, `first`, `last`) per group; emits one "
+            "output record per group on flush";
     }
 
     #! Returns data provider static info

@@ -74,7 +74,7 @@ public class QoreGMMProcessor inherits DataProvider::AbstractDataProvider {
                 "display_name": "Covariance Type",
                 "short_desc": "How cluster shapes are modeled",
                 "desc": "Controls the shape of the clusters that the model can discover; "
-                    "default: full",
+                    "default: `full`",
                 "type": AbstractDataProviderTypeMap."*string",
                 "allowed_values": (
                     <AllowedValueInfo>{
