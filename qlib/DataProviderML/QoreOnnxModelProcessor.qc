@@ -87,9 +87,12 @@ public class QoreOnnxModelProcessor inherits DataProvider::AbstractDataProvider 
                 "short_desc": "Number of records to process at once",
                 "desc": "The number of records to collect before sending them to the model "
                     "for inference as a batch; larger batches may be more efficient but "
-                    "use more memory; must be at least 1",
+                    "use more memory; must be at least 1.\n\n"
+                    "**Sizing guidance**: `1` for real-time inference, `10`\u2013`100` for batch "
+                    "efficiency, `1000`+ for maximum throughput on GPU",
                 "type": AbstractDataProviderTypeMap."int",
                 "required": True,
+                "example_value": 10,
             },
             "input_tensor": <DataProviderOptionInfo>{
                 "display_name": "Input Tensor Name",

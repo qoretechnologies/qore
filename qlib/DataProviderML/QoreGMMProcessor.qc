@@ -56,19 +56,28 @@ public class QoreGMMProcessor inherits DataProvider::AbstractDataProvider {
                 "display_name": "Window Size",
                 "short_desc": "Number of records to cluster together",
                 "desc": "The number of records to collect before assigning them to groups "
-                    "with probability scores; must be at least 2",
+                    "with probability scores; must be at least 2.\n\n"
+                    "**Sizing guidance**: GMM needs more data than k-means for stable "
+                    "results; use `100`+ for `2`\u2013`3` groups, `500`+ for `5`+ groups; "
+                    "use `full` covariance requires even more data",
                 "type": AbstractDataProviderTypeMap."int",
                 "required": True,
+                "example_value": 200,
             },
             "n_components": <DataProviderOptionInfo>{
                 "display_name": "Number of Groups",
                 "short_desc": "How many groups to discover",
                 "desc": "The number of groups (clusters) the algorithm should find in the "
                     "data; unlike k-means, each record gets a probability for each group "
-                    "rather than a hard assignment; must be at least 1 and no more than "
-                    "the number of records in the window",
+                    "rather than a hard assignment; must be at least `1` and no more than "
+                    "the number of records in the window.\n\n"
+                    "**How to choose**: start with `2`\u2013`3` groups and increase if the "
+                    "probabilities are spread too evenly (no clear group structure); "
+                    "for example, `2` for binary classification, `3`\u2013`5` for multi-segment "
+                    "analysis",
                 "type": AbstractDataProviderTypeMap."int",
                 "required": True,
+                "example_value": 3,
             },
             "covariance_type": <DataProviderOptionInfo>{
                 "display_name": "Covariance Type",

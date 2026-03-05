@@ -68,9 +68,13 @@ public class QoreLinearRegressionProcessor inherits DataProvider::AbstractDataPr
                 "short_desc": "Number of records to learn from",
                 "desc": "The number of records to collect before fitting the model and "
                     "generating predictions; the model learns the relationship between "
-                    "input fields and the target from this batch; must be at least 2",
+                    "input fields and the target from this batch; must be at least 2.\n\n"
+                    "**Sizing guidance**: use at least `20`\u2013`30` per input field for "
+                    "reliable regression; for example, with 3 input fields, use at least "
+                    "`60`\u2013`100` records",
                 "type": AbstractDataProviderTypeMap."int",
                 "required": True,
+                "example_value": 100,
             },
             "fit_intercept": <DataProviderOptionInfo>{
                 "display_name": "Fit Intercept",

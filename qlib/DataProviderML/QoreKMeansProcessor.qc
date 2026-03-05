@@ -57,18 +57,25 @@ public class QoreKMeansProcessor inherits DataProvider::AbstractDataProvider {
                 "display_name": "Window Size",
                 "short_desc": "Number of records to group together",
                 "desc": "The number of records to collect before assigning them to groups; "
-                    "all records in a window are analyzed together; must be at least 2",
+                    "all records in a window are analyzed together; must be at least 2.\n\n"
+                    "**Sizing guidance**: use `50`\u2013`200` for exploratory grouping, `500`+ for "
+                    "stable group assignments; should be much larger than `k`",
                 "type": AbstractDataProviderTypeMap."int",
                 "required": True,
+                "example_value": 100,
             },
             "k": <DataProviderOptionInfo>{
                 "display_name": "Number of Groups",
                 "short_desc": "How many groups to create",
                 "desc": "The number of groups (clusters) to divide the data into; you must "
-                    "specify this in advance; must be at least 1 and no more than the "
-                    "number of records in the window",
+                    "specify this in advance; must be at least `1` and no more than the "
+                    "number of records in the window.\n\n"
+                    "**How to choose**: start with `3`\u2013`5` for most use cases (e.g. customer "
+                    "segments, risk tiers); increase if results don't separate well; for "
+                    "example, `3` for low/medium/high grouping, `5` for finer segmentation",
                 "type": AbstractDataProviderTypeMap."int",
                 "required": True,
+                "example_value": 3,
             },
             "online": <DataProviderOptionInfo>{
                 "display_name": "Incremental Learning",

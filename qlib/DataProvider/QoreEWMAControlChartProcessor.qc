@@ -44,18 +44,25 @@ public class QoreEWMAControlChartProcessor inherits AbstractAnalyticsProcessor {
                 "short_desc": "EWMA smoothing parameter (0-1)",
                 "desc": "How quickly the EWMA reacts to changes; higher values "
                     "(closer to `1.0`) react faster but are more sensitive to noise; "
-                    "lower values produce smoother trends; must be between `0` (exclusive) "
-                    "and `1` (inclusive); default: `0.2`",
+                    "lower values produce smoother trends.\n\n"
+                    "**Typical values**: `0.1` (slow, smooth \u2014 best for detecting small "
+                    "persistent shifts), `0.2` (standard), `0.4` (responsive \u2014 closer to "
+                    "a raw signal); must be between `0` (exclusive) and `1` (inclusive); "
+                    "default: `0.2`",
                 "type": AbstractDataProviderTypeMap."*float",
+                "example_value": 0.2,
             },
             "sigma_multiplier": <DataProviderOptionInfo>{
                 "display_name": "Control Limit Width",
                 "short_desc": "Number of standard deviations for control limits",
                 "desc": "How wide the control limits are as a multiple of the standard "
                     "deviation; larger values mean fewer false alarms but slower detection "
-                    "of real shifts; typical values: `2.0` (sensitive), `3.0` (standard); "
+                    "of real shifts.\n\n"
+                    "**Typical values**: `2.0` (sensitive \u2014 catches small shifts quickly), "
+                    "`3.0` (standard \u2014 good balance of sensitivity and false alarms); "
                     "default: `3.0`",
                 "type": AbstractDataProviderTypeMap."*float",
+                "example_value": 3.0,
             },
             "target": <DataProviderOptionInfo>{
                 "display_name": "Target Value",

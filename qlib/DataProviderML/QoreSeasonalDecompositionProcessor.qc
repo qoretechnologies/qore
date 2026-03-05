@@ -53,6 +53,7 @@ public class QoreSeasonalDecompositionProcessor inherits DataProvider::AbstractA
                     "value; must be at least 2",
                 "type": AbstractDataProviderTypeMap."int",
                 "required": True,
+                "example_value": 12,
             },
             "type": <DataProviderOptionInfo>{
                 "display_name": "Decomposition Type",

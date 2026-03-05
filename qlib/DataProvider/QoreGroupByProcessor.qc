@@ -99,6 +99,7 @@ public class QoreGroupByProcessor inherits AbstractDataProvider {
                     "Example: `total=sum(amount),orders=count(),avg_price=avg(price)`",
                 "type": AbstractDataProviderTypeMap."string",
                 "required": True,
+                "example_value": "total=sum(amount),orders=count(),avg=avg(amount)",
             },
         };
 

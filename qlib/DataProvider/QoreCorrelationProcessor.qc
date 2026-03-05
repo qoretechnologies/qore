@@ -56,9 +56,12 @@ public class QoreCorrelationProcessor inherits AbstractDataProvider {
                 "display_name": "Window Size",
                 "short_desc": "Number of records per correlation window",
                 "desc": "The number of records to accumulate before computing the correlation "
-                    "matrix; the window is cleared after each computation",
+                    "matrix; the window is cleared after each computation.\n\n"
+                    "**Sizing guidance**: correlation needs enough data for stable results; "
+                    "use at least `30` for basic correlation, `100`+ for reliable results",
                 "type": AbstractDataProviderTypeMap."int",
                 "required": True,
+                "example_value": 100,
             },
         };
     }

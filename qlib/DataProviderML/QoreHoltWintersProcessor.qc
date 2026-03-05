@@ -54,32 +54,42 @@ public class QoreHoltWintersProcessor inherits DataProvider::AbstractAnalyticsPr
                     "must be at least 2",
                 "type": AbstractDataProviderTypeMap."int",
                 "required": True,
+                "example_value": 12,
             },
             "alpha": <DataProviderOptionInfo>{
                 "display_name": "Level Sensitivity",
                 "short_desc": "How fast the baseline adapts to changes",
                 "desc": "Controls how quickly the baseline level responds to new data; "
                     "a value between `0.0` and `1.0`; higher values react faster to recent "
-                    "changes but may be noisier; lower values produce smoother forecasts; "
-                    "default: automatically selected",
+                    "changes but may be noisier; lower values produce smoother forecasts.\n\n"
+                    "**Starting points**: `0.1`\u2013`0.3` for smooth forecasts, `0.5`+ for "
+                    "fast-changing data; leave unset to let the algorithm choose automatically",
                 "type": AbstractDataProviderTypeMap."*float",
+                "example_value": 0.2,
             },
             "beta": <DataProviderOptionInfo>{
                 "display_name": "Trend Sensitivity",
                 "short_desc": "How fast the trend adapts to changes",
                 "desc": "Controls how quickly the upward or downward trend responds to new "
                     "data; a value between `0.0` and `1.0`; higher values track trend changes "
-                    "more aggressively; default: automatically selected",
+                    "more aggressively.\n\n"
+                    "**Starting points**: `0.01`\u2013`0.1` for stable trends, `0.2`+ for "
+                    "rapidly changing trends; leave unset to let the algorithm choose "
+                    "automatically",
                 "type": AbstractDataProviderTypeMap."*float",
+                "example_value": 0.05,
             },
             "gamma": <DataProviderOptionInfo>{
                 "display_name": "Seasonal Sensitivity",
                 "short_desc": "How fast seasonal patterns adapt to changes",
                 "desc": "Controls how quickly the repeating seasonal pattern adjusts to new "
                     "observations; a value between `0.0` and `1.0`; higher values allow the "
-                    "seasonal pattern to change more quickly over time; "
-                    "default: automatically selected",
+                    "seasonal pattern to change more quickly over time.\n\n"
+                    "**Starting points**: `0.05`\u2013`0.2` for stable seasonal patterns, `0.3`+ "
+                    "for evolving patterns; leave unset to let the algorithm choose "
+                    "automatically",
                 "type": AbstractDataProviderTypeMap."*float",
+                "example_value": 0.1,
             },
             "forecast_steps": <DataProviderOptionInfo>{
                 "display_name": "Forecast Steps",
@@ -88,6 +98,7 @@ public class QoreHoltWintersProcessor inherits DataProvider::AbstractAnalyticsPr
                     "for example, with daily data and `forecast_steps` = `7`, it predicts "
                     "the next 7 days; default: `1`",
                 "type": AbstractDataProviderTypeMap."*int",
+                "example_value": 1,
             },
             "seasonal_type": <DataProviderOptionInfo>{
                 "display_name": "Seasonal Type",
@@ -126,8 +137,11 @@ public class QoreHoltWintersProcessor inherits DataProvider::AbstractAnalyticsPr
                 "desc": "A value between `0.0` and `1.0` controlling how rapidly the trend "
                     "flattens in long-range forecasts; values closer to `1.0` allow the trend "
                     "to persist longer; values closer to `0.0` flatten the trend more quickly; "
-                    "only used when damped trend is enabled; default: automatically selected",
+                    "only used when damped trend is enabled.\n\n"
+                    "**Typical values**: `0.8`\u2013`0.98` (common range); leave unset to let "
+                    "the algorithm choose automatically",
                 "type": AbstractDataProviderTypeMap."*float",
+                "example_value": 0.95,
             },
         };
     }

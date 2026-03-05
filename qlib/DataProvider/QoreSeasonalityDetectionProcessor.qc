@@ -46,14 +46,18 @@ public class QoreSeasonalityDetectionProcessor inherits AbstractAnalyticsProcess
                     "use `window_size / 3` automatically; the window size should be at least "
                     "3 times the expected maximum period; default: `0` (auto)",
                 "type": AbstractDataProviderTypeMap."*int",
+                "example_value": 0,
             },
             "min_correlation": <DataProviderOptionInfo>{
                 "display_name": "Minimum Correlation",
                 "short_desc": "Minimum autocorrelation to report as significant",
-                "desc": "The minimum autocorrelation value (`0`-`1`) at which a period is "
-                    "considered significant; lower values detect weaker patterns; "
-                    "default: `0.3`",
+                "desc": "The minimum strength of a repeating pattern (measured as "
+                    "autocorrelation, `0`\u2013`1`) for it to be reported; autocorrelation "
+                    "measures how similar a data series is to a shifted copy of itself.\n\n"
+                    "**Typical values**: `0.2` (detect weak/noisy patterns), `0.3` (balanced "
+                    "default), `0.5` (only report strong, clear patterns); default: `0.3`",
                 "type": AbstractDataProviderTypeMap."*float",
+                "example_value": 0.3,
             },
         };
     }

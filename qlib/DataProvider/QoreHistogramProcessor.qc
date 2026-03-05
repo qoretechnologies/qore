@@ -42,9 +42,11 @@ public class QoreHistogramProcessor inherits AbstractAnalyticsProcessor {
             "n_bins": <DataProviderOptionInfo>{
                 "display_name": "Number of Bins",
                 "short_desc": "Number of histogram bins",
-                "desc": "The number of bins to divide the value range into; "
+                "desc": "The number of bins to divide the value range into; more bins "
+                    "show finer detail but need more data to be meaningful; "
                     "default: `10`",
                 "type": AbstractDataProviderTypeMap."*int",
+                "example_value": 10,
             },
             "bin_method": <DataProviderOptionInfo>{
                 "display_name": "Binning Method",

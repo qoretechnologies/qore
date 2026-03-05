@@ -56,19 +56,28 @@ public class QoreDBSCANClusteringProcessor inherits DataProvider::AbstractDataPr
                 "display_name": "Window Size",
                 "short_desc": "Number of records to cluster together",
                 "desc": "The number of records to collect before grouping them into clusters; "
-                    "all records in a window are analyzed together; must be at least 2",
+                    "all records in a window are analyzed together; must be at least 2.\n\n"
+                    "**Sizing guidance**: use `50`\u2013`200` for exploratory clustering, `500`+ "
+                    "for stable cluster discovery; DBSCAN needs enough points to form "
+                    "dense regions",
                 "type": AbstractDataProviderTypeMap."int",
                 "required": True,
+                "example_value": 100,
             },
             "epsilon": <DataProviderOptionInfo>{
                 "display_name": "Neighborhood Radius",
                 "short_desc": "How close points must be to form a cluster",
                 "desc": "The maximum distance between two data points for them to be "
                     "considered neighbors; smaller values create tighter, more specific "
-                    "clusters; larger values merge nearby groups into larger clusters; "
-                    "the appropriate value depends on the scale of your data",
+                    "clusters; larger values merge nearby groups into larger clusters.\n\n"
+                    "**How to choose**: the right value depends on the scale of your data. "
+                    "A practical approach is to look at the typical range of your values: "
+                    "if values range from `0`\u2013`100`, try `5`\u2013`15`; if values range from "
+                    "`0`\u2013`1.0`, try `0.1`\u2013`0.3`. Start with a larger value (fewer clusters) "
+                    "and decrease it to find more specific groups",
                 "type": AbstractDataProviderTypeMap."float",
                 "required": True,
+                "example_value": 5.0,
             },
             "min_points": <DataProviderOptionInfo>{
                 "display_name": "Minimum Cluster Size",
@@ -78,6 +87,7 @@ public class QoreDBSCANClusteringProcessor inherits DataProvider::AbstractDataPr
                     "belonging to any cluster); higher values require denser groups; "
                     "default: `5`",
                 "type": AbstractDataProviderTypeMap."*int",
+                "example_value": 5,
             },
             "metric": <DataProviderOptionInfo>{
                 "display_name": "Distance Metric",

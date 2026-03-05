@@ -59,9 +59,12 @@ public class QoreIsolationForestProcessor inherits DataProvider::AbstractDataPro
                 "desc": "The number of records to collect before analyzing them as a group; "
                     "the algorithm learns what is normal from this group and then scores each "
                     "record; larger windows provide more context but use more memory; "
-                    "must be at least 2",
+                    "must be at least 2.\n\n"
+                    "**Sizing guidance**: use `100`\u2013`500` for most use cases; smaller windows "
+                    "detect anomalies faster but may be less accurate",
                 "type": AbstractDataProviderTypeMap."int",
                 "required": True,
+                "example_value": 256,
             },
             "n_trees": <DataProviderOptionInfo>{
                 "display_name": "Number of Trees",
@@ -70,6 +73,7 @@ public class QoreIsolationForestProcessor inherits DataProvider::AbstractDataPro
                     "more trees produce more reliable anomaly scores but take longer to "
                     "compute; default: `100`",
                 "type": AbstractDataProviderTypeMap."*int",
+                "example_value": 100,
             },
             "sample_size": <DataProviderOptionInfo>{
                 "display_name": "Sample Size",
@@ -78,6 +82,7 @@ public class QoreIsolationForestProcessor inherits DataProvider::AbstractDataPro
                     "values make it easier to detect anomalies but may reduce accuracy for "
                     "subtle outliers; should be less than the window size; default: `256`",
                 "type": AbstractDataProviderTypeMap."*int",
+                "example_value": 256,
             },
             "threshold": <DataProviderOptionInfo>{
                 "display_name": "Anomaly Threshold",
@@ -85,8 +90,11 @@ public class QoreIsolationForestProcessor inherits DataProvider::AbstractDataPro
                 "desc": "A value between `0.0` and `1.0` that determines when a record is "
                     "flagged as anomalous; records scoring at or above this threshold are "
                     "classified as anomalies; lower values flag more records as anomalous, "
-                    "higher values flag fewer; default: `0.5`",
+                    "higher values flag fewer.\n\n"
+                    "**Typical values**: `0.5` (standard), `0.6`\u2013`0.7` (conservative \u2014 "
+                    "only obvious anomalies); default: `0.5`",
                 "type": AbstractDataProviderTypeMap."*float",
+                "example_value": 0.5,
             },
         };
     }
