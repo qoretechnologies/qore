@@ -415,6 +415,13 @@ public class ProviderIndexUtil {
         TypedHash dp_arg_info_th = TypedHash::forName("DataProvider::DataProviderArgInfo");
         # get the AbstractDataProviderTypeMap value
         hash<auto> type_map = Constant::forName("DataProvider::AbstractDataProviderTypeMap").getValue();
+        # get the UiOptionViewMap for enum deserialization
+        *hash<auto> ui_view_map;
+        try {
+            ui_view_map = Constant::forName("DataProvider::UiOptionViewMap").getValue();
+        } catch () {
+            # backwards compatibility: older DataProvider versions may not have this constant
+        }
 
         *hash<DataProviderIndexInfo> rv;
         try {
@@ -441,7 +448,7 @@ public class ProviderIndexUtil {
             if (rv.actioninfomap) {
                 rv.actioninfomap = deserializeActions(rv.actioninfomap, action_info_th, option_info_th, path_vars_th,
                     dp_info_th, dp_opt_info_th, dp_exp_info_th, mapper_key_info_th, dp_msg_info_th, dp_sig_info_th,
-                    dp_arg_info_th, type_map);
+                    dp_arg_info_th, type_map, ui_view_map);
                 foreach hash<auto> i in (rv.actioninfomap.pairIterator()) {
                     map rv.top_actioninfomap{i.key + "/" + $1.key} = $1.value, i.value.pairIterator();
                 }
@@ -457,7 +464,8 @@ public class ProviderIndexUtil {
     static private hash<auto> deserializeActions(hash<string, hash<string, hash<auto>>> actioninfomap,
             TypedHash action_info_th, TypedHash option_info_th, TypedHash path_vars_th, TypedHash dp_info_th,
             TypedHash dp_opt_info_th, TypedHash dp_exp_info_th, TypedHash mapper_key_info_th,
-            TypedHash dp_msg_info_th, TypedHash dp_sig_info_th, TypedHash dp_arg_info_th, hash<auto> type_map) {
+            TypedHash dp_msg_info_th, TypedHash dp_sig_info_th, TypedHash dp_arg_info_th, hash<auto> type_map,
+            *hash<auto> ui_view_map) {
         hash<auto> rv;
         foreach hash<auto> i in (actioninfomap.pairIterator()) {
             foreach hash<auto> j in (i.value.pairIterator()) {
@@ -467,11 +475,12 @@ public class ProviderIndexUtil {
                         ? map {$1.key: path_vars_th.doCast($1.value)}, j.value.path_vars.pairIterator(),
                         : NOTHING),
                     "options": (map {
-                        $1.key: option_info_th.doCast($1.value + {
+                        $1.key: option_info_th.doCast(($1.value - "default_view") + {
                             "allowed_values": (map cast<hash<AllowedValueInfo>>($1), $1.value.allowed_values),
                             "element_allowed_values": (map cast<hash<AllowedValueInfo>>($1),
                                 $1.value.element_allowed_values),
                             "type": type_map{$1.value.type} ?? type_map."auto",
+                            "default_view": ui_view_map{$1.value.default_view},
                         })
                     }, j.value.options.pairIterator()),
                     "data_provider_info": deserializeDataProviderInfo(j.value.data_provider_info, dp_info_th,

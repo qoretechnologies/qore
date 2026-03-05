@@ -42,7 +42,7 @@
 %endtry
 
 module DataProvider {
-    version = "3.4.0";
+    version = "3.3.0";
     desc = "user module for data integration patterns and data and API introspection";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -81,6 +81,7 @@ module DataProvider {
                 "matching records pass through, non-matching records are dropped",
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_FILTER,
+            "output_data_type": DPAD_PASS_THROUGH,
             "cls": "DataProvider::QoreFilterRecordsProcessor",
             "groups": ("Filtering",),
             "data_dependent_options": True,
@@ -212,6 +213,7 @@ module DataProvider {
                 "pass through and all subsequent records are dropped",
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_FILTER,
+            "output_data_type": DPAD_PASS_THROUGH,
             "cls": "DataProvider::QoreRecordLimitProcessor",
             "groups": ("Filtering",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
@@ -999,7 +1001,12 @@ if (errors) {
 
     @section dataprovider_relnotes Release Notes
 
-    @subsection dataprovider_v3_4 DataProvider v3.4
+    @subsection dataprovider_v3_3 DataProvider v3.3
+    - added @ref DataProvider::DPAD_PASS_THROUGH "DPAD_PASS_THROUGH" constant for pipeline processor
+      actions whose output type is the same as their input type (e.g., filter processors that
+      drop non-matching records but do not modify matching ones)
+    - set \c output_data_type to @ref DataProvider::DPAD_PASS_THROUGH "DPAD_PASS_THROUGH" on
+      \c filter-records and \c record-limit pipeline processor registrations
     - added \c input_field_names boolean field to
       @ref DataProvider::BaseOptionInfo "BaseOptionInfo" to mark pipeline processor options whose
       allowed values should be dynamically populated from the preceding pipeline state's output
@@ -1020,8 +1027,6 @@ if (errors) {
     - added \c input_field_names marker to single-field options (\c field, \c field_x, \c field_y,
       \c target_field) for dynamic allowed value population
     - all field-name-based processor options now support dot-notation for nested field access
-
-    @subsection dataprovider_v3_3 DataProvider v3.3
     - fixed @ref DataProvider::DataProviderPipeline "DataProviderPipeline"
       @ref DataProvider::PipelineMetricsSnapshot "PipelineMetricsSnapshot".\c total_records_submitted
       always being 0 in fan-out topologies where queue 0's first element is a fan-out list
