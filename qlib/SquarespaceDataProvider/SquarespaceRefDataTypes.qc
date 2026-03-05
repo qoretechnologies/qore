@@ -27,7 +27,7 @@ public namespace SquarespaceDataProvider {
 
 #! Money type (currency + value)
 public class SquarespaceMoneyDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "currency": {
                 "type": StringType,
@@ -60,7 +60,7 @@ public class SquarespaceMoneyDataType inherits HashDataType {
 
 #! Pricing type for product variants (all product types)
 public class SquarespaceBasePricingDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "basePrice": {
                 "type": new SquarespaceMoneyDataType(),
@@ -79,7 +79,7 @@ public class SquarespaceBasePricingDataType inherits HashDataType {
 
 #! Pricing type for PHYSICAL and SERVICE variants (includes sale pricing)
 public class SquarespaceFullPricingDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "basePrice": {
                 "type": new SquarespaceMoneyDataType(),
@@ -92,14 +92,14 @@ public class SquarespaceFullPricingDataType inherits HashDataType {
                 "type": SoftBoolOrNothingType,
                 "display_name": "On Sale",
                 "short_desc": "Whether the variant is on sale",
-                "desc": "Whether the variant is on sale; if true, salePrice is required",
+                "desc": "Whether the variant is on sale; if `true`, `salePrice` is required",
             },
             "salePrice": {
                 "type": new SquarespaceMoneyDataType(AutoHashOrNothingType),
                 "display_name": "Sale Price",
                 "short_desc": "The sale price of the variant",
                 "desc": "The sale price of the variant (currency + value); "
-                    "required if onSale is true",
+                    "required if `onSale` is `true`",
             },
         };
     }
@@ -107,11 +107,16 @@ public class SquarespaceFullPricingDataType inherits HashDataType {
     constructor() : HashDataType("FullPricing") {
         addQoreFields(Fields);
     }
+
+    #! Creates an or-nothing variant for use in optional field contexts
+    constructor(Type base_type) : HashDataType(base_type, "FullPricing") {
+        addQoreFields(Fields);
+    }
 }
 
 #! Stock type for PHYSICAL and SERVICE variants
 public class SquarespaceStockDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "quantity": {
                 "type": SoftIntOrNothingType,
@@ -141,7 +146,7 @@ public class SquarespaceStockDataType inherits HashDataType {
 
 #! Weight type for PHYSICAL variant shipping measurements
 public class SquarespaceWeightDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "unit": {
                 "type": StringType,
@@ -171,7 +176,7 @@ public class SquarespaceWeightDataType inherits HashDataType {
 
 #! Dimensions type for PHYSICAL variant shipping measurements
 public class SquarespaceDimensionsDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "unit": {
                 "type": StringType,
@@ -215,7 +220,7 @@ public class SquarespaceDimensionsDataType inherits HashDataType {
 
 #! Shipping measurements type for PHYSICAL variants
 public class SquarespaceShippingMeasurementsDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "weight": {
                 "type": new SquarespaceWeightDataType(),
@@ -244,7 +249,7 @@ public class SquarespaceShippingMeasurementsDataType inherits HashDataType {
 
 #! Variant type for GIFT_CARD products (minimal: sku + basePrice only)
 public class SquarespaceGiftCardVariantDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "sku": {
                 "type": StringType,
@@ -270,7 +275,7 @@ public class SquarespaceGiftCardVariantDataType inherits HashDataType {
 
 #! Variant type for SERVICE products (sku, pricing with sale, stock, attributes)
 public class SquarespaceServiceVariantDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "sku": {
                 "type": StringType,
@@ -309,7 +314,7 @@ public class SquarespaceServiceVariantDataType inherits HashDataType {
 
 #! Variant type for PHYSICAL products (full: sku, pricing, stock, attributes, shipping)
 public class SquarespacePhysicalVariantDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "sku": {
                 "type": StringType,
@@ -348,6 +353,184 @@ public class SquarespacePhysicalVariantDataType inherits HashDataType {
     }
 
     constructor() : HashDataType("PhysicalVariant") {
+        addQoreFields(Fields);
+    }
+}
+
+#! Address type for billing and shipping addresses
+public class SquarespaceAddressDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "firstName": {
+                "type": StringOrNothingType,
+                "display_name": "First Name",
+                "short_desc": "First name",
+                "desc": "The first name of the recipient",
+            },
+            "lastName": {
+                "type": StringOrNothingType,
+                "display_name": "Last Name",
+                "short_desc": "Last name",
+                "desc": "The last name of the recipient",
+            },
+            "address1": {
+                "type": StringOrNothingType,
+                "display_name": "Address Line 1",
+                "short_desc": "Street address line 1",
+                "desc": "The first line of the street address",
+            },
+            "address2": {
+                "type": StringOrNothingType,
+                "display_name": "Address Line 2",
+                "short_desc": "Street address line 2",
+                "desc": "The second line of the street address",
+            },
+            "city": {
+                "type": StringOrNothingType,
+                "display_name": "City",
+                "short_desc": "City",
+                "desc": "The city",
+            },
+            "state": {
+                "type": StringOrNothingType,
+                "display_name": "State",
+                "short_desc": "State or province",
+                "desc": "The state or province",
+            },
+            "countryCode": {
+                "type": StringOrNothingType,
+                "display_name": "Country Code",
+                "short_desc": "ISO country code",
+                "desc": "The ISO country code",
+                "example_value": "US",
+            },
+            "postalCode": {
+                "type": StringOrNothingType,
+                "display_name": "Postal Code",
+                "short_desc": "Postal or ZIP code",
+                "desc": "The postal or ZIP code",
+            },
+            "phone": {
+                "type": StringOrNothingType,
+                "display_name": "Phone",
+                "short_desc": "Phone number",
+                "desc": "The phone number",
+            },
+        };
+    }
+
+    constructor() : HashDataType("Address") {
+        addQoreFields(Fields);
+    }
+
+    #! Creates an or-nothing variant for use in optional field contexts
+    constructor(Type base_type) : HashDataType(base_type, "Address") {
+        addQoreFields(Fields);
+    }
+}
+
+#! SEO options type for product SEO configuration
+public class SquarespaceSeoOptionsDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "title": {
+                "type": StringOrNothingType,
+                "display_name": "Title",
+                "short_desc": "SEO title",
+                "desc": "The SEO title for the product",
+            },
+            "description": {
+                "type": StringOrNothingType,
+                "display_name": "Description",
+                "short_desc": "SEO description",
+                "desc": "The SEO meta description for the product",
+            },
+        };
+    }
+
+    constructor() : HashDataType("SeoOptions") {
+        addQoreFields(Fields);
+    }
+
+    #! Creates an or-nothing variant for use in optional field contexts
+    constructor(Type base_type) : HashDataType(base_type, "SeoOptions") {
+        addQoreFields(Fields);
+    }
+}
+
+#! Line item type for order line items
+public class SquarespaceLineItemDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "lineItemType": {
+                "type": StringType,
+                "display_name": "Line Item Type",
+                "short_desc": "The type of line item",
+                "desc": "The type of line item (e.g., `PHYSICAL`, `DIGITAL`, `SERVICE`, `GIFT_CARD`)",
+                "required": True,
+            },
+            "quantity": {
+                "type": SoftIntType,
+                "display_name": "Quantity",
+                "short_desc": "The quantity ordered",
+                "desc": "The quantity of this line item",
+                "required": True,
+                "example_value": 1,
+            },
+            "unitPricePaid": {
+                "type": new SquarespaceMoneyDataType(),
+                "display_name": "Unit Price Paid",
+                "short_desc": "The unit price paid",
+                "desc": "The unit price paid for this line item",
+                "required": True,
+            },
+        };
+    }
+
+    constructor() : HashDataType("LineItem") {
+        addQoreFields(Fields);
+    }
+}
+
+#! Shipment type for order fulfillment shipments
+public class SquarespaceShipmentDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "shipDate": {
+                "type": SoftDateType,
+                "display_name": "Ship Date",
+                "short_desc": "The shipment date",
+                "desc": "The date the shipment was sent",
+                "required": True,
+            },
+            "carrierName": {
+                "type": StringOrNothingType,
+                "display_name": "Carrier Name",
+                "short_desc": "The shipping carrier name",
+                "desc": "The name of the shipping carrier",
+            },
+            "service": {
+                "type": StringOrNothingType,
+                "display_name": "Service",
+                "short_desc": "The shipping service",
+                "desc": "The shipping service used",
+            },
+            "trackingNumber": {
+                "type": StringOrNothingType,
+                "display_name": "Tracking Number",
+                "short_desc": "The tracking number",
+                "desc": "The shipment tracking number",
+            },
+            "trackingUrl": {
+                "type": StringOrNothingType,
+                "display_name": "Tracking URL",
+                "short_desc": "The tracking URL",
+                "desc": "The URL for tracking the shipment",
+            },
+        };
+    }
+
+    constructor() : HashDataType("Shipment") {
         addQoreFields(Fields);
     }
 }

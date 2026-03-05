@@ -27,7 +27,7 @@ public namespace SquarespaceDataProvider {
 
 #! Squarespace product record type
 public class SquarespaceProductDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for Squarespace products
         const Fields = {
             "id": {
@@ -40,7 +40,7 @@ public class SquarespaceProductDataType inherits HashDataType {
                 "type": StringOrNothingType,
                 "display_name": "Type",
                 "short_desc": "The product type",
-                "desc": "The type of the product (PHYSICAL, SERVICE, GIFT_CARD, or DIGITAL)",
+                "desc": "The type of the product (`PHYSICAL`, `SERVICE`, `GIFT_CARD`, or `DIGITAL`)",
                 "allowed_values": (
                     <AllowedValueInfo>{"value": "PHYSICAL", "desc": "Physical product"},
                     <AllowedValueInfo>{"value": "SERVICE", "desc": "Service product"},
@@ -91,10 +91,10 @@ public class SquarespaceProductDataType inherits HashDataType {
                 "desc": "Indicates whether the product is visible on the store",
             },
             "seoOptions": {
-                "type": AutoHashOrNothingType,
+                "type": new SquarespaceSeoOptionsDataType(AutoHashOrNothingType),
                 "display_name": "SEO Options",
                 "short_desc": "SEO configuration",
-                "desc": "The SEO options for the product (title, description)",
+                "desc": "The SEO options for the product (`title`, `description`)",
             },
             "variantAttributes": {
                 "type": SoftListOrNothingType,
@@ -115,10 +115,10 @@ public class SquarespaceProductDataType inherits HashDataType {
                 "desc": "The list of images associated with the product",
             },
             "pricing": {
-                "type": AutoHashOrNothingType,
+                "type": new SquarespaceFullPricingDataType(AutoHashOrNothingType),
                 "display_name": "Pricing",
                 "short_desc": "The product pricing",
-                "desc": "The pricing information for the product (used for DIGITAL products)",
+                "desc": "The pricing information for the product (used for `DIGITAL` products)",
             },
             "digitalGood": {
                 "type": AutoHashOrNothingType,
@@ -127,16 +127,16 @@ public class SquarespaceProductDataType inherits HashDataType {
                 "desc": "The digital good details for digital products",
             },
             "createdOn": {
-                "type": StringOrNothingType,
+                "type": DateOrNothingType,
                 "display_name": "Created On",
                 "short_desc": "When the product was created",
-                "desc": "The timestamp when the product was created (ISO 8601 format)",
+                "desc": "The timestamp when the product was created",
             },
             "modifiedOn": {
-                "type": StringOrNothingType,
+                "type": DateOrNothingType,
                 "display_name": "Modified On",
                 "short_desc": "When the product was last modified",
-                "desc": "The timestamp when the product was last modified (ISO 8601 format)",
+                "desc": "The timestamp when the product was last modified",
             },
         };
     }

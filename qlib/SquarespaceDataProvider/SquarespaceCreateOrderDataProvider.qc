@@ -27,7 +27,7 @@ public namespace SquarespaceDataProvider {
 
 #! Request type for creating an order
 public class SquarespaceCreateOrderRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "channelName": {
                 "type": StringType,
@@ -44,17 +44,17 @@ public class SquarespaceCreateOrderRequestDataType inherits HashDataType {
                 "required": True,
             },
             "createdOn": {
-                "type": StringType,
+                "type": SoftDateType,
                 "display_name": "Created On",
-                "short_desc": "When order was placed (ISO 8601)",
-                "desc": "When order was placed (ISO 8601)",
+                "short_desc": "When the order was placed",
+                "desc": "When the order was placed",
                 "required": True,
             },
             "priceTaxInterpretation": {
                 "type": StringType,
                 "display_name": "Price Tax Interpretation",
                 "short_desc": "EXCLUSIVE or INCLUSIVE",
-                "desc": "EXCLUSIVE or INCLUSIVE",
+                "desc": "`EXCLUSIVE` or `INCLUSIVE`",
                 "required": True,
                 "allowed_values": (
                     <AllowedValueInfo>{"value": "EXCLUSIVE", "desc": "Prices exclude tax"},
@@ -62,42 +62,43 @@ public class SquarespaceCreateOrderRequestDataType inherits HashDataType {
                 ),
             },
             "grandTotal": {
-                "type": AutoHashType,
+                "type": new SquarespaceMoneyDataType(),
                 "display_name": "Grand Total",
-                "short_desc": "Order grand total (Money object with currency and value)",
-                "desc": "Order grand total (Money object with currency and value)",
+                "short_desc": "Order grand total",
+                "desc": "Order grand total with `currency` and `value`",
                 "required": True,
             },
             "lineItems": {
-                "type": SoftListType,
+                "type": new ListDataType("LineItemList", new SquarespaceLineItemDataType(), True),
                 "display_name": "Line Items",
-                "short_desc": "Line items (array of objects with lineItemType, quantity, unitPricePaid)",
-                "desc": "Line items (array of objects with lineItemType, quantity, unitPricePaid)",
+                "short_desc": "Order line items",
+                "desc": "The list of line items for the order",
                 "required": True,
             },
             "customerEmail": {
                 "type": StringOrNothingType,
                 "display_name": "Customer Email",
                 "short_desc": "Customer email",
-                "desc": "Customer email",
+                "desc": "Customer email address",
+                "preselected": True,
             },
             "billingAddress": {
-                "type": AutoHashOrNothingType,
+                "type": new SquarespaceAddressDataType(AutoHashOrNothingType),
                 "display_name": "Billing Address",
                 "short_desc": "Billing address",
-                "desc": "Billing address",
+                "desc": "Billing address for the order",
             },
             "shippingAddress": {
-                "type": AutoHashOrNothingType,
+                "type": new SquarespaceAddressDataType(AutoHashOrNothingType),
                 "display_name": "Shipping Address",
                 "short_desc": "Shipping address",
-                "desc": "Shipping address",
+                "desc": "Shipping address for the order",
             },
             "fulfillmentStatus": {
                 "type": StringOrNothingType,
                 "display_name": "Fulfillment Status",
                 "short_desc": "PENDING or FULFILLED",
-                "desc": "PENDING or FULFILLED",
+                "desc": "`PENDING` or `FULFILLED`",
                 "allowed_values": (
                     <AllowedValueInfo>{"value": "PENDING", "desc": "Order is pending fulfillment"},
                     <AllowedValueInfo>{"value": "FULFILLED", "desc": "Order has been fulfilled"},
@@ -107,35 +108,35 @@ public class SquarespaceCreateOrderRequestDataType inherits HashDataType {
                 "type": StringOrNothingType,
                 "display_name": "Inventory Behavior",
                 "short_desc": "DEDUCT or SKIP (default: SKIP)",
-                "desc": "DEDUCT or SKIP (default: SKIP)",
+                "desc": "`DEDUCT` or `SKIP` (default: `SKIP`)",
                 "allowed_values": (
                     <AllowedValueInfo>{"value": "DEDUCT", "desc": "Deduct from inventory"},
                     <AllowedValueInfo>{"value": "SKIP", "desc": "Do not adjust inventory"},
                 ),
             },
             "subtotal": {
-                "type": AutoHashOrNothingType,
+                "type": new SquarespaceMoneyDataType(AutoHashOrNothingType),
                 "display_name": "Subtotal",
-                "short_desc": "Subtotal",
-                "desc": "Subtotal",
+                "short_desc": "Order subtotal",
+                "desc": "Order subtotal with `currency` and `value`",
             },
             "shippingTotal": {
-                "type": AutoHashOrNothingType,
+                "type": new SquarespaceMoneyDataType(AutoHashOrNothingType),
                 "display_name": "Shipping Total",
                 "short_desc": "Shipping total",
-                "desc": "Shipping total",
+                "desc": "Shipping total with `currency` and `value`",
             },
             "discountTotal": {
-                "type": AutoHashOrNothingType,
+                "type": new SquarespaceMoneyDataType(AutoHashOrNothingType),
                 "display_name": "Discount Total",
                 "short_desc": "Discount total",
-                "desc": "Discount total",
+                "desc": "Discount total with `currency` and `value`",
             },
             "taxTotal": {
-                "type": AutoHashOrNothingType,
+                "type": new SquarespaceMoneyDataType(AutoHashOrNothingType),
                 "display_name": "Tax Total",
                 "short_desc": "Tax total",
-                "desc": "Tax total",
+                "desc": "Tax total with `currency` and `value`",
             },
         };
     }

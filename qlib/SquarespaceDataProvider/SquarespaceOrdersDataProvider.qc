@@ -62,7 +62,7 @@ public class SquarespaceOrdersDataProvider inherits SquarespaceDataProviderBase 
                 "display_name": "Fulfillment Status",
                 "short_desc": "Filter by status (PENDING, FULFILLED, CANCELED)",
                 "type": AbstractDataProviderType::get(SoftStringOrNothingType),
-                "desc": "Filter by fulfillment status (PENDING, FULFILLED, CANCELED)",
+                "desc": "Filter by fulfillment status (`PENDING`, `FULFILLED`, `CANCELED`)",
                 "allowed_values": (
                     <AllowedValueInfo>{"value": "PENDING", "desc": "Pending fulfillment"},
                     <AllowedValueInfo>{"value": "FULFILLED", "desc": "Fulfilled"},
@@ -71,15 +71,15 @@ public class SquarespaceOrdersDataProvider inherits SquarespaceDataProviderBase 
             },
             "modified_after": <DataProviderOptionInfo>{
                 "display_name": "Modified After",
-                "short_desc": "Orders modified after this ISO 8601 datetime",
-                "type": AbstractDataProviderType::get(SoftStringOrNothingType),
-                "desc": "Orders modified after this ISO 8601 datetime",
+                "short_desc": "Orders modified after this datetime",
+                "type": AbstractDataProviderType::get(SoftDateOrNothingType),
+                "desc": "Orders modified after this datetime",
             },
             "modified_before": <DataProviderOptionInfo>{
                 "display_name": "Modified Before",
-                "short_desc": "Orders modified before this ISO 8601 datetime",
-                "type": AbstractDataProviderType::get(SoftStringOrNothingType),
-                "desc": "Orders modified before this ISO 8601 datetime",
+                "short_desc": "Orders modified before this datetime",
+                "type": AbstractDataProviderType::get(SoftDateOrNothingType),
+                "desc": "Orders modified before this datetime",
             },
             "limit": <DataProviderOptionInfo>{
                 "display_name": "Limit",
@@ -124,8 +124,8 @@ public class SquarespaceOrdersDataProvider inherits SquarespaceDataProviderBase 
     }
 
     #! Returns the record type
-    private *AbstractDataProviderType getRecordTypeImpl() {
-        return new SquarespaceOrderDataType();
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return new SquarespaceOrderDataType().getFields();
     }
 
     #! Returns an iterator for records matching the search criteria
