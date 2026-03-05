@@ -27,7 +27,7 @@ public namespace Cin7CoreDataProvider {
 
 #! Cin7Core stock adjustment data type
 public class Cin7CoreStockAdjustmentDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions
         const Fields = {
             "TaskID": {
@@ -78,7 +78,7 @@ public class Cin7CoreStockAdjustmentDataType inherits HashDataType {
                 "desc": "The reason for the stock adjustment",
             },
             "Lines": {
-                "type": SoftAutoListOrNothingType,
+                "type": new ListDataType("Lines", new Cin7CoreStockAdjustmentLineDataType(), True),
                 "display_name": "Lines",
                 "short_desc": "Adjustment lines",
                 "desc": "List of stock adjustment line items",
@@ -100,7 +100,7 @@ public class Cin7CoreStockAdjustmentDataType inherits HashDataType {
 
 #! Cin7Core create stock adjustment request data type
 public class Cin7CoreCreateStockAdjustmentRequestDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions
         const Fields = {
             "AdjustmentDate": {
@@ -129,7 +129,7 @@ public class Cin7CoreCreateStockAdjustmentRequestDataType inherits HashDataType 
                 "desc": "The reason for the stock adjustment",
             },
             "Lines": {
-                "type": SoftAutoListType,
+                "type": new ListDataType("Lines", new Cin7CoreStockAdjustmentLineDataType(), False),
                 "display_name": "Lines",
                 "short_desc": "Adjustment lines",
                 "desc": "List of stock adjustment line items (required)",
@@ -146,7 +146,7 @@ public class Cin7CoreCreateStockAdjustmentRequestDataType inherits HashDataType 
 
 #! Cin7Core stock adjustment line data type
 public class Cin7CoreStockAdjustmentLineDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions
         const Fields = {
             "ProductID": {

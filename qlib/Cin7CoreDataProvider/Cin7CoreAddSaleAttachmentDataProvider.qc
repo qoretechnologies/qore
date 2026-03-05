@@ -105,7 +105,7 @@ public class Cin7CoreAddSaleAttachmentDataProvider inherits Cin7CoreDataProvider
 
 #! Request data type for adding a sale attachment
 public class Cin7CoreAddSaleAttachmentRequestDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions
         const Fields = {
             "SaleID": {
@@ -141,7 +141,7 @@ public class Cin7CoreAddSaleAttachmentRequestDataType inherits HashDataType {
 
 #! Response data type for sale attachment
 public class Cin7CoreSaleAttachmentDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions
         const Fields = {
             "ID": {

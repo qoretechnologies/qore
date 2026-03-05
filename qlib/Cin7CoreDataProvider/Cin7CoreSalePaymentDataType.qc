@@ -27,7 +27,7 @@ public namespace Cin7CoreDataProvider {
 
 #! Cin7Core sale payment data type
 public class Cin7CoreSalePaymentDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions
         const Fields = {
             "ID": {
@@ -107,7 +107,7 @@ public class Cin7CoreSalePaymentDataType inherits HashDataType {
 
 #! Cin7Core add sale payment request data type
 public class Cin7CoreAddSalePaymentRequestDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions
         const Fields = {
             "SaleID": {

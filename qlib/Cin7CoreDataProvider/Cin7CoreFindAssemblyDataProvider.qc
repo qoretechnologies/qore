@@ -50,18 +50,26 @@ public class Cin7CoreFindAssemblyDataProvider inherits Cin7CoreDataProviderBase 
                 "short_desc": "Filter by task ID",
                 "type": AbstractDataProviderType::get(StringOrNothingType),
                 "desc": "Return a specific assembly task by ID",
+                "preselected": True,
             },
             "AssemblyNumber": <DataProviderOptionInfo>{
                 "display_name": "Assembly Number",
                 "short_desc": "Filter by assembly number",
                 "type": AbstractDataProviderType::get(StringOrNothingType),
                 "desc": "Return assembly by number",
+                "preselected": True,
             },
             "Status": <DataProviderOptionInfo>{
                 "display_name": "Status",
                 "short_desc": "Filter by status",
                 "type": AbstractDataProviderType::get(StringOrNothingType),
-                "desc": "Filter by status (Draft, Authorized, Void)",
+                "desc": "Filter assemblies by status",
+                "preselected": True,
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "Draft", "desc": "Draft assembly"},
+                    <AllowedValueInfo>{"value": "Authorized", "desc": "Authorized assembly"},
+                    <AllowedValueInfo>{"value": "Void", "desc": "Voided assembly"},
+                ),
             },
             "Location": <DataProviderOptionInfo>{
                 "display_name": "Location",
@@ -171,7 +179,7 @@ public class Cin7CoreFindAssemblyDataProvider inherits Cin7CoreDataProviderBase 
 
 #! Assembly/finished goods data type
 public class Cin7CoreAssemblyDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions
         const Fields = {
             "TaskID": {
@@ -211,13 +219,13 @@ public class Cin7CoreAssemblyDataType inherits HashDataType {
                 "desc": "The product family being assembled",
             },
             "FinishedGood": {
-                "type": AutoHashOrNothingType,
+                "type": new Cin7CoreAssemblyProductDataType(AutoHashOrNothingType),
                 "display_name": "Finished Good",
                 "short_desc": "Finished product",
                 "desc": "The finished product being created",
             },
             "Components": {
-                "type": AutoListOrNothingType,
+                "type": new ListDataType("Components", new Cin7CoreAssemblyProductDataType(), True),
                 "display_name": "Components",
                 "short_desc": "Component list",
                 "desc": "List of components used in the assembly",
@@ -239,6 +247,61 @@ public class Cin7CoreAssemblyDataType inherits HashDataType {
 
     #! Creates the object
     constructor() : HashDataType("Cin7CoreAssemblyDataType") {
+        addQoreFields(Fields);
+    }
+}
+
+#! Cin7Core assembly product data type (used for finished goods and components)
+public class Cin7CoreAssemblyProductDataType inherits HashDataType {
+    public {
+        #! Field definitions
+        const Fields = {
+            "ProductID": {
+                "type": StringOrNothingType,
+                "display_name": "Product ID",
+                "short_desc": "Product identifier",
+                "desc": "The unique identifier of the product",
+            },
+            "SKU": {
+                "type": StringOrNothingType,
+                "display_name": "SKU",
+                "short_desc": "Stock keeping unit",
+                "desc": "The product SKU",
+            },
+            "Name": {
+                "type": StringOrNothingType,
+                "display_name": "Name",
+                "short_desc": "Product name",
+                "desc": "The product name",
+            },
+            "Quantity": {
+                "type": FloatOrNothingType,
+                "display_name": "Quantity",
+                "short_desc": "Quantity",
+                "desc": "The quantity of this product in the assembly",
+            },
+            "UnitCost": {
+                "type": FloatOrNothingType,
+                "display_name": "Unit Cost",
+                "short_desc": "Cost per unit",
+                "desc": "The unit cost of this product",
+            },
+            "Wastage": {
+                "type": FloatOrNothingType,
+                "display_name": "Wastage",
+                "short_desc": "Wastage quantity",
+                "desc": "The expected wastage quantity",
+            },
+        };
+    }
+
+    #! Creates the object
+    constructor() : HashDataType("Cin7CoreAssemblyProductDataType") {
+        addQoreFields(Fields);
+    }
+
+    #! Creates the object with a base type
+    constructor(Type base_type) : HashDataType(base_type, "Cin7CoreAssemblyProductDataType") {
         addQoreFields(Fields);
     }
 }

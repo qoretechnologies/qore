@@ -98,7 +98,7 @@ public class Cin7CoreGetSaleDataProvider inherits Cin7CoreDataProviderBase {
 
 #! Request data type for getting a sale
 public class Cin7CoreGetSaleRequestDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions
         const Fields = {
             "ID": {

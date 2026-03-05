@@ -126,7 +126,7 @@ public class Cin7CoreUpdateSaleDataProvider inherits Cin7CoreDataProviderBase {
 
 #! Request data type for updating a sale
 public class Cin7CoreUpdateSaleRequestDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions
         const Fields = {
             "ID": {
@@ -211,13 +211,13 @@ public class Cin7CoreUpdateSaleRequestDataType inherits HashDataType {
                 "desc": "The price tier for this sale",
             },
             "ShippingAddress": {
-                "type": AutoHashOrNothingType,
+                "type": new Cin7CoreAddressDataType(AutoHashOrNothingType),
                 "display_name": "Shipping Address",
                 "short_desc": "Shipping address",
                 "desc": "The shipping address for this sale",
             },
             "BillingAddress": {
-                "type": AutoHashOrNothingType,
+                "type": new Cin7CoreAddressDataType(AutoHashOrNothingType),
                 "display_name": "Billing Address",
                 "short_desc": "Billing address",
                 "desc": "The billing address for this sale",
@@ -259,13 +259,13 @@ public class Cin7CoreUpdateSaleRequestDataType inherits HashDataType {
                 "desc": "The sales representative for this sale",
             },
             "Lines": {
-                "type": AutoListOrNothingType,
+                "type": new ListDataType("Lines", new Cin7CoreSaleLineItemDataType(), True),
                 "display_name": "Lines",
                 "short_desc": "Line items",
                 "desc": "The line items for this sale",
             },
             "AdditionalCharges": {
-                "type": AutoListOrNothingType,
+                "type": new ListDataType("AdditionalCharges", new Cin7CoreAdditionalChargeDataType(), True),
                 "display_name": "Additional Charges",
                 "short_desc": "Additional charges",
                 "desc": "Additional charges for this sale",

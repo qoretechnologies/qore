@@ -110,7 +110,7 @@ public class Cin7CoreUpdateSalePaymentDataProvider inherits Cin7CoreDataProvider
 
 #! Request data type for updating a sale payment
 public class Cin7CoreUpdateSalePaymentRequestDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions
         const Fields = {
             "ID": {

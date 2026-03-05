@@ -109,7 +109,7 @@ public class Cin7CoreUpdateStockAdjustmentDataProvider inherits Cin7CoreDataProv
 
 #! Request data type for updating a stock adjustment
 public class Cin7CoreUpdateStockAdjustmentRequestDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions
         const Fields = {
             "TaskID": {
@@ -127,7 +127,7 @@ public class Cin7CoreUpdateStockAdjustmentRequestDataType inherits HashDataType 
                 "ref_data": "locations",
             },
             "Lines": {
-                "type": AutoListOrNothingType,
+                "type": new ListDataType("Lines", new Cin7CoreStockAdjustmentLineDataType(), True),
                 "display_name": "Lines",
                 "short_desc": "Adjustment lines",
                 "desc": "List of products and quantities to adjust",
