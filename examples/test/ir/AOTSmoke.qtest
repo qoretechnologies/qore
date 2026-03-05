@@ -103,8 +103,18 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT strip source cast parse hash", \testStripSourceCastParseHash());
         # Closure and regex handler serialization tests
         addTestCase("AOT closure in function", \testClosureInFunction());
+        addTestCase("AOT closure lambda", \testClosureLambda());
+        addTestCase("AOT closure typed params defaults", \testClosureTypedParamsDefaults());
+        addTestCase("AOT closure multi capture", \testClosureMultiCapture());
+        addTestCase("AOT closure strip source", \testClosureStripSource());
         addTestCase("AOT regex switch in on_exit", \testRegexSwitchInOnExit());
         addTestCase("AOT nested on_exit", \testNestedOnExit());
+        # Closure default value serialization tests
+        addTestCase("AOT closure default int", \testClosureDefaultInt());
+        addTestCase("AOT closure default bool", \testClosureDefaultBool());
+        addTestCase("AOT closure default float", \testClosureDefaultFloat());
+        addTestCase("AOT closure default multiple", \testClosureDefaultMultiple());
+        addTestCase("AOT closure default strip source", \testClosureDefaultStripSource());
         set_return_value(main());
     }
 
@@ -2759,6 +2769,94 @@ exit(0);
         assertEq(interp_out, result.run_out, "closure-in-func output matches interpreter");
     }
 
+    testClosureLambda() {
+        # Test lambda expression in AOT
+        string code = "%modern
+string sub apply_and_format(code func, int val) {
+    return sprintf(\"result=%d\", func(val));
+}
+
+code doubler = int sub(int x) { return x * 2; };
+printf(\"%s\\n\", apply_and_format(doubler, 5));
+printf(\"%s\\n\", apply_and_format(doubler, 15));
+exit(0);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "closure-lambda: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "closure-lambda output matches interpreter");
+    }
+
+    testClosureTypedParamsDefaults() {
+        # Test closure with typed parameters and default values
+        string code = "%modern
+string sub make_formatter(string prefix) {
+    code fmt = string sub(int val, string suffix = \"!\") {
+        return prefix + string(val) + suffix;
+    };
+    return fmt(42) + \" \" + fmt(7, \"?\");
+}
+
+printf(\"%s\\n\", make_formatter(\"num=\"));
+printf(\"%s\\n\", make_formatter(\"x=\"));
+exit(0);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "closure-typed-defaults: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "closure-typed-defaults output matches interpreter");
+    }
+
+    testClosureMultiCapture() {
+        # Test closure capturing multiple variables
+        string code = "%modern
+string sub compute(int a, int b, string op) {
+    code calc = int sub() {
+        switch (op) {
+            case \"+\": return a + b;
+            case \"*\": return a * b;
+            default: return a - b;
+        }
+    };
+    return sprintf(\"%s(%d,%d)=%d\", op, a, b, calc());
+}
+
+printf(\"%s\\n\", compute(10, 3, \"+\"));
+printf(\"%s\\n\", compute(10, 3, \"*\"));
+printf(\"%s\\n\", compute(10, 3, \"-\"));
+exit(0);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "closure-multi-capture: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "closure-multi-capture output matches interpreter");
+    }
+
+    testClosureStripSource() {
+        # Test closure works in strip-source mode (no AST fallback)
+        string code = "%modern
+string sub make_adder_label(int base) {
+    code adder = int sub(int x) { return base + x; };
+    return sprintf(\"base=%d result=%d\", base, adder(7));
+}
+
+printf(\"%s\\n\", make_adder_label(10));
+printf(\"%s\\n\", make_adder_label(20));
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.all_precompiled,
+            "closure-strip-source: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "closure-strip-source output matches interpreter");
+    }
+
     testRegexSwitchInOnExit() {
         # Test regex switch cases in on_exit handler body
         string code = "%modern
@@ -2822,5 +2920,117 @@ exit(0);
         string interp_out = runInterpreted(code);
         assertEq(interp_out, result.run_out,
             "nested-on-exit strip-source output matches interpreter");
+    }
+
+    testClosureDefaultInt() {
+        # Test closure with int default value survives AOT serialization
+        string code = "%modern
+string sub test_default_int() {
+    code fn = string sub(int x = 42) {
+        return sprintf(\"x=%d\", x);
+    };
+    return fn() + \" \" + fn(7);
+}
+
+printf(\"%s\\n\", test_default_int());
+exit(0);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "closure-default-int: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "closure-default-int output matches interpreter");
+    }
+
+    testClosureDefaultBool() {
+        # Test closure with bool default value survives AOT serialization
+        string code = "%modern
+string sub test_default_bool() {
+    code fn = string sub(bool flag = True) {
+        return flag ? \"yes\" : \"no\";
+    };
+    return fn() + \" \" + fn(False);
+}
+
+printf(\"%s\\n\", test_default_bool());
+exit(0);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "closure-default-bool: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "closure-default-bool output matches interpreter");
+    }
+
+    testClosureDefaultFloat() {
+        # Test closure with float default value survives AOT serialization
+        string code = "%modern
+string sub test_default_float() {
+    code fn = string sub(float f = 3.14) {
+        return sprintf(\"f=%.2f\", f);
+    };
+    return fn() + \" \" + fn(2.72);
+}
+
+printf(\"%s\\n\", test_default_float());
+exit(0);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "closure-default-float: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "closure-default-float output matches interpreter");
+    }
+
+    testClosureDefaultMultiple() {
+        # Test closure with multiple params, some with defaults, some without
+        string code = "%modern
+string sub test_multi_defaults() {
+    code fn = string sub(int a, int b = 10, string s = \"hi\", bool flag = True) {
+        string result = sprintf(\"%d+%d=%d %s\", a, b, a + b, s);
+        if (flag) {
+            result += \"!\";
+        }
+        return result;
+    };
+    # Call with just required arg
+    string r1 = fn(5);
+    # Call with all args
+    string r2 = fn(1, 2, \"bye\", False);
+    # Call with partial args
+    string r3 = fn(3, 7);
+    return r1 + \"|\" + r2 + \"|\" + r3;
+}
+
+printf(\"%s\\n\", test_multi_defaults());
+exit(0);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "closure-default-multiple: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "closure-default-multiple output matches interpreter");
+    }
+
+    testClosureDefaultStripSource() {
+        # Test closure with defaults works in strip-source mode (no AST fallback)
+        string code = "%modern
+string sub test_strip_defaults() {
+    code fn = string sub(int x = 42, string s = \"default\") {
+        return sprintf(\"%d:%s\", x, s);
+    };
+    return fn() + \" \" + fn(7, \"custom\");
+}
+
+printf(\"%s\\n\", test_strip_defaults());
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.all_precompiled,
+            "closure-default-strip: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "closure-default-strip output matches interpreter");
     }
 }

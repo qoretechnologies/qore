@@ -48,10 +48,19 @@
 #include "qore/intern/CaseNodeRegex.h"
 #include "qore/intern/QoreRegex.h"
 #include "qore/intern/OnBlockExitStatement.h"
+#include "qore/intern/Function.h"
+#include "qore/intern/QoreClosureParseNode.h"
 #include <qore/QoreEnumDecl.h>
+
+#include "qore/intern/QoreIRBuilder.h"
+#include "qore/intern/QoreIRLowering.h"
+#include "qore/intern/QoreIRVerifier.h"
 
 #include <cassert>
 #include <cstring>
+
+// Defined in Function.cpp - collects all local variables from a StatementBlock and nested blocks
+extern void collectAllStatementLocals(const StatementBlock* block, std::vector<LocalVar*>& locals);
 
 // ---- QoreAOTBinaryWriter ----
 
@@ -1607,6 +1616,71 @@ static void writeMethodsSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
     writer.endSection(sec_idx);
 }
 
+//! Lower a closure variant to IR for serialization
+/** Follows the same pattern as buildContextForVariant() in QoreAOTRuntime.cpp.
+    @param variant the closure variant to lower
+    @return heap-allocated IR function, or nullptr on failure (caller owns)
+*/
+static QoreIRFunction* lowerClosureForSerialization(const UserClosureVariant* variant) {
+    StatementBlock* sb = const_cast<UserClosureVariant*>(variant)->getStatementBlock();
+    if (!sb) {
+        return nullptr;
+    }
+
+    auto* ir = new QoreIRFunction("<closure>");
+
+    // Record pre-instantiated locals from signature
+    const UserSignature* sig = const_cast<UserClosureVariant*>(variant)->getUserSignature();
+    if (sig) {
+        for (unsigned i = 0; i < sig->numParams(); ++i) {
+            ir->pre_instantiated_locals.insert(reinterpret_cast<const void*>(sig->lv[i]));
+        }
+        if (sig->argvid) {
+            ir->pre_instantiated_locals.insert(reinterpret_cast<const void*>(sig->argvid));
+        }
+        if (sig->selfid) {
+            ir->pre_instantiated_locals.insert(reinterpret_cast<const void*>(sig->selfid));
+        }
+    }
+
+    QoreIRBuilder builder(ir);
+    auto* entry = ir->createBlock("entry");
+    builder.setBlock(entry);
+
+    QoreProgram* pgm = const_cast<UserClosureVariant*>(variant)->pgm;
+    QoreParseContext parse_context(pgm);
+    QoreIRLowering lowering(builder, &parse_context);
+    std::string error;
+    if (!lowering.lowerStatementBlock(sb, error)) {
+        printd(2, "AOT: closure IR lowering failed: %s\n", error.c_str());
+        delete ir;
+        return nullptr;
+    }
+
+    // Ensure terminator
+    if (ir->blocks.back()->instructions.empty() ||
+            (ir->blocks.back()->instructions.back()->opcode != QoreIROpcode::Return &&
+             ir->blocks.back()->instructions.back()->opcode != QoreIROpcode::ReturnNothing &&
+             ir->blocks.back()->instructions.back()->opcode != QoreIROpcode::Br &&
+             ir->blocks.back()->instructions.back()->opcode != QoreIROpcode::Rethrow)) {
+        builder.createReturnNothing();
+    }
+
+    std::string verify_error;
+    if (!QoreIRVerifier::verify(*ir, verify_error)) {
+        printd(2, "AOT: closure IR verification failed: %s\n", verify_error.c_str());
+        delete ir;
+        return nullptr;
+    }
+
+    // Collect body locals
+    collectAllStatementLocals(sb, ir->all_body_locals);
+
+    ir->computeSlotIdsAndEmbed();
+    return ir;
+}
+
+
 //! Classify and write a QoreValue expression in AOTExprKind format
 /** Used by handler IR serialization to classify expression nodes inline.
     Handles function calls, method calls, variable refs, constants, and enums.
@@ -1829,7 +1903,78 @@ void serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
                     // ref1 = member name
                     writer.writeStringRef(expr.ref1.c_str());
                     break;
-                case AOTExprKind::CLOSURE_CREATE:
+                case AOTExprKind::CLOSURE_CREATE: {
+                    // Write flags and class type path
+                    writer.writeStringRef(expr.ref1.c_str());  // "lambda,in_method"
+                    writer.writeStringRef(expr.ref2.c_str());  // class_type_path
+
+                    // Serialize closure signature metadata
+                    const UserClosureFunction* ucf = expr.closure_func;
+                    assert(ucf);
+                    auto* variant = static_cast<const UserClosureVariant*>(ucf->first());
+                    const UserSignature* sig = const_cast<UserClosureVariant*>(variant)->getUserSignature();
+
+                    // Write return type
+                    const char* ret_path = sig->getReturnTypeInfo()
+                        ? QoreTypeInfo::getPath(sig->getReturnTypeInfo()) : "";
+                    writer.writeStringRef(ret_path);
+
+                    // Write params: count, then (name, type_path, default) per param
+                    unsigned num_params = sig->numParams();
+                    writer.writeU16(static_cast<uint16_t>(num_params));
+                    for (unsigned p = 0; p < num_params; ++p) {
+                        const char* pname = sig->getName(p);
+                        writer.writeStringRef(pname ? pname : "");
+                        const char* ptype = sig->getParamTypeInfo(p)
+                            ? QoreTypeInfo::getPath(sig->getParamTypeInfo(p)) : "";
+                        writer.writeStringRef(ptype);
+                        // Default value: write has_default flag + value if present
+                        bool has_default = sig->hasDefaultArg(p);
+                        writer.writeU8(has_default ? 1 : 0);
+                        if (has_default) {
+                            writer.writeValue(sig->getDefaultArgList()[p]);
+                        }
+                    }
+                    writer.writeU8(sig->hasVarargs() ? 1 : 0);
+
+                    // Write captured variable names (from LVarSet)
+                    const LVarSet* vlist = const_cast<UserClosureFunction*>(ucf)->getVList();
+                    writer.writeU16(vlist ? static_cast<uint16_t>(vlist->size()) : 0);
+                    if (vlist) {
+                        for (LocalVar* lv : *vlist) {
+                            writer.writeStringRef(lv->getName());
+                        }
+                    }
+
+                    // Lower closure to IR and serialize
+                    const QoreIRFunction* closure_ir = const_cast<UserClosureVariant*>(variant)->getCachedIR();
+                    QoreIRFunction* owned_ir = nullptr;
+                    if (!closure_ir) {
+                        // Lower on the fly for serialization
+                        owned_ir = lowerClosureForSerialization(variant);
+                        closure_ir = owned_ir;
+                    }
+
+                    if (closure_ir) {
+                        writer.writeU8(1);  // has_ir
+                        uint32_t size_pos = writer.position();
+                        writer.writeU32(0);  // placeholder
+
+                        const auto& parent_locals = func.slot_ids.locals;
+                        const auto& parent_globals = func.slot_ids.globals;
+                        auto writeExpr = [&parent_locals, &parent_globals](QoreAOTBinaryWriter& w,
+                                const QoreValue& e) -> bool {
+                            return classifyAndWriteExpr(w, e, parent_locals, parent_globals);
+                        };
+                        serializeIRFunction(writer, *closure_ir, writeExpr);
+                        uint32_t end_pos = writer.position();
+                        writer.patchU32(size_pos, end_pos - size_pos - 4);
+                    } else {
+                        writer.writeU8(0);  // no IR — fallback needed
+                    }
+                    delete owned_ir;
+                    break;
+                }
                 case AOTExprKind::CALL_REF:
                 case AOTExprKind::OBJ_METHOD_REF:
                     // no additional data
@@ -1906,12 +2051,12 @@ void serializeFallbackSources(QoreAOTBinaryWriter& writer,
         const char* source_text, int source_len) {
     // Collect functions that need source fallback:
     // - functions with unsupported expressions (GENERIC_EVAL)
-    // - functions with closure expressions (CLOSURE_CREATE — need source for runtime re-lowering)
     // - functions with stmt_slots that lack handler IR (need AST execution)
     // - constructor/destructor/copy methods (need BCAList from source parsing)
+    // Note: CLOSURE_CREATE no longer triggers fallback — closures are fully serialized
     std::vector<const AOTCompiledFuncWithSlots*> fallback_funcs;
     for (auto& func : funcs) {
-        if (func.slot_ids.has_unsupported_exprs || func.slot_ids.has_closure_exprs) {
+        if (func.slot_ids.has_unsupported_exprs) {
             fallback_funcs.push_back(&func);
             continue;
         }

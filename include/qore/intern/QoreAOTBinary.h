@@ -770,11 +770,14 @@ struct AOTGlobalSlotId {
 };
 
 //! Identity for an expression slot
+class UserClosureFunction;
+
 struct AOTExprSlotId {
     AOTExprKind kind = AOTExprKind::GENERIC_EVAL; //!< expression kind
     std::string ref1;        //!< kind-specific: function name or class path
     std::string ref2;        //!< kind-specific: method name (for method calls)
     const QoreListNode* constructor_args = nullptr; //!< constructor args for NEW_OBJECT/SCOPED_NEW_OBJECT
+    const UserClosureFunction* closure_func = nullptr; //!< For CLOSURE_CREATE: source closure function
 };
 
 //! Identity for a body local variable (needed for instantiation management)

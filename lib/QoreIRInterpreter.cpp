@@ -1957,7 +1957,6 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         QoreIRBasicBlock* current_block = block;
 next_instruction:
         QoreIRInstruction* inst = block->instructions[ip].get();
-
         // Unified per-line overhead: only update runtime_loc, check ephemeral refs,
         // and fire debug events when the source line changes.  Multiple IR instructions
         // on the same source line share the same location, so we only need one check

@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -76,6 +76,13 @@ class QoreClosureParseNode : public ParseNode, public DeferredCodeObject {
 public:
     DLLLOCAL QoreClosureParseNode(const QoreProgramLocation* loc, UserClosureFunction* n_uf, bool n_lambda = false);
 
+    //! AOT constructor: creates a closure parse node from pre-built function
+    DLLLOCAL QoreClosureParseNode(const QoreProgramLocation* loc, UserClosureFunction* n_uf,
+            bool n_lambda, bool n_in_method)
+        : ParseNode(loc, NT_CLOSURE), uf(n_uf), lambda(n_lambda), in_method(n_in_method) {
+        set_effect_as_root(false);
+    }
+
     DLLLOCAL ~QoreClosureParseNode();
 
     DLLLOCAL virtual int parseInitDeferred();
@@ -88,6 +95,8 @@ public:
     }
 
     DLLLOCAL bool isLambda() const { return lambda; }
+
+    DLLLOCAL bool isInMethod() const { return in_method; }
 
     DLLLOCAL QoreValue exec(const QoreClosureBase& closure_base, QoreProgram* pgm, const QoreListNode* args,
         QoreObject* self, const qore_class_private* class_ctx, ExceptionSink* xsink) const;

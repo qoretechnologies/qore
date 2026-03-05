@@ -156,6 +156,8 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         addTestCase("IR hash slice smoke", \testIrHashSliceSmoke());
         addTestCase("IR map dot-eval in try smoke", \testIrMapDotEvalInTrySmoke());
         addTestCase("IR map hash bool value smoke", \testIrMapHashBoolValueSmoke());
+        addTestCase("IR closure default args smoke", \testIrClosureDefaultArgsSmoke());
+        addTestCase("IR closure default arg omitted smoke", \testIrClosureDefaultArgOmittedSmoke());
         set_return_value(main());
     }
 
@@ -5400,5 +5402,79 @@ class IRExecModeSmokeTest inherits QUnit::Test {
 
         string stdout_output = ReadOnlyFile::readTextFile(out.path);
         assertEq("map-hash-bool:ok\n", stdout_output, "map {$1: True} should preserve bool type");
+    }
+
+    testIrClosureDefaultArgsSmoke() {
+        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        if (!qore_bin || qore_bin == NOTHING) {
+            testSkip("no qore binary path available");
+            return;
+        }
+
+        TmpFile script();
+        script.file.write("%new-style\n%modern\n");
+        script.file.write("code fn = int sub (int x = 42, string s = \"hello\", bool b = True) {\n");
+        script.file.write("    return x + s.length() + (b ? 1 : 0);\n");
+        script.file.write("};\n");
+        script.file.write("int r1 = fn();\n");
+        script.file.write("int r2 = fn(10, \"ab\", False);\n");
+        script.file.write("printf(\"defaults:%d:%d\\n\", r1, r2);\n");
+        script.file.close();
+
+        TmpFile out();
+        TmpFile err();
+
+        string cmd = sprintf("%s --exec-mode=ir --ir-fallback-warn %s > %s 2> %s",
+            qore_bin, script.path, out.path, err.path);
+        int rc = runCommand(cmd, script.path);
+        string err_output = ReadOnlyFile::readTextFile(err.path);
+        if (rc != 0 && err_output =~ /exec-mode/ && err_output =~ /valid long option/) {
+            testSkip("exec-mode option not supported by test qore binary");
+            return;
+        }
+
+        assertEq(0, rc, "IR closure default args should exit cleanly");
+        assertFalse(err_output =~ /IR exec fallback to AST:/, "Unexpected IR fallback warning");
+
+        string stdout_output = ReadOnlyFile::readTextFile(out.path);
+        # r1 = 42 + 5 + 1 = 48, r2 = 10 + 2 + 0 = 12
+        assertEq("defaults:48:12\n", stdout_output, "Unexpected IR closure default args output");
+    }
+
+    testIrClosureDefaultArgOmittedSmoke() {
+        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        if (!qore_bin || qore_bin == NOTHING) {
+            testSkip("no qore binary path available");
+            return;
+        }
+
+        TmpFile script();
+        script.file.write("%new-style\n%modern\n");
+        script.file.write("code greet = string sub (string name, string greeting = \"Hi\") {\n");
+        script.file.write("    return greeting + \" \" + name;\n");
+        script.file.write("};\n");
+        script.file.write("string r1 = greet(\"Alice\");\n");
+        script.file.write("string r2 = greet(\"Bob\", \"Hello\");\n");
+        script.file.write("printf(\"greet:%s:%s\\n\", r1, r2);\n");
+        script.file.close();
+
+        TmpFile out();
+        TmpFile err();
+
+        string cmd = sprintf("%s --exec-mode=ir --ir-fallback-warn %s > %s 2> %s",
+            qore_bin, script.path, out.path, err.path);
+        int rc = runCommand(cmd, script.path);
+        string err_output = ReadOnlyFile::readTextFile(err.path);
+        if (rc != 0 && err_output =~ /exec-mode/ && err_output =~ /valid long option/) {
+            testSkip("exec-mode option not supported by test qore binary");
+            return;
+        }
+
+        assertEq(0, rc, "IR closure default arg omitted should exit cleanly");
+        assertFalse(err_output =~ /IR exec fallback to AST:/, "Unexpected IR fallback warning");
+
+        string stdout_output = ReadOnlyFile::readTextFile(out.path);
+        assertEq("greet:Hi Alice:Hello Bob\n", stdout_output,
+            "Unexpected IR closure default arg omitted output");
     }
 }

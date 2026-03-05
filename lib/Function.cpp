@@ -3117,16 +3117,21 @@ QoreValue UserVariantBase::evalIntern(const char* name, ReferenceHolder<QoreList
     // Also dispatch to evalTiered for AOT-only functions (no AST body) that are already at TIER_JIT
     if (pgm) {
         bool has_aot = current_tier.load(std::memory_order_acquire) == TIER_JIT && cached_aot_fn;
-        if (statements || has_aot) {
+        if (statements || has_aot || cached_ir) {
             qore_exec_mode_t mode = pgm->getExecMode();
-            printd(3, "evalIntern '%s': mode=%d pgm=%p statements=%p has_aot=%d\n",
-                name, (int)mode, (void*)pgm, (void*)statements, (int)has_aot);
+            printd(3, "evalIntern '%s': mode=%d pgm=%p statements=%p has_aot=%d cached_ir=%p\n",
+                name, (int)mode, (void*)pgm, (void*)statements, (int)has_aot, (void*)cached_ir);
             // AOT dispatch: always use evalTiered when a cached AOT function is
             // available (tier==TIER_JIT && cached_aot_fn). This covers both
             // strip-source (no AST body) and normal AOT with AST body.
             // The AOT context is valid because registerPrecompiledAOTFunction()
             // set it up during program initialization.
             if (has_aot) {
+                return evalTiered(name, argv, self, xsink);
+            }
+            // IR-only dispatch: closure variants reconstructed from AOT binary
+            // with cached IR but no AST body and no native AOT function
+            if (!statements && cached_ir) {
                 return evalTiered(name, argv, self, xsink);
             }
             // Tiered promotion for JIT/IR/tiered modes with %modern code.

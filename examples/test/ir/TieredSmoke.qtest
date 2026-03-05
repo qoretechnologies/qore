@@ -44,6 +44,7 @@ class TieredSmokeTest inherits QUnit::Test {
         addTestCase("tiered closure basic", \testTieredClosureBasic());
         addTestCase("tiered closure write-back", \testTieredClosureWriteBack());
         addTestCase("tiered closure multi-capture", \testTieredClosureMultiCapture());
+        addTestCase("tiered closure defaults", \testTieredClosureDefaults());
         set_return_value(main());
     }
 
@@ -675,6 +676,39 @@ printf(\"%s\\n\", results.join(\",\"));
             string expected_str = sprintf("val=%.1f", expected);
             assertEq(expected_str, parts[i],
                 sprintf("closure multi-capture: compute(%d) = %s", i, expected_str));
+        }
+    }
+
+    testTieredClosureDefaults() {
+        # Closure with default args called enough times to trigger AST->IR->JIT promotion
+        string code = "%modern
+code fn = int sub (int x, int y = 10, string s = \"abc\") {
+    return x + y + s.length();
+};
+list<int> results = ();
+for (int i = 0; i < 40; i++) {
+    if (i % 2 == 0) {
+        results += fn(i);
+    } else {
+        results += fn(i, 20, \"hello\");
+    }
+}
+printf(\"%s\\n\", (map $1.toString(), results).join(\",\"));
+";
+        string result = trim(runScript(code, "tiered", "--jit-ir-threshold=5 --jit-jit-threshold=20"));
+        list<string> parts = result.split(",");
+        assertEq(40, parts.size(), "closure defaults: got 40 results");
+        for (int i = 0; i < 40; i++) {
+            int expected;
+            if (i % 2 == 0) {
+                # fn(i) => i + 10 + 3 = i + 13
+                expected = i + 13;
+            } else {
+                # fn(i, 20, "hello") => i + 20 + 5 = i + 25
+                expected = i + 25;
+            }
+            assertEq(expected.toString(), parts[i],
+                sprintf("closure defaults: fn(%d) = %d", i, expected));
         }
     }
 }

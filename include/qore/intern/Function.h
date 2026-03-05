@@ -804,6 +804,14 @@ public:
         return cached_ir;
     }
 
+    //! Set cached IR for a closure variant reconstructed from AOT binary.
+    //! Promotes directly to TIER_IR (no AST body, no AOT fn).
+    DLLLOCAL void setCachedIR(QoreIRFunction* ir) {
+        cached_ir = ir;
+        std::call_once(ir_lower_once, []{});  // consume the flag safely
+        current_tier.store(TIER_IR, std::memory_order_release);
+    }
+
     //! Returns a pointer to the deopt counter for JIT guard failure tracking
     DLLLOCAL void* getDeoptCounterPtr() const {
         return const_cast<void*>(static_cast<const void*>(&deopt_count));

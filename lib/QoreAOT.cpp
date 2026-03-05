@@ -339,7 +339,7 @@ static void reportAOTCompileStats(const char* label, int compiled_count, int tot
         int failed_count, const std::vector<AOTCompiledFunc>& compiled_funcs) {
     int unsupported_count = 0;
     for (auto& cf : compiled_funcs) {
-        if (cf.slot_ids.has_unsupported_exprs || cf.slot_ids.has_closure_exprs) {
+        if (cf.slot_ids.has_unsupported_exprs) {
             ++unsupported_count;
         }
     }
@@ -357,12 +357,13 @@ static void reportAOTCompileStats(const char* label, int compiled_count, int tot
 
 //! Check if a compiled function needs source fallback at runtime
 /** A function needs source fallback if it has:
-    - unsupported expressions (closures, etc.) that can't be reconstructed from binary
+    - unsupported expressions that can't be reconstructed from binary
     - statement slots (on_exit/on_success/on_error) without serialized handler IR
     - constructor/destructor/copy methods that need BCAList from source parsing
+    Note: closures are fully serialized and no longer trigger fallback.
 */
 static bool funcNeedsFallback(const AOTCompiledFuncWithSlots& f) {
-    if (f.slot_ids.has_unsupported_exprs || f.slot_ids.has_closure_exprs) {
+    if (f.slot_ids.has_unsupported_exprs) {
         return true;
     }
     // Check if any stmt slots lack handler IR (need AST fallback)
@@ -5066,9 +5067,19 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots) 
     }
 
     // QoreClosureParseNode: closure/lambda creation
-    // Classified as CLOSURE_CREATE — the slot will be filled at runtime from re-lowered source
-    if (dynamic_cast<const QoreClosureParseNode*>(node)) {
+    if (auto* closure = dynamic_cast<const QoreClosureParseNode*>(node)) {
         id.kind = AOTExprKind::CLOSURE_CREATE;
+        UserClosureFunction* ucf = closure->getFunction();
+        // ref1 = flags: "lambda,in_method" (comma-separated booleans)
+        id.ref1 = std::string(closure->isLambda() ? "1" : "0") + ","
+                + (closure->isInMethod() ? "1" : "0");
+        // ref2 = class type path (empty if no class context)
+        const QoreTypeInfo* cti = ucf->getClassType();
+        if (cti) {
+            id.ref2 = QoreTypeInfo::getPath(cti);
+        }
+        // Store closure function pointer for later serialization
+        id.closure_func = ucf;
         return id;
     }
 
