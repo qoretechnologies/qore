@@ -677,7 +677,8 @@ void ThreadEntry::cleanup() {
 
     assert(!thread_data);
 
-    if (status != QTS_NA && status != QTS_RESERVED && !joined && ptid) {
+    if (status != QTS_NA && status != QTS_RESERVED && !joined && ptid
+            && !pthread_equal(ptid, pthread_self())) {
         pthread_detach(ptid);
     }
 
