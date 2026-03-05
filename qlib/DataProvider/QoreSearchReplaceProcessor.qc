@@ -50,9 +50,12 @@ public class QoreSearchReplaceProcessor inherits AbstractDataProvider {
             "search": <DataProviderOptionInfo>{
                 "display_name": "Search Pattern",
                 "short_desc": "Text or regex pattern to search for",
-                "desc": "The search string or regular expression pattern to find in the field value",
+                "desc": "The search string or regular expression pattern to find in the "
+                    "field value; when regex mode is enabled, supports full Qore regular "
+                    "expression syntax",
                 "type": AbstractDataProviderTypeMap."string",
                 "required": True,
+                "example_value": "old_value",
             },
             "replace": <DataProviderOptionInfo>{
                 "display_name": "Replacement String",
@@ -60,6 +63,7 @@ public class QoreSearchReplaceProcessor inherits AbstractDataProvider {
                 "desc": "The replacement string to substitute for matches",
                 "type": AbstractDataProviderTypeMap."string",
                 "required": True,
+                "example_value": "new_value",
             },
             "is_regex": <DataProviderOptionInfo>{
                 "display_name": "Use Regex",

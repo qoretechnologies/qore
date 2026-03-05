@@ -207,7 +207,6 @@ public class MailgunDataProviderTest inherits QUnit::Test {
         assertTrue(children.contains("domains"));
         assertTrue(children.contains("send-email"));
         assertTrue(children.contains("validate-email"));
-        assertTrue(children.contains("make-api-call"));
         assertTrue(children.contains("add-mailing-list-member"));
         assertTrue(children.contains("get-mailing-list-member"));
         assertTrue(children.contains("delete-mailing-list-member"));
@@ -396,7 +395,6 @@ public class MailgunDataProviderTest inherits QUnit::Test {
         list<string> actionNames = map $1.action, actions;
         assertTrue(actionNames.contains("send-email"));
         assertTrue(actionNames.contains("validate-email"));
-        assertTrue(actionNames.contains("make-api-call"));
 
         # Verify mailing list actions
         assertTrue(actionNames.contains("add-mailing-list-member"));

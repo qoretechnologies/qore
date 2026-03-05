@@ -68,16 +68,20 @@ public class QoreLinearRegressionProcessor inherits DataProvider::AbstractDataPr
                 "short_desc": "Number of records to learn from",
                 "desc": "The number of records to collect before fitting the model and "
                     "generating predictions; the model learns the relationship between "
-                    "input fields and the target from this batch; must be at least 2",
+                    "input fields and the target from this batch; must be at least 2.\n\n"
+                    "**Sizing guidance**: use at least `20`\u2013`30` per input field for "
+                    "reliable regression; for example, with 3 input fields, use at least "
+                    "`60`\u2013`100` records",
                 "type": AbstractDataProviderTypeMap."int",
                 "required": True,
+                "example_value": 100,
             },
             "fit_intercept": <DataProviderOptionInfo>{
                 "display_name": "Fit Intercept",
                 "short_desc": "Include a baseline constant in the model",
                 "desc": "When enabled, the model includes a baseline constant (intercept); "
                     "this should almost always be enabled unless you know the target is "
-                    "zero when all inputs are zero; default: True (enabled)",
+                    "zero when all inputs are zero; default: `True` (enabled)",
                 "type": AbstractDataProviderTypeMap."*bool",
             },
             "normalize": <DataProviderOptionInfo>{
@@ -86,7 +90,7 @@ public class QoreLinearRegressionProcessor inherits DataProvider::AbstractDataPr
                 "desc": "When enabled, input fields are scaled to have similar ranges before "
                     "fitting; this can improve accuracy when input fields have very different "
                     "units or magnitudes (e.g., mixing square feet and number of rooms); "
-                    "default: False (disabled)",
+                    "default: `False` (disabled)",
                 "type": AbstractDataProviderTypeMap."*bool",
             },
         };

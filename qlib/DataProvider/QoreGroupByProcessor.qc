@@ -99,6 +99,7 @@ public class QoreGroupByProcessor inherits AbstractDataProvider {
                     "Example: `total=sum(amount),orders=count(),avg_price=avg(price)`",
                 "type": AbstractDataProviderTypeMap."string",
                 "required": True,
+                "example_value": "total=sum(amount),orders=count(),avg=avg(amount)",
             },
         };
 
@@ -157,8 +158,8 @@ public class QoreGroupByProcessor inherits AbstractDataProvider {
     #! Returns the data provider description
     *string getDesc() {
         return "Groups records by one or more field values and computes aggregate functions "
-            "(count, sum, avg, min, max, first, last) per group; emits one output record per "
-            "group on flush";
+            "(`count`, `sum`, `avg`, `min`, `max`, `first`, `last`) per group; emits one "
+            "output record per group on flush";
     }
 
     #! Returns data provider static info

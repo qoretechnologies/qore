@@ -58,9 +58,12 @@ public class QoreLOFProcessor inherits DataProvider::AbstractDataProvider {
                 "short_desc": "Number of records to analyze together",
                 "desc": "The number of records to collect before analyzing them for local "
                     "anomalies; all records in a window are compared against each other; "
-                    "must be larger than the number of neighbors; must be at least 2",
+                    "must be larger than the number of neighbors; must be at least 2.\n\n"
+                    "**Sizing guidance**: use at least `50`; should be several times larger "
+                    "than `k` (neighborhood size) for reliable results",
                 "type": AbstractDataProviderTypeMap."int",
                 "required": True,
+                "example_value": 100,
             },
             "k": <DataProviderOptionInfo>{
                 "display_name": "Neighborhood Size",
@@ -68,17 +71,23 @@ public class QoreLOFProcessor inherits DataProvider::AbstractDataProvider {
                 "desc": "The number of closest data points used to define each point's local "
                     "neighborhood; larger values consider wider neighborhoods, making the "
                     "algorithm less sensitive to small local variations; must be smaller "
-                    "than the window size; default: 20",
+                    "than the window size.\n\n"
+                    "**Typical values**: `10`\u2013`20` for most use cases; increase for noisy "
+                    "data, decrease for small datasets; default: `20`",
                 "type": AbstractDataProviderTypeMap."*int",
+                "example_value": 20,
             },
             "threshold": <DataProviderOptionInfo>{
                 "display_name": "Anomaly Threshold",
                 "short_desc": "Score cutoff for flagging anomalies",
-                "desc": "The outlier score cutoff; a score of 1.0 means a point has the "
+                "desc": "The outlier score cutoff; a score of `1.0` means a point has the "
                     "same density as its neighbors (normal); scores significantly above "
-                    "1.0 indicate the point is in a less dense region than its neighbors "
-                    "(anomalous); lower thresholds flag more records; default: 1.5",
+                    "`1.0` indicate the point is in a less dense region than its neighbors "
+                    "(anomalous); lower thresholds flag more records.\n\n"
+                    "**Typical values**: `1.5` (standard \u2014 catches moderate outliers), "
+                    "`2.0` (conservative \u2014 only strong outliers); default: `1.5`",
                 "type": AbstractDataProviderTypeMap."*float",
+                "example_value": 1.5,
             },
         };
     }

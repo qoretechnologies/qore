@@ -270,9 +270,15 @@ public class AbstractAnalyticsProcessor inherits AbstractDataProvider {
                 "short_desc": "Number of records in each analytics window",
                 "desc": "The number of records to accumulate in each analytics window; "
                     "for window-level processors, an event is emitted when the window is full; "
-                    "for record-level processors, this controls the sliding window size",
+                    "for record-level processors, this controls the sliding window size.\n\n"
+                    "**Sizing guidance**: use `20`\u2013`50` for real-time alerting where fast "
+                    "response matters, `100`\u2013`500` for general trend and statistics analysis, "
+                    "or `1000`+ for high-frequency data where you need stable long-term "
+                    "statistics; the window must be large enough to capture at least one full "
+                    "cycle of any pattern you want to detect",
                 "type": AbstractDataProviderTypeMap."int",
                 "required": True,
+                "example_value": 100,
             },
         };
     }

@@ -57,8 +57,8 @@ public class QoreRunningStatsProcessor inherits AbstractAnalyticsProcessor {
 
     #! Returns the data provider description
     *string getDesc() {
-        return "Computes running statistics (count, sum, avg, min, max, stddev, variance) over a "
-            "window of records for each configured numeric field";
+        return "Computes running statistics (`count`, `sum`, `avg`, `min`, `max`, `stddev`, "
+            "`variance`) over a window of records for each configured numeric field";
     }
 
     #! Returns data provider static info

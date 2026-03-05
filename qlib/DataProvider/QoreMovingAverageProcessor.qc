@@ -42,10 +42,15 @@ public class QoreMovingAverageProcessor inherits AbstractAnalyticsProcessor {
             "ema_alpha": <DataProviderOptionInfo>{
                 "display_name": "EMA Smoothing Factor",
                 "short_desc": "Smoothing factor for exponential moving average (0-1)",
-                "desc": "The smoothing factor (alpha) for the exponential moving average; "
-                    "higher values weight recent data more heavily; "
+                "desc": "Controls how much weight is given to the most recent value vs. "
+                    "historical values when computing the exponential moving average (EMA); "
+                    "higher values make the average respond faster to recent changes but "
+                    "also make it noisier.\n\n"
+                    "**Typical values**: `0.1` (smooth, slow to react), `0.2` (balanced, "
+                    "good default), `0.5` (responsive, tracks changes quickly); "
                     "must be between `0.0` and `1.0` exclusive; default: `0.2`",
                 "type": AbstractDataProviderTypeMap."*float",
+                "example_value": 0.2,
             },
         };
     }
@@ -89,8 +94,8 @@ public class QoreMovingAverageProcessor inherits AbstractAnalyticsProcessor {
 
     #! Returns the data provider description
     *string getDesc() {
-        return "Computes simple moving average (SMA) and exponential moving average (EMA) for each "
-            "configured numeric field, emitting one event per record";
+        return "Computes simple moving average (`SMA`) and exponential moving average (`EMA`) for "
+            "each configured numeric field, emitting one event per record";
     }
 
     #! Returns data provider static info

@@ -105,9 +105,6 @@ public class Cin7CoreDataProvider inherits Cin7CoreDataProviderBase {
             # Assembly providers
             "find-assembly": Class::forName("Cin7CoreFindAssemblyDataProvider"),
 
-            # Utility providers
-            "make-api-call": Class::forName("Cin7CoreMakeApiCallDataProvider"),
-
             # Events container
             "events": Class::forName("Cin7CoreEventsDataProvider"),
         };

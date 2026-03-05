@@ -84,9 +84,6 @@ public class UnleashedDataProvider inherits UnleashedDataProviderBase {
             "update-credit-note-line": Class::forName("UnleashedUpdateCreditNoteLineDataProvider"),
             "delete-credit-note-line": Class::forName("UnleashedDeleteCreditNoteLineDataProvider"),
 
-            # Utility providers
-            "make-api-call": Class::forName("UnleashedMakeApiCallDataProvider"),
-
             # Events container
             "events": Class::forName("UnleashedEventsDataProvider"),
         };

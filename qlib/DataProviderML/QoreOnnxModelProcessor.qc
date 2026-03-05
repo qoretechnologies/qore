@@ -87,9 +87,12 @@ public class QoreOnnxModelProcessor inherits DataProvider::AbstractDataProvider 
                 "short_desc": "Number of records to process at once",
                 "desc": "The number of records to collect before sending them to the model "
                     "for inference as a batch; larger batches may be more efficient but "
-                    "use more memory; must be at least 1",
+                    "use more memory; must be at least 1.\n\n"
+                    "**Sizing guidance**: `1` for real-time inference, `10`\u2013`100` for batch "
+                    "efficiency, `1000`+ for maximum throughput on GPU",
                 "type": AbstractDataProviderTypeMap."int",
                 "required": True,
+                "example_value": 10,
             },
             "input_tensor": <DataProviderOptionInfo>{
                 "display_name": "Input Tensor Name",
@@ -112,7 +115,8 @@ public class QoreOnnxModelProcessor inherits DataProvider::AbstractDataProvider 
                 "display_name": "CUDA Device ID",
                 "short_desc": "GPU device index for CUDA provider",
                 "desc": "The GPU device index to use with the CUDA execution provider; "
-                    "only used when 'CUDA' is listed in execution_providers; defaults to \"0\"",
+                    "only used when 'CUDA' is listed in `execution_providers`; "
+                    "defaults to `\"0\"`",
                 "type": AbstractDataProviderTypeMap."*string",
             },
             "intra_op_threads": <DataProviderOptionInfo>{
@@ -120,7 +124,7 @@ public class QoreOnnxModelProcessor inherits DataProvider::AbstractDataProvider 
                 "short_desc": "Threads within each model operation",
                 "desc": "The number of threads used to speed up individual model operations "
                     "(e.g. a single matrix multiplication); increasing this helps with large "
-                    "models that have big operations; defaults to 1",
+                    "models that have big operations; defaults to `1`",
                 "type": AbstractDataProviderTypeMap."*int",
             },
             "inter_op_threads": <DataProviderOptionInfo>{
@@ -128,7 +132,7 @@ public class QoreOnnxModelProcessor inherits DataProvider::AbstractDataProvider 
                 "short_desc": "Threads across independent operations",
                 "desc": "The number of threads used to run independent model operations in "
                     "parallel (e.g. two branches of a neural network that don't depend on "
-                    "each other); 0 means the runtime chooses automatically; defaults to 0",
+                    "each other); `0` means the runtime chooses automatically; defaults to `0`",
                 "type": AbstractDataProviderTypeMap."*int",
             },
             "graph_optimization_level": <DataProviderOptionInfo>{
@@ -136,7 +140,7 @@ public class QoreOnnxModelProcessor inherits DataProvider::AbstractDataProvider 
                 "short_desc": "Level of model graph optimization",
                 "desc": "Controls how aggressively the runtime optimizes the model graph "
                     "before running inference; higher levels can improve speed but take "
-                    "longer to initialize; defaults to 'All'",
+                    "longer to initialize; defaults to `All`",
                 "type": AbstractDataProviderTypeMap."*int",
                 "allowed_values": (
                     <AllowedValueInfo>{"value": 0, "display_name": "Disabled"},
@@ -150,7 +154,7 @@ public class QoreOnnxModelProcessor inherits DataProvider::AbstractDataProvider 
                 "short_desc": "ONNX Runtime log verbosity level",
                 "desc": "Controls how much diagnostic information the ONNX Runtime logs; "
                     "lower values produce more output, which is useful for troubleshooting "
-                    "model loading or inference issues; defaults to 'Warning'",
+                    "model loading or inference issues; defaults to `Warning`",
                 "type": AbstractDataProviderTypeMap."*int",
                 "allowed_values": (
                     <AllowedValueInfo>{"value": 0, "display_name": "Verbose"},

@@ -64,9 +64,14 @@ public class QoreCrossCorrelationProcessor inherits AbstractDataProvider {
             "window_size": <DataProviderOptionInfo>{
                 "display_name": "Window Size",
                 "short_desc": "Number of records per analysis window",
-                "desc": "The number of records to accumulate before computing cross-correlations",
+                "desc": "The number of records to accumulate before computing "
+                    "cross-correlations.\n\n"
+                    "**Sizing guidance**: use at least `50` for basic lag detection, "
+                    "`200`+ for reliable results; the window must be at least 4 times "
+                    "the maximum lag you expect to find",
                 "type": AbstractDataProviderTypeMap."int",
                 "required": True,
+                "example_value": 200,
             },
             "max_lag": <DataProviderOptionInfo>{
                 "display_name": "Maximum Lag",
@@ -75,6 +80,7 @@ public class QoreCrossCorrelationProcessor inherits AbstractDataProvider {
                     "the other; set to `0` to use `window_size / 4` automatically; "
                     "default: `0` (auto)",
                 "type": AbstractDataProviderTypeMap."*int",
+                "example_value": 0,
             },
         };
     }

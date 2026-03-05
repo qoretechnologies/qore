@@ -206,7 +206,6 @@ public class ShippoDataProviderTest inherits QUnit::Test {
         assertTrue(children.contains("validate-address"));
         assertTrue(children.contains("create-label-by-rate"));
         assertTrue(children.contains("get-transaction"));
-        assertTrue(children.contains("make-api-call"));
 
         # Events provider
         assertTrue(children.contains("events"));
@@ -425,9 +424,6 @@ public class ShippoDataProviderTest inherits QUnit::Test {
         # Address actions
         assertTrue(actionNames.contains("validate-address"));
 
-        # Utility actions
-        assertTrue(actionNames.contains("make-api-call"));
-
         # Trigger actions
         assertTrue(actionNames.contains("new-parcel"));
         assertTrue(actionNames.contains("new-shipment"));
@@ -469,9 +465,6 @@ public class ShippoDataProviderTest inherits QUnit::Test {
 
         # Test address validation
         testValidateAddress();
-
-        # Test make-api-call action
-        testMakeApiCall();
     }
 
     #! Test API connectivity
@@ -875,47 +868,6 @@ public class ShippoDataProviderTest inherits QUnit::Test {
 
         if (m_options.verbose) {
             printf("--- Validate Address tests completed ---\n");
-        }
-    }
-
-    #! Test make-api-call action
-    private testMakeApiCall() {
-        if (m_options.verbose) {
-            printf("\n--- Testing Make API Call Action ---\n");
-        }
-
-        ShippoDataProvider::ShippoDataProvider prov(client);
-
-        AbstractDataProvider makeApiCallProvider = prov.getChildProvider("make-api-call");
-
-        # Test GET request to addresses endpoint
-        auto result = makeApiCallProvider.doRequest({
-            "method": "GET",
-            "path": "/addresses",
-        });
-
-        assertTrue(result.hasKey("body"), "make-api-call should return body");
-        assertTrue(result.body.typeCode() == NT_HASH,
-            "make-api-call response body should be hash");
-        if (m_options.verbose) {
-            printf("  GET /addresses returned hash with %d key(s)\n",
-                elements keys result.body);
-        }
-
-        # Test with query parameters
-        auto parcels = makeApiCallProvider.doRequest({
-            "method": "GET",
-            "path": "/parcels",
-            "query_params": {"results": 1},
-        });
-
-        assertTrue(parcels.hasKey("body"), "make-api-call /parcels should return body");
-        if (m_options.verbose) {
-            printf("  GET /parcels returned successfully\n");
-        }
-
-        if (m_options.verbose) {
-            printf("--- Make API Call tests completed ---\n");
         }
     }
 

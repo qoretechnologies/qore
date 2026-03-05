@@ -42,12 +42,15 @@ public class QoreTrendAnalysisProcessor inherits AbstractAnalyticsProcessor {
             "direction_threshold": <DataProviderOptionInfo>{
                 "display_name": "Direction Threshold",
                 "short_desc": "Minimum absolute slope to classify as rising or falling",
-                "desc": "The minimum absolute slope value for the trend to be classified as "
-                    "`rising` or `falling`; slopes with absolute value at or below this threshold "
-                    "are classified as `flat`.\n\n"
-                    "Use smaller values for data at large scales where meaningful trends have "
-                    "small slopes; must be >= 0; default: `0.001`",
+                "desc": "The minimum slope magnitude for the trend to be classified as "
+                    "`rising` or `falling`; slopes below this threshold are classified as "
+                    "`flat`.\n\n"
+                    "**Typical values**: `0.001` (sensitive \u2014 detects very gradual trends), "
+                    "`0.01` (moderate), `0.1` (only strong trends); use smaller values when "
+                    "your data has a large scale and meaningful trends have small slopes; "
+                    "must be >= `0`; default: `0.001`",
                 "type": AbstractDataProviderTypeMap."*float",
+                "example_value": 0.001,
             },
         };
     }
@@ -81,8 +84,8 @@ public class QoreTrendAnalysisProcessor inherits AbstractAnalyticsProcessor {
 
     #! Returns the data provider description
     *string getDesc() {
-        return "Computes linear regression trend analysis (slope, intercept, r-squared, direction) over a "
-            "window of records for each configured numeric field";
+        return "Computes linear regression trend analysis (`slope`, `intercept`, `r_squared`, "
+            "`direction`) over a window of records for each configured numeric field";
     }
 
     #! Returns data provider static info

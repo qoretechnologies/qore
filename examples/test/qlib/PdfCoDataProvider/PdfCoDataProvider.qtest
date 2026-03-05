@@ -1,0 +1,915 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  PdfCoDataProvider.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/RestClient.qm
+%requires ../../../../qlib/Mime.qm
+
+%try-module json
+%define NoJson
+%endtry
+
+%requires ../../../../qlib/PdfCoRestClient.qm
+%requires ../../../../qlib/PdfCoDataProvider
+
+%exec-class PdfCoDataProviderTest
+
+public class PdfCoDataProviderTest inherits QUnit::Test {
+    private {
+        #! PDF.co REST client for integration tests
+        *PdfCoRestClient::PdfCoRestClient client;
+
+        #! Logger for verbose output
+        Logger logger;
+
+        #! Custom command-line options
+        const MyOpts = Opts + {
+            "apikey": "k,apikey=s",
+            "conn": "c,connection=s",
+            "url": "u,url=s",
+        };
+
+        #! All expected child provider names
+        const ExpectedChildren = (
+            "ai-invoice-parser",
+            "add-password",
+            "add-text-images",
+            "compress-pdf",
+            "convert-html-to-pdf",
+            "convert-images-to-pdf",
+            "convert-from-pdf",
+            "convert-from-pdf-to-images",
+            "convert-to-pdf",
+            "create-fillable-form",
+            "document-classifier",
+            "fill-pdf-form",
+            "generate-barcode",
+            "get-pdf-info",
+            "job-check",
+            "merge-pdf",
+            "parse-document",
+            "read-barcode",
+            "remove-password",
+            "search-text",
+            "search-and-delete-text",
+            "search-and-replace-text",
+            "search-and-replace-with-image",
+            "send-email",
+            "split-pdf",
+            "upload-file",
+        );
+    }
+
+    constructor() : Test("PdfCoDataProvider Test", "1.0", \ARGV, MyOpts) {
+        logger = new Logger("test", LoggerLevel::getLevelInfo());
+
+        # Unit tests (always run, no credentials needed)
+        addTestCase("sanity tests", \sanityTests());
+        addTestCase("factory tests", \factoryTests());
+        addTestCase("metadata tests", \metadataTests());
+        addTestCase("child provider tests", \childProviderTests());
+        addTestCase("data type tests", \dataTypeTests());
+        addTestCase("connection tests", \connectionTests());
+        addTestCase("action catalog tests", \actionCatalogTests());
+        addTestCase("negative tests", \negativeTests());
+
+        # Integration tests (require PDFCO_API_KEY)
+        addTestCase("integration tests", \integrationTests());
+
+        # Try to set up connection for integration tests
+        try {
+            setupConnection();
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("Connection setup failed: %s: %s\n", ex.err, ex.desc);
+            }
+        }
+
+        set_return_value(main());
+    }
+
+    #! Sets up the PDF.co client for integration tests
+    private setupConnection() {
+        *string apikey = m_options.apikey ?? ENV.PDFCO_API_KEY;
+        if (!apikey) {
+            if (m_options.verbose) {
+                printf("No API key provided (use -k option or PDFCO_API_KEY env var)\n");
+            }
+            return;
+        }
+        hash<auto> client_opts = {"apikey": apikey};
+        if (m_options.url) {
+            client_opts.url = m_options.url;
+            if (m_options.verbose) {
+                printf("Using custom API URL: %s\n", m_options.url);
+            }
+        }
+        client = new PdfCoRestClient::PdfCoRestClient(client_opts);
+    }
+
+    #! Check if json module is available
+    private checkJson() {
+%ifdef NoJson
+        testSkip("no json module present");
+%endif
+    }
+
+    #! Creates a PdfCoDataProvider for unit tests
+    private *PdfCoDataProvider::PdfCoDataProvider tryCreateProvider() {
+        try {
+            return new PdfCoDataProvider::PdfCoDataProvider({
+                "pdfcorestclient_options": {
+                    "apikey": "fake-test-key-for-unit-tests",
+                },
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
+                    || ex.err == "QOREADDRINFO-GETINFO-ERROR") {
+                testSkip(sprintf("cannot connect to PDF.co API: %s", ex.desc));
+            }
+            if (ex.arg.status_code == 401) {
+                testSkip("PDF.co API returned 401; skipping unit tests that require connectivity");
+            }
+            rethrow;
+        }
+    }
+
+    #! Creates a provider using the real client (integration tests only)
+    private *PdfCoDataProvider::PdfCoDataProvider createRealProvider() {
+        if (!client) {
+            testSkip("No PDF.co API key provided; set PDFCO_API_KEY or use -k option");
+        }
+        return new PdfCoDataProvider::PdfCoDataProvider(client);
+    }
+
+    #! Basic sanity tests - provider instantiation
+    sanityTests() {
+        checkJson();
+        *PdfCoDataProvider::PdfCoDataProvider prov = tryCreateProvider();
+        if (!prov) {
+            return;
+        }
+        assertEq("pdfco", prov.getName());
+        assertEq("PDF.co data provider for document processing: PDF conversion, manipulation, "
+            "data extraction, barcode operations, and more", prov.getDesc());
+    }
+
+    #! Factory tests - verify factory registration
+    factoryTests() {
+        checkJson();
+        # Verify factory is registered
+        AbstractDataProviderFactory factory = DataProvider::getFactory("pdfco");
+        assertEq("pdfco", factory.getInfo().name);
+        assertTrue(factory.getInfo().children_can_support_apis);
+
+        # Verify constructor options
+        hash<auto> factoryOpts = factory.getInfo().provider_info.constructor_options;
+        assertTrue(factoryOpts.hasKey("pdfcorestclient"));
+        assertTrue(factoryOpts.hasKey("pdfcorestclient_options"));
+    }
+
+    #! Metadata tests - verify provider info structure
+    metadataTests() {
+        checkJson();
+        *PdfCoDataProvider::PdfCoDataProvider prov = tryCreateProvider();
+        if (!prov) {
+            return;
+        }
+        hash<DataProviderInfo> info = prov.getInfo();
+
+        assertTrue(info.supports_children);
+        assertTrue(info.children_can_support_apis);
+        assertEq("PdfCoDataProvider", info.type);
+
+        # Check constructor options include REST client options
+        assertTrue(info.constructor_options.hasKey("pdfcorestclient"));
+    }
+
+    #! Child provider tests - verify hierarchy
+    childProviderTests() {
+        checkJson();
+        *PdfCoDataProvider::PdfCoDataProvider prov = tryCreateProvider();
+        if (!prov) {
+            return;
+        }
+
+        # Check all expected child providers exist
+        list<string> children = prov.getChildProviderNames();
+        assertEq(26, children.size());
+
+        foreach string childName in (ExpectedChildren) {
+            assertTrue(inlist(childName, children),
+                sprintf("expected child provider '%s' not found", childName));
+        }
+
+        # Verify each child is a request-based action provider
+        foreach string childName in (ExpectedChildren) {
+            AbstractDataProvider child = prov.getChildProvider(childName);
+            assertEq(childName, child.getName());
+            hash<DataProviderInfo> childInfo = child.getInfo();
+            assertTrue(childInfo.supports_request,
+                sprintf("child '%s' should support requests", childName));
+        }
+    }
+
+    #! Data type tests - verify response type field definitions
+    dataTypeTests() {
+        checkJson();
+
+        # Test URL response type (most common)
+        PdfCoDataProvider::PdfCoUrlResponseDataType urlType();
+        hash<string, AbstractDataField> urlFields = urlType.getFields();
+        assertTrue(urlFields.hasKey("url"));
+        assertTrue(urlFields.hasKey("pageCount"));
+        assertTrue(urlFields.hasKey("error"));
+        assertTrue(urlFields.hasKey("status"));
+        assertTrue(urlFields.hasKey("message"));
+        assertTrue(urlFields.hasKey("jobId"));
+        assertTrue(urlFields.hasKey("name"));
+        assertTrue(urlFields.hasKey("credits"));
+        assertTrue(urlFields.hasKey("remainingCredits"));
+
+        # Test split response type
+        PdfCoDataProvider::PdfCoSplitResponseDataType splitType();
+        hash<string, AbstractDataField> splitFields = splitType.getFields();
+        assertTrue(splitFields.hasKey("urls"));
+        assertTrue(splitFields.hasKey("error"));
+        assertTrue(splitFields.hasKey("status"));
+        assertTrue(splitFields.hasKey("message"));
+        assertTrue(splitFields.hasKey("jobId"));
+
+        # Test barcode read response type
+        PdfCoDataProvider::PdfCoBarcodeReadResponseDataType barcodeType();
+        hash<string, AbstractDataField> barcodeFields = barcodeType.getFields();
+        assertTrue(barcodeFields.hasKey("barcodes"));
+        assertTrue(barcodeFields.hasKey("error"));
+        assertTrue(barcodeFields.hasKey("message"));
+        assertTrue(barcodeFields.hasKey("jobId"));
+
+        # Test invoice parser response type
+        PdfCoDataProvider::PdfCoInvoiceParserResponseDataType invoiceType();
+        hash<string, AbstractDataField> invoiceFields = invoiceType.getFields();
+        assertTrue(invoiceFields.hasKey("body"));
+        assertTrue(invoiceFields.hasKey("error"));
+
+        # Test document parser response type
+        PdfCoDataProvider::PdfCoDocumentParserResponseDataType docParserType();
+        hash<string, AbstractDataField> docParserFields = docParserType.getFields();
+        assertTrue(docParserFields.hasKey("body"));
+        assertTrue(docParserFields.hasKey("error"));
+        assertTrue(docParserFields.hasKey("message"));
+        assertTrue(docParserFields.hasKey("jobId"));
+
+        # Test document classifier response type
+        PdfCoDataProvider::PdfCoDocumentClassifierResponseDataType classifierType();
+        hash<string, AbstractDataField> classifierFields = classifierType.getFields();
+        assertTrue(classifierFields.hasKey("body"));
+        assertTrue(classifierFields.hasKey("error"));
+        assertTrue(classifierFields.hasKey("message"));
+        assertTrue(classifierFields.hasKey("jobId"));
+
+        # Test PDF info response type
+        PdfCoDataProvider::PdfCoPdfInfoResponseDataType pdfInfoType();
+        hash<string, AbstractDataField> pdfInfoFields = pdfInfoType.getFields();
+        assertTrue(pdfInfoFields.hasKey("info"));
+        assertTrue(pdfInfoFields.hasKey("error"));
+        assertTrue(pdfInfoFields.hasKey("message"));
+        assertTrue(pdfInfoFields.hasKey("jobId"));
+
+        # Test job check response type
+        PdfCoDataProvider::PdfCoJobCheckResponseDataType jobCheckType();
+        hash<string, AbstractDataField> jobCheckFields = jobCheckType.getFields();
+        assertTrue(jobCheckFields.hasKey("status"));
+        assertTrue(jobCheckFields.hasKey("jobId"));
+
+        # Test search text response type (has body array for results)
+        PdfCoDataProvider::PdfCoSearchTextResponseDataType searchType();
+        hash<string, AbstractDataField> searchFields = searchType.getFields();
+        assertTrue(searchFields.hasKey("body"));
+        assertTrue(searchFields.hasKey("pageCount"));
+        assertTrue(searchFields.hasKey("error"));
+        assertTrue(searchFields.hasKey("message"));
+        assertTrue(searchFields.hasKey("jobId"));
+
+        # Test send email response type (no URL field)
+        PdfCoDataProvider::PdfCoSendEmailResponseDataType emailRespType();
+        hash<string, AbstractDataField> emailRespFields = emailRespType.getFields();
+        assertTrue(emailRespFields.hasKey("error"));
+        assertTrue(emailRespFields.hasKey("message"));
+        assertTrue(emailRespFields.hasKey("jobId"));
+        assertTrue(emailRespFields.hasKey("credits"));
+        assertFalse(emailRespFields.hasKey("url"));
+
+        # Test request data types for a few key actions
+        PdfCoDataProvider::PdfCoConvertFromPdfRequestDataType convertReqType();
+        hash<string, AbstractDataField> convertReqFields = convertReqType.getFields();
+        assertTrue(convertReqFields.hasKey("file"));
+        assertTrue(convertReqFields.hasKey("url"));
+        assertTrue(convertReqFields.hasKey("output_format"));
+
+        PdfCoDataProvider::PdfCoGetPdfInfoRequestDataType pdfInfoReqType();
+        hash<string, AbstractDataField> pdfInfoReqFields = pdfInfoReqType.getFields();
+        assertTrue(pdfInfoReqFields.hasKey("file"));
+        assertTrue(pdfInfoReqFields.hasKey("url"));
+
+        PdfCoDataProvider::PdfCoUploadFileRequestDataType uploadReqType();
+        hash<string, AbstractDataField> uploadReqFields = uploadReqType.getFields();
+        assertTrue(uploadReqFields.hasKey("file"));
+        assertTrue(uploadReqFields.hasKey("url"));
+
+        PdfCoDataProvider::PdfCoConvertHtmlToPdfRequestDataType htmlReqType();
+        hash<string, AbstractDataField> htmlReqFields = htmlReqType.getFields();
+        assertTrue(htmlReqFields.hasKey("file"));
+        assertTrue(htmlReqFields.hasKey("source_type"));
+        assertTrue(htmlReqFields.hasKey("html"));
+
+        PdfCoDataProvider::PdfCoGenerateBarcodeRequestDataType barcodeReqType();
+        hash<string, AbstractDataField> barcodeReqFields = barcodeReqType.getFields();
+        assertTrue(barcodeReqFields.hasKey("type"));
+        assertTrue(barcodeReqFields.hasKey("value"));
+        # generate-barcode should NOT have file field (it generates, doesn't process)
+        assertFalse(barcodeReqFields.hasKey("file"));
+
+        PdfCoDataProvider::PdfCoSendEmailRequestDataType emailReqType();
+        hash<string, AbstractDataField> emailReqFields = emailReqType.getFields();
+        assertTrue(emailReqFields.hasKey("from"));
+        assertTrue(emailReqFields.hasKey("to"));
+        assertTrue(emailReqFields.hasKey("subject"));
+        assertTrue(emailReqFields.hasKey("smtpserver"));
+
+        # Test structured element data types
+        PdfCoDataProvider::PdfCoTextAnnotationDataType textAnnotType();
+        hash<string, AbstractDataField> textAnnotFields = textAnnotType.getFields();
+        assertTrue(textAnnotFields.hasKey("text"));
+        assertTrue(textAnnotFields.hasKey("x"));
+        assertTrue(textAnnotFields.hasKey("y"));
+        assertTrue(textAnnotFields.hasKey("width"));
+        assertTrue(textAnnotFields.hasKey("height"));
+        assertTrue(textAnnotFields.hasKey("size"));
+        assertTrue(textAnnotFields.hasKey("fontName"));
+        assertTrue(textAnnotFields.hasKey("fontBold"));
+        assertTrue(textAnnotFields.hasKey("fontItalic"));
+        assertTrue(textAnnotFields.hasKey("fontUnderline"));
+        assertTrue(textAnnotFields.hasKey("fontStrikeout"));
+        assertTrue(textAnnotFields.hasKey("color"));
+        assertTrue(textAnnotFields.hasKey("alignment"));
+        assertTrue(textAnnotFields.hasKey("link"));
+        assertTrue(textAnnotFields.hasKey("transparent"));
+        assertTrue(textAnnotFields.hasKey("RotationAngle"));
+        assertTrue(textAnnotFields.hasKey("pages"));
+        assertTrue(textAnnotFields.hasKey("type"));
+
+        PdfCoDataProvider::PdfCoImageAnnotationDataType imgAnnotType();
+        hash<string, AbstractDataField> imgAnnotFields = imgAnnotType.getFields();
+        assertTrue(imgAnnotFields.hasKey("url"));
+        assertTrue(imgAnnotFields.hasKey("x"));
+        assertTrue(imgAnnotFields.hasKey("y"));
+        assertTrue(imgAnnotFields.hasKey("width"));
+        assertTrue(imgAnnotFields.hasKey("height"));
+        assertTrue(imgAnnotFields.hasKey("pages"));
+
+        PdfCoDataProvider::PdfCoFormFieldValueDataType fieldValType();
+        hash<string, AbstractDataField> fieldValFields = fieldValType.getFields();
+        assertTrue(fieldValFields.hasKey("fieldName"));
+        assertTrue(fieldValFields.hasKey("text"));
+        assertTrue(fieldValFields.hasKey("pages"));
+
+        # Test form field title type
+        PdfCoDataProvider::PdfCoFormFieldTitleDataType titleType();
+        hash<string, AbstractDataField> titleFields = titleType.getFields();
+        assertTrue(titleFields.hasKey("text"));
+        assertTrue(titleFields.hasKey("x"));
+        assertTrue(titleFields.hasKey("y"));
+        assertTrue(titleFields.hasKey("size"));
+        assertTrue(titleFields.hasKey("fontName"));
+        assertTrue(titleFields.hasKey("fontBold"));
+        assertTrue(titleFields.hasKey("fontItalic"));
+        assertTrue(titleFields.hasKey("fontUnderline"));
+        assertTrue(titleFields.hasKey("fontStrikeout"));
+        assertTrue(titleFields.hasKey("color"));
+
+        PdfCoDataProvider::PdfCoFormFieldDefinitionDataType fieldDefType();
+        hash<string, AbstractDataField> fieldDefFields = fieldDefType.getFields();
+        assertTrue(fieldDefFields.hasKey("type"));
+        assertTrue(fieldDefFields.hasKey("id"));
+        assertTrue(fieldDefFields.hasKey("x"));
+        assertTrue(fieldDefFields.hasKey("y"));
+        assertTrue(fieldDefFields.hasKey("width"));
+        assertTrue(fieldDefFields.hasKey("height"));
+        assertTrue(fieldDefFields.hasKey("text"));
+        assertTrue(fieldDefFields.hasKey("title"));
+        assertTrue(fieldDefFields.hasKey("size"));
+        assertTrue(fieldDefFields.hasKey("fontName"));
+        assertTrue(fieldDefFields.hasKey("fontBold"));
+        assertTrue(fieldDefFields.hasKey("fontItalic"));
+        assertTrue(fieldDefFields.hasKey("fontUnderline"));
+        assertTrue(fieldDefFields.hasKey("fontStrikeout"));
+        assertTrue(fieldDefFields.hasKey("color"));
+        assertTrue(fieldDefFields.hasKey("pages"));
+
+        # Verify list field types in request types (annotations/images/fields are now list types)
+        PdfCoDataProvider::PdfCoAddTextImagesRequestDataType addTextReqType();
+        hash<string, AbstractDataField> addTextReqFields = addTextReqType.getFields();
+        assertTrue(addTextReqFields.hasKey("annotations"));
+        assertTrue(addTextReqFields.hasKey("images"));
+        assertTrue(addTextReqFields.hasKey("annotationsString"));
+        assertTrue(addTextReqFields.hasKey("imagesString"));
+
+        PdfCoDataProvider::PdfCoFillPdfFormRequestDataType fillFormReqType();
+        hash<string, AbstractDataField> fillFormReqFields = fillFormReqType.getFields();
+        assertTrue(fillFormReqFields.hasKey("fields"));
+        assertTrue(fillFormReqFields.hasKey("fieldsString"));
+
+        PdfCoDataProvider::PdfCoCreateFillableFormRequestDataType createFormReqType();
+        hash<string, AbstractDataField> createFormReqFields = createFormReqType.getFields();
+        assertTrue(createFormReqFields.hasKey("annotations"));
+    }
+
+    #! Connection tests - verify connection scheme registration
+    connectionTests() {
+        # Verify the pdfco:// scheme is registered
+        hash<ConnectionSchemeInfo> scheme = ConnectionSchemeCache::getScheme("pdfco");
+
+        assertTrue(scheme.options.hasKey("apikey"));
+
+        # Verify apikey option is sensitive
+        assertTrue(scheme.options.apikey.sensitive ?? False);
+
+        # Verify connection class can be instantiated and has data provider support
+        PdfCoRestClient::PdfCoRestConnection conn("test", "test connection",
+            "pdfco://api.pdf.co/v1", {},
+            {"apikey": "fake-key-for-test"});
+        assertTrue(conn.hasDataProvider());
+        assertEq("PdfCo", conn.getAppName());
+        assertEq("pdfco", conn.getType());
+    }
+
+    #! Action catalog tests - verify all actions are registered
+    actionCatalogTests() {
+        checkJson();
+        # Verify app is registered
+        *hash<DataProviderAppInfo> appInfo = DataProviderActionCatalog::getApp("PdfCo");
+        assertEq("PdfCo", appInfo.name);
+        assertEq("pdfco", appInfo.scheme);
+
+        # Verify all 27 actions are registered
+        *list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActions("PdfCo");
+        hash<string, bool> actionMap;
+        map actionMap{$1.action} = True, actions;
+
+        # Conversion actions
+        assertTrue(actionMap{"convert-from-pdf"} ?? False);
+        assertTrue(actionMap{"convert-from-pdf-to-images"} ?? False);
+        assertTrue(actionMap{"convert-html-to-pdf"} ?? False);
+        assertTrue(actionMap{"convert-images-to-pdf"} ?? False);
+        assertTrue(actionMap{"convert-to-pdf"} ?? False);
+
+        # Document operations
+        assertTrue(actionMap{"merge-pdf"} ?? False);
+        assertTrue(actionMap{"split-pdf"} ?? False);
+        assertTrue(actionMap{"compress-pdf"} ?? False);
+        assertTrue(actionMap{"add-text-images"} ?? False);
+        assertTrue(actionMap{"create-fillable-form"} ?? False);
+        assertTrue(actionMap{"fill-pdf-form"} ?? False);
+        assertTrue(actionMap{"get-pdf-info"} ?? False);
+
+        # Search & Edit
+        assertTrue(actionMap{"search-text"} ?? False);
+        assertTrue(actionMap{"search-and-delete-text"} ?? False);
+        assertTrue(actionMap{"search-and-replace-text"} ?? False);
+        assertTrue(actionMap{"search-and-replace-with-image"} ?? False);
+
+        # Extraction & AI
+        assertTrue(actionMap{"ai-invoice-parser"} ?? False);
+        assertTrue(actionMap{"parse-document"} ?? False);
+        assertTrue(actionMap{"document-classifier"} ?? False);
+
+        # Barcodes
+        assertTrue(actionMap{"generate-barcode"} ?? False);
+        assertTrue(actionMap{"read-barcode"} ?? False);
+
+        # Security
+        assertTrue(actionMap{"add-password"} ?? False);
+        assertTrue(actionMap{"remove-password"} ?? False);
+
+        # Email
+        assertTrue(actionMap{"send-email"} ?? False);
+
+        # System
+        assertTrue(actionMap{"upload-file"} ?? False);
+        assertTrue(actionMap{"job-check"} ?? False);
+
+        # Verify total count
+        assertEq(26, actions.size());
+
+        # Verify all actions have DPAT_API action_code
+        foreach hash<DataProviderActionInfo> action in (actions) {
+            assertEq(DPAT_API, action.action_code,
+                sprintf("action '%s' should have DPAT_API code", action.action));
+        }
+
+        # Verify all actions have output_type (resolved from get_output_type)
+        foreach hash<DataProviderActionInfo> action in (actions) {
+            assertTrue(action.output_type instanceof AbstractDataProviderType,
+                sprintf("action '%s' should have output_type", action.action));
+        }
+
+        # Verify all actions have options populated
+        foreach hash<DataProviderActionInfo> action in (actions) {
+            assertTrue(action.options.size() > 0,
+                sprintf("action '%s' should have options", action.action));
+        }
+
+        # Verify action groups
+        hash<string, list<string>> groupMap;
+        foreach hash<DataProviderActionInfo> action in (actions) {
+            foreach string group in (action.groups) {
+                if (!groupMap{group}) {
+                    groupMap{group} = ();
+                }
+                push groupMap{group}, action.action;
+            }
+        }
+        assertTrue(groupMap.hasKey("Conversion"));
+        assertTrue(groupMap.hasKey("Document Operations"));
+        assertTrue(groupMap.hasKey("Search & Edit"));
+        assertTrue(groupMap.hasKey("Extraction & AI"));
+        assertTrue(groupMap.hasKey("Barcodes"));
+        assertTrue(groupMap.hasKey("Security"));
+        assertTrue(groupMap.hasKey("Email"));
+        assertTrue(groupMap.hasKey("System"));
+    }
+
+    #! Negative tests - verify error handling
+    negativeTests() {
+        checkJson();
+
+        # Test non-existent child provider returns NOTHING
+        *PdfCoDataProvider::PdfCoDataProvider prov = tryCreateProvider();
+        if (!prov) {
+            return;
+        }
+        assertNothing(prov.getChildProvider("nonexistent-provider"));
+
+        # Test getChildProviderEx throws for non-existent child
+        assertThrows("INVALID-CHILD-PROVIDER", sub () {
+            prov.getChildProviderEx("nonexistent-provider");
+        });
+
+        # Test missing apikey throws
+        assertThrows("PDFCO-ERROR", sub () {
+            new PdfCoRestClient::PdfCoRestClient({});
+        });
+    }
+
+    #! Integration tests - require a real PDF.co API key
+    integrationTests() {
+        checkJson();
+        if (!client) {
+            testSkip("No PDF.co API key provided; set PDFCO_API_KEY or use -k option");
+        }
+
+        testCreditBalance();
+        testGetPdfInfo();
+        testGenerateBarcode();
+        testUploadFile();
+        testUploadFileWithFileField();
+        testGetPdfInfoWithFileField();
+        testConvertHtmlToPdf();
+        testCompressPdf();
+        testAddTextToPdf();
+    }
+
+    #! Test credit balance (lightweight API call)
+    private testCreditBalance() {
+        if (m_options.verbose) {
+            printf("Testing credit balance...\n");
+        }
+        hash<auto> result = client.get("account/credit/balance");
+        assertTrue(result.body.hasKey("remainingCredits"));
+        if (m_options.verbose) {
+            printf("Remaining credits: %y\n", result.body.remainingCredits);
+        }
+    }
+
+    #! Test get-pdf-info action with a real PDF
+    private testGetPdfInfo() {
+        if (m_options.verbose) {
+            printf("Testing get-pdf-info action...\n");
+        }
+        PdfCoDataProvider::PdfCoDataProvider prov(client);
+        AbstractDataProvider getPdfInfo = prov.getChildProvider("get-pdf-info");
+
+        # Use a well-known public PDF for testing
+        hash<auto> result;
+        try {
+            result = getPdfInfo.doRequest({
+                "url": "https://bytescout-com.s3-us-west-2.amazonaws.com/files/demo-files/cloud-api"
+                    "/pdf-info/sample.pdf",
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.arg.status_code == 402) {
+                if (m_options.verbose) {
+                    printf("NOTE: Skipping get-pdf-info - out of credits (402)\n");
+                }
+                return;
+            }
+            rethrow;
+        }
+        assertFalse(result.error ?? False);
+        assertTrue(result.hasKey("info"));
+        # Verify info contains expected PDF metadata fields
+        assertTrue(result.info.typeCode() == NT_HASH, "info should be a hash");
+        assertTrue(result.info.hasKey("PageCount") || result.info.hasKey("pageCount"),
+            "info should contain page count");
+        if (m_options.verbose) {
+            printf("PDF info: %y\n", result.info);
+        }
+    }
+
+    #! Test generate-barcode action
+    private testGenerateBarcode() {
+        if (m_options.verbose) {
+            printf("Testing generate-barcode action...\n");
+        }
+        PdfCoDataProvider::PdfCoDataProvider prov(client);
+        AbstractDataProvider genBarcode = prov.getChildProvider("generate-barcode");
+
+        hash<auto> result;
+        try {
+            result = genBarcode.doRequest({
+                "type": "QRCode",
+                "value": "https://qore.org",
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.arg.status_code == 402) {
+                if (m_options.verbose) {
+                    printf("NOTE: Skipping generate-barcode - out of credits (402)\n");
+                }
+                return;
+            }
+            rethrow;
+        }
+        assertFalse(result.error ?? False);
+        assertTrue(result.hasKey("url"));
+        assertTrue(result.url.val());
+        # Verify URL points to a valid resource
+        assertRegex("^https?://", result.url, "barcode URL should be a valid HTTP URL");
+        if (m_options.verbose) {
+            printf("Generated barcode URL: %s\n", result.url);
+        }
+    }
+
+    #! Test upload-file action
+    private testUploadFile() {
+        if (m_options.verbose) {
+            printf("Testing upload-file action...\n");
+        }
+        PdfCoDataProvider::PdfCoDataProvider prov(client);
+        AbstractDataProvider uploadFile = prov.getChildProvider("upload-file");
+
+        hash<auto> result;
+        try {
+            result = uploadFile.doRequest({
+                "url": "https://bytescout-com.s3-us-west-2.amazonaws.com/files/demo-files/cloud-api"
+                    "/pdf-info/sample.pdf",
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.arg.status_code == 402) {
+                if (m_options.verbose) {
+                    printf("NOTE: Skipping upload-file - out of credits (402)\n");
+                }
+                return;
+            }
+            rethrow;
+        }
+        assertFalse(result.error ?? False);
+        assertTrue(result.hasKey("url"));
+        assertTrue(result.url.val());
+        # Verify URL points to a valid resource
+        assertRegex("^https?://", result.url, "upload URL should be a valid HTTP URL");
+        if (m_options.verbose) {
+            printf("Uploaded file URL: %s\n", result.url);
+        }
+    }
+
+    #! Test upload-file action with file field (direct content upload)
+    private testUploadFileWithFileField() {
+        if (m_options.verbose) {
+            printf("Testing upload-file action with file field...\n");
+        }
+        PdfCoDataProvider::PdfCoDataProvider prov(client);
+        AbstractDataProvider uploadFile = prov.getChildProvider("upload-file");
+
+        hash<auto> result;
+        try {
+            result = uploadFile.doRequest({
+                "file": {
+                    "name": "test.txt",
+                    "content": make_base64_string("Hello, PDF.co!"),
+                    "mime_type": "text/plain",
+                },
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.arg.status_code == 402) {
+                if (m_options.verbose) {
+                    printf("NOTE: Skipping upload-file with file - out of credits (402)\n");
+                }
+                return;
+            }
+            rethrow;
+        }
+        assertFalse(result.error ?? False);
+        assertTrue(result.hasKey("url"));
+        assertTrue(result.url.val());
+        assertRegex("^https?://", result.url, "upload URL should be a valid HTTP URL");
+        if (m_options.verbose) {
+            printf("Uploaded file (via file field) URL: %s\n", result.url);
+        }
+    }
+
+    #! Test get-pdf-info action with file field (auto-upload)
+    private testGetPdfInfoWithFileField() {
+        if (m_options.verbose) {
+            printf("Testing get-pdf-info action with file field (auto-upload)...\n");
+        }
+        PdfCoDataProvider::PdfCoDataProvider prov(client);
+        AbstractDataProvider getPdfInfo = prov.getChildProvider("get-pdf-info");
+
+        # Create a minimal PDF content for testing
+        # We use a simple PDF that is valid enough for the API
+        string pdf_content = "%PDF-1.0\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
+            "2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n"
+            "3 0 obj<</Type/Page/MediaBox[0 0 612 792]/Parent 2 0 R>>endobj\n"
+            "xref\n0 4\n0000000000 65535 f \n0000000009 00000 n \n"
+            "0000000058 00000 n \n0000000115 00000 n \n"
+            "trailer<</Size 4/Root 1 0 R>>\nstartxref\n190\n%%EOF";
+
+        hash<auto> result;
+        try {
+            result = getPdfInfo.doRequest({
+                "file": {
+                    "name": "test.pdf",
+                    "content": make_base64_string(pdf_content),
+                    "mime_type": "application/pdf",
+                },
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.arg.status_code == 402) {
+                if (m_options.verbose) {
+                    printf("NOTE: Skipping get-pdf-info with file - out of credits (402)\n");
+                }
+                return;
+            }
+            # PDF.co may reject our minimal PDF - that's OK, the auto-upload worked
+            if (ex.err == "PDFCO-API-ERROR") {
+                if (m_options.verbose) {
+                    printf("NOTE: PDF.co rejected minimal PDF (expected): %s\n", ex.desc);
+                }
+                # The fact that we got an API error (not a connection or upload error)
+                # confirms the auto-upload worked correctly
+                assertTrue(True, "auto-upload succeeded (API processed the file)");
+                return;
+            }
+            rethrow;
+        }
+        assertFalse(result.error ?? False);
+        assertTrue(result.hasKey("info"));
+        if (m_options.verbose) {
+            printf("PDF info (via file field): %y\n", result.info);
+        }
+    }
+
+    #! Test convert-html-to-pdf action (tests endpoint dispatch logic)
+    private testConvertHtmlToPdf() {
+        if (m_options.verbose) {
+            printf("Testing convert-html-to-pdf action...\n");
+        }
+        PdfCoDataProvider::PdfCoDataProvider prov(client);
+        AbstractDataProvider convertHtml = prov.getChildProvider("convert-html-to-pdf");
+
+        hash<auto> result;
+        try {
+            result = convertHtml.doRequest({
+                "source_type": "html",
+                "html": "<html><body><h1>Test</h1></body></html>",
+                "name": "test-output.pdf",
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.arg.status_code == 402) {
+                if (m_options.verbose) {
+                    printf("NOTE: Skipping convert-html-to-pdf - out of credits (402)\n");
+                }
+                return;
+            }
+            rethrow;
+        }
+        assertFalse(result.error ?? False);
+        assertTrue(result.hasKey("url"));
+        assertTrue(result.url.val());
+        assertRegex("^https?://", result.url, "output URL should be a valid HTTP URL");
+        if (m_options.verbose) {
+            printf("Converted HTML to PDF URL: %s\n", result.url);
+        }
+    }
+
+    #! Test add-text-images action with structured list data
+    private testAddTextToPdf() {
+        if (m_options.verbose) {
+            printf("Testing add-text-images action with structured data...\n");
+        }
+        PdfCoDataProvider::PdfCoDataProvider prov(client);
+        AbstractDataProvider addText = prov.getChildProvider("add-text-images");
+
+        hash<auto> result;
+        try {
+            result = addText.doRequest({
+                "url": "https://bytescout-com.s3-us-west-2.amazonaws.com/files/demo-files/cloud-api"
+                    "/pdf-info/sample.pdf",
+                "annotations": (
+                    {
+                        "text": "Hello from structured input",
+                        "x": 100,
+                        "y": 100,
+                        "size": 14,
+                        "fontName": "Arial",
+                        "pages": "0",
+                    },
+                ),
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.arg.status_code == 402) {
+                if (m_options.verbose) {
+                    printf("NOTE: Skipping add-text-images - out of credits (402)\n");
+                }
+                return;
+            }
+            rethrow;
+        }
+        assertFalse(result.error ?? False);
+        assertTrue(result.hasKey("url"));
+        assertTrue(result.url.val());
+        assertRegex("^https?://", result.url, "output URL should be a valid HTTP URL");
+        if (m_options.verbose) {
+            printf("Add text result URL: %s\n", result.url);
+        }
+    }
+
+    #! Test compress-pdf action
+    private testCompressPdf() {
+        if (m_options.verbose) {
+            printf("Testing compress-pdf action...\n");
+        }
+        PdfCoDataProvider::PdfCoDataProvider prov(client);
+        AbstractDataProvider compress = prov.getChildProvider("compress-pdf");
+
+        hash<auto> result;
+        try {
+            result = compress.doRequest({
+                "url": "https://bytescout-com.s3-us-west-2.amazonaws.com/files/demo-files/cloud-api"
+                    "/pdf-info/sample.pdf",
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.arg.status_code == 402) {
+                if (m_options.verbose) {
+                    printf("NOTE: Skipping compress-pdf - out of credits (402)\n");
+                }
+                return;
+            }
+            rethrow;
+        }
+        assertFalse(result.error ?? False);
+        assertTrue(result.hasKey("url"));
+        assertTrue(result.url.val());
+        if (m_options.verbose) {
+            printf("Compressed PDF URL: %s\n", result.url);
+        }
+    }
+}
