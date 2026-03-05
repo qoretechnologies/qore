@@ -340,6 +340,12 @@ public const DPAD_RECORD_STREAM = "record-stream";
 /** The data is a hash of record info; keys are field names, values are lists of field values
 */
 public const DPAD_RECORD_SET = "record-set";
+
+#! Pass-through data
+/** The output type is the same as the input type; the processor passes records through unchanged
+    (e.g., filter processors that drop non-matching records but do not modify matching ones)
+*/
+public const DPAD_PASS_THROUGH = "pass-through";
 #/@}
 
 #! DataProvider action definition

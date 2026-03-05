@@ -114,6 +114,8 @@ class QoreProcessorsTest inherits QUnit::Test {
         addTestCase("dynamic options - filter action", \dynamicOptionsFilterAction());
         addTestCase("dynamic options - pipeline processor dispatch", \dynamicOptionsPipelineProcessorDispatch());
 
+        addTestCase("pass-through output data type", \passThroughOutputDataType());
+
         addTestCase("RegularExpressionArgInfo - RE_Global present", \regexArgInfoReGlobal());
 
         addTestCase("prepareExpression - field path caching", \prepareExpressionFieldPath());
@@ -655,6 +657,23 @@ class QoreProcessorsTest inherits QUnit::Test {
         assertEq(True, exists dispatched_opts);
         assertEq(True, dispatched_opts.hasKey("where_cond"));
         assertEq(True, dispatched_opts.where_cond.supports_expressions);
+    }
+
+    # --- Pass-Through Output Data Type Tests ---
+
+    passThroughOutputDataType() {
+        *hash<string, hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActionHash("Qore");
+
+        # filter-records should have pass-through output data type
+        hash<DataProviderActionInfo> filter_action = actions."filter-records";
+        assertEq(DPAD_PASS_THROUGH, filter_action.output_data_type);
+
+        # record-limit should have pass-through output data type
+        hash<DataProviderActionInfo> limit_action = actions."record-limit";
+        assertEq(DPAD_PASS_THROUGH, limit_action.output_data_type);
+
+        # verify the constant value
+        assertEq("pass-through", DPAD_PASS_THROUGH);
     }
 
     # --- RegularExpressionArgInfo Tests ---
