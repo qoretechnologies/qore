@@ -354,6 +354,17 @@ public const DPAD_RECORD_SET = "record-set";
     (e.g., filter processors that drop non-matching records but do not modify matching ones)
 */
 public const DPAD_PASS_THROUGH = "pass-through";
+
+#! Modified pass-through data
+/** The output type is a modification of the input type based on the processor's configuration.
+    The actual output type must be computed using
+    @ref AbstractDataProvider::getPipelineProcessorOutputTypeWithInputType()
+    "getPipelineProcessorOutputTypeWithInputType()" with the input type from the preceding
+    pipeline state.
+
+    @since %DataProvider 3.4
+*/
+public const DPAD_MODIFIED_PASS_THROUGH = "modified-pass-through";
 #/@}
 
 #! DataProvider action definition

@@ -169,6 +169,18 @@ public class QoreSearchReplaceProcessor inherits AbstractDataProvider {
         return record + {field: val};
     }
 
+    #! Returns the input type as the output type (search-replace does not change field structure)
+    /** @param input_type the output type from the preceding pipeline state
+
+        @return the input type unchanged, since search-replace only modifies field values, not structure
+
+        @since %DataProvider 3.4
+    */
+    private *AbstractDataProviderType getPipelineProcessorOutputTypeWithInputTypeImpl(
+            *AbstractDataProviderType input_type) {
+        return input_type;
+    }
+
     #! Indicates that this processor does not support the bulk API
     private bool supportsBulkApiImpl() {
         return False;

@@ -101,6 +101,18 @@ public class QoreRecordLimitProcessor inherits AbstractDataProvider {
         return False;
     }
 
+    #! Returns the input type as the output type (record-limit does not change record structure)
+    /** @param input_type the output type from the preceding pipeline state
+
+        @return the input type unchanged, since limiting only drops records without modifying them
+
+        @since %DataProvider 3.4
+    */
+    private *AbstractDataProviderType getPipelineProcessorOutputTypeWithInputTypeImpl(
+            *AbstractDataProviderType input_type) {
+        return input_type;
+    }
+
     #! Returns the processor capability bitfield
     private int getProcessorCapabilitiesImpl() {
         return DPC_FILTER;
