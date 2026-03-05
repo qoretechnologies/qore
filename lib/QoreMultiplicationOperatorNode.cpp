@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -42,6 +42,20 @@ QoreValue QoreMultiplicationOperatorNode::evalImpl(bool& needs_deref, ExceptionS
 
     qore_type_t lt = lh->getType();
     qore_type_t rt = rh->getType();
+
+    // relative date * int/float/number => relative date
+    if (lt == NT_DATE || rt == NT_DATE) {
+        const DateTimeNode* dt = lt == NT_DATE ? lh->get<DateTimeNode>() : rh->get<DateTimeNode>();
+        int64 us = dt->getRelativeMicroseconds();
+        if (lt == NT_FLOAT || rt == NT_FLOAT) {
+            double factor = lt == NT_FLOAT ? lh->getAsFloat() : rh->getAsFloat();
+            us = (int64)(us * factor);
+        } else {
+            int64 factor = lt == NT_INT ? lh->getAsBigInt() : rh->getAsBigInt();
+            us *= factor;
+        }
+        return DateTimeNode::makeRelativeFromSeconds(us / 1000000, (int)(us % 1000000));
+    }
 
     if (lt == NT_NUMBER || rt == NT_NUMBER) {
         QoreNumberNodeHelper l(*lh);
@@ -90,8 +104,11 @@ int QoreMultiplicationOperatorNode::parseInitImpl(QoreValue& val, QoreParseConte
         del.release();
     }
 
+    // if either side is a date, return type is date (relative date * scalar => relative date)
+    if (QoreTypeInfo::isType(leftTypeInfo, NT_DATE) || QoreTypeInfo::isType(rightTypeInfo, NT_DATE)) {
+        returnTypeInfo = dateTypeInfo;
     // if either side is a float, then the return type is float (highest priority)
-    if (QoreTypeInfo::isType(leftTypeInfo, NT_FLOAT) || QoreTypeInfo::isType(rightTypeInfo, NT_FLOAT)) {
+    } else if (QoreTypeInfo::isType(leftTypeInfo, NT_FLOAT) || QoreTypeInfo::isType(rightTypeInfo, NT_FLOAT)) {
         returnTypeInfo = floatTypeInfo;
     } else {
         if (QoreTypeInfo::hasType(leftTypeInfo) && QoreTypeInfo::hasType(rightTypeInfo)) {

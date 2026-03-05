@@ -110,7 +110,7 @@ public class AbstractWatchDataProviderBase inherits DataProvider::DelayedObserva
             {
                 AutoLock al(sleep_m);
                 if (!stop_flag) {
-                    sleep_cond.wait(sleep_m, poll_interval_secs * 1000ms);
+                    sleep_cond.wait(sleep_m, poll_interval_secs * 1000);
                 }
             }
         }

@@ -153,7 +153,7 @@ public class TableauPollEventDataProviderBase inherits TableauDataProviderBase,
                 if (stop) {
                     break;
                 }
-                cond.wait(lck, poll_secs * 1000ms);
+                cond.wait(lck, poll_secs * 1000);
             }
         }
     }

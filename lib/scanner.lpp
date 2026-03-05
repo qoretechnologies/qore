@@ -459,7 +459,7 @@ static DateTimeNode* makeSeconds(const char* txt) {
 }
 
 static DateTimeNode *makeMilliseconds(int ms) {
-    return new DateTimeNode(0, 0, 0, 0, 0, 0, ms, true);
+    return DateTimeNode::makeRelative(0, 0, 0, 0, 0, ms / 1000, (ms % 1000) * 1000);
 }
 
 static DateTimeNode *makeMicroseconds(int us) {
