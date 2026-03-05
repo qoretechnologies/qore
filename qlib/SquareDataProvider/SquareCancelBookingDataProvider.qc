@@ -27,7 +27,7 @@ public namespace SquareDataProvider {
 
 #! Request type for canceling a booking
 public class SquareCancelBookingRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "booking_id": {
                 "type": StringType,

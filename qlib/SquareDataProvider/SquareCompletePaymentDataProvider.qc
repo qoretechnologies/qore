@@ -27,7 +27,7 @@ public namespace SquareDataProvider {
 
 #! Request type for completing a payment
 public class SquareCompletePaymentRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "payment_id": {
                 "type": StringType,

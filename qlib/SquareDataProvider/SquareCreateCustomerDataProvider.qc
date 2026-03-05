@@ -27,7 +27,7 @@ public namespace SquareDataProvider {
 
 #! Request type for creating a customer
 public class SquareCreateCustomerRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "given_name": {
                 "type": StringOrNothingType,

@@ -27,7 +27,7 @@ public namespace SquareDataProvider {
 
 #! Square order record type
 public class SquareOrderDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for Square orders
         const Fields = {
             "id": {

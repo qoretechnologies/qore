@@ -27,7 +27,7 @@ public namespace SquareDataProvider {
 
 #! Request type for changing inventory (user-friendly flattened fields)
 public class SquareChangeInventoryRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "change_type": {
                 "type": StringType,
