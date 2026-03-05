@@ -54,7 +54,7 @@ public class ChargebeeDataProviderBase inherits DataProvider::AbstractDataProvid
                 "display_name": "Site",
                 "short_desc": "Chargebee site name",
                 "type": AbstractDataProviderType::get(StringType),
-                "desc": "The Chargebee site name (e.g., 'mycompany' for mycompany.chargebee.com)",
+                "desc": "The Chargebee site name (e.g., `mycompany` for mycompany.chargebee.com)",
                 "required": True,
             },
         };
