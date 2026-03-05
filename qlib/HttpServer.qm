@@ -774,27 +774,6 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         map $1.signalHandlersToStop(), llist.iterator();
     }
 
-    #! Signals all listeners to set their exit flag without performing full shutdown
-    /** Called by the async I/O controller during shutdown before waiting for the handler pool
-        to complete.  This sets the @ref HttpListener::exit "exit" flag on each listener so that
-        persistent handler loops (running @ref HttpListener::handlePersistentConnectionSync())
-        break promptly, allowing @ref ThreadPool::stopWait() "stopWait()" to return.
-
-        The full @ref HttpListener::stop() is called later from @ref HttpServer::stop() to
-        perform remaining cleanup (socket shutdown, waiting for connections, etc).
-
-        @since HttpServer 1.6
-    */
-    signalListenersToExit() {
-        *hash<string, HttpListener> llist;
-        {
-            lm.enter();
-            on_exit lm.exit();
-            llist = listeners;
-        }
-        map $1.signalExit(), llist.iterator();
-    }
-
     #! Returns the handler for inline check from global handler lists (no side effects)
     /** Looks up the handler from the permanent global handler list only.
         Dynamic handlers are not returned since they require lifecycle tracking
@@ -3291,8 +3270,6 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
         bool exit = False;
         bool stopped = False;
-        #! flag to prevent double-execution of stop()
-        bool stop_called = False;
         int id;
 
         # socket handler hash
@@ -3895,11 +3872,12 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             m.lock();
             on_exit m.unlock();
 
-            if (stopped || stop_called) {
+            if (stopped)
                 return;
-            }
 
-            stop_called = True;
+            if (exit)
+                return;
+
             exit = True;
         }
 
@@ -4406,24 +4384,6 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 log("signalHandlersToStop: error stopping handler: %s: %s", ex.err, ex.desc);
             }
         }
-    }
-
-    #! Signals the listener to exit without performing full shutdown cleanup
-    /** Sets the \c exit flag so that persistent handler loops and the accept loop
-        will break, but does not close the socket, wait for connections, or stop
-        dedicated handlers.  This is called during async I/O controller shutdown
-        before @ref ThreadPool::stopWait() "stopWait()" so that persistent handler
-        tasks can exit deterministically.
-
-        The full @ref stop() method is called later from @ref HttpServer::stop()
-        to perform the remaining cleanup.
-
-        @since HttpServer 1.6
-    */
-    signalExit() {
-        m.lock();
-        on_exit m.unlock();
-        exit = True;
     }
 
     #! Returns the context template for new connections
@@ -5446,17 +5406,15 @@ class HttpServerNativeAsyncTarget inherits HttpServerAsyncIo::HttpAsyncTarget {
         }
     }
 
-    #! Signals streaming and persistent handlers to stop
+    #! Signals streaming handlers (SSE, WebSocket) to stop their polling loops
     /** Called by @ref HttpServerAsyncIo::HttpAsyncSocketIoController::stop() before waiting
         for the handler thread pool to complete.  Signals all active dedicated socket handlers
-        on all listeners so their polling loops (e.g. SSE queue polling) exit promptly.  Also
-        signals all listeners to set their exit flag so that persistent handler loops break.
+        on all listeners so their polling loops (e.g. SSE queue polling) exit promptly.
 
         @since HttpServer 1.6
     */
     stopStreaming() {
         server.signalStreamingHandlersToStop();
-        server.signalListenersToExit();
     }
 
     #! Logs a message
