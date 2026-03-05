@@ -3367,6 +3367,24 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         return getPipelineProcessorOutputTypeWithOptionsImpl(options);
     }
 
+    #! Returns the output type for the pipeline processor given the input type from the preceding state
+    /** For processors whose output type depends on the input (e.g., select-fields, remove-fields,
+        set-fields), this method computes the output type based on the input type and the processor's
+        configuration.
+
+        @param input_type the output type from the preceding pipeline state; NOTHING if unknown
+
+        @return the computed output type, or NOTHING if the output type cannot be determined
+
+        @throw INVALID-OPERATION the data provider does not support the pipeline processor API
+
+        @since %DataProvider 3.4
+    */
+    *AbstractDataProviderType getPipelineProcessorOutputTypeWithInputType(*AbstractDataProviderType input_type) {
+        checkPipelineProcessor();
+        return getPipelineProcessorOutputTypeWithInputTypeImpl(input_type);
+    }
+
     #! Returns the description of an observable event, if any
     /** @param event_id the event ID of the event
 
@@ -6958,6 +6976,22 @@ list<hash<DataProviderDebugInfo>> info = collector.getAll();
     */
     private *AbstractDataProviderType getPipelineProcessorOutputTypeWithOptionsImpl(*hash<auto> options) {
         return getPipelineProcessorOutputTypeImpl();
+    }
+
+    #! Returns the output type for the pipeline processor given the input type from the preceding state
+    /** @param input_type the output type from the preceding pipeline state; NOTHING if unknown
+
+        @return the computed output type, or NOTHING if the output type cannot be determined
+
+        The default implementation returns NOTHING; override in subclasses where the output type
+        depends on the input type (e.g., field selection, removal, or addition processors).
+
+        @note only called if the provider supports the pipeline processor API
+
+        @since %DataProvider 3.4
+    */
+    private *AbstractDataProviderType getPipelineProcessorOutputTypeWithInputTypeImpl(
+            *AbstractDataProviderType input_type) {
     }
 
     #! Overrides the processor API to throw by default

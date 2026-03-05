@@ -121,6 +121,7 @@ module DataProvider {
                 "Use `name` to keep a field as-is, or `new_name=old_name` to rename it",
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_TRANSFORM,
+            "output_data_type": DPAD_MODIFIED_PASS_THROUGH,
             "cls": "DataProvider::QoreSelectFieldsProcessor",
             "groups": ("Transformation",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
@@ -143,6 +144,7 @@ module DataProvider {
                 "the pipeline",
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_TRANSFORM,
+            "output_data_type": DPAD_MODIFIED_PASS_THROUGH,
             "cls": "DataProvider::QoreSetFieldsProcessor",
             "groups": ("Transformation",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
@@ -165,6 +167,7 @@ module DataProvider {
                 "fields not in the removal list are passed through unchanged",
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_TRANSFORM,
+            "output_data_type": DPAD_MODIFIED_PASS_THROUGH,
             "cls": "DataProvider::QoreRemoveFieldsProcessor",
             "groups": ("Transformation",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
@@ -187,6 +190,7 @@ module DataProvider {
                 "literal string matching and regular expression patterns",
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_TRANSFORM,
+            "output_data_type": DPAD_PASS_THROUGH,
             "cls": "DataProvider::QoreSearchReplaceProcessor",
             "groups": ("Transformation",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
