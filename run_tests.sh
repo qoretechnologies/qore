@@ -176,10 +176,17 @@ LD_PRELOAD=$LIBQORE
 
 # Enable core dumps for crash diagnostics
 ulimit -c unlimited 2>/dev/null
-# Try to set core pattern to a writable location (may fail in containers)
+# Create a directory for core dumps (used as CI artifact)
+# Use a path relative to the project root so GitLab can collect it as an artifact
+CORE_DIR="${CORE_DIR:-./crash-dumps}"
+mkdir -p "$CORE_DIR" 2>/dev/null
+CORE_DIR_ABS=$(cd "$CORE_DIR" && pwd)
+# Try to set core pattern to write cores to our directory (may fail in containers)
 if [ -w /proc/sys/kernel/core_pattern ]; then
-    echo "/tmp/core.%p" > /proc/sys/kernel/core_pattern
+    echo "$CORE_DIR_ABS/core.%e.%p" > /proc/sys/kernel/core_pattern
 fi
+# Also try sysctl (works on some systems where /proc write fails)
+sysctl -w "kernel.core_pattern=$CORE_DIR_ABS/core.%e.%p" 2>/dev/null || true
 
 # Print info about used variables etc.
 echo "Using qore: $QORE"
@@ -238,22 +245,31 @@ for test in $TESTS; do
         if [ $TEST_EXIT -gt 128 ]; then
             SIG_NUM=`expr $TEST_EXIT - 128`
             echo "*** CRASH: test killed by signal $SIG_NUM (exit code $TEST_EXIT) ***"
-            # Check for core dump
+            # Check for core dump in known locations
             CORE_FILE=""
-            for cf in core core.* /tmp/core.*; do
+            for cf in "$CORE_DIR"/core.* "$CORE_DIR_ABS"/core.* core core.* /tmp/core.*; do
                 if [ -f "$cf" ] 2>/dev/null; then
                     CORE_FILE="$cf"
                     break
                 fi
             done
+            TEST_BASENAME=$(basename "$test" .qtest)
             if [ -n "$CORE_FILE" ] && command -v gdb > /dev/null 2>&1; then
                 echo "*** Core dump found: $CORE_FILE - extracting backtrace ***"
-                gdb -batch -ex "thread apply all bt" -ex "quit" "$QORE" "$CORE_FILE" 2>&1 | head -200
-                rm -f "$CORE_FILE"
+                BT_FILE="$CORE_DIR/backtrace-${TEST_BASENAME}.txt"
+                gdb -batch -ex "thread apply all bt full" -ex "quit" "$QORE" "$CORE_FILE" 2>&1 | tee "$BT_FILE" | head -500
+                # Move core to artifact directory for CI collection (don't delete)
+                case "$CORE_FILE" in
+                    "$CORE_DIR"/*|"$CORE_DIR_ABS"/*) ;;
+                    *) cp "$CORE_FILE" "$CORE_DIR/" 2>/dev/null && rm -f "$CORE_FILE" || true ;;
+                esac
             elif command -v gdb > /dev/null 2>&1; then
                 echo "*** No core dump found; re-running under gdb to try to capture backtrace ***"
-                gdb -batch -ex run -ex "thread apply all bt" -ex quit \
-                    --args $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT 2>&1 | head -200
+                BT_FILE="$CORE_DIR/backtrace-${TEST_BASENAME}.txt"
+                # Filter out thread creation/exit noise, keep backtrace output
+                gdb -batch -ex run -ex "thread apply all bt full" -ex quit \
+                    --args $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT 2>&1 \
+                    | grep -v '^\[New Thread\|^\[Thread.*exited\]' | tee "$BT_FILE" | head -500
             fi
         fi
     fi
