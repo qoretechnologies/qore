@@ -27,7 +27,7 @@ public namespace UnleashedDataProvider {
 
 #! Customer data type for Unleashed
 public class UnleashedCustomerDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "Guid": {
                 "type": SoftStringOrNothingType,
@@ -126,7 +126,7 @@ public class UnleashedCustomerDataType inherits HashDataType {
                 "desc": "Customer's website URL",
             },
             "Addresses": {
-                "type": SoftAutoListOrNothingType,
+                "type": new ListDataType("Addresses", new UnleashedCustomerAddressDataType(), True),
                 "display_name": "Addresses",
                 "short_desc": "Customer addresses",
                 "desc": "List of customer addresses (Shipping, Postal, Physical)",

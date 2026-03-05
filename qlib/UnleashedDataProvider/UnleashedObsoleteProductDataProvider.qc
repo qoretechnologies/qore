@@ -98,7 +98,7 @@ public class UnleashedObsoleteProductDataProvider inherits UnleashedDataProvider
 
 #! Request data type for marking a product obsolete
 public class UnleashedObsoleteProductRequestDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions
         const Fields = {
             "guid": {

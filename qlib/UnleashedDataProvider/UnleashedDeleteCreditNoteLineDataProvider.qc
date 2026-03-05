@@ -100,7 +100,7 @@ public class UnleashedDeleteCreditNoteLineDataProvider inherits UnleashedDataPro
 
 #! Request data type for deleting a credit note line
 public class UnleashedDeleteCreditNoteLineRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "guid": {
                 "type": StringType,
@@ -108,6 +108,7 @@ public class UnleashedDeleteCreditNoteLineRequestDataType inherits HashDataType 
                 "short_desc": "The credit note GUID",
                 "desc": "The unique identifier (GUID) of the credit note",
                 "required": True,
+                "ref_data": "creditnotes",
             },
             "lineGuid": {
                 "type": StringType,

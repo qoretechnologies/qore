@@ -106,7 +106,7 @@ public class UnleashedUpdateSalesOrderDataProvider inherits UnleashedDataProvide
 
 #! Request data type for updating a sales order
 public class UnleashedUpdateSalesOrderRequestDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions
         const Fields = {
             "guid": {
@@ -122,6 +122,15 @@ public class UnleashedUpdateSalesOrderRequestDataType inherits HashDataType {
                 "display_name": "Order Status",
                 "short_desc": "Order status",
                 "desc": "The order status",
+                "preselected": True,
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "Open", "desc": "Open order"},
+                    <AllowedValueInfo>{"value": "Parked", "desc": "Draft/parked order"},
+                    <AllowedValueInfo>{"value": "Backordered", "desc": "Backordered order"},
+                    <AllowedValueInfo>{"value": "Placed", "desc": "Placed order"},
+                    <AllowedValueInfo>{"value": "Completed", "desc": "Completed order"},
+                    <AllowedValueInfo>{"value": "Deleted", "desc": "Deleted order"},
+                ),
             },
             "RequiredDate": {
                 "type": SoftDateOrNothingType,
@@ -136,10 +145,11 @@ public class UnleashedUpdateSalesOrderRequestDataType inherits HashDataType {
                 "desc": "Comments or notes for this order",
             },
             "SalesOrderLines": {
-                "type": SoftAutoListOrNothingType,
+                "type": new ListDataType("SalesOrderLines", new UnleashedSalesOrderLineDataType(), True),
                 "display_name": "Sales Order Lines",
                 "short_desc": "Order line items",
                 "desc": "List of line items for this sales order",
+                "preselected": True,
             },
         };
     }

@@ -50,12 +50,14 @@ public class UnleashedCreditNotesDataProvider inherits UnleashedDataProviderBase
                 "short_desc": "Filter by credit note number",
                 "type": AbstractDataProviderType::get(StringOrNothingType),
                 "desc": "Filter by specific credit note number",
+                "preselected": True,
             },
             "creditStatus": <DataProviderOptionInfo>{
                 "display_name": "Credit Status",
                 "short_desc": "Filter by credit note status",
                 "type": AbstractDataProviderType::get(StringOrNothingType),
-                "desc": "Filter by credit note status (Parked, Completed)",
+                "desc": "Filter by credit note status",
+                "preselected": True,
                 "allowed_values": (
                     <AllowedValueInfo>{"value": "Parked", "desc": "Parked credit notes"},
                     <AllowedValueInfo>{"value": "Completed", "desc": "Completed credit notes"},
@@ -88,7 +90,7 @@ public class UnleashedCreditNotesDataProvider inherits UnleashedDataProviderBase
         };
     }
 
-    private {
+    public {
         #! Record type
         static UnleashedCreditNoteDataType recordType();
     }

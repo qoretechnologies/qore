@@ -98,7 +98,7 @@ public class UnleashedDeleteSalesOrderDataProvider inherits UnleashedDataProvide
 
 #! Request data type for deleting a sales order
 public class UnleashedDeleteSalesOrderRequestDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions
         const Fields = {
             "guid": {

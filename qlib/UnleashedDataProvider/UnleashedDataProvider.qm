@@ -100,6 +100,9 @@ module UnleashedDataProvider {
             "desc": "Create a new customer in Unleashed with contact information and settings.",
             "action_code": DPAT_API,
             "data_provider_info": UnleashedCreateCustomerDataProvider::ProviderInfo,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                UnleashedCreateCustomerRequestDataType::Fields),
+            "output_type": UnleashedCreateCustomerDataProvider::ResponseType,
         });
 
         # Get Customer
@@ -113,16 +116,9 @@ module UnleashedDataProvider {
             "desc": "Retrieve detailed information about a specific customer by their unique identifier (GUID).",
             "action_code": DPAT_API,
             "data_provider_info": UnleashedGetCustomerDataProvider::ProviderInfo,
-            "options": {
-                "guid": <ActionOptionInfo>{
-                    "display_name": "Customer GUID",
-                    "short_desc": "The customer GUID",
-                    "desc": "The unique identifier (GUID) of the customer to retrieve",
-                    "type": AbstractDataProviderTypeMap."string",
-                    "required": True,
-                    "ref_data": "customers",
-                },
-            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                UnleashedGetCustomerRequestDataType::Fields),
+            "output_type": UnleashedGetCustomerDataProvider::ResponseType,
         });
 
         # Update Customer
@@ -136,6 +132,9 @@ module UnleashedDataProvider {
             "desc": "Update an existing customer's information in Unleashed.",
             "action_code": DPAT_API,
             "data_provider_info": UnleashedUpdateCustomerDataProvider::ProviderInfo,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                UnleashedUpdateCustomerRequestDataType::Fields),
+            "output_type": UnleashedUpdateCustomerDataProvider::ResponseType,
         });
 
         # ========== PRODUCT ACTIONS ==========
@@ -168,6 +167,9 @@ module UnleashedDataProvider {
             "desc": "Create a new product in Unleashed with product code, description, and pricing.",
             "action_code": DPAT_API,
             "data_provider_info": UnleashedCreateProductDataProvider::ProviderInfo,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                UnleashedCreateProductRequestDataType::Fields),
+            "output_type": UnleashedCreateProductDataProvider::ResponseType,
         });
 
         # Get Product
@@ -181,16 +183,9 @@ module UnleashedDataProvider {
             "desc": "Retrieve detailed information about a specific product.",
             "action_code": DPAT_API,
             "data_provider_info": UnleashedGetProductDataProvider::ProviderInfo,
-            "options": {
-                "guid": <ActionOptionInfo>{
-                    "display_name": "Product GUID",
-                    "short_desc": "The product GUID",
-                    "desc": "The unique identifier (GUID) of the product to retrieve",
-                    "type": AbstractDataProviderTypeMap."string",
-                    "required": True,
-                    "ref_data": "products",
-                },
-            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                UnleashedGetProductRequestDataType::Fields),
+            "output_type": UnleashedGetProductDataProvider::ResponseType,
         });
 
         # Update Product
@@ -204,6 +199,9 @@ module UnleashedDataProvider {
             "desc": "Update an existing product's information in Unleashed.",
             "action_code": DPAT_API,
             "data_provider_info": UnleashedUpdateProductDataProvider::ProviderInfo,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                UnleashedUpdateProductRequestDataType::Fields),
+            "output_type": UnleashedUpdateProductDataProvider::ResponseType,
         });
 
         # Obsolete Product
@@ -217,6 +215,9 @@ module UnleashedDataProvider {
             "desc": "Mark a product as obsolete in Unleashed, removing it from active use.",
             "action_code": DPAT_API,
             "data_provider_info": UnleashedObsoleteProductDataProvider::ProviderInfo,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                UnleashedObsoleteProductRequestDataType::Fields),
+            "output_type": UnleashedObsoleteProductDataProvider::ResponseType,
         });
 
         # ========== SALES ORDER ACTIONS ==========
@@ -248,6 +249,9 @@ module UnleashedDataProvider {
             "desc": "Create a new sales order in Unleashed with customer, line items, and delivery information.",
             "action_code": DPAT_API,
             "data_provider_info": UnleashedCreateSalesOrderDataProvider::ProviderInfo,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                UnleashedCreateSalesOrderRequestDataType::Fields),
+            "output_type": UnleashedCreateSalesOrderDataProvider::ResponseType,
         });
 
         # Get Sales Order
@@ -261,16 +265,9 @@ module UnleashedDataProvider {
             "desc": "Retrieve detailed information about a specific sales order.",
             "action_code": DPAT_API,
             "data_provider_info": UnleashedGetSalesOrderDataProvider::ProviderInfo,
-            "options": {
-                "guid": <ActionOptionInfo>{
-                    "display_name": "Sales Order GUID",
-                    "short_desc": "The sales order GUID",
-                    "desc": "The unique identifier (GUID) of the sales order to retrieve",
-                    "type": AbstractDataProviderTypeMap."string",
-                    "required": True,
-                    "ref_data": "salesorders",
-                },
-            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                UnleashedGetSalesOrderRequestDataType::Fields),
+            "output_type": UnleashedGetSalesOrderDataProvider::ResponseType,
         });
 
         # Update Sales Order
@@ -284,6 +281,9 @@ module UnleashedDataProvider {
             "desc": "Update an existing sales order in Unleashed.",
             "action_code": DPAT_API,
             "data_provider_info": UnleashedUpdateSalesOrderDataProvider::ProviderInfo,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                UnleashedUpdateSalesOrderRequestDataType::Fields),
+            "output_type": UnleashedUpdateSalesOrderDataProvider::ResponseType,
         });
 
         # Delete Sales Order
@@ -297,6 +297,9 @@ module UnleashedDataProvider {
             "desc": "Delete a sales order from Unleashed.",
             "action_code": DPAT_API,
             "data_provider_info": UnleashedDeleteSalesOrderDataProvider::ProviderInfo,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                UnleashedDeleteSalesOrderRequestDataType::Fields),
+            "output_type": UnleashedDeleteSalesOrderDataProvider::ResponseType,
         });
 
         # Complete Sales Order
@@ -310,6 +313,9 @@ module UnleashedDataProvider {
             "desc": "Mark a sales order as completed in Unleashed.",
             "action_code": DPAT_API,
             "data_provider_info": UnleashedCompleteSalesOrderDataProvider::ProviderInfo,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                UnleashedCompleteSalesOrderRequestDataType::Fields),
+            "output_type": UnleashedCompleteSalesOrderDataProvider::ResponseType,
         });
 
         # ========== CREDIT NOTE ACTIONS ==========
@@ -341,6 +347,9 @@ module UnleashedDataProvider {
             "desc": "Create a new free credit note in Unleashed.",
             "action_code": DPAT_API,
             "data_provider_info": UnleashedCreateCreditNoteDataProvider::ProviderInfo,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                UnleashedCreateCreditNoteRequestDataType::Fields),
+            "output_type": UnleashedCreateCreditNoteDataProvider::ResponseType,
         });
 
         # Get Credit Note
@@ -354,16 +363,9 @@ module UnleashedDataProvider {
             "desc": "Retrieve detailed information about a specific credit note.",
             "action_code": DPAT_API,
             "data_provider_info": UnleashedGetCreditNoteDataProvider::ProviderInfo,
-            "options": {
-                "guid": <ActionOptionInfo>{
-                    "display_name": "Credit Note GUID",
-                    "short_desc": "The credit note GUID",
-                    "desc": "The unique identifier (GUID) of the credit note to retrieve",
-                    "type": AbstractDataProviderTypeMap."string",
-                    "required": True,
-                    "ref_data": "creditnotes",
-                },
-            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                UnleashedGetCreditNoteRequestDataType::Fields),
+            "output_type": UnleashedGetCreditNoteDataProvider::ResponseType,
         });
 
         # Update Credit Note
@@ -377,6 +379,9 @@ module UnleashedDataProvider {
             "desc": "Update an existing credit note in Unleashed.",
             "action_code": DPAT_API,
             "data_provider_info": UnleashedUpdateCreditNoteDataProvider::ProviderInfo,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                UnleashedUpdateCreditNoteRequestDataType::Fields),
+            "output_type": UnleashedUpdateCreditNoteDataProvider::ResponseType,
         });
 
         # Delete Credit Note
@@ -390,6 +395,9 @@ module UnleashedDataProvider {
             "desc": "Delete a credit note from Unleashed.",
             "action_code": DPAT_API,
             "data_provider_info": UnleashedDeleteCreditNoteDataProvider::ProviderInfo,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                UnleashedDeleteCreditNoteRequestDataType::Fields),
+            "output_type": UnleashedDeleteCreditNoteDataProvider::ResponseType,
         });
 
         # Complete Credit Note
@@ -403,6 +411,9 @@ module UnleashedDataProvider {
             "desc": "Mark a credit note as completed in Unleashed.",
             "action_code": DPAT_API,
             "data_provider_info": UnleashedCompleteCreditNoteDataProvider::ProviderInfo,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                UnleashedCompleteCreditNoteRequestDataType::Fields),
+            "output_type": UnleashedCompleteCreditNoteDataProvider::ResponseType,
         });
 
         # ========== CREDIT NOTE LINE ACTIONS ==========
@@ -418,6 +429,9 @@ module UnleashedDataProvider {
             "desc": "Create a new line item on an existing credit note.",
             "action_code": DPAT_API,
             "data_provider_info": UnleashedCreateCreditNoteLineDataProvider::ProviderInfo,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                UnleashedCreateCreditNoteLineRequestDataType::Fields),
+            "output_type": UnleashedCreateCreditNoteLineDataProvider::ResponseType,
         });
 
         # Update Credit Note Line
@@ -431,6 +445,9 @@ module UnleashedDataProvider {
             "desc": "Update an existing line item on a credit note.",
             "action_code": DPAT_API,
             "data_provider_info": UnleashedUpdateCreditNoteLineDataProvider::ProviderInfo,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                UnleashedUpdateCreditNoteLineRequestDataType::Fields),
+            "output_type": UnleashedUpdateCreditNoteLineDataProvider::ResponseType,
         });
 
         # Delete Credit Note Line
@@ -444,6 +461,9 @@ module UnleashedDataProvider {
             "desc": "Remove a line item from a credit note.",
             "action_code": DPAT_API,
             "data_provider_info": UnleashedDeleteCreditNoteLineDataProvider::ProviderInfo,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                UnleashedDeleteCreditNoteLineRequestDataType::Fields),
+            "output_type": UnleashedDeleteCreditNoteLineDataProvider::ResponseType,
         });
 
         # ========== TRIGGER ACTIONS (POLLING EVENTS) ==========

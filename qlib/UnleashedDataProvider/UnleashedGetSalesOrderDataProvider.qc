@@ -98,7 +98,7 @@ public class UnleashedGetSalesOrderDataProvider inherits UnleashedDataProviderBa
 
 #! Request data type for getting a sales order
 public class UnleashedGetSalesOrderRequestDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions
         const Fields = {
             "guid": {
