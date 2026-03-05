@@ -1019,10 +1019,10 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                 }
                 date poll_start = now_us();
                 # Use persistent EventLoop for efficient kqueue/epoll/poll
-                *list<hash<SocketPollInfo>> ready_list = loop.poll(poll_timeout);
+                *list<hash<EventPollInfo>> ready_list = loop.poll(poll_timeout);
                 ready_sockets = {};
                 if (ready_list) {
-                    foreach hash<SocketPollInfo> info in (ready_list) {
+                    foreach hash<EventPollInfo> info in (ready_list) {
                         if (info.socket) {
                             ready_sockets{info.socket.uniqueHash()} = True;
                         }
@@ -1032,7 +1032,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                     if (getenv("QORE_ASYNCIO_TRACE")) {
                         int non_notifier_ready = 0;
                         if (ready_list) {
-                            foreach hash<SocketPollInfo> info in (ready_list) {
+                            foreach hash<EventPollInfo> info in (ready_list) {
                                 if (info.socket && info.socket.uniqueHash() != notifier_hash) {
                                     ++non_notifier_ready;
                                 }
@@ -1049,7 +1049,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                             log(LoggerLevel::INFO, "EventLoop::poll() ready_list: %y", (map $1 + {
                                 "events": PollEventMap{$1.events} ?? "unknown",
                                 "events_raw": $1.events,
-                                "socket": sprintf("%s %s", $1.socket.className(), $1.socket.uniqueHash()[0..8]),
+                                "socket": $1.socket ? sprintf("%s %s", $1.socket.className(), $1.socket.uniqueHash()[0..8]) : "timer",
                             }, ready_list));
                         }
                     }
