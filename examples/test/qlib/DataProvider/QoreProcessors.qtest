@@ -30,6 +30,8 @@
 %requires ../../../../qlib/QUnit.qm
 %requires ../../../../qlib/Mime.qm
 %requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ProviderIndex
+%requires ../../../../qlib/ProviderIndexUtil
 
 %exec-class QoreProcessorsTest
 
@@ -122,6 +124,9 @@ class QoreProcessorsTest inherits QUnit::Test {
         addTestCase("filter - bulk mode support", \filterBulkMode());
         addTestCase("filter - bulk edge cases", \filterBulkEdgeCases());
         addTestCase("filter - bulk in pipeline", \filterBulkPipeline());
+
+        addTestCase("index round-trip - expression return_type deserialization",
+            \indexRoundTripExpressionReturnType());
 
         set_return_value(main());
     }
@@ -804,5 +809,49 @@ class QoreProcessorsTest inherits QUnit::Test {
             "where_cond": {"exp": "==", "args": ({"field": "v"}, 1)},
         }));
         assertTrue(pipeline.getInfo().bulk, "pipeline with filter has bulk mode enabled");
+    }
+
+    indexRoundTripExpressionReturnType() {
+        # Create a temp dir for the index
+        string dir = tmp_location() + "/provindex_test_" + get_random_string(8);
+        mkdir(dir);
+        on_exit {
+            unlink(dir + "/qore-data-index.yaml");
+            rmdir(dir);
+        }
+
+        # Use ProviderIndex to create the data provider index (serializes to YAML)
+        ProviderIndex::createDataProviderIndex(<DataProviderIndexInfo>{}, dir);
+
+        # Read back using ProviderIndexUtil (deserializes from YAML)
+        *hash<DataProviderIndexInfo> result = ProviderIndexUtil::readDataProviderIndex();
+        assertEq(True, exists result, "index read back successfully");
+        assertEq(True, exists result.actioninfomap."Qore", "Qore app actions exist");
+
+        # Verify filter-records expressions have proper AbstractDataProviderType return_type
+        *hash<auto> filter = result.actioninfomap."Qore"."filter-records";
+        assertEq(True, exists filter, "filter-records action exists");
+        assertEq(True, exists filter.data_provider_info.expressions, "filter-records has expressions");
+
+        int exp_count;
+        foreach hash<auto> exp in (filter.data_provider_info.expressions.iterator()) {
+            assertEq(True, exp.return_type instanceof AbstractDataProviderType,
+                sprintf("expression %y return_type is AbstractDataProviderType (got %s)",
+                    exp.name, exp.return_type.type()));
+            ++exp_count;
+        }
+        assertEq(True, exp_count > 0, "at least one expression checked");
+
+        # Verify specific standard expressions are present
+        assertEq(True, exists filter.data_provider_info.expressions."&&",
+            "&& expression exists after round-trip");
+        assertEq(True, exists filter.data_provider_info.expressions."==",
+            "== expression exists after round-trip");
+
+        # Verify default_view enum is preserved for options that have it set
+        *hash<auto> where_cond = filter.options.where_cond;
+        assertEq(True, exists where_cond, "where_cond option exists after round-trip");
+        assertEq("expression", string(where_cond.default_view),
+            "default_view enum value preserved after round-trip");
     }
 }

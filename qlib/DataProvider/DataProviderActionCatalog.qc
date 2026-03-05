@@ -191,6 +191,14 @@ public enum UiOptionView {
     Expression = "expression",
 }
 
+#! Maps string values to UiOptionView enum values for deserialization
+/** @since DataProvider 3.3
+*/
+public const UiOptionViewMap = {
+    "template": UiOptionView::Template,
+    "expression": UiOptionView::Expression,
+};
+
 #! Maps DPAT_* action type codes to app action flags
 public const ActionCodeFlagMap = {
     DPAT_EVENT: "supports_events",
