@@ -2322,7 +2322,9 @@ public class HttpAsyncSocketIoController {
                             }
                         }
                         # Use freshly-updated cinfo (not the stale closure capture)
-                        submitConnectionOp(uh, resumed_cinfo);
+                        if (resumed_cinfo) {
+                            submitConnectionOp(uh, resumed_cinfo);
+                        }
                     }
                     handleHttp2MultiplexedResult(uh, cinfo, stream_id, result);
                 } catch (hash<ExceptionInfo> ex) {
@@ -2343,7 +2345,9 @@ public class HttpAsyncSocketIoController {
                                     resumed_cinfo = connections{uh} = conn_info_upd;
                                 }
                             }
-                            submitConnectionOp(uh, resumed_cinfo);
+                            if (resumed_cinfo) {
+                                submitConnectionOp(uh, resumed_cinfo);
+                            }
                         } catch () {}
                     }
                     try {
@@ -2372,7 +2376,9 @@ public class HttpAsyncSocketIoController {
                             resumed_cinfo = connections{uh} = conn_info_upd;
                         }
                     }
-                    submitConnectionOp(uh, resumed_cinfo);
+                    if (resumed_cinfo) {
+                        submitConnectionOp(uh, resumed_cinfo);
+                    }
                 } catch () {}
             }
             # Send error response for this stream

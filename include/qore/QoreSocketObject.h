@@ -716,7 +716,8 @@ public:
         @param stream_id the HTTP/3 stream ID
         @param timeout_ms maximum wait time in milliseconds
         @param xsink exception sink
-        @return binary data if available, or NOTHING if stream complete or timeout
+        @return binary data if available, or NOTHING if the stream is complete (end-of-stream);
+            on timeout, the QUIC-STREAM-TIMEOUT exception is raised
         @since %Qore 2.3
     */
     DLLEXPORT BinaryNode* readQuicStreamDataBlock(int64_t session_id, int64_t stream_id,
