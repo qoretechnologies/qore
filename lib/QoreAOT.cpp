@@ -139,6 +139,7 @@
 #include "qore/intern/QoreImplicitElementNode.h"
 #include "qore/intern/ParseReferenceNode.h"
 #include "qore/intern/QoreSquareBracketsRangeOperatorNode.h"
+#include "qore/intern/QoreParseHashNode.h"
 #include "qore/intern/QoreRegex.h"
 #include "qore/intern/CaseNodeRegex.h"
 #include "qore/intern/QoreRegexSubst.h"
@@ -255,6 +256,8 @@ struct AOTCompiledFunc {
     int num_regex_cases = 0;        //!< number of regex case slots (SwitchRegexMatch)
     AOTSlotIdentities slot_ids;     //!< extracted slot identities for source-stripped mode
     uint64_t feature_flags = 0;     //!< QORE_AOT_FEAT_* bitset required by this function
+    //! Owned handler IR functions indexed by stmt slot; null = no IR (Foreach, or lowering failed)
+    std::vector<std::unique_ptr<QoreIRFunction>> handler_irs;
 };
 
 // ---- Feature flag helpers ----
@@ -336,7 +339,7 @@ static void reportAOTCompileStats(const char* label, int compiled_count, int tot
         int failed_count, const std::vector<AOTCompiledFunc>& compiled_funcs) {
     int unsupported_count = 0;
     for (auto& cf : compiled_funcs) {
-        if (cf.slot_ids.has_unsupported_exprs) {
+        if (cf.slot_ids.has_unsupported_exprs || cf.slot_ids.has_closure_exprs) {
             ++unsupported_count;
         }
     }
@@ -350,6 +353,41 @@ static void reportAOTCompileStats(const char* label, int compiled_count, int tot
         printf("AOT: all %d functions fully serialized (no source fallback needed)\n",
             compiled_count);
     }
+}
+
+//! Check if a compiled function needs source fallback at runtime
+/** A function needs source fallback if it has:
+    - unsupported expressions (closures, etc.) that can't be reconstructed from binary
+    - statement slots (on_exit/on_success/on_error) without serialized handler IR
+    - constructor/destructor/copy methods that need BCAList from source parsing
+*/
+static bool funcNeedsFallback(const AOTCompiledFuncWithSlots& f) {
+    if (f.slot_ids.has_unsupported_exprs || f.slot_ids.has_closure_exprs) {
+        return true;
+    }
+    // Check if any stmt slots lack handler IR (need AST fallback)
+    if (f.num_stmts > 0) {
+        bool all_have_ir = static_cast<int>(f.handler_irs.size()) == f.num_stmts
+            && std::all_of(f.handler_irs.begin(), f.handler_irs.end(),
+                [](const QoreIRFunction* hir) { return hir != nullptr; });
+        if (!all_have_ir) {
+            return true;
+        }
+    }
+    // Check if this is a constructor/destructor/copy method — these need source
+    // fallback to reconstruct BCAList (base class constructor arguments) at runtime
+    size_t sep = f.name.find("::");
+    if (sep != std::string::npos) {
+        std::string method = f.name.substr(sep + 2);
+        size_t paren = method.find('(');
+        if (paren != std::string::npos) {
+            method = method.substr(0, paren);
+        }
+        if (method == "constructor" || method == "destructor" || method == "copy") {
+            return true;
+        }
+    }
+    return false;
 }
 
 //! Try to lower a user function variant to IR
@@ -435,6 +473,8 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
 static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots);
 static void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slots,
         UserVariantBase* uvb, AOTSlotIdentities& out);
+static std::vector<std::unique_ptr<QoreIRFunction>> extractHandlerIRs(
+        QoreIRFunction& func, const AOTSlotMap& slots);
 
 //! Walk a namespace and compile all user functions to LLVM IR using AOT mode
 //! Check if an item should be skipped because it belongs to a different module
@@ -561,6 +601,10 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     cf.num_regex_cases = static_cast<int>(slots.regex_case_slots.size());
                     // Extract slot identities for source-stripped mode
                     extractAOTSlotIdentities(*ir_func, slots, uvb, cf.slot_ids);
+                    // Extract handler IR from OnBlockExit instructions (moves ownership)
+                    if (!slots.stmt_slots.empty()) {
+                        cf.handler_irs = extractHandlerIRs(*ir_func, slots);
+                    }
                     // Scan IR function for required features
                     cf.feature_flags = scanIRFeatureFlags(*ir_func);
                     compiled_funcs.push_back(std::move(cf));
@@ -689,6 +733,10 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         cf.num_regex_cases = static_cast<int>(slots.regex_case_slots.size());
                         // Extract slot identities for source-stripped mode
                         extractAOTSlotIdentities(*ir_func, slots, uvb, cf.slot_ids);
+                        // Extract handler IR from OnBlockExit instructions (moves ownership)
+                        if (!slots.stmt_slots.empty()) {
+                            cf.handler_irs = extractHandlerIRs(*ir_func, slots);
+                        }
                         // Scan IR function for required features
                         cf.feature_flags = scanIRFeatureFlags(*ir_func);
                         compiled_funcs.push_back(std::move(cf));
@@ -1308,38 +1356,21 @@ bool QoreAOT::compile(QoreProgram* pgm,
             fws.num_stmts = cf.num_stmts;
             fws.num_regex_cases = cf.num_regex_cases;
             fws.slot_ids = cf.slot_ids;
+            // Transfer handler IR pointers (non-owning: AOTCompiledFunc still owns them)
+            for (auto& hir : cf.handler_irs) {
+                fws.handler_irs.push_back(hir.get());
+            }
             func_slots.push_back(std::move(fws));
         }
         serializeSlotMaps(writer, func_slots);
 
         // Serialize fallback sources when needed: either explicitly requested via
         // --include-source, or when any functions require AST fallback (unsupported
-        // expressions or statement slots). Without this, source-stripped binaries crash
-        // when calling functions that need AST evaluation but have no source to parse.
-        // Constructors, destructors, and copy methods also need source fallback to
-        // reconstruct BCAList (base class constructor arguments) at runtime.
+        // expressions, closures, or constructor/destructor/copy methods that need
+        // BCAList from source parsing).
         {
             bool has_fallback_funcs = std::any_of(func_slots.begin(), func_slots.end(),
-                [](const AOTCompiledFuncWithSlots& f) {
-                    if (f.slot_ids.has_unsupported_exprs || f.num_stmts > 0) {
-                        return true;
-                    }
-                    // Check if this is a constructor/destructor/copy method
-                    // Name format: "ClassName::methodName(...)"
-                    size_t sep = f.name.find("::");
-                    if (sep != std::string::npos) {
-                        std::string method = f.name.substr(sep + 2);
-                        size_t paren = method.find('(');
-                        if (paren != std::string::npos) {
-                            method = method.substr(0, paren);
-                        }
-                        if (method == "constructor" || method == "destructor"
-                                || method == "copy") {
-                            return true;
-                        }
-                    }
-                    return false;
-                });
+                funcNeedsFallback);
             if (has_fallback_funcs || include_source) {
                 serializeFallbackSources(writer, func_slots, source_text, source_len);
             }
@@ -2392,14 +2423,16 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
             fws.num_stmts = cf.num_stmts;
             fws.num_regex_cases = cf.num_regex_cases;
             fws.slot_ids = cf.slot_ids;
+            // Transfer handler IR pointers (non-owning: AOTCompiledFunc still owns them)
+            for (auto& hir : cf.handler_irs) {
+                fws.handler_irs.push_back(hir.get());
+            }
             func_slots.push_back(std::move(fws));
         }
         serializeSlotMaps(writer, func_slots);
         {
             bool has_fallback_funcs = std::any_of(func_slots.begin(), func_slots.end(),
-                [](const AOTCompiledFuncWithSlots& f) {
-                    return f.slot_ids.has_unsupported_exprs || f.num_stmts > 0;
-                });
+                funcNeedsFallback);
             if (has_fallback_funcs || include_source) {
                 serializeFallbackSources(writer, func_slots, source_text, source_len);
             }
@@ -2727,14 +2760,16 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
                 fws.num_exprs = cf.num_exprs;
                 fws.num_stmts = cf.num_stmts;
                 fws.slot_ids = cf.slot_ids;
+                // Transfer handler IR pointers (non-owning: AOTCompiledFunc still owns them)
+                for (auto& hir : cf.handler_irs) {
+                    fws.handler_irs.push_back(hir.get());
+                }
                 func_slots.push_back(std::move(fws));
             }
             serializeSlotMaps(writer, func_slots);
             {
                 bool has_fallback_funcs = std::any_of(func_slots.begin(), func_slots.end(),
-                    [](const AOTCompiledFuncWithSlots& f) {
-                        return f.slot_ids.has_unsupported_exprs || f.num_stmts > 0;
-                    });
+                    funcNeedsFallback);
                 if (has_fallback_funcs || include_source) {
                     serializeFallbackSources(writer, func_slots, combined_source.c_str(), (int)combined_source.size());
                 }
@@ -4740,6 +4775,22 @@ class ExprTreeSerializer {
             return true;
         }
 
+        // QoreParseHashNode: parse-time hash literal (key/value expressions)
+        if (auto* phn = dynamic_cast<const QoreParseHashNode*>(node)) {
+            writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_PARSE_HASH));
+            uint16_t count = static_cast<uint16_t>(phn->getKeys().size());
+            writeU16(count);
+            for (size_t i = 0; i < count; ++i) {
+                if (!serializeValue(phn->getKeys()[i])) {
+                    return false;
+                }
+                if (!serializeValue(phn->getValues()[i])) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
         // QoreImplicitArgumentNode: $1, $2, $argv
         if (auto* ia = dynamic_cast<const QoreImplicitArgumentNode*>(node)) {
             writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_IMPLICIT_ARG));
@@ -4919,6 +4970,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots) 
         id.kind = AOTExprKind::NEW_OBJECT;
         const QoreClass* qc = no->getClass();
         id.ref1 = qc ? qc->getPath() : "";
+        id.constructor_args = no->getArgs();
         return id;
     }
 
@@ -4938,9 +4990,29 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots) 
         if (qc) {
             id.kind = AOTExprKind::NEW_OBJECT;
             id.ref1 = qc->getPath();
+            id.constructor_args = vrn->getArgs();
             return id;
         }
-        // Non-class VarRefNewObjectNode (hashdecl, complex hash/list) falls through to GENERIC_EVAL
+        // Hashdecl construction (e.g., MyHashDecl h())
+        const TypedHashDecl* hd = QoreTypeInfo::getUniqueReturnHashDecl(vrn->getTypeInfo());
+        if (hd) {
+            id.kind = AOTExprKind::HASHDECL_NEW;
+            id.ref1 = hd->getNamespacePath();
+            return id;
+        }
+        // Complex hash construction (e.g., hash<string, int> h())
+        if (QoreTypeInfo::getUniqueReturnComplexHash(vrn->getTypeInfo())) {
+            id.kind = AOTExprKind::COMPLEX_HASH_NEW;
+            id.ref1 = QoreTypeInfo::getPath(vrn->getTypeInfo());
+            return id;
+        }
+        // Complex list construction (e.g., list<string> l())
+        if (QoreTypeInfo::getUniqueReturnComplexList(vrn->getTypeInfo())) {
+            id.kind = AOTExprKind::COMPLEX_LIST_NEW;
+            id.ref1 = QoreTypeInfo::getPath(vrn->getTypeInfo());
+            return id;
+        }
+        // Other non-class VarRefNewObjectNode falls through to GENERIC_EVAL
     }
 
     // NewHashDeclNode: hashdecl construction (new MyHashDecl(...))
@@ -4994,8 +5066,11 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots) 
     }
 
     // QoreClosureParseNode: closure/lambda creation
-    // Phase 7: Serialize closure body via EXPR_TREE serialization (complex expression)
-    // Falls through to ExprTreeSerializer below
+    // Classified as CLOSURE_CREATE — the slot will be filled at runtime from re-lowered source
+    if (dynamic_cast<const QoreClosureParseNode*>(node)) {
+        id.kind = AOTExprKind::CLOSURE_CREATE;
+        return id;
+    }
 
     // QoreNumberNode: number literal constant
     if (auto* num = dynamic_cast<const QoreNumberNode*>(node)) {
@@ -5031,6 +5106,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots) 
         if (sc->oc) {
             id.ref1 = sc->oc->getPath();
         }
+        id.constructor_args = sc->getArgs();
         return id;
     }
 
@@ -5135,10 +5211,13 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
     // Extract expression slot identities
     out.exprs.resize(slots.expr_slots.size());
     out.has_unsupported_exprs = false;
+    out.has_closure_exprs = false;
     for (auto& [bits, slot] : slots.expr_slots) {
         out.exprs[slot] = classifyExpression(bits, slots);
         if (out.exprs[slot].kind == AOTExprKind::GENERIC_EVAL) {
             out.has_unsupported_exprs = true;
+        } else if (out.exprs[slot].kind == AOTExprKind::CLOSURE_CREATE) {
+            out.has_closure_exprs = true;
         }
     }
 
@@ -5165,6 +5244,37 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
 
     // stmt_slots (on_block_exit handlers) are resolved from the function's AST at
     // runtime in buildContextFromSlotMap(), so they no longer require source fallback.
+}
+
+//! Extract handler IR pointers for each statement slot in the compiled function.
+/** Walks the IR function to find OnBlockExit instructions with handler_ir and maps them
+    to their statement slot indices. Foreach instructions have null handler_ir.
+    @param func the IR function
+    @param slots the slot map with stmt_slot indices
+    @return vector of handler IR pointers indexed by stmt slot (null = no handler IR)
+*/
+static std::vector<std::unique_ptr<QoreIRFunction>> extractHandlerIRs(
+        QoreIRFunction& func, const AOTSlotMap& slots) {
+    std::vector<std::unique_ptr<QoreIRFunction>> result(slots.stmt_slots.size());
+    std::unordered_set<const void*> seen;
+
+    for (auto& block : func.blocks) {
+        for (auto& inst : block->instructions) {
+            if (inst->opcode == QoreIROpcode::OnBlockExit) {
+                auto* obei = static_cast<QoreIROnBlockExitInstruction*>(inst.get());
+                StatementBlock* code = obei->stmt->getCode();
+                const void* key = reinterpret_cast<const void*>(code);
+                if (seen.insert(key).second) {
+                    auto it = slots.stmt_slots.find(key);
+                    if (it != slots.stmt_slots.end() && obei->handler_ir) {
+                        result[it->second] = std::move(obei->handler_ir);
+                    }
+                }
+            }
+            // Foreach instructions don't have handler_ir — null stays in result
+        }
+    }
+    return result;
 }
 
 void QoreAOT::printSupportedTargets() {

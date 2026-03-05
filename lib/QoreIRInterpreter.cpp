@@ -4591,22 +4591,28 @@ load_local_done:
 
             case QoreIROpcode::OnBlockExit: {
                 auto* obe_inst = static_cast<QoreIROnBlockExitInstruction*>(inst);
-                if (!obe_inst->stmt) {
+                if (obe_inst->stmt) {
+                    // Normal case: record the handler for deferred execution at block/function exit.
+                    // Don't call exec() here - the AST's exec() calls advance_on_block_exit()
+                    // which requires the thread on_block_exit stack to be set up by StatementBlock,
+                    // but the IR interpreter doesn't go through StatementBlock::execIntern().
+                    on_block_exit_handlers.push_back({obe_inst->stmt->getType(),
+                        obe_inst->stmt->getCode(),
+                        obe_inst->handler_ir ? obe_inst->handler_ir.get() : nullptr});
+                } else if (obe_inst->handler_ir) {
+                    // Deserialized case: no AST statement, but handler IR is available
+                    on_block_exit_handlers.push_back({obe_inst->obe_type,
+                        nullptr,
+                        obe_inst->handler_ir.get()});
+                } else {
                     if (xsink) {
-                        xsink->raiseException("IR-EXEC-ERROR", "on-block-exit requires a statement");
+                        xsink->raiseException("IR-EXEC-ERROR", "on-block-exit requires a statement or handler IR");
                     }
                     executeOnBlockExitHandlers(on_block_exit_handlers, xsink);
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     cleanupLocalCaches();
                     return false;
                 }
-                // Record the handler for deferred execution at block/function exit.
-                // Don't call exec() here - the AST's exec() calls advance_on_block_exit()
-                // which requires the thread on_block_exit stack to be set up by StatementBlock,
-                // but the IR interpreter doesn't go through StatementBlock::execIntern().
-                on_block_exit_handlers.push_back({obe_inst->stmt->getType(),
-                    obe_inst->stmt->getCode(),
-                    obe_inst->handler_ir ? obe_inst->handler_ir.get() : nullptr});
                 ++ip;
                 break;
             }

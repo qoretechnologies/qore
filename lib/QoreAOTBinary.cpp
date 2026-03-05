@@ -41,6 +41,13 @@
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/typed_hash_decl_private.h"
 #include "qore/intern/qore_enum_decl_private.h"
+#include "qore/intern/FunctionCallNode.h"
+#include "qore/intern/VarRefNode.h"
+#include "qore/intern/StaticClassVarRefNode.h"
+#include "qore/intern/SelfVarrefNode.h"
+#include "qore/intern/CaseNodeRegex.h"
+#include "qore/intern/QoreRegex.h"
+#include "qore/intern/OnBlockExitStatement.h"
 #include <qore/QoreEnumDecl.h>
 
 #include <cassert>
@@ -1166,7 +1173,6 @@ static void writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
         // default argument
         bool has_default = sig->hasDefaultArg(i);
         if (has_default && i < static_cast<uint32_t>(defaults.size())) {
-            writer.writeU8(1);
             QoreValue dv = defaults[i];
             // Check if the default value is a serializable constant type.
             // AST expression nodes (function calls, variable refs, etc.) have types
@@ -1178,10 +1184,23 @@ static void writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
                     || dt == NT_FLOAT || dt == NT_STRING || dt == NT_DATE
                     || dt == NT_NUMBER || dt == NT_BINARY || dt == NT_LIST
                     || dt == NT_HASH) {
+                writer.writeU8(1);
                 writer.writeValue(dv);
+            } else if (dv.hasNode()) {
+                // Try to serialize as a classifiable expression (e.g. function call)
+                auto* fcn = dynamic_cast<const FunctionCallNode*>(dv.getInternalNode());
+                if (fcn && fcn->getName() && (!fcn->getArgs() || fcn->getArgs()->empty())) {
+                    // No-arg function call default (e.g., getcwd(), now())
+                    writer.writeU8(2);  // expression default: function call
+                    writer.writeStringRef(fcn->getName());
+                } else {
+                    // Unclassifiable complex expression — write opaque placeholder
+                    writer.writeU8(1);
+                    writer.writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_OPAQUE_DEFAULT));
+                }
             } else {
-                // Complex expression default (e.g. function call like getcwd())
-                // Write opaque marker so deserialization knows parameter is optional
+                // Unknown type — write opaque placeholder
+                writer.writeU8(1);
                 writer.writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_OPAQUE_DEFAULT));
             }
         } else {
@@ -1588,6 +1607,152 @@ static void writeMethodsSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
     writer.endSection(sec_idx);
 }
 
+//! Classify and write a QoreValue expression in AOTExprKind format
+/** Used by handler IR serialization to classify expression nodes inline.
+    Handles function calls, method calls, variable refs, constants, and enums.
+    Returns true on success, false if the expression cannot be classified.
+*/
+static bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
+        const std::vector<AOTLocalSlotId>& parent_locals,
+        const std::vector<AOTGlobalSlotId>& parent_globals) {
+    if (!expr.hasNode()) {
+        if (expr.isEnum()) {
+            const QoreEnumMember* member = expr.getEnumMember();
+            writer.writeU8(static_cast<uint8_t>(AOTExprKind::CONST_ENUM));
+            std::string ns_path = member->getEnumDecl()->getNamespacePath();
+            writer.writeStringRef(ns_path.c_str());
+            writer.writeStringRef(member->getName());
+            return true;
+        }
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::GENERIC_EVAL));
+        return true;
+    }
+
+    const AbstractQoreNode* node = expr.getInternalNode();
+    if (!node) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::GENERIC_EVAL));
+        return true;
+    }
+
+    // FunctionCallNode: regular function call
+    if (auto* call = dynamic_cast<const FunctionCallNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::FUNC_CALL));
+        writer.writeStringRef(call->getName());
+        return true;
+    }
+
+    // SelfFunctionCallNode: method call on self
+    if (auto* call = dynamic_cast<const SelfFunctionCallNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::SELF_METHOD_CALL));
+        const QoreMethod* method = call->getMethod();
+        if (method) {
+            const QoreClass* qc = method->getClass();
+            writer.writeStringRef(qc ? qc->getPath() : "");
+        } else {
+            writer.writeStringRef("");
+        }
+        writer.writeStringRef(call->getName());
+        return true;
+    }
+
+    // StaticMethodCallNode: static method call
+    if (auto* call = dynamic_cast<const StaticMethodCallNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::STATIC_METHOD_CALL));
+        const QoreMethod* method = call->getMethod();
+        if (method) {
+            const QoreClass* qc = method->getClass();
+            writer.writeStringRef(qc ? qc->getPath() : "");
+        } else {
+            writer.writeStringRef("");
+        }
+        writer.writeStringRef(call->getName());
+        return true;
+    }
+
+    // VarRefNode: local and global variable references
+    if (auto* varref = dynamic_cast<const VarRefNode*>(node)) {
+        if (varref->getType() == VT_LOCAL || varref->getType() == VT_LOCAL_TS ||
+                varref->getType() == VT_CLOSURE) {
+            // Look up the local slot index from parent function's local slots
+            const void* lv_ptr = reinterpret_cast<const void*>(varref->ref.id);
+            for (size_t i = 0; i < parent_locals.size(); ++i) {
+                // Compare by name since pointer identity may differ
+                if (varref->getName() && parent_locals[i].name == varref->getName()) {
+                    writer.writeU8(static_cast<uint8_t>(AOTExprKind::LOCAL_VARREF));
+                    writer.writeStringRef(std::to_string(i).c_str());
+                    return true;
+                }
+            }
+        } else if (varref->getType() == VT_GLOBAL || varref->getType() == VT_THREAD_LOCAL) {
+            Var* global_var = varref->ref.var;
+            if (global_var) {
+                // Find the global slot index by name
+                for (size_t i = 0; i < parent_globals.size(); ++i) {
+                    if (parent_globals[i].name == global_var->getName()) {
+                        writer.writeU8(static_cast<uint8_t>(AOTExprKind::GLOBAL_VARREF));
+                        writer.writeStringRef(std::to_string(i).c_str());
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+
+    // SelfVarrefNode: self variable reference
+    if (auto* svn = dynamic_cast<const SelfVarrefNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::SELF_VARREF));
+        writer.writeStringRef(svn->str ? svn->str : "");
+        return true;
+    }
+
+    // StaticClassVarRefNode: static class variable reference
+    if (auto* sv = dynamic_cast<const StaticClassVarRefNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::STATIC_VARREF));
+        writer.writeStringRef(sv->qc.getName());
+        writer.writeStringRef(sv->str.c_str());
+        return true;
+    }
+
+    // NewObjectCallNode: constructor call
+    if (auto* no = dynamic_cast<const NewObjectCallNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::NEW_OBJECT));
+        const QoreClass* qc = no->getClass();
+        writer.writeStringRef(qc ? qc->getPath() : "");
+        return true;
+    }
+
+    // QoreNumberNode: number literal constant
+    if (auto* num = dynamic_cast<const QoreNumberNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::CONST_NUMBER));
+        QoreString str;
+        num->toString(str);
+        writer.writeStringRef(str.c_str());
+        return true;
+    }
+
+    // BinaryNode: binary literal constant
+    if (auto* bin = dynamic_cast<const BinaryNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::CONST_BINARY));
+        std::string hex;
+        const unsigned char* data = static_cast<const unsigned char*>(bin->getPtr());
+        size_t len = bin->size();
+        hex.reserve(len * 2);
+        for (size_t i = 0; i < len; ++i) {
+            char buf[3];
+            snprintf(buf, sizeof(buf), "%02x", data[i]);
+            hex.append(buf);
+        }
+        writer.writeStringRef(hex.c_str());
+        return true;
+    }
+
+    // Unsupported — write GENERIC_EVAL placeholder
+    printd(3, "AOT: handler IR unsupported expr type '%s' for serialization\n",
+        node->getTypeName());
+    writer.writeU8(static_cast<uint8_t>(AOTExprKind::GENERIC_EVAL));
+    return true;
+}
+
 } // anonymous namespace
 
 void serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompiledFuncWithSlots>& funcs) {
@@ -1627,9 +1792,20 @@ void serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
         for (auto& expr : func.slot_ids.exprs) {
             writer.writeU8(static_cast<uint8_t>(expr.kind));
             switch (expr.kind) {
-                case AOTExprKind::FUNC_CALL:
                 case AOTExprKind::NEW_OBJECT:
                 case AOTExprKind::SCOPED_NEW_OBJECT:
+                    // ref1 = class path, followed by serialized constructor args
+                    writer.writeStringRef(expr.ref1.c_str());
+                    if (expr.constructor_args && expr.constructor_args->size() > 0) {
+                        writer.writeU8(static_cast<uint8_t>(expr.constructor_args->size()));
+                        for (size_t j = 0; j < expr.constructor_args->size(); ++j) {
+                            writer.writeValue(expr.constructor_args->retrieveEntry(j));
+                        }
+                    } else {
+                        writer.writeU8(0);
+                    }
+                    break;
+                case AOTExprKind::FUNC_CALL:
                 case AOTExprKind::RUNTIME_CONST_REF:
                 case AOTExprKind::LOCAL_VARREF:
                 case AOTExprKind::GLOBAL_VARREF:
@@ -1686,6 +1862,38 @@ void serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
             writer.writeI64(rc.options);
             writer.writeU8(rc.is_negated ? 1 : 0);
         }
+
+        // Handler IR entries for statement slots
+        // For each stmt slot, write u8 flag (1 = handler IR follows, 0 = no handler IR)
+        // If handler IR is present, serialize the IR function inline
+        for (int i = 0; i < func.num_stmts; ++i) {
+            const QoreIRFunction* handler_ir = (i < static_cast<int>(func.handler_irs.size()))
+                ? func.handler_irs[i] : nullptr;
+            if (handler_ir) {
+                writer.writeU8(1);
+                // Write a size placeholder — we'll patch it after serializing the IR
+                uint32_t size_pos = writer.position();
+                writer.writeU32(0);  // placeholder
+
+                // Use a writeExpr callback that classifies and writes expressions
+                // using the parent function's slot info for variable resolution
+                const auto& parent_locals = func.slot_ids.locals;
+                const auto& parent_globals = func.slot_ids.globals;
+                auto writeExpr = [&parent_locals, &parent_globals](QoreAOTBinaryWriter& w,
+                        const QoreValue& expr) -> bool {
+                    return classifyAndWriteExpr(w, expr, parent_locals, parent_globals);
+                };
+                if (!serializeIRFunction(writer, *handler_ir, writeExpr)) {
+                    // Handler IR serialization failed — mark as unavailable
+                    printd(0, "AOT: handler IR serialization failed for stmt slot %d\n", i);
+                }
+                // Patch the size field
+                uint32_t end_pos = writer.position();
+                writer.patchU32(size_pos, end_pos - size_pos - 4);
+            } else {
+                writer.writeU8(0);
+            }
+        }
     }
 
     writer.endSection(sec_idx);
@@ -1697,12 +1905,36 @@ void serializeFallbackSources(QoreAOTBinaryWriter& writer,
         const std::vector<AOTCompiledFuncWithSlots>& funcs,
         const char* source_text, int source_len) {
     // Collect functions that need source fallback:
-    // - functions with unsupported expressions (need AST evaluation)
-    // - functions with stmt_slots (on_exit/on_success/on_error handlers need AST execution)
+    // - functions with unsupported expressions (GENERIC_EVAL)
+    // - functions with closure expressions (CLOSURE_CREATE — need source for runtime re-lowering)
+    // - functions with stmt_slots that lack handler IR (need AST execution)
+    // - constructor/destructor/copy methods (need BCAList from source parsing)
     std::vector<const AOTCompiledFuncWithSlots*> fallback_funcs;
     for (auto& func : funcs) {
-        if (func.slot_ids.has_unsupported_exprs || func.num_stmts > 0) {
+        if (func.slot_ids.has_unsupported_exprs || func.slot_ids.has_closure_exprs) {
             fallback_funcs.push_back(&func);
+            continue;
+        }
+        if (func.num_stmts > 0) {
+            bool all_have_ir = static_cast<int>(func.handler_irs.size()) == func.num_stmts
+                && std::all_of(func.handler_irs.begin(), func.handler_irs.end(),
+                    [](const QoreIRFunction* hir) { return hir != nullptr; });
+            if (!all_have_ir) {
+                fallback_funcs.push_back(&func);
+                continue;
+            }
+        }
+        // Check for constructor/destructor/copy methods
+        size_t sep = func.name.find("::");
+        if (sep != std::string::npos) {
+            std::string method = func.name.substr(sep + 2);
+            size_t paren = method.find('(');
+            if (paren != std::string::npos) {
+                method = method.substr(0, paren);
+            }
+            if (method == "constructor" || method == "destructor" || method == "copy") {
+                fallback_funcs.push_back(&func);
+            }
         }
     }
 
@@ -1720,6 +1952,778 @@ void serializeFallbackSources(QoreAOTBinaryWriter& writer,
     }
 
     writer.endSection(sec_idx);
+}
+
+// ---- IR Function Serialization (Phase 5) ----
+
+#include "qore/intern/Variable.h"
+
+//! Determine the instruction group for serialization using dynamic_cast
+static QoreIRInstGroup classifyInstruction(const QoreIRInstruction* inst) {
+    // Check specific subclasses from most to least derived to avoid false matches.
+    // Order matters because some subclasses derive from others (e.g. InvokeSimError from Throw).
+    if (dynamic_cast<const QoreIRConstInstruction*>(inst)) {
+        return QoreIRInstGroup::Const;
+    }
+    if (dynamic_cast<const QoreIRBranchIfInstruction*>(inst)) {
+        return QoreIRInstGroup::BranchIf;
+    }
+    if (dynamic_cast<const QoreIRBranchInstruction*>(inst)) {
+        return QoreIRInstGroup::Branch;
+    }
+    if (dynamic_cast<const QoreIRSwitchIntInstruction*>(inst)) {
+        return QoreIRInstGroup::SwitchInt;
+    }
+    if (dynamic_cast<const QoreIRSwitchStringInstruction*>(inst)) {
+        return QoreIRInstGroup::SwitchString;
+    }
+    if (dynamic_cast<const QoreIRPhiInstruction*>(inst)) {
+        return QoreIRInstGroup::Phi;
+    }
+    if (dynamic_cast<const QoreIRGuardInstruction*>(inst)) {
+        return QoreIRInstGroup::Guard;
+    }
+    if (dynamic_cast<const QoreIRReturnInstruction*>(inst)) {
+        return QoreIRInstGroup::Return;
+    }
+    if (dynamic_cast<const QoreIRThrowInstruction*>(inst)) {
+        return QoreIRInstGroup::Throw;
+    }
+    if (dynamic_cast<const QoreIRAddAssignLocalIntInstruction*>(inst)) {
+        return QoreIRInstGroup::FusedAddLocal;
+    }
+    if (dynamic_cast<const QoreIRIncrementLocalIntInstruction*>(inst)) {
+        return QoreIRInstGroup::FusedIncLocal;
+    }
+    if (dynamic_cast<const QoreIRBranchIfLtLocalIntInstruction*>(inst)) {
+        return QoreIRInstGroup::FusedBrLtLocal;
+    }
+    if (dynamic_cast<const QoreIRLocalInstruction*>(inst)) {
+        return QoreIRInstGroup::Local;
+    }
+    if (dynamic_cast<const QoreIRVarInstruction*>(inst)) {
+        return QoreIRInstGroup::Var;
+    }
+    if (dynamic_cast<const QoreIRImplicitArgInstruction*>(inst)) {
+        return QoreIRInstGroup::ImplicitArg;
+    }
+    if (dynamic_cast<const QoreIRHashKeyStoreInstruction*>(inst)) {
+        return QoreIRInstGroup::HashKeyStore;
+    }
+    if (dynamic_cast<const QoreIRHashKeyAccessInstruction*>(inst)) {
+        return QoreIRInstGroup::HashKeyAccess;
+    }
+    if (dynamic_cast<const QoreIRListIndexStoreInstruction*>(inst)) {
+        return QoreIRInstGroup::ListIndexStore;
+    }
+    if (dynamic_cast<const QoreIRMapHashKeyInstruction*>(inst)) {
+        return QoreIRInstGroup::MapHashKey;
+    }
+    if (dynamic_cast<const QoreIRSelfMemberInstruction*>(inst)) {
+        return QoreIRInstGroup::SelfMember;
+    }
+    if (dynamic_cast<const QoreIRStaticVarInstruction*>(inst)) {
+        return QoreIRInstGroup::StaticVar;
+    }
+    if (dynamic_cast<const QoreIRNewObjectInstruction*>(inst)) {
+        return QoreIRInstGroup::NewObject;
+    }
+    if (dynamic_cast<const QoreIRLoadConstantInstruction*>(inst)) {
+        return QoreIRInstGroup::LoadConst;
+    }
+    if (dynamic_cast<const QoreIRCreateClosureInstruction*>(inst)) {
+        return QoreIRInstGroup::CreateClosure;
+    }
+    if (dynamic_cast<const QoreIRCreateCallRefInstruction*>(inst)) {
+        return QoreIRInstGroup::CreateCallRef;
+    }
+    if (dynamic_cast<const QoreIRCreateMethodRefInstruction*>(inst)) {
+        return QoreIRInstGroup::CreateMethodRef;
+    }
+    if (dynamic_cast<const QoreIRCreateParseRefInstruction*>(inst)) {
+        return QoreIRInstGroup::CreateParseRef;
+    }
+    if (dynamic_cast<const QoreIRNewHashDeclInstruction*>(inst)) {
+        return QoreIRInstGroup::NewHashDecl;
+    }
+    if (dynamic_cast<const QoreIRNewComplexHashInstruction*>(inst)) {
+        return QoreIRInstGroup::NewComplexHash;
+    }
+    if (dynamic_cast<const QoreIRNewComplexListInstruction*>(inst)) {
+        return QoreIRInstGroup::NewComplexList;
+    }
+    if (dynamic_cast<const QoreIRVrnConstructInstruction*>(inst)) {
+        return QoreIRInstGroup::VrnConstruct;
+    }
+    if (dynamic_cast<const QoreIRLValueInstruction*>(inst)) {
+        return QoreIRInstGroup::LValue;
+    }
+    // Check specific call instruction types before generic expr
+    if (dynamic_cast<const QoreIRCallDirectInstruction*>(inst)) {
+        return QoreIRInstGroup::CallDirect;
+    }
+    if (dynamic_cast<const QoreIRInvokeMethodDirectInstruction*>(inst)) {
+        return QoreIRInstGroup::InvokeMethodDirect;
+    }
+    if (dynamic_cast<const QoreIRCallMethodDirectInstruction*>(inst)) {
+        return QoreIRInstGroup::CallMethodDirect;
+    }
+    if (dynamic_cast<const QoreIRCallStaticDirectInstruction*>(inst)) {
+        return QoreIRInstGroup::CallStaticDirect;
+    }
+    if (dynamic_cast<const QoreIRInvokeDotEvalMethodDirectInstruction*>(inst)) {
+        return QoreIRInstGroup::InvokeDotEvalMethodDirect;
+    }
+    if (dynamic_cast<const QoreIRDotEvalMethodDirectInstruction*>(inst)) {
+        return QoreIRInstGroup::DotEvalMethodDirect;
+    }
+    if (dynamic_cast<const QoreIRInvokeInstruction*>(inst)) {
+        return QoreIRInstGroup::Invoke;
+    }
+    if (dynamic_cast<const QoreIRForeachInstruction*>(inst)) {
+        return QoreIRInstGroup::Foreach;
+    }
+    if (dynamic_cast<const QoreIRIteratorCreateInstruction*>(inst)) {
+        return QoreIRInstGroup::IteratorCreate;
+    }
+    if (dynamic_cast<const QoreIRIteratorNextInstruction*>(inst)) {
+        return QoreIRInstGroup::IteratorNext;
+    }
+    if (dynamic_cast<const QoreIROnBlockExitInstruction*>(inst)) {
+        return QoreIRInstGroup::OnBlockExit;
+    }
+    if (dynamic_cast<const QoreIRScopeEnterInstruction*>(inst)) {
+        return QoreIRInstGroup::ScopeEnter;
+    }
+    if (dynamic_cast<const QoreIRScopeExitInstruction*>(inst)) {
+        return QoreIRInstGroup::ScopeExit;
+    }
+    if (dynamic_cast<const QoreIRDebugInstruction*>(inst)) {
+        return QoreIRInstGroup::Debug;
+    }
+    if (dynamic_cast<const QoreIRAssertInstruction*>(inst)) {
+        return QoreIRInstGroup::Assert;
+    }
+    if (dynamic_cast<const QoreIRLandingPadInstruction*>(inst)) {
+        return QoreIRInstGroup::LandingPad;
+    }
+    if (dynamic_cast<const QoreIRSwitchRegexMatchInstruction*>(inst)) {
+        return QoreIRInstGroup::SwitchRegexMatch;
+    }
+    if (dynamic_cast<const QoreIRRefForeachInitInstruction*>(inst)) {
+        return QoreIRInstGroup::RefForeachInit;
+    }
+    if (dynamic_cast<const QoreIRExprInstruction*>(inst)) {
+        return QoreIRInstGroup::Expr;
+    }
+    // Default: base instruction (no extra fields)
+    return QoreIRInstGroup::Base;
+}
+
+//! Get type path string for a LocalVar, handling nullptr typeInfo
+static const char* getLocalTypePath(const LocalVar* lv) {
+    const QoreTypeInfo* ti = lv->getTypeInfo();
+    return ti ? QoreTypeInfo::getPath(ti) : "";
+}
+
+//! Serialize a single IR instruction
+static bool serializeIRInstruction(QoreAOTBinaryWriter& writer, const QoreIRInstruction* inst,
+        const std::unordered_map<const QoreIRBasicBlock*, uint16_t>& block_idx,
+        const AOTExprWriteFunc& writeExpr) {
+    // Write opcode
+    writer.writeU16(static_cast<uint16_t>(inst->opcode));
+
+    // Classify and write group tag
+    QoreIRInstGroup group = classifyInstruction(inst);
+    writer.writeU8(static_cast<uint8_t>(group));
+
+    // Write base fields: result, operands, exception_target
+    writer.writeU32(inst->result.id);
+    writer.writeU8(static_cast<uint8_t>(inst->operands.size()));
+    for (auto& op : inst->operands) {
+        writer.writeU32(op.id);
+    }
+    // Exception target block index (0xFFFF = none)
+    if (inst->exception_target) {
+        auto it = block_idx.find(inst->exception_target);
+        writer.writeU16(it != block_idx.end() ? it->second : 0xFFFF);
+    } else {
+        writer.writeU16(0xFFFF);
+    }
+
+    // Write group-specific fields
+    switch (group) {
+        case QoreIRInstGroup::Base:
+            // No extra fields
+            break;
+
+        case QoreIRInstGroup::Const: {
+            auto* ci = static_cast<const QoreIRConstInstruction*>(inst);
+            writer.writeU8(static_cast<uint8_t>(ci->constant.kind));
+            switch (ci->constant.kind) {
+                case QoreIRConstant::Kind::Int:
+                    writer.writeI64(ci->constant.int_value);
+                    break;
+                case QoreIRConstant::Kind::Float:
+                    writer.writeF64(ci->constant.float_value);
+                    break;
+                case QoreIRConstant::Kind::Bool:
+                    writer.writeU8(ci->constant.bool_value ? 1 : 0);
+                    break;
+                case QoreIRConstant::Kind::Nothing:
+                case QoreIRConstant::Kind::Null:
+                    // No extra data
+                    break;
+                case QoreIRConstant::Kind::String:
+                    writer.writeStringRef(ci->constant.string_value.c_str());
+                    break;
+                case QoreIRConstant::Kind::Date:
+                    writer.writeI64(ci->constant.date_microseconds);
+                    writer.writeU8(ci->constant.date_is_relative ? 1 : 0);
+                    break;
+                case QoreIRConstant::Kind::Enum:
+                    // Serialize enum as namespace path + member name
+                    if (ci->constant.enum_member) {
+                        std::string ns_path = ci->constant.enum_member->getEnumDecl()->getNamespacePath();
+                        writer.writeStringRef(ns_path.c_str());
+                        writer.writeStringRef(ci->constant.enum_member->getName());
+                    } else {
+                        writer.writeStringRef("");
+                        writer.writeStringRef("");
+                    }
+                    break;
+            }
+            break;
+        }
+
+        case QoreIRInstGroup::Branch: {
+            auto* bi = static_cast<const QoreIRBranchInstruction*>(inst);
+            auto it = block_idx.find(bi->target);
+            writer.writeU16(it != block_idx.end() ? it->second : 0xFFFF);
+            break;
+        }
+
+        case QoreIRInstGroup::BranchIf: {
+            auto* bi = static_cast<const QoreIRBranchIfInstruction*>(inst);
+            writer.writeU32(bi->condition.id);
+            auto it_t = block_idx.find(bi->true_target);
+            writer.writeU16(it_t != block_idx.end() ? it_t->second : 0xFFFF);
+            auto it_f = block_idx.find(bi->false_target);
+            writer.writeU16(it_f != block_idx.end() ? it_f->second : 0xFFFF);
+            break;
+        }
+
+        case QoreIRInstGroup::Return: {
+            auto* ri = static_cast<const QoreIRReturnInstruction*>(inst);
+            writer.writeU8(ri->has_value ? 1 : 0);
+            if (ri->has_value) {
+                writer.writeU32(ri->value.id);
+            }
+            break;
+        }
+
+        case QoreIRInstGroup::Throw: {
+            auto* ti = static_cast<const QoreIRThrowInstruction*>(inst);
+            // exception_target for throw (separate from base exception_target)
+            if (ti->exception_target) {
+                auto it = block_idx.find(ti->exception_target);
+                writer.writeU16(it != block_idx.end() ? it->second : 0xFFFF);
+            } else {
+                writer.writeU16(0xFFFF);
+            }
+            writer.writeU16(static_cast<uint16_t>(ti->catch_depth));
+            writer.writeU8(ti->synthetic ? 1 : 0);
+            break;
+        }
+
+        case QoreIRInstGroup::Local: {
+            auto* li = static_cast<const QoreIRLocalInstruction*>(inst);
+            writer.writeStringRef(li->local ? li->local->getName() : "");
+            writer.writeStringRef(li->local ? getLocalTypePath(li->local) : "");
+            writer.writeU32(li->slot_id);
+            writer.writeU8(li->auto_ref ? 1 : 0);
+            writer.writeU8(li->weak ? 1 : 0);
+            writer.writeU8(li->is_closure ? 1 : 0);
+            writer.writeU8(li->is_ref ? 1 : 0);
+            break;
+        }
+
+        case QoreIRInstGroup::Var: {
+            auto* vi = static_cast<const QoreIRVarInstruction*>(inst);
+            writer.writeStringRef(vi->var ? vi->var->getName() : "");
+            writer.writeU8(vi->weak ? 1 : 0);
+            break;
+        }
+
+        case QoreIRInstGroup::LValue: {
+            auto* lvi = static_cast<const QoreIRLValueInstruction*>(inst);
+            if (!writeExpr(writer, lvi->lvalue)) {
+                return false;
+            }
+            writer.writeU8(lvi->weak ? 1 : 0);
+            writer.writeU32(lvi->lvalue_slot_id);
+            break;
+        }
+
+        case QoreIRInstGroup::Expr: {
+            auto* ei = static_cast<const QoreIRExprInstruction*>(inst);
+            if (!writeExpr(writer, ei->expr)) {
+                return false;
+            }
+            writer.writeU8(ei->has_ref_args ? 1 : 0);
+            break;
+        }
+
+        case QoreIRInstGroup::CallDirect: {
+            auto* ci = static_cast<const QoreIRCallDirectInstruction*>(inst);
+            // Serialize function path for runtime resolution
+            if (!writeExpr(writer, ci->expr)) {
+                return false;
+            }
+            writer.writeU8(ci->has_ref_args ? 1 : 0);
+            writer.writeU8(ci->is_self_recursive ? 1 : 0);
+            break;
+        }
+
+        case QoreIRInstGroup::CallMethodDirect: {
+            auto* ci = static_cast<const QoreIRCallMethodDirectInstruction*>(inst);
+            if (ci->expr) {
+                writer.writeU8(1);
+                if (!writeExpr(writer, ci->expr)) {
+                    return false;
+                }
+            } else {
+                writer.writeU8(0);
+            }
+            writer.writeStringRef(ci->qc ? ci->qc->getPath() : "");
+            writer.writeStringRef(ci->method ? ci->method->getName() : "");
+            writer.writeU8(ci->has_ref_args ? 1 : 0);
+            break;
+        }
+
+        case QoreIRInstGroup::InvokeMethodDirect: {
+            auto* ci = static_cast<const QoreIRInvokeMethodDirectInstruction*>(inst);
+            if (ci->expr) {
+                writer.writeU8(1);
+                if (!writeExpr(writer, ci->expr)) {
+                    return false;
+                }
+            } else {
+                writer.writeU8(0);
+            }
+            writer.writeStringRef(ci->qc ? ci->qc->getPath() : "");
+            writer.writeStringRef(ci->method ? ci->method->getName() : "");
+            writer.writeU8(ci->has_ref_args ? 1 : 0);
+            // Normal and exception targets
+            auto it_n = block_idx.find(ci->normal_target);
+            writer.writeU16(it_n != block_idx.end() ? it_n->second : 0xFFFF);
+            auto it_e = block_idx.find(ci->exception_target);
+            writer.writeU16(it_e != block_idx.end() ? it_e->second : 0xFFFF);
+            break;
+        }
+
+        case QoreIRInstGroup::CallStaticDirect: {
+            auto* ci = static_cast<const QoreIRCallStaticDirectInstruction*>(inst);
+            if (!writeExpr(writer, ci->expr)) {
+                return false;
+            }
+            writer.writeStringRef(ci->method ? ci->method->getClass()->getPath() : "");
+            writer.writeStringRef(ci->method ? ci->method->getName() : "");
+            writer.writeU8(ci->has_ref_args ? 1 : 0);
+            break;
+        }
+
+        case QoreIRInstGroup::DotEvalMethodDirect: {
+            auto* ci = static_cast<const QoreIRDotEvalMethodDirectInstruction*>(inst);
+            if (!writeExpr(writer, ci->expr)) {
+                return false;
+            }
+            writer.writeStringRef(ci->qc ? ci->qc->getPath() : "");
+            writer.writeStringRef(ci->method ? ci->method->getName() : "");
+            writer.writeU8(ci->pseudo ? 1 : 0);
+            writer.writeU8(ci->has_ref_args ? 1 : 0);
+            break;
+        }
+
+        case QoreIRInstGroup::InvokeDotEvalMethodDirect: {
+            auto* ci = static_cast<const QoreIRInvokeDotEvalMethodDirectInstruction*>(inst);
+            if (!writeExpr(writer, ci->expr)) {
+                return false;
+            }
+            writer.writeStringRef(ci->qc ? ci->qc->getPath() : "");
+            writer.writeStringRef(ci->method ? ci->method->getName() : "");
+            writer.writeU8(ci->pseudo ? 1 : 0);
+            writer.writeU8(ci->has_ref_args ? 1 : 0);
+            auto it_n = block_idx.find(ci->normal_target);
+            writer.writeU16(it_n != block_idx.end() ? it_n->second : 0xFFFF);
+            auto it_e = block_idx.find(ci->exception_target);
+            writer.writeU16(it_e != block_idx.end() ? it_e->second : 0xFFFF);
+            break;
+        }
+
+        case QoreIRInstGroup::Invoke: {
+            auto* ii = static_cast<const QoreIRInvokeInstruction*>(inst);
+            if (!writeExpr(writer, ii->expr)) {
+                return false;
+            }
+            writer.writeU16(static_cast<uint16_t>(ii->invoke_opcode));
+            writer.writeStringRef(ii->invoke_key_name.c_str());
+            writer.writeU8(ii->weak ? 1 : 0);
+            auto it_n = block_idx.find(ii->normal_target);
+            writer.writeU16(it_n != block_idx.end() ? it_n->second : 0xFFFF);
+            auto it_e = block_idx.find(ii->exception_target);
+            writer.writeU16(it_e != block_idx.end() ? it_e->second : 0xFFFF);
+            break;
+        }
+
+        case QoreIRInstGroup::ScopeEnter: {
+            auto* si = static_cast<const QoreIRScopeEnterInstruction*>(inst);
+            writer.writeU32(si->scope_id);
+            break;
+        }
+
+        case QoreIRInstGroup::ScopeExit: {
+            auto* si = static_cast<const QoreIRScopeExitInstruction*>(inst);
+            writer.writeU32(si->scope_id);
+            writer.writeU8(si->is_error ? 1 : 0);
+            break;
+        }
+
+        case QoreIRInstGroup::LandingPad: {
+            auto* li = static_cast<const QoreIRLandingPadInstruction*>(inst);
+            writer.writeU32(static_cast<uint32_t>(li->scope_depth));
+            writer.writeU32(li->try_scope_id);
+            break;
+        }
+
+        case QoreIRInstGroup::SwitchInt: {
+            auto* si = static_cast<const QoreIRSwitchIntInstruction*>(inst);
+            writer.writeU32(si->switch_val.id);
+            auto it_d = block_idx.find(si->default_target);
+            writer.writeU16(it_d != block_idx.end() ? it_d->second : 0xFFFF);
+            writer.writeU16(static_cast<uint16_t>(si->cases.size()));
+            for (auto& c : si->cases) {
+                writer.writeI64(c.value);
+                auto it = block_idx.find(c.target);
+                writer.writeU16(it != block_idx.end() ? it->second : 0xFFFF);
+            }
+            break;
+        }
+
+        case QoreIRInstGroup::SwitchString: {
+            auto* si = static_cast<const QoreIRSwitchStringInstruction*>(inst);
+            writer.writeU32(si->switch_val.id);
+            auto it_d = block_idx.find(si->default_target);
+            writer.writeU16(it_d != block_idx.end() ? it_d->second : 0xFFFF);
+            writer.writeU16(static_cast<uint16_t>(si->cases.size()));
+            for (auto& c : si->cases) {
+                writer.writeStringRef(c.value.c_str());
+                auto it = block_idx.find(c.target);
+                writer.writeU16(it != block_idx.end() ? it->second : 0xFFFF);
+            }
+            break;
+        }
+
+        case QoreIRInstGroup::Phi: {
+            auto* pi = static_cast<const QoreIRPhiInstruction*>(inst);
+            writer.writeU16(static_cast<uint16_t>(pi->incoming.size()));
+            for (auto& inc : pi->incoming) {
+                writer.writeU32(inc.value.id);
+                auto it = block_idx.find(inc.block);
+                writer.writeU16(it != block_idx.end() ? it->second : 0xFFFF);
+            }
+            break;
+        }
+
+        case QoreIRInstGroup::Guard: {
+            auto* gi = static_cast<const QoreIRGuardInstruction*>(inst);
+            auto it = block_idx.find(gi->deopt_target);
+            writer.writeU16(it != block_idx.end() ? it->second : 0xFFFF);
+            writer.writeStringRef(gi->type_info ? QoreTypeInfo::getPath(gi->type_info) : "");
+            writer.writeU32(gi->guard_id);
+            break;
+        }
+
+        case QoreIRInstGroup::ImplicitArg: {
+            auto* ii = static_cast<const QoreIRImplicitArgInstruction*>(inst);
+            writer.writeU16(static_cast<uint16_t>(ii->offset));
+            break;
+        }
+
+        case QoreIRInstGroup::HashKeyAccess: {
+            auto* hi = static_cast<const QoreIRHashKeyAccessInstruction*>(inst);
+            writer.writeStringRef(hi->key_name.c_str());
+            break;
+        }
+
+        case QoreIRInstGroup::SelfMember: {
+            auto* si = static_cast<const QoreIRSelfMemberInstruction*>(inst);
+            writer.writeStringRef(si->member_name.c_str());
+            break;
+        }
+
+        case QoreIRInstGroup::StaticVar: {
+            auto* si = static_cast<const QoreIRStaticVarInstruction*>(inst);
+            writer.writeStringRef(si->var_name.c_str());
+            if (!writeExpr(writer, si->expr)) {
+                return false;
+            }
+            break;
+        }
+
+        case QoreIRInstGroup::NewObject: {
+            auto* ni = static_cast<const QoreIRNewObjectInstruction*>(inst);
+            if (!writeExpr(writer, ni->expr)) {
+                return false;
+            }
+            break;
+        }
+
+        case QoreIRInstGroup::LoadConst: {
+            auto* lci = static_cast<const QoreIRLoadConstantInstruction*>(inst);
+            if (!writeExpr(writer, lci->expr)) {
+                return false;
+            }
+            break;
+        }
+
+        case QoreIRInstGroup::CreateClosure: {
+            auto* cci = static_cast<const QoreIRCreateClosureInstruction*>(inst);
+            if (!writeExpr(writer, cci->expr)) {
+                return false;
+            }
+            break;
+        }
+
+        case QoreIRInstGroup::CreateCallRef: {
+            auto* cri = static_cast<const QoreIRCreateCallRefInstruction*>(inst);
+            if (!writeExpr(writer, cri->expr)) {
+                return false;
+            }
+            break;
+        }
+
+        case QoreIRInstGroup::CreateMethodRef: {
+            auto* cri = static_cast<const QoreIRCreateMethodRefInstruction*>(inst);
+            if (!writeExpr(writer, cri->expr)) {
+                return false;
+            }
+            break;
+        }
+
+        case QoreIRInstGroup::CreateParseRef: {
+            auto* cri = static_cast<const QoreIRCreateParseRefInstruction*>(inst);
+            if (!writeExpr(writer, cri->expr)) {
+                return false;
+            }
+            break;
+        }
+
+        case QoreIRInstGroup::NewHashDecl: {
+            auto* ni = static_cast<const QoreIRNewHashDeclInstruction*>(inst);
+            if (!writeExpr(writer, ni->expr)) {
+                return false;
+            }
+            break;
+        }
+
+        case QoreIRInstGroup::NewComplexHash: {
+            auto* ni = static_cast<const QoreIRNewComplexHashInstruction*>(inst);
+            if (!writeExpr(writer, ni->expr)) {
+                return false;
+            }
+            break;
+        }
+
+        case QoreIRInstGroup::NewComplexList: {
+            auto* ni = static_cast<const QoreIRNewComplexListInstruction*>(inst);
+            if (!writeExpr(writer, ni->expr)) {
+                return false;
+            }
+            break;
+        }
+
+        case QoreIRInstGroup::VrnConstruct: {
+            auto* vi = static_cast<const QoreIRVrnConstructInstruction*>(inst);
+            if (!writeExpr(writer, vi->expr)) {
+                return false;
+            }
+            break;
+        }
+
+        case QoreIRInstGroup::HashKeyStore: {
+            auto* hi = static_cast<const QoreIRHashKeyStoreInstruction*>(inst);
+            writer.writeStringRef(hi->key_name.c_str());
+            writer.writeU32(hi->container_slot_id);
+            break;
+        }
+
+        case QoreIRInstGroup::ListIndexStore: {
+            auto* li = static_cast<const QoreIRListIndexStoreInstruction*>(inst);
+            writer.writeU32(li->container_slot_id);
+            break;
+        }
+
+        case QoreIRInstGroup::FusedAddLocal: {
+            auto* fi = static_cast<const QoreIRAddAssignLocalIntInstruction*>(inst);
+            writer.writeStringRef(fi->target ? fi->target->getName() : "");
+            writer.writeStringRef(fi->source ? fi->source->getName() : "");
+            writer.writeU32(fi->target_slot_id);
+            writer.writeU32(fi->source_slot_id);
+            writer.writeU8(fi->target_ir_only ? 1 : 0);
+            break;
+        }
+
+        case QoreIRInstGroup::FusedIncLocal: {
+            auto* fi = static_cast<const QoreIRIncrementLocalIntInstruction*>(inst);
+            writer.writeStringRef(fi->local ? fi->local->getName() : "");
+            writer.writeI64(fi->delta);
+            writer.writeU32(fi->slot_id);
+            writer.writeU8(fi->ir_only ? 1 : 0);
+            break;
+        }
+
+        case QoreIRInstGroup::FusedBrLtLocal: {
+            auto* fi = static_cast<const QoreIRBranchIfLtLocalIntInstruction*>(inst);
+            writer.writeStringRef(fi->lhs ? fi->lhs->getName() : "");
+            writer.writeStringRef(fi->rhs ? fi->rhs->getName() : "");
+            writer.writeU32(fi->lhs_slot_id);
+            writer.writeU32(fi->rhs_slot_id);
+            auto it_t = block_idx.find(fi->true_target);
+            writer.writeU16(it_t != block_idx.end() ? it_t->second : 0xFFFF);
+            auto it_f = block_idx.find(fi->false_target);
+            writer.writeU16(it_f != block_idx.end() ? it_f->second : 0xFFFF);
+            break;
+        }
+
+        case QoreIRInstGroup::MapHashKey: {
+            auto* mi = static_cast<const QoreIRMapHashKeyInstruction*>(inst);
+            writer.writeStringRef(mi->key1.c_str());
+            writer.writeStringRef(mi->key2.c_str());
+            break;
+        }
+
+        case QoreIRInstGroup::IteratorCreate: {
+            auto* ii = static_cast<const QoreIRIteratorCreateInstruction*>(inst);
+            writer.writeU32(ii->iterable.id);
+            break;
+        }
+
+        case QoreIRInstGroup::IteratorNext: {
+            auto* ii = static_cast<const QoreIRIteratorNextInstruction*>(inst);
+            writer.writeU32(ii->iterator.id);
+            auto it_d = block_idx.find(ii->done_target);
+            writer.writeU16(it_d != block_idx.end() ? it_d->second : 0xFFFF);
+            auto it_c = block_idx.find(ii->continue_target);
+            writer.writeU16(it_c != block_idx.end() ? it_c->second : 0xFFFF);
+            break;
+        }
+
+        case QoreIRInstGroup::RefForeachInit: {
+            auto* ri = static_cast<const QoreIRRefForeachInitInstruction*>(inst);
+            if (!writeExpr(writer, ri->expr)) {
+                return false;
+            }
+            break;
+        }
+
+        case QoreIRInstGroup::SwitchRegexMatch: {
+            auto* sri = static_cast<const QoreIRSwitchRegexMatchInstruction*>(inst);
+            if (!sri->regex_case) {
+                return false;
+            }
+            QoreRegex* re = sri->regex_case->getRegex();
+            if (!re || !re->getPatternCStr()) {
+                return false;
+            }
+            writer.writeStringRef(re->getPatternCStr());
+            writer.writeI64(re->getOptions());
+            writer.writeU8(dynamic_cast<const CaseNodeNegRegex*>(sri->regex_case) ? 1 : 0);
+            break;
+        }
+
+        case QoreIRInstGroup::OnBlockExit: {
+            auto* obe_inst = static_cast<const QoreIROnBlockExitInstruction*>(inst);
+            // Write the handler type (on_exit/on_success/on_error)
+            obe_type_e type = obe_inst->stmt ? obe_inst->stmt->getType() : obe_inst->obe_type;
+            writer.writeU8(static_cast<uint8_t>(type));
+            // Write nested handler IR if available
+            if (obe_inst->handler_ir) {
+                writer.writeU8(1);
+                if (!serializeIRFunction(writer, *obe_inst->handler_ir, writeExpr)) {
+                    return false;
+                }
+            } else {
+                // Can't serialize without handler IR in handler context
+                return false;
+            }
+            break;
+        }
+
+        // These instruction groups hold AST statement pointers that cannot be serialized.
+        // They are rare in handler/closure bodies and mark the function as non-serializable.
+        case QoreIRInstGroup::Foreach:
+        case QoreIRInstGroup::Debug:
+        case QoreIRInstGroup::Assert:
+        case QoreIRInstGroup::Unsupported:
+            printd(0, "AOT IR serialize: unsupported instruction group %d (opcode %d)\n",
+                (int)group, (int)inst->opcode);
+            return false;
+    }
+
+    return true;
+}
+
+bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func,
+        const AOTExprWriteFunc& writeExpr) {
+    // 1. Function header
+    writer.writeStringRef(func.name.c_str());
+    writer.writeU32(func.max_value_id);
+    writer.writeU32(func.max_local_slot_id);
+    writer.writeU32(func.num_guards);
+    writer.writeStringRef(func.return_type_info ? QoreTypeInfo::getPath(func.return_type_info) : "");
+    writer.writeU16(static_cast<uint16_t>(func.blocks.size()));
+    writer.writeU16(static_cast<uint16_t>(func.local_var_slots.size()));
+    writer.writeU16(static_cast<uint16_t>(func.all_body_locals.size()));
+
+    // 2. Local variable slot table
+    // Sort by slot_id for deterministic serialization
+    std::vector<std::pair<const LocalVar*, uint32_t>> sorted_slots(
+        func.local_var_slots.begin(), func.local_var_slots.end());
+    std::sort(sorted_slots.begin(), sorted_slots.end(),
+        [](const auto& a, const auto& b) { return a.second < b.second; });
+    for (auto& [lv, slot_id] : sorted_slots) {
+        writer.writeStringRef(lv->getName());
+        writer.writeStringRef(getLocalTypePath(lv));
+        writer.writeU32(slot_id);
+    }
+
+    // 3. Body locals
+    for (auto* lv : func.all_body_locals) {
+        writer.writeStringRef(lv->getName());
+        writer.writeStringRef(getLocalTypePath(lv));
+    }
+
+    // 4. Build block index map for block reference serialization
+    std::unordered_map<const QoreIRBasicBlock*, uint16_t> block_idx;
+    for (size_t i = 0; i < func.blocks.size(); ++i) {
+        block_idx[func.blocks[i].get()] = static_cast<uint16_t>(i);
+    }
+
+    // 5. Serialize blocks
+    for (auto& block : func.blocks) {
+        writer.writeStringRef(block->name.c_str());
+        writer.writeU8(block->is_loop_header ? 1 : 0);
+        writer.writeU16(static_cast<uint16_t>(block->instructions.size()));
+
+        for (auto& inst_ptr : block->instructions) {
+            if (!serializeIRInstruction(writer, inst_ptr.get(), block_idx, writeExpr)) {
+                return false;
+            }
+        }
+    }
+
+    return true;
 }
 
 // ---- Namespace Deserialization (Phase 4) ----
@@ -2696,7 +3700,8 @@ static bool readAndSetupVariantSignature(
         }
         param_types[j] = pti;
 
-        if (has_default) {
+        if (has_default == 1) {
+            // Constant default value
             param_defaults[j] = reader.readValue(ptr, end, error);
             if (!error.empty()) {
                 // Clean up already-read defaults
@@ -2704,6 +3709,25 @@ static bool readAndSetupVariantSignature(
                     param_defaults[k].discard(nullptr);
                 }
                 return false;
+            }
+        } else if (has_default == 2) {
+            // Expression default: no-arg function call (e.g., getcwd())
+            const char* fname = reader.readStringRef(ptr);
+            if (fname && *fname) {
+                qore_program_private* pp = qore_program_private::get(*pgm);
+                const FunctionEntry* fe = qore_root_ns_private::runtimeFindFunctionEntry(
+                    *pp->RootNS, fname);
+                if (fe) {
+                    FunctionCallNode* fcn = new FunctionCallNode(
+                        &loc_builtin, fe, (QoreListNode*)nullptr, pgm);
+                    param_defaults[j] = QoreValue(fcn);
+                } else {
+                    printd(0, "AOT deser: cannot resolve default expression function '%s'\n",
+                        fname);
+                    param_defaults[j] = QoreValue(true);
+                }
+            } else {
+                param_defaults[j] = QoreValue(true);
             }
         }
     }

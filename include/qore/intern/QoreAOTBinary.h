@@ -36,6 +36,8 @@
 #include <cstdint>
 #include <cstring>
 #include <string>
+#include <functional>
+#include <memory>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -44,6 +46,8 @@ class QoreValue;
 class QoreProgram;
 class QoreTypeInfo;
 class qore_ns_private;
+class QoreIRFunction;
+class LocalVar;
 
 //! Magic number: "QORD" in little-endian (0x44524F51)
 constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
@@ -287,6 +291,15 @@ public:
 
     //! Get current write position in buffer
     uint32_t position() const { return static_cast<uint32_t>(buffer.size()); }
+
+    //! Overwrite a U32 at a previously recorded position (for patching size fields)
+    void patchU32(uint32_t pos, uint32_t v) {
+        assert(pos + 4 <= buffer.size());
+        buffer[pos]     = static_cast<uint8_t>(v & 0xFF);
+        buffer[pos + 1] = static_cast<uint8_t>((v >> 8) & 0xFF);
+        buffer[pos + 2] = static_cast<uint8_t>((v >> 16) & 0xFF);
+        buffer[pos + 3] = static_cast<uint8_t>((v >> 24) & 0xFF);
+    }
 
     //! Begin a new section
     /** @param type the section type
@@ -734,6 +747,9 @@ enum class AOTExprNodeKind : uint8_t {
     // Reference to lvalue (\var)
     EN_REF_TO_LVALUE = 154, //!< 1 child (lvalue expression)
 
+    // Parse-time hash literal (key expressions + value expressions)
+    EN_PARSE_HASH    = 156, //!< u16 num_entries; for each: 1 child (key expr) + 1 child (value expr)
+
     // Square brackets range (x[m..n])
     EN_SQ_BRKT_RANGE = 155, //!< 3 children: [target, start, end]
 };
@@ -758,6 +774,7 @@ struct AOTExprSlotId {
     AOTExprKind kind = AOTExprKind::GENERIC_EVAL; //!< expression kind
     std::string ref1;        //!< kind-specific: function name or class path
     std::string ref2;        //!< kind-specific: method name (for method calls)
+    const QoreListNode* constructor_args = nullptr; //!< constructor args for NEW_OBJECT/SCOPED_NEW_OBJECT
 };
 
 //! Identity for a body local variable (needed for instantiation management)
@@ -782,6 +799,7 @@ struct AOTSlotIdentities {
     std::vector<AOTBodyLocalId> body_locals; //!< body locals in order
     std::vector<AOTRegexCaseSlotId> regex_cases; //!< indexed by regex case slot index
     bool has_unsupported_exprs = false;   //!< true if any expression is GENERIC_EVAL
+    bool has_closure_exprs = false;       //!< true if any expression is CLOSURE_CREATE
 };
 
 //! Descriptor for a compiled function with slot identities
@@ -793,6 +811,9 @@ struct AOTCompiledFuncWithSlots {
     int num_stmts = 0;               //!< number of statement slots (OnBlockExit)
     int num_regex_cases = 0;         //!< number of regex case slots (SwitchRegexMatch)
     AOTSlotIdentities slot_ids;      //!< extracted slot identities
+    //! Handler IR functions for each statement slot (indexed by stmt slot index).
+    //! Non-null entries have serializable handler IR; null entries need AST fallback.
+    std::vector<const QoreIRFunction*> handler_irs;
 };
 
 //! Serialize slot maps for compiled functions into the SLOT_MAPS binary section
@@ -982,5 +1003,128 @@ public:
         return false;
     }
 };
+
+// ---- IR Function Serialization (Phase 5) ----
+
+//! Instruction group tag for IR function serialization
+/** Identifies the instruction subclass for correct serialization/deserialization
+    of subclass-specific fields. Stored as a u8 in the binary format.
+*/
+enum class QoreIRInstGroup : uint8_t {
+    Base = 0,               //!< QoreIRInstruction — no extra fields
+    Const = 1,              //!< QoreIRConstInstruction
+    Branch = 2,             //!< QoreIRBranchInstruction
+    BranchIf = 3,           //!< QoreIRBranchIfInstruction
+    Return = 4,             //!< QoreIRReturnInstruction
+    Throw = 5,              //!< QoreIRThrowInstruction
+    Local = 6,              //!< QoreIRLocalInstruction
+    Var = 7,                //!< QoreIRVarInstruction
+    LValue = 8,             //!< QoreIRLValueInstruction
+    Expr = 9,               //!< QoreIRExprInstruction
+    CallDirect = 10,        //!< QoreIRCallDirectInstruction
+    CallMethodDirect = 11,  //!< QoreIRCallMethodDirectInstruction
+    InvokeMethodDirect = 12,//!< QoreIRInvokeMethodDirectInstruction
+    CallStaticDirect = 13,  //!< QoreIRCallStaticDirectInstruction
+    DotEvalMethodDirect = 14, //!< QoreIRDotEvalMethodDirectInstruction
+    InvokeDotEvalMethodDirect = 15, //!< QoreIRInvokeDotEvalMethodDirectInstruction
+    Invoke = 16,            //!< QoreIRInvokeInstruction
+    ScopeEnter = 17,        //!< QoreIRScopeEnterInstruction
+    ScopeExit = 18,         //!< QoreIRScopeExitInstruction
+    LandingPad = 19,        //!< QoreIRLandingPadInstruction
+    SwitchInt = 20,         //!< QoreIRSwitchIntInstruction
+    SwitchString = 21,      //!< QoreIRSwitchStringInstruction
+    Phi = 22,               //!< QoreIRPhiInstruction
+    Guard = 23,             //!< QoreIRGuardInstruction
+    ImplicitArg = 24,       //!< QoreIRImplicitArgInstruction
+    HashKeyAccess = 25,     //!< QoreIRHashKeyAccessInstruction
+    SelfMember = 26,        //!< QoreIRSelfMemberInstruction
+    StaticVar = 27,         //!< QoreIRStaticVarInstruction
+    NewObject = 28,         //!< QoreIRNewObjectInstruction
+    LoadConst = 29,         //!< QoreIRLoadConstantInstruction
+    CreateClosure = 30,     //!< QoreIRCreateClosureInstruction
+    CreateCallRef = 31,     //!< QoreIRCreateCallRefInstruction
+    CreateMethodRef = 32,   //!< QoreIRCreateMethodRefInstruction
+    CreateParseRef = 33,    //!< QoreIRCreateParseRefInstruction
+    NewHashDecl = 34,       //!< QoreIRNewHashDeclInstruction
+    NewComplexHash = 35,    //!< QoreIRNewComplexHashInstruction
+    NewComplexList = 36,    //!< QoreIRNewComplexListInstruction
+    VrnConstruct = 37,      //!< QoreIRVrnConstructInstruction
+    HashKeyStore = 38,      //!< QoreIRHashKeyStoreInstruction
+    ListIndexStore = 39,    //!< QoreIRListIndexStoreInstruction
+    FusedAddLocal = 40,     //!< QoreIRAddAssignLocalIntInstruction
+    FusedIncLocal = 41,     //!< QoreIRIncrementLocalIntInstruction
+    FusedBrLtLocal = 42,    //!< QoreIRBranchIfLtLocalIntInstruction
+    MapHashKey = 43,        //!< QoreIRMapHashKeyInstruction
+    Foreach = 44,           //!< QoreIRForeachInstruction
+    OnBlockExit = 45,       //!< QoreIROnBlockExitInstruction
+    IteratorCreate = 46,    //!< QoreIRIteratorCreateInstruction
+    IteratorNext = 47,      //!< QoreIRIteratorNextInstruction
+    SwitchRegexMatch = 48,  //!< QoreIRSwitchRegexMatchInstruction
+    RefForeachInit = 49,    //!< QoreIRRefForeachInitInstruction
+    Debug = 50,             //!< QoreIRDebugInstruction
+    Assert = 51,            //!< QoreIRAssertInstruction
+    Unsupported = 0xFF,     //!< Instruction cannot be serialized
+};
+
+//! Callback for serializing AST expressions embedded in IR instructions
+/** Called for each QoreValue expr/lvalue field that needs serialization.
+    Must write the expression data in AOTExprKind format (u8 kind + kind-specific refs).
+    @param writer binary writer
+    @param expr the AST expression to serialize
+    @return true on success, false if expression cannot be serialized
+*/
+typedef std::function<bool(QoreAOTBinaryWriter& writer, const QoreValue& expr)> AOTExprWriteFunc;
+
+//! Callback for deserializing AST expressions embedded in IR instructions
+/** Reads expression data in AOTExprKind format and reconstructs the AST expression.
+    @param reader binary reader (for string pool access)
+    @param ptr data pointer (advanced past the expression data)
+    @param end pointer past end of valid data
+    @param error receives error message on failure
+    @return the reconstructed expression, or NOTHING on failure
+*/
+typedef std::function<QoreValue(const QoreAOTBinaryReader& reader, const uint8_t*& ptr,
+    const uint8_t* end, std::string& error)> AOTExprReadFunc;
+
+//! Serialize a QoreIRFunction to binary format
+/** Writes a compact binary representation of the IR function that can be
+    deserialized at runtime to reconstruct the function for IR interpreter execution.
+
+    Binary format:
+    - Function header: name, max_value_id, max_local_slot_id, num_guards, return_type, block/local counts
+    - Local variable slot table: name, type_path, slot_id for each local
+    - Body locals list: name, type_path for each body local
+    - Blocks: for each block, name, is_loop_header, instructions
+    - Instructions: opcode, group_tag, result, operands, exception_target, group-specific fields
+
+    @param writer binary writer (uses string pool and buffer)
+    @param func the IR function to serialize
+    @param writeExpr callback for serializing AST expression fields
+    @return true on success, false if any instruction cannot be serialized
+*/
+bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func,
+    const AOTExprWriteFunc& writeExpr);
+
+//! Deserialize a QoreIRFunction from binary data
+/** Reads binary data written by serializeIRFunction() and reconstructs a
+    QoreIRFunction suitable for IR interpreter execution.
+
+    @param reader binary reader (for string pool access)
+    @param ptr data pointer (advanced past the function data on success)
+    @param end pointer past end of valid data
+    @param pgm the QoreProgram for namespace/type resolution
+    @param readExpr callback for deserializing AST expression fields
+    @param enclosing_locals optional name→LocalVar* map from the enclosing function's scope
+    @param error receives error message on failure
+    @return reconstructed function, or nullptr on failure
+*/
+std::unique_ptr<QoreIRFunction> deserializeIRFunction(
+    const QoreAOTBinaryReader& reader,
+    const uint8_t*& ptr,
+    const uint8_t* end,
+    QoreProgram* pgm,
+    const AOTExprReadFunc& readExpr,
+    const std::unordered_map<std::string, LocalVar*>* enclosing_locals,
+    std::string& error);
 
 #endif

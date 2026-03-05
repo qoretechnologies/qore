@@ -3584,8 +3584,15 @@ extern "C" DLLEXPORT void qore_rt_exec_on_block_exit(int64_t saved_count, Except
 
 extern "C" DLLEXPORT void qore_rt_push_on_block_exit_aot(QoreAOTContext* ctx, int32_t idx, int type) {
     assert(ctx && idx >= 0 && idx < ctx->num_stmts);
-    qore_rt_push_on_block_exit(type, const_cast<StatementBlock*>(
-        static_cast<const StatementBlock*>(ctx->stmts[idx])));
+    // Check if handler IR is available (strip-source mode or optimized path)
+    if (idx < static_cast<int32_t>(ctx->handler_irs.size()) && ctx->handler_irs[idx]) {
+        // Use handler IR for IR interpreter execution
+        qore_rt_push_on_block_exit_ir(type, nullptr, ctx->handler_irs[idx].get());
+    } else {
+        // Fall back to AST-based handler
+        qore_rt_push_on_block_exit(type, const_cast<StatementBlock*>(
+            static_cast<const StatementBlock*>(ctx->stmts[idx])));
+    }
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_exec_foreach_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {

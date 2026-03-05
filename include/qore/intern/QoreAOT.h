@@ -36,6 +36,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -91,6 +92,11 @@ struct QoreAOTContext {
     //! Populated during buildAOTContext() to avoid per-call dynamic_cast in qore_rt_call_direct_aot()
     //! Size == num_exprs; entries with func==nullptr are not CallDirect slots.
     QoreAOTCallTarget* call_targets = nullptr;
+
+    //! Deserialized handler IR functions for on_exit/on_success/on_error handlers.
+    //! Indexed by statement slot index. Non-null entries can be executed by the IR interpreter.
+    //! Used in strip-source mode where AST-based stmts[] are not available.
+    std::vector<std::unique_ptr<QoreIRFunction>> handler_irs;
 
     //! Destructor: deref all held expression values, then free arrays.
     //! Implemented in QoreAOT.cpp because it needs QoreValue.

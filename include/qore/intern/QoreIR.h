@@ -1542,7 +1542,15 @@ public:
             : QoreIRInstruction(QoreIROpcode::OnBlockExit), stmt(n_stmt) {
     }
 
+    //! Constructor for deserialized case (no AST statement available)
+    QoreIROnBlockExitInstruction(obe_type_e n_obe_type, std::unique_ptr<QoreIRFunction> n_handler_ir)
+            : QoreIRInstruction(QoreIROpcode::OnBlockExit), obe_type(n_obe_type),
+              handler_ir(std::move(n_handler_ir)) {
+    }
+
     const OnBlockExitStatement* stmt = nullptr;
+    //! Handler type for deserialized case (when stmt is null)
+    obe_type_e obe_type = OBE_Unconditional;
     //! Compiled handler body (nullptr = AST fallback).
     //! When set, the handler body can be executed via the IR interpreter
     //! instead of delegating to StatementBlock::exec().
@@ -1655,7 +1663,14 @@ public:
             : QoreIRInstruction(QoreIROpcode::SwitchRegexMatch), regex_case(n_regex_case) {
     }
 
+    ~QoreIRSwitchRegexMatchInstruction() override {
+        if (owns_regex_case) {
+            delete const_cast<CaseNodeRegex*>(regex_case);
+        }
+    }
+
     const CaseNodeRegex* regex_case = nullptr;  //!< The regex case node containing the regex
+    bool owns_regex_case = false;  //!< true when deserialized (we own the CaseNodeRegex)
 };
 
 //! Reference foreach init instruction — stores the ParseReferenceNode expression

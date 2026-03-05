@@ -88,6 +88,23 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT subscript compound assign", \testSubscriptCompoundAssign());
         addTestCase("AOT hash compound native", \testHashCompoundNative());
         addTestCase("AOT thread-local vars", \testThreadLocalVars());
+        # Strip source: global variable initialization
+        addTestCase("AOT strip source global var init", \testStripSourceGlobalVarInit());
+        # Strip source: complex hash/list construction via new
+        addTestCase("AOT strip source complex type new", \testStripSourceComplexTypeNew());
+        # Strip source: runtime constant resolution
+        addTestCase("AOT strip source runtime const ref", \testStripSourceRuntimeConstRef());
+        # Strip source: static class variable access (module)
+        addTestCase("AOT strip source static varref module", \testStripSourceStaticVarrefModule());
+        # Strip source: on_exit/on_success handler IR
+        addTestCase("AOT strip source on_exit handlers", \testStripSourceOnExitHandlers());
+        addTestCase("AOT strip source constructor args", \testStripSourceConstructorArgs());
+        addTestCase("AOT strip source default args", \testStripSourceDefaultArgs());
+        addTestCase("AOT strip source cast parse hash", \testStripSourceCastParseHash());
+        # Closure and regex handler serialization tests
+        addTestCase("AOT closure in function", \testClosureInFunction());
+        addTestCase("AOT regex switch in on_exit", \testRegexSwitchInOnExit());
+        addTestCase("AOT nested on_exit", \testNestedOnExit());
         set_return_value(main());
     }
 
@@ -2464,5 +2481,346 @@ printf(\"%d\\n\", get_counter());
         string interp_out = runInterpreted(code);
         assertEq(interp_out, result.run_out, "thread-local AOT output matches interpreter");
         assertEq(result.run_out, "15 18 main\n18\n");
+    }
+
+    testStripSourceGlobalVarInit() {
+        # Global and thread-local variable initialization in strip-source mode
+        string code = "%modern
+our int x = 42;
+our string msg = \"hello world\";
+our float pi = 3.14159;
+our bool flag = True;
+our hash<auto> h = {\"key\": \"value\", \"num\": 123};
+our list<auto> l = (1, 2, 3);
+thread_local int counter = 100;
+thread_local string tl_msg = \"thread-local\";
+
+printf(\"x=%d msg=%s pi=%.5f flag=%s\\n\", x, msg, pi, flag ? \"T\" : \"F\");
+printf(\"h=%y\\n\", h);
+printf(\"l=%y\\n\", l);
+printf(\"counter=%d tl_msg=%s\\n\", counter, tl_msg);
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.compiled, "global var init: compiled: " + result.compile_out);
+        assertTrue(result.all_precompiled,
+            "global var init: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "global var init: strip-source matches interpreter");
+    }
+
+    testStripSourceComplexTypeNew() {
+        # Complex hash/list construction via new keyword in strip-source mode
+        string code = "%modern
+hash<string, int> sub make_hash() {
+    auto h = new hash<string, int>();
+    h{\"a\"} = 1;
+    h{\"b\"} = 2;
+    return h;
+}
+
+list<string> sub make_list() {
+    auto l = new list<string>();
+    l += \"hello\";
+    l += \"world\";
+    return l;
+}
+
+printf(\"hash=%y\\n\", make_hash());
+printf(\"list=%y\\n\", make_list());
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.compiled, "complex type new: compiled: " + result.compile_out);
+        assertTrue(result.all_precompiled,
+            "complex type new: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "complex type new: strip-source matches interpreter");
+    }
+
+    testStripSourceRuntimeConstRef() {
+        # Runtime constant references in strip-source mode
+        string code = "%modern
+namespace TestConsts {
+    const PI = 3.14159;
+    const GREETING = \"Hello\";
+    const MAX_VAL = 100;
+}
+
+string sub format_msg() {
+    return sprintf(\"%s PI=%.5f MAX=%d\", TestConsts::GREETING, TestConsts::PI, TestConsts::MAX_VAL);
+}
+
+printf(\"%s\\n\", format_msg());
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.compiled, "runtime const ref: compiled: " + result.compile_out);
+        assertTrue(result.all_precompiled,
+            "runtime const ref: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "runtime const ref: strip-source matches interpreter");
+    }
+
+    testStripSourceStaticVarrefModule() {
+        # Static class variable access in a strip-source compiled module
+        string mod_code = "%new-style
+%require-types
+%strict-args
+
+module StripStaticVarMod {
+    version = \"1.0\";
+    desc = \"Test static var access\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace StripStaticVarMod {
+    public class Accumulator {
+        public {
+            static int total = 0;
+        }
+
+        static add(int n) {
+            Accumulator::total += n;
+        }
+
+        static int getTotal() {
+            return Accumulator::total;
+        }
+
+        static reset() {
+            Accumulator::total = 0;
+        }
+    }
+}
+";
+        hash<auto> mod_info = compileStripSourceModule(mod_code, "StripStaticVarMod");
+        on_exit {
+            backquote(sprintf("rm -rf %s", mod_info.tmp_dir));
+        }
+
+        assertTrue(mod_info.compiled,
+            "static varref module compiled: " + mod_info.compile_out);
+
+        # Create a test script that uses static methods
+        string test_code = "%modern
+%require-types
+%strict-args
+
+%requires StripStaticVarMod
+
+StripStaticVarMod::Accumulator::add(10);
+StripStaticVarMod::Accumulator::add(20);
+StripStaticVarMod::Accumulator::add(12);
+printf(\"%d\\n\", StripStaticVarMod::Accumulator::getTotal());
+exit(0);
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        # Run with the compiled strip-source .qmod
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, mod_info.tmp_dir, qore_bin, paths.src));
+
+        assertEq("42\n", out,
+            "static varref from strip-source module works correctly");
+    }
+
+    testStripSourceOnExitHandlers() {
+        string code = "%modern
+string sub test_on_exit(string label) {
+    string result = \"\";
+    on_exit {
+        printf(\"exit: %s\\n\", label);
+    }
+    result = \"body: \" + label;
+    printf(\"%s\\n\", result);
+    return result;
+}
+
+string sub test_on_success(string label) {
+    string result = \"\";
+    on_success {
+        printf(\"success: %s\\n\", label);
+    }
+    result = \"body2: \" + label;
+    printf(\"%s\\n\", result);
+    return result;
+}
+
+string rv1 = test_on_exit(\"A\");
+printf(\"rv: %s\\n\", rv1);
+string rv2 = test_on_success(\"B\");
+printf(\"rv: %s\\n\", rv2);
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.all_precompiled,
+            "on_exit strip-source: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "on_exit strip-source output matches interpreter");
+    }
+
+    testStripSourceConstructorArgs() {
+        string code = "%modern
+class Greeter {
+    public {
+        string greeting;
+    }
+    constructor(string msg) {
+        greeting = msg;
+    }
+    string greet(string name) {
+        return greeting + \", \" + name + \"!\";
+    }
+}
+
+# Test VarRefNewObjectNode syntax (ClassName var(args))
+Greeter g(\"Hello\");
+printf(\"%s\\n\", g.greet(\"World\"));
+printf(\"%s\\n\", g.greeting);
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.all_precompiled,
+            "constructor-args strip-source: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "constructor-args strip-source output matches interpreter");
+    }
+
+    testStripSourceDefaultArgs() {
+        string code = "%modern
+string sub make_greeting(string name, string prefix = getcwd()) {
+    return prefix + \": \" + name;
+}
+
+# Call with default arg (should use getcwd())
+string result1 = make_greeting(\"test\");
+# Verify it contains the current working directory
+printf(\"%s\\n\", result1.regex(\"^/\") ? \"PASS\" : \"FAIL\");
+
+# Call with explicit arg (should use the explicit value)
+string result2 = make_greeting(\"test\", \"hello\");
+printf(\"%s\\n\", result2);
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.all_precompiled,
+            "default-args strip-source: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "default-args strip-source output matches interpreter");
+    }
+
+    testStripSourceCastParseHash() {
+        string code = "%modern
+hashdecl MyInfo {
+    string name;
+    int age;
+}
+
+hash<MyInfo> sub make_info(string name, int age) {
+    return cast<hash<MyInfo>>({\"name\": name, \"age\": age});
+}
+
+hash<MyInfo> info = make_info(\"Alice\", 30);
+printf(\"%s %d\\n\", info.name, info.age);
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.all_precompiled,
+            "cast-parse-hash strip-source: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "cast-parse-hash strip-source output matches interpreter");
+    }
+
+    testClosureInFunction() {
+        # Test that functions with closures are pre-compiled and work correctly
+        string code = "%modern
+string sub make_adder_label(int base) {
+    code adder = int sub(int x) { return base + x; };
+    return sprintf(\"base=%d result=%d\", base, adder(7));
+}
+
+printf(\"%s\\n\", make_adder_label(10));
+printf(\"%s\\n\", make_adder_label(20));
+exit(0);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "closure-in-func: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "closure-in-func output matches interpreter");
+    }
+
+    testRegexSwitchInOnExit() {
+        # Test regex switch cases in on_exit handler body
+        string code = "%modern
+string sub classify(string val) {
+    string result;
+    on_exit {
+        switch (val) {
+            case /^[0-9]+$/:
+                result += \" (numeric)\";
+                break;
+            case /^[a-z]+$/i:
+                result += \" (alpha)\";
+                break;
+            default:
+                result += \" (other)\";
+                break;
+        }
+    }
+    result = val;
+    return result;
+}
+
+printf(\"%s\\n\", classify(\"123\"));
+printf(\"%s\\n\", classify(\"abc\"));
+printf(\"%s\\n\", classify(\"a1b2\"));
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.all_precompiled,
+            "regex-switch-on-exit strip-source: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "regex-switch-on-exit strip-source output matches interpreter");
+    }
+
+    testNestedOnExit() {
+        # Test nested on_exit inside an on_exit handler
+        string code = "%modern
+list<string> sub test_nested() {
+    list<string> log = ();
+    on_exit {
+        log += \"outer-exit\";
+        on_exit {
+            log += \"inner-exit\";
+        }
+        log += \"outer-body\";
+    }
+    log += \"main\";
+    return log;
+}
+
+list<string> result = test_nested();
+for (int i = 0; i < result.size(); ++i) {
+    printf(\"%s\\n\", result[i]);
+}
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.all_precompiled,
+            "nested-on-exit strip-source: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "nested-on-exit strip-source output matches interpreter");
     }
 }
