@@ -63,8 +63,11 @@ public:
         rcycle = 0,         // the recursive cycle/transaction number to see if the object has been scanned since a transaction restart
         ref_inprogress = 0, // the number of dereference actions in progress
         ref_waiting = 0,    // the number of threads waiting on a dereference action to complete
-        rref_waiting = 0,   // the number of threads waiting on an rset invalidation to complete
-        rrefs = 0;          // the number of "real" refs (i.e. refs not possibly part of a recursive graph)
+        rref_waiting = 0;   // the number of threads waiting on an rset invalidation to complete
+
+    // the number of "real" refs (i.e. refs not possibly part of a recursive graph)
+    // atomic because it is read without rlck in some paths (customDeref, scanMembersIntern)
+    std::atomic_int rrefs{0};
 
     // set of objects in a cyclic directed graph
     RSet* rset = nullptr;
