@@ -300,6 +300,10 @@ if [ -n "$CI_NODE_INDEX" ] && [ -n "$CI_NODE_TOTAL" ] && [ "$CI_NODE_TOTAL" -gt 
 fi
 
 TEST_COUNT=`echo $TESTS | wc -w`
+if [ $TEST_COUNT -eq 0 ]; then
+    echo "ERROR: no tests found to run" >&2
+    exit 1
+fi
 PASSED_TEST_COUNT=0
 FAILED_TEST_COUNT=0
 
