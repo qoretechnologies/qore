@@ -966,8 +966,37 @@ l50Xb2GWQesIt9k5jF5IOw==
         assertTrue(listeners.size() >= 2,
             sprintf("server should have at least 2 listeners (TCP + QUIC), got %d", listeners.size()));
 
+        # Find the QUIC listener (the one with name starting with "quic-")
+        *hash<auto> quic_listener;
+        foreach hash<auto> linfo in (listeners.pairIterator()) {
+            if (linfo.value.name =~ /^quic-/) {
+                quic_listener = linfo.value;
+                break;
+            }
+        }
+        assertEq(True, exists quic_listener, "QUIC listener should exist");
+
+        # Verify that the QUIC listener info includes address/family details from ext_info
+        assertTrue(exists quic_listener.address,
+            "QUIC listener info should include 'address'");
+        assertTrue(exists quic_listener.address_desc,
+            "QUIC listener info should include 'address_desc'");
+        assertTrue(exists quic_listener.family,
+            "QUIC listener info should include 'family'");
+        assertTrue(exists quic_listener.familystr,
+            "QUIC listener info should include 'familystr'");
+        assertTrue(exists quic_listener.port,
+            "QUIC listener info should include 'port'");
+        assertEq(Type::Int, quic_listener.port.type(),
+            "QUIC listener port should be an integer");
+        assertTrue(quic_listener.port > 0,
+            "QUIC listener port should be a positive integer");
+
         if (m_options.verbose > 1) {
-            printf("testAutoQuicListenerCreation: TCP port=%d, listeners=%d\n", tcp_port, listeners.size());
+            printf("testAutoQuicListenerCreation: TCP port=%d, listeners=%d, "
+                "QUIC address=%y family=%y port=%d\n",
+                tcp_port, listeners.size(), quic_listener.address,
+                quic_listener.familystr, quic_listener.port);
         }
     }
 
