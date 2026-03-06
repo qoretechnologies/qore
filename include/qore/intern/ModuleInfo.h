@@ -776,6 +776,13 @@ public:
         }
     }
 
+    //! Run the module deletion callback if it has not yet been called
+    /** Safe to call multiple times; only runs the callback once.
+        Called by QoreModuleManager::delUser() Phase 0 to ensure del callbacks
+        execute while all module programs (and their TypeInfos) are still alive.
+    */
+    DLLLOCAL void runDelCallback(ExceptionSink& xsink);
+
 protected:
     //! Module logic / namespace container
     QoreProgram* pgm;

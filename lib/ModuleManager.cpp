@@ -414,20 +414,34 @@ QoreAbstractModule::~QoreAbstractModule() {
     }
 }
 
+void QoreUserModule::runDelCallback(ExceptionSink& xsink) {
+    if (!del) {
+        return;
+    }
+    // Claim del first to prevent double-execution if called from both Phase 0 and destructor
+    AbstractQoreNode* d = del;
+    del = nullptr;
+
+    ProgramThreadCountContextHelper tch(&xsink, pgm, true);
+    if (!xsink) {
+        ValueHolder cn(d->eval(&xsink), &xsink);
+        assert(!xsink);
+        if (!xsink) {
+            assert(cn->getType() == NT_RUNTIME_CLOSURE || cn->getType() == NT_FUNCREF);
+            cn->get<ResolvedCallReferenceNode>()->execValue(0, &xsink).discard(&xsink);
+        }
+    }
+    d->deref(&xsink);
+    xsink.handleExceptions();
+}
+
 QoreUserModule::~QoreUserModule() {
     //printd(5, "QoreUserModule::~QoreUserModule() this: %p name: %s\n", this, name.c_str());
     assert(pgm);
     ExceptionSink xsink;
-    if (del) {
-        ProgramThreadCountContextHelper tch(&xsink, pgm, true);
-        if (!xsink) {
-            ValueHolder cn(del->eval(&xsink), &xsink);
-            assert(!xsink);
-            assert(cn->getType() == NT_RUNTIME_CLOSURE || cn->getType() == NT_FUNCREF);
-            cn->get<ResolvedCallReferenceNode>()->execValue(0, &xsink).discard(&xsink);
-            del->deref(&xsink);
-        }
-    }
+    // del is normally already run by QoreModuleManager::delUser() Phase 0, but
+    // guard here in case the module is destroyed outside the normal del path
+    runDelCallback(xsink);
     // issue #4816: Use waitForTermination() + deref() instead of waitForTerminationAndDeref()
     // This allows Type objects in foreign modules to keep the program data alive via strong refs.
     // When deref() triggers clear(), the cleanup callback will break cycles for same-program Types.
@@ -1966,6 +1980,21 @@ void QoreModuleManager::delOrig(QoreAbstractModule* mi) {
 void QoreModuleManager::delUser() {
     //md_map.show("md_map");
     //rmd_map.show("rmd_map");
+
+    // issue #5164: Phase 0 - run all del callbacks before clearing any module data
+    // This ensures del callbacks execute while all module programs (and their TypeInfos) are alive,
+    // preventing use-after-free when a del callback accesses a static var whose TypeInfo belongs to
+    // a class from a module that would otherwise have been deleted in Phase 2 already
+    {
+        ExceptionSink xsink;
+        for (auto& name : umset) {
+            auto i = map.find(name.c_str());
+            assert(i != map.end());
+            QoreAbstractModule* m = i->second;
+            assert(m->isUser());
+            static_cast<QoreUserModule*>(m)->runDelCallback(xsink);
+        }
+    }
 
     // issue #5164: Phase 1 - clear namespace data on all user module programs before destroying any modules
     // This ensures static variable destructors run while all module programs are still alive, preventing
