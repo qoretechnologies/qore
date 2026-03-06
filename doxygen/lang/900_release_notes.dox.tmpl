@@ -935,6 +935,18 @@ cargo install tree-sitter-cli@0.26.5
       - polling-based event triggers for customers, orders, products, carts, shipments, and addresses
       - action catalog integration with 13 actions and 11 triggers
       - connection support with \c bigcommerceres:// URL scheme
+    - @ref keaprestclientintro "KeapRestClient" module
+      - new module providing a REST client for Keap's CRM and marketing automation API
+      - supports OAuth2 authentication with bearer tokens
+      - provides KeapRestConnection for connection management with \c keaprest:// URL scheme
+    - @ref keapdataproviderintro "KeapDataProvider" module
+      - new module providing a data provider API for Keap CRM
+      - contact management (create, update, delete, merge, list, find by ID)
+      - company, opportunity, order, tag, task, note, and file management
+      - tag application and removal from contacts
+      - polling-based event triggers for contacts, opportunities, orders, tasks, and notes
+      - action catalog integration with 45+ actions and 7 triggers
+      - connection support with \c keaprest:// URL scheme
     - @ref gohighlevelrestclientintro "GoHighLevelRestClient" module
       - new module providing a REST client for GoHighLevel's CRM and marketing automation API
       - supports OAuth2 authentication with bearer tokens

@@ -1,0 +1,1787 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore KeapDataProvider module definition
+
+/*  KeapDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%modern
+# require type definitions everywhere
+# strict argument handling
+# enable all warnings
+
+%requires(reexport) DataProvider
+%requires(reexport) KeapRestClient
+%requires uuid
+%try-module json
+%define NoJson
+%endtry
+
+module KeapDataProvider {
+    version = "1.0";
+    desc = "User module providing a data provider API for Keap CRM and marketing automation";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # Register the data provider factory
+        DataProvider::registerFactory(new KeapDataProviderFactory());
+
+        # Register the application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": KeapDataProvider::AppName,
+            "display_name": "Keap",
+            "short_desc": "Keap CRM and marketing automation platform",
+            "desc": "Keap (formerly Infusionsoft) is a CRM and marketing automation platform "
+                "for contacts, companies, opportunities, orders, tags, tasks, and email.\n\n"
+                "This integration supports full CRUD operations on core CRM resources, "
+                "tag management, and event-based triggers.",
+            "scheme": "keaprest",
+            "logo": KeapLogo,
+            "logo_file_name": "keap-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::CrmSales, DataProvider::AppGroup::Marketing),
+        });
+
+        # ========== CONTACT ACTIONS ==========
+
+        # Create a Contact
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KeapDataProvider::AppName,
+            "path": "/contacts/create",
+            "action": "create-contact",
+            "groups": "Contacts",
+            "display_name": "Create a Contact",
+            "short_desc": "Create a new contact",
+            "desc": "Create a new contact in Keap",
+            "action_code": DPAT_API,
+            "output_type": new KeapContactDataType(),
+            "options": {
+                "given_name": <ActionOptionInfo>{
+                    "display_name": "First Name",
+                    "short_desc": "Contact first name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                    "desc": "First name of the contact",
+                    "example_value": "John",
+                },
+                "family_name": <ActionOptionInfo>{
+                    "display_name": "Last Name",
+                    "short_desc": "Contact last name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                    "desc": "Last name of the contact",
+                    "example_value": "Smith",
+                },
+                "email": <ActionOptionInfo>{
+                    "display_name": "Email",
+                    "short_desc": "Contact email",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                    "desc": "Email address of the contact",
+                    "example_value": "john@example.com",
+                },
+                "phone1": <ActionOptionInfo>{
+                    "display_name": "Phone",
+                    "short_desc": "Phone number",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Phone number of the contact",
+                },
+                "company_id": <ActionOptionInfo>{
+                    "display_name": "Company ID",
+                    "short_desc": "Associated company",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "ID of the associated company",
+                    "ref_data": "companies",
+                },
+                "job_title": <ActionOptionInfo>{
+                    "display_name": "Job Title",
+                    "short_desc": "Contact job title",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "lead_source_id": <ActionOptionInfo>{
+                    "display_name": "Lead Source ID",
+                    "short_desc": "Lead source",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "opt_in_reason": <ActionOptionInfo>{
+                    "display_name": "Opt-in Reason",
+                    "short_desc": "Reason for opting in",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+        });
+
+        # Update a Contact
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KeapDataProvider::AppName,
+            "path": "/contacts/update",
+            "action": "update-contact",
+            "groups": "Contacts",
+            "display_name": "Update a Contact",
+            "short_desc": "Update an existing contact",
+            "desc": "Update an existing contact in Keap",
+            "action_code": DPAT_API,
+            "output_type": new KeapContactDataType(),
+            "options": {
+                "contact_id": <ActionOptionInfo>{
+                    "display_name": "Contact ID",
+                    "short_desc": "The contact to update",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "contacts",
+                },
+                "given_name": <ActionOptionInfo>{
+                    "display_name": "First Name",
+                    "short_desc": "Contact first name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "family_name": <ActionOptionInfo>{
+                    "display_name": "Last Name",
+                    "short_desc": "Contact last name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "email": <ActionOptionInfo>{
+                    "display_name": "Email",
+                    "short_desc": "Contact email",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "phone1": <ActionOptionInfo>{
+                    "display_name": "Phone",
+                    "short_desc": "Phone number",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "company_id": <ActionOptionInfo>{
+                    "display_name": "Company ID",
+                    "short_desc": "Associated company",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "companies",
+                },
+                "job_title": <ActionOptionInfo>{
+                    "display_name": "Job Title",
+                    "short_desc": "Contact job title",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+        });
+
+        # Delete a Contact
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KeapDataProvider::AppName,
+            "path": "/contacts/delete",
+            "action": "delete-contact",
+            "groups": "Contacts",
+            "display_name": "Delete a Contact",
+            "short_desc": "Delete a contact",
+            "desc": "Delete a contact from Keap",
+            "action_code": DPAT_API,
+            "output_type": AbstractDataProviderTypeMap."hash",
+            "options": {
+                "contact_id": <ActionOptionInfo>{
+                    "display_name": "Contact ID",
+                    "short_desc": "The contact to delete",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "contacts",
+                },
+            },
+        });
+
+        # Merge Contacts
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KeapDataProvider::AppName,
+            "path": "/contacts/merge",
+            "action": "merge-contacts",
+            "groups": "Contacts",
+            "display_name": "Merge Contacts",
+            "short_desc": "Merge two contacts",
+            "desc": "Merge a duplicate contact into a surviving contact in Keap",
+            "action_code": DPAT_API,
+            "output_type": new KeapContactDataType(),
+            "options": {
+                "contact_id": <ActionOptionInfo>{
+                    "display_name": "Surviving Contact ID",
+                    "short_desc": "The contact that survives",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "contacts",
+                },
+                "duplicate_contact_id": <ActionOptionInfo>{
+                    "display_name": "Duplicate Contact ID",
+                    "short_desc": "The contact to merge and delete",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "contacts",
+                },
+            },
+        });
+
+        # List Contacts
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KeapDataProvider::AppName,
+            "path": "/contacts",
+            "action": "list-contacts",
+            "groups": "Contacts",
+            "display_name": "List Contacts",
+            "short_desc": "List all contacts",
+            "desc": "List contacts in Keap with optional filtering",
+            "action_code": DPAT_FIND,
+            "options": {
+                "contact_id": <ActionOptionInfo>{
+                    "display_name": "Contact ID",
+                    "short_desc": "Filter by contact ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "email": <ActionOptionInfo>{
+                    "display_name": "Email",
+                    "short_desc": "Filter by email",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "given_name": <ActionOptionInfo>{
+                    "display_name": "First Name",
+                    "short_desc": "Filter by first name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "family_name": <ActionOptionInfo>{
+                    "display_name": "Last Name",
+                    "short_desc": "Filter by last name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "order_by": <ActionOptionInfo>{
+                    "display_name": "Order By",
+                    "short_desc": "Sort field",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "order_direction": <ActionOptionInfo>{
+                    "display_name": "Order Direction",
+                    "short_desc": "Sort direction",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Sort direction",
+                    "allowed_values": (<AllowedValueInfo>{"value": "ASCENDING"}, <AllowedValueInfo>{"value": "DESCENDING"}),
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+            },
+        });
+
+        # Get a Contact
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KeapDataProvider::AppName,
+            "path": "/contacts",
+            "action": "get-contact",
+            "groups": "Contacts",
+            "display_name": "Get a Contact",
+            "short_desc": "Get a single contact by ID",
+            "desc": "Retrieve a single contact by ID from Keap",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "contact_id": <ActionOptionInfo>{
+                    "display_name": "Contact ID",
+                    "short_desc": "The contact ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "contacts",
+                },
+            },
+        });
+
+        # ========== COMPANY ACTIONS ==========
+
+        # Create a Company
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KeapDataProvider::AppName,
+            "path": "/companies/create",
+            "action": "create-company",
+            "groups": "Companies",
+            "display_name": "Create a Company",
+            "short_desc": "Create a new company",
+            "desc": "Create a new company in Keap",
+            "action_code": DPAT_API,
+            "output_type": new KeapCompanyDataType(),
+            "options": {
+                "company_name": <ActionOptionInfo>{
+                    "display_name": "Company Name",
+                    "short_desc": "Name of the company",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "Name of the company",
+                    "example_value": "Acme Corp",
+                },
+                "email_address": <ActionOptionInfo>{
+                    "display_name": "Email",
+                    "short_desc": "Company email",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "phone_number": <ActionOptionInfo>{
+                    "display_name": "Phone",
+                    "short_desc": "Company phone",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "website": <ActionOptionInfo>{
+                    "display_name": "Website",
+                    "short_desc": "Company website",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+        });
+
+        # Update a Company
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KeapDataProvider::AppName,
+            "path": "/companies/update",
+            "action": "update-company",
+            "groups": "Companies",
+            "display_name": "Update a Company",
+            "short_desc": "Update an existing company",
+            "desc": "Update an existing company in Keap",
+            "action_code": DPAT_API,
+            "output_type": new KeapCompanyDataType(),
+            "options": {
+                "company_id": <ActionOptionInfo>{
+                    "display_name": "Company ID",
+                    "short_desc": "The company to update",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "companies",
+                },
+                "company_name": <ActionOptionInfo>{
+                    "display_name": "Company Name",
+                    "short_desc": "Name of the company",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "email_address": <ActionOptionInfo>{
+                    "display_name": "Email",
+                    "short_desc": "Company email",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "phone_number": <ActionOptionInfo>{
+                    "display_name": "Phone",
+                    "short_desc": "Company phone",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "website": <ActionOptionInfo>{
+                    "display_name": "Website",
+                    "short_desc": "Company website",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+        });
+
+        # Delete a Company
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KeapDataProvider::AppName,
+            "path": "/companies/delete",
+            "action": "delete-company",
+            "groups": "Companies",
+            "display_name": "Delete a Company",
+            "short_desc": "Delete a company",
+            "desc": "Delete a company from Keap",
+            "action_code": DPAT_API,
+            "output_type": AbstractDataProviderTypeMap."hash",
+            "options": {
+                "company_id": <ActionOptionInfo>{
+                    "display_name": "Company ID",
+                    "short_desc": "The company to delete",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "companies",
+                },
+            },
+        });
+
+        # List Companies
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KeapDataProvider::AppName,
+            "path": "/companies",
+            "action": "list-companies",
+            "groups": "Companies",
+            "display_name": "List Companies",
+            "short_desc": "List all companies",
+            "desc": "List companies in Keap with optional filtering",
+            "action_code": DPAT_FIND,
+            "options": {
+                "company_id": <ActionOptionInfo>{
+                    "display_name": "Company ID",
+                    "short_desc": "Filter by company ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "company_name": <ActionOptionInfo>{
+                    "display_name": "Company Name",
+                    "short_desc": "Filter by company name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "order_by": <ActionOptionInfo>{
+                    "display_name": "Order By",
+                    "short_desc": "Sort field",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "order_direction": <ActionOptionInfo>{
+                    "display_name": "Order Direction",
+                    "short_desc": "Sort direction",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Sort direction",
+                    "allowed_values": (<AllowedValueInfo>{"value": "ASCENDING"}, <AllowedValueInfo>{"value": "DESCENDING"}),
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+            },
+        });
+
+        # Get a Company
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KeapDataProvider::AppName,
+            "path": "/companies",
+            "action": "get-company",
+            "groups": "Companies",
+            "display_name": "Get a Company",
+            "short_desc": "Get a single company by ID",
+            "desc": "Retrieve a single company by ID from Keap",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "company_id": <ActionOptionInfo>{
+                    "display_name": "Company ID",
+                    "short_desc": "The company ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "companies",
+                },
+            },
+        });
+
+        # ========== OPPORTUNITY ACTIONS ==========
+
+        # Create an Opportunity
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KeapDataProvider::AppName,
+            "path": "/opportunities/create",
+            "action": "create-opportunity",
+            "groups": "Opportunities",
+            "display_name": "Create an Opportunity",
+            "short_desc": "Create a new opportunity",
+            "desc": "Create a new opportunity in Keap",
+            "action_code": DPAT_API,
+            "output_type": new KeapOpportunityDataType(),
+            "options": {
+                "opportunity_title": <ActionOptionInfo>{
+                    "display_name": "Title",
+                    "short_desc": "Opportunity title",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "Title of the opportunity",
+                    "example_value": "New Deal",
+                },
+                "contact_id": <ActionOptionInfo>{
+                    "display_name": "Contact ID",
+                    "short_desc": "Associated contact",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                    "ref_data": "contacts",
+                },
+                "stage_id": <ActionOptionInfo>{
+                    "display_name": "Stage ID",
+                    "short_desc": "Pipeline stage",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "estimated_close_date": <ActionOptionInfo>{
+                    "display_name": "Estimated Close Date",
+                    "short_desc": "Expected close date",
+                    "type": AbstractDataProviderTypeMap."*date",
+                },
+                "projected_revenue_high": <ActionOptionInfo>{
+                    "display_name": "Projected Revenue High",
+                    "short_desc": "High revenue estimate",
+                    "type": AbstractDataProviderTypeMap."*float",
+                },
+                "projected_revenue_low": <ActionOptionInfo>{
+                    "display_name": "Projected Revenue Low",
+                    "short_desc": "Low revenue estimate",
+                    "type": AbstractDataProviderTypeMap."*float",
+                },
+                "opportunity_notes": <ActionOptionInfo>{
+                    "display_name": "Notes",
+                    "short_desc": "Opportunity notes",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+        });
+
+        # Update an Opportunity
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KeapDataProvider::AppName,
+            "path": "/opportunities/update",
+            "action": "update-opportunity",
+            "groups": "Opportunities",
+            "display_name": "Update an Opportunity",
+            "short_desc": "Update an existing opportunity",
+            "desc": "Update an existing opportunity in Keap",
+            "action_code": DPAT_API,
+            "output_type": new KeapOpportunityDataType(),
+            "options": {
+                "opportunity_id": <ActionOptionInfo>{
+                    "display_name": "Opportunity ID",
+                    "short_desc": "The opportunity to update",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "opportunities",
+                },
+                "opportunity_title": <ActionOptionInfo>{
+                    "display_name": "Title",
+                    "short_desc": "Opportunity title",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "stage_id": <ActionOptionInfo>{
+                    "display_name": "Stage ID",
+                    "short_desc": "Pipeline stage",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "estimated_close_date": <ActionOptionInfo>{
+                    "display_name": "Estimated Close Date",
+                    "short_desc": "Expected close date",
+                    "type": AbstractDataProviderTypeMap."*date",
+                },
+                "projected_revenue_high": <ActionOptionInfo>{
+                    "display_name": "Projected Revenue High",
+                    "short_desc": "High revenue estimate",
+                    "type": AbstractDataProviderTypeMap."*float",
+                },
+                "projected_revenue_low": <ActionOptionInfo>{
+                    "display_name": "Projected Revenue Low",
+                    "short_desc": "Low revenue estimate",
+                    "type": AbstractDataProviderTypeMap."*float",
+                },
+                "opportunity_notes": <ActionOptionInfo>{
+                    "display_name": "Notes",
+                    "short_desc": "Opportunity notes",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+        });
+
+        # Delete an Opportunity
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KeapDataProvider::AppName,
+            "path": "/opportunities/delete",
+            "action": "delete-opportunity",
+            "groups": "Opportunities",
+            "display_name": "Delete an Opportunity",
+            "short_desc": "Delete an opportunity",
+            "desc": "Delete an opportunity from Keap",
+            "action_code": DPAT_API,
+            "output_type": AbstractDataProviderTypeMap."hash",
+            "options": {
+                "opportunity_id": <ActionOptionInfo>{
+                    "display_name": "Opportunity ID",
+                    "short_desc": "The opportunity to delete",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "opportunities",
+                },
+            },
+        });
+
+        # List Opportunities
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KeapDataProvider::AppName,
+            "path": "/opportunities",
+            "action": "list-opportunities",
+            "groups": "Opportunities",
+            "display_name": "List Opportunities",
+            "short_desc": "List all opportunities",
+            "desc": "List opportunities in Keap with optional filtering",
+            "action_code": DPAT_FIND,
+            "options": {
+                "opportunity_id": <ActionOptionInfo>{
+                    "display_name": "Opportunity ID",
+                    "short_desc": "Filter by opportunity ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "opportunities",
+                },
+                "contact_id": <ActionOptionInfo>{
+                    "display_name": "Contact ID",
+                    "short_desc": "Filter by contact",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "contacts",
+                    "preselected": True,
+                },
+                "stage_id": <ActionOptionInfo>{
+                    "display_name": "Stage ID",
+                    "short_desc": "Filter by stage",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "order_by": <ActionOptionInfo>{
+                    "display_name": "Order By",
+                    "short_desc": "Sort field",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "order_direction": <ActionOptionInfo>{
+                    "display_name": "Order Direction",
+                    "short_desc": "Sort direction",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Sort direction",
+                    "allowed_values": (<AllowedValueInfo>{"value": "ASCENDING"}, <AllowedValueInfo>{"value": "DESCENDING"}),
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+            },
+        });
+
+        # Get an Opportunity
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KeapDataProvider::AppName,
+            "path": "/opportunities",
+            "action": "get-opportunity",
+            "groups": "Opportunities",
+            "display_name": "Get an Opportunity",
+            "short_desc": "Get a single opportunity by ID",
+            "desc": "Retrieve a single opportunity by ID from Keap",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "opportunity_id": <ActionOptionInfo>{
+                    "display_name": "Opportunity ID",
+                    "short_desc": "The opportunity ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "opportunities",
+                },
+            },
+        });
+
+        # ========== ORDER ACTIONS ==========
+
+        # Create an Order
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KeapDataProvider::AppName,
+            "path": "/orders/create",
+            "action": "create-order",
+            "groups": "Orders",
+            "display_name": "Create an Order",
+            "short_desc": "Create a new order",
+            "desc": "Create a new order in Keap",
+            "action_code": DPAT_API,
+            "output_type": new KeapOrderDataType(),
+            "options": {
+                "contact_id": <ActionOptionInfo>{
+                    "display_name": "Contact ID",
+                    "short_desc": "Associated contact",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "contacts",
+                },
+                "order_title": <ActionOptionInfo>{
+                    "display_name": "Order Title",
+                    "short_desc": "Title of the order",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "example_value": "New Order",
+                },
+                "order_items": <ActionOptionInfo>{
+                    "display_name": "Order Items",
+                    "short_desc": "Items in the order",
+                    "type": AbstractDataProviderTypeMap."list",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "List of order item hashes",
+                },
+                "order_date": <ActionOptionInfo>{
+                    "display_name": "Order Date",
+                    "short_desc": "Date of the order",
+                    "type": AbstractDataProviderTypeMap."*date",
+                },
+                "promo_codes": <ActionOptionInfo>{
+                    "display_name": "Promo Codes",
+                    "short_desc": "Promotional codes",
+                    "type": AbstractDataProviderTypeMap."*list",
+                },
+            },
+        });
+
+        # List Orders
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KeapDataProvider::AppName,
+            "path": "/orders",
+            "action": "list-orders",
+            "groups": "Orders",
+            "display_name": "List Orders",
+            "short_desc": "List all orders",
+            "desc": "List orders in Keap with optional filtering",
+            "action_code": DPAT_FIND,
+            "options": {
+                "order_id": <ActionOptionInfo>{
+                    "display_name": "Order ID",
+                    "short_desc": "Filter by order ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "contact_id": <ActionOptionInfo>{
+                    "display_name": "Contact ID",
+                    "short_desc": "Filter by contact",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "contacts",
+                    "preselected": True,
+                },
+                "paid": <ActionOptionInfo>{
+                    "display_name": "Paid",
+                    "short_desc": "Filter by payment status",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                    "preselected": True,
+                },
+                "order_by": <ActionOptionInfo>{
+                    "display_name": "Order By",
+                    "short_desc": "Sort field",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "order_direction": <ActionOptionInfo>{
+                    "display_name": "Order Direction",
+                    "short_desc": "Sort direction",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Sort direction",
+                    "allowed_values": (<AllowedValueInfo>{"value": "ASCENDING"}, <AllowedValueInfo>{"value": "DESCENDING"}),
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+            },
+        });
+
+        # Get an Order
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KeapDataProvider::AppName,
+            "path": "/orders",
+            "action": "get-order",
+            "groups": "Orders",
+            "display_name": "Get an Order",
+            "short_desc": "Get a single order by ID",
+            "desc": "Retrieve a single order by ID from Keap",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "order_id": <ActionOptionInfo>{
+                    "display_name": "Order ID",
+                    "short_desc": "The order ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                },
+            },
+        });
+
+        # ========== TAG ACTIONS ==========
+
+        # Create a Tag
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KeapDataProvider::AppName,
+            "path": "/tags/create",
+            "action": "create-tag",
+            "groups": "Tags",
+            "display_name": "Create a Tag",
+            "short_desc": "Create a new tag",
+            "desc": "Create a new tag in Keap",
+            "action_code": DPAT_API,
+            "output_type": new KeapTagDataType(),
+            "options": {
+                "name": <ActionOptionInfo>{
+                    "display_name": "Tag Name",
+                    "short_desc": "Name of the tag",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "Name of the tag",
+                    "example_value": "VIP Customer",
+                },
+                "description": <ActionOptionInfo>{
+                    "display_name": "Description",
+                    "short_desc": "Tag description",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "category_id": <ActionOptionInfo>{
+                    "display_name": "Category ID",
+                    "short_desc": "Tag category",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+            },
+        });
+
+        # Delete a Tag
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KeapDataProvider::AppName,
+            "path": "/tags/delete",
+            "action": "delete-tag",
+            "groups": "Tags",
+            "display_name": "Delete a Tag",
+            "short_desc": "Delete a tag",
+            "desc": "Delete a tag from Keap",
+            "action_code": DPAT_API,
+            "output_type": AbstractDataProviderTypeMap."hash",
+            "options": {
+                "tag_id": <ActionOptionInfo>{
+                    "display_name": "Tag ID",
+                    "short_desc": "The tag to delete",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "tags",
+                },
+            },
+        });
+
+        # Apply Tag to Contact
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KeapDataProvider::AppName,
+            "path": "/tags/apply",
+            "action": "apply-tag",
+            "groups": "Tags",
+            "display_name": "Apply Tag to Contact",
+            "short_desc": "Apply a tag to a contact",
+            "desc": "Apply one or more tags to a contact in Keap",
+            "action_code": DPAT_API,
+            "output_type": AbstractDataProviderTypeMap."hash",
+            "options": {
+                "contact_id": <ActionOptionInfo>{
+                    "display_name": "Contact ID",
+                    "short_desc": "The contact to tag",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "contacts",
+                },
+                "tag_ids": <ActionOptionInfo>{
+                    "display_name": "Tag IDs",
+                    "short_desc": "Tags to apply",
+                    "type": AbstractDataProviderTypeMap."list",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "List of integer tag IDs",
+                },
+            },
+        });
+
+        # Remove Tag from Contact
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KeapDataProvider::AppName,
+            "path": "/tags/remove",
+            "action": "remove-tag",
+            "groups": "Tags",
+            "display_name": "Remove Tag from Contact",
+            "short_desc": "Remove a tag from a contact",
+            "desc": "Remove a tag from a contact in Keap",
+            "action_code": DPAT_API,
+            "output_type": AbstractDataProviderTypeMap."hash",
+            "options": {
+                "contact_id": <ActionOptionInfo>{
+                    "display_name": "Contact ID",
+                    "short_desc": "The contact",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "contacts",
+                },
+                "tag_id": <ActionOptionInfo>{
+                    "display_name": "Tag ID",
+                    "short_desc": "The tag to remove",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "tags",
+                },
+            },
+        });
+
+        # List Tags
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KeapDataProvider::AppName,
+            "path": "/tags",
+            "action": "list-tags",
+            "groups": "Tags",
+            "display_name": "List Tags",
+            "short_desc": "List all tags",
+            "desc": "List tags in Keap with optional filtering",
+            "action_code": DPAT_FIND,
+            "options": {
+                "tag_id": <ActionOptionInfo>{
+                    "display_name": "Tag ID",
+                    "short_desc": "Filter by tag ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "name": <ActionOptionInfo>{
+                    "display_name": "Tag Name",
+                    "short_desc": "Filter by tag name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "category_id": <ActionOptionInfo>{
+                    "display_name": "Category ID",
+                    "short_desc": "Filter by category",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+            },
+        });
+
+        # Get a Tag
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KeapDataProvider::AppName,
+            "path": "/tags",
+            "action": "get-tag",
+            "groups": "Tags",
+            "display_name": "Get a Tag",
+            "short_desc": "Get a single tag by ID",
+            "desc": "Retrieve a single tag by ID from Keap",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "tag_id": <ActionOptionInfo>{
+                    "display_name": "Tag ID",
+                    "short_desc": "The tag ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "tags",
+                },
+            },
+        });
+
+        # ========== NOTE ACTIONS ==========
+
+        # Create a Note
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KeapDataProvider::AppName,
+            "path": "/notes/create",
+            "action": "create-note",
+            "groups": "Notes",
+            "display_name": "Create a Note",
+            "short_desc": "Create a new note",
+            "desc": "Create a new note for a contact in Keap",
+            "action_code": DPAT_API,
+            "output_type": new KeapNoteDataType(),
+            "options": {
+                "contact_id": <ActionOptionInfo>{
+                    "display_name": "Contact ID",
+                    "short_desc": "The contact",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "contacts",
+                },
+                "title": <ActionOptionInfo>{
+                    "display_name": "Title",
+                    "short_desc": "Note title",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "example_value": "Follow-up call",
+                },
+                "body": <ActionOptionInfo>{
+                    "display_name": "Body",
+                    "short_desc": "Note body",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "type": <ActionOptionInfo>{
+                    "display_name": "Type",
+                    "short_desc": "Note type",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The type of note",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "Appointment"},
+                        <AllowedValueInfo>{"value": "Call"},
+                        <AllowedValueInfo>{"value": "Email"},
+                        <AllowedValueInfo>{"value": "Fax"},
+                        <AllowedValueInfo>{"value": "Letter"},
+                        <AllowedValueInfo>{"value": "Other"},
+                    ),
+                },
+            },
+        });
+
+        # Update a Note
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KeapDataProvider::AppName,
+            "path": "/notes/update",
+            "action": "update-note",
+            "groups": "Notes",
+            "display_name": "Update a Note",
+            "short_desc": "Update an existing note",
+            "desc": "Update an existing note in Keap",
+            "action_code": DPAT_API,
+            "output_type": new KeapNoteDataType(),
+            "options": {
+                "contact_id": <ActionOptionInfo>{
+                    "display_name": "Contact ID",
+                    "short_desc": "The contact",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "contacts",
+                },
+                "note_id": <ActionOptionInfo>{
+                    "display_name": "Note ID",
+                    "short_desc": "The note to update",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                },
+                "title": <ActionOptionInfo>{
+                    "display_name": "Title",
+                    "short_desc": "Note title",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "body": <ActionOptionInfo>{
+                    "display_name": "Body",
+                    "short_desc": "Note body",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+        });
+
+        # Delete a Note
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KeapDataProvider::AppName,
+            "path": "/notes/delete",
+            "action": "delete-note",
+            "groups": "Notes",
+            "display_name": "Delete a Note",
+            "short_desc": "Delete a note",
+            "desc": "Delete a note from Keap",
+            "action_code": DPAT_API,
+            "output_type": AbstractDataProviderTypeMap."hash",
+            "options": {
+                "contact_id": <ActionOptionInfo>{
+                    "display_name": "Contact ID",
+                    "short_desc": "The contact",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "contacts",
+                },
+                "note_id": <ActionOptionInfo>{
+                    "display_name": "Note ID",
+                    "short_desc": "The note to delete",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                },
+            },
+        });
+
+        # List Notes
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KeapDataProvider::AppName,
+            "path": "/notes",
+            "action": "list-notes",
+            "groups": "Notes",
+            "display_name": "List Notes",
+            "short_desc": "List notes for a contact",
+            "desc": "List notes for a contact in Keap",
+            "action_code": DPAT_FIND,
+            "options": {
+                "contact_id": <ActionOptionInfo>{
+                    "display_name": "Contact ID",
+                    "short_desc": "The contact",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "contacts",
+                },
+                "note_id": <ActionOptionInfo>{
+                    "display_name": "Note ID",
+                    "short_desc": "Filter by note ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+            },
+        });
+
+        # ========== TASK ACTIONS ==========
+
+        # Create a Task
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KeapDataProvider::AppName,
+            "path": "/tasks/create",
+            "action": "create-task",
+            "groups": "Tasks",
+            "display_name": "Create a Task",
+            "short_desc": "Create a new task",
+            "desc": "Create a new task in Keap",
+            "action_code": DPAT_API,
+            "output_type": new KeapTaskDataType(),
+            "options": {
+                "title": <ActionOptionInfo>{
+                    "display_name": "Title",
+                    "short_desc": "Task title",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "example_value": "Follow up with client",
+                },
+                "contact_id": <ActionOptionInfo>{
+                    "display_name": "Contact ID",
+                    "short_desc": "Associated contact",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "contacts",
+                },
+                "due_date": <ActionOptionInfo>{
+                    "display_name": "Due Date",
+                    "short_desc": "Task due date",
+                    "type": AbstractDataProviderTypeMap."*date",
+                },
+                "description": <ActionOptionInfo>{
+                    "display_name": "Description",
+                    "short_desc": "Task description",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "priority": <ActionOptionInfo>{
+                    "display_name": "Priority",
+                    "short_desc": "Task priority",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "type": <ActionOptionInfo>{
+                    "display_name": "Type",
+                    "short_desc": "Task type",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "completed": <ActionOptionInfo>{
+                    "display_name": "Completed",
+                    "short_desc": "Task completion status",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                },
+                "user_id": <ActionOptionInfo>{
+                    "display_name": "User ID",
+                    "short_desc": "Assigned user",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+            },
+        });
+
+        # Update a Task
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KeapDataProvider::AppName,
+            "path": "/tasks/update",
+            "action": "update-task",
+            "groups": "Tasks",
+            "display_name": "Update a Task",
+            "short_desc": "Update an existing task",
+            "desc": "Update an existing task in Keap",
+            "action_code": DPAT_API,
+            "output_type": new KeapTaskDataType(),
+            "options": {
+                "task_id": <ActionOptionInfo>{
+                    "display_name": "Task ID",
+                    "short_desc": "The task to update",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                },
+                "title": <ActionOptionInfo>{
+                    "display_name": "Title",
+                    "short_desc": "Task title",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "due_date": <ActionOptionInfo>{
+                    "display_name": "Due Date",
+                    "short_desc": "Task due date",
+                    "type": AbstractDataProviderTypeMap."*date",
+                },
+                "description": <ActionOptionInfo>{
+                    "display_name": "Description",
+                    "short_desc": "Task description",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "priority": <ActionOptionInfo>{
+                    "display_name": "Priority",
+                    "short_desc": "Task priority",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "completed": <ActionOptionInfo>{
+                    "display_name": "Completed",
+                    "short_desc": "Task completion status",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                },
+            },
+        });
+
+        # Delete a Task
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KeapDataProvider::AppName,
+            "path": "/tasks/delete",
+            "action": "delete-task",
+            "groups": "Tasks",
+            "display_name": "Delete a Task",
+            "short_desc": "Delete a task",
+            "desc": "Delete a task from Keap",
+            "action_code": DPAT_API,
+            "output_type": AbstractDataProviderTypeMap."hash",
+            "options": {
+                "task_id": <ActionOptionInfo>{
+                    "display_name": "Task ID",
+                    "short_desc": "The task to delete",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                },
+            },
+        });
+
+        # List Tasks
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KeapDataProvider::AppName,
+            "path": "/tasks",
+            "action": "list-tasks",
+            "groups": "Tasks",
+            "display_name": "List Tasks",
+            "short_desc": "List all tasks",
+            "desc": "List tasks in Keap with optional filtering",
+            "action_code": DPAT_FIND,
+            "options": {
+                "task_id": <ActionOptionInfo>{
+                    "display_name": "Task ID",
+                    "short_desc": "Filter by task ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "contact_id": <ActionOptionInfo>{
+                    "display_name": "Contact ID",
+                    "short_desc": "Filter by contact",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "contacts",
+                    "preselected": True,
+                },
+                "completed": <ActionOptionInfo>{
+                    "display_name": "Completed",
+                    "short_desc": "Filter by completion status",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                    "preselected": True,
+                },
+                "user_id": <ActionOptionInfo>{
+                    "display_name": "User ID",
+                    "short_desc": "Filter by assigned user",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "order_by": <ActionOptionInfo>{
+                    "display_name": "Order By",
+                    "short_desc": "Sort field",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+            },
+        });
+
+        # Get a Task
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KeapDataProvider::AppName,
+            "path": "/tasks",
+            "action": "get-task",
+            "groups": "Tasks",
+            "display_name": "Get a Task",
+            "short_desc": "Get a single task by ID",
+            "desc": "Retrieve a single task by ID from Keap",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "task_id": <ActionOptionInfo>{
+                    "display_name": "Task ID",
+                    "short_desc": "The task ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                },
+            },
+        });
+
+        # ========== EMAIL ACTIONS ==========
+
+        # List Emails
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KeapDataProvider::AppName,
+            "path": "/emails",
+            "action": "list-emails",
+            "groups": "Emails",
+            "display_name": "List Emails",
+            "short_desc": "List emails",
+            "desc": "List emails in Keap with optional filtering",
+            "action_code": DPAT_FIND,
+            "options": {
+                "contact_id": <ActionOptionInfo>{
+                    "display_name": "Contact ID",
+                    "short_desc": "Filter by contact",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "contacts",
+                    "preselected": True,
+                },
+                "email": <ActionOptionInfo>{
+                    "display_name": "Email",
+                    "short_desc": "Filter by email address",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+            },
+        });
+
+        # ========== FILE ACTIONS ==========
+
+        # Upload a File
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KeapDataProvider::AppName,
+            "path": "/files/upload",
+            "action": "upload-file",
+            "groups": "Files",
+            "display_name": "Upload a File",
+            "short_desc": "Upload a file",
+            "desc": "Upload a file to Keap",
+            "action_code": DPAT_API,
+            "output_type": new KeapFileDataType(),
+            "options": {
+                "file_name": <ActionOptionInfo>{
+                    "display_name": "File Name",
+                    "short_desc": "Name of the file",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "example_value": "document.pdf",
+                },
+                "file_data": <ActionOptionInfo>{
+                    "display_name": "File Data",
+                    "short_desc": "Base64-encoded file data",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "Base64-encoded file data",
+                },
+                "contact_id": <ActionOptionInfo>{
+                    "display_name": "Contact ID",
+                    "short_desc": "Associated contact",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "contacts",
+                },
+                "is_public": <ActionOptionInfo>{
+                    "display_name": "Is Public",
+                    "short_desc": "File visibility",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                },
+            },
+        });
+
+        # Get a File
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KeapDataProvider::AppName,
+            "path": "/files/get",
+            "action": "get-file",
+            "groups": "Files",
+            "display_name": "Get a File",
+            "short_desc": "Get file details",
+            "desc": "Get file details from Keap",
+            "action_code": DPAT_API,
+            "output_type": new KeapFileDataType(),
+            "options": {
+                "file_id": <ActionOptionInfo>{
+                    "display_name": "File ID",
+                    "short_desc": "The file to retrieve",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Delete a File
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KeapDataProvider::AppName,
+            "path": "/files/delete",
+            "action": "delete-file",
+            "groups": "Files",
+            "display_name": "Delete a File",
+            "short_desc": "Delete a file",
+            "desc": "Delete a file from Keap",
+            "action_code": DPAT_API,
+            "output_type": AbstractDataProviderTypeMap."hash",
+            "options": {
+                "file_id": <ActionOptionInfo>{
+                    "display_name": "File ID",
+                    "short_desc": "The file to delete",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                },
+            },
+        });
+
+        # List Files
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KeapDataProvider::AppName,
+            "path": "/files",
+            "action": "list-files",
+            "groups": "Files",
+            "display_name": "List Files",
+            "short_desc": "List all files",
+            "desc": "List files in Keap with optional filtering",
+            "action_code": DPAT_FIND,
+            "options": {
+                "file_id": <ActionOptionInfo>{
+                    "display_name": "File ID",
+                    "short_desc": "Filter by file ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "contact_id": <ActionOptionInfo>{
+                    "display_name": "Contact ID",
+                    "short_desc": "Filter by contact",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "contacts",
+                    "preselected": True,
+                },
+                "permission": <ActionOptionInfo>{
+                    "display_name": "Permission",
+                    "short_desc": "Filter by permission",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "USER", "desc": "Files owned by the user"},
+                        <AllowedValueInfo>{"value": "COMPANY", "desc": "Files owned by the company"},
+                        <AllowedValueInfo>{"value": "BOTH", "desc": "Both user and company files"},
+                    ),
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+            },
+        });
+
+        # ========== PRODUCT ACTIONS ==========
+
+        # List Products
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KeapDataProvider::AppName,
+            "path": "/products",
+            "action": "list-products",
+            "groups": "Products",
+            "display_name": "List Products",
+            "short_desc": "List all products",
+            "desc": "List products in Keap with optional filtering",
+            "action_code": DPAT_FIND,
+            "options": {
+                "product_id": <ActionOptionInfo>{
+                    "display_name": "Product ID",
+                    "short_desc": "Filter by product ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+            },
+        });
+
+        # Get a Product
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KeapDataProvider::AppName,
+            "path": "/products",
+            "action": "get-product",
+            "groups": "Products",
+            "display_name": "Get a Product",
+            "short_desc": "Get a single product by ID",
+            "desc": "Retrieve a single product by ID from Keap",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "product_id": <ActionOptionInfo>{
+                    "display_name": "Product ID",
+                    "short_desc": "The product ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                },
+            },
+        });
+
+        # ========== CAMPAIGN ACTIONS ==========
+
+        # List Campaigns
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KeapDataProvider::AppName,
+            "path": "/campaigns",
+            "action": "list-campaigns",
+            "groups": "Campaigns",
+            "display_name": "List Campaigns",
+            "short_desc": "List all campaigns",
+            "desc": "List campaigns in Keap with optional filtering",
+            "action_code": DPAT_FIND,
+            "options": {
+                "order_by": <ActionOptionInfo>{
+                    "display_name": "Order By",
+                    "short_desc": "Sort field",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "order_direction": <ActionOptionInfo>{
+                    "display_name": "Order Direction",
+                    "short_desc": "Sort direction",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Sort direction",
+                    "allowed_values": (<AllowedValueInfo>{"value": "ASCENDING"}, <AllowedValueInfo>{"value": "DESCENDING"}),
+                    "preselected": True,
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+            },
+        });
+
+        # ========== AFFILIATE ACTIONS ==========
+
+        # List Affiliates
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KeapDataProvider::AppName,
+            "path": "/affiliates",
+            "action": "list-affiliates",
+            "groups": "Affiliates",
+            "display_name": "List Affiliates",
+            "short_desc": "List all affiliates",
+            "desc": "List affiliates in Keap",
+            "action_code": DPAT_FIND,
+            "options": {
+                "order_by": <ActionOptionInfo>{
+                    "display_name": "Order By",
+                    "short_desc": "Sort field",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+            },
+        });
+
+        # ========== GENERIC API ACTION ==========
+
+        # Execute API Call
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KeapDataProvider::AppName,
+            "path": "/execute-api-call",
+            "action": "execute-api-call",
+            "groups": "API",
+            "display_name": "Execute API Call",
+            "short_desc": "Execute a raw API call",
+            "desc": "Execute a raw API call against the Keap REST API",
+            "action_code": DPAT_API,
+            "output_type": AbstractDataProviderTypeMap."hash",
+            "options": {
+                "method": <ActionOptionInfo>{
+                    "display_name": "HTTP Method",
+                    "short_desc": "HTTP method",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "HTTP method to use for the API call",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "GET", "desc": "Retrieve data"},
+                        <AllowedValueInfo>{"value": "POST", "desc": "Create a resource"},
+                        <AllowedValueInfo>{"value": "PUT", "desc": "Replace a resource"},
+                        <AllowedValueInfo>{"value": "PATCH", "desc": "Partially update a resource"},
+                        <AllowedValueInfo>{"value": "DELETE", "desc": "Delete a resource"},
+                    ),
+                },
+                "path": <ActionOptionInfo>{
+                    "display_name": "API Path",
+                    "short_desc": "API path",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "API path relative to /crm/rest/v2",
+                },
+                "body": <ActionOptionInfo>{
+                    "display_name": "Request Body",
+                    "short_desc": "Request body",
+                    "type": AbstractDataProviderTypeMap."*hash",
+                    "desc": "Request body for POST/PUT/PATCH",
+                },
+            },
+        });
+
+        # ========== EVENT ACTIONS ==========
+
+        # Contact Added
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KeapDataProvider::AppName,
+            "path": "/events/contact-added",
+            "action": "contact-added",
+            "groups": "Events",
+            "display_name": "Contact Added",
+            "short_desc": "Watch for new contacts",
+            "desc": "Triggers when a new contact is created in Keap",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_CONTACT_ADDED,
+        });
+
+        # Contact Updated
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KeapDataProvider::AppName,
+            "path": "/events/contact-updated",
+            "action": "contact-updated",
+            "groups": "Events",
+            "display_name": "Contact Updated",
+            "short_desc": "Watch for contact updates",
+            "desc": "Triggers when a contact is updated in Keap",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_CONTACT_UPDATED,
+        });
+
+        # Tag Applied
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KeapDataProvider::AppName,
+            "path": "/events/tag-applied",
+            "action": "tag-applied",
+            "groups": "Events",
+            "display_name": "Tag Applied",
+            "short_desc": "Watch for tag applications",
+            "desc": "Triggers when a tag is applied to a contact in Keap",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_TAG_APPLIED,
+        });
+
+        # Opportunity Added
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KeapDataProvider::AppName,
+            "path": "/events/opportunity-added",
+            "action": "opportunity-added",
+            "groups": "Events",
+            "display_name": "Opportunity Added",
+            "short_desc": "Watch for new opportunities",
+            "desc": "Triggers when a new opportunity is created in Keap",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_OPPORTUNITY_ADDED,
+        });
+
+        # Order Added
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KeapDataProvider::AppName,
+            "path": "/events/order-added",
+            "action": "order-added",
+            "groups": "Events",
+            "display_name": "Order Added",
+            "short_desc": "Watch for new orders",
+            "desc": "Triggers when a new order is created in Keap",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_ORDER_ADDED,
+        });
+
+        # Task Created
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KeapDataProvider::AppName,
+            "path": "/events/task-created",
+            "action": "task-created",
+            "groups": "Events",
+            "display_name": "Task Created",
+            "short_desc": "Watch for new tasks",
+            "desc": "Triggers when a new task is created in Keap",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_TASK_CREATED,
+        });
+
+        # Note Added
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KeapDataProvider::AppName,
+            "path": "/events/note-added",
+            "action": "note-added",
+            "groups": "Events",
+            "display_name": "Note Added",
+            "short_desc": "Watch for new notes",
+            "desc": "Triggers when a new note is added in Keap",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NOTE_ADDED,
+        });
+    };
+}
+
+/** @mainpage KeapDataProvider Module
+
+    @tableofcontents
+
+    @section keapdataproviderintro KeapDataProvider Introduction
+
+    The %KeapDataProvider module provides a data provider API for the Keap CRM
+    and marketing automation platform.
+
+    To use this module, use \c "%requires KeapDataProvider" in your code.
+
+    All the public symbols in the module are defined in the KeapDataProvider namespace.
+
+    The main classes are:
+    - @ref KeapDataProvider::KeapDataProvider "KeapDataProvider":
+      the root data provider for Keap
+    - @ref KeapDataProvider::KeapDataProviderFactory "KeapDataProviderFactory":
+      the data provider factory for Keap
+
+    @section keapdataproviderrelnotes Release Notes
+
+    @subsection keapdataproviderv1_0 KeapDataProvider v1.0
+    - the initial version of the %KeapDataProvider module
+*/
+
+#! Contains all public definitions in the KeapDataProvider module
+public namespace KeapDataProvider {
+}
