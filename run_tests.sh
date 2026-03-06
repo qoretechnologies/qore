@@ -44,7 +44,7 @@ fi
 while getopts ":d:jvtEP" opt; do
     case $opt in
         d)
-            TEST_DIRS="$TEST_DIRS \"$BASE_TEST_PATH/$OPTARG\""
+            TEST_DIRS="$TEST_DIRS $BASE_TEST_PATH/$OPTARG"
             ;;
         j)
             if [ -n "$TEST_OUTPUT_FORMAT" ]; then
@@ -203,17 +203,31 @@ LD_PRELOAD=$LIBQORE
 
 # Enable core dumps for crash diagnostics
 ulimit -c unlimited 2>/dev/null
+CORE_ULIMIT=$(ulimit -c 2>/dev/null)
+echo "Core dump ulimit: ${CORE_ULIMIT:-unknown}"
 # Create a directory for core dumps (used as CI artifact)
 # Use a path relative to the project root so GitLab can collect it as an artifact
 CORE_DIR="${CORE_DIR:-./crash-dumps}"
 mkdir -p "$CORE_DIR" 2>/dev/null
 CORE_DIR_ABS=$(cd "$CORE_DIR" && pwd)
 # Try to set core pattern to write cores to our directory (may fail in containers)
+CORE_PATTERN_SET=0
 if [ -w /proc/sys/kernel/core_pattern ]; then
     echo "$CORE_DIR_ABS/core.%e.%p" > /proc/sys/kernel/core_pattern
+    CORE_PATTERN_SET=1
 fi
 # Also try sysctl (works on some systems where /proc write fails)
-sysctl -w "kernel.core_pattern=$CORE_DIR_ABS/core.%e.%p" 2>/dev/null || true
+if [ $CORE_PATTERN_SET -eq 0 ]; then
+    sysctl -w "kernel.core_pattern=$CORE_DIR_ABS/core.%e.%p" 2>/dev/null && CORE_PATTERN_SET=1
+fi
+# Show the actual core pattern so we know where cores will land
+if [ -f /proc/sys/kernel/core_pattern ]; then
+    KERN_CORE_PATTERN=$(cat /proc/sys/kernel/core_pattern 2>/dev/null)
+    echo "kernel.core_pattern: $KERN_CORE_PATTERN"
+    if echo "$KERN_CORE_PATTERN" | grep -q '^|'; then
+        echo "WARNING: core_pattern pipes to a program; cores may not be saved to disk"
+    fi
+fi
 
 # Print info about used variables etc.
 echo "Using qore: $QORE"
@@ -237,7 +251,7 @@ fi
 echo
 
 # Search for tests in the test directory.
-TESTS=`eval find "$TEST_DIRS" -name "*.qtest" | sort`
+TESTS=`find $TEST_DIRS -name "*.qtest" | sort`
 FAILED_TESTS=""
 
 # Helper: check if a test matches the perf/stress test pattern
@@ -286,6 +300,10 @@ if [ -n "$CI_NODE_INDEX" ] && [ -n "$CI_NODE_TOTAL" ] && [ "$CI_NODE_TOTAL" -gt 
 fi
 
 TEST_COUNT=`echo $TESTS | wc -w`
+if [ $TEST_COUNT -eq 0 ]; then
+    echo "ERROR: no tests found to run" >&2
+    exit 1
+fi
 PASSED_TEST_COUNT=0
 FAILED_TEST_COUNT=0
 
@@ -319,7 +337,8 @@ for test in $TESTS; do
             echo "*** CRASH: test killed by signal $SIG_NUM (exit code $TEST_EXIT) ***"
             # Check for core dump in known locations
             CORE_FILE=""
-            for cf in "$CORE_DIR"/core.* "$CORE_DIR_ABS"/core.* core core.* /tmp/core.*; do
+            for cf in "$CORE_DIR"/core.* "$CORE_DIR_ABS"/core.* core core.* /tmp/core.* \
+                       /var/lib/apport/coredump/core.* /var/crash/*.crash; do
                 if [ -f "$cf" ] 2>/dev/null; then
                     CORE_FILE="$cf"
                     break
@@ -338,10 +357,13 @@ for test in $TESTS; do
             elif command -v gdb > /dev/null 2>&1; then
                 echo "*** No core dump found; re-running under gdb to try to capture backtrace ***"
                 BT_FILE="$CORE_DIR/backtrace-${TEST_BASENAME}.txt"
-                # Filter out thread creation/exit noise, keep backtrace output
+                # Filter out thread creation/exit noise (both glibc [New Thread] and musl [New LWP] formats)
                 gdb -batch -ex run -ex "thread apply all bt full" -ex quit \
                     --args $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT 2>&1 \
-                    | grep -v '^\[New Thread\|^\[Thread.*exited\]' | tee "$BT_FILE" | head -500
+                    | grep -v '^\[New Thread\|^\[Thread.*exited\]\|^\[New LWP\|^\[LWP.*exited\]\|^\[Detaching' \
+                    | tee "$BT_FILE" | head -500
+            else
+                echo "*** No core dump found and gdb not available ***"
             fi
         fi
     fi

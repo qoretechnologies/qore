@@ -967,14 +967,14 @@ void qore_object_private::addVirtualPrivateData(qore_classid_t key, AbstractPriv
 void qore_object_private::setRealReference() {
     AutoLocker al(rlck);
     printd(QORE_DEBUG_OBJ_REFS, "qore_object_private::setRealReference() this: %p '%s': references %d rrefs %d->%d\n",
-        this, status == OS_OK ? getClassName() : "<deleted>", references.load(), rrefs, rrefs + 1);
+        this, status == OS_OK ? getClassName() : "<deleted>", references.load(), rrefs.load(), rrefs.load() + 1);
     ++rrefs;
 }
 
 void qore_object_private::unsetRealReference() {
     AutoLocker al(rlck);
     printd(QORE_DEBUG_OBJ_REFS, "qore_object_private::unsetRealReference() this: %p '%s': references %d rrefs " \
-        "%d->%d\n", this, status == OS_OK ? getClassName() : "<deleted>", references.load(), rrefs, rrefs - 1);
+        "%d->%d\n", this, status == OS_OK ? getClassName() : "<deleted>", references.load(), rrefs.load(), rrefs.load() - 1);
     derefRealIntern();
 }
 
@@ -987,7 +987,7 @@ void qore_object_private::customDeref(ExceptionSink* xsink, bool real) {
 
         printd(QORE_DEBUG_OBJ_REFS, "qore_object_private::customDeref() this: %p '%s': references %d->%d "
             "rrefs %d->%d\n", this, status == OS_OK ? getClassName() : "<deleted>", references.load(),
-            references.load() - 1, rrefs, rrefs - (real ? 1 : 0));
+            references.load() - 1, rrefs.load(), rrefs.load() - (real ? 1 : 0));
 
         robject_dereference_helper qodh(this, real);
         int ref_copy = qodh.getRefs();
@@ -1011,7 +1011,7 @@ void qore_object_private::customDeref(ExceptionSink* xsink, bool real) {
 
                     printd(QRO_LVL, "qore_object_private::customDeref() this: %p '%s' rset: %p (valid: %d) "
                         "rcount: %d refs: %d/%d rrefs: %d (deferred: %d do_scan: %d)\n", this, getClassName(), rset,
-                        RSet::isValid(rset), rcount, ref_copy, references.load(), rrefs, deferred_scan,
+                        RSet::isValid(rset), rcount, ref_copy, references.load(), rrefs.load(), deferred_scan,
                         qodh.doScan());
 
                     int rc;
@@ -1436,8 +1436,8 @@ void qore_object_private::customRefIntern(bool real) {
         tRef();
 
     printd(QORE_DEBUG_OBJ_REFS, "qore_object_private::customRefIntern() this: %p obj: %p '%s' references %d->%d " \
-        "rrefs: %d->%d\n", this, obj, getClassName(), references.load(), references.load() + 1, rrefs,
-        rrefs + (real ? 1 : 0));
+        "rrefs: %d->%d\n", this, obj, getClassName(), references.load(), references.load() + 1, rrefs.load(),
+        rrefs.load() + (real ? 1 : 0));
     ++references;
     if (real)
         ++rrefs;

@@ -6,6 +6,12 @@ set -x
 # Performance test script - builds with Release optimization and runs only perf tests.
 # No database services are required.
 
+# Source environment from the Docker image (provides INSTALL_PREFIX, etc.)
+ENV_FILE=/tmp/env.sh
+if [ -f "${ENV_FILE}" ]; then
+    . ${ENV_FILE}
+fi
+
 # setup QORE_SRC_DIR env var
 cwd=`pwd`
 if [ "${QORE_SRC_DIR}" = "" ]; then
@@ -27,7 +33,7 @@ fi
 # build Qore with Release optimization
 echo && echo "-- building Qore (Release) --"
 cd ${QORE_SRC_DIR}
-mkdir build
+mkdir -p build
 cd build
 cmake .. -DCMAKE_BUILD_TYPE=Release -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX}
 make -j${MAKE_JOBS}

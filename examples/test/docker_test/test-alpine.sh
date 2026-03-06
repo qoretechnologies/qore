@@ -37,7 +37,7 @@ if [ -z "${REDIS_URL}" ]; then
     setup_redis_on_host
 fi
 
-find / -name "libqore.so*" -exec rm -f {} \;
+find / -path "${QORE_SRC_DIR}/build" -prune -o -name "libqore.so*" -exec rm -f {} \;
 
 # build or install Qore
 if [ -d "${QORE_SRC_DIR}/build" ] && [ -f "${QORE_SRC_DIR}/build/CMakeCache.txt" ]; then
@@ -53,9 +53,11 @@ else
         cargo install tree-sitter-cli@0.26.5
     fi
 
+    export MAKE_JOBS=${MAKE_JOBS:-6}
+
     echo && echo "-- building Qore --"
     cd ${QORE_SRC_DIR}
-    mkdir build
+    mkdir -p build
     cd build
     cmake .. -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE:-debug} -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX}
     make -j${MAKE_JOBS}
@@ -73,6 +75,21 @@ fi
 # install gdb for crash diagnostics (captures backtraces on segfault)
 if ! command -v gdb > /dev/null 2>&1; then
     apk add --no-cache gdb
+fi
+
+# Enable core dumps before dropping to qore user (needs root for /proc/sys writes)
+# suid_dumpable=2 writes cores to the core_pattern location securely (needed for gosu)
+if [ -f /proc/sys/fs/suid_dumpable ]; then
+    echo 2 > /proc/sys/fs/suid_dumpable 2>/dev/null || true
+fi
+# Set core_pattern to write cores to crash-dumps/ (must be done as root)
+CORE_DIR="${QORE_SRC_DIR}/crash-dumps"
+mkdir -p "$CORE_DIR"
+chown qore:qore "$CORE_DIR"
+if [ -w /proc/sys/kernel/core_pattern ]; then
+    echo "$CORE_DIR/core.%e.%p" > /proc/sys/kernel/core_pattern
+elif command -v sysctl > /dev/null 2>&1; then
+    sysctl -w "kernel.core_pattern=$CORE_DIR/core.%e.%p" 2>/dev/null || true
 fi
 
 # own everything by the qore user

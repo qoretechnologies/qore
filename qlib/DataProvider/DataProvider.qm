@@ -99,6 +99,7 @@ module DataProvider {
                             "through, non-matching records are dropped",
                         "type": AbstractDataProviderTypeMap."*bool",
                         "required": True,
+                        "server_expression_handling": True,
                     },
                 }, {
                     "loc": "constructor",
