@@ -54,7 +54,7 @@ else
 
     echo && echo "-- building Qore --"
     cd ${QORE_SRC_DIR}
-    mkdir build
+    mkdir -p build
     cd build
     cmake .. -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE:-debug} -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX}
     make -j${MAKE_JOBS}

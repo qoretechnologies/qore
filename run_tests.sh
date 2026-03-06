@@ -44,7 +44,7 @@ fi
 while getopts ":d:jvtEP" opt; do
     case $opt in
         d)
-            TEST_DIRS="$TEST_DIRS \"$BASE_TEST_PATH/$OPTARG\""
+            TEST_DIRS="$TEST_DIRS $BASE_TEST_PATH/$OPTARG"
             ;;
         j)
             if [ -n "$TEST_OUTPUT_FORMAT" ]; then
@@ -251,7 +251,7 @@ fi
 echo
 
 # Search for tests in the test directory.
-TESTS=`eval find "$TEST_DIRS" -name "*.qtest" | sort`
+TESTS=`find $TEST_DIRS -name "*.qtest" | sort`
 FAILED_TESTS=""
 
 # Helper: check if a test matches the perf/stress test pattern
