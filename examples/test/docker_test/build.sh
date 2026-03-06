@@ -7,6 +7,12 @@ set -x
 # Used by the CI build stage; test jobs download the build/ artifact
 # and skip compilation.
 
+# Source environment from the Docker image (provides INSTALL_PREFIX, etc.)
+ENV_FILE=/tmp/env.sh
+if [ -f "${ENV_FILE}" ]; then
+    . ${ENV_FILE}
+fi
+
 # setup QORE_SRC_DIR env var
 cwd=`pwd`
 if [ "${QORE_SRC_DIR}" = "" ]; then
