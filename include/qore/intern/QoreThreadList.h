@@ -240,6 +240,15 @@ public:
         return (tid >= 0 && tid < MAX_QORE_THREADS) ? entry[tid].cancel_reason : nullptr;
     }
 
+    //! Mark a thread entry so that pthread_detach() is not called on exit
+    /** Used for the main (initial) thread which is not created by pthread_create()
+        and therefore should not be detached — doing so causes ASAN failures on macOS.
+    */
+    DLLLOCAL void markNoDetach(int tid) {
+        AutoLocker al(lck);
+        entry[tid].joined = true;
+    }
+
     //! Request cancellation of a thread; acquires lock internally
     DLLLOCAL int cancelThread(int tid, const char* reason);
 

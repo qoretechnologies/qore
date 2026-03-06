@@ -143,7 +143,7 @@ void QoreSignalManager::del() {
 
     // remove all signal handlers to ensure that all Programs are dereferenced
     for (int i = 0; i < QORE_SIGNAL_MAX; ++i) {
-        if (i != QORE_STATUS_SIGNAL|| !handlers[i].isSet())
+        if (i == QORE_STATUS_SIGNAL || !handlers[i].isSet())
             continue;
         sigdelset(&mask, i);
         changed = true;

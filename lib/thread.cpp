@@ -3201,6 +3201,9 @@ void init_qore_threads() {
 
     // setup parent thread data
     thread_list.activate(initial_thread = get_thread_entry());
+    // The main (initial) thread is not created by pthread_create(); calling pthread_detach()
+    // on it causes ASAN check failures on macOS. Mark it so cleanup() skips the detach.
+    thread_list.markNoDetach(initial_thread);
 
     // initialize recursive mutex attribute
     pthread_mutexattr_init(&ma_recursive);
