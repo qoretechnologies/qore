@@ -110,8 +110,8 @@ public class BigCommerceBlogPostsDataProvider inherits BigCommerceDataProviderBa
     }
 
     #! Returns the record type
-    private *AbstractDataProviderType getRecordTypeImpl() {
-        return new BigCommerceBlogPostDataType();
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return new BigCommerceBlogPostDataType().getFields();
     }
 
     #! Returns an iterator for records matching the search criteria

@@ -174,8 +174,8 @@ public class BigCommerceCustomersDataProvider inherits BigCommerceDataProviderBa
     }
 
     #! Returns the record type
-    private *AbstractDataProviderType getRecordTypeImpl() {
-        return new BigCommerceCustomerDataType();
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return new BigCommerceCustomerDataType().getFields();
     }
 
     #! Returns an iterator for records matching the search criteria

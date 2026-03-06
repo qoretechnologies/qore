@@ -27,13 +27,15 @@ public namespace BigCommerceDataProvider {
 
 #! Request type for deleting a product
 public class BigCommerceDeleteProductRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "product_id": {
                 "display_name": "Product ID",
+                "short_desc": "The product to delete",
                 "type": IntType,
                 "desc": "The ID of the product to delete",
                 "required": True,
+                "ref_data": "products",
             },
         };
     }
