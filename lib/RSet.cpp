@@ -140,16 +140,17 @@ int RObject::checkDeferScan() {
             // we are making a scan now, so if the deferred_scan flag is set, unset it
             if (deferred_scan)
                 deferred_scan = false;
-            printd(QRO_LVL, "RObject::checkDeferScan() this: %p (%s) rrefs: %d scan OK\n", this, getName(), rrefs);
+            printd(QRO_LVL, "RObject::checkDeferScan() this: %p (%s) rrefs: %d scan OK\n", this, getName(),
+                rrefs.load());
             return 0;
         }
         if (deferred_scan) {
             printd(QRO_LVL, "RObject::checkDeferScan() this: %p (%s) rrefs: %d deferred_scan already set\n", this,
-                getName(), rrefs);
+                getName(), rrefs.load());
             return -1;
         }
         printd(QRO_LVL, "RObject::checkDeferScan() this: %p (%s) rrefs: %d setting deferred_scan\n", this, getName(),
-            rrefs);
+            rrefs.load());
         deferred_scan = true;
         // if there is no rset, we can return immediately, no rset can be attached while rrefs > 0
         if (!rset)

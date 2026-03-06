@@ -4,7 +4,7 @@
 
   Qore Programming Language
 
-  Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+  Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -32,6 +32,8 @@
 #ifndef _QORE_INTERN_RSECTION_H
 
 #define _QORE_INTERN_RSECTION_H
+
+#include <atomic>
 
 #include "qore/intern/qore_var_rwlock_priv.h"
 
@@ -141,7 +143,8 @@ public:
 
 protected:
     // tid of thread holding the rsection lock
-    int rs_tid = -1;
+    // atomic because it is read without lock in hasRSectionLock() and checkRSectionExclusive()
+    std::atomic_int rs_tid{-1};
 
     // number of threads waiting on the rsection lock
     int rsection_waiting = 0;
