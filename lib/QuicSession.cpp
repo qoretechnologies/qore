@@ -935,6 +935,17 @@ int QuicSession::setupHttp3(ExceptionSink* xsink) {
     // HTTP/3 control + QPACK streams have data to send
     pending_write_.store(true, std::memory_order_release);
 
+    // Tell nghttp3 how many bidirectional streams the client is allowed to open.
+    // This must match the initial_max_streams_bidi we advertised in our QUIC transport
+    // params.  Without this call conn->remote.bidi.max_client_streams stays at 0,
+    // causing NGHTTP3_ERR_H3_ID_ERROR for every PRIORITY_UPDATE frame the client sends,
+    // which in turn corrupts the read-state machine and triggers an assertion on the
+    // next packet.  Only the server side needs this — on the client we are the one
+    // sending PRIORITY_UPDATE frames.
+    if (is_server_) {
+        nghttp3_conn_set_max_client_streams_bidi(h3_conn_, QUIC_INITIAL_MAX_STREAMS_BIDI);
+    }
+
     // Replay any stream data that arrived before HTTP/3 was initialized
     if (!pre_h3_buffer_.empty()) {
         ngtcp2_tstamp ts = ngtcp2_conn_get_timestamp(conn_);
@@ -2658,9 +2669,15 @@ int QuicSession::extendMaxLocalStreamsBidiCallback(ngtcp2_conn* /* conn */,
 }
 
 int QuicSession::extendMaxRemoteStreamsBidiCallback(ngtcp2_conn* /* conn */,
-                                                     uint64_t /* max_streams */,
-                                                     void* /* user_data */) {
-    // Server: can accept more request streams from client
+                                                     uint64_t max_streams,
+                                                     void* user_data) {
+    // Server: the client is now permitted to open more bidirectional request streams.
+    // Keep nghttp3 in sync so PRIORITY_UPDATE frames referencing those new stream IDs
+    // are accepted rather than rejected with NGHTTP3_ERR_H3_ID_ERROR.
+    auto* session = static_cast<QuicSession*>(user_data);
+    if (session->is_server_ && session->h3_conn_) {
+        nghttp3_conn_set_max_client_streams_bidi(session->h3_conn_, max_streams);
+    }
     return 0;
 }
 
