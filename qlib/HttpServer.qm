@@ -4026,11 +4026,13 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             m.lock();
             on_exit m.unlock();
 
-            if (stopped)
+            if (stopped) {
                 return;
+            }
 
-            if (exit)
+            if (exit) {
                 return;
+            }
 
             exit = True;
         }
@@ -4079,15 +4081,22 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         dThreads.wait();
 
         stopped = True;
-        if (!silent) {
-            log("stopped listener");
-        }
 
+        # Notify the server BEFORE logging, because log() may access the server
+        # via the weak 'serv' reference, and if the server's last strong reference
+        # has been dropped externally (e.g. stopNoWait() + caller scope exit), the
+        # log call can trigger server destruction.  The server destructor calls
+        # stop() -> c.wait(), so c.done() (inside listenerStopped) must complete
+        # first to avoid a deadlock.
         if (serv) {
             serv.listenerStopped(self);
             if (stopc) {
                 serv.callListenerStopCallback(stopc, name, socket_info);
             }
+        }
+
+        if (!silent) {
+            log("stopped listener");
         }
     }
 
