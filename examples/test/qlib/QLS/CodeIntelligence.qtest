@@ -1,0 +1,1367 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  CodeIntelligence.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/QoreCodeCompletion
+%requires json
+%requires ../../../../qlib/QLS
+
+%exec-class CodeIntelligenceTest
+
+#! Test-local completion provider that wraps Document methods
+/** Mirrors the CSTCompletionProvider logic but is accessible from the test.
+    The CSTSearcher returns flat hashes with keys: name, kind, location, scope_level,
+    typeName, access, isStatic (no nested "symbol" sub-hash).
+*/
+class TestCSTProvider inherits QoreCodeCompletion::AbstractCompletionProvider {
+    private {
+        QLS::Document doc;
+        hash position;
+    }
+
+    constructor(QLS::Document doc, hash position) {
+        self.doc = doc;
+        self.position = position;
+    }
+
+    int getParseOptions() {
+        return doc.getParseDirectiveOptions();
+    }
+
+    list<hash<QoreCodeCompletion::CompletionItem>> getVisibleSymbols(string prefix) {
+        *list symbols = doc.findScopeSymbolsDetailed(position);
+        if (!symbols) {
+            return ();
+        }
+
+        list<hash<QoreCodeCompletion::CompletionItem>> result = ();
+        hash<string, bool> seen;
+        foreach hash sym in (symbols) {
+            string name = sym.name;
+            if (!seen{name}
+                    && QoreCodeCompletion::CompletionEngine::matchesPrefix(name, prefix)) {
+                seen{name} = True;
+                string kind = symbolKindToString(sym.kind);
+                bool callable = kind == "function" || kind == "method";
+                result += <QoreCodeCompletion::CompletionItem>{
+                    "label": name,
+                    "kind": kind,
+                    "isCallable": callable,
+                };
+            }
+        }
+        return result;
+    }
+
+    list<hash<QoreCodeCompletion::CompletionItem>> getClassNames(string prefix) {
+        *list symbols = doc.findScopeSymbolsDetailed(position);
+        if (!symbols) {
+            return ();
+        }
+
+        list<hash<QoreCodeCompletion::CompletionItem>> result = ();
+        hash<string, bool> seen;
+        foreach hash sym in (symbols) {
+            if (sym.kind == QLS::ASTSymbolKind.Class) {
+                string name = sym.name;
+                if (!seen{name}
+                        && QoreCodeCompletion::CompletionEngine::matchesPrefix(name, prefix)) {
+                    seen{name} = True;
+                    result += <QoreCodeCompletion::CompletionItem>{
+                        "label": name,
+                        "kind": "class",
+                        "isCallable": True,
+                    };
+                }
+            }
+        }
+        return result;
+    }
+
+    list<hash<QoreCodeCompletion::CompletionItem>> getInstanceMembers(string target, string prefix) {
+        *string typeName = doc.getSymbolType({
+            "line": position.line,
+            "character": position.character > 0 ? position.character - 1 : 0,
+        });
+        if (!typeName) {
+            typeName = target;
+        }
+
+        *list members = doc.findTypeMembers(typeName, True);
+        if (!members) {
+            return ();
+        }
+
+        list<hash<QoreCodeCompletion::CompletionItem>> result = ();
+        hash<string, bool> seen;
+        foreach hash sym in (members) {
+            string name = sym.name;
+            if (name == "constructor" || name == "destructor" || name == "copy") {
+                continue;
+            }
+            if (sym.isStatic) {
+                continue;
+            }
+            if (!seen{name}
+                    && QoreCodeCompletion::CompletionEngine::matchesPrefix(name, prefix)) {
+                seen{name} = True;
+                string kind = symbolKindToString(sym.kind);
+                bool callable = kind == "function" || kind == "method";
+                result += <QoreCodeCompletion::CompletionItem>{
+                    "label": name,
+                    "kind": kind,
+                    "isCallable": callable,
+                };
+            }
+        }
+        return result;
+    }
+
+    list<hash<QoreCodeCompletion::CompletionItem>> getScopeMembers(string target, string prefix) {
+        *list members = doc.findTypeMembers(target, True);
+        if (!members) {
+            return ();
+        }
+
+        list<hash<QoreCodeCompletion::CompletionItem>> result = ();
+        hash<string, bool> seen;
+        foreach hash sym in (members) {
+            string name = sym.name;
+            if (name == "constructor" || name == "destructor") {
+                continue;
+            }
+            if (!seen{name}
+                    && QoreCodeCompletion::CompletionEngine::matchesPrefix(name, prefix)) {
+                seen{name} = True;
+                string kind = symbolKindToString(sym.kind);
+                bool callable = kind == "function" || kind == "method";
+                result += <QoreCodeCompletion::CompletionItem>{
+                    "label": name,
+                    "kind": kind,
+                    "isCallable": callable,
+                };
+            }
+        }
+        return result;
+    }
+
+    private static string symbolKindToString(int kind) {
+        switch (kind) {
+            case QLS::ASTSymbolKind.Function: return "function";
+            case QLS::ASTSymbolKind.Class: return "class";
+            case QLS::ASTSymbolKind.Method: return "method";
+            case QLS::ASTSymbolKind.Property: return "member";
+            case QLS::ASTSymbolKind.Field: return "member";
+            case QLS::ASTSymbolKind.Variable: return "variable";
+            case QLS::ASTSymbolKind.Constant: return "constant";
+            case QLS::ASTSymbolKind.Namespace: return "namespace";
+            case QLS::ASTSymbolKind.Enum: return "enum";
+            case QLS::ASTSymbolKind.Constructor: return "method";
+            case QLS::ASTSymbolKind.Interface: return "hashdecl";
+            case QLS::ASTSymbolKind.Module: return "namespace";
+        }
+        return "variable";
+    }
+}
+
+class CodeIntelligenceTest inherits QUnit::Test {
+    private {
+        QLS::QLSServer server;
+        int reqId = 0;
+        int docCount = 0;
+        hash<string, string> docCache;
+
+        # Completion test sources
+        #! Test source with known declarations
+        const CompletionTestSource = "%modern
+
+namespace TestNs {
+    class MyClass {
+        public {
+            int myField;
+            string name;
+        }
+
+        constructor() {}
+
+        int getValue() { return 1; }
+        string getName() { return name; }
+        static int staticHelper() { return 0; }
+    }
+
+    class OtherClass inherits MyClass {
+        doWork() {}
+    }
+
+    sub myFunc(int x) { return x + 1; }
+
+    const MY_CONST = 42;
+}
+
+sub topFunc() { return 1; }
+";
+
+        #! Source for testing dot/scope completion (complete expression, no parse errors)
+        const VarCompletionSource = "%modern
+
+class Foo {
+    public {
+        int bar;
+        string baz;
+    }
+
+    constructor() {}
+
+    int getBar() { return bar; }
+    string getBaz() { return baz; }
+    static Foo create() { return new Foo(); }
+}
+
+sub test() {
+    Foo obj = new Foo();
+    int x = obj.getBar();
+}
+";
+
+        # SignatureHelp test sources
+        # Valid source with complete function calls -- cursor position determines the paren context
+        # Line 0: %modern
+        # Line 1: sub myFunc(int x, string y) { return; }
+        # Line 2: sub foo() { return 1; }
+        # Line 3: sub caller() { myFunc(1, "hello"); }
+        const SigHelpFuncSource = "%modern\nsub myFunc(int x, string y) { return; }\n"
+            "sub foo() { return 1; }\n"
+            "sub caller() { myFunc(1, \"hello\"); }\n";
+
+        # Line 0: %modern
+        # Line 1: class Foo {
+        # Line 2:     int getVal(int x) { return x; }
+        # Line 3: }
+        # Line 4: sub test() {
+        # Line 5:     Foo obj = new Foo();
+        # Line 6:     int r = obj.getVal(42);
+        # Line 7: }
+        const SigHelpMethodSource = "%modern\nclass Foo {\n    int getVal(int x) { return x; }\n}\n"
+            "sub test() {\n    Foo obj = new Foo();\n    int r = obj.getVal(42);\n}\n";
+    }
+
+    constructor() : Test("QLS CodeIntelligence", "1.0") {
+        initServer();
+
+        # Completion tests
+        addTestCase("Completion: Document.getLine", \testDocumentGetLine());
+        addTestCase("Completion: Document.findScopeSymbolsDetailed",
+            \testDocumentFindScopeSymbolsDetailed());
+        addTestCase("Completion: Document.getSymbolType", \testDocumentGetSymbolType());
+        addTestCase("Completion: Document.findTypeMembers", \testDocumentFindTypeMembers());
+        addTestCase("Completion: Provider: getVisibleSymbols", \testGetVisibleSymbols());
+        addTestCase("Completion: Provider: getClassNames", \testGetClassNames());
+        addTestCase("Completion: Provider: getScopeMembers", \testGetScopeMembers());
+        addTestCase("Completion: Provider: getInstanceMembers", \testGetInstanceMembers());
+        addTestCase("Completion: Engine: identifier completion", \testEngineIdentifier());
+        addTestCase("Completion: Engine: new completion", \testEngineNew());
+        addTestCase("Completion: Engine: scope completion", \testEngineScope());
+        addTestCase("Completion: Engine: dot context detection", \testEngineDotContext());
+        addTestCase("Completion: Empty document: graceful handling",
+            \testCompletionEmptyDocument());
+        addTestCase("Completion: Parse error document: graceful handling",
+            \testParseErrorDocument());
+        addTestCase("Completion: Document.getParseDirectiveOptions: modern",
+            \testParseDirectiveModern());
+        addTestCase("Completion: Document.getParseDirectiveOptions: multiple directives",
+            \testParseDirectiveMultiple());
+        addTestCase("Completion: Document.getParseDirectiveOptions: no directives",
+            \testParseDirectiveNone());
+        addTestCase("Completion: Document.getParseDirectiveOptions: caching",
+            \testParseDirectiveCaching());
+        addTestCase("Completion: Parse options: no-thread-control filters background keyword",
+            \testParseOptionsNoThreadKeyword());
+
+        # SignatureHelp tests
+        addTestCase("SignatureHelp: capability advertised", \testSigHelpCapability());
+        addTestCase("SignatureHelp: signature for known function", \testSigHelpKnownFunction());
+        addTestCase("SignatureHelp: active parameter at first position",
+            \testSigHelpActiveParamFirst());
+        addTestCase("SignatureHelp: active parameter after comma",
+            \testSigHelpActiveParamAfterComma());
+        addTestCase("SignatureHelp: nested parens", \testSigHelpNestedParens());
+        addTestCase("SignatureHelp: unknown function", \testSigHelpUnknownFunction());
+        addTestCase("SignatureHelp: no paren on line", \testSigHelpNoParenOnLine());
+        addTestCase("SignatureHelp: empty document", \testSigHelpEmptyDocument());
+        addTestCase("SignatureHelp: missing params", \testSigHelpMissingParams());
+        addTestCase("SignatureHelp: non-existent document", \testSigHelpNonExistentDocument());
+        addTestCase("SignatureHelp: method signature via dot access",
+            \testSigHelpDotAccessMethod());
+        addTestCase("SignatureHelp: out of range position", \testSigHelpOutOfRangePosition());
+
+        # CodeLens tests
+        addTestCase("CodeLens: code lens on class and function",
+            \testCodeLensClassAndFunction());
+        addTestCase("CodeLens: code lens on constant", \testCodeLensConstant());
+        addTestCase("CodeLens: resolve returns reference count",
+            \testCodeLensResolveRefCount());
+        addTestCase("CodeLens: resolve zero references", \testCodeLensResolveZeroRefs());
+        addTestCase("CodeLens: empty document", \testCodeLensEmptyDocument());
+        addTestCase("CodeLens: no declarations", \testCodeLensNoDeclarations());
+        addTestCase("CodeLens: missing params", \testCodeLensMissingParams());
+
+        # InlayHint tests
+        addTestCase("InlayHint: parameter hints for function calls",
+            \testInlayHintFunctionCallHints());
+        addTestCase("InlayHint: no hints for single-arg calls",
+            \testInlayHintSingleArgNoHints());
+        addTestCase("InlayHint: range filtering", \testInlayHintRangeFiltering());
+        addTestCase("InlayHint: empty document", \testInlayHintEmptyDocument());
+        addTestCase("InlayHint: missing params", \testInlayHintMissingParams());
+
+        # CodeAction tests
+        addTestCase("CodeAction: sort imports unsorted", \testCodeActionSortImportsUnsorted());
+        addTestCase("CodeAction: sort imports already sorted",
+            \testCodeActionSortImportsSorted());
+        addTestCase("CodeAction: sort imports single", \testCodeActionSortImportsSingle());
+        addTestCase("CodeAction: add modern missing", \testCodeActionAddModernMissing());
+        addTestCase("CodeAction: add modern present", \testCodeActionAddModernPresent());
+        addTestCase("CodeAction: empty document", \testCodeActionEmptyDocument());
+        addTestCase("CodeAction: missing params", \testCodeActionMissingParams());
+
+        set_return_value(main());
+    }
+
+    private initServer() {
+        server = new QLS::QLSServer();
+
+        hash<auto> initReq = makeRequest("initialize", {
+            "processId": getpid(),
+            "capabilities": {},
+            "rootUri": NOTHING,
+        });
+        server.handleRequest(make_json(initReq));
+
+        hash<auto> initializedReq = makeRequest("initialized");
+        delete initializedReq.id;
+        server.handleRequest(make_json(initializedReq));
+    }
+
+    private hash<auto> makeRequest(string method, *hash<auto> params) {
+        return {
+            "jsonrpc": "2.0",
+            "id": ++reqId,
+            "method": method,
+            "params": params,
+        };
+    }
+
+    private QLS::Document makeDoc(string text) {
+        return new QLS::Document("file:///test.q", text, "qore", 1);
+    }
+
+    #! Opens a document on the shared server, caching by content; returns the URI
+    private string setupDoc(string text) {
+        *string cached = docCache{text};
+        if (exists cached) {
+            return cached;
+        }
+        string uri = sprintf("file:///test/codeintel%d.q", ++docCount);
+        hash<auto> openReq = makeRequest("textDocument/didOpen", {
+            "textDocument": {
+                "uri": uri,
+                "languageId": "qore",
+                "version": 1,
+                "text": text,
+            },
+        });
+        delete openReq.id;
+        server.handleRequest(make_json(openReq));
+        docCache{text} = uri;
+        return uri;
+    }
+
+    # -----------------------------------------------------------------------
+    # SignatureHelp helpers
+    # -----------------------------------------------------------------------
+
+    private hash<auto> sendSignatureHelp(string uri, int line, int character) {
+        hash<auto> req = makeRequest("textDocument/signatureHelp", {
+            "textDocument": {"uri": uri},
+            "position": {"line": line, "character": character},
+        });
+        softlist<auto> responses = server.handleRequest(make_json(req));
+        if (!responses || !responses[0]) {
+            return {"signatures": (), "activeSignature": 0, "activeParameter": 0};
+        }
+        hash<auto> resp = parse_json(responses[0]);
+        return resp.result;
+    }
+
+    # -----------------------------------------------------------------------
+    # CodeLens helpers
+    # -----------------------------------------------------------------------
+
+    # Test source:
+    # Line 0: %modern
+    # Line 1: class Calc {
+    # Line 2:     int add(int a, int b) { return a + b; }
+    # Line 3: }
+    # Line 4: const VERSION = "1.0";
+    # Line 5: sub helper() { return 0; }
+    # Line 6: Calc c();
+    # Line 7: c.add(1, 2);
+    # Line 8: helper();
+    private string getCodeLensTestCode() {
+        return "%modern
+class Calc {
+    int add(int a, int b) { return a + b; }
+}
+const VERSION = \"1.0\";
+sub helper() { return 0; }
+Calc c();
+c.add(1, 2);
+helper();
+";
+    }
+
+    private string setupCodeLensDoc(*string text) {
+        string src = text ?? getCodeLensTestCode();
+        return setupDoc(src);
+    }
+
+    private *list<auto> sendCodeLens(string uri) {
+        hash<auto> req = makeRequest("textDocument/codeLens", {
+            "textDocument": {"uri": uri},
+        });
+        softlist<auto> responses = server.handleRequest(make_json(req));
+        if (!responses || !responses[0]) {
+            return NOTHING;
+        }
+        hash<auto> resp = parse_json(responses[0]);
+        return resp.result;
+    }
+
+    private *hash<auto> sendCodeLensResolve(hash<auto> lens) {
+        hash<auto> req = makeRequest("codeLens/resolve", lens);
+        softlist<auto> responses = server.handleRequest(make_json(req));
+        if (!responses || !responses[0]) {
+            return NOTHING;
+        }
+        hash<auto> resp = parse_json(responses[0]);
+        return resp.result;
+    }
+
+    # -----------------------------------------------------------------------
+    # InlayHint helpers
+    # -----------------------------------------------------------------------
+
+    # Test source:
+    # Line 0: %modern
+    # Line 1: sub add(int a, int b) { return a + b; }
+    # Line 2: sub single(int x) { return x; }
+    # Line 3: add(1, 2);
+    # Line 4: single(5);
+    private string getInlayHintTestCode() {
+        return "%modern
+sub add(int a, int b) { return a + b; }
+sub single(int x) { return x; }
+add(1, 2);
+single(5);
+";
+    }
+
+    private string setupInlayHintDoc(*string text) {
+        string src = text ?? getInlayHintTestCode();
+        return setupDoc(src);
+    }
+
+    private *list<auto> sendInlayHint(string uri, int startLine, int endLine) {
+        hash<auto> req = makeRequest("textDocument/inlayHint", {
+            "textDocument": {"uri": uri},
+            "range": {
+                "start": {"line": startLine, "character": 0},
+                "end": {"line": endLine, "character": 999},
+            },
+        });
+        softlist<auto> responses = server.handleRequest(make_json(req));
+        if (!responses || !responses[0]) {
+            return NOTHING;
+        }
+        hash<auto> resp = parse_json(responses[0]);
+        return resp.result;
+    }
+
+    # -----------------------------------------------------------------------
+    # CodeAction helpers
+    # -----------------------------------------------------------------------
+
+    private string setupCodeActionDoc(string text) {
+        string uri = sprintf("file:///test/codeaction%d.q", ++docCount);
+        hash<auto> openReq = makeRequest("textDocument/didOpen", {
+            "textDocument": {
+                "uri": uri,
+                "languageId": "qore",
+                "version": 1,
+                "text": text,
+            },
+        });
+        delete openReq.id;
+        server.handleRequest(make_json(openReq));
+        return uri;
+    }
+
+    private *list<auto> sendCodeAction(string uri, int startLine, int endLine) {
+        hash<auto> req = makeRequest("textDocument/codeAction", {
+            "textDocument": {"uri": uri},
+            "range": {
+                "start": {"line": startLine, "character": 0},
+                "end": {"line": endLine, "character": 999},
+            },
+            "context": {
+                "diagnostics": (),
+            },
+        });
+        softlist<auto> responses = server.handleRequest(make_json(req));
+        if (!responses || !responses[0]) {
+            return NOTHING;
+        }
+        hash<auto> resp = parse_json(responses[0]);
+        return resp.result;
+    }
+
+    # ===================================================================
+    # Completion tests
+    # ===================================================================
+
+    testDocumentGetLine() {
+        string text = "line0\nline1\nline2\n";
+        QLS::Document doc = makeDoc(text);
+
+        assertEq("line0", doc.getLine(0));
+        assertEq("line1", doc.getLine(1));
+        assertEq("line2", doc.getLine(2));
+        # Out of range
+        assertNothing(doc.getLine(99));
+        assertNothing(doc.getLine(-1));
+    }
+
+    testDocumentFindScopeSymbolsDetailed() {
+        QLS::Document doc = makeDoc(CompletionTestSource);
+        assertEq(0, doc.getParseErrorCount(), "test source should parse without errors");
+
+        # Position inside namespace body -- should find symbols in scope
+        *list symbols = doc.findScopeSymbolsDetailed({"line": 5, "character": 0});
+        assertTrue(exists symbols, "should find symbols at position");
+        assertTrue(symbols.size() > 0, "should have at least one symbol");
+
+        # Each symbol should have the expected flat structure
+        hash firstSym = symbols[0];
+        assertTrue(exists firstSym.name, "symbol should have 'name' key");
+        assertTrue(exists firstSym.kind, "symbol should have 'kind' key");
+    }
+
+    testDocumentGetSymbolType() {
+        QLS::Document doc = makeDoc(VarCompletionSource);
+        assertEq(0, doc.getParseErrorCount(), "var source should parse without errors");
+
+        # Try to get type of 'obj' variable -- may or may not resolve depending on CSTSearcher
+        # Just verify it doesn't crash -- type resolution is best-effort
+        doc.getSymbolType({"line": 17, "character": 4});
+        assertTrue(True, "getSymbolType should not crash");
+    }
+
+    testDocumentFindTypeMembers() {
+        QLS::Document doc = makeDoc(VarCompletionSource);
+        assertEq(0, doc.getParseErrorCount(), "source should parse without errors");
+
+        # Find members of "Foo" class
+        *list members = doc.findTypeMembers("Foo", True);
+        assertTrue(exists members, "Foo should have members");
+        assertTrue(members.size() > 0, "Foo should have at least one member");
+        hash<string, bool> names;
+        foreach hash sym in (members) {
+            names{sym.name} = True;
+        }
+        # Should find at least getBar and getBaz
+        assertTrue(names{"getBar"} ?? False, "should find getBar method");
+        assertTrue(names{"getBaz"} ?? False, "should find getBaz method");
+
+        # Nonexistent type
+        *list noMembers = doc.findTypeMembers("NonexistentType_xyz", True);
+        assertNothing(noMembers, "nonexistent type should return NOTHING");
+    }
+
+    testGetVisibleSymbols() {
+        QLS::Document doc = makeDoc(CompletionTestSource);
+
+        TestCSTProvider provider(doc, {"line": 5, "character": 0});
+        list<hash<QoreCodeCompletion::CompletionItem>> items = provider.getVisibleSymbols("");
+        assertTrue(items.size() > 0, "getVisibleSymbols should return symbols");
+
+        # Check that some known symbols are present
+        hash<string, bool> names = map {$1.label: True}, items;
+        assertTrue(names{"MyClass"} ?? False, "should find MyClass");
+
+        # Filter by prefix
+        list<hash<QoreCodeCompletion::CompletionItem>> filtered = provider.getVisibleSymbols("My");
+        assertTrue(filtered.size() > 0, "should find symbols starting with 'My'");
+        foreach hash<QoreCodeCompletion::CompletionItem> item in (filtered) {
+            assertTrue(item.label.equalPartial("My"),
+                sprintf("filtered item '%s' should start with 'My'", item.label));
+        }
+
+        # Nonexistent prefix
+        list<hash<QoreCodeCompletion::CompletionItem>> none = provider.getVisibleSymbols("Zzz_nonexistent_xyz");
+        assertEq(0, none.size(), "nonexistent prefix should return empty");
+    }
+
+    testGetClassNames() {
+        QLS::Document doc = makeDoc(CompletionTestSource);
+
+        TestCSTProvider provider(doc, {"line": 5, "character": 0});
+        list<hash<QoreCodeCompletion::CompletionItem>> items = provider.getClassNames("");
+        assertTrue(items.size() > 0, "should find class names");
+
+        # All returned items should be classes
+        foreach hash<QoreCodeCompletion::CompletionItem> item in (items) {
+            assertEq("class", item.kind, sprintf("'%s' should be kind 'class'", item.label));
+            assertTrue(item.isCallable, sprintf("class '%s' should be callable", item.label));
+        }
+
+        # Filter by prefix
+        list<hash<QoreCodeCompletion::CompletionItem>> filtered = provider.getClassNames("My");
+        assertTrue(filtered.size() > 0, "should find classes starting with 'My'");
+        hash<string, bool> names = map {$1.label: True}, filtered;
+        assertTrue(names{"MyClass"} ?? False, "should find MyClass with 'My' prefix");
+    }
+
+    testGetScopeMembers() {
+        QLS::Document doc = makeDoc(CompletionTestSource);
+
+        TestCSTProvider provider(doc, {"line": 5, "character": 0});
+        list<hash<QoreCodeCompletion::CompletionItem>> items = provider.getScopeMembers("TestNs", "");
+
+        # Check for known members of TestNs
+        if (items.size() > 0) {
+            hash<string, bool> names = map {$1.label: True}, items;
+            bool hasAny = (names{"MyClass"} ?? False) || (names{"myFunc"} ?? False)
+                || (names{"MY_CONST"} ?? False);
+            assertTrue(hasAny, "should find at least one of MyClass, myFunc, MY_CONST in TestNs scope");
+        }
+
+        # Filter by prefix
+        list<hash<QoreCodeCompletion::CompletionItem>> filtered = provider.getScopeMembers("TestNs", "My");
+        foreach hash<QoreCodeCompletion::CompletionItem> item in (filtered) {
+            assertTrue(item.label.equalPartial("My"),
+                sprintf("filtered scope item '%s' should start with 'My'", item.label));
+        }
+    }
+
+    testGetInstanceMembers() {
+        QLS::Document doc = makeDoc(VarCompletionSource);
+        assertEq(0, doc.getParseErrorCount(), "var completion source should parse without errors");
+
+        TestCSTProvider provider(doc, {"line": 18, "character": 16});
+
+        # Get instance members for "Foo" (fallback path)
+        list<hash<QoreCodeCompletion::CompletionItem>> items = provider.getInstanceMembers("Foo", "");
+        assertTrue(items.size() > 0, "should find instance members of Foo");
+        hash<string, bool> names = map {$1.label: True}, items;
+        # constructor should be skipped
+        assertFalse(names{"constructor"} ?? False, "constructor should be skipped");
+        # static methods should be skipped for dot access
+        assertFalse(names{"create"} ?? False, "static methods should be skipped for dot access");
+
+        # Filter by prefix
+        list<hash<QoreCodeCompletion::CompletionItem>> filtered = provider.getInstanceMembers("Foo", "get");
+        assertTrue(filtered.size() > 0, "should find members starting with 'get'");
+        foreach hash<QoreCodeCompletion::CompletionItem> item in (filtered) {
+            assertTrue(item.label.equalPartial("get"),
+                sprintf("filtered dot item '%s' should start with 'get'", item.label));
+        }
+    }
+
+    testEngineIdentifier() {
+        QLS::Document doc = makeDoc(CompletionTestSource);
+        TestCSTProvider provider(doc, {"line": 5, "character": 0});
+        QoreCodeCompletion::CompletionEngine engine(provider);
+
+        # Complete with "my" -- should match keyword + symbols
+        list<hash<QoreCodeCompletion::CompletionItem>> items = engine.complete("my");
+        assertTrue(items.size() > 0, "identifier completion for 'my' should return results");
+
+        hash<string, bool> names = map {$1.label: True}, items;
+        assertTrue(names{"my"} ?? False, "should include 'my' keyword");
+
+        # Results should be sorted alphabetically
+        for (int i = 1; i < items.size(); i++) {
+            assertTrue(items[i - 1].label <= items[i].label,
+                sprintf("results should be sorted: '%s' <= '%s'", items[i - 1].label, items[i].label));
+        }
+    }
+
+    testEngineNew() {
+        QLS::Document doc = makeDoc(CompletionTestSource);
+        TestCSTProvider provider(doc, {"line": 5, "character": 0});
+        QoreCodeCompletion::CompletionEngine engine(provider);
+
+        list<hash<QoreCodeCompletion::CompletionItem>> items = engine.complete("new My");
+        assertTrue(items.size() > 0, "new completion for 'My' should return results");
+        # Should only return classes
+        foreach hash<QoreCodeCompletion::CompletionItem> item in (items) {
+            assertEq("class", item.kind, sprintf("new completion '%s' should be class", item.label));
+        }
+
+        # Empty prefix after "new " should return all visible classes
+        list<hash<QoreCodeCompletion::CompletionItem>> all = engine.complete("new ");
+        foreach hash<QoreCodeCompletion::CompletionItem> item in (all) {
+            assertEq("class", item.kind, sprintf("new completion '%s' should be class", item.label));
+        }
+    }
+
+    testEngineScope() {
+        QLS::Document doc = makeDoc(CompletionTestSource);
+        TestCSTProvider provider(doc, {"line": 5, "character": 0});
+        QoreCodeCompletion::CompletionEngine engine(provider);
+
+        list<hash<QoreCodeCompletion::CompletionItem>> items = engine.complete("TestNs::");
+        if (items.size() > 0) {
+            hash<string, bool> names = map {$1.label: True}, items;
+            bool hasExpected = (names{"MyClass"} ?? False) || (names{"myFunc"} ?? False);
+            assertTrue(hasExpected, "scope completion should find TestNs members");
+        }
+    }
+
+    testEngineDotContext() {
+        # Test context detection for dot completion
+        hash<auto> ctx = QoreCodeCompletion::CompletionEngine::extractCompletionContext("obj.get");
+        assertEq(QoreCodeCompletion::CC_DOT, ctx.kind, "should detect dot context");
+        assertEq("get", ctx.prefix);
+        assertEq("obj", ctx.target);
+
+        # Dot without prefix
+        hash<auto> ctx2 = QoreCodeCompletion::CompletionEngine::extractCompletionContext("obj.");
+        assertEq(QoreCodeCompletion::CC_DOT, ctx2.kind);
+        assertEq("", ctx2.prefix);
+        assertEq("obj", ctx2.target);
+    }
+
+    testCompletionEmptyDocument() {
+        QLS::Document doc = makeDoc("");
+        TestCSTProvider provider(doc, {"line": 0, "character": 0});
+
+        # Should return empty lists gracefully
+        list<hash<QoreCodeCompletion::CompletionItem>> vis = provider.getVisibleSymbols("");
+        assertEq(Type::List, vis.type());
+
+        list<hash<QoreCodeCompletion::CompletionItem>> cls = provider.getClassNames("");
+        assertEq(Type::List, cls.type());
+
+        list<hash<QoreCodeCompletion::CompletionItem>> dot = provider.getInstanceMembers("x", "");
+        assertEq(Type::List, dot.type());
+
+        list<hash<QoreCodeCompletion::CompletionItem>> scope = provider.getScopeMembers("x", "");
+        assertEq(Type::List, scope.type());
+
+        # Engine should also handle gracefully
+        QoreCodeCompletion::CompletionEngine engine(provider);
+        list<hash<QoreCodeCompletion::CompletionItem>> items = engine.complete("");
+        assertEq(0, items.size(), "empty input on empty doc should return no items");
+    }
+
+    testParseErrorDocument() {
+        QLS::Document doc = makeDoc("%modern\nclass { broken syntax\n");
+        assertGt(0, doc.getParseErrorCount(), "should have parse errors");
+
+        TestCSTProvider provider(doc, {"line": 0, "character": 0});
+
+        # Should not crash
+        list<hash<QoreCodeCompletion::CompletionItem>> vis = provider.getVisibleSymbols("");
+        assertEq(Type::List, vis.type());
+
+        QoreCodeCompletion::CompletionEngine engine(provider);
+        list<hash<QoreCodeCompletion::CompletionItem>> items = engine.complete("cl");
+        # At minimum, should get keywords
+        assertTrue(items.size() > 0, "should get at least keyword completions even with parse errors");
+        hash<string, bool> names = map {$1.label: True}, items;
+        assertTrue(names{"class"} ?? False, "should find 'class' keyword");
+    }
+
+    testParseDirectiveModern() {
+        QLS::Document doc = makeDoc("%modern\nsub foo() { return 1; }\n");
+        int po = doc.getParseDirectiveOptions();
+        # %modern implies PO_STRICT_ARGS and PO_REQUIRE_TYPES
+        assertTrue((po & PO_STRICT_ARGS) != 0,
+            "%modern should include PO_STRICT_ARGS");
+        assertTrue((po & PO_REQUIRE_TYPES) != 0,
+            "%modern should include PO_REQUIRE_TYPES");
+    }
+
+    testParseDirectiveMultiple() {
+        QLS::Document doc = makeDoc(
+            "%new-style\n%no-thread-control\n%no-filesystem\nsub bar() {}\n"
+        );
+        int po = doc.getParseDirectiveOptions();
+        assertTrue((po & PO_NEW_STYLE) != 0, "should have PO_NEW_STYLE");
+        assertTrue((po & PO_NO_THREAD_CONTROL) != 0, "should have PO_NO_THREAD_CONTROL");
+        assertTrue((po & PO_NO_FILESYSTEM) != 0, "should have PO_NO_FILESYSTEM");
+    }
+
+    testParseDirectiveNone() {
+        QLS::Document doc = makeDoc("sub foo() { return 1; }\n");
+        int po = doc.getParseDirectiveOptions();
+        assertEq(0, po, "no directives should return 0");
+    }
+
+    testParseDirectiveCaching() {
+        string text1 = "%modern\nsub foo() {}\n";
+        QLS::Document doc = makeDoc(text1);
+        int po1 = doc.getParseDirectiveOptions();
+        # Call again -- should return cached result
+        int po2 = doc.getParseDirectiveOptions();
+        assertEq(po1, po2, "cached result should match");
+
+        # After didChange, cache should be invalidated
+        doc.didChange({"text": "%no-thread-control\nsub bar() {}\n"});
+        int po3 = doc.getParseDirectiveOptions();
+        assertTrue((po3 & PO_NO_THREAD_CONTROL) != 0,
+            "after didChange, should reflect new directives");
+        # Old flags should not be present
+        assertEq(0, po3 & PO_STRICT_ARGS,
+            "after didChange, old PO_STRICT_ARGS should be gone");
+    }
+
+    testParseOptionsNoThreadKeyword() {
+        QLS::Document doc = makeDoc(
+            "%modern\n%no-thread-control\n\nsub test() {\n    int x = 1;\n}\n"
+        );
+        assertEq(0, doc.getParseErrorCount(), "should parse without errors");
+
+        # Position inside test() body
+        TestCSTProvider provider(doc, {"line": 4, "character": 4});
+        QoreCodeCompletion::CompletionEngine engine(provider);
+
+        # "background" keyword should be filtered with %no-thread-control
+        list<hash<QoreCodeCompletion::CompletionItem>> items = engine.complete("ba");
+        bool has_background = False;
+        foreach hash<QoreCodeCompletion::CompletionItem> item in (items) {
+            if (item.label == "background" && item.kind == "keyword") {
+                has_background = True;
+            }
+        }
+        assertFalse(has_background,
+            "'background' keyword should be filtered with %no-thread-control");
+
+        # "thread_exit" keyword should also be filtered
+        items = engine.complete("thread_");
+        bool has_thread_exit = False;
+        foreach hash<QoreCodeCompletion::CompletionItem> item in (items) {
+            if (item.label == "thread_exit" && item.kind == "keyword") {
+                has_thread_exit = True;
+            }
+        }
+        assertFalse(has_thread_exit,
+            "'thread_exit' keyword should be filtered with %no-thread-control");
+
+        # Without restrictions, "break" should still appear (different keyword)
+        items = engine.complete("br");
+        bool has_break = False;
+        foreach hash<QoreCodeCompletion::CompletionItem> item in (items) {
+            if (item.label == "break" && item.kind == "keyword") {
+                has_break = True;
+            }
+        }
+        assertTrue(has_break, "'break' keyword should still appear (not restricted)");
+    }
+
+    # ===================================================================
+    # SignatureHelp tests
+    # ===================================================================
+
+    testSigHelpCapability() {
+        assertTrue(exists QLS::ServerCapabilities.signatureHelpProvider,
+            "signatureHelpProvider should exist");
+        assertEq(("(", ","), QLS::ServerCapabilities.signatureHelpProvider.triggerCharacters,
+            "trigger characters should be ( and ,");
+    }
+
+    testSigHelpKnownFunction() {
+        # Line 3: "sub caller() { myFunc(1, "hello"); }"
+        # Cursor at col 22, right after "myFunc(" -- lineText up to cursor = "sub caller() { myFunc("
+        string uri = setupDoc(SigHelpFuncSource);
+
+        hash<auto> result = sendSignatureHelp(uri, 3, 22);
+        assertTrue(result.signatures.size() > 0,
+            "should find signature for myFunc");
+        hash<auto> sig = result.signatures[0];
+        assertTrue(sig.label.find("myFunc") >= 0,
+            sprintf("signature label should contain 'myFunc': got '%s'", sig.label));
+        assertEq(2, sig.parameters.size(), "myFunc should have 2 parameters");
+    }
+
+    testSigHelpActiveParamFirst() {
+        # Cursor right after ( -- activeParameter should be 0
+        string uri = setupDoc(SigHelpFuncSource);
+
+        # Line 3: "sub caller() { myFunc(1, "hello"); }" -- col 22 = after "("
+        hash<auto> result = sendSignatureHelp(uri, 3, 22);
+        assertTrue(result.signatures.size() > 0, "should find signature");
+        assertEq(0, result.activeParameter, "activeParameter should be 0 right after (");
+    }
+
+    testSigHelpActiveParamAfterComma() {
+        # Cursor after first comma: col 25 in "sub caller() { myFunc(1, "hello"); }"
+        # Text up to col 25: "sub caller() { myFunc(1, " -- 1 comma at depth 0
+        string uri = setupDoc(SigHelpFuncSource);
+
+        hash<auto> result = sendSignatureHelp(uri, 3, 25);
+        assertTrue(result.signatures.size() > 0, "should find signature for activeParam test");
+        assertEq(1, result.activeParameter, "activeParameter should be 1 after first comma");
+    }
+
+    testSigHelpNestedParens() {
+        # Source with nested calls: caller calls myFunc(foo(), "hello")
+        # Line 0: %modern
+        # Line 1: sub foo() { return 1; }
+        # Line 2: sub myFunc(int x, string y) { return; }
+        # Line 3: sub caller() { myFunc(foo(), "hello"); }
+        string text = "%modern\nsub foo() { return 1; }\n"
+            "sub myFunc(int x, string y) { return; }\n"
+            "sub caller() { myFunc(foo(), \"hello\"); }\n";
+        string uri = setupDoc(text);
+
+        # Line 3: "sub caller() { myFunc(foo(), "hello"); }"
+        # Col 29: after "myFunc(foo(), " -- foo() has balanced parens, comma is for myFunc
+        hash<auto> result = sendSignatureHelp(uri, 3, 29);
+        assertTrue(result.signatures.size() > 0,
+            "should find signature for myFunc in nested parens context");
+        assertEq(1, result.activeParameter,
+            "activeParameter should be 1 after nested call and comma");
+    }
+
+    testSigHelpUnknownFunction() {
+        # Source where unknownFunc doesn't exist
+        string text = "%modern\nsub caller() { int x = unknownFunc(1); }\n";
+        string uri = setupDoc(text);
+
+        # Line 1: "sub caller() { int x = unknownFunc(1); }" -- col 36 = after "unknownFunc("
+        hash<auto> result = sendSignatureHelp(uri, 1, 36);
+        assertEq(0, result.signatures.size(), "should return empty signatures for unknown function");
+    }
+
+    testSigHelpNoParenOnLine() {
+        string text = "%modern\nint x = 1;\n";
+        string uri = setupDoc(text);
+
+        hash<auto> result = sendSignatureHelp(uri, 1, 5);
+        assertEq(0, result.signatures.size(), "should return empty signatures when no paren found");
+    }
+
+    testSigHelpEmptyDocument() {
+        string uri = setupDoc("");
+
+        hash<auto> result = sendSignatureHelp(uri, 0, 0);
+        assertEq(0, result.signatures.size(), "should return empty signatures for empty document");
+    }
+
+    testSigHelpMissingParams() {
+        QLS::QLSServer errorServer();
+
+        hash<auto> initReq = makeRequest("initialize", {
+            "processId": getpid(),
+            "capabilities": {},
+            "rootUri": NOTHING,
+        });
+        errorServer.handleRequest(make_json(initReq));
+
+        hash<auto> initializedReq = makeRequest("initialized");
+        delete initializedReq.id;
+        errorServer.handleRequest(make_json(initializedReq));
+
+        hash<auto> req = makeRequest("textDocument/signatureHelp");
+        delete req.params;
+        softlist<auto> responses = errorServer.handleRequest(make_json(req));
+        assertTrue(exists responses, "should return error response for missing params");
+        assertTrue(responses.size() > 0, "should have at least one response");
+        hash<auto> resp = parse_json(responses[0]);
+        assertTrue(exists resp.error, "response should have error field");
+    }
+
+    testSigHelpNonExistentDocument() {
+        setupDoc(SigHelpFuncSource);
+
+        hash<auto> req = makeRequest("textDocument/signatureHelp", {
+            "textDocument": {"uri": "file:///nonexistent.q"},
+            "position": {"line": 0, "character": 0},
+        });
+        softlist<auto> responses = server.handleRequest(make_json(req));
+        assertTrue(exists responses, "should return response for non-existent document");
+        hash<auto> resp = parse_json(responses[0]);
+        assertEq(0, resp.result.signatures.size(),
+            "should return empty signatures for non-existent document");
+    }
+
+    testSigHelpOutOfRangePosition() {
+        string uri = setupDoc(SigHelpFuncSource);
+
+        # Request at a line way beyond the document
+        hash<auto> result = sendSignatureHelp(uri, 999, 0);
+        assertEq(0, result.signatures.size(),
+            "should return empty signatures for out-of-range position");
+    }
+
+    testSigHelpDotAccessMethod() {
+        # Line 6: "    int r = obj.getVal(42);" -- cursor at col 23 = after "obj.getVal("
+        string uri = setupDoc(SigHelpMethodSource);
+
+        hash<auto> result = sendSignatureHelp(uri, 6, 23);
+        assertTrue(result.signatures.size() > 0,
+            "should find signature for dot-access method getVal");
+        hash<auto> sig = result.signatures[0];
+        assertTrue(sig.label.find("getVal") >= 0,
+            sprintf("label should contain 'getVal': got '%s'", sig.label));
+        assertTrue(sig.parameters.size() > 0, "getVal should have parameters");
+    }
+
+    # ===================================================================
+    # CodeLens tests
+    # ===================================================================
+
+    testCodeLensClassAndFunction() {
+        string uri = setupCodeLensDoc();
+
+        *list<auto> lenses = sendCodeLens(uri);
+        assertTrue(exists lenses && lenses.size() > 0,
+            "should return code lenses");
+
+        # Find class lens
+        *hash<auto> classLens;
+        *hash<auto> funcLens;
+        foreach hash<auto> lens in (lenses) {
+            if (lens.data.name == "Calc") {
+                classLens = lens;
+            } else if (lens.data.name == "helper") {
+                funcLens = lens;
+            }
+        }
+
+        assertTrue(exists classLens, "should have code lens for class Calc");
+        assertTrue(exists funcLens, "should have code lens for function helper");
+        assertTrue(exists classLens.data.uri, "lens data should have uri");
+        assertTrue(exists classLens.data.position, "lens data should have position");
+    }
+
+    testCodeLensConstant() {
+        string uri = setupCodeLensDoc();
+
+        *list<auto> lenses = sendCodeLens(uri);
+        assertTrue(exists lenses, "should return lenses");
+
+        # Find constant lens
+        *hash<auto> constLens;
+        foreach hash<auto> lens in (lenses) {
+            if (lens.data.name == "VERSION") {
+                constLens = lens;
+            }
+        }
+
+        assertTrue(exists constLens, "should have code lens for constant VERSION");
+    }
+
+    testCodeLensResolveRefCount() {
+        string uri = setupCodeLensDoc();
+
+        *list<auto> lenses = sendCodeLens(uri);
+        assertTrue(exists lenses, "should return lenses");
+
+        # Find and resolve the helper function lens
+        *hash<auto> funcLens;
+        foreach hash<auto> lens in (lenses) {
+            if (lens.data.name == "helper") {
+                funcLens = lens;
+                break;
+            }
+        }
+
+        assertTrue(exists funcLens, "should have helper lens");
+        *hash<auto> resolved = sendCodeLensResolve(funcLens);
+        assertTrue(exists resolved, "should resolve lens");
+        assertTrue(exists resolved.command, "resolved lens should have command");
+        assertTrue(exists resolved.command.title, "command should have title");
+        # "helper()" is called once at line 8
+        assertTrue(resolved.command.title =~ /reference/, "title should mention references");
+    }
+
+    testCodeLensResolveZeroRefs() {
+        string code = "%modern
+const UNUSED_CONST = 42;
+";
+        string uri = setupCodeLensDoc(code);
+
+        *list<auto> lenses = sendCodeLens(uri);
+        assertTrue(exists lenses && lenses.size() > 0, "should return lenses");
+
+        *hash<auto> resolved = sendCodeLensResolve(lenses[0]);
+        assertTrue(exists resolved, "should resolve lens");
+        assertTrue(resolved.command.title =~ /0 reference/, "should show 0 references");
+    }
+
+    testCodeLensEmptyDocument() {
+        string uri = setupCodeLensDoc("");
+
+        *list<auto> lenses = sendCodeLens(uri);
+        assertEq(0, lenses.size(), "empty doc should return empty lenses");
+    }
+
+    testCodeLensNoDeclarations() {
+        string code = "%modern
+int x = 5;
+x + 1;
+";
+        string uri = setupCodeLensDoc(code);
+
+        *list<auto> lenses = sendCodeLens(uri);
+        # Local vars are not top-level declarations -- should be empty or few
+        # (might include nothing)
+        assertTrue(exists lenses, "should return a result");
+    }
+
+    testCodeLensMissingParams() {
+        hash<auto> req = makeRequest("textDocument/codeLens");
+        delete req.params;
+        softlist<auto> responses = server.handleRequest(make_json(req));
+        assertTrue(exists responses && responses.size() > 0,
+            "should return error response for missing params");
+        hash<auto> resp = parse_json(responses[0]);
+        assertTrue(exists resp.error, "response should have error field");
+    }
+
+    # ===================================================================
+    # InlayHint tests
+    # ===================================================================
+
+    testInlayHintFunctionCallHints() {
+        string uri = setupInlayHintDoc();
+
+        # Get hints for line 3: add(1, 2) -- should have hints for 'a:' and 'b:'
+        *list<auto> hints = sendInlayHint(uri, 3, 3);
+        assertTrue(exists hints && hints.size() > 0,
+            "should return hints for multi-arg call");
+        # Verify hints have parameter kind (2)
+        foreach hash<auto> hint in (hints) {
+            assertEq(2, hint.kind, "hint should be parameter kind");
+            assertTrue(hint.label.size() > 0, "hint label should not be empty");
+            assertTrue(hint.paddingRight, "hint should have padding right");
+        }
+    }
+
+    testInlayHintSingleArgNoHints() {
+        string uri = setupInlayHintDoc();
+
+        # Get hints for line 4: single(5) -- single-arg, should have no hints
+        *list<auto> hints = sendInlayHint(uri, 4, 4);
+        # Should be empty (single-arg calls are excluded)
+        assertEq(0, hints.size(), "single-arg call should have no hints");
+    }
+
+    testInlayHintRangeFiltering() {
+        string uri = setupInlayHintDoc();
+
+        # Request only line 0 (parse directive) -- should have no call hints
+        *list<auto> hints = sendInlayHint(uri, 0, 0);
+        assertEq(0, hints.size(), "no hints on parse directive line");
+    }
+
+    testInlayHintEmptyDocument() {
+        string uri = setupInlayHintDoc("");
+
+        *list<auto> hints = sendInlayHint(uri, 0, 0);
+        assertEq(0, hints.size(), "empty doc should return no hints");
+    }
+
+    testInlayHintMissingParams() {
+        hash<auto> req = makeRequest("textDocument/inlayHint");
+        delete req.params;
+        softlist<auto> responses = server.handleRequest(make_json(req));
+        assertTrue(exists responses && responses.size() > 0,
+            "should return error response for missing params");
+        hash<auto> resp = parse_json(responses[0]);
+        assertTrue(exists resp.error, "response should have error field");
+    }
+
+    # ===================================================================
+    # CodeAction tests
+    # ===================================================================
+
+    testCodeActionSortImportsUnsorted() {
+        string code = "%modern
+%requires json
+%requires astparser
+%requires xml
+";
+        string uri = setupCodeActionDoc(code);
+
+        *list<auto> actions = sendCodeAction(uri, 0, 4);
+        assertTrue(exists actions, "should return actions");
+
+        # Find sort imports action
+        bool foundSort = False;
+        hash<auto> sortAction;
+        foreach hash<auto> action in (actions) {
+            if (action.kind == "source.sortImports") {
+                foundSort = True;
+                sortAction = action;
+                break;
+            }
+        }
+        assertTrue(foundSort, "should have sort imports action");
+
+        # Verify the edit reorders imports alphabetically
+        if (foundSort) {
+            assertEq("Sort imports", sortAction.title, "action title");
+            assertTrue(exists sortAction.edit.changes{uri},
+                "edit should have changes for the document");
+            list<auto> edits = sortAction.edit.changes{uri};
+            assertEq(3, edits.size(), "should have 3 edits (one per requires line)");
+            # After sorting: astparser, json, xml
+            assertEq("%requires astparser", edits[0].newText, "first should be astparser");
+            assertEq("%requires json", edits[1].newText, "second should be json");
+            assertEq("%requires xml", edits[2].newText, "third should be xml");
+        }
+    }
+
+    testCodeActionSortImportsSorted() {
+        string code = "%modern
+%requires astparser
+%requires json
+%requires xml
+";
+        string uri = setupCodeActionDoc(code);
+
+        *list<auto> actions = sendCodeAction(uri, 0, 4);
+        assertTrue(exists actions, "should return actions");
+
+        # Should NOT have sort imports (already sorted)
+        bool foundSort = False;
+        foreach hash<auto> action in (actions) {
+            if (action.kind == "source.sortImports") {
+                foundSort = True;
+            }
+        }
+        assertFalse(foundSort, "should not offer sort when already sorted");
+    }
+
+    testCodeActionSortImportsSingle() {
+        string code = "%modern
+%requires json
+";
+        string uri = setupCodeActionDoc(code);
+
+        *list<auto> actions = sendCodeAction(uri, 0, 2);
+        assertTrue(exists actions, "should return actions");
+
+        # Should NOT have sort imports (only one import)
+        bool foundSort = False;
+        foreach hash<auto> action in (actions) {
+            if (action.kind == "source.sortImports") {
+                foundSort = True;
+            }
+        }
+        assertFalse(foundSort, "should not offer sort with single import");
+    }
+
+    testCodeActionAddModernMissing() {
+        string code = "%requires json
+sub foo() { return 1; }
+";
+        string uri = setupCodeActionDoc(code);
+
+        *list<auto> actions = sendCodeAction(uri, 0, 2);
+        assertTrue(exists actions, "should return actions");
+
+        # Find add modern action
+        bool foundModern = False;
+        hash<auto> modernAction;
+        foreach hash<auto> action in (actions) {
+            if (action.title == "Add %modern directive") {
+                foundModern = True;
+                modernAction = action;
+                break;
+            }
+        }
+        assertTrue(foundModern, "should have add modern action");
+
+        # Verify the edit adds %modern at beginning
+        if (foundModern) {
+            list<auto> edits = modernAction.edit.changes{uri};
+            assertEq(1, edits.size(), "should have 1 edit");
+            assertEq("%modern\n", edits[0].newText, "should add %modern\\n");
+            assertEq(0, edits[0].range.start.line, "edit at line 0");
+            assertEq(0, edits[0].range.start.character, "edit at col 0");
+        }
+    }
+
+    testCodeActionAddModernPresent() {
+        string code = "%modern
+sub foo() { return 1; }
+";
+        string uri = setupCodeActionDoc(code);
+
+        *list<auto> actions = sendCodeAction(uri, 0, 2);
+        assertTrue(exists actions, "should return actions");
+
+        # Should NOT have add modern action
+        bool foundModern = False;
+        foreach hash<auto> action in (actions) {
+            if (action.title == "Add %modern directive") {
+                foundModern = True;
+            }
+        }
+        assertFalse(foundModern, "should not offer add modern when present");
+    }
+
+    testCodeActionEmptyDocument() {
+        string uri = setupCodeActionDoc("");
+
+        *list<auto> actions = sendCodeAction(uri, 0, 0);
+        assertTrue(exists actions, "should return actions");
+
+        # Empty doc should offer "add modern"
+        bool foundModern = False;
+        foreach hash<auto> action in (actions) {
+            if (action.title == "Add %modern directive") {
+                foundModern = True;
+            }
+        }
+        assertTrue(foundModern, "empty doc should offer add modern");
+    }
+
+    testCodeActionMissingParams() {
+        hash<auto> req = makeRequest("textDocument/codeAction");
+        delete req.params;
+        softlist<auto> responses = server.handleRequest(make_json(req));
+        assertTrue(exists responses && responses.size() > 0,
+            "should return error response for missing params");
+        hash<auto> resp = parse_json(responses[0]);
+        assertTrue(exists resp.error, "response should have error field");
+    }
+}

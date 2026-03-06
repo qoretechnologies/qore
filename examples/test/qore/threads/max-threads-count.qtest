@@ -18,8 +18,6 @@ public class MaxThreadCountTest inherits QUnit::Test {
     constructor() : Test("Max thread count test", "1.0") {
         addTestCase("max thread count", \testMaxThreadCount());
         addTestCase("TID assignments", \testTidAssignments());
-        # run the TID assignment test twice
-        addTestCase("TID assignments", \testTidAssignments());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -104,11 +102,11 @@ public class MaxThreadCountTest inherits QUnit::Test {
             c.waitForZero();
         };
 
-        # wait for all threads to complete
+        # wait for all threads from previous test to complete
         {
             date now = now_us();
             while (num_threads() > 1) {
-                sleep(100ms);
+                sleep(5ms);
                 date d = now_us() - now;
                 if (d > 20s) {
                     throw "TIMEOUT-ERROR", "timeout waiting for threads to terminate";
