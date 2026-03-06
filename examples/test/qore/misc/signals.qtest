@@ -11,6 +11,8 @@ class SignalTest inherits QUnit::Test {
     constructor() : QUnit::Test("Signal test", "1.0") {
         addTestCase("signal neg test", \signalNegTest());
         addTestCase("signal test", \signalTest());
+        addTestCase("signal handler re-register", \signalReregisterTest());
+        addTestCase("signal handler rapid re-register", \signalRapidReregisterTest());
         set_return_value(main());
     }
 
@@ -32,5 +34,60 @@ class SignalTest inherits QUnit::Test {
         set_signal_handler(SIGUSR1, handle);
         kill(getpid(), SIGUSR1);
         assertEq(SIGUSR1, q.get(1s));
+        remove_signal_handler(SIGUSR1);
+    }
+
+    # Test remove + immediate re-register works correctly
+    signalReregisterTest() {
+        if (!HAVE_SIGNAL_HANDLING) {
+            testSkip("no signal handling on this platform");
+        }
+
+        Queue q();
+        set_signal_handler(SIGUSR1, sub(int sig) { q.push(sig); });
+        kill(getpid(), SIGUSR1);
+        assertEq(SIGUSR1, q.get(1s), "first handler received signal");
+
+        remove_signal_handler(SIGUSR1);
+
+        # Re-register and verify the new handler works
+        Queue q2();
+        set_signal_handler(SIGUSR1, sub(int sig) { q2.push(sig); });
+        kill(getpid(), SIGUSR1);
+        assertEq(SIGUSR1, q2.get(1s), "second handler received signal after re-register");
+
+        remove_signal_handler(SIGUSR1);
+    }
+
+    # Regression test for stale SH_Delete status after remove-while-active + re-register
+    # Uses rapid iterations to create timing races between signal thread and setHandler/removeHandler.
+    # Without the fix, stale SH_Delete status would cause an assertion at signal_handler_thread line 355.
+    signalRapidReregisterTest() {
+        if (!HAVE_SIGNAL_HANDLING) {
+            testSkip("no signal handling on this platform");
+        }
+
+        # Run many cycles of: register → send → wait → remove → re-register
+        # This races the signal thread's post-handler cleanup with setHandler/removeHandler,
+        # creating opportunities for the stale-status bug to trigger.
+        int iterations = 50;
+        int total = 0;
+        for (int i = 0; i < iterations; i++) {
+            Queue q();
+            set_signal_handler(SIGUSR1, sub(int sig) { q.push(sig); total++; });
+            kill(getpid(), SIGUSR1);
+            assertEq(SIGUSR1, q.get(5s), sprintf("iteration %d: handler received signal", i));
+            remove_signal_handler(SIGUSR1);
+            # Immediately re-register to race with signal thread's status cleanup
+        }
+
+        # Final handler should still work after all those rapid cycles
+        Queue qf();
+        set_signal_handler(SIGUSR1, sub(int sig) { qf.push(sig); });
+        kill(getpid(), SIGUSR1);
+        assertEq(SIGUSR1, qf.get(5s), "final handler works after rapid re-register cycles");
+        remove_signal_handler(SIGUSR1);
+
+        assertEq(iterations, total, "all handlers ran");
     }
 }

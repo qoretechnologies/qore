@@ -386,15 +386,14 @@ void QoreSignalManager::signal_handler_thread() {
             // reacquire lock to check handler status
             sl.lock();
 
-            if (handlers[sig].status == QoreSignalHandler::SH_InProgress) {
+            // SH_InProgress: normal, no external mutation — reset and continue
+            // SH_OK: setHandler() replaced the handler (and reset status) while we ran — continue
+            // SH_Delete: removeHandler() (and no replacement) — proceed to cleanup
+            if (handlers[sig].status != QoreSignalHandler::SH_Delete) {
                 handlers[sig].status = QoreSignalHandler::SH_OK;
                 continue;
             }
 
-#ifdef DEBUG
-            if (handlers[sig].status != QoreSignalHandler::SH_Delete)
-                printd(0, "error: status: %d (sig: %d)\n", handlers[sig].status, sig);
-#endif
             assert(handlers[sig].status == QoreSignalHandler::SH_Delete);
             CodePgm old = handlers[sig].take();
             qore_program_private::delSignal(*old.pgm, sig);
@@ -489,6 +488,9 @@ int QoreSignalManager::setHandler(int sig, const ResolvedCallReferenceNode *fr, 
 
             //printd(5, "setting handler for signal %d, pgm: %p\n", sig, pgm);
             qore_program_private::addSignal(*pgm, sig);
+            // Reset status in case a prior take() left a stale SH_Delete state
+            // (signal fired while removing → SH_InProgress → take() → funcref=0 but status=SH_Delete)
+            handlers[sig].status = QoreSignalHandler::SH_OK;
             handlers[sig].set(fr, pgm);
             ++num_handlers;
         } else {
@@ -497,6 +499,15 @@ int QoreSignalManager::setHandler(int sig, const ResolvedCallReferenceNode *fr, 
             if (old.pgm != pgm) {
                 qore_program_private::delSignal(*old.pgm, sig);
                 qore_program_private::addSignal(*pgm, sig);
+            }
+            // If the handler was being deleted (removed while active), the signal thread
+            // will see SH_Delete after our replace() and try to take() the new handler.
+            // Reset to SH_OK so the signal thread knows the handler is active again.
+            // Also restore the signal in the mask: removeHandler() called sigdelset() even
+            // though the handler was in-progress; we must add it back for the new handler.
+            if (handlers[sig].status == QoreSignalHandler::SH_Delete) {
+                handlers[sig].status = QoreSignalHandler::SH_OK;
+                already_set = false;  // force mask update below
             }
         }
 
