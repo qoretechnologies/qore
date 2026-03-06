@@ -450,7 +450,10 @@ public class Http2ClientPollOperation inherits HttpClientPollOperation {
             }
             if (dispatched) {
                 state = STATE_WAIT_READ;
-                return <SocketPollInfo>{
+                # Use C++ events when available — they include SOCK_POLLOUT if there
+                # are pending sends (e.g., WINDOW_UPDATE after receiving data).
+                # Fall back to SOCK_POLLIN only when C++ returned null (connection closing).
+                return poll_info ?? <SocketPollInfo>{
                     "events": SOCK_POLLIN,
                     "socket": sock,
                 };

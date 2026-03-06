@@ -1129,7 +1129,8 @@ public class HttpServer inherits HttpServer::AbstractLogger {
 
         string name = opts.name ?? sprintf("quic-%d", actual_port);
 
-        # Create an HttpListener for handler dispatch (no TCP bind)
+        # Create an HttpListener for handler dispatch (no TCP bind);
+        # pass UDP socket info via ext_info so getInfo() includes address/family details
         int lid = seqListeners.next();
         string lname = name + sprintf("-%d", lid);
         HttpListener http_listener = getListener(self, lid, <HttpListenerOptionInfo>{
@@ -1140,6 +1141,8 @@ public class HttpServer inherits HttpServer::AbstractLogger {
             "get_remote_certs": opts.get_remote_certs,
             "no_start_main_thread": True,
             "no_bind": True,
+            "ext_info": sock_info{"address", "address_desc", "family", "familystr", "port",
+                "hostname", "hostname_desc"},
         });
         # Increment listener counter; decremented by HttpListener::listenerStopped()
         # when the listener is stopped/deleted (on_error handles setup failures)
