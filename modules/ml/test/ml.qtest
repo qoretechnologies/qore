@@ -2041,13 +2041,15 @@ public class MlTest inherits QUnit::Test {
             sprintf("onnx_providers should include CPUExecutionProvider; got %y",
                 caps.onnx_providers));
 
-        # getModelInfo().active_provider should be set
+        # getModelInfo().active_provider should be set (may be auto-detected GPU provider)
         ML::OnnxModel model(getTestModelPath());
         hash<ML::OnnxModelInfo> info = model.getModelInfo();
-        assertEq("CPUExecutionProvider", info.active_provider);
+        assertTrue(providers.contains(info.active_provider),
+            sprintf("active_provider %y should be in available providers %y",
+                info.active_provider, providers));
 
-        # getProviderInfo() should work
-        assertEq("CPUExecutionProvider", model.getProviderInfo());
+        # getProviderInfo() should match
+        assertEq(info.active_provider, model.getProviderInfo());
     }
 
     onnxInvalidProviderTest() {
@@ -2105,18 +2107,23 @@ public class MlTest inherits QUnit::Test {
             return;
         }
 
-        # Original single-arg constructor should still work and return CPUExecutionProvider
+        # Original single-arg constructor should still work with auto-detected provider
         ML::OnnxModel model(getTestModelPath());
         assertTrue(model.isLoaded());
-        assertEq("CPUExecutionProvider", model.getProviderInfo());
+        list<string> providers = ML::ml_get_onnx_providers();
+        assertTrue(providers.contains(model.getProviderInfo()),
+            sprintf("provider %y should be in available providers %y",
+                model.getProviderInfo(), providers));
 
         # Inference should still work
         hash<auto> result = model.run({"X": ((2.0,),)});
         assertFloat(5.0, result.Y[0], 1e-5);
 
-        # getModelInfo should have active_provider
+        # getModelInfo should have active_provider matching available providers
         hash<ML::OnnxModelInfo> info = model.getModelInfo();
-        assertEq("CPUExecutionProvider", info.active_provider);
+        assertTrue(providers.contains(info.active_provider),
+            sprintf("active_provider %y should be in available providers %y",
+                info.active_provider, providers));
     }
 
     onnxEmptyProvidersTest() {
@@ -2124,7 +2131,7 @@ public class MlTest inherits QUnit::Test {
             return;
         }
 
-        # Empty providers list should default to CPU and work fine
+        # Empty providers list should use CPU (explicit empty = no GPU auto-detect)
         hash<ML::OnnxSessionConfig> config = <ML::OnnxSessionConfig>{
             "providers": (),
         };

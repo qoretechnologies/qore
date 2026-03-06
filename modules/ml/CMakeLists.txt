@@ -27,12 +27,16 @@ find_package(Eigen3 3.4 REQUIRED NO_MODULE)
 set(HAVE_ONNXRUNTIME FALSE)
 find_package(PkgConfig QUIET)
 if (PkgConfig_FOUND)
+    # Also check /opt/onnxruntime for pkg-config files
+    set(ENV{PKG_CONFIG_PATH} "$ENV{PKG_CONFIG_PATH}:/opt/onnxruntime/lib/pkgconfig")
     pkg_check_modules(ONNXRUNTIME QUIET libonnxruntime)
 endif()
 if (NOT ONNXRUNTIME_FOUND)
-    find_library(ONNXRUNTIME_LIBRARY NAMES onnxruntime)
+    find_library(ONNXRUNTIME_LIBRARY NAMES onnxruntime
+                 HINTS /opt/onnxruntime/lib)
     find_path(ONNXRUNTIME_INCLUDE_DIR onnxruntime_cxx_api.h
-              PATH_SUFFIXES onnxruntime)
+              PATH_SUFFIXES onnxruntime
+              HINTS /opt/onnxruntime/include)
     if (ONNXRUNTIME_LIBRARY AND ONNXRUNTIME_INCLUDE_DIR)
         set(ONNXRUNTIME_FOUND TRUE)
         set(ONNXRUNTIME_LIBRARIES ${ONNXRUNTIME_LIBRARY})

@@ -29,6 +29,7 @@
 
 #include "QC_OnnxModel.h"
 
+#include <algorithm>
 #include <numeric>
 #include <cstring>
 
@@ -44,6 +45,7 @@ QoreOnnxModel::QoreOnnxModel(const char* model_path, ExceptionSink* xsink)
         env = std::make_unique<Ort::Env>(ORT_LOGGING_LEVEL_WARNING, "qore-ml");
         Ort::SessionOptions session_options;
         session_options.SetIntraOpNumThreads(1);
+        autoDetectProvider(session_options);
         session = std::make_unique<Ort::Session>(*env, model_path, session_options);
         loadMetadata(xsink);
     } catch (const Ort::Exception& e) {
@@ -182,7 +184,38 @@ void QoreOnnxModel::configureSession(Ort::SessionOptions& opts, const QoreHashNo
                 return;
             }
         }
+    } else {
+        // No explicit providers configured — auto-detect best available GPU provider
+        autoDetectProvider(opts);
     }
+}
+
+void QoreOnnxModel::autoDetectProvider(Ort::SessionOptions& opts) {
+    std::vector<std::string> available = Ort::GetAvailableProviders();
+
+    // Priority order: CUDA (Linux), CoreML (macOS), then CPU fallback
+    static const std::vector<std::string> preferred = {
+        "CUDAExecutionProvider",
+        "CoreMLExecutionProvider",
+    };
+
+    for (const auto& pref : preferred) {
+        if (std::find(available.begin(), available.end(), pref) != available.end()) {
+            try {
+                std::unordered_map<std::string, std::string> empty_opts;
+                ExceptionSink xsink;
+                appendProvider(opts, pref, empty_opts, &xsink);
+                if (!xsink) {
+                    return;
+                }
+                // Provider failed to initialize — try the next one
+                active_provider = "CPUExecutionProvider";
+            } catch (...) {
+                active_provider = "CPUExecutionProvider";
+            }
+        }
+    }
+    // Fall through to CPU (always available, no action needed)
 }
 
 void QoreOnnxModel::appendProvider(Ort::SessionOptions& opts, const std::string& name,
