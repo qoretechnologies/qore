@@ -37,22 +37,32 @@ if [ -z "${REDIS_URL}" ]; then
     setup_redis_on_host
 fi
 
-find / -name "libqore.so*" -exec rm -f {} \;
+find / -path "${QORE_SRC_DIR}/build" -prune -o -name "libqore.so*" -exec rm -f {} \;
 
-# install tree-sitter CLI for astparser module build
-if ! command -v tree-sitter > /dev/null 2>&1; then
-    echo && echo "-- installing tree-sitter CLI --"
-    cargo install tree-sitter-cli@0.26.5
+# build or install Qore
+if [ -d "${QORE_SRC_DIR}/build" ] && [ -f "${QORE_SRC_DIR}/build/CMakeCache.txt" ]; then
+    # Pre-built artifact from build stage - just install
+    echo && echo "-- installing pre-built Qore --"
+    cd ${QORE_SRC_DIR}/build
+    cmake --install .
+else
+    # No pre-built artifact - full build
+    # install tree-sitter CLI for astparser module build
+    if ! command -v tree-sitter > /dev/null 2>&1; then
+        echo && echo "-- installing tree-sitter CLI --"
+        cargo install tree-sitter-cli@0.26.5
+    fi
+
+    export MAKE_JOBS=${MAKE_JOBS:-6}
+
+    echo && echo "-- building Qore --"
+    cd ${QORE_SRC_DIR}
+    mkdir -p build
+    cd build
+    cmake .. -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE:-debug} -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX}
+    make -j${MAKE_JOBS}
+    make install
 fi
-
-# build Qore and install
-echo && echo "-- building Qore --"
-cd ${QORE_SRC_DIR}
-mkdir build
-cd build
-cmake .. -DCMAKE_BUILD_TYPE=debug -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX}
-make -j${MAKE_JOBS}
-make install
 
 # add Qore user and group
 if ! grep -q "^qore:x:${QORE_GID}" /etc/group; then

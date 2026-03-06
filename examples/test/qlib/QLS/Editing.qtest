@@ -1,7 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-/*  SelectionRange.qtest Copyright 2026 Qore Technologies, s.r.o.
+/*  Editing.qtest Copyright 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -28,9 +28,9 @@
 %requires json
 %requires ../../../../qlib/QLS
 
-%exec-class SelectionRangeTest
+%exec-class EditingTest
 
-class SelectionRangeTest inherits QUnit::Test {
+class EditingTest inherits QUnit::Test {
     private {
         QLS::QLSServer server;
         int reqId = 0;
@@ -38,9 +38,20 @@ class SelectionRangeTest inherits QUnit::Test {
         hash<string, string> docCache;
     }
 
-    constructor() : Test("QLS SelectionRange", "1.0") {
+    constructor() : Test("QLS Editing", "1.0") {
         initServer();
 
+        # Rename tests
+        addTestCase("prepare rename on identifier", \testPrepareRename());
+        addTestCase("prepare rename on non-symbol", \testPrepareRenameNonSymbol());
+        addTestCase("rename local variable", \testRenameLocalVariable());
+        addTestCase("rename function", \testRenameFunction());
+        addTestCase("rename class", \testRenameClass());
+        addTestCase("cross-doc rename", \testCrossDocRename());
+        addTestCase("missing params rename", \testRenameMissingParams());
+        addTestCase("missing newName", \testMissingNewName());
+
+        # Selection Range tests
         addTestCase("identifier expands to statement then block", \testIdentifierExpansion());
         addTestCase("multiple positions in one request", \testMultiplePositions());
         addTestCase("position on whitespace", \testWhitespace());
@@ -48,7 +59,7 @@ class SelectionRangeTest inherits QUnit::Test {
         addTestCase("position on comment", \testComment());
         addTestCase("nested selection chain", \testNestedChain());
         addTestCase("empty document", \testEmptyDocument());
-        addTestCase("missing params", \testMissingParams());
+        addTestCase("missing params selectionRange", \testSelectionRangeMissingParams());
         addTestCase("non-existent document", \testNonExistentDocument());
 
         set_return_value(main());
@@ -69,14 +80,27 @@ class SelectionRangeTest inherits QUnit::Test {
         server.handleRequest(make_json(initializedReq));
     }
 
-    # Test source:
+    # Test source for rename tests:
+    # Line 0: %modern
+    # Line 1: sub helper(int x) { return x + 1; }
+    # Line 2: int val = helper(5);
+    # Line 3: helper(val);
+    private string getRenameTestCode() {
+        return "%modern
+sub helper(int x) { return x + 1; }
+int val = helper(5);
+helper(val);
+";
+    }
+
+    # Test source for selection range tests:
     # Line 0: %modern
     # Line 1: class Calculator {
     # Line 2:     int add(int n) { return n + 1; }
     # Line 3: }
     # Line 4: # a comment
     # Line 5: int x = 5;
-    private string getTestCode() {
+    private string getSelectionRangeTestCode() {
         return "%modern
 class Calculator {
     int add(int n) { return n + 1; }
@@ -86,13 +110,14 @@ int x = 5;
 ";
     }
 
-    private string setupDoc(*string text) {
-        string src = text ?? getTestCode();
+    private string setupDoc(*string text, *string prefix) {
+        string src = text ?? "";
         *string cached = docCache{src};
         if (exists cached) {
             return cached;
         }
-        string uri = sprintf("file:///test/selrange%d.q", ++docCount);
+        string pfx = prefix ?? "editing";
+        string uri = sprintf("file:///test/%s%d.q", pfx, ++docCount);
         hash<auto> openReq = makeRequest("textDocument/didOpen", {
             "textDocument": {
                 "uri": uri,
@@ -115,6 +140,37 @@ int x = 5;
             "params": params,
         };
     }
+
+    # ---- Rename helpers ----
+
+    private *hash<auto> sendPrepareRename(string uri, int line, int character) {
+        hash<auto> req = makeRequest("textDocument/prepareRename", {
+            "textDocument": {"uri": uri},
+            "position": {"line": line, "character": character},
+        });
+        softlist<auto> responses = server.handleRequest(make_json(req));
+        if (!responses || !responses[0]) {
+            return NOTHING;
+        }
+        hash<auto> resp = parse_json(responses[0]);
+        return resp.result;
+    }
+
+    private *hash<auto> sendRename(string uri, int line, int character, string newName) {
+        hash<auto> req = makeRequest("textDocument/rename", {
+            "textDocument": {"uri": uri},
+            "position": {"line": line, "character": character},
+            "newName": newName,
+        });
+        softlist<auto> responses = server.handleRequest(make_json(req));
+        if (!responses || !responses[0]) {
+            return NOTHING;
+        }
+        hash<auto> resp = parse_json(responses[0]);
+        return resp.result;
+    }
+
+    # ---- Selection Range helpers ----
 
     private *list<auto> sendSelectionRange(string uri, list<hash<auto>> positions) {
         hash<auto> req = makeRequest("textDocument/selectionRange", {
@@ -139,8 +195,141 @@ int x = 5;
         return depth;
     }
 
+    # ---- Rename tests ----
+
+    testPrepareRename() {
+        string uri = setupDoc(getRenameTestCode());
+
+        # "helper" at line 1, col 4
+        *hash<auto> result = sendPrepareRename(uri, 1, 4);
+        assertTrue(exists result, "should return prepare rename result");
+        if (result) {
+            assertTrue(exists result.range, "should have range");
+            assertEq("helper", result.placeholder, "placeholder should be 'helper'");
+        }
+    }
+
+    testPrepareRenameNonSymbol() {
+        string uri = setupDoc(getRenameTestCode());
+
+        # Position on %modern at line 0, col 0 — parse directives are not renameable
+        *hash<auto> result = sendPrepareRename(uri, 0, 0);
+        # Should return null for non-renameable position
+        assertNothing(result, "prepareRename on non-symbol should return null");
+    }
+
+    testRenameLocalVariable() {
+        string code = "%modern
+sub test() {
+    int count = 0;
+    count += 1;
+    return count;
+}
+";
+        string uri = setupDoc(code);
+
+        # "count" at line 2, col 8
+        *hash<auto> result = sendRename(uri, 2, 8, "total");
+        assertTrue(exists result, "should return workspace edit");
+        if (result && result.changes) {
+            assertTrue(exists result.changes{uri}, "should have edits for current doc");
+            *list<auto> edits = result.changes{uri};
+            assertTrue(edits.size() >= 3,
+                sprintf("should have at least 3 references to rename (got %d)", edits.size()));
+            # All edits should have newText = "total"
+            foreach hash<auto> edit in (edits) {
+                assertEq("total", edit.newText, "newText should be 'total'");
+            }
+        }
+    }
+
+    testRenameFunction() {
+        string uri = setupDoc(getRenameTestCode());
+
+        # "helper" at line 1, col 4
+        *hash<auto> result = sendRename(uri, 1, 4, "myHelper");
+        assertTrue(exists result, "should return workspace edit");
+        if (result && result.changes) {
+            *list<auto> edits = result.changes{uri};
+            assertTrue(exists edits && edits.size() >= 3,
+                sprintf("should find at least 3 references (decl + 2 calls), got %d",
+                    edits ? edits.size() : 0));
+        }
+    }
+
+    testRenameClass() {
+        string code = "%modern
+class Foo {
+    int val;
+}
+Foo f();
+";
+        string uri = setupDoc(code);
+
+        # "Foo" at line 1, col 6
+        *hash<auto> result = sendRename(uri, 1, 6, "Bar");
+        assertTrue(exists result, "should return workspace edit");
+        if (result && result.changes) {
+            *list<auto> edits = result.changes{uri};
+            assertTrue(exists edits && edits.size() >= 2,
+                sprintf("should find at least 2 references (decl + usage), got %d",
+                    edits ? edits.size() : 0));
+        }
+    }
+
+    testCrossDocRename() {
+        # Function definition in one doc
+        string funcCode = "%modern
+sub rnHelper(int x) { return x; }
+";
+        string funcUri = setupDoc(funcCode);
+
+        # Usage in another doc
+        string usageCode = "%modern
+rnHelper(5);
+";
+        string usageUri = setupDoc(usageCode);
+
+        # Rename "rnHelper" from the definition doc
+        *hash<auto> result = sendRename(funcUri, 1, 4, "rnNewHelper");
+        assertTrue(exists result, "should return workspace edit");
+        if (result && result.changes) {
+            assertTrue(exists result.changes{funcUri},
+                "should have edits for function doc");
+            assertTrue(exists result.changes{usageUri},
+                "should have edits for usage doc");
+        }
+    }
+
+    testRenameMissingParams() {
+        hash<auto> req = makeRequest("textDocument/rename");
+        delete req.params;
+        softlist<auto> responses = server.handleRequest(make_json(req));
+        assertTrue(exists responses && responses.size() > 0,
+            "should return error response for missing params");
+        hash<auto> resp = parse_json(responses[0]);
+        assertTrue(exists resp.error, "response should have error field");
+    }
+
+    testMissingNewName() {
+        string uri = setupDoc(getRenameTestCode());
+
+        hash<auto> req = makeRequest("textDocument/rename", {
+            "textDocument": {"uri": uri},
+            "position": {"line": 1, "character": 4},
+            # missing newName
+        });
+        softlist<auto> responses = server.handleRequest(make_json(req));
+        assertTrue(exists responses && responses.size() > 0,
+            "should return error for missing newName");
+        hash<auto> resp = parse_json(responses[0]);
+        assertTrue(exists resp.error, "should have error for missing newName");
+    }
+
+    # ---- Selection Range tests ----
+
     testIdentifierExpansion() {
-        string uri = setupDoc();
+        string uri = setupDoc(getSelectionRangeTestCode());
 
         # "n" in "return n + 1" at line 2, col 28
         *list<auto> result = sendSelectionRange(uri, ({"line": 2, "character": 28},));
@@ -163,7 +352,7 @@ int x = 5;
     }
 
     testMultiplePositions() {
-        string uri = setupDoc();
+        string uri = setupDoc(getSelectionRangeTestCode());
 
         # Request two positions at once
         *list<auto> result = sendSelectionRange(uri, (
@@ -179,7 +368,7 @@ int x = 5;
     }
 
     testWhitespace() {
-        string uri = setupDoc();
+        string uri = setupDoc(getSelectionRangeTestCode());
 
         # Position on leading whitespace at line 2, col 0
         *list<auto> result = sendSelectionRange(uri, ({"line": 2, "character": 0},));
@@ -188,7 +377,7 @@ int x = 5;
     }
 
     testParseDirective() {
-        string uri = setupDoc();
+        string uri = setupDoc(getSelectionRangeTestCode());
 
         # Position on %modern at line 0, col 1
         *list<auto> result = sendSelectionRange(uri, ({"line": 0, "character": 1},));
@@ -197,7 +386,7 @@ int x = 5;
     }
 
     testComment() {
-        string uri = setupDoc();
+        string uri = setupDoc(getSelectionRangeTestCode());
 
         # Position on "# a comment" at line 4, col 2
         *list<auto> result = sendSelectionRange(uri, ({"line": 4, "character": 2},));
@@ -206,7 +395,7 @@ int x = 5;
     }
 
     testNestedChain() {
-        string uri = setupDoc();
+        string uri = setupDoc(getSelectionRangeTestCode());
 
         # "add" method name at line 2, col 8
         *list<auto> result = sendSelectionRange(uri, ({"line": 2, "character": 8},));
@@ -234,7 +423,7 @@ int x = 5;
         assertEq(1, result.size(), "should return one result");
     }
 
-    testMissingParams() {
+    testSelectionRangeMissingParams() {
         hash<auto> req = makeRequest("textDocument/selectionRange");
         delete req.params;
         softlist<auto> responses = server.handleRequest(make_json(req));
@@ -245,7 +434,7 @@ int x = 5;
     }
 
     testNonExistentDocument() {
-        setupDoc();
+        setupDoc(getSelectionRangeTestCode());
 
         *list<auto> result = sendSelectionRange(
             "file:///nonexistent.q",

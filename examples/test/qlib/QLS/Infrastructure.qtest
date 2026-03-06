@@ -1,7 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-/*  QLSMetadata.qtest Copyright 2026 Qore Technologies, s.r.o.
+/*  Infrastructure.qtest Copyright 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -30,9 +30,9 @@
 %requires json
 %requires ../../../../qlib/QLS
 
-%exec-class QLSMetadataTest
+%exec-class InfrastructureTest
 
-class QLSMetadataTest inherits QUnit::Test {
+class InfrastructureTest inherits QUnit::Test {
     private {
         QLS::QLSServer server;
         int reqId = 0;
@@ -40,36 +40,74 @@ class QLSMetadataTest inherits QUnit::Test {
         hash<string, string> docCache;
     }
 
-    constructor() : Test("QLS Metadata Integration", "1.0") {
+    constructor() : Test("QLS Infrastructure", "1.0") {
         initServer();
 
-        # Phase 1: Metadata loading
+        # QLSMetadata tests
         addTestCase("metadata loaded at init", \testMetadataLoaded());
         addTestCase("resolve provider capability", \testResolveProviderCapability());
-
-        # Phase 2: Hover
         addTestCase("hover — builtin class", \testHoverBuiltinClass());
         addTestCase("hover — builtin function", \testHoverBuiltinFunction());
         addTestCase("hover — user-defined symbol not affected", \testHoverUserDefined());
         addTestCase("hover — unknown symbol returns empty", \testHoverUnknown());
-
-        # Phase 3: Completion
         addTestCase("completion — builtin class in visible symbols", \testCompletionBuiltinClass());
         addTestCase("completion — dot access on builtin type", \testCompletionDotBuiltin());
         addTestCase("completion — scope access on builtin class", \testCompletionScopeBuiltin());
         addTestCase("completion resolve — enriches with documentation", \testCompletionResolve());
         addTestCase("completion resolve — no data returns as-is", \testCompletionResolveNoData());
-
-        # Phase 4: Signature help
         addTestCase("signature help — builtin function", \testSignatureHelpBuiltinFunction());
         addTestCase("signature help — builtin method", \testSignatureHelpBuiltinMethod());
         addTestCase("signature help — user function still works", \testSignatureHelpUserFunction());
-
-        # Graceful degradation
         addTestCase("no metadata dir — graceful", \testNoMetadataGraceful());
+
+        # SymbolInfoKinds tests
+        addTestCase("ASTSymbolKind constants", \testASTSymbolKind());
+        addTestCase("ASTSymbolUsageKind constants", \testASTSymbolUsageKind());
+        addTestCase("SymbolUsageStringMap", \testSymbolUsageStringMap());
+        addTestCase("SymbolUsageFastMap", \testSymbolUsageFastMap());
+
+        # ParamValidator tests
+        addTestCase("required - missing key", \testRequiredMissing());
+        addTestCase("required - wrong type", \testRequiredWrongType());
+        addTestCase("required - valid", \testRequiredValid());
+        addTestCase("initializeParams - valid", \testInitializeParamsValid());
+        addTestCase("initializeParams - missing processId", \testInitializeParamsMissingPid());
+        addTestCase("textDocumentIdentifier - valid", \testTextDocIdentValid());
+        addTestCase("textDocumentIdentifier - missing", \testTextDocIdentMissing());
+        addTestCase("textDocumentItem - valid", \testTextDocItemValid());
+        addTestCase("textDocumentItem - missing fields", \testTextDocItemMissing());
+        addTestCase("versionedTextDocumentIdentifier", \testVersionedTextDoc());
+        addTestCase("textDocumentPositionParams - valid", \testTextDocPosValid());
+        addTestCase("textDocumentPositionParams - missing position", \testTextDocPosMissing());
+        addTestCase("didChangeConfigParams", \testDidChangeConfig());
+        addTestCase("didChangeWatchedFilesParams - valid", \testDidChangeWatchedFiles());
+        addTestCase("didChangeWatchedFilesParams - invalid event", \testDidChangeWatchedFilesInvalid());
+        addTestCase("referenceParams", \testReferenceParams());
+        addTestCase("workspaceSymbolParams", \testWorkspaceSymbolParams());
+
+        # ErrorResponse tests
+        addTestCase("ErrorCodes constants", \testErrorCodes());
+        addTestCase("notInitialized", \testNotInitialized());
+        addTestCase("invalidRequest", \testInvalidRequest());
+        addTestCase("invalidRequest with message", \testInvalidRequestWithMessage());
+        addTestCase("methodNotFound", \testMethodNotFound());
+        addTestCase("internalError", \testInternalError());
+        addTestCase("internalError with message", \testInternalErrorWithMessage());
+        addTestCase("invalidParams", \testInvalidParams());
+        addTestCase("nonExistentDocument", \testNonExistentDocument());
+
+        # Notification tests
+        addTestCase("MessageType constants", \testMessageType());
+        addTestCase("diagnostics notification", \testDiagnostics());
+        addTestCase("diagnostics empty", \testDiagnosticsEmpty());
+        addTestCase("showMessage notification", \testShowMessage());
 
         set_return_value(main());
     }
+
+    # ==========================================
+    # Shared helpers
+    # ==========================================
 
     private initServer() {
         server = new QLS::QLSServer();
@@ -114,6 +152,10 @@ class QLSMetadataTest inherits QUnit::Test {
             "params": params,
         };
     }
+
+    # ==========================================
+    # QLSMetadata helpers
+    # ==========================================
 
     private hash<auto> sendHover(string uri, int line, int character) {
         hash<auto> req = makeRequest("textDocument/hover", {
@@ -165,7 +207,15 @@ class QLSMetadataTest inherits QUnit::Test {
     }
 
     # ==========================================
-    # Phase 1: Metadata loading
+    # ParamValidator helpers
+    # ==========================================
+
+    private hash baseRequest() {
+        return {"jsonrpc": "2.0", "id": 1, "method": "test"};
+    }
+
+    # ==========================================
+    # QLSMetadata tests
     # ==========================================
 
     testMetadataLoaded() {
@@ -186,10 +236,6 @@ class QLSMetadataTest inherits QUnit::Test {
         assertEq(True, QLS::ServerCapabilities.completionProvider.resolveProvider,
             "completionProvider.resolveProvider should be True");
     }
-
-    # ==========================================
-    # Phase 2: Hover
-    # ==========================================
 
     testHoverBuiltinClass() {
         # Source referencing Mutex — a builtin class
@@ -247,10 +293,6 @@ class QLSMetadataTest inherits QUnit::Test {
         hash<auto> result = sendHover(uri, 2, 13);
         assertEq(Type::List, result.contents.type(), "hover returns a list for contents");
     }
-
-    # ==========================================
-    # Phase 3: Completion
-    # ==========================================
 
     testCompletionBuiltinClass() {
         # Source with partial typing — "Mut" should suggest "Mutex" from metadata
@@ -343,10 +385,6 @@ class QLSMetadataTest inherits QUnit::Test {
         assertEq("myLocalVar", resolved.label, "label should be preserved");
     }
 
-    # ==========================================
-    # Phase 4: Signature help
-    # ==========================================
-
     testSignatureHelpBuiltinFunction() {
         # Source calling printf — a builtin function
         string text = "%modern\nsub test() {\n    printf(\"hello\");\n}\n";
@@ -397,10 +435,6 @@ class QLSMetadataTest inherits QUnit::Test {
             "signature should contain 'myFunc'");
         assertEq(2, sig.parameters.size(), "myFunc should have 2 parameters");
     }
-
-    # ==========================================
-    # Graceful degradation
-    # ==========================================
 
     testNoMetadataGraceful() {
         # Create a fresh server with a nonexistent metadata dir
@@ -455,5 +489,339 @@ class QLSMetadataTest inherits QUnit::Test {
         });
         softlist<auto> sigResp = freshServer.handleRequest(make_json(sigReq));
         assertEq(Type::List, sigResp.type(), "signature help returns a response list without metadata");
+    }
+
+    # ==========================================
+    # SymbolInfoKinds tests
+    # ==========================================
+
+    testASTSymbolKind() {
+        assertEq(0, QLS::ASTSymbolKind.None);
+        assertEq(1, QLS::ASTSymbolKind.File);
+        assertEq(5, QLS::ASTSymbolKind.Class);
+        assertEq(6, QLS::ASTSymbolKind.Method);
+        assertEq(12, QLS::ASTSymbolKind.Function);
+        assertEq(13, QLS::ASTSymbolKind.Variable);
+        assertEq(14, QLS::ASTSymbolKind.Constant);
+        assertEq(18, QLS::ASTSymbolKind.Array);
+    }
+
+    testASTSymbolUsageKind() {
+        assertEq(0, QLS::ASTSymbolUsageKind.None);
+        assertEq(100, QLS::ASTSymbolUsageKind.ClassDeclName);
+        assertEq(200, QLS::ASTSymbolUsageKind.AccessVariable);
+        assertEq(300, QLS::ASTSymbolUsageKind.ContextStmtName);
+        assertEq(316, QLS::ASTSymbolUsageKind.WhileStmtCond);
+    }
+
+    testSymbolUsageStringMap() {
+        assertEq(Type::Hash, QLS::SymbolUsageStringMap.type());
+        # ClassDeclName should map to (Class,)
+        assertEq((QLS::ASTSymbolKind.Class,), QLS::SymbolUsageStringMap.ClassDeclName);
+        # FuncDeclName should include Function, Method, Constructor
+        list funcDecl = QLS::SymbolUsageStringMap.FuncDeclName;
+        assertEq(True, funcDecl.contains(QLS::ASTSymbolKind.Function));
+        assertEq(True, funcDecl.contains(QLS::ASTSymbolKind.Method));
+        assertEq(True, funcDecl.contains(QLS::ASTSymbolKind.Constructor));
+    }
+
+    testSymbolUsageFastMap() {
+        assertEq(Type::Hash, QLS::SymbolUsageFastMap.type());
+        # check that the fast map has entries for all usage kinds
+        string key = string(QLS::ASTSymbolUsageKind.ClassDeclName);
+        assertEq(True, QLS::SymbolUsageFastMap.hasKey(key));
+        assertEq((QLS::ASTSymbolKind.Class,), QLS::SymbolUsageFastMap{key});
+    }
+
+    # ==========================================
+    # ParamValidator tests
+    # ==========================================
+
+    testRequiredMissing() {
+        hash request = baseRequest();
+        string err;
+        bool result = QLS::ParamValidator::required(request, {}, "missing", NT_STRING, \err);
+        assertEq(False, result);
+        assertEq(Type::String, err.type());
+    }
+
+    testRequiredWrongType() {
+        hash request = baseRequest();
+        string err;
+        bool result = QLS::ParamValidator::required(request, {"key": 123}, "key", NT_STRING, \err);
+        assertEq(False, result);
+        assertEq(Type::String, err.type());
+    }
+
+    testRequiredValid() {
+        hash request = baseRequest();
+        string err;
+        bool result = QLS::ParamValidator::required(request, {"key": "value"}, "key", NT_STRING, \err);
+        assertEq(True, result);
+    }
+
+    testInitializeParamsValid() {
+        hash request = baseRequest();
+        hash params = {
+            "processId": 123,
+            "rootPath": "/tmp",
+            "rootUri": "file:///tmp",
+            "capabilities": {},
+        };
+        *string result = QLS::ParamValidator::initializeParams(request, params);
+        assertNothing(result);
+    }
+
+    testInitializeParamsMissingPid() {
+        hash request = baseRequest();
+        hash params = {"capabilities": {}};
+        *string result = QLS::ParamValidator::initializeParams(request, params);
+        assertEq(Type::String, result.type());
+    }
+
+    testTextDocIdentValid() {
+        hash request = baseRequest();
+        hash params = {"textDocument": {"uri": "file:///test.q"}};
+        *string result = QLS::ParamValidator::textDocumentIdentifier(request, params);
+        assertNothing(result);
+    }
+
+    testTextDocIdentMissing() {
+        hash request = baseRequest();
+        *string result = QLS::ParamValidator::textDocumentIdentifier(request, {});
+        assertEq(Type::String, result.type());
+    }
+
+    testTextDocItemValid() {
+        hash request = baseRequest();
+        hash params = {
+            "textDocument": {
+                "uri": "file:///test.q",
+                "languageId": "qore",
+                "version": 1,
+                "text": "code",
+            },
+        };
+        *string result = QLS::ParamValidator::textDocumentItem(request, params);
+        assertNothing(result);
+    }
+
+    testTextDocItemMissing() {
+        hash request = baseRequest();
+        hash params = {
+            "textDocument": {
+                "uri": "file:///test.q",
+                # missing languageId, version, text
+            },
+        };
+        *string result = QLS::ParamValidator::textDocumentItem(request, params);
+        assertEq(Type::String, result.type());
+    }
+
+    testVersionedTextDoc() {
+        hash request = baseRequest();
+        hash params = {"textDocument": {"uri": "file:///test.q", "version": 1}};
+        *string result = QLS::ParamValidator::versionedTextDocumentIdentifier(request, params);
+        assertNothing(result);
+
+        # missing version
+        hash params2 = {"textDocument": {"uri": "file:///test.q"}};
+        *string result2 = QLS::ParamValidator::versionedTextDocumentIdentifier(request, params2);
+        assertEq(Type::String, result2.type());
+    }
+
+    testTextDocPosValid() {
+        hash request = baseRequest();
+        hash params = {
+            "textDocument": {"uri": "file:///test.q"},
+            "position": {"line": 0, "character": 0},
+        };
+        *string result = QLS::ParamValidator::textDocumentPositionParams(request, params);
+        assertNothing(result);
+    }
+
+    testTextDocPosMissing() {
+        hash request = baseRequest();
+        hash params = {"textDocument": {"uri": "file:///test.q"}};
+        *string result = QLS::ParamValidator::textDocumentPositionParams(request, params);
+        assertEq(Type::String, result.type());
+    }
+
+    testDidChangeConfig() {
+        hash request = baseRequest();
+        hash params = {"settings": {"qore": {}}};
+        *string result = QLS::ParamValidator::didChangeConfigParams(request, params);
+        assertNothing(result);
+
+        # missing settings
+        *string result2 = QLS::ParamValidator::didChangeConfigParams(request, {});
+        assertEq(Type::String, result2.type());
+    }
+
+    testDidChangeWatchedFiles() {
+        hash request = baseRequest();
+        hash params = {
+            "changes": ({"uri": "file:///test.q", "type": 1},),
+        };
+        *string result = QLS::ParamValidator::didChangeWatchedFilesParams(request, params);
+        assertNothing(result);
+    }
+
+    testDidChangeWatchedFilesInvalid() {
+        hash request = baseRequest();
+        # event is not a hash
+        hash params = {"changes": ("not a hash",)};
+        *string result = QLS::ParamValidator::didChangeWatchedFilesParams(request, params);
+        assertEq(Type::String, result.type());
+    }
+
+    testReferenceParams() {
+        hash request = baseRequest();
+        hash params = {
+            "textDocument": {"uri": "file:///test.q"},
+            "position": {"line": 0, "character": 0},
+            "context": {"includeDeclaration": True},
+        };
+        *string result = QLS::ParamValidator::referenceParams(request, params);
+        assertNothing(result);
+
+        # missing context
+        hash params2 = {
+            "textDocument": {"uri": "file:///test.q"},
+            "position": {"line": 0, "character": 0},
+        };
+        *string result2 = QLS::ParamValidator::referenceParams(request, params2);
+        assertEq(Type::String, result2.type());
+    }
+
+    testWorkspaceSymbolParams() {
+        hash request = baseRequest();
+        hash params = {"query": "test"};
+        *string result = QLS::ParamValidator::workspaceSymbolParams(request, params);
+        assertNothing(result);
+
+        # missing query
+        *string result2 = QLS::ParamValidator::workspaceSymbolParams(request, {});
+        assertEq(Type::String, result2.type());
+    }
+
+    # ==========================================
+    # ErrorResponse tests
+    # ==========================================
+
+    testErrorCodes() {
+        assertEq(-32700, QLS::ErrorCodes.ParseError);
+        assertEq(-32600, QLS::ErrorCodes.InvalidRequest);
+        assertEq(-32601, QLS::ErrorCodes.MethodNotFound);
+        assertEq(-32602, QLS::ErrorCodes.InvalidParams);
+        assertEq(-32603, QLS::ErrorCodes.InternalError);
+        assertEq(-32002, QLS::ErrorCodes.ServerNotInitialized);
+        assertEq(-32001, QLS::ErrorCodes.UnknownErrorCode);
+    }
+
+    testNotInitialized() {
+        hash request = {"jsonrpc": "2.0", "id": 1, "method": "test"};
+        string resp = QLS::ErrorResponse::notInitialized(request);
+        assertEq(Type::String, resp.type());
+        hash parsed = parse_json(resp);
+        assertEq("2.0", parsed.jsonrpc);
+        assertEq(1, parsed.id);
+        assertEq(QLS::ErrorCodes.ServerNotInitialized, parsed.error.code);
+    }
+
+    testInvalidRequest() {
+        hash request = {"jsonrpc": "2.0", "id": 2, "method": "test"};
+        string resp = QLS::ErrorResponse::invalidRequest(request);
+        hash parsed = parse_json(resp);
+        assertEq(QLS::ErrorCodes.InvalidRequest, parsed.error.code);
+        assertEq("invalid request", parsed.error.message);
+    }
+
+    testInvalidRequestWithMessage() {
+        hash request = {"jsonrpc": "2.0", "id": 3, "method": "test"};
+        string resp = QLS::ErrorResponse::invalidRequest(request, "custom error");
+        hash parsed = parse_json(resp);
+        assertEq(QLS::ErrorCodes.InvalidRequest, parsed.error.code);
+        assertEq("custom error", parsed.error.message);
+    }
+
+    testMethodNotFound() {
+        hash request = {"jsonrpc": "2.0", "id": 4, "method": "nonExistent"};
+        string resp = QLS::ErrorResponse::methodNotFound(request);
+        hash parsed = parse_json(resp);
+        assertEq(QLS::ErrorCodes.MethodNotFound, parsed.error.code);
+        assertRegex("nonExistent", parsed.error.message);
+    }
+
+    testInternalError() {
+        string resp = QLS::ErrorResponse::internalError("2.0");
+        hash parsed = parse_json(resp);
+        assertEq(QLS::ErrorCodes.InternalError, parsed.error.code);
+        assertEq("internal error", parsed.error.message);
+    }
+
+    testInternalErrorWithMessage() {
+        string resp = QLS::ErrorResponse::internalError("2.0", "something broke");
+        hash parsed = parse_json(resp);
+        assertEq(QLS::ErrorCodes.InternalError, parsed.error.code);
+        assertEq("something broke", parsed.error.message);
+    }
+
+    testInvalidParams() {
+        hash request = {"jsonrpc": "2.0", "id": 5, "method": "test"};
+        string resp = QLS::ErrorResponse::invalidParams(request, "bad params");
+        hash parsed = parse_json(resp);
+        assertEq(QLS::ErrorCodes.InvalidParams, parsed.error.code);
+        assertEq("bad params", parsed.error.message);
+    }
+
+    testNonExistentDocument() {
+        hash request = {
+            "jsonrpc": "2.0",
+            "id": 6,
+            "method": "test",
+            "params": {"textDocument": {"uri": "file:///nonexistent"}},
+        };
+        string resp = QLS::ErrorResponse::nonExistentDocument(request);
+        hash parsed = parse_json(resp);
+        assertEq(QLS::ErrorCodes.InvalidParams, parsed.error.code);
+        assertRegex("nonexistent", parsed.error.message);
+    }
+
+    # ==========================================
+    # Notification tests
+    # ==========================================
+
+    testMessageType() {
+        assertEq(1, QLS::MessageType.Error);
+        assertEq(2, QLS::MessageType.Warning);
+        assertEq(3, QLS::MessageType.Info);
+        assertEq(4, QLS::MessageType.Log);
+    }
+
+    testDiagnostics() {
+        list diags = ({"message": "test error", "range": {"start": {"line": 0, "character": 0}}},);
+        string resp = QLS::Notification::diagnostics("2.0", "file:///test.q", diags);
+        assertEq(Type::String, resp.type());
+        hash parsed = parse_json(resp);
+        assertEq("2.0", parsed.jsonrpc);
+        assertEq("textDocument/publishDiagnostics", parsed.method);
+        assertEq("file:///test.q", parsed.params.uri);
+        assertEq(1, parsed.params.diagnostics.size());
+    }
+
+    testDiagnosticsEmpty() {
+        string resp = QLS::Notification::diagnostics("2.0", "file:///test.q");
+        hash parsed = parse_json(resp);
+        assertEq("textDocument/publishDiagnostics", parsed.method);
+        assertEq(0, parsed.params.diagnostics.size());
+    }
+
+    testShowMessage() {
+        string resp = QLS::Notification::showMessage("2.0", QLS::MessageType.Warning, "test warning");
+        hash parsed = parse_json(resp);
+        assertEq("window/showMessage", parsed.method);
+        assertEq(QLS::MessageType.Warning, parsed.params.type);
+        assertEq("test warning", parsed.params.message);
     }
 }
