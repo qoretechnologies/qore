@@ -727,8 +727,8 @@ public class HttpAsyncSocketIoController {
             # Don't call getPeerInfo() here - can block I/O thread if client closes socket
             # Will populate peer info after SSL handshake completes and socket is stable
             hash<auto> cx = {
-                "peer": {"address": "unknown", "port": 0},
-                "socket": {"address": "unknown", "port": 0},
+                "peer": {"address": "unknown", "address_desc": "unknown", "port": 0},
+                "socket": {"address": "unknown", "address_desc": "unknown", "port": 0},
             };
 
             if (linfo.cert) {
@@ -790,7 +790,7 @@ public class HttpAsyncSocketIoController {
         # Check if this is an HTTP/2 connection
         if (output.is_http2) {
             # Get peer info safely - no DNS lookup
-            hash<auto> cx = {"peer": {"address": "unknown", "port": 0}, "socket": {"address": "unknown", "port": 0}};
+            hash<auto> cx = {"peer": {"address": "unknown", "address_desc": "unknown", "port": 0}, "socket": {"address": "unknown", "address_desc": "unknown", "port": 0}};
             if (sock.isOpen()) {
                 try {
                     cx = {
@@ -832,7 +832,7 @@ public class HttpAsyncSocketIoController {
 
         # HTTP/1.x path (no SSL)
         # Get peer info safely - no DNS lookup
-        hash<auto> cx = {"peer": {"address": "unknown", "port": 0}, "socket": {"address": "unknown", "port": 0}};
+        hash<auto> cx = {"peer": {"address": "unknown", "address_desc": "unknown", "port": 0}, "socket": {"address": "unknown", "address_desc": "unknown", "port": 0}};
         if (sock.isOpen()) {
             try {
                 cx = {
@@ -1013,7 +1013,11 @@ public class HttpAsyncSocketIoController {
             "sock": listener,
             "listener": linfo.http_listener,
             "cx": {
-                "peer": {"address": request.peer_address ?? "quic", "port": request.peer_port ?? 0},
+                "peer": {
+                    "address": request.peer_address ?? "quic",
+                    "address_desc": request.peer_address ?? "quic",
+                    "port": request.peer_port ?? 0,
+                },
                 "socket": listener.getSocketInfo(),
             },
             "target": target,
@@ -1329,8 +1333,8 @@ public class HttpAsyncSocketIoController {
         Socket sock = result.sock;
 
         # Now safe to get peer info - socket established, DNS disabled
-        hash<auto> peer_info = {"address": "unknown", "port": 0};
-        hash<auto> socket_info = {"address": "unknown", "port": 0};
+        hash<auto> peer_info = {"address": "unknown", "address_desc": "unknown", "port": 0};
+        hash<auto> socket_info = {"address": "unknown", "address_desc": "unknown", "port": 0};
         if (sock.isOpen()) {
             try {
                 peer_info = sock.getPeerInfo(False);      # host_lookup=False - no DNS blocking
