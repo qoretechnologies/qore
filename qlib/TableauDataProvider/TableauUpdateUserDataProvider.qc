@@ -36,6 +36,7 @@ public class TableauUpdateUserRequestDataType inherits HashDataType {
                 "desc": "The unique identifier of the user to update",
                 "required": True,
                 "example_value": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+                "ref_data": "users",
             },
             "full_name": {
                 "type": StringOrNothingType,
@@ -43,6 +44,7 @@ public class TableauUpdateUserRequestDataType inherits HashDataType {
                 "short_desc": "The user's full name",
                 "desc": "The new full name of the user",
                 "example_value": "John Smith",
+                "preselected": True,
             },
             "email": {
                 "type": StringOrNothingType,
@@ -50,12 +52,14 @@ public class TableauUpdateUserRequestDataType inherits HashDataType {
                 "short_desc": "The user's email address",
                 "desc": "The new email address of the user",
                 "example_value": "jsmith@example.com",
+                "preselected": True,
             },
             "site_role": {
                 "type": StringOrNothingType,
                 "display_name": "Site Role",
                 "short_desc": "The user's site role",
                 "desc": "The new site role for the user",
+                "preselected": True,
                 "allowed_values": (
                     <AllowedValueInfo>{"value": "Creator", "display_name": "Creator"},
                     <AllowedValueInfo>{"value": "Explorer", "display_name": "Explorer"},
@@ -72,6 +76,12 @@ public class TableauUpdateUserRequestDataType inherits HashDataType {
                 "short_desc": "The authentication setting",
                 "desc": "The new authentication setting for the user",
                 "example_value": "ServerDefault",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "ServerDefault", "desc": "Use server default authentication"},
+                    <AllowedValueInfo>{"value": "SAML", "desc": "SAML authentication"},
+                    <AllowedValueInfo>{"value": "OpenID", "desc": "OpenID Connect authentication"},
+                    <AllowedValueInfo>{"value": "TableauIDWithMFA", "desc": "Tableau ID with multi-factor authentication"},
+                ),
             },
         };
     }

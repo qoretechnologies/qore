@@ -117,8 +117,8 @@ public class TableauUsersDataProvider inherits TableauDataProviderBase {
     }
 
     #! Returns the record type
-    private *AbstractDataProviderType getRecordTypeImpl() {
-        return new TableauUserDataType();
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return new TableauUserDataType().getFields();
     }
 
     #! Returns an iterator for records matching the search criteria

@@ -27,7 +27,7 @@ public namespace TableauDataProvider {
 
 #! Tableau user record type
 public class TableauUserDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for Tableau users
         const Fields = {
             "id": {
@@ -61,7 +61,7 @@ public class TableauUserDataType inherits HashDataType {
                 "desc": "The site role of the user",
             },
             "lastLogin": {
-                "type": StringOrNothingType,
+                "type": DateOrNothingType,
                 "display_name": "Last Login",
                 "short_desc": "When the user last logged in",
                 "desc": "When the user last logged in",

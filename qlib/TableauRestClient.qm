@@ -339,7 +339,7 @@ public class TableauRestConnection inherits RestClient::RestConnection {
                     "display_name": "Subdomain",
                     "short_desc": "Tableau Cloud pod name",
                     "type": "string",
-                    "desc": "The Tableau Cloud pod name (e.g., 'us-east-23b', '10ax', '10ay'). "
+                    "desc": "The Tableau Cloud pod name (e.g., `us-east-23b`, `10ax`, `10ay`). "
                         "For Tableau Cloud, the server address must contain the pod name.",
                     "preselected": True,
                 },
@@ -370,7 +370,7 @@ public class TableauRestConnection inherits RestClient::RestConnection {
                     "display_name": "API Version",
                     "short_desc": "Tableau REST API version",
                     "type": "string",
-                    "desc": "The Tableau REST API version (e.g., '3.27')",
+                    "desc": "The Tableau REST API version (e.g., `3.27`)",
                     "default_value": TableauRestClient::DefaultApiVersion,
                 },
                 "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
@@ -394,7 +394,7 @@ public class TableauRestConnection inherits RestClient::RestConnection {
                     "content": "Enter your Tableau Cloud pod name (subdomain) and Personal Access "
                         "Token credentials.\n\n"
                         "- **Subdomain**: The pod name from your Tableau Cloud URL "
-                        "(e.g., 'us-east-23b' from https://us-east-23b.online.tableau.com)\n"
+                        "(e.g., `us-east-23b` from https://us-east-23b.online.tableau.com)\n"
                         "- **Token Name / Secret**: Create a Personal Access Token in your "
                         "Tableau account settings",
                 },

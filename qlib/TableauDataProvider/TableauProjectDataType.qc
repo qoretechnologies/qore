@@ -27,7 +27,7 @@ public namespace TableauDataProvider {
 
 #! Tableau project record type
 public class TableauProjectDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for Tableau projects
         const Fields = {
             "id": {
@@ -49,13 +49,13 @@ public class TableauProjectDataType inherits HashDataType {
                 "desc": "The description of the project",
             },
             "createdAt": {
-                "type": StringOrNothingType,
+                "type": DateOrNothingType,
                 "display_name": "Created At",
                 "short_desc": "When the project was created",
                 "desc": "When the project was created",
             },
             "updatedAt": {
-                "type": StringOrNothingType,
+                "type": DateOrNothingType,
                 "display_name": "Updated At",
                 "short_desc": "When the project was last updated",
                 "desc": "When the project was last updated",
