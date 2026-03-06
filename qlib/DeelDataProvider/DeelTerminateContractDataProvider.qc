@@ -32,6 +32,7 @@ public class DeelTerminateContractRequestDataType inherits HashDataType {
             "contract_id": {
                 "type": StringType,
                 "display_name": "Contract ID",
+                "ref_data": "contracts",
                 "short_desc": "The contract ID to terminate",
                 "desc": "The unique identifier of the contract to terminate",
                 "required": True,

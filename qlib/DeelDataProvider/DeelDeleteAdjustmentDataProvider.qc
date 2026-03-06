@@ -32,6 +32,7 @@ public class DeelDeleteAdjustmentRequestDataType inherits HashDataType {
             "adjustment_id": {
                 "type": StringType,
                 "display_name": "Adjustment ID",
+                "ref_data": "adjustments",
                 "short_desc": "The adjustment ID to delete",
                 "desc": "The unique identifier of the invoice adjustment to delete",
                 "required": True,
@@ -52,7 +53,7 @@ public class DeelDeletedResponseDataType inherits HashDataType {
                 "type": SoftBoolOrNothingType,
                 "display_name": "Deleted",
                 "short_desc": "Whether the record was deleted",
-                "desc": "True if the record was successfully deleted",
+                "desc": "`True` if the record was successfully deleted",
             },
         };
     }

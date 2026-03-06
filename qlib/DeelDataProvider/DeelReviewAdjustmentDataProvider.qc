@@ -32,6 +32,7 @@ public class DeelReviewAdjustmentRequestDataType inherits HashDataType {
             "adjustment_id": {
                 "type": StringType,
                 "display_name": "Adjustment ID",
+                "ref_data": "adjustments",
                 "short_desc": "The adjustment ID to review",
                 "desc": "The unique identifier of the invoice adjustment to review",
                 "required": True,

@@ -220,7 +220,6 @@ public class DeelRestConnection inherits RestClient::RestConnection {
                         "Both **personal tokens** (linked to a user account) and "
                         "**organization tokens** (service-level access) are supported.",
                     "sensitive": True,
-                    "preselected": True,
                 },
                 "use_sandbox": <ConnectionOptionInfo>{
                     "display_name": "Use Sandbox",
@@ -381,7 +380,7 @@ public class DeelRestConnection inherits RestClient::RestConnection {
         @return a @ref DeelRestClient object
     */
     private DeelRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
-        return new DeelRestClient(getConnectionOptions(), !connect);
+        return new DeelRestClient(getConnectionOptions(rtopts), !connect);
     }
 
     #! Returns the ConnectionSchemeInfo hash for this object

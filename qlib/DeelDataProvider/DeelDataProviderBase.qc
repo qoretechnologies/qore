@@ -305,6 +305,7 @@ public class DeelDataProviderBase inherits DataProvider::AbstractDataProvider {
             "adjustments": True,
             "time_off_types": True,
             "time_off_requests": True,
+            "invoices": True,
         };
     }
 
@@ -322,6 +323,7 @@ public class DeelDataProviderBase inherits DataProvider::AbstractDataProvider {
             case "adjustments": return getReferenceAdjustments();
             case "time_off_types": return getReferenceTimeOffTypes();
             case "time_off_requests": return getReferenceTimeOffRequests();
+            case "invoices": return getReferenceInvoices();
         }
     }
 
@@ -457,6 +459,27 @@ public class DeelDataProviderBase inherits DataProvider::AbstractDataProvider {
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::DEBUG, "getReferenceTimeOffRequests: error fetching requests: %s",
                 ex.desc);
+        }
+        return rv;
+    }
+
+    #! Returns available invoices for reference data
+    private *list<hash<AllowedValueInfo>> getReferenceInvoices() {
+        list<hash<AllowedValueInfo>> rv = ();
+        try {
+            list<hash<auto>> records = fetchAllPages("invoices", "invoices", NOTHING, DefaultPageSize);
+            foreach hash<auto> record in (records) {
+                string id = string(record.id);
+                string display_name = sprintf("Invoice %s", id);
+                rv += <AllowedValueInfo>{
+                    "display_name": display_name,
+                    "short_desc": record.status ?? "unknown",
+                    "desc": sprintf("%s (Status: %s)", display_name, record.status ?? "unknown"),
+                    "value": id,
+                };
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::DEBUG, "getReferenceInvoices: error fetching invoices: %s", ex.desc);
         }
         return rv;
     }

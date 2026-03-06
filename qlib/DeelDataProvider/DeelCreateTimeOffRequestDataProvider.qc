@@ -92,6 +92,7 @@ public class DeelCreateTimeOffRequestRequestDataType inherits HashDataType {
             "contract_id": {
                 "type": StringType,
                 "display_name": "Contract ID",
+                "ref_data": "contracts",
                 "short_desc": "The associated contract ID",
                 "desc": "The unique identifier of the contract for this time-off request",
                 "required": True,
@@ -99,6 +100,7 @@ public class DeelCreateTimeOffRequestRequestDataType inherits HashDataType {
             "type_id": {
                 "type": StringType,
                 "display_name": "Time-Off Type ID",
+                "ref_data": "time_off_types",
                 "short_desc": "The time-off type ID",
                 "desc": "The ID of the time-off type (entitlement) to use for this request",
                 "required": True,
