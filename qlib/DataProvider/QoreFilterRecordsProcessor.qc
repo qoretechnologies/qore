@@ -187,6 +187,18 @@ public class QoreFilterRecordsProcessor inherits AbstractDataProvider {
         return True;
     }
 
+    #! Returns the input type as the output type (filter does not change record structure)
+    /** @param input_type the output type from the preceding pipeline state
+
+        @return the input type unchanged, since filtering only drops records without modifying them
+
+        @since %DataProvider 3.4
+    */
+    private *AbstractDataProviderType getPipelineProcessorOutputTypeWithInputTypeImpl(
+            *AbstractDataProviderType input_type) {
+        return input_type;
+    }
+
     #! Returns the processor capability bitfield
     private int getProcessorCapabilitiesImpl() {
         return DPC_FILTER;

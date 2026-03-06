@@ -415,22 +415,13 @@ public class Http2ClientPollOperation inherits HttpClientPollOperation {
                 *hash<auto> stream_ctx;
                 {
                     AutoLock al(stream_lock);
-                    if (is_end) {
-                        cb = remove stream_callbacks{sid};
-                        stream_ctx = remove stream_ctxs{sid};
-                        if (cb) {
-                            --active_stream_count;
-                        }
-                    } else {
-                        cb = stream_callbacks{sid};
-                        stream_ctx = stream_ctxs{sid};
-                    }
+                    cb = stream_callbacks{sid};
+                    stream_ctx = stream_ctxs{sid};
                     if (cb) {
                         callback_dispatched = True;
                     }
                 }
                 if (cb) {
-
                     try {
                         cb(output + {"ctx": stream_ctx}, NOTHING);
                     } catch (hash<ExceptionInfo> ex) {
@@ -439,6 +430,16 @@ public class Http2ClientPollOperation inherits HttpClientPollOperation {
                     }
                 } else {
                     log(LoggerLevel::DEBUG, "discarding response for cancelled stream %d", stream_id);
+                }
+                # Remove stream AFTER callback completes so the stream handle's
+                # state is already Complete before the stream becomes unavailable
+                # for sends — eliminates the race where isDone() returns False
+                # but the stream is already gone from the map
+                if (is_end && cb) {
+                    AutoLock al(stream_lock);
+                    remove stream_callbacks{sid};
+                    remove stream_ctxs{sid};
+                    --active_stream_count;
                 }
             }
 

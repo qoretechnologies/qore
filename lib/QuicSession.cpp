@@ -1925,6 +1925,10 @@ int QuicSession::waitForStreamDrain(int64_t stream_id, int timeout_ms) {
         }
     }
 
+    if (closed_.load(std::memory_order_acquire)) {
+        return -1;  // session closing
+    }
+
     if (timeout_ms == 0) {
         return 1;  // no wait requested, buffer is full
     }
@@ -1943,13 +1947,18 @@ int QuicSession::waitForStreamDrain(int64_t stream_id, int timeout_ms) {
         {
             std::unique_lock<std::mutex> dlock(drain_mtx_);
             auto gen_changed = [this, gen]() {
-                return drain_gen_.load(std::memory_order_acquire) != gen;
+                return closed_.load(std::memory_order_acquire)
+                    || drain_gen_.load(std::memory_order_acquire) != gen;
             };
             if (timeout_ms < 0) {
                 drain_cv_.wait(dlock, gen_changed);
             } else {
                 drain_cv_.wait_until(dlock, deadline, gen_changed);
             }
+        }
+
+        if (closed_.load(std::memory_order_acquire)) {
+            return -1;  // session closing
         }
 
         // Re-check actual predicate under mtx_
@@ -2103,10 +2112,41 @@ QuicStreamInfo* QuicSession::getOrCreateStream(int64_t stream_id) {
 void QuicSession::markStreamComplete(int64_t stream_id) {
     auto it = streams_.find(stream_id);
     if (it != streams_.end() && !it->second->body_complete) {
-        printd(5, "QuicSession::markStreamComplete() stream_id=" QLLD " body_size=%d status=%d\n",
-            stream_id, (int)it->second->body.size(), it->second->status_code);
+        printd(5, "QuicSession::markStreamComplete() stream_id=" QLLD " body_size=%d status=%d dispatched=%d\n",
+            stream_id, (int)it->second->body.size(), it->second->status_code,
+            it->second->dispatched ? 1 : 0);
         it->second->state = QuicStreamState::Closed;
         it->second->body_complete = true;
+
+        // If stream was dispatched via headers-only mode, the handler is reading DATA
+        // incrementally. Keep stream in map for continued DATA accumulation; don't push
+        // to completed_streams or erase. Notify the handler's condition variable.
+        if (it->second->dispatched) {
+            printd(5, "QuicSession::markStreamComplete() stream_id=" QLLD " dispatched, keeping in map\n",
+                stream_id);
+            // Signal per-stream notifier first (targeted wakeup), fallback to session-wide CV
+            auto nit = stream_notifiers_.find(stream_id);
+            if (nit != stream_notifiers_.end()) {
+                nit->second->signal();
+            } else {
+                {
+                    std::lock_guard<std::mutex> lg(stream_data_mtx_);
+                    stream_data_gen_.fetch_add(1, std::memory_order_release);
+                }
+                stream_data_cv_.notify_all();
+            }
+            return;
+        }
+
+        // In headers-only mode, if headers are complete but the stream hasn't been
+        // dispatched yet (e.g., HEADERS + DATA + END_STREAM arrived in one batch),
+        // keep the stream in the map so takeHeadersReadyStreamCopy() can find it.
+        if (headers_only_mode_ && it->second->headers_complete) {
+            printd(5, "QuicSession::markStreamComplete() stream_id=" QLLD " headers-only mode, keeping in map\n",
+                stream_id);
+            return;
+        }
+
         completed_streams_.push(stream_id);
         has_completed_streams_.store(true, std::memory_order_release);
     }
@@ -2155,6 +2195,119 @@ bool QuicSession::hasCompletedStreams() const {
     return has_completed_streams_.load(std::memory_order_acquire);
 }
 
+void QuicSession::setHeadersOnlyMode(bool v) {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    headers_only_mode_ = v;
+}
+
+std::unique_ptr<QuicStreamInfo> QuicSession::takeHeadersReadyStreamCopy(
+        std::shared_ptr<StreamNotifier>* notifier_out) {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    for (auto& [id, info] : streams_) {
+        if (info->headers_complete && !info->dispatched) {
+            // Copy stream info for the caller (headers, method, path, etc.)
+            auto copy = std::make_unique<QuicStreamInfo>(*info);
+            // Clear body on the COPY: any DATA that arrived with HEADERS stays
+            // in the original for takeStreamData()/readQuicStreamDataBlock() to return.
+            copy->body.clear();
+            info->dispatched = true;
+
+            // Create per-stream notifier for targeted wakeup
+            auto notifier = std::make_shared<StreamNotifier>();
+            stream_notifiers_[id] = notifier;
+            if (notifier_out) {
+                *notifier_out = notifier;
+            }
+
+            printd(5, "QuicSession::takeHeadersReadyStreamCopy() stream_id=" QLLD "\n", id);
+            return copy;
+        }
+    }
+    return nullptr;
+}
+
+bool QuicSession::isStreamComplete(int64_t stream_id) const {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    auto it = streams_.find(stream_id);
+    if (it == streams_.end()) {
+        return true;  // Stream not found, treat as complete
+    }
+    return it->second->body_complete;
+}
+
+void QuicSession::cleanupStream(int64_t stream_id) {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    auto it = streams_.find(stream_id);
+    if (it != streams_.end()) {
+        printd(5, "QuicSession::cleanupStream() stream_id=" QLLD " removing dispatched stream\n",
+            stream_id);
+        streams_.erase(it);
+    }
+    stream_notifiers_.erase(stream_id);
+}
+
+std::shared_ptr<StreamNotifier> QuicSession::getStreamNotifier(int64_t stream_id) const {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    auto it = stream_notifiers_.find(stream_id);
+    if (it != stream_notifiers_.end()) {
+        return it->second;
+    }
+    return nullptr;
+}
+
+QoreValue QuicSession::takeStreamData(int64_t stream_id, bool& complete) {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    auto it = streams_.find(stream_id);
+    if (it == streams_.end()) {
+        complete = true;  // Stream not found, treat as complete
+        return QoreValue();
+    }
+
+    // Atomic: extract data AND check completion under one lock
+    complete = it->second->body_complete;
+
+    if (it->second->body.empty()) {
+        return QoreValue();  // NOTHING — caller checks 'complete' to decide next step
+    }
+
+    // Extract data with swap — avoids copy and releases vector memory
+    std::vector<char> data;
+    data.swap(it->second->body);
+    size_t consumed = data.size();
+
+    // Consumption-driven flow control: extend QUIC windows only when the handler
+    // consumes data, not when it arrives. This naturally caps the buffer to the
+    // initial flow control window (QUIC_SERVER_INITIAL_MAX_STREAM_DATA = 256KB)
+    // and provides backpressure when the handler is slow.
+    if (conn_) {
+        ngtcp2_conn_extend_max_stream_offset(conn_, stream_id,
+                                              static_cast<uint64_t>(consumed));
+        ngtcp2_conn_extend_max_offset(conn_, static_cast<uint64_t>(consumed));
+        // Signal that MAX_STREAM_DATA/MAX_DATA frames need to be sent so the peer
+        // can continue sending. Without this, the window update is delayed until
+        // the next natural I/O cycle (timer or incoming packet).
+        pending_write_.store(true, std::memory_order_release);
+    }
+
+    SimpleRefHolder<BinaryNode> bin(new BinaryNode());
+    bin->append(data.data(), data.size());
+    return bin.release();
+}
+
+void QuicSession::waitForStreamData(int timeout_ms) {
+    if (closed_.load(std::memory_order_acquire)) {
+        return;
+    }
+    unsigned gen = stream_data_gen_.load(std::memory_order_acquire);
+    std::unique_lock<std::mutex> lk(stream_data_mtx_);
+    int wait_ms = timeout_ms >= 0 ? std::min(timeout_ms, 100) : 100;
+    stream_data_cv_.wait_for(lk, std::chrono::milliseconds(wait_ms),
+        [this, gen]() {
+            return closed_.load(std::memory_order_acquire)
+                || stream_data_gen_.load(std::memory_order_acquire) != gen;
+        });
+}
+
 bool QuicSession::isHandshakeComplete() const {
     // No lock needed: handshake_completed_ is std::atomic<bool>
     return handshake_completed_.load(std::memory_order_acquire);
@@ -2166,6 +2319,32 @@ bool QuicSession::isClosed() const {
         return true;
     }
     return ngtcp2_conn_in_closing_period(conn_) || ngtcp2_conn_in_draining_period(conn_);
+}
+
+void QuicSession::markClosed() {
+    closed_.store(true, std::memory_order_release);
+
+    // Wake all per-stream notifiers (targeted wakeup for dispatched stream handlers)
+    {
+        std::lock_guard<std::recursive_mutex> lock(mtx_);
+        for (auto& [id, notifier] : stream_notifiers_) {
+            notifier->markClosed();
+        }
+    }
+
+    // Wake all handler threads blocked in waitForStreamData() (session-wide fallback)
+    stream_data_gen_.fetch_add(1, std::memory_order_release);
+    {
+        std::lock_guard<std::mutex> lg(stream_data_mtx_);
+    }
+    stream_data_cv_.notify_all();
+
+    // Wake all handler threads blocked in waitForStreamDrain()
+    drain_gen_.fetch_add(1, std::memory_order_release);
+    {
+        std::lock_guard<std::mutex> lg(drain_mtx_);
+    }
+    drain_cv_.notify_all();
 }
 
 ssize_t QuicSession::writeConnectionClose(uint8_t* buf, size_t buflen) {
@@ -2933,6 +3112,7 @@ int QuicSession::h3EndHeadersCallback(nghttp3_conn* /* conn */, int64_t stream_i
         auto* session = static_cast<QuicSession*>(conn_user_data);
         auto* stream = session->getOrCreateStream(stream_id);
         stream->headers_complete = true;
+        stream->headers_end_stream = (fin != 0);
 
         // Pre-allocate body buffer using content-length hint to avoid repeated
         // reallocation in h3RecvDataCallback
@@ -2960,6 +3140,23 @@ int QuicSession::h3EndHeadersCallback(nghttp3_conn* /* conn */, int64_t stream_i
             return 0;
         }
 
+        // In headers-only mode, dispatch immediately on HEADERS
+        if (session->headers_only_mode_) {
+            if (fin) {
+                // FIN on HEADERS = no body; mark truly complete
+                printd(5, "QuicSession::h3EndHeadersCallback() stream_id=" QLLD " headers-only mode "
+                    "FIN on HEADERS - marking complete\n", stream_id);
+                session->markStreamComplete(stream_id);
+            } else {
+                // No FIN = body expected; stream stays in map with headers_complete=true
+                // (set above) so takeHeadersReadyStreamCopy() can find it.
+                // body_complete is NOT set — DATA frames are expected.
+                printd(5, "QuicSession::h3EndHeadersCallback() stream_id=" QLLD " headers-only mode "
+                    "no FIN - headers ready for dispatch\n", stream_id);
+            }
+            return 0;
+        }
+
         // If fin is set, the stream has no body — mark it complete now
         if (fin) {
             printd(5, "QuicSession::h3EndHeadersCallback() stream_id=" QLLD " FIN set - marking complete (body=%d)\n",
@@ -2980,7 +3177,20 @@ int QuicSession::h3RecvDataCallback(nghttp3_conn* /* conn */, int64_t stream_id,
                                      void* conn_user_data, void* /* stream_user_data */) {
     try {
         auto* session = static_cast<QuicSession*>(conn_user_data);
-        auto* stream = session->getOrCreateStream(stream_id);
+        // Use find() instead of getOrCreateStream() to avoid recreating zombie streams
+        // that were already cleaned up by the handler (via cleanupStream())
+        auto it = session->streams_.find(stream_id);
+        if (it == session->streams_.end()) {
+            // Stream was cleaned up — extend flow control so the connection continues,
+            // but discard the data
+            printd(5, "h3RecvDataCallback() stream_id=" QLLD " datalen=%d — stream already cleaned up\n",
+                stream_id, (int)datalen);
+            ngtcp2_conn_extend_max_stream_offset(session->conn_, stream_id,
+                                                  static_cast<uint64_t>(datalen));
+            ngtcp2_conn_extend_max_offset(session->conn_, static_cast<uint64_t>(datalen));
+            return 0;
+        }
+        auto* stream = it->second.get();
         printd(5, "h3RecvDataCallback() stream_id=" QLLD " datalen=%d body_total=%d\n",
             stream_id, (int)datalen, (int)(stream->body.size() + datalen));
 
@@ -2995,6 +3205,28 @@ int QuicSession::h3RecvDataCallback(nghttp3_conn* /* conn */, int64_t stream_id,
             ngtcp2_conn_extend_max_stream_offset(session->conn_, stream_id,
                                                   static_cast<uint64_t>(datalen));
             ngtcp2_conn_extend_max_offset(session->conn_, static_cast<uint64_t>(datalen));
+            return 0;
+        }
+
+        // For dispatched streams (headers-only mode), buffer data and notify handler.
+        // Flow control is NOT extended here — it's extended in takeStreamData() when
+        // the handler actually consumes data (consumption-driven flow control). This
+        // naturally caps the buffer to the initial flow control window
+        // (QUIC_SERVER_INITIAL_MAX_STREAM_DATA = 256KB) and provides backpressure
+        // when the handler is slow.
+        if (stream->dispatched) {
+            stream->body.insert(stream->body.end(), data, data + datalen);
+            // Signal per-stream notifier first (targeted wakeup), fallback to session-wide CV
+            auto nit = session->stream_notifiers_.find(stream_id);
+            if (nit != session->stream_notifiers_.end()) {
+                nit->second->signal();
+            } else {
+                {
+                    std::lock_guard<std::mutex> lg(session->stream_data_mtx_);
+                    session->stream_data_gen_.fetch_add(1, std::memory_order_release);
+                }
+                session->stream_data_cv_.notify_all();
+            }
             return 0;
         }
 

@@ -455,11 +455,8 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
                 *hash<auto> stream_ctx;
                 {
                     AutoLock al(stream_lock);
-                    cb = remove stream_callbacks{sid};
-                    stream_ctx = remove stream_ctxs{sid};
-                    if (cb) {
-                        --active_stream_count;
-                    }
+                    cb = stream_callbacks{sid};
+                    stream_ctx = stream_ctxs{sid};
                     if (cb) {
                         callback_dispatched = True;
                     }
@@ -474,6 +471,14 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
                 } else {
                     log(LoggerLevel::DEBUG, "discarding response for cancelled stream %d",
                         stream_id);
+                }
+                # Remove stream AFTER callback completes so the stream handle's
+                # state is already updated before the stream becomes unavailable
+                if (cb) {
+                    AutoLock al(stream_lock);
+                    remove stream_callbacks{sid};
+                    remove stream_ctxs{sid};
+                    --active_stream_count;
                 }
             }
 

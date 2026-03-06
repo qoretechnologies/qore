@@ -117,6 +117,13 @@ class QoreProcessorsTest inherits QUnit::Test {
         addTestCase("dynamic options - pipeline processor dispatch", \dynamicOptionsPipelineProcessorDispatch());
 
         addTestCase("pass-through output data type", \passThroughOutputDataType());
+        addTestCase("modified pass-through output data type", \modifiedPassThroughOutputDataType());
+        addTestCase("output type with input type - select-fields", \outputTypeWithInputSelectFields());
+        addTestCase("output type with input type - remove-fields", \outputTypeWithInputRemoveFields());
+        addTestCase("output type with input type - set-fields", \outputTypeWithInputSetFields());
+        addTestCase("output type with input type - search-replace", \outputTypeWithInputSearchReplace());
+        addTestCase("output type with input type - filter pass-through", \outputTypeWithInputFilter());
+        addTestCase("output type with input type - edge cases", \outputTypeWithInputEdgeCases());
 
         addTestCase("RegularExpressionArgInfo - RE_Global present", \regexArgInfoReGlobal());
 
@@ -679,6 +686,176 @@ class QoreProcessorsTest inherits QUnit::Test {
 
         # verify the constant value
         assertEq("pass-through", DPAD_PASS_THROUGH);
+    }
+
+    # --- Modified Pass-Through Output Data Type Tests ---
+
+    modifiedPassThroughOutputDataType() {
+        *hash<string, hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActionHash("Qore");
+
+        # verify the constant value
+        assertEq("modified-pass-through", DPAD_MODIFIED_PASS_THROUGH);
+
+        # select-fields should have modified-pass-through output data type
+        assertEq(DPAD_MODIFIED_PASS_THROUGH, actions."select-fields".output_data_type);
+
+        # set-fields should have modified-pass-through output data type
+        assertEq(DPAD_MODIFIED_PASS_THROUGH, actions."set-fields".output_data_type);
+
+        # remove-fields should have modified-pass-through output data type
+        assertEq(DPAD_MODIFIED_PASS_THROUGH, actions."remove-fields".output_data_type);
+
+        # search-replace should have pass-through output data type (field structure unchanged)
+        assertEq(DPAD_PASS_THROUGH, actions."search-replace".output_data_type);
+    }
+
+    # --- Output Type With Input Type Tests ---
+
+    outputTypeWithInputSelectFields() {
+        # build an input type with three fields
+        HashDataType input("TestInput");
+        input.addField(new QoreDataField("a", NOTHING, AbstractDataProviderTypeMap."int"));
+        input.addField(new QoreDataField("b", NOTHING, AbstractDataProviderTypeMap."string"));
+        input.addField(new QoreDataField("c", NOTHING, AbstractDataProviderTypeMap."float"));
+
+        # select only a and c
+        QoreSelectFieldsProcessor proc({"fields": ("a", "c")});
+        *AbstractDataProviderType output = proc.getPipelineProcessorOutputTypeWithInputType(input);
+        assertEq(True, exists output);
+        *hash<string, AbstractDataField> fields = output.getFields();
+        assertEq(2, fields.size());
+        assertEq(True, fields.hasKey("a"));
+        assertEq(True, fields.hasKey("c"));
+        assertEq("int", fields.a.getType().getName());
+        assertEq("float", fields.c.getType().getName());
+    }
+
+    outputTypeWithInputRemoveFields() {
+        HashDataType input("TestInput");
+        input.addField(new QoreDataField("a", NOTHING, AbstractDataProviderTypeMap."int"));
+        input.addField(new QoreDataField("b", NOTHING, AbstractDataProviderTypeMap."string"));
+        input.addField(new QoreDataField("c", NOTHING, AbstractDataProviderTypeMap."float"));
+
+        # remove field b
+        QoreRemoveFieldsProcessor proc({"fields": ("b",)});
+        *AbstractDataProviderType output = proc.getPipelineProcessorOutputTypeWithInputType(input);
+        assertEq(True, exists output);
+        *hash<string, AbstractDataField> fields = output.getFields();
+        assertEq(2, fields.size());
+        assertEq(True, fields.hasKey("a"));
+        assertEq(True, fields.hasKey("c"));
+        assertEq(False, fields.hasKey("b"));
+    }
+
+    outputTypeWithInputSetFields() {
+        HashDataType input("TestInput");
+        input.addField(new QoreDataField("a", NOTHING, AbstractDataProviderTypeMap."int"));
+
+        # set new field b
+        QoreSetFieldsProcessor proc({"fields": {"b": "hello"}});
+        *AbstractDataProviderType output = proc.getPipelineProcessorOutputTypeWithInputType(input);
+        assertEq(True, exists output);
+        *hash<string, AbstractDataField> fields = output.getFields();
+        assertEq(2, fields.size());
+        assertEq(True, fields.hasKey("a"));
+        assertEq(True, fields.hasKey("b"));
+        # original field preserves its type
+        assertEq("int", fields.a.getType().getName());
+    }
+
+    outputTypeWithInputSearchReplace() {
+        HashDataType input("TestInput");
+        input.addField(new QoreDataField("name", NOTHING, AbstractDataProviderTypeMap."string"));
+        input.addField(new QoreDataField("age", NOTHING, AbstractDataProviderTypeMap."int"));
+
+        QoreSearchReplaceProcessor proc({
+            "field": "name", "search": "old", "replace": "new",
+            "regex_options": ("RE_Global",),
+        });
+        *AbstractDataProviderType output = proc.getPipelineProcessorOutputTypeWithInputType(input);
+        # search-replace returns the input type unchanged
+        assertEq(True, exists output);
+        assertEq(input.uniqueHash(), output.uniqueHash());
+    }
+
+    outputTypeWithInputFilter() {
+        HashDataType input("TestInput");
+        input.addField(new QoreDataField("status", NOTHING, AbstractDataProviderTypeMap."string"));
+        input.addField(new QoreDataField("amount", NOTHING, AbstractDataProviderTypeMap."int"));
+
+        # filter returns input type unchanged
+        hash<DataProviderExpression> expr = <DataProviderExpression>{
+            "exp": "==",
+            "args": (<DataProviderFieldReference>{"field": "status"}, "active"),
+        };
+        QoreFilterRecordsProcessor proc({"where_cond": expr});
+        *AbstractDataProviderType output = proc.getPipelineProcessorOutputTypeWithInputType(input);
+        assertEq(True, exists output);
+        assertEq(input.uniqueHash(), output.uniqueHash());
+
+        # record-limit also returns input type unchanged
+        QoreRecordLimitProcessor limit_proc({"limit": 10});
+        *AbstractDataProviderType limit_output = limit_proc.getPipelineProcessorOutputTypeWithInputType(input);
+        assertEq(True, exists limit_output);
+        assertEq(input.uniqueHash(), limit_output.uniqueHash());
+    }
+
+    outputTypeWithInputEdgeCases() {
+        # NOTHING input type
+        QoreSelectFieldsProcessor sel({"fields": ("a",)});
+        assertNothing(sel.getPipelineProcessorOutputTypeWithInputType());
+
+        QoreRemoveFieldsProcessor rem({"fields": ("a",)});
+        assertNothing(rem.getPipelineProcessorOutputTypeWithInputType());
+
+        QoreSearchReplaceProcessor srp({
+            "field": "x", "search": "a", "replace": "b",
+            "regex_options": ("RE_Global",),
+        });
+        assertNothing(srp.getPipelineProcessorOutputTypeWithInputType());
+
+        # unconfigured processor
+        QoreSelectFieldsProcessor unconfigured();
+        HashDataType input("TestInput");
+        input.addField(new QoreDataField("a", NOTHING, AbstractDataProviderTypeMap."int"));
+        assertNothing(unconfigured.getPipelineProcessorOutputTypeWithInputType(input));
+
+        # unconfigured set-fields
+        QoreSetFieldsProcessor unconfigured_set();
+        assertNothing(unconfigured_set.getPipelineProcessorOutputTypeWithInputType(input));
+
+        # select-fields with rename
+        QoreSelectFieldsProcessor rename_proc({"fields": ("x=a", "c")});
+        HashDataType input2("TestInput2");
+        input2.addField(new QoreDataField("a", NOTHING, AbstractDataProviderTypeMap."int"));
+        input2.addField(new QoreDataField("b", NOTHING, AbstractDataProviderTypeMap."string"));
+        input2.addField(new QoreDataField("c", NOTHING, AbstractDataProviderTypeMap."float"));
+        *AbstractDataProviderType output = rename_proc.getPipelineProcessorOutputTypeWithInputType(input2);
+        assertEq(True, exists output);
+        *hash<string, AbstractDataField> fields = output.getFields();
+        assertEq(2, fields.size());
+        assertEq(True, fields.hasKey("x"));
+        assertEq(True, fields.hasKey("c"));
+        assertEq("int", fields.x.getType().getName());
+        assertEq("float", fields.c.getType().getName());
+
+        # set-fields without input type still works (adds only set fields)
+        QoreSetFieldsProcessor set_no_input({"fields": {"x": 1}});
+        *AbstractDataProviderType set_output = set_no_input.getPipelineProcessorOutputTypeWithInputType();
+        assertEq(True, exists set_output);
+        *hash<string, AbstractDataField> set_fields = set_output.getFields();
+        assertEq(1, set_fields.size());
+        assertEq(True, set_fields.hasKey("x"));
+
+        # input type with no fields (e.g., simple type)
+        QoreSelectFieldsProcessor sel2({"fields": ("a",)});
+        assertNothing(sel2.getPipelineProcessorOutputTypeWithInputType(AbstractDataProviderTypeMap."any"));
+
+        # remove-fields: removing all fields returns NOTHING
+        QoreRemoveFieldsProcessor rem_all({"fields": ("a",)});
+        HashDataType input_single("Single");
+        input_single.addField(new QoreDataField("a", NOTHING, AbstractDataProviderTypeMap."int"));
+        assertNothing(rem_all.getPipelineProcessorOutputTypeWithInputType(input_single));
     }
 
     # --- RegularExpressionArgInfo Tests ---

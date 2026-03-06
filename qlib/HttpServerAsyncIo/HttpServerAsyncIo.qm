@@ -175,13 +175,28 @@ public namespace HttpServerAsyncIo {
 
     #! Connection info passed to callbacks
     /** For HTTP/2 connections, \c header_info contains:
-        - \c http2: True for HTTP/2 requests
+        - \c http2: \c True for HTTP/2 requests
         - \c stream_id: The HTTP/2 stream ID (needed for sending response)
+        - \c body_streaming: \c True when the client sent HEADERS without END_STREAM (request body
+          not yet complete); the handler should use \c Socket::readHttp2StreamDataBlock() to read
+          body data incrementally and \c Socket::flushHttp2() to send outgoing data (the handler
+          has exclusive socket access in this mode)
+        - \c headers_end_stream: \c True if END_STREAM was on the HEADERS frame (e.g., GET with
+          no body); when \c True, \c body_streaming is \c False and there is no body to read
+        - \c io_wake: a code closure to call after queuing outgoing data to wake the I/O thread;
+          @note in \c body_streaming mode, \c io_wake has no effect because the I/O thread does not
+          manage the socket — use \c Socket::flushHttp2() instead
 
         For HTTP/3 connections, \c header_info contains:
-        - \c http3: True for HTTP/3 requests
+        - \c http3: \c True for HTTP/3 requests
         - \c session_id: The QUIC session ID
         - \c stream_id: The HTTP/3 stream ID (needed for sending response)
+        - \c body_streaming: \c True when the stream has not received END_STREAM on HEADERS
+        - \c headers_end_stream: \c True if END_STREAM was on the HEADERS frame
+
+        When \c body_streaming is \c True, the following additional key is available after
+        the request is dispatched through \c HttpServer:
+        - \c sock: The \c Socket object for calling stream data methods
 
         For HTTP/2, the \c hdr hash also includes:
         - \c method: The HTTP method

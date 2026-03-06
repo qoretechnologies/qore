@@ -93,6 +93,34 @@ public class QoreRemoveFieldsProcessor inherits AbstractDataProvider {
         return record - field_list;
     }
 
+    #! Computes the output type based on the input type and the configured field removal list
+    /** @param input_type the output type from the preceding pipeline state
+
+        @return a HashDataType with the specified fields removed from the input type,
+        or NOTHING if the input type has no fields or the processor is not configured
+
+        @since %DataProvider 3.4
+    */
+    private *AbstractDataProviderType getPipelineProcessorOutputTypeWithInputTypeImpl(
+            *AbstractDataProviderType input_type) {
+        if (!field_list || !input_type) {
+            return;
+        }
+        *hash<string, AbstractDataField> input_fields = input_type.getFields();
+        if (!input_fields) {
+            return;
+        }
+        # remove the specified fields
+        hash<string, bool> remove_set = map {$1: True}, field_list;
+        HashDataType rv(input_type.getName() + " (filtered)");
+        foreach hash<auto> i in (input_fields.pairIterator()) {
+            if (!remove_set{i.key}) {
+                rv.addField(i.value);
+            }
+        }
+        return rv.getFields() ? rv : NOTHING;
+    }
+
     #! Indicates that this processor does not support the bulk API
     private bool supportsBulkApiImpl() {
         return False;

@@ -6834,6 +6834,10 @@ QoreValue SocketHttp2ServerPollOperation::getOutput() const {
     // Indicate headers-only dispatch (stream still in map for incremental reading)
     if (h2_state == H2S_HEADERS_READY) {
         result->setKeyValue("hdr", true, nullptr);
+        // Indicate whether END_STREAM was on the HEADERS frame itself (no body expected)
+        if (cached_stream->headers_end_stream) {
+            result->setKeyValue("headers_end_stream", true, nullptr);
+        }
     }
 
     return result;

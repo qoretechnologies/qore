@@ -1,0 +1,899 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Tests for HTTP/3 bidirectional streaming support (headers-only dispatch).
+
+    Tests cover:
+    - Unary POST with body over HTTP/3 (baseline)
+    - Server-streaming GET → response via InputStream (baseline)
+    - Client-streaming POST with headers-only dispatch, handler reads body
+      incrementally via readQuicStreamDataBlock()
+    - Headers-end-stream: GET with no body (FIN on HEADERS frame)
+    - body_streaming flag correctly set in header_info
+    - Backward-compat: handler without wantsBodyStreaming() gets buffered body
+*/
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/AsyncSocketIo
+%requires ../../../../qlib/HttpServerAsyncIo
+%requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/HttpClientIo
+
+%exec-class HttpServerH3StreamingTest
+
+#! Size of the test payload
+const TestPayloadSize = 64 * 1024;  # 64 KB
+
+#! Size of each chunk for streaming writes
+
+#! Generates a deterministic binary payload of the given size
+binary sub generatePayload(int size) {
+    return binary(strmul("D", size));
+}
+
+#! Handler that echoes the POST body back in the response
+class EchoHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, body ?? "", {
+            "Content-Type": hdr."content-type" ?? "application/octet-stream",
+        });
+    }
+}
+
+#! Handler that returns a large InputStream response (server-streaming)
+class StreamResponseHandler inherits AbstractHttpRequestHandler {
+    private {
+        binary payload;
+    }
+
+    constructor(binary payload) {
+        self.payload = payload;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return <HttpResponseInfo>{
+            "code": 200,
+            "body": new BinaryInputStream(payload),
+            "hdr": {
+                "Content-Type": "application/octet-stream",
+                "Content-Length": string(payload.size()),
+            },
+        };
+    }
+}
+
+#! Handler that reads body incrementally via readQuicStreamDataBlock()
+/** Tests headers-only dispatch: the handler is invoked before the request body
+    arrives, then reads body data incrementally using the socket-level
+    readQuicStreamDataBlock() method.
+*/
+class StreamingBodyHandler inherits AbstractHttpRequestHandler {
+    private {
+        #! Received data stored for test verification
+        Mutex data_lock();
+        list<hash<auto>> received_requests();
+    }
+
+    #! Opt in to body streaming so the framework doesn't buffer the body
+    bool wantsBodyStreaming(hash<auto> cx, hash<auto> hdr) {
+        return True;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        int session_id = cx."header-info".session_id;
+        int stream_id = cx."header-info".stream_id;
+        bool body_streaming = cx."header-info".body_streaming ?? False;
+        bool headers_end_stream = cx."header-info".headers_end_stream ?? False;
+        *Socket sock = cx."header-info".sock;
+
+        @debug {
+            printf("StreamingBodyHandler: session=%d stream=%d body_streaming=%y "
+                "headers_end_stream=%y sock=%y body_present=%y\n",
+                session_id, stream_id, body_streaming, headers_end_stream,
+                exists sock, exists body);
+        }
+
+        hash<auto> result = {
+            "method": hdr.method,
+            "path": hdr.path,
+            "body_streaming": body_streaming,
+            "headers_end_stream": headers_end_stream,
+            "session_id": session_id,
+            "stream_id": stream_id,
+        };
+
+        if (body_streaming && !headers_end_stream) {
+            # Read body incrementally
+            @debug { printf("StreamingBodyHandler: entering streaming read loop\n"); }
+            binary accumulated_body = binary();
+            while (True) {
+                *binary chunk = sock.readQuicStreamDataBlock(session_id, stream_id, 10s);
+                @debug { printf("StreamingBodyHandler: read chunk size=%y\n", chunk.size()); }
+                if (!exists chunk) {
+                    @debug { printf("StreamingBodyHandler: no more data, exiting loop\n"); }
+                    # Stream complete (END_STREAM received)
+                    break;
+                }
+                accumulated_body += chunk;
+            }
+            @debug { printf("StreamingBodyHandler: total accumulated=%d\n", accumulated_body.size()); }
+            result.body_size = accumulated_body.size();
+            result.body = accumulated_body;
+        } else if (body) {
+            # Non-streaming: body was provided directly
+            result.body_size = body.size();
+            result.body = body;
+        } else {
+            result.body_size = 0;
+        }
+
+        {
+            AutoLock al(data_lock);
+            received_requests += result;
+        }
+
+        # Return the body size in the response
+        return makeResponse(200, sprintf("%d", result.body_size), {
+            "Content-Type": "text/plain",
+            "X-Body-Streaming": body_streaming ? "true" : "false",
+            "X-Headers-End-Stream": headers_end_stream ? "true" : "false",
+        });
+    }
+
+    #! Returns received requests for test verification
+    list<hash<auto>> getReceivedRequests() {
+        AutoLock al(data_lock);
+        return received_requests;
+    }
+
+    #! Clears received requests
+    clearRequests() {
+        AutoLock al(data_lock);
+        received_requests = ();
+    }
+}
+
+#! Handler that reads one chunk and responds immediately (partial body read)
+class PartialReadHandler inherits AbstractHttpRequestHandler {
+    bool wantsBodyStreaming(hash<auto> cx, hash<auto> hdr) {
+        return True;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        int session_id = cx."header-info".session_id;
+        int stream_id = cx."header-info".stream_id;
+        bool body_streaming = cx."header-info".body_streaming ?? False;
+        *Socket sock = cx."header-info".sock;
+
+        if (body_streaming && sock) {
+            # Read just one chunk and return immediately without reading the rest
+            try {
+                *binary chunk = sock.readQuicStreamDataBlock(session_id, stream_id, 5s);
+                int chunk_size = chunk ? chunk.size() : 0;
+                return makeResponse(200, sprintf("partial:%d", chunk_size), {
+                    "Content-Type": "text/plain",
+                });
+            } catch (hash<ExceptionInfo> ex) {
+                return makeResponse(500, sprintf("error:%s:%s", ex.err, ex.desc), {
+                    "Content-Type": "text/plain",
+                });
+            }
+        }
+        return makeResponse(200, "no-streaming", {"Content-Type": "text/plain"});
+    }
+}
+
+#! Handler for shutdown test — blocks in readQuicStreamDataBlock() until session is closed
+/** Uses a large payload (4MB) so the handler is still reading when server.stop() fires.
+    Signals a gate after receiving the first data chunk to synchronize with the test.
+*/
+class ShutdownTestHandler inherits AbstractHttpRequestHandler {
+    private {
+        Counter reading_gate(1);
+    }
+
+    bool wantsBodyStreaming(hash<auto> cx, hash<auto> hdr) {
+        return True;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        int session_id = cx."header-info".session_id;
+        int stream_id = cx."header-info".stream_id;
+        bool body_streaming = cx."header-info".body_streaming ?? False;
+        *Socket sock = cx."header-info".sock;
+
+        if (body_streaming && sock) {
+            # Signal that we're in the handler and actively reading
+            reading_gate.dec();
+
+            # Read body data — with a 4MB payload and QUIC flow control, the handler
+            # will be blocked in readQuicStreamDataBlock() for many iterations.
+            # server.stop() calls markClosed() which signals the per-stream CV,
+            # causing readQuicStreamDataBlock() to raise QUIC-ERROR immediately.
+            while (True) {
+                try {
+                    *binary chunk = sock.readQuicStreamDataBlock(session_id, stream_id, 30s);
+                    if (!exists chunk) {
+                        break;
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    # Expected: QUIC-ERROR from markClosed() during shutdown
+                    break;
+                }
+            }
+        }
+        return makeResponse(200, "ok", {"Content-Type": "text/plain"});
+    }
+
+    #! Waits until the handler has started reading
+    /** @return 0 on success, ETIMEDOUT on timeout
+    */
+    int waitForReading(timeout t = 10s) {
+        return reading_gate.waitForZero(t);
+    }
+}
+
+#! Handler that exercises timeout handling by reading with a tiny timeout after data
+class TimeoutHandler inherits AbstractHttpRequestHandler {
+    private {
+        Mutex lock();
+        bool timeout_hit = False;
+    }
+
+    bool wantsBodyStreaming(hash<auto> cx, hash<auto> hdr) {
+        return True;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        int session_id = cx."header-info".session_id;
+        int stream_id = cx."header-info".stream_id;
+        bool body_streaming = cx."header-info".body_streaming ?? False;
+        *Socket sock = cx."header-info".sock;
+
+        if (body_streaming && sock) {
+            # Read all available data first
+            binary accumulated = binary();
+            while (True) {
+                try {
+                    # Use 1ms timeout — after reading all available data, this will timeout
+                    *binary chunk = sock.readQuicStreamDataBlock(session_id, stream_id, 1ms);
+                    if (!exists chunk) {
+                        # Stream complete
+                        break;
+                    }
+                    accumulated += chunk;
+                } catch (hash<ExceptionInfo> ex) {
+                    if (ex.err == "QUIC-STREAM-TIMEOUT") {
+                        {
+                            AutoLock al(lock);
+                            timeout_hit = True;
+                        }
+                        # Got timeout — this is the expected path when not all data arrived yet
+                        return makeResponse(408, sprintf("timeout:%d", accumulated.size()), {
+                            "Content-Type": "text/plain",
+                        });
+                    }
+                    rethrow;
+                }
+            }
+            # Got all data without timeout (happens when data arrives in one batch on loopback)
+            return makeResponse(200, sprintf("complete:%d", accumulated.size()), {
+                "Content-Type": "text/plain",
+            });
+        }
+        return makeResponse(200, "no-streaming", {"Content-Type": "text/plain"});
+    }
+
+    bool wasTimeoutHit() {
+        AutoLock al(lock);
+        return timeout_hit;
+    }
+}
+
+class HttpServerH3StreamingTest inherits Test {
+    private {
+        *Logger mLogger;
+        binary mPayload;
+
+        # Self-signed test certificate (localhost, RSA 2048)
+        const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIUahuuRGDlubXWYmiPhjVeT66vtNYwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MDIyMjE5MjIwMVoXDTM2MDIy
+MDE5MjIwMVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEAjZNfLFUyyo02MjZjouaR11FybkZNwDWBG/bhkpTVyj/x
+QKlwKf20LbGSCmMIYHaFnODMg6u6E6sfRJVk+ofwVHBN/Ug+mvoL1zlNJanMdXLH
+7oUsUILY6bVUDPm1ACZmFJsAc9jfHfkluJ6vfYG+DOJbyB0nsMfO9/fvrwndQPUQ
+k9eMq2VfDohni4ijk5BWD/P9UmrciZUNOaNISay469Le5ZrtfGt9An1+Ye3TckJC
+tTF4q7+V+GC88w5QtLd1AMQGf/1ax5cwqQv9SSFvhnwj9o3V3Wkz1dq4XA/9rSA1
+ecPHh/tJeGuvbD11Hyr9LTYjQ+DIel0DV0ZDHdc5vwIDAQABo1MwUTAdBgNVHQ4E
+FgQUYBBsVylVinbbAzTbUt0jRM6mJvwwHwYDVR0jBBgwFoAUYBBsVylVinbbAzTb
+Ut0jRM6mJvwwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAfIAE
+EPvLO+gOnm366xJabLr2Sw3hfmvCq/zSTlPcrB9jdBlOLpMmKcdGiOOCNmzg9+BX
+YNX+I6+MNOGp0j3afWlVwEjiMD66ydSMPEQw0FTzvpIjFN3fHo/MJzFbingRLrk8
+LCo94GmjMBYG+50M8MCKE6EzqfmoYT9fiMJcyJwwdptOWf0URNYKKrG1wRlX4+o8
+uNjQ3VwynI95fAw9WcR/ZtP0pkmCor/hKaYgVRsSGjD78Fu0Uuhm/pCAOuObpEHj
+5eoTlaWC3pZzGA67piqlEDOWiRi9Mo2CzG0t5fmQ83KB51ImauKdYB21whxjkZ+5
+BjwMC4hqSD+bzO2B+A==
+-----END CERTIFICATE-----";
+
+        const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCNk18sVTLKjTYy
+NmOi5pHXUXJuRk3ANYEb9uGSlNXKP/FAqXAp/bQtsZIKYwhgdoWc4MyDq7oTqx9E
+lWT6h/BUcE39SD6a+gvXOU0lqcx1csfuhSxQgtjptVQM+bUAJmYUmwBz2N8d+SW4
+nq99gb4M4lvIHSewx8739++vCd1A9RCT14yrZV8OiGeLiKOTkFYP8/1SatyJlQ05
+o0hJrLjr0t7lmu18a30CfX5h7dNyQkK1MXirv5X4YLzzDlC0t3UAxAZ//VrHlzCp
+C/1JIW+GfCP2jdXdaTPV2rhcD/2tIDV5w8eH+0l4a69sPXUfKv0tNiND4Mh6XQNX
+RkMd1zm/AgMBAAECggEAATo1WYTgPK75DiS4PBR5UDS7DryvoN/LNOsGLUdQC9b+
+aEaacSrAvKKs9vJr2KuTtfahn0SbsjRKFZtL9aYRuHxZbhLfGWiF4MGflcOBQRq+
+eVFl6clwnaS+S/cq5rZD1/WODUhkisslqhI/cubvNwe2rvyduE510LgxYkLuIZ7a
++SCQz1XyPyhb8eVrWIZiprufjqXvDy01MC74l3ZYqaq1hr1oKi0ZDHI95Os7gtwQ
+4HQ3qdJsmYfbaf1223REp8gybnshsxkyjhKRU3nG7ZvgrRRMFkJvfHZ8VcS3cvsK
+ccKBJg7376+VDtc+RHUcBMyVZ881y4Rq2t6ssYVJVQKBgQDFq+N7ZGKOtQChSIXn
+ju/gP5WzSKJFaZhdkSggHi1K+PkuCZ1SXzKD3CPibreSUx9hzoZAAmTjzOfwhVZ7
+5HDqhrKfkWNeThAdXlglhNX5LVKhhmBsNGawANO8Pmq+pueWhK/76XgiGcOknyt6
+NH1ZE/QZpFeZB2binEhf6leYGwKBgQC3WgF2eaj2c4pugq13oZ9BHms5nsbYQgj8
+1H2C1wsgJNiz4tq6xFdvjiaw+r1OrCFrl9nz7npFc7uohtrRxXr7sq5nwMPO3QAP
+VxzyZ/TFP/FI70Avz6x+xX7HIlptpQ1mWacsdrvtoIG1c8veEJTyA4JgjoMhdDer
+JuPze+ZHLQKBgAzuLIhCzcul/W+Pberyx7A0mJdMtgiyWpwsRaKsNqxD0xD24gqk
+XYqQmOxT78Arnc7pEpEXVwArxDRQlJKwI87DluWnPgfKNXWmWT/DC7gsBc65Go+Z
+ceorc65JqvPjuRx4e4aQBCK+6rRXESICUvzDuGEBBhXljQ5fyMA1dRtnAoGAQSFH
+w74Ttvf0BK2G0SgoWglkLWOpXsiWSLlynDenTBPKppu+9vkn1gi41cU72eZrOL0I
+Pw5HgMRLtOGyeTGdLiuaqGBhLepzSv+22KT03dyI6U+TjWhH7gBZuIMLfEdVKzZN
+nA3RU+fgK4SmtotNXWrBtWrqScfuvm1iK+unMUECgYBrwc1rU/GI9tH4MWvBX99n
+pmFneeIUuXJajOsh7jUyTxcrHl+4kkgHDExuFMNPHfrIG8xCj43fjzxD/spz3xRS
++Ki3i3lYOFNhTUCREt5Xx23hkksK6j7SYlfY0IV2UruWt/UubpsfEqxC1Uk07NTo
+l50Xb2GWQesIt9k5jF5IOw==
+-----END PRIVATE KEY-----";
+    }
+
+    constructor() : Test("HttpServerH3StreamingTest", "1.0") {
+        @debug {
+            set_signal_handler(SIGUSR1, sub (int sig) {
+                printf("=== SIGUSR1 Thread Stacks ===\n%Y\n=== End Thread Stacks ===\n",
+                    get_all_thread_call_stacks());
+            });
+        }
+
+        mPayload = generatePayload(TestPayloadSize);
+
+        addTestCase("HTTP/3 unary POST (baseline)", \testH3UnaryPost());
+        addTestCase("HTTP/3 server-streaming GET (baseline)", \testH3ServerStreaming());
+        addTestCase("HTTP/3 client-streaming POST (headers-only)", \testH3ClientStreaming());
+        addTestCase("HTTP/3 headers-end-stream GET (no body)", \testH3HeadersEndStream());
+        addTestCase("HTTP/3 body_streaming flag detection", \testH3BodyStreamingFlag());
+        addTestCase("HTTP/3 backward-compat body buffering", \testH3BackwardCompatBuffering());
+        addTestCase("HTTP/3 timeout handling", \testH3Timeout());
+        addTestCase("HTTP/3 oversized body (413)", \testH3OversizedBody());
+        addTestCase("HTTP/3 concurrent streaming", \testH3ConcurrentStreaming());
+        addTestCase("HTTP/3 shutdown during streaming", \testH3ShutdownDuringStreaming());
+        addTestCase("HTTP/3 partial body read + early response", \testH3PartialBodyRead());
+        addTestCase("HTTP/3 headers-only GET (no body read)", \testH3HeadersOnlyGetNoBodyRead());
+
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        mLogger = new Logger("h3-streaming-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            mLogger.addAppender(new StdoutAppender());
+        }
+    }
+
+    #! Creates a new async HTTP server with TLS and HTTP/3 + headers-only
+    private hash<auto> createServer(*hash<auto> opts) {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": mLogger,
+            "debug": True,
+            "async_mode": True,
+            "quic_headers_only": opts.headers_only ?? False,
+            "max_request_body_size": opts.max_request_body_size ?? 0,
+        });
+
+        StreamingBodyHandler streaming_handler();
+        server.setHandler("echo", "/echo", NOTHING, new EchoHandler());
+        server.setHandler("stream-response", "/stream-response", NOTHING,
+            new StreamResponseHandler(mPayload));
+        server.setHandler("streaming-body", "/streaming-body", NOTHING, streaming_handler);
+
+        # Add extra handlers if provided
+        if (opts.extra_handlers) {
+            HashIterator hi(opts.extra_handlers);
+            while (hi.next()) {
+                hash<auto> h = hi.getValue();
+                server.setHandler(hi.getKey(), h.path, NOTHING, h.handler);
+            }
+        }
+
+        server.waitForAsyncIo();
+
+        hash<auto> h2info = server.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "enable_h3": True,
+        });
+        server.waitForAsyncIo();
+
+        return {
+            "server": server,
+            "port": h2info.port,
+            "streaming_handler": streaming_handler,
+        };
+    }
+
+    #! Creates an HTTP/3 client connection manager
+    private HttpClientIo::HttpClientConnectionManager createH3Manager() {
+        return new HttpClientIo::HttpClientConnectionManager(
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "protocol": "h3",
+                "accept_all_certs": True,
+                "logger": mLogger,
+                "request_timeout": 30s,
+                "connect_timeout": 15s,
+            },
+        );
+    }
+
+    # ---- Baseline Tests ----
+
+    #! Unary POST: normal request/response (body buffered before dispatch)
+    testH3UnaryPost() {
+        hash<auto> setup = createServer();
+        HttpServer server = setup.server;
+        on_exit delete server;
+
+        HttpClientIo::HttpClientConnectionManager mgr = createH3Manager();
+        on_exit delete mgr;
+
+        string url = sprintf("https://127.0.0.1:%d", setup.port);
+        hash<auto> resp = mgr.request(url, "POST", "/echo",
+            {"Content-Type": "application/octet-stream"}, mPayload);
+        assertEq(200, resp.status_code, "H3 unary POST response status");
+        binary resp_body;
+        if (resp.body.typeCode() == NT_BINARY) {
+            resp_body = resp.body;
+        } else {
+            resp_body = binary(resp.body);
+        }
+        assertEq(mPayload.size(), resp_body.size(), "H3 unary POST response body size");
+        assertEq(mPayload, resp_body, "H3 unary POST response body content");
+    }
+
+    #! Server-streaming: GET → InputStream response
+    testH3ServerStreaming() {
+        hash<auto> setup = createServer();
+        HttpServer server = setup.server;
+        on_exit delete server;
+
+        HttpClientIo::HttpClientConnectionManager mgr = createH3Manager();
+        on_exit delete mgr;
+
+        string url = sprintf("https://127.0.0.1:%d", setup.port);
+        hash<auto> resp = mgr.request(url, "GET", "/stream-response");
+        assertEq(200, resp.status_code, "H3 server-streaming response status");
+        binary resp_body;
+        if (resp.body.typeCode() == NT_BINARY) {
+            resp_body = resp.body;
+        } else {
+            resp_body = binary(resp.body);
+        }
+        assertEq(TestPayloadSize, resp_body.size(), "H3 server-streaming response body size");
+        assertEq(mPayload, resp_body, "H3 server-streaming response body content");
+    }
+
+    # ---- Headers-Only Dispatch Tests ----
+
+    #! Client-streaming POST: handler reads body via readQuicStreamDataBlock()
+    testH3ClientStreaming() {
+        hash<auto> setup = createServer({"headers_only": True});
+        HttpServer server = setup.server;
+        StreamingBodyHandler handler = setup.streaming_handler;
+        on_exit delete server;
+
+        HttpClientIo::HttpClientConnectionManager mgr = createH3Manager();
+        on_exit delete mgr;
+
+        handler.clearRequests();
+
+        string url = sprintf("https://127.0.0.1:%d", setup.port);
+        hash<auto> resp = mgr.request(url, "POST", "/streaming-body",
+            {"Content-Type": "application/octet-stream"}, mPayload);
+        assertEq(200, resp.status_code, "H3 client-streaming response status");
+
+        # Response body contains the size read by the handler
+        string body_str = resp.body.typeCode() == NT_BINARY
+            ? resp.body.toString() : string(resp.body);
+        int body_size = int(body_str);
+        assertEq(TestPayloadSize, body_size, "H3 client-streaming: handler read correct body size");
+
+        # Verify the header indicates body_streaming was used
+        assertEq("true", resp.headers."x-body-streaming",
+            "H3 client-streaming: body_streaming header");
+        assertEq("false", resp.headers."x-headers-end-stream",
+            "H3 client-streaming: headers_end_stream header");
+
+        # Verify handler's recorded data
+        list<hash<auto>> requests = handler.getReceivedRequests();
+        assertEq(1, requests.size(), "H3 client-streaming: one request received");
+        assertTrue(requests[0].body_streaming, "H3 client-streaming: body_streaming flag set");
+        assertFalse(requests[0].headers_end_stream,
+            "H3 client-streaming: headers_end_stream flag not set");
+        assertEq(TestPayloadSize, requests[0].body_size,
+            "H3 client-streaming: handler accumulated correct body size");
+        assertEq(mPayload, requests[0].body,
+            "H3 client-streaming: handler accumulated correct body content");
+    }
+
+    #! Headers-end-stream: GET with no body (FIN on HEADERS frame)
+    testH3HeadersEndStream() {
+        hash<auto> setup = createServer({"headers_only": True});
+        HttpServer server = setup.server;
+        StreamingBodyHandler handler = setup.streaming_handler;
+        on_exit delete server;
+
+        HttpClientIo::HttpClientConnectionManager mgr = createH3Manager();
+        on_exit delete mgr;
+
+        handler.clearRequests();
+
+        string url = sprintf("https://127.0.0.1:%d", setup.port);
+        hash<auto> resp = mgr.request(url, "GET", "/streaming-body");
+        assertEq(200, resp.status_code, "H3 headers-end-stream response status");
+
+        # Verify headers_end_stream was detected
+        assertEq("true", resp.headers."x-headers-end-stream",
+            "H3 headers-end-stream: header flag set");
+
+        # Verify handler's recorded data
+        list<hash<auto>> requests = handler.getReceivedRequests();
+        assertEq(1, requests.size(), "H3 headers-end-stream: one request received");
+        assertTrue(requests[0].headers_end_stream,
+            "H3 headers-end-stream: flag set in handler");
+        assertEq(0, requests[0].body_size,
+            "H3 headers-end-stream: no body data");
+    }
+
+    #! Verify body_streaming flag is correctly set based on headers-only mode
+    testH3BodyStreamingFlag() {
+        # With headers_only=True and a POST with body, body_streaming should be True
+        hash<auto> setup = createServer({"headers_only": True});
+        HttpServer server = setup.server;
+        StreamingBodyHandler handler = setup.streaming_handler;
+        on_exit delete server;
+
+        HttpClientIo::HttpClientConnectionManager mgr = createH3Manager();
+        on_exit delete mgr;
+
+        handler.clearRequests();
+
+        # POST with body → body_streaming=True, headers_end_stream=False
+        string url = sprintf("https://127.0.0.1:%d", setup.port);
+        hash<auto> resp1 = mgr.request(url, "POST", "/streaming-body",
+            {"Content-Type": "text/plain"}, binary("hello"));
+        assertEq(200, resp1.status_code, "body_streaming flag: POST status");
+
+        list<hash<auto>> requests = handler.getReceivedRequests();
+        assertEq(1, requests.size(), "body_streaming flag: POST request received");
+        assertTrue(requests[0].body_streaming,
+            "body_streaming flag: POST with body → body_streaming=True");
+        assertFalse(requests[0].headers_end_stream,
+            "body_streaming flag: POST with body → headers_end_stream=False");
+    }
+
+    #! Backward-compat: handler without wantsBodyStreaming() gets fully buffered body
+    /** When headers_only=True is set on the server but the handler doesn't override
+        wantsBodyStreaming(), the framework should automatically buffer the body via
+        readQuicStreamDataBlock() before passing it to handleRequest().
+    */
+    testH3BackwardCompatBuffering() {
+        # Create server with headers_only=True — the EchoHandler doesn't override
+        # wantsBodyStreaming() so the framework will buffer the body automatically
+        hash<auto> setup = createServer({"headers_only": True});
+        HttpServer server = setup.server;
+        on_exit delete server;
+
+        HttpClientIo::HttpClientConnectionManager mgr = createH3Manager();
+        on_exit delete mgr;
+
+        string url = sprintf("https://127.0.0.1:%d", setup.port);
+        hash<auto> resp = mgr.request(url, "POST", "/echo",
+            {"Content-Type": "application/octet-stream"}, mPayload);
+        assertEq(200, resp.status_code, "backward-compat: response status");
+
+        # The EchoHandler echoes the body — verify the full body was buffered and passed
+        binary resp_body;
+        if (resp.body.typeCode() == NT_BINARY) {
+            resp_body = resp.body;
+        } else {
+            resp_body = binary(resp.body);
+        }
+        assertEq(mPayload.size(), resp_body.size(), "backward-compat: response body size");
+        assertEq(mPayload, resp_body, "backward-compat: response body content");
+    }
+
+    # ---- Negative/Edge-Case Tests ----
+
+    #! Test 3.1: Timeout handling — handler exercises QUIC-STREAM-TIMEOUT path
+    /** Tests timeout handling with a 1ms read timeout and a large payload.
+        Uses a 512KB payload to increase the likelihood of flow control delays
+        that cause the 1ms timeout to fire between data batches.
+
+        On loopback, all data may still arrive in one batch (no timeout), so
+        the test validates whichever path fires:
+        - 408 with timeout: validates QUIC-STREAM-TIMEOUT exception handling
+        - 200 with complete data: validates normal streaming read to completion
+
+        @note A fully deterministic timeout test would require client-side streaming
+        support (send headers, delay body) which HttpClientIo does not yet support.
+    */
+    testH3Timeout() {
+        TimeoutHandler timeout_handler();
+
+        # Use 512KB payload — larger payloads are more likely to trigger flow
+        # control delays that cause the 1ms read timeout to fire
+        binary large_payload = generatePayload(512 * 1024);
+
+        hash<auto> setup = createServer({
+            "headers_only": True,
+            "extra_handlers": {
+                "timeout": {
+                    "path": "/timeout",
+                    "handler": timeout_handler,
+                },
+            },
+        });
+        HttpServer server = setup.server;
+        on_exit delete server;
+
+        HttpClientIo::HttpClientConnectionManager mgr = createH3Manager();
+        on_exit delete mgr;
+
+        string url = sprintf("https://127.0.0.1:%d", setup.port);
+        hash<auto> resp = mgr.request(url, "POST", "/timeout",
+            {"Content-Type": "application/octet-stream"}, large_payload);
+
+        string body_str = resp.body.typeCode() == NT_BINARY
+            ? resp.body.toString() : string(resp.body);
+
+        if (resp.status_code == 408) {
+            # Timeout path: handler caught QUIC-STREAM-TIMEOUT and returned 408
+            assertTrue(timeout_handler.wasTimeoutHit(), "timeout: handler recorded timeout");
+            assertTrue(body_str =~ /^timeout:/, "timeout: response body format");
+        } else {
+            # Complete path: all data arrived before the 1ms timeout between chunks
+            assertEq(200, resp.status_code, "timeout: response status");
+            assertTrue(body_str =~ /^complete:/, "timeout: response body format");
+            assertEq("complete:" + string(large_payload.size()), body_str,
+                "timeout: all data received");
+        }
+    }
+
+    #! Test 3.2: Oversized body — framework returns 413 via backward-compat buffering
+    testH3OversizedBody() {
+        hash<auto> setup = createServer({
+            "headers_only": True,
+            "max_request_body_size": 1024,
+        });
+        HttpServer server = setup.server;
+        on_exit delete server;
+
+        HttpClientIo::HttpClientConnectionManager mgr = createH3Manager();
+        on_exit delete mgr;
+
+        # Send 2048-byte body to EchoHandler (no wantsBodyStreaming) with 1024-byte limit
+        binary oversized = binary(strmul("X", 2048));
+        string url = sprintf("https://127.0.0.1:%d", setup.port);
+        hash<auto> resp = mgr.request(url, "POST", "/echo",
+            {"Content-Type": "application/octet-stream"}, oversized);
+        assertEq(413, resp.status_code, "oversized body: response status 413");
+    }
+
+    #! Test 3.3: Concurrent streaming — multiple simultaneous POSTs
+    testH3ConcurrentStreaming() {
+        hash<auto> setup = createServer({"headers_only": True});
+        HttpServer server = setup.server;
+        StreamingBodyHandler handler = setup.streaming_handler;
+        on_exit delete server;
+
+        handler.clearRequests();
+
+        int num_concurrent = 4;
+        Counter cnt(num_concurrent);
+        list<hash<auto>> results();
+        Mutex results_lock();
+
+        for (int i = 0; i < num_concurrent; ++i) {
+            int idx = i;
+            background sub () {
+                try {
+                    HttpClientIo::HttpClientConnectionManager mgr = createH3Manager();
+                    on_exit delete mgr;
+
+                    string url = sprintf("https://127.0.0.1:%d", setup.port);
+                    hash<auto> resp = mgr.request(url, "POST", "/streaming-body",
+                        {"Content-Type": "application/octet-stream"}, mPayload);
+                    {
+                        AutoLock al(results_lock);
+                        results += {
+                            "idx": idx,
+                            "status_code": resp.status_code,
+                            "body": resp.body,
+                        };
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    {
+                        AutoLock al(results_lock);
+                        results += {
+                            "idx": idx,
+                            "error": sprintf("%s: %s", ex.err, ex.desc),
+                        };
+                    }
+                }
+                cnt.dec();
+            }();
+        }
+
+        int rc = cnt.waitForZero(60s);
+        assertEq(0, rc, "concurrent: all threads completed");
+
+        # Check results
+        assertEq(num_concurrent, results.size(), "concurrent: all results received");
+        for (int i = 0; i < results.size(); ++i) {
+            assertFalse(exists results[i].error,
+                sprintf("concurrent[%d]: no error (got: %y)", results[i].idx, results[i].error));
+            assertEq(200, results[i].status_code,
+                sprintf("concurrent[%d]: status 200", results[i].idx));
+            string body_str = results[i].body.typeCode() == NT_BINARY
+                ? results[i].body.toString() : string(results[i].body);
+            assertEq(string(TestPayloadSize), body_str,
+                sprintf("concurrent[%d]: correct body size", results[i].idx));
+        }
+    }
+
+    #! Test 3.4: Server shutdown during streaming — handler exits quickly
+    /** Uses a ShutdownTestHandler with a Counter gate to deterministically wait
+        for the handler to start reading before shutting down.  Uses a 4MB payload
+        to ensure the handler is actively reading (not already finished) when
+        server.stop() fires.
+    */
+    testH3ShutdownDuringStreaming() {
+        ShutdownTestHandler shutdown_handler();
+        hash<auto> setup = createServer({
+            "headers_only": True,
+            "extra_handlers": {
+                "shutdown-test": {
+                    "path": "/shutdown-test",
+                    "handler": shutdown_handler,
+                },
+            },
+        });
+        HttpServer server = setup.server;
+        on_exit delete server;
+
+        # Use a 4MB payload — large enough that QUIC flow control ensures the handler
+        # is still actively reading when server.stop() fires
+        binary large_payload = generatePayload(4 * 1024 * 1024);
+
+        # Start streaming POST in background with short request timeout
+        Counter cnt(1);
+        background sub () {
+            try {
+                HttpClientIo::HttpClientConnectionManager mgr =
+                    new HttpClientIo::HttpClientConnectionManager(
+                        <HttpClientIo::HttpClientConnectionManagerOptions>{
+                            "protocol": "h3",
+                            "accept_all_certs": True,
+                            "logger": mLogger,
+                            "request_timeout": 10s,
+                            "connect_timeout": 10s,
+                        },
+                    );
+                on_exit delete mgr;
+                string url = sprintf("https://127.0.0.1:%d", setup.port);
+                mgr.request(url, "POST", "/shutdown-test",
+                    {"Content-Type": "application/octet-stream"}, large_payload);
+            } catch (hash<ExceptionInfo> ex) {
+                # Expected: connection error due to server shutdown
+            }
+            cnt.dec();
+        }();
+
+        # Wait for the handler to start reading (deterministic, no sleep)
+        int gate_rc = shutdown_handler.waitForReading(15s);
+        assertEq(0, gate_rc, "shutdown: handler entered read loop");
+
+        # Measure shutdown time
+        date start = now_us();
+        server.stop();
+        date elapsed = now_us() - start;
+        int elapsed_ms = int(elapsed) * 1000 / 1000000;
+
+        # Shutdown should be fast (< 5s), not 30s
+        assertTrue(elapsed_ms < 5000,
+            sprintf("shutdown: completed in %dms (expected < 5000ms)", elapsed_ms));
+
+        # Wait for background thread to finish (client has 10s request timeout)
+        int rc = cnt.waitForZero(15s);
+        assertEq(0, rc, "shutdown: background thread completed");
+    }
+
+    #! Test 3.5: Partial body read + early response — handler reads one chunk, returns
+    testH3PartialBodyRead() {
+        PartialReadHandler partial_handler();
+        hash<auto> setup = createServer({
+            "headers_only": True,
+            "extra_handlers": {
+                "partial": {
+                    "path": "/partial",
+                    "handler": partial_handler,
+                },
+            },
+        });
+        HttpServer server = setup.server;
+        on_exit delete server;
+
+        HttpClientIo::HttpClientConnectionManager mgr = createH3Manager();
+        on_exit delete mgr;
+
+        string url = sprintf("https://127.0.0.1:%d", setup.port);
+        hash<auto> resp = mgr.request(url, "POST", "/partial",
+            {"Content-Type": "application/octet-stream"}, mPayload);
+
+        assertEq(200, resp.status_code, "partial read: response status 200");
+        string body_str = resp.body.typeCode() == NT_BINARY
+            ? resp.body.toString() : string(resp.body);
+        # Response should start with "partial:" and have a non-zero chunk size
+        assertTrue(body_str =~ /^partial:/, "partial read: response format correct");
+    }
+
+    #! Test 3.6: Headers-only GET with no body — handler doesn't call readQuicStreamDataBlock
+    testH3HeadersOnlyGetNoBodyRead() {
+        hash<auto> setup = createServer({"headers_only": True});
+        HttpServer server = setup.server;
+        StreamingBodyHandler handler = setup.streaming_handler;
+        on_exit delete server;
+
+        HttpClientIo::HttpClientConnectionManager mgr = createH3Manager();
+        on_exit delete mgr;
+
+        handler.clearRequests();
+
+        string url = sprintf("https://127.0.0.1:%d", setup.port);
+        hash<auto> resp = mgr.request(url, "GET", "/streaming-body");
+        assertEq(200, resp.status_code, "headers-only GET: response status");
+
+        # Verify handler saw headers_end_stream=True and body_streaming=False (GET has no body)
+        list<hash<auto>> requests = handler.getReceivedRequests();
+        assertEq(1, requests.size(), "headers-only GET: one request received");
+        assertTrue(requests[0].headers_end_stream,
+            "headers-only GET: headers_end_stream=True");
+        assertEq(0, requests[0].body_size, "headers-only GET: no body data");
+    }
+}

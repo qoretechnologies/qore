@@ -93,6 +93,34 @@ public class QoreSetFieldsProcessor inherits AbstractDataProvider {
         return record + fields;
     }
 
+    #! Computes the output type based on the input type and the configured fields to set
+    /** @param input_type the output type from the preceding pipeline state
+
+        @return a HashDataType with all input fields plus the set fields (using \c auto type for
+        set fields since their runtime values may be templates), or NOTHING if the processor is
+        not configured
+
+        @since %DataProvider 3.4
+    */
+    private *AbstractDataProviderType getPipelineProcessorOutputTypeWithInputTypeImpl(
+            *AbstractDataProviderType input_type) {
+        if (!configured) {
+            return;
+        }
+        HashDataType rv("set-fields output");
+        # start with all input fields, if any
+        if (input_type) {
+            if (*hash<string, AbstractDataField> input_fields = input_type.getFields()) {
+                map rv.addField($1.value), input_fields.pairIterator();
+            }
+        }
+        # add/overwrite with the set fields (typed as auto since values may be templates)
+        foreach string field_name in (keys fields) {
+            rv.addField(new QoreDataField(field_name, NOTHING, AbstractDataProviderType::anyDataType));
+        }
+        return rv.getFields() ? rv : NOTHING;
+    }
+
     #! Indicates that this processor does not support the bulk API
     private bool supportsBulkApiImpl() {
         return False;

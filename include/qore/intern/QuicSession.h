@@ -96,6 +96,11 @@ struct QuicStreamInfo {
     //! RFC 9220: True if this stream is a CONNECT tunnel that must stay in streams_
     //! after being dispatched (so h3RecvDataCallback can route tunnel data)
     bool connect_tunnel_active = false;
+
+    //! True after headers-only dispatch (stream stays in map for DATA accumulation)
+    bool dispatched = false;
+    //! True if FIN was set on the HEADERS frame (no body expected)
+    bool headers_end_stream = false;
 };
 
 //! Per-stream body data for sending via nghttp3 data reader callback
@@ -124,6 +129,54 @@ struct QuicStreamingBodyData {
 };
 
 class qore_socket_private;
+
+//! Per-stream notification object for targeted wakeup (avoids thundering herd)
+/** Heap-allocated and shared via shared_ptr between the I/O thread (signal side)
+    and the handler thread (wait side). Non-copyable (contains mutex/CV), but
+    QuicStreamInfo remains copyable because streams reference this indirectly.
+*/
+struct StreamNotifier {
+    std::mutex mtx;
+    std::condition_variable cv;
+    std::atomic<unsigned> gen{0};
+    std::atomic<bool> closed{false};
+
+    //! Signal that data is available (increments gen, notify_one)
+    void signal() {
+        gen.fetch_add(1, std::memory_order_release);
+        {
+            std::lock_guard<std::mutex> lg(mtx);
+        }
+        cv.notify_one();
+    }
+
+    //! Mark as closed and wake the waiter
+    void markClosed() {
+        closed.store(true, std::memory_order_release);
+        gen.fetch_add(1, std::memory_order_release);
+        {
+            std::lock_guard<std::mutex> lg(mtx);
+        }
+        cv.notify_one();
+    }
+
+    //! Wait for signal or timeout (uses generation-based wakeup)
+    /** @param timeout_ms max wait in ms; capped at 100ms per iteration
+    */
+    void wait(int timeout_ms) {
+        if (closed.load(std::memory_order_acquire)) {
+            return;
+        }
+        unsigned cur_gen = gen.load(std::memory_order_acquire);
+        std::unique_lock<std::mutex> lk(mtx);
+        int wait_ms = timeout_ms >= 0 ? std::min(timeout_ms, 100) : 100;
+        cv.wait_for(lk, std::chrono::milliseconds(wait_ms),
+            [this, cur_gen]() {
+                return closed.load(std::memory_order_acquire)
+                    || gen.load(std::memory_order_acquire) != cur_gen;
+            });
+    }
+};
 
 //! Result from processTimerAndWrite() — coalesces timer check + packet generation
 struct QuicTimerWriteResult {
@@ -375,11 +428,74 @@ public:
     */
     DLLLOCAL bool hasCompletedStreams() const;
 
+    //! Set headers-only dispatch mode
+    /** When true, headers-complete streams are kept in the map for
+        takeHeadersReadyStreamCopy() to find and dispatch them.
+    */
+    DLLLOCAL void setHeadersOnlyMode(bool v);
+
+    //! Atomically find first headers-ready stream, copy it, and mark as dispatched
+    /** Finds the first stream with headers_complete && !dispatched, creates a copy
+        (clears body on copy), marks original as dispatched = true.
+        @return copy of the stream info, or nullptr if none found
+    */
+    DLLLOCAL std::unique_ptr<QuicStreamInfo> takeHeadersReadyStreamCopy(
+        std::shared_ptr<StreamNotifier>* notifier_out = nullptr);
+
+    //! Check if a dispatched stream has received all body data (END_STREAM)
+    /** @param stream_id the HTTP/3 stream ID
+        @return true if body_complete or stream not found (treat as complete)
+    */
+    DLLLOCAL bool isStreamComplete(int64_t stream_id) const;
+
+    //! Remove a dispatched stream from the session map
+    /** Called after the handler has finished processing all body data.
+        @param stream_id the HTTP/3 stream ID
+    */
+    DLLLOCAL void cleanupStream(int64_t stream_id);
+
+    //! Get the per-stream notifier for a dispatched stream (if any)
+    /** @param stream_id the HTTP/3 stream ID
+        @return shared_ptr to the notifier, or nullptr if not found
+    */
+    DLLLOCAL std::shared_ptr<StreamNotifier> getStreamNotifier(int64_t stream_id) const;
+
+    //! Take accumulated body data from a dispatched stream (atomic with completion check)
+    /** Swaps out the body data from stream->body and returns it as BinaryNode*.
+        Also sets @a complete to indicate whether the stream has received END_STREAM.
+        Both data extraction and completion check happen under a single lock to avoid
+        TOCTOU races with the I/O thread.
+
+        When data is consumed, QUIC flow control windows are extended to allow the peer
+        to send more data (consumption-driven flow control).
+
+        Used by handler threads to incrementally read request body data.
+        @param stream_id the HTTP/3 stream ID
+        @param complete [out] set to true if body_complete (END_STREAM received) or stream not found
+        @return body data as BinaryNode*, or NOTHING if no data available
+    */
+    DLLLOCAL QoreValue takeStreamData(int64_t stream_id, bool& complete);
+
+    //! Wait for stream data or completion on a dispatched stream
+    /** Blocks until the stream_data_cv_ is signaled or the timeout expires.
+        @param timeout_ms maximum wait time in milliseconds
+    */
+    DLLLOCAL void waitForStreamData(int timeout_ms);
+
     //! Check if the QUIC handshake is complete
     DLLLOCAL bool isHandshakeComplete() const;
 
     //! Check if the connection is closed or closing
     DLLLOCAL bool isClosed() const;
+
+    //! Mark session as closed — wakes all handler threads blocked in waitForStreamData()/waitForStreamDrain()
+    /** Called by abort() before removing the session from the socket map.
+        Thread-safe: uses atomic store + signals all CVs.
+    */
+    DLLLOCAL void markClosed();
+
+    //! Check if session has been marked closed via markClosed()
+    DLLLOCAL bool isMarkedClosed() const { return closed_.load(std::memory_order_acquire); }
 
     //! Get the connection close error (if any)
     DLLLOCAL ngtcp2_ccerr getCloseError() const;
@@ -926,10 +1042,12 @@ private:
     std::atomic<bool> handshake_completed_{false};   //!< true when handshake completes
     std::atomic<bool> pending_write_{false};         //!< true when data queued for writing
     std::atomic<bool> has_completed_streams_{false};  //!< true when completed streams are queued (lock-free check)
+    bool headers_only_mode_{false};                  //!< when true, markStreamComplete() keeps undispatched headers-complete streams in map
     std::atomic<bool> attempting_0rtt_{false};          //!< true when attempting 0-RTT connection
     std::atomic<bool> early_data_rejected_{false};    //!< true when 0-RTT early data was rejected by server
     std::atomic<bool> early_data_ready_{false};       //!< true when 0-RTT TX key installed (can send early data)
     std::atomic<bool> goaway_sent_{false};           //!< true when final GOAWAY (submitShutdown) has been queued; false during notice-only phase
+    std::atomic<bool> closed_{false};                //!< true when session is being torn down (abort); wakes blocked handlers
     std::atomic<bool> goaway_received_{false};       //!< true when GOAWAY received from peer
     std::atomic<bool> path_migrated_{false};         //!< set by pathValidationCallback on SUCCESS; cleared by clearPathMigrated()
     //! Address change generation counter — incremented each time remote_addr_ is updated.
@@ -947,6 +1065,9 @@ private:
 
     //! Active streams (unordered_map for O(1) lookup vs O(log n) with std::map)
     std::unordered_map<int64_t, std::unique_ptr<QuicStreamInfo>> streams_;
+
+    //! Per-stream notifiers for targeted wakeup of handler threads (protected by mtx_)
+    std::unordered_map<int64_t, std::shared_ptr<StreamNotifier>> stream_notifiers_;
 
     //! Queue of completed stream IDs
     std::queue<int64_t> completed_streams_;
@@ -1024,6 +1145,18 @@ private:
     std::mutex drain_mtx_;
     std::condition_variable drain_cv_;
     std::atomic<unsigned> drain_gen_{0};
+
+    //! Condition variable for stream data notifications (headers-only body streaming)
+    /** Signaled by h3RecvDataCallback and h3EndStreamCallback when data arrives or
+        a dispatched stream completes.  Used by readQuicStreamDataBlock() to wait for
+        body data on dispatched streams without polling.
+
+        Uses a separate non-recursive stream_data_mtx_ + stream_data_cv_ pair with an
+        atomic generation counter (same pattern as drain_cv_).
+    */
+    std::mutex stream_data_mtx_;
+    std::condition_variable stream_data_cv_;
+    std::atomic<unsigned> stream_data_gen_{0};
 };
 
 #endif // _QORE_INTERN_QUICSESSION_H

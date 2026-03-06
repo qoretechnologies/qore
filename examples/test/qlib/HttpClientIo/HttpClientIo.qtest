@@ -122,6 +122,53 @@ class StreamingHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! Handler that supports HTTP/2 bidirectional streaming
+/** Overrides the 5-arg handleRequest to get direct socket access for
+    incremental body reading and response streaming.
+*/
+class BidiEchoHandler inherits AbstractHttpRequestHandler {
+    bool wantsBodyStreaming(hash<auto> cx, hash<auto> hdr) {
+        return hdr."content-type" == "application/x-bidi-test";
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener,
+            Socket s, hash<auto> cx, hash<auto> hdr, *data body) {
+        if (!cx."header-info".body_streaming) {
+            return makeResponse(200, body ?? "no body");
+        }
+        int stream_id = cx."header-info".stream_id;
+
+        # Send response headers (no END_STREAM yet)
+        s.submitHttp2StreamingResponseHeaders(stream_id, 200,
+            {"content-type": "application/octet-stream"});
+        # In body_streaming mode, the handler has exclusive socket access
+        # (h2op is not on the I/O thread). Use flushHttp2() to send queued data.
+        s.flushHttp2();
+
+        # Read body data and echo it back (bidirectional).
+        # Use readHttp2StreamDataBlock() return value as loop control (not isHttp2StreamComplete),
+        # because DATA+END_STREAM may arrive in the same batch as HEADERS, making
+        # isHttp2StreamComplete() True before data is consumed. readHttp2StreamDataBlock()
+        # returns data first, then NOTHING when stream is complete.
+        while (True) {
+            *binary chunk = s.readHttp2StreamDataBlock(stream_id, 5s);
+            if (!chunk) {
+                break;
+            }
+            s.sendHttp2StreamData(stream_id, chunk);
+            s.flushHttp2();
+        }
+        # Send END_STREAM on response
+        s.sendHttp2StreamData(stream_id, NOTHING, True);
+        s.flushHttp2();
+        s.cleanupHttp2Stream(stream_id);
+
+        # Mark response as sent — framework will call setDedicatedExternal()
+        cx."response-sent" = True;
+        return <HttpResponseInfo>{"code": 200, "body": ""};
+    }
+}
+
 class HttpClientIoTest inherits QUnit::Test {
     private {
         HttpServer mServer;
@@ -270,6 +317,15 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         # Connection draining test
         addTestCase("connection draining", \testConnectionDraining());
 
+        # Bidi streaming: sendData after server END_STREAM must not throw HTTP2-STREAM-ERROR
+        addTestCase("H2 bidi streaming send after server close", \testH2BidiSendAfterServerClose());
+
+        # Bidi streaming: echo test with BidiEchoHandler
+        addTestCase("H2 bidi echo streaming", \testH2BidiEchoStreaming());
+
+        # HTTP/3 callback ordering (stream removal after callback)
+        addTestCase("H3 callback ordering", \testH3CallbackOrdering());
+
         set_return_value(main());
     }
 
@@ -293,6 +349,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         mServer.setHandler("slow", "/slow", NOTHING, new SlowHandler());
         mServer.setHandler("error", "/error", NOTHING, new ErrorHandler());
         mServer.setHandler("streaming", "/streaming", NOTHING, new StreamingHandler());
+        mServer.setHandler("bidi", "/bidi", NOTHING, new BidiEchoHandler());
 
         # Add HTTPS listener
         mSslPort = mServer.addListener(<HttpListenerOptionInfo>{
@@ -1797,5 +1854,158 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
         stats = mgr.getStats();
         assertEq(2, stats.total_connections, "second connection created because first is draining");
+    }
+
+    # ---- Bidi Streaming Race Condition Tests ----
+
+    testH2BidiSendAfterServerClose() {
+        AsyncSocketIo::AsyncSocketIoController controller(False);
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "protocol": "h2",
+            "logger": mLogger,
+        });
+        mgr.setController(controller);
+        controller.start();
+        on_exit {
+            controller.stop();
+            mgr.closeAll();
+        }
+
+        # Run multiple iterations to exercise the race window between stream
+        # removal from callbacks and state transition to Complete
+        for (int i = 0; i < 20; ++i) {
+            HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(mSslUrl);
+            HttpClientIo::Http2ClientStreamHandle h2stream =
+                cast<HttpClientIo::Http2ClientStreamHandle>(stream);
+
+            # Start bidirectional streaming (body_streaming=True keeps client send side open)
+            h2stream.startStreaming("POST", "/simple", NOTHING, True);
+
+            # Send END_STREAM immediately — the server's body buffering loop needs this
+            # before it can dispatch to the handler. This tests the race window between
+            # stream removal from callbacks and state transition to Complete.
+            try {
+                h2stream.sendData(binary(), True);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "HTTP2-STREAM-ERROR") {
+                    fail(sprintf("iteration %d: HTTP2-STREAM-ERROR on send: %s - "
+                        "race condition between stream removal and state update",
+                        i, ex.desc));
+                }
+                # HTTPCLIENT-STATE-ERROR is acceptable (state already Complete)
+            }
+
+            # Read the server's response and end_stream marker
+            date end_time = now_us() + 10s;
+            while (now_us() < end_time) {
+                auto data = h2stream.readData(5s);
+                if (!exists data) {
+                    continue;
+                }
+                if (data.typeCode() == NT_HASH && data.end_stream) {
+                    break;
+                }
+                if (data.typeCode() == NT_HASH && data.error) {
+                    break;
+                }
+            }
+
+            assertTrue(h2stream.isDone(), sprintf("iteration %d: stream should be done", i));
+        }
+    }
+
+    testH2BidiEchoStreaming() {
+        AsyncSocketIo::AsyncSocketIoController controller(False);
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "protocol": "h2",
+            "logger": mLogger,
+        });
+        mgr.setController(controller);
+        controller.start();
+        on_exit {
+            controller.stop();
+            mgr.closeAll();
+        }
+
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(mSslUrl);
+        HttpClientIo::Http2ClientStreamHandle h2stream =
+            cast<HttpClientIo::Http2ClientStreamHandle>(stream);
+
+        # Start bidirectional streaming with the bidi-test content type
+        h2stream.startStreaming("POST", "/bidi",
+            {"content-type": "application/x-bidi-test"}, True);
+
+        # Send 3 chunks and collect echoed data
+        list<binary> sent_chunks = ();
+        binary all_received = binary();
+
+        for (int i = 0; i < 3; ++i) {
+            binary chunk = binary(sprintf("chunk-%d", i));
+            sent_chunks += chunk;
+            h2stream.sendData(chunk);
+        }
+        # Send END_STREAM to signal end of request body
+        h2stream.sendData(binary(), True);
+
+        # Read all echoed data until end_stream
+        date end_time = now_us() + 10s;
+        bool got_end_stream = False;
+        while (now_us() < end_time) {
+            auto rdata = h2stream.readData(5s);
+            if (!exists rdata) {
+                continue;
+            }
+            if (rdata.typeCode() == NT_HASH) {
+                if (rdata.end_stream) {
+                    got_end_stream = True;
+                    break;
+                }
+                if (rdata.error) {
+                    fail(sprintf("unexpected error: %y", rdata));
+                    break;
+                }
+            } else if (rdata.typeCode() == NT_BINARY) {
+                all_received += rdata;
+            }
+        }
+
+        assertTrue(got_end_stream, "server should send END_STREAM");
+        assertTrue(h2stream.isDone(), "stream should be done");
+
+        # Verify all sent data was echoed back
+        binary all_sent = binary();
+        map all_sent += $1, sent_chunks;
+        assertEq(all_sent, all_received, "echoed data should match sent data");
+    }
+
+    testH3CallbackOrdering() {
+        if (!mQuicUrl) {
+            testSkip("QUIC not available");
+        }
+
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "protocol": "h3",
+            "connect_timeout": 10s,
+            "request_timeout": 10s,
+            "logger": mLogger,
+        });
+        on_exit mgr.closeAll();
+
+        # Run multiple requests to exercise the callback ordering fix.
+        # Before the fix, the stream was removed from callbacks before the
+        # callback was invoked, creating a window where the stream handle's
+        # state could be inconsistent. After the fix, removal happens after
+        # the callback completes.
+        for (int i = 0; i < 20; ++i) {
+            hash<auto> resp = mgr.request(mQuicUrl, "GET", "/simple");
+            assertEq(200, resp.status_code,
+                sprintf("iteration %d: H3 response should be 200", i));
+        }
     }
 }

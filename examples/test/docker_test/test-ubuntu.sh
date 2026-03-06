@@ -106,6 +106,21 @@ if ! command -v gdb > /dev/null 2>&1; then
     apt-get update -qq && apt-get install -y -qq gdb > /dev/null 2>&1
 fi
 
+# Enable core dumps before dropping to qore user (needs root for /proc/sys writes)
+# suid_dumpable=2 writes cores to the core_pattern location securely (needed for gosu)
+if [ -f /proc/sys/fs/suid_dumpable ]; then
+    echo 2 > /proc/sys/fs/suid_dumpable 2>/dev/null || true
+fi
+# Set core_pattern to write cores to crash-dumps/ (must be done as root)
+CORE_DIR="${QORE_SRC_DIR}/crash-dumps"
+mkdir -p "$CORE_DIR"
+chown qore:qore "$CORE_DIR"
+if [ -w /proc/sys/kernel/core_pattern ]; then
+    echo "$CORE_DIR/core.%e.%p" > /proc/sys/kernel/core_pattern
+elif command -v sysctl > /dev/null 2>&1; then
+    sysctl -w "kernel.core_pattern=$CORE_DIR/core.%e.%p" 2>/dev/null || true
+fi
+
 # own everything by the qore user
 chown -R qore:qore ${QORE_SRC_DIR}
 

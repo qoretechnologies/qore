@@ -57,6 +57,11 @@ test-ubuntu-amd64:
             -d "{\"state\": \"failure\", \"context\": \"${REPO_NAME}\", \"description\": \"Gitlab CI\", \"target_url\": \"${CI_JOB_URL}\"}"
           exit 1
         fi
+  artifacts:
+    when: on_failure
+    paths:
+      - crash-dumps/
+    expire_in: 7 days
 
 test-ubuntu-arm64:
   stage: test
@@ -80,6 +85,11 @@ test-ubuntu-arm64:
             -d "{\"state\": \"failure\", \"context\": \"${REPO_NAME}\", \"description\": \"Gitlab CI\", \"target_url\": \"${CI_JOB_URL}\"}"
           exit 1
         fi
+  artifacts:
+    when: on_failure
+    paths:
+      - crash-dumps/
+    expire_in: 7 days
 
 test-alpine-amd64:
   stage: test
@@ -103,6 +113,11 @@ test-alpine-amd64:
             -d "{\"state\": \"failure\", \"context\": \"${REPO_NAME}\", \"description\": \"Gitlab CI\", \"target_url\": \"${CI_JOB_URL}\"}"
           exit 1
         fi
+  artifacts:
+    when: on_failure
+    paths:
+      - crash-dumps/
+    expire_in: 7 days
 
 test-alpine-arm64:
   stage: test
@@ -126,6 +141,11 @@ test-alpine-arm64:
             -d "{\"state\": \"failure\", \"context\": \"${REPO_NAME}\", \"description\": \"Gitlab CI\", \"target_url\": \"${CI_JOB_URL}\"}"
           exit 1
         fi
+  artifacts:
+    when: on_failure
+    paths:
+      - crash-dumps/
+    expire_in: 7 days
 
 test-ir-ubuntu-amd64:
   stage: test
@@ -243,3 +263,8 @@ test-macos:
             -d "{\"state\": \"failure\", \"context\": \"${REPO_NAME}-macos\", \"description\": \"Gitlab CI macOS\", \"target_url\": \"${CI_JOB_URL}\"}"
           exit 1
         fi
+  artifacts:
+    when: on_failure
+    paths:
+      - crash-dumps/
+    expire_in: 7 days

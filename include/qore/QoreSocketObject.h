@@ -710,6 +710,35 @@ public:
     DLLEXPORT QoreValue readQuicConnectStreamData(int64_t session_id, int64_t stream_id,
         ExceptionSink* xsink);
 
+    //! Read body data from a dispatched HTTP/3 stream (headers-only mode)
+    /** Blocks until body data is available, the stream completes, or the timeout expires.
+        @param session_id the QUIC session ID
+        @param stream_id the HTTP/3 stream ID
+        @param timeout_ms maximum wait time in milliseconds
+        @param xsink exception sink
+        @return binary data if available, or NOTHING if the stream is complete (end-of-stream);
+            on timeout, the QUIC-STREAM-TIMEOUT exception is raised
+        @since %Qore 2.3
+    */
+    DLLEXPORT BinaryNode* readQuicStreamDataBlock(int64_t session_id, int64_t stream_id,
+        int timeout_ms, ExceptionSink* xsink);
+
+    //! Check if an HTTP/3 stream has received END_STREAM
+    /** @param session_id the QUIC session ID
+        @param stream_id the HTTP/3 stream ID
+        @return true if body_complete or stream not found
+        @since %Qore 2.3
+    */
+    DLLEXPORT bool isQuicStreamComplete(int64_t session_id, int64_t stream_id) const;
+
+    //! Remove a dispatched HTTP/3 stream from the session map
+    /** @param session_id the QUIC session ID
+        @param stream_id the HTTP/3 stream ID
+        @param xsink exception sink
+        @since %Qore 2.3
+    */
+    DLLEXPORT void cleanupQuicStream(int64_t session_id, int64_t stream_id, ExceptionSink* xsink);
+
 private:
     DLLLOCAL QoreSocketObject(QoreSocket* s, QoreSSLCertificate* cert = nullptr, QoreSSLPrivateKey* pk = nullptr);
 

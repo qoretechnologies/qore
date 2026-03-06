@@ -116,6 +116,7 @@ struct Http2StreamInfo {
     bool reset = false;
     bool marked_complete = false;  //!< True if already added to completed_streams (prevents duplicates)
     bool dispatched = false;       //!< True after headers-only dispatch (stream stays in map for DATA accumulation)
+    bool headers_end_stream = false; //!< True if END_STREAM was on the initial HEADERS frame (no body expected)
     bool streaming = false;        //!< True for streaming requests (bidi/client-streaming) on client side
     uint32_t error_code = 0;
 

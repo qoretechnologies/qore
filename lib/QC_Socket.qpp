@@ -5341,15 +5341,59 @@ AbstractPollOperation Socket::startPollQuicConnect(string host, int port, int fa
     @throw QUIC-ERROR if QUIC/HTTP/3 support is not available
     @throw SOCKET-NOT-OPEN if the socket is not open
 
+    @param opts optional options hash:
+    - \c "headers_only": if @ref True, dispatches requests as soon as headers are received
+      (before the full body arrives); the handler reads body data incrementally via
+      @ref readQuicStreamDataBlock().  When enabled:
+      - The poll operation completes when HEADERS are received (not when the full body arrives)
+      - The output hash will have \c body set to @ref nothing
+      - The output hash includes \c hdr set to @ref True to indicate headers-only dispatch
+      - The output hash includes \c headers_end_stream: @ref True if END_STREAM was set
+        on the HEADERS frame (e.g., GET requests with no body)
+      - The handler must call @ref readQuicStreamDataBlock() to read body data and
+        @ref cleanupQuicStream() when done
+
+    @par Headers-Only Example
+    @code{.py}
+    Socket sock();
+    sock.bindINET("0.0.0.0", 8443, True, AF_INET);
+    AbstractPollOperation op = sock.startPollQuicAccept({"headers_only": True});
+    while (*hash<SocketPollInfo> info = op.continuePoll()) {
+        Socket::poll((info,), 10s);
+    }
+    hash<auto> request = op.getOutput();
+    # request.hdr is True — body must be read incrementally
+    if (!request.headers_end_stream) {
+        binary body = binary();
+        while (True) {
+            *binary chunk = sock.readQuicStreamDataBlock(request.session_id,
+                request.stream_id, 30s);
+            if (!exists chunk) {
+                break;
+            }
+            body += chunk;
+        }
+        sock.cleanupQuicStream(request.session_id, request.stream_id);
+    }
+    @endcode
+
     @note Requires a UDP socket bound with @ref bindINET() before calling this method
 
     @since %Qore 2.3
 */
-AbstractPollOperation Socket::startPollQuicAccept() {
+AbstractPollOperation Socket::startPollQuicAccept(*hash<auto> opts) {
     s->ref();
     ReferenceHolder<SocketPollOperationBase> poller(new SocketQuicServerPollOperation(xsink, s), xsink);
     if (*xsink) {
         return QoreValue();
+    }
+
+    // Apply options
+    if (opts) {
+        bool headers_only = opts->getKeyValue("headers_only").getAsBool();
+        if (headers_only) {
+            reinterpret_cast<SocketQuicServerPollOperation*>(*poller)->setHeadersOnly(true);
+        }
     }
 
     ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
@@ -5987,4 +6031,213 @@ nothing Socket::submitQuicConnectResponse(int session_id, int stream_id, int sta
         return QoreValue();
     }
     return s->readQuicConnectStreamData(session_id, stream_id, xsink);
+}
+
+//! Reads body data from a dispatched HTTP/3 stream (headers-only mode)
+/** Blocks until body data is available, the stream completes (END_STREAM), or the
+    timeout expires.  Used by handler threads to incrementally read request body data
+    from streams that were dispatched via headers-only mode.
+
+    @par HTTP/3 vs HTTP/2 Threading Model
+    Unlike HTTP/2 where the handler thread drives the TCP socket directly,
+    HTTP/3 uses a shared UDP socket where a dedicated I/O thread processes
+    datagrams and buffers incoming data per stream.  This method uses a
+    per-stream condition variable to wait for data, so only the handler for
+    the specific stream that received data is woken (no thundering herd).
+
+    @par Thread Safety
+    This method intentionally does @b not acquire the Socket object's mutex, because
+    holding the mutex during a blocking wait would prevent other threads from performing
+    operations on the same socket.  Thread safety for the QUIC session internals is
+    provided by the session's own recursive mutex.
+
+    Multiple handler threads can safely call this method concurrently for different
+    streams on the same session — each handler waits on its own per-stream condition
+    variable.
+
+    @par Stream Lifecycle
+    When a stream is dispatched with the \c headers_only option via
+    @ref startPollQuicAccept(), the stream remains in the QuicSession so that body
+    data can be read incrementally with this method.  After all data has been consumed
+    (this method returns @ref nothing), call @ref cleanupQuicStream() to free the
+    stream state.  If the handler is invoked via the @ref HttpServer "HttpServer"
+    framework, cleanup is handled automatically by the framework's \c on_exit handler.
+
+    @par Typical Usage (Low-Level Socket API)
+    @code{.py}
+    # In a handler thread after receiving a headers-only dispatched request:
+    int session_id = request.session_id;
+    int stream_id = request.stream_id;
+    binary body = binary();
+    while (True) {
+        *binary chunk = sock.readQuicStreamDataBlock(session_id, stream_id, 30s);
+        if (!exists chunk) {
+            # Stream complete — END_STREAM received and no more buffered data
+            break;
+        }
+        body += chunk;
+    }
+    # Process the complete body
+    process_body(body);
+    # Clean up the stream state (required to prevent stream-state accumulation)
+    sock.cleanupQuicStream(session_id, stream_id);
+    @endcode
+
+    @par Typical Usage (HttpServer Framework)
+    @code{.py}
+    class MyStreamingHandler inherits AbstractHttpRequestHandler {
+        bool wantsBodyStreaming(hash<auto> cx, hash<auto> hdr) {
+            return True;
+        }
+
+        hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+            int session_id = cx."header-info".session_id;
+            int stream_id = cx."header-info".stream_id;
+            Socket sock = cx."header-info".sock;
+
+            # Read body incrementally — the framework handles cleanup automatically
+            binary accumulated = binary();
+            while (True) {
+                *binary chunk = sock.readQuicStreamDataBlock(session_id, stream_id, 30s);
+                if (!exists chunk) {
+                    break;
+                }
+                accumulated += chunk;
+            }
+            return makeResponse(200, process(accumulated));
+        }
+    }
+    @endcode
+
+    @par Timeout Handling
+    @code{.py}
+    # Use a short timeout and handle QUIC-STREAM-TIMEOUT for time-sensitive reads
+    try {
+        *binary chunk = sock.readQuicStreamDataBlock(session_id, stream_id, 5s);
+    } catch (hash<ExceptionInfo> ex) {
+        if (ex.err == "QUIC-STREAM-TIMEOUT") {
+            # Timeout — no data arrived within 5 seconds
+            return makeResponse(408, "Request Timeout");
+        }
+        rethrow;
+    }
+    @endcode
+
+    @par Session Closure
+    If the QUIC session is closed (e.g., server shutdown or peer disconnect) while
+    this method is waiting, it raises a \c QUIC-ERROR exception immediately rather
+    than waiting for the timeout to expire.
+
+    @param session_id the QUIC session ID (from \c cx."header-info".session_id)
+    @param stream_id the HTTP/3 stream ID (from \c cx."header-info".stream_id)
+    @param timeout the maximum time to wait for data; default 30s
+
+    @return binary data if available, or @ref nothing if the stream is complete
+    (END_STREAM received and no more buffered data)
+
+    @throw QUIC-ERROR if no QUIC session with the given ID is active, or if the session
+    is closed during the wait (e.g., server shutdown)
+    @throw QUIC-STREAM-TIMEOUT if the timeout expires before data arrives or the stream
+    completes
+
+    @see @ref cleanupQuicStream()
+    @see @ref isQuicStreamComplete()
+    @see @ref wantsBodyStreaming()
+
+    @since %Qore 2.3
+*/
+*binary Socket::readQuicStreamDataBlock(int session_id, int stream_id, timeout timeout = 30s) {
+    if (session_id <= 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
+        return QoreValue();
+    }
+    if (stream_id < 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid stream_id %lld: must be >= 0", (long long)stream_id);
+        return QoreValue();
+    }
+    return s->readQuicStreamDataBlock(session_id, stream_id, (int)timeout, xsink);
+}
+
+//! Check if an HTTP/3 stream has received END_STREAM
+/** Returns @ref True "True" if all body data has been received for the given stream
+    (i.e., END_STREAM has been received), or if the stream is not found in the session.
+
+    @note In most cases, you do not need to call this method directly.
+    @ref readQuicStreamDataBlock() returns @ref nothing when the stream is complete,
+    which is the recommended way to detect end-of-stream in a read loop.  This method
+    is useful for non-blocking status checks without attempting a read.
+
+    @par Example
+    @code{.py}
+    # Non-blocking check whether more data is expected
+    if (!sock.isQuicStreamComplete(session_id, stream_id)) {
+        # More data may arrive — continue reading
+        *binary chunk = sock.readQuicStreamDataBlock(session_id, stream_id, 30s);
+    }
+    @endcode
+
+    @param session_id the QUIC session ID
+    @param stream_id the HTTP/3 stream ID
+
+    @return @ref True if END_STREAM has been received (body_complete) or the stream is
+    not found (treat unknown streams as complete for safety)
+
+    @see @ref readQuicStreamDataBlock()
+
+    @since %Qore 2.3
+*/
+bool Socket::isQuicStreamComplete(int session_id, int stream_id) [flags=CONSTANT] {
+    if (session_id <= 0 || stream_id < 0) {
+        return true;
+    }
+    return s->isQuicStreamComplete(session_id, stream_id);
+}
+
+//! Remove a dispatched HTTP/3 stream from the session map
+/** Called after the handler has finished processing all body data from a
+    headers-only dispatched stream.  Releases the stream's state (buffered data,
+    per-stream notifier, completion flag) from the QuicSession and prevents
+    stream-state accumulation on long-lived connections.
+
+    @par When to Call
+    Call this method after @ref readQuicStreamDataBlock() returns @ref nothing
+    (stream complete) or when the handler decides to stop reading (early return).
+    If using the @ref HttpServer "HttpServer" framework with @ref wantsBodyStreaming(),
+    cleanup is handled automatically by the framework's \c on_exit handler — you do
+    @b not need to call this manually.
+
+    @par Typical Usage (Low-Level Socket API)
+    @code{.py}
+    # Read all data from a headers-only dispatched HTTP/3 stream
+    binary body = binary();
+    while (True) {
+        *binary chunk = sock.readQuicStreamDataBlock(session_id, stream_id, 30s);
+        if (!exists chunk) {
+            break;
+        }
+        body += chunk;
+    }
+    # Free the stream state from the session
+    sock.cleanupQuicStream(session_id, stream_id);
+    @endcode
+
+    @param session_id the QUIC session ID
+    @param stream_id the HTTP/3 stream ID
+
+    @throw QUIC-ERROR if no QUIC session with the given ID is active
+
+    @see @ref readQuicStreamDataBlock()
+
+    @since %Qore 2.3
+*/
+nothing Socket::cleanupQuicStream(int session_id, int stream_id) {
+    if (session_id <= 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
+        return QoreValue();
+    }
+    if (stream_id < 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid stream_id %lld: must be >= 0", (long long)stream_id);
+        return QoreValue();
+    }
+    s->cleanupQuicStream(session_id, stream_id, xsink);
 }

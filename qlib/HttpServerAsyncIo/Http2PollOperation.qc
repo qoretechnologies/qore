@@ -73,17 +73,24 @@ public class Http2PollOperation inherits AbstractPollOperation {
 
         #! Counter for consecutive empty reads to prevent infinite poll loops
         int empty_read_count = 0;
+
+        #! Whether to use headers-only mode for request reading
+        bool headers_only = False;
     }
 
     #! Creates the poll operation
     /** @param sock the client socket with an established HTTP/2 connection
+        @param headers_only if True, dispatch requests as soon as headers arrive
+        (before END_STREAM), enabling bidirectional streaming; the handler must read
+        the body via Socket::readHttp2StreamDataBlock()
     */
-    constructor(Socket sock) {
+    constructor(Socket sock, bool headers_only = False) {
         @assert(sock, "socket cannot be null");
         @assert(sock.isOpen(), "socket must be open");
         self.sock = sock;
+        self.headers_only = headers_only;
         # Start reading HTTP/2 request
-        startReadRequest();
+        startReadRequest(headers_only);
     }
 
     #! Returns the goal of the operation
@@ -409,7 +416,7 @@ if (push) {
             throw "HTTP2-STATE-ERROR", sprintf("cannot read next request in state: %y", state);
         }
         remove request;
-        startReadRequest();
+        startReadRequest(headers_only);
     }
 
     #! Continues reading without creating a new C++ read operation
@@ -439,8 +446,8 @@ if (push) {
     }
 
     #! Internal: starts the read request operation
-    private startReadRequest() {
-        current_op = sock.startPollReadHttp2Request();
+    private startReadRequest(*bool headers_only) {
+        current_op = sock.startPollReadHttp2Request(headers_only ? {"headers_only": True} : NOTHING);
         state = STATE_READING;
     }
 }

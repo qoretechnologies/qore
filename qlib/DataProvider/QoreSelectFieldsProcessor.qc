@@ -119,6 +119,38 @@ public class QoreSelectFieldsProcessor inherits AbstractDataProvider {
         return result;
     }
 
+    #! Computes the output type based on the input type and the configured field selection
+    /** @param input_type the output type from the preceding pipeline state
+
+        @return a HashDataType with only the selected (and optionally renamed) fields from the input,
+        or NOTHING if the input type has no fields or the processor is not configured
+
+        @since %DataProvider 3.4
+    */
+    private *AbstractDataProviderType getPipelineProcessorOutputTypeWithInputTypeImpl(
+            *AbstractDataProviderType input_type) {
+        if (!field_map || !input_type) {
+            return;
+        }
+        *hash<string, AbstractDataField> input_fields = input_type.getFields();
+        if (!input_fields) {
+            return;
+        }
+        HashDataType rv(input_type.getName() + " (selected)");
+        foreach hash<auto> i in (field_map.pairIterator()) {
+            # i.key = output name, i.value = input name
+            if (*AbstractDataField field = input_fields{i.value}) {
+                if (i.key != i.value) {
+                    # renamed field: create new field with output name and same type
+                    rv.addField(new QoreDataField(i.key, field.getDescription(), field.getType()));
+                } else {
+                    rv.addField(field);
+                }
+            }
+        }
+        return rv.getFields() ? rv : NOTHING;
+    }
+
     #! Indicates that this processor does not support the bulk API
     private bool supportsBulkApiImpl() {
         return False;

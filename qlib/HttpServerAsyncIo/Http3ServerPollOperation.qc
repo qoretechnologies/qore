@@ -100,6 +100,9 @@ public class Http3ServerPollOperation inherits AbstractPollOperation {
         #! Effective drain timeout for this operation
         timeout drain_timeout;
 
+        #! Headers-only mode: dispatch on HEADERS before full body
+        bool headers_only = False;
+
         #! Mutex for thread safety between I/O thread (continuePoll) and handler
         #! thread (startSendResponse)
         Mutex op_lock();
@@ -109,8 +112,12 @@ public class Http3ServerPollOperation inherits AbstractPollOperation {
     /** @param sock the UDP socket bound and ready for QUIC connections
         @param drain_timeout duration to wait for in-flight requests to complete
         during GOAWAY graceful shutdown; defaults to @ref DefaultDrainTimeout (5s)
+        @param headers_only if @ref True, dispatches requests as soon as headers are
+        received (before the full body arrives); the handler reads body data
+        incrementally via @ref Qore::Socket::readQuicStreamDataBlock()
     */
-    constructor(Socket sock, timeout drain_timeout = DefaultDrainTimeout) {
+    constructor(Socket sock, timeout drain_timeout = DefaultDrainTimeout,
+            bool headers_only = False) {
         if (!sock) {
             throw "HTTP3-ERROR", "socket cannot be null";
         }
@@ -119,6 +126,7 @@ public class Http3ServerPollOperation inherits AbstractPollOperation {
         }
         self.sock = sock;
         self.drain_timeout = drain_timeout;
+        self.headers_only = headers_only;
         # Start accepting QUIC connection and reading HTTP/3 request
         startReadRequest();
     }
@@ -513,7 +521,7 @@ public class Http3ServerPollOperation inherits AbstractPollOperation {
         both initial accept and subsequent request reads.
     */
     private startReadRequest() {
-        current_op = sock.startPollQuicAccept();
+        current_op = sock.startPollQuicAccept(headers_only ? {"headers_only": True} : NOTHING);
         state = STATE_READING;
     }
 }
