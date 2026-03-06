@@ -1567,12 +1567,17 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     values.resize(reserve_size);
     std::vector<uint32_t> cleanup;
 
+    // Use local_var_slots.size() (= number of slots assigned, i.e. next_local_slot) to correctly
+    // handle the case where max_local_slot_id == 0 (exactly one local with slot_id=0).
+    // Must be computed before locals_slot_cache/locals_lvar_cache which depend on it.
+    size_t local_slot_count = func.local_var_slots.size();
+
     // Flat array for fast local variable cache access
     // Maps slot IDs to cached values for O(1) direct array access (vs hash lookup)
     // This is the primary (and only) local variable cache for the IR interpreter
     std::vector<QoreValue> locals_slot_cache;
-    if (func.max_local_slot_id > 0) {
-        locals_slot_cache.resize(func.max_local_slot_id + 1);
+    if (local_slot_count > 0) {
+        locals_slot_cache.resize(local_slot_count);
     }
 
     // Cache of LocalVarValue* pointers for direct write-through to TLS variables.
@@ -1581,8 +1586,8 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // Pointers are stable during function execution (TLS stack is LIFO, single-threaded
     // for non-closure locals). Cleared whenever cleanupLocalCaches() is called.
     std::vector<LocalVarValue*> locals_lvar_cache;
-    if (func.max_local_slot_id > 0) {
-        locals_lvar_cache.resize(func.max_local_slot_id + 1, nullptr);
+    if (local_slot_count > 0) {
+        locals_lvar_cache.resize(local_slot_count, nullptr);
     }
 
     std::unordered_set<const LocalVar*> instantiated_locals;
@@ -1591,10 +1596,6 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // These must be re-instantiated by ensureLocalInstantiated on next use, even though
     // they appear in pre_instantiated (the caller won't re-instantiate them per-iteration).
     std::unordered_set<const LocalVar*> locally_uninstantiated;
-    // Track which value slots hold VarRefNewObjectNode results for each LocalVar
-    // Used to cleanup references when UninstantiateLocal is processed
-    // Indexed by slot_id (from local_var_slots) for O(1) access
-    size_t local_slot_count = func.max_local_slot_id > 0 ? func.max_local_slot_id + 1 : 0;
 
     // Precompute bitmask of IR-only local slots.  After function calls (without
     // reference args), only non-IR-only slots need cache invalidation because callees
@@ -3926,23 +3927,18 @@ load_local_done:
                 auto* local_inst = static_cast<QoreIRLocalInstruction*>(inst);
                 // Uninstantiate the local variable (calls destructor for objects)
                 if (local_inst->local) {
-                    // Skip outer-scope variables: these were never instantiated by
-                    // this function (ensureLocalInstantiated skips them) and must
-                    // not be uninstantiated here — doing so would pop an entry
-                    // from the calling function's stack frame, corrupting the
-                    // variable stack.
-                    if (function_own_locals
-                            && !function_own_locals->count(
-                                reinterpret_cast<const void*>(local_inst->local))) {
-                        ++ip;
-                        break;
-                    }
                     bool is_pre = pre_instantiated && pre_instantiated->find(local_inst->local) != pre_instantiated->end();
                     // Check if this variable was actually instantiated by the IR
                     // interpreter. For non-pre-instantiated (IR-only) variables,
                     // ensureLocalInstantiated() pushes them on first use. If a
                     // variable was never used (e.g. in a code path not taken),
                     // it was never pushed, so we must not pop it here.
+                    // NOTE: outer-scope variables (from a calling function) are
+                    // also !is_pre && !was_instantiated -- ensureLocalInstantiated()
+                    // skips them (via the function_own_locals check), so they are
+                    // never added to instantiated_locals. The !is_pre && !was_instantiated
+                    // path below handles them safely: it clears the slot cache but
+                    // does NOT call uninstantiate(), so no stack corruption occurs.
                     bool was_instantiated = instantiated_locals.count(local_inst->local) > 0;
                     // Remove from instantiated_locals since we're explicitly cleaning it up
                     instantiated_locals.erase(local_inst->local);
@@ -3951,9 +3947,28 @@ load_local_done:
                         locals_instantiated[local_inst->slot_id] = false;
                     }
                     if (!is_pre && !was_instantiated) {
-                        // Variable was never instantiated by this function —
+                        // Variable was never on the TLS stack for this function —
                         // skip uninstantiation to avoid popping an unrelated
-                        // stack entry.
+                        // stack entry. BUT: still clear the slot cache value (if any)
+                        // to trigger destructors at block scope exit (e.g., AutoLock).
+                        if (local_inst->slot_id != UINT32_MAX
+                                && local_inst->slot_id < locals_slot_cache.size()) {
+                            locals_slot_cache[local_inst->slot_id].discard(xsink);
+                            locals_slot_cache[local_inst->slot_id] = QoreValue();
+                        }
+                        // Also clear the init slot (from StoreLocal) to drop that reference
+                        if (local_inst->slot_id != UINT32_MAX) {
+                            if (local_inst->slot_id < local_init_slots.size()
+                                    && local_init_slots[local_inst->slot_id] != UINT32_MAX) {
+                                uint32_t init_slot = local_init_slots[local_inst->slot_id];
+                                if (init_slot < values.size()) {
+                                    values[init_slot].discard(xsink);
+                                    values[init_slot] = QoreValue();
+                                }
+                                local_init_slots[local_inst->slot_id] = UINT32_MAX;
+                            }
+                            clearLoadSlots(local_inst->slot_id);
+                        }
                         ++ip;
                         break;
                     }
