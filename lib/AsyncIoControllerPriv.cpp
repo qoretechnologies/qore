@@ -2035,8 +2035,11 @@ void AsyncIoControllerPriv::callAbort(QoreObject* spop_obj, ExceptionSink* xsink
 
 QoreHashNode* AsyncIoControllerPriv::buildResultHash(PollInfo& pinfo, bool canceled,
         QoreHashNode* ex_hash, ExceptionSink* xsink) {
-    ReferenceHolder<QoreHashNode> result(new QoreHashNode(hashdeclSocketPollResultInfo, xsink), xsink);
-    if (*xsink) {
+    // use a temporary ExceptionSink for hash construction to avoid interference from pre-existing exceptions
+    ExceptionSink hash_xsink;
+    ReferenceHolder<QoreHashNode> result(new QoreHashNode(hashdeclSocketPollResultInfo, &hash_xsink), xsink);
+    if (hash_xsink) {
+        xsink->assimilate(hash_xsink);
         return nullptr;
     }
     if (pinfo.sock_obj) {

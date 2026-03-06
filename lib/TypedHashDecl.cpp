@@ -425,8 +425,8 @@ QoreHashNode* typed_hash_decl_private::newHash(const QoreHashNode* init, bool ru
 int typed_hash_decl_private::initHash(QoreHashNode* h, const QoreHashNode* init, ExceptionSink* xsink) const {
     int rc = initHashIntern(h, init, xsink);
     // xsink may be nullptr when being executed in a try block
-    if (xsink && *xsink) {
-        assert(rc);
+    // only annotate if initHashIntern actually failed; xsink may have pre-existing exceptions
+    if (rc && xsink && *xsink) {
         xsink->appendLastDescription(" (while initializing hashdecl '%s')", name.c_str());
     }
     return rc;
