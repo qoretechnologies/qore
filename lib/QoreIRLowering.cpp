@@ -3196,7 +3196,10 @@ LocalVar* QoreIRLowering::getLocalVarFromValue(const QoreValue& expr) const {
     }
     const AbstractQoreNode* node = expr.getInternalNode();
     auto* var = dynamic_cast<const VarRefNode*>(node);
-    if (!var || var->getType() != VT_LOCAL) {
+    // Accept both local (VT_LOCAL) and closure-captured (VT_CLOSURE) variables —
+    // both use var->ref.id to identify the LocalVar, which carries the declared
+    // type info needed for type-specialized switch/arithmetic lowering.
+    if (!var || (var->getType() != VT_LOCAL && var->getType() != VT_CLOSURE)) {
         return nullptr;
     }
     return var->ref.id;
