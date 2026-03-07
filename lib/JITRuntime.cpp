@@ -2894,7 +2894,13 @@ static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call
         }
         StatementBlock* stmts = uvb->getStatementBlock();
         if (stmts) {
+            // Set TLS returnTypeInfo to the callee's declared return type so that
+            // ReturnStatement::execImpl() performs the correct type check.
+            // Fast-call paths (qore_rt_call_fast et al.) bypass CodeEvaluationHelper,
+            // so TLS returnTypeInfo may still hold the *caller*'s return type here.
+            const QoreTypeInfo* old_rti = saveReturnTypeInfo(uvb->getUserSignature()->getReturnTypeInfo());
             val = stmts->exec(xsink);
+            saveReturnTypeInfo(old_rti);
         }
         if (skip_body_locals) {
             for (int i = (int)body_locals.size() - 1; i >= 0; --i) {
@@ -2982,9 +2988,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast(const QoreFunction* func,
             return toBits(QoreValue());
         }
     }
-    // NOTE: ThreadFrameBoundaryHelper intentionally skipped here for performance.
-    // Frame boundaries are only used by debugger introspection (get_local_vars/set_local_var_value),
-    // not by runtime variable lookup (ThreadLocalVariableData::find() skips frame_boundary entries).
+    // Push frame boundary so that get_local_vars()/set_local_var_value() can correctly
+    // determine call-stack depth for debugger introspection (same as CodeEvaluationHelper
+    // via UserVariantExecHelper::ThreadFrameBoundaryHelper in the AST path).
+    ThreadFrameBoundaryHelper tfbh(true);
 
     // Instantiate parameter locals directly from NaN-boxed args
     if (instantiateFastCallParams(sig, num_params, nargs, args, xsink) < 0) {
@@ -3330,9 +3337,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_method_fast(const QoreMethod* method,
     if (*xsink) {
         return toBits(QoreValue());
     }
-    // NOTE: ThreadFrameBoundaryHelper intentionally skipped here for performance.
-    // Frame boundaries are only used by debugger introspection (get_local_vars/set_local_var_value),
-    // not by runtime variable lookup (ThreadLocalVariableData::find() skips frame_boundary entries).
+    // Push frame boundary so that get_local_vars()/set_local_var_value() can correctly
+    // determine call-stack depth for debugger introspection.
+    ThreadFrameBoundaryHelper tfbh(true);
 
     // Push self object onto the method call stack
     ObjectSubstitutionHelper osh(self, qore_class_private::get(*method->getClass()));
@@ -4426,9 +4433,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_static_method_direct(const QoreMethod
     if (*xsink) {
         return toBits(QoreValue());
     }
-    // NOTE: ThreadFrameBoundaryHelper intentionally skipped here for performance.
-    // Frame boundaries are only used by debugger introspection (get_local_vars/set_local_var_value),
-    // not by runtime variable lookup (ThreadLocalVariableData::find() skips frame_boundary entries).
+    // Push frame boundary so that get_local_vars()/set_local_var_value() can correctly
+    // determine call-stack depth for debugger introspection.
+    ThreadFrameBoundaryHelper tfbh(true);
 
     // Instantiate parameter locals directly from NaN-boxed args
     if (instantiateFastCallParams(sig, num_params, nargs, args, xsink) < 0) {
