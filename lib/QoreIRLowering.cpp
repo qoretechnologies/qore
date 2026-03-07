@@ -7407,21 +7407,8 @@ QoreIRValue QoreIRLowering::lowerSelect(const QoreValue& expr, std::string& erro
         return result;
     }
 
-    // Native loop-based select always wraps results in a list.  Only use it when
-    // the input is guaranteed to be a list or an iterable object.  For scalars and
-    // unknown (auto) types, fall back to QoreSelectOperatorNode which returns
-    // the scalar directly when the input is not a list.
-    const QoreTypeInfo* input_type = getExprTypeInfo(select->getLeft());
-    if (input_type
-            && (QoreTypeInfo::isListType(input_type)
-                || QoreTypeInfo::getUniqueReturnClass(input_type) != nullptr)) {
-        // Native IR lowering with implicit argument context ($1, $#)
-        return lowerSelectNative(select, expr, error);
-    }
-
-    // Fall back to AST evaluation for scalars and auto-typed inputs
-    std::vector<QoreIRValue> operands;
-    return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, select->loc, error);
+    // Native IR lowering with implicit argument context ($1, $#)
+    return lowerSelectNative(select, expr, error);
 }
 
 QoreIRValue QoreIRLowering::lowerMapSelect(const QoreValue& expr, std::string& error) {
@@ -7927,6 +7914,21 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
 
     // Fallback: iterator-based loop for untyped lists
 
+    // Check at compile time if we know whether the input is a collection (list/object)
+    // or a scalar.  For unknown (auto) types, we need a runtime check.
+    bool is_known_collection = list_type
+        && (QoreTypeInfo::isListType(list_type)
+            || QoreTypeInfo::getUniqueReturnClass(list_type) != nullptr);
+    bool needs_runtime_unwrap_check = !is_known_collection;
+
+    // For runtime unwrap check: determine if input is a collection before creating
+    // the iterator (type check on the original value)
+    QoreIRValue is_collection_val;
+    if (needs_runtime_unwrap_check) {
+        is_collection_val = builder.createUnaryOp(QoreIROpcode::IsCollectionType,
+                input_list, select->loc)->result;
+    }
+
     // Create iterator from input list
     auto* iter_inst = builder.createIteratorCreate(input_list, nullptr, select->loc);
     QoreIRValue iter_val = iter_inst->result;
@@ -7937,14 +7939,29 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
     QoreIRBasicBlock* body_block = createBlock("select.body");
     QoreIRBasicBlock* append_block = createBlock("select.append");
     QoreIRBasicBlock* cont_block = createBlock("select.cont");
-    QoreIRBasicBlock* exit_block = createBlock("select.exit");
+    QoreIRBasicBlock* loop_exit_block = createBlock("select.loop_exit");
     QoreIRBasicBlock* nothing_block = createBlock("select.nothing");
+    QoreIRBasicBlock* final_block = createBlock("select.final");
     if (!preheader_block || !header_block || !body_block || !append_block
-            || !cont_block || !exit_block || !nothing_block) {
+            || !cont_block || !loop_exit_block || !nothing_block || !final_block) {
         error = "IR builder failed to create blocks for select";
         return QoreIRValue();
     }
     header_block->is_loop_header = true;
+
+    // Additional blocks for scalar unwrapping (only when needed)
+    QoreIRBasicBlock* unwrap_check_block = nullptr;
+    QoreIRBasicBlock* unwrap_get_block = nullptr;
+    QoreIRBasicBlock* unwrap_nothing_block = nullptr;
+    if (needs_runtime_unwrap_check) {
+        unwrap_check_block = createBlock("select.unwrap_check");
+        unwrap_get_block = createBlock("select.unwrap_get");
+        unwrap_nothing_block = createBlock("select.unwrap_nothing");
+        if (!unwrap_check_block || !unwrap_get_block || !unwrap_nothing_block) {
+            error = "IR builder failed to create blocks for select unwrap";
+            return QoreIRValue();
+        }
+    }
 
     // Check if iterator is null (input was NOTHING) → return NOTHING
     QoreIRValue zero = builder.createConstInt(0, select->loc)->result;
@@ -7964,7 +7981,7 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
     QoreIRValue index_val = index_phi->result;
 
     // Get next element from iterator
-    auto* next_inst = builder.createIteratorNext(iter_val, exit_block, body_block, select->loc);
+    auto* next_inst = builder.createIteratorNext(iter_val, loop_exit_block, body_block, select->loc);
     QoreIRValue element_val = next_inst->result;
 
     // Body block: set up context, evaluate predicate
@@ -8023,17 +8040,55 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
     // Nothing block: input was NOTHING → return NOTHING
     builder.setBlock(nothing_block);
     QoreIRValue nothing_val = builder.createConstNothing(select->loc)->result;
-    builder.createBranch(exit_block, select->loc);
+    builder.createBranch(final_block, select->loc);
 
-    // Exit block: PHI between result_list and NOTHING
-    builder.setBlock(exit_block);
+    // Loop exit block: iterator exhausted → decide whether to return list or unwrap
+    builder.setBlock(loop_exit_block);
 
-    std::vector<QoreIRPhiIncoming> result_incoming;
-    result_incoming.push_back({result_list, header_block});
-    result_incoming.push_back({nothing_val, nothing_block});
-    auto* result_phi = builder.createPhi(result_incoming, select->loc);
+    if (needs_runtime_unwrap_check) {
+        // Runtime check: if input was a collection (list/object), return result_list as-is
+        builder.createBranchIf(is_collection_val, final_block, unwrap_check_block, select->loc);
 
-    return result_phi->result;
+        // Unwrap check: scalar input — check if result_list has any elements
+        builder.setBlock(unwrap_check_block);
+        QoreIRValue list_size = builder.createListSize(result_list, select->loc)->result;
+        builder.createBranchIf(list_size, unwrap_get_block, unwrap_nothing_block, select->loc);
+
+        // Unwrap get: return result_list[0] (scalar matched predicate)
+        builder.setBlock(unwrap_get_block);
+        QoreIRValue zero_idx = builder.createConstInt(0, select->loc)->result;
+        QoreIRValue unwrapped = builder.createBinaryOp(QoreIROpcode::ListGetValue,
+                result_list, zero_idx, select->loc)->result;
+        builder.createBranch(final_block, select->loc);
+
+        // Unwrap nothing: scalar didn't match predicate → return NOTHING
+        builder.setBlock(unwrap_nothing_block);
+        QoreIRValue unwrap_nothing_val = builder.createConstNothing(select->loc)->result;
+        builder.createBranch(final_block, select->loc);
+
+        // Final block: PHI merging all paths
+        builder.setBlock(final_block);
+        std::vector<QoreIRPhiIncoming> result_incoming;
+        result_incoming.push_back({result_list, loop_exit_block});      // collection → return list
+        result_incoming.push_back({unwrapped, unwrap_get_block});        // scalar matched → return scalar
+        result_incoming.push_back({unwrap_nothing_val, unwrap_nothing_block}); // scalar didn't match → NOTHING
+        result_incoming.push_back({nothing_val, nothing_block});         // NOTHING input → NOTHING
+        auto* result_phi = builder.createPhi(result_incoming, select->loc);
+
+        return result_phi->result;
+    } else {
+        // Compile-time known collection: return result_list directly
+        builder.createBranch(final_block, select->loc);
+
+        // Final block: PHI between result_list and NOTHING
+        builder.setBlock(final_block);
+        std::vector<QoreIRPhiIncoming> result_incoming;
+        result_incoming.push_back({result_list, loop_exit_block});
+        result_incoming.push_back({nothing_val, nothing_block});
+        auto* result_phi = builder.createPhi(result_incoming, select->loc);
+
+        return result_phi->result;
+    }
 }
 
 QoreIRValue QoreIRLowering::lowerFoldlNative(const QoreFoldlOperatorNode* foldl, const QoreValue& expr,

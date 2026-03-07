@@ -523,7 +523,11 @@ enum class QoreIROpcode : uint16_t {
     // Uses CaseNode::matches() which unwraps TAG_ENUM before hard comparison
     SwitchCaseMatch     = 343,
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (344, 345, ...)
+    // Runtime type check (344) — returns native bool (1 if value is NT_LIST or NT_OBJECT, 0 otherwise)
+    // Used by select to determine if the result should be returned as a list or unwrapped to a scalar
+    IsCollectionType    = 344,
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (345, 346, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -531,8 +535,8 @@ enum class QoreIROpcode : uint16_t {
 //! NOTE: Both QoreIRInterpreter.cpp and QoreIRToLLVM.cpp have matching
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
-constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::SwitchCaseMatch);
-static_assert(QORE_IR_MAX_OPCODE == 343, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::IsCollectionType);
+static_assert(QORE_IR_MAX_OPCODE == 344, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! Returns true if the opcode is a unary computation op (used by Invoke dispatch)
@@ -547,6 +551,7 @@ inline bool isUnaryInvokeOpcode(QoreIROpcode op) {
         case QoreIROpcode::UnaryMinusAny:
         case QoreIROpcode::ExistsAny:
         case QoreIROpcode::ExistsBool:
+        case QoreIROpcode::IsCollectionType:
             return true;
         default:
             return false;

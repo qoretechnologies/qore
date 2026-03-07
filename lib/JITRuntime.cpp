@@ -1353,6 +1353,14 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_access(uint64_t list_val, int64
     return toBits(QoreValue());
 }
 
+// Runtime type check: returns 1 if value is NT_LIST or NT_OBJECT, 0 otherwise
+// Used by select to determine if the result should be returned as a list or unwrapped
+extern "C" DLLEXPORT int64_t qore_rt_is_collection_type(uint64_t val) {
+    QoreValue v = fromBits(val);
+    qore_type_t t = v.getType();
+    return (t == NT_LIST || t == NT_OBJECT) ? 1 : 0;
+}
+
 // Optimized list iteration helpers for foldl/map/select
 extern "C" DLLEXPORT int64_t qore_rt_list_size(uint64_t list_val) {
     QoreValue v = fromBits(list_val);

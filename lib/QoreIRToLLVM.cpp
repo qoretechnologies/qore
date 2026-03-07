@@ -37,7 +37,7 @@
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 343,
+static_assert(QORE_IR_MAX_OPCODE == 344,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 #include "qore/intern/QoreLibIntern.h"
@@ -8258,6 +8258,19 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             nanboxed_values.insert(inst->result.id);
             // No trackResultForCleanup — boolean value, no heap allocation
             // No emitExceptionCheck — exists cannot throw
+            return true;
+        }
+
+        // === IsCollectionType: runtime type check (1 if NT_LIST or NT_OBJECT) ===
+        case QoreIROpcode::IsCollectionType: {
+            auto* val = getVal(inst->operands[0].id, error);
+            if (!val) { return false; }
+            llvm::Value* val_boxed = boxValue(val, inst->operands[0].id);
+            auto helper = module.getOrInsertFunction("qore_rt_is_collection_type",
+                    llvm::FunctionType::get(i64_type, {i64_type}, false));
+            llvm::Value* result_int = builder->CreateCall(helper, {val_boxed});
+            // Result is native i64 (0 or 1), treat as native int (not nanboxed)
+            values[inst->result.id] = result_int;
             return true;
         }
 
