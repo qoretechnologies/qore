@@ -54,6 +54,8 @@
 #include "qore/intern/QoreHashObjectDereferenceOperatorNode.h"
 #include "qore/intern/ScopedObjectCallNode.h"
 #include <qore/intern/ParseReferenceNode.h>
+#include "qore/intern/NewComplexTypeNode.h"
+#include "qore/intern/QoreCastOperatorNode.h"
 #include <qore/QoreEnumDecl.h>
 
 #include "qore/intern/QoreIRBuilder.h"
@@ -1702,6 +1704,29 @@ static bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& e
             writer.writeStringRef(member->getName());
             return true;
         }
+        // Handle inline primitive values
+        switch (expr.getType()) {
+            case NT_INT: {
+                writer.writeU8(static_cast<uint8_t>(AOTExprKind::CONST_INT));
+                writer.writeI64(expr.getAsBigInt());
+                return true;
+            }
+            case NT_FLOAT: {
+                writer.writeU8(static_cast<uint8_t>(AOTExprKind::CONST_FLOAT));
+                writer.writeF64(expr.getAsFloat());
+                return true;
+            }
+            case NT_BOOLEAN: {
+                writer.writeU8(static_cast<uint8_t>(AOTExprKind::CONST_BOOL));
+                writer.writeU8(expr.getAsBool() ? 1 : 0);
+                return true;
+            }
+            case NT_NOTHING:
+                writer.writeU8(static_cast<uint8_t>(AOTExprKind::CONST_NOTHING));
+                return true;
+            default:
+                break;
+        }
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::GENERIC_EVAL));
         return true;
     }
@@ -1923,6 +1948,79 @@ static bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& e
         return true;
     }
 
+    // NewHashDeclNode: hashdecl construction (e.g., <StatInfo>{"size": 1})
+    if (auto* nhd = dynamic_cast<const NewHashDeclNode*>(node)) {
+        if (nhd->hd) {
+            writer.writeU8(static_cast<uint8_t>(AOTExprKind::HASHDECL_NEW));
+            writer.writeStringRef(nhd->hd->getNamespacePath().c_str());
+            return true;
+        }
+    }
+
+    // NewComplexHashNode: complex typed hash construction
+    if (auto* nch = dynamic_cast<const NewComplexHashNode*>(node)) {
+        if (nch->typeInfo) {
+            writer.writeU8(static_cast<uint8_t>(AOTExprKind::COMPLEX_HASH_NEW));
+            writer.writeStringRef(QoreTypeInfo::getPath(nch->typeInfo));
+            return true;
+        }
+    }
+
+    // NewComplexListNode: complex typed list construction
+    if (auto* ncl = dynamic_cast<const NewComplexListNode*>(node)) {
+        if (ncl->typeInfo) {
+            writer.writeU8(static_cast<uint8_t>(AOTExprKind::COMPLEX_LIST_NEW));
+            writer.writeStringRef(QoreTypeInfo::getPath(ncl->typeInfo));
+            return true;
+        }
+    }
+
+    // QoreHashDeclCastOperatorNode: cast<StatInfo>(hash)
+    if (auto* hdc = dynamic_cast<const QoreHashDeclCastOperatorNode*>(node)) {
+        const TypedHashDecl* hd = QoreTypeInfo::getUniqueReturnHashDecl(hdc->getCastTypeInfo());
+        if (hd) {
+            writer.writeU8(static_cast<uint8_t>(AOTExprKind::CAST_HASHDECL));
+            writer.writeStringRef(hd->getNamespacePath().c_str());
+            writer.writeU8(hdc->isOrNothing() ? 1 : 0);
+            return true;
+        }
+    }
+
+    // QoreComplexHashCastOperatorNode: cast<hash<string, int>>(hash)
+    if (auto* chc = dynamic_cast<const QoreComplexHashCastOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::CAST_COMPLEX_HASH));
+        writer.writeStringRef(QoreTypeInfo::getPath(chc->getCastTypeInfo()));
+        writer.writeU8(chc->isOrNothing() ? 1 : 0);
+        return true;
+    }
+
+    // QoreComplexListCastOperatorNode: cast<list<int>>(list)
+    if (auto* clc = dynamic_cast<const QoreComplexListCastOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::CAST_COMPLEX_LIST));
+        writer.writeStringRef(QoreTypeInfo::getPath(clc->getCastTypeInfo()));
+        writer.writeU8(clc->isOrNothing() ? 1 : 0);
+        return true;
+    }
+
+    // QoreClassCastOperatorNode: cast<ClassName>(obj)
+    if (auto* cc = dynamic_cast<const QoreClassCastOperatorNode*>(node)) {
+        const QoreClass* qc = QoreTypeInfo::getUniqueReturnClass(cc->getCastTypeInfo());
+        if (qc) {
+            writer.writeU8(static_cast<uint8_t>(AOTExprKind::CAST_CLASS));
+            writer.writeStringRef(qc->getPath());
+            writer.writeU8(cc->isOrNothing() ? 1 : 0);
+            return true;
+        }
+    }
+
+    // QoreEnumCastOperatorNode: cast<EnumType>(val)
+    if (auto* ec = dynamic_cast<const QoreEnumCastOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::CAST_ENUM));
+        writer.writeStringRef(QoreTypeInfo::getPath(ec->getCastTypeInfo()));
+        writer.writeU8(ec->isOrNothing() ? 1 : 0);
+        return true;
+    }
+
     // Unsupported — write GENERIC_EVAL placeholder
     printd(3, "AOT: handler IR unsupported expr type '%s' for serialization\n",
         node->getTypeName());
@@ -2073,6 +2171,7 @@ void serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
                                 const QoreValue& e) -> bool {
                             return classifyAndWriteExpr(w, e, parent_locals, parent_globals);
                         };
+
                         serializeIRFunction(writer, *closure_ir, writeExpr);
                         uint32_t end_pos = writer.position();
                         writer.patchU32(size_pos, end_pos - size_pos - 4);

@@ -4035,8 +4035,6 @@ extern "C" DLLEXPORT uint64_t qore_rt_regex_op_with_operand_aot(QoreAOTContext* 
 extern "C" DLLEXPORT void* qore_rt_iterator_create(uint64_t iterable_bits, void* iterator_func, ExceptionSink* xsink) {
     QoreValue iterable = fromBits(iterable_bits);
 
-    // (debug removed)
-
     FunctionalOperator::FunctionalValueType value_type;
     FunctionalOperatorInterface* iter = nullptr;
 

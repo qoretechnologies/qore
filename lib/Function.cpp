@@ -3112,7 +3112,6 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
 QoreValue UserVariantBase::evalIntern(const char* name, ReferenceHolder<QoreListNode>& argv, QoreObject* self,
         ExceptionSink* xsink) const {
     //QORE_TRACE("UserVariantBase::evalIntern()");
-
     // Tiered compilation dispatch
     // Also dispatch to evalTiered for AOT-only functions (no AST body) that are already at TIER_JIT
     if (pgm) {
@@ -3525,7 +3524,6 @@ QoreValue UserClosureFunction::evalClosure(const QoreClosureBase& closure_base, 
     RuntimeConfig& rc = rc_get_current_ref();
     // closures cannot be overloaded
     assert(vlist.singular());
-
     const AbstractQoreFunctionVariant* variant = first();
 
     // setup call, save runtime position

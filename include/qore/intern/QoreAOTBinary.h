@@ -615,6 +615,15 @@ enum class AOTExprKind : uint8_t {
     HASH_LITERAL       = 21,  //!< Hash literal: num_pairs(u8) + [key_str(stringref) + value(AOTExprKind)] * N
     HASH_DEREF         = 22,  //!< Hash/object dereference: left(AOTExprKind) + right(AOTExprKind)
     PARSE_REF          = 23,  //!< Parse reference (\var): inner_lvalue(AOTExprKind)
+    CAST_HASHDECL      = 24,  //!< Hashdecl cast: ref1=hashdecl_path, u8 or_nothing
+    CAST_COMPLEX_HASH  = 25,  //!< Complex hash cast: ref1=type_path, u8 or_nothing
+    CAST_COMPLEX_LIST  = 26,  //!< Complex list cast: ref1=type_path, u8 or_nothing
+    CAST_CLASS         = 27,  //!< Class cast: ref1=class_path, u8 or_nothing
+    CAST_ENUM          = 28,  //!< Enum cast: ref1=enum_path, u8 or_nothing
+    CONST_INT          = 29,  //!< Integer constant: i64 value (8 bytes LE)
+    CONST_FLOAT        = 30,  //!< Float constant: f64 value (8 bytes LE, IEEE 754)
+    CONST_BOOL         = 31,  //!< Boolean constant: u8 value (0 or 1)
+    CONST_NOTHING      = 32,  //!< Nothing constant: no data
     EXPR_TREE          = 0xFE, //!< Recursive expression tree: binary blob (inline bytes)
     GENERIC_EVAL       = 0xFF //!< Unsupported expression — function needs source fallback
 };
@@ -712,7 +721,7 @@ enum class AOTExprNodeKind : uint8_t {
     // Special nodes
     EN_OBJ_METH_REF  = 100, //!< u16 method_len + bytes; 1 child = target expr
     EN_SELF_METH_REF = 101, //!< u16 method_len + bytes; 0 children
-    EN_CLOSURE       = 102, //!< cannot serialize — signals failure
+    EN_CLOSURE       = 102, //!< u32 expr_slot_index; 0 children — references CLOSURE_CREATE expr slot
     EN_FUNC_REF      = 103, //!< u16 name_len + bytes; 0 children (function reference)
 
     // Assignment (2 children = [lvalue, rvalue])

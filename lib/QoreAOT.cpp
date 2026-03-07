@@ -4828,12 +4828,19 @@ class ExprTreeSerializer {
             return serializeValue(sbr->get(2));
         }
 
-        // Closure — cannot be serialized
+        // Closure — serialize as expression slot reference
         if (dynamic_cast<const QoreClosureParseNode*>(node)) {
+            QoreValue closure_val(const_cast<AbstractQoreNode*>(node));
+            uint64_t bits;
+            std::memcpy(&bits, &closure_val, sizeof(bits));
+            int32_t slot = const_cast<AOTSlotMap&>(slots).getExprSlot(bits);
+            writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_CLOSURE));
+            writeU32(static_cast<uint32_t>(slot));
+            writeU16(0); // 0 children
             if (debug) {
-                fprintf(stderr, "EXPR_TREE: closure cannot be serialized\n");
+                fprintf(stderr, "EXPR_TREE: serialized closure as expr slot %d\n", slot);
             }
-            return false;
+            return true;
         }
 
         // Unsupported node type

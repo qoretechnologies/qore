@@ -482,6 +482,86 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
     }
 }
 
+// ---- Cast Expression Slot Resolver ----
+
+//! Resolves a cast operator expression slot from its serialized representation
+static uint64_t resolveCastExprSlot(AOTExprKind kind, const char* ref1, bool or_nothing,
+        QoreProgram* pgm) {
+    if (!ref1 || !*ref1) {
+        return 0;
+    }
+    qore_program_private* pp = qore_program_private::get(*pgm);
+    qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
+
+    switch (kind) {
+        case AOTExprKind::CAST_HASHDECL: {
+            const qore_ns_private* found_ns = nullptr;
+            const TypedHashDecl* hd = qore_root_ns_private::runtimeFindHashDecl(
+                *pp->RootNS, ref1, found_ns);
+            if (!hd) {
+                printd(0, "AOT v2: cannot resolve hashdecl '%s' for cast\n", ref1);
+                return 0;
+            }
+            auto* node = new QoreHashDeclCastOperatorNode(&loc_builtin, hd, QoreValue(), or_nothing);
+            return toBitsNB(QoreValue(node));
+        }
+        case AOTExprKind::CAST_COMPLEX_HASH: {
+            std::string type_error;
+            QoreAOTTypeResolver type_resolver(pgm);
+            const QoreTypeInfo* ti = type_resolver.resolve(ref1, type_error);
+            if (!ti) {
+                printd(0, "AOT v2: cannot resolve type '%s' for complex hash cast: %s\n",
+                    ref1, type_error.c_str());
+                return 0;
+            }
+            auto* node = new QoreComplexHashCastOperatorNode(&loc_builtin, ti, QoreValue(), or_nothing);
+            return toBitsNB(QoreValue(node));
+        }
+        case AOTExprKind::CAST_COMPLEX_LIST: {
+            std::string type_error;
+            QoreAOTTypeResolver type_resolver(pgm);
+            const QoreTypeInfo* ti = type_resolver.resolve(ref1, type_error);
+            if (!ti) {
+                printd(0, "AOT v2: cannot resolve type '%s' for complex list cast: %s\n",
+                    ref1, type_error.c_str());
+                return 0;
+            }
+            auto* node = new QoreComplexListCastOperatorNode(&loc_builtin, ti, QoreValue(), or_nothing);
+            return toBitsNB(QoreValue(node));
+        }
+        case AOTExprKind::CAST_CLASS: {
+            const qore_ns_private* found_ns = nullptr;
+            const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
+                *pp->RootNS, ref1, found_ns);
+            if (!qc) {
+                printd(0, "AOT v2: cannot resolve class '%s' for cast\n", ref1);
+                return 0;
+            }
+            auto* node = new QoreClassCastOperatorNode(&loc_builtin, qc, QoreValue(), or_nothing);
+            return toBitsNB(QoreValue(node));
+        }
+        case AOTExprKind::CAST_ENUM: {
+            std::string type_error;
+            QoreAOTTypeResolver type_resolver(pgm);
+            const QoreTypeInfo* ti = type_resolver.resolve(ref1, type_error);
+            if (!ti) {
+                printd(0, "AOT v2: cannot resolve type '%s' for enum cast: %s\n",
+                    ref1, type_error.c_str());
+                return 0;
+            }
+            const QoreEnumDecl* ed = QoreTypeInfo::getUniqueReturnEnum(ti);
+            if (!ed) {
+                printd(0, "AOT v2: cannot extract enum from type '%s' for cast\n", ref1);
+                return 0;
+            }
+            auto* node = new QoreEnumCastOperatorNode(&loc_builtin, ed, ti, QoreValue(), or_nothing);
+            return toBitsNB(QoreValue(node));
+        }
+        default:
+            return 0;
+    }
+}
+
 // ---- Inline IR Expression Reader ----
 
 //! Read one expression from inline closure/handler IR binary data.
@@ -550,7 +630,28 @@ static void skipOneExpr(const QoreAOTBinaryReader& rdr, const uint8_t*& p, const
         rdr.readStringRef(p);
         return;
     }
-    // GENERIC_EVAL or unknown: no bytes to skip
+    // Cast kinds: stringref + u8
+    if (ek == AOTExprKind::CAST_HASHDECL || ek == AOTExprKind::CAST_COMPLEX_HASH
+            || ek == AOTExprKind::CAST_COMPLEX_LIST || ek == AOTExprKind::CAST_CLASS
+            || ek == AOTExprKind::CAST_ENUM) {
+        rdr.readStringRef(p);
+        QoreAOTBinaryReader::readU8(p);
+        return;
+    }
+    // Inline constants
+    if (ek == AOTExprKind::CONST_INT) {
+        p += 8;
+        return;
+    }
+    if (ek == AOTExprKind::CONST_FLOAT) {
+        p += 8;
+        return;
+    }
+    if (ek == AOTExprKind::CONST_BOOL) {
+        QoreAOTBinaryReader::readU8(p);
+        return;
+    }
+    // CONST_NOTHING, GENERIC_EVAL or unknown: no bytes to skip
 }
 
 static QoreValue readOneExpr(
@@ -675,6 +776,36 @@ static QoreValue readOneExpr(
             r1 = rdr.readStringRef(p);
             r2 = rdr.readStringRef(p);
             break;
+        case AOTExprKind::CAST_HASHDECL:
+        case AOTExprKind::CAST_COMPLEX_HASH:
+        case AOTExprKind::CAST_COMPLEX_LIST:
+        case AOTExprKind::CAST_CLASS:
+        case AOTExprKind::CAST_ENUM: {
+            // Cast operators: ref1 = type/hashdecl/class path, u8 = or_nothing
+            r1 = rdr.readStringRef(p);
+            uint8_t or_nothing = QoreAOTBinaryReader::readU8(p);
+            uint64_t bits = resolveCastExprSlot(ek, r1, or_nothing != 0, pgm);
+            if (bits) {
+                QoreValue v;
+                memcpy(&v, &bits, sizeof(v));
+                return v;
+            }
+            return QoreValue();
+        }
+        case AOTExprKind::CONST_INT: {
+            int64_t v = QoreAOTBinaryReader::readI64(p);
+            return QoreValue(v);
+        }
+        case AOTExprKind::CONST_FLOAT: {
+            double v = QoreAOTBinaryReader::readF64(p);
+            return QoreValue(v);
+        }
+        case AOTExprKind::CONST_BOOL: {
+            uint8_t v = QoreAOTBinaryReader::readU8(p);
+            return QoreValue((bool)(v != 0));
+        }
+        case AOTExprKind::CONST_NOTHING:
+            return QoreValue();
         default:
             // GENERIC_EVAL or unknown — no additional bytes to read
             return QoreValue();
@@ -1737,10 +1868,17 @@ class ExprTreeDeserializer {
                 return fail();
             }
 
-            case AOTExprNodeKind::EN_CLOSURE:
-                // Cannot deserialize closures
-                printd(0, "AOT EXPR_TREE: closure deserialization not supported\n");
+            case AOTExprNodeKind::EN_CLOSURE: {
+                uint32_t slot = readU32();
+                readU16(); // 0 children
+                if (ctx && slot < static_cast<uint32_t>(ctx->num_exprs) && ctx->exprs[slot]) {
+                    QoreValue v;
+                    memcpy(&v, &ctx->exprs[slot], sizeof(v));
+                    return v.refSelf();
+                }
+                printd(0, "AOT EXPR_TREE: cannot resolve closure expr slot %u\n", slot);
                 return fail();
+            }
 
             case AOTExprNodeKind::EN_LIST: {
                 uint16_t count = readU16();
@@ -2019,6 +2157,14 @@ static QoreAOTContext* buildContextFromSlotMap(
     }
 
     // Read and resolve expression slot identities
+    // Deferred EXPR_TREE blobs: processed after all other slots are resolved
+    // (EXPR_TREE may reference CLOSURE_CREATE slots that come later in the stream)
+    struct DeferredExprTree {
+        int slot;
+        const uint8_t* blob_data;
+        uint32_t blob_size;
+    };
+    std::vector<DeferredExprTree> deferred_expr_trees;
     bool has_closure_slots = false;
     for (int i = 0; i < num_exprs; ++i) {
         uint8_t kind_byte = QoreAOTBinaryReader::readU8(ptr);
@@ -2099,20 +2245,13 @@ static QoreAOTContext* buildContextFromSlotMap(
                 ref2 = reader.readStringRef(ptr);
                 break;
             case AOTExprKind::EXPR_TREE: {
-                // Read inline blob: u32 length + raw bytes
+                // Defer EXPR_TREE deserialization until after all other slots
+                // (especially CLOSURE_CREATE) are resolved, since EXPR_TREEs
+                // may reference closure slots that appear later in the stream
                 uint32_t blob_size = QoreAOTBinaryReader::readU32(ptr);
                 const uint8_t* blob_data = ptr;
                 ptr += blob_size;
-                // Deserialize the expression tree
-                ExprTreeDeserializer deser(blob_data, blob_size, pgm, ctx);
-                uint64_t bits = deser.deserialize();
-                if (bits) {
-                    ctx->exprs[i] = bits;
-                } else {
-                    printd(2, "AOT v2: EXPR_TREE deserialization failed for expr slot %d of '%s'\n",
-                        i, name);
-                    has_unsupported = true;
-                }
+                deferred_expr_trees.push_back({i, blob_data, blob_size});
                 continue;
             }
             case AOTExprKind::HASH_LITERAL: {
@@ -2396,6 +2535,132 @@ static QoreAOTContext* buildContextFromSlotMap(
                 ctx->exprs[i] = toBitsNB(QoreValue(closure_node));
                 continue;
             }
+            case AOTExprKind::CAST_HASHDECL: {
+                ref1 = reader.readStringRef(ptr);
+                uint8_t or_nothing = QoreAOTBinaryReader::readU8(ptr);
+                if (ref1 && *ref1) {
+                    const qore_ns_private* found_ns = nullptr;
+                    const TypedHashDecl* hd = qore_root_ns_private::runtimeFindHashDecl(
+                        *pp->RootNS, ref1, found_ns);
+                    if (hd) {
+                        auto* node = new QoreHashDeclCastOperatorNode(&loc_builtin, hd, QoreValue(), or_nothing != 0);
+                        ctx->exprs[i] = toBitsNB(QoreValue(node));
+                    } else {
+                        printd(0, "AOT v2: cannot resolve hashdecl '%s' for cast\n", ref1);
+                        has_unsupported = true;
+                    }
+                } else {
+                    has_unsupported = true;
+                }
+                continue;
+            }
+            case AOTExprKind::CAST_COMPLEX_HASH: {
+                ref1 = reader.readStringRef(ptr);
+                uint8_t or_nothing = QoreAOTBinaryReader::readU8(ptr);
+                if (ref1 && *ref1) {
+                    std::string type_error;
+                    QoreAOTTypeResolver type_resolver(pgm);
+                    const QoreTypeInfo* ti = type_resolver.resolve(ref1, type_error);
+                    if (ti) {
+                        auto* node = new QoreComplexHashCastOperatorNode(&loc_builtin, ti, QoreValue(),
+                            or_nothing != 0);
+                        ctx->exprs[i] = toBitsNB(QoreValue(node));
+                    } else {
+                        printd(0, "AOT v2: cannot resolve type '%s' for complex hash cast: %s\n",
+                            ref1, type_error.c_str());
+                        has_unsupported = true;
+                    }
+                } else {
+                    has_unsupported = true;
+                }
+                continue;
+            }
+            case AOTExprKind::CAST_COMPLEX_LIST: {
+                ref1 = reader.readStringRef(ptr);
+                uint8_t or_nothing = QoreAOTBinaryReader::readU8(ptr);
+                if (ref1 && *ref1) {
+                    std::string type_error;
+                    QoreAOTTypeResolver type_resolver(pgm);
+                    const QoreTypeInfo* ti = type_resolver.resolve(ref1, type_error);
+                    if (ti) {
+                        auto* node = new QoreComplexListCastOperatorNode(&loc_builtin, ti, QoreValue(),
+                            or_nothing != 0);
+                        ctx->exprs[i] = toBitsNB(QoreValue(node));
+                    } else {
+                        printd(0, "AOT v2: cannot resolve type '%s' for complex list cast: %s\n",
+                            ref1, type_error.c_str());
+                        has_unsupported = true;
+                    }
+                } else {
+                    has_unsupported = true;
+                }
+                continue;
+            }
+            case AOTExprKind::CAST_CLASS: {
+                ref1 = reader.readStringRef(ptr);
+                uint8_t or_nothing = QoreAOTBinaryReader::readU8(ptr);
+                if (ref1 && *ref1) {
+                    const qore_ns_private* found_ns = nullptr;
+                    const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
+                        *pp->RootNS, ref1, found_ns);
+                    if (qc) {
+                        auto* node = new QoreClassCastOperatorNode(&loc_builtin, qc, QoreValue(),
+                            or_nothing != 0);
+                        ctx->exprs[i] = toBitsNB(QoreValue(node));
+                    } else {
+                        printd(0, "AOT v2: cannot resolve class '%s' for cast\n", ref1);
+                        has_unsupported = true;
+                    }
+                } else {
+                    has_unsupported = true;
+                }
+                continue;
+            }
+            case AOTExprKind::CAST_ENUM: {
+                ref1 = reader.readStringRef(ptr);
+                uint8_t or_nothing = QoreAOTBinaryReader::readU8(ptr);
+                if (ref1 && *ref1) {
+                    std::string type_error;
+                    QoreAOTTypeResolver type_resolver(pgm);
+                    const QoreTypeInfo* ti = type_resolver.resolve(ref1, type_error);
+                    if (ti) {
+                        const QoreEnumDecl* ed = QoreTypeInfo::getUniqueReturnEnum(ti);
+                        if (ed) {
+                            auto* node = new QoreEnumCastOperatorNode(&loc_builtin, ed, ti, QoreValue(),
+                                or_nothing != 0);
+                            ctx->exprs[i] = toBitsNB(QoreValue(node));
+                        } else {
+                            printd(0, "AOT v2: cannot extract enum from type '%s' for cast\n", ref1);
+                            has_unsupported = true;
+                        }
+                    } else {
+                        printd(0, "AOT v2: cannot resolve type '%s' for enum cast: %s\n",
+                            ref1, type_error.c_str());
+                        has_unsupported = true;
+                    }
+                } else {
+                    has_unsupported = true;
+                }
+                continue;
+            }
+            case AOTExprKind::CONST_INT: {
+                int64_t v = QoreAOTBinaryReader::readI64(ptr);
+                ctx->exprs[i] = toBitsNB(QoreValue(v));
+                continue;
+            }
+            case AOTExprKind::CONST_FLOAT: {
+                double v = QoreAOTBinaryReader::readF64(ptr);
+                ctx->exprs[i] = toBitsNB(QoreValue(v));
+                continue;
+            }
+            case AOTExprKind::CONST_BOOL: {
+                uint8_t v = QoreAOTBinaryReader::readU8(ptr);
+                ctx->exprs[i] = toBitsNB(QoreValue((bool)(v != 0)));
+                continue;
+            }
+            case AOTExprKind::CONST_NOTHING:
+                ctx->exprs[i] = toBitsNB(QoreValue());
+                continue;
             case AOTExprKind::CALL_REF:
             case AOTExprKind::OBJ_METHOD_REF:
             case AOTExprKind::GENERIC_EVAL:
@@ -2444,6 +2709,19 @@ static QoreAOTContext* buildContextFromSlotMap(
         } else if (kind != AOTExprKind::GENERIC_EVAL) {
             printd(2, "AOT buildCtx: '%s' unresolved expr[%d] kind=%d ref1='%s' ref2='%s'\n",
                 name, i, (int)kind, ref1 ? ref1 : "", ref2 ? ref2 : "");
+            has_unsupported = true;
+        }
+    }
+
+    // Process deferred EXPR_TREE blobs now that all CLOSURE_CREATE slots are resolved
+    for (auto& dt : deferred_expr_trees) {
+        ExprTreeDeserializer deser(dt.blob_data, dt.blob_size, pgm, ctx);
+        uint64_t bits = deser.deserialize();
+        if (bits) {
+            ctx->exprs[dt.slot] = bits;
+        } else {
+            printd(2, "AOT v2: EXPR_TREE deserialization failed for expr slot %d of '%s'\n",
+                dt.slot, name);
             has_unsupported = true;
         }
     }
@@ -3742,6 +4020,14 @@ static void skipSlotMapEntry(const QoreAOTBinaryReader& reader, const uint8_t*& 
                 reader.readStringRef(ptr);
                 reader.readStringRef(ptr);
                 break;
+            case AOTExprKind::CAST_HASHDECL:
+            case AOTExprKind::CAST_COMPLEX_HASH:
+            case AOTExprKind::CAST_COMPLEX_LIST:
+            case AOTExprKind::CAST_CLASS:
+            case AOTExprKind::CAST_ENUM:
+                reader.readStringRef(ptr);  // type/class/hashdecl path
+                QoreAOTBinaryReader::readU8(ptr);  // or_nothing
+                break;
             case AOTExprKind::EXPR_TREE: {
                 uint32_t blob_size = QoreAOTBinaryReader::readU32(ptr);
                 ptr += blob_size;
@@ -3788,6 +4074,17 @@ static void skipSlotMapEntry(const QoreAOTBinaryReader& reader, const uint8_t*& 
                 }
                 break;
             }
+            case AOTExprKind::CONST_INT:
+                ptr += 8;
+                break;
+            case AOTExprKind::CONST_FLOAT:
+                ptr += 8;
+                break;
+            case AOTExprKind::CONST_BOOL:
+                QoreAOTBinaryReader::readU8(ptr);
+                break;
+            case AOTExprKind::CONST_NOTHING:
+                break;
             default:
                 break;
         }
