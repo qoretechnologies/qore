@@ -2,7 +2,7 @@
 /*
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),

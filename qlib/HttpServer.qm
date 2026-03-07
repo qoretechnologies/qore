@@ -4725,7 +4725,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         @param sock_key the socket uniqueHash() identifying the connection
     */
     clearMultiplexedPersistentState(string sock_key) {
-        MultiplexedPersistentState state;
+        *MultiplexedPersistentState state;
         {
             persistent_cache_mutex.lock();
             on_exit persistent_cache_mutex.unlock();

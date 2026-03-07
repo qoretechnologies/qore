@@ -3,7 +3,7 @@
 /*
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -150,27 +150,27 @@ void ThreadPool::worker(ExceptionSink* xsink) {
         }
     }
 
-    // idle threads can be terminated with stop() in all cases
+    // signal idle threads to stop; safe to call while holding ThreadPool lock
+    // since idle threads don't call tp.done() (they have no task)
     for (auto& i : fh) {
-        i->stop();
+        i->stopWait();
     }
 
     sl.unlock();
 
-    if (!detach) {
-        // signal worker threads to terminate and confirm termination inline
-        for (auto& i : ah) {
-            i->stopWait();
-        }
-        // wait for termination
-        for (auto& i : ah) {
-            i->stopConfirm(xsink);
-        }
-    } else {
-        // detach threads and do not wait for termination
-        for (auto& i : ah) {
-            i->stop();
-        }
+    // signal active threads to stop; must be done after unlock to avoid
+    // deadlock with threads calling tp.done() which acquires the same lock
+    for (auto& i : ah) {
+        i->stopWait();
+    }
+
+    // wait for all thread termination to prevent use-after-free when threads
+    // hold a reference to the ThreadPool and call finalize() after destruction
+    for (auto& i : fh) {
+        i->stopConfirm(xsink);
+    }
+    for (auto& i : ah) {
+        i->stopConfirm(xsink);
     }
 
     sl.lock();
@@ -278,7 +278,7 @@ ThreadPool::constructor(int max = 0, int minidle = 0, int maxidle = 0, timeout r
     self->setPrivate(CID_THREADPOOL, tp.release());
 }
 
-//! destroys the pool; any worker threads are detached and pending tasks not yet executed are canceled; to wait for all worker threads to complete, call ThreadPool::stopWait() first
+//! destroys the pool; all worker threads are stopped and pending tasks not yet executed are canceled; to wait for all queued tasks to be processed first, call ThreadPool::stopWait() before destroying the pool
 /** @par Example:
     @code{.py}
 delete tp;
@@ -289,18 +289,16 @@ ThreadPool::destructor() {
     tp->deref();
 }
 
-//! stops the thread pool and returns immediately; queued tasks are canceled
+//! stops the thread pool; queued tasks are canceled
 /** @par Example:
     @code{.py}
 tp.stop();
     @endcode
 
-    This method detaches all worker threads immediately, stops the ThreadPool, and returns immediately; after this
+    This method stops the ThreadPool and waits for all worker threads to terminate; after this
     method has been executed once no more tasks can be submitted to the ThreadPool.
 
     Queued tasks not yet processed by a worker thread are canceled.
-
-    @note if any worker threads are still running; they are detached from the ThreadPool and terminate independently from the ThreadPool
 
     @see ThreadPool::stopWait()
  */
