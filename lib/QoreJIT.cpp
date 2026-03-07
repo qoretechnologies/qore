@@ -539,17 +539,21 @@ bool QoreJIT::compileFunctionBatchLocked(const QoreIRFunction& root_func, std::s
 bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std::string& error,
         void* root_deopt_counter,
         const std::vector<BatchCallee>& callees) {
+    // Copy root_func.name before any LLVM operations (same heap-corruption workaround
+    // as compileFunctionInternal — see comment there for details).
+    const std::string root_func_name = root_func.name;
+
     // Re-check cache under compile lock
     {
         std::lock_guard<std::mutex> lock(cache_mutex);
-        if (compiled_functions.find(root_func.name) != compiled_functions.end()) {
+        if (compiled_functions.find(root_func_name) != compiled_functions.end()) {
             return true;
         }
     }
 
     // Create a shared LLVM context and module for the batch
     auto ctx = std::make_unique<llvm::LLVMContext>();
-    auto module = std::make_unique<llvm::Module>("qore_jit_batch_" + root_func.name, *ctx);
+    auto module = std::make_unique<llvm::Module>("qore_jit_batch_" + root_func_name, *ctx);
     module->setDataLayout(jit->getDataLayout());
 
     // Build the batch callee map: variant → BatchCalleeInfo
@@ -578,6 +582,16 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
                 already_compiled.insert(callee.ir_func->name);
             }
         }
+    }
+
+    // Pre-copy all callee names before any LLVM operations.
+    // After addIRModule()/lookup(), LLVM 21 on Linux can corrupt adjacent heap memory
+    // (specifically std::string::_M_string_length), so we capture callee names now
+    // while the ir_func pointers and their name fields are guaranteed intact.
+    std::vector<std::string> callee_names;
+    callee_names.reserve(callees.size());
+    for (const auto& callee : callees) {
+        callee_names.push_back(callee.ir_func->name);
     }
 
     // Forward-declare all callee functions in the module so they can be referenced
@@ -704,7 +718,7 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
     // Dump LLVM IR if requested (after optimization)
     if (getenv("QORE_DUMP_LLVM_IR")) {
         llvm::raw_fd_ostream llvm_dump(2, false);
-        llvm_dump << "=== LLVM IR (batch) for " << root_func.name << " ===\n";
+        llvm_dump << "=== LLVM IR (batch) for " << root_func_name << " ===\n";
         module->print(llvm_dump, nullptr);
         llvm_dump << "=== END LLVM IR ===\n";
     }
@@ -718,9 +732,9 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
     }
 
     // Look up the root function (triggers materialization/code generation)
-    auto sym = jit->lookup(root_func.name);
+    auto sym = jit->lookup(root_func_name);
     if (!sym) {
-        error = "failed to look up compiled function '" + root_func.name + "': "
+        error = "failed to look up compiled function '" + root_func_name + "': "
             + llvm::toString(sym.takeError());
         return false;
     }
@@ -729,22 +743,24 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
     // Cache the root function
     {
         std::lock_guard<std::mutex> lock(cache_mutex);
-        compiled_functions[root_func.name] = root_fn_ptr;
+        compiled_functions[root_func_name] = root_fn_ptr;
     }
 
-    // Look up and cache all callee functions
-    for (const auto& callee : callees) {
-        auto callee_sym = jit->lookup(callee.ir_func->name);
+    // Look up and cache all callee functions.
+    // Use pre-copied callee_names (not callee.ir_func->name) as LLVM may have
+    // corrupted adjacent heap memory during addIRModule()/lookup() above.
+    for (size_t i = 0; i < callees.size(); ++i) {
+        auto callee_sym = jit->lookup(callee_names[i]);
         if (!callee_sym) {
             // Non-fatal: callees that fail lookup will fall back to runtime dispatch
             printd(2, "QoreJIT::compileFunctionBatch() callee '%s' lookup failed\n",
-                callee.ir_func->name.c_str());
+                callee_names[i].c_str());
             continue;
         }
         auto callee_fn_ptr = callee_sym->toPtr<uint64_t(ExceptionSink*)>();
         {
             std::lock_guard<std::mutex> lock(cache_mutex);
-            compiled_functions[callee.ir_func->name] = callee_fn_ptr;
+            compiled_functions[callee_names[i]] = callee_fn_ptr;
         }
     }
 
