@@ -57,6 +57,7 @@ static_assert(QORE_IR_MAX_OPCODE == 343,
 #include "qore/intern/QoreOperatorNode.h"
 #include "qore/intern/QorePseudoMethods.h"
 #include "qore/intern/QoreCastOperatorNode.h"
+#include "qore/intern/QoreInstanceOfOperatorNode.h"
 #include <qore/QoreStringNode.h>
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/Constants.h>
@@ -253,6 +254,10 @@ void QoreIRToLLVM::declareRuntimeHelpers(llvm::Module& module) {
 
     // Guard type helper: (i64, ptr) -> i64
     module.getOrInsertFunction("qore_rt_guard_type",
+            llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
+
+    // InstanceOf helper: (i64, ptr) -> i64
+    module.getOrInsertFunction("qore_rt_instanceof",
             llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
 
     // Date construction helper: (i64, i64) -> i64
@@ -3643,6 +3648,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         builder->CreateCall(assign_fn, {var_as_ptr, boxed, xsink_arg});
                     }
                 }
+            }
+            if (inst->result.isValid()) {
+                values[inst->result.id] = result;
+                // NOT nanboxed — native int result
             }
             return true;
         }
@@ -8185,11 +8194,49 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             return true;
         }
 
+        // === InstanceOf: native type check with pre-evaluated operand ===
+        case QoreIROpcode::InstanceOfBool: {
+            const auto* expr_inst = static_cast<const QoreIRExprInstruction*>(inst);
+            if (!aot_mode) {
+                // JIT mode: use pre-evaluated operand + type info pointer
+                auto* val = getVal(inst->operands[0].id, error);
+                if (!val) { return false; }
+                llvm::Value* val_boxed = boxValue(val, inst->operands[0].id);
+                auto* io_node = static_cast<const QoreInstanceOfOperatorNode*>(
+                    expr_inst->expr.getInternalNode());
+                const QoreTypeInfo* ti = io_node->getInstanceTypeInfo();
+                llvm::Value* ti_ptr = llvm::ConstantInt::get(i64_type,
+                        reinterpret_cast<uint64_t>(ti));
+                llvm::Value* ti_as_ptr = builder->CreateIntToPtr(ti_ptr, ptr_type);
+                auto helper = module.getOrInsertFunction("qore_rt_instanceof",
+                        llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
+                llvm::Value* result = builder->CreateCall(helper, {val_boxed, ti_as_ptr});
+                values[inst->result.id] = result;
+                nanboxed_values.insert(inst->result.id);
+                // No trackResultForCleanup — boolean result, no heap allocation
+                // No emitExceptionCheck — instanceof cannot throw
+                return true;
+            }
+            // AOT mode: fall through to qore_rt_invoke_expr_aot (evaluates full AST)
+            QoreValue expr_val = expr_inst->expr;
+            uint64_t expr_bits;
+            std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
+            int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
+            auto aot_helper = module.getOrInsertFunction("qore_rt_invoke_expr_aot",
+                    llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type}, false));
+            llvm::Value* result = builder->CreateCall(aot_helper, {aot_ctx_arg,
+                    llvm::ConstantInt::get(i32_type, slot), xsink_arg});
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            emitExceptionCheck(module, llvm_func, inst);
+            return true;
+        }
+
         // === Pure expression ops (no variable modification) ===
         case QoreIROpcode::KeysAny:
         case QoreIROpcode::KeysList:
         case QoreIROpcode::KeysHash:
-        case QoreIROpcode::InstanceOfBool:
         case QoreIROpcode::BackgroundInt:
         case QoreIROpcode::ElementsAny:
         case QoreIROpcode::ElementsInt: {

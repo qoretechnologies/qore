@@ -371,7 +371,6 @@ static int expectedOperands(QoreIROpcode op) {
         case QoreIROpcode::Assert:
         case QoreIROpcode::Context:
         case QoreIROpcode::Summarize:
-        case QoreIROpcode::InstanceOfBool:
         case QoreIROpcode::TrimAny:
         case QoreIROpcode::TrimString:
         case QoreIROpcode::ChompAny:
@@ -573,6 +572,7 @@ static int expectedOperands(QoreIROpcode op) {
         case QoreIROpcode::RegexSubstString:
         case QoreIROpcode::ExistsAny:
         case QoreIROpcode::ExistsBool:
+        case QoreIROpcode::InstanceOfBool:
         case QoreIROpcode::ElementsAny:
         case QoreIROpcode::ElementsInt:
         case QoreIROpcode::DotEvalAny:

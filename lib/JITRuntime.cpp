@@ -1158,6 +1158,32 @@ extern "C" DLLEXPORT int64_t qore_rt_guard_type(uint64_t val, const QoreTypeInfo
     return QoreTypeInfo::runtimeAcceptsValue(type_info, v) != QTI_NOT_EQUAL ? 1 : 0;
 }
 
+// --- InstanceOf helper ---
+
+extern "C" DLLEXPORT uint64_t qore_rt_instanceof(uint64_t val_bits, const QoreTypeInfo* ti) {
+    QoreValue val = fromBits(val_bits);
+    qore_type_t t = val.getType();
+    bool result;
+    switch (t) {
+        case NT_WEAKREF:
+            result = QoreTypeInfo::runtimeAcceptsValue(ti,
+                **val.get<const WeakReferenceNode>()) != QTI_NOT_EQUAL;
+            break;
+        case NT_WEAKREF_HASH:
+            result = QoreTypeInfo::runtimeAcceptsValue(ti,
+                **val.get<const WeakHashReferenceNode>()) != QTI_NOT_EQUAL;
+            break;
+        case NT_WEAKREF_LIST:
+            result = QoreTypeInfo::runtimeAcceptsValue(ti,
+                **val.get<const WeakListReferenceNode>()) != QTI_NOT_EQUAL;
+            break;
+        default:
+            result = QoreTypeInfo::runtimeAcceptsValue(ti, val) != QTI_NOT_EQUAL;
+            break;
+    }
+    return toBits(QoreValue(result));
+}
+
 // --- Date construction helper ---
 
 extern "C" DLLEXPORT uint64_t qore_rt_make_date(int64_t date_microseconds, int64_t is_relative) {
