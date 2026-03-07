@@ -135,7 +135,7 @@ public:
     }
 
     DLLLOCAL ParseSelfMethodReferenceNode(const QoreProgramLocation* loc, const QoreMethod* m)
-            : AbstractParseObjectMethodReferenceNode(loc), meth(m) {
+            : AbstractParseObjectMethodReferenceNode(loc), method(m->getName()), meth(m) {
     }
 
     //! Returns the method name (for AOT serialization)

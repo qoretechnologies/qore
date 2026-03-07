@@ -52,6 +52,7 @@
 
 #include "qore/intern/ModuleInfo.h"
 #include "qore/intern/VarRefNode.h"
+#include "qore/intern/ParseReferenceNode.h"
 #include "qore/intern/qore_thread_intern.h"
 #include "qore/intern/SelfVarrefNode.h"
 #include "qore/intern/ScopedObjectCallNode.h"
@@ -139,6 +140,7 @@
 #include "qore/intern/QoreRegexSubst.h"
 #include "qore/intern/QoreTransliteration.h"
 #include "qore/intern/QoreClosureParseNode.h"
+#include "qore/intern/qore_list_private.h"
 #include <qore/QoreNumberNode.h>
 #include <qore/BinaryNode.h>
 
@@ -317,6 +319,11 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
             return toBitsNB(QoreValue(num));
         }
 
+        case AOTExprKind::CONST_STRING: {
+            // String literal constant (e.g., "" passed as constructor arg)
+            return toBitsNB(QoreValue(new QoreStringNode(ref1 ? ref1 : "")));
+        }
+
         case AOTExprKind::CONST_BINARY: {
             if (!ref1) {
                 return 0;
@@ -473,6 +480,241 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
             // Unsupported — function needs source fallback
             return 0;
     }
+}
+
+// ---- Inline IR Expression Reader ----
+
+//! Read one expression from inline closure/handler IR binary data.
+/** Used by readExprCb lambdas in buildContextFromSlotMap to deserialize expressions
+    stored inline in closure and handler IR bodies. The format is produced by
+    classifyAndWriteExpr(): kind(u8) + kind-specific data (stringrefs, recursive exprs).
+
+    For NEW_OBJECT/SCOPED_NEW_OBJECT: class_path(stringref) + num_args(u8) + N×readOneExpr().
+
+    @param rdr binary reader (for readStringRef)
+    @param p current read pointer (advanced by reading)
+    @param e end of valid data
+    @param err set to error message on failure
+    @param pgm the Qore program (for symbol resolution)
+    @param locals LocalVar* array for LOCAL_VARREF resolution (may be null)
+    @param num_locals number of entries in locals
+    @param globals Var* array for GLOBAL_VARREF resolution (may be null)
+    @param num_globals number of entries in globals
+    @return reconstructed expression, or NOTHING on failure
+*/
+//! Advance pointer past one AOTExprKind-encoded expression without allocating objects
+static void skipOneExpr(const QoreAOTBinaryReader& rdr, const uint8_t*& p, const uint8_t* e) {
+    if (p >= e) { return; }
+    uint8_t ekind = QoreAOTBinaryReader::readU8(p);
+    AOTExprKind ek = static_cast<AOTExprKind>(ekind);
+
+    if (ek == AOTExprKind::HASH_DEREF) {
+        skipOneExpr(rdr, p, e);  // left (base expression)
+        skipOneExpr(rdr, p, e);  // right (key expression)
+        return;
+    }
+    if (ek == AOTExprKind::PARSE_REF) {
+        skipOneExpr(rdr, p, e);  // inner lvalue expression
+        return;
+    }
+    if (ek == AOTExprKind::HASH_LITERAL) {
+        uint8_t n = QoreAOTBinaryReader::readU8(p);
+        for (uint8_t i = 0; i < n; ++i) {
+            rdr.readStringRef(p);  // key
+            skipOneExpr(rdr, p, e);  // value (recursive)
+        }
+        return;
+    }
+    if (ek == AOTExprKind::NEW_OBJECT || ek == AOTExprKind::SCOPED_NEW_OBJECT) {
+        rdr.readStringRef(p);  // class path
+        uint8_t na = QoreAOTBinaryReader::readU8(p);
+        for (uint8_t i = 0; i < na; ++i) {
+            skipOneExpr(rdr, p, e);  // each arg
+        }
+        return;
+    }
+    // Two-stringref kinds
+    if (ek == AOTExprKind::SELF_METHOD_CALL || ek == AOTExprKind::STATIC_METHOD_CALL
+            || ek == AOTExprKind::STATIC_VARREF || ek == AOTExprKind::CONST_ENUM) {
+        rdr.readStringRef(p);
+        rdr.readStringRef(p);
+        return;
+    }
+    // One-stringref kinds
+    if (ek == AOTExprKind::FUNC_CALL || ek == AOTExprKind::RUNTIME_CONST_REF
+            || ek == AOTExprKind::CONST_NUMBER || ek == AOTExprKind::CONST_BINARY
+            || ek == AOTExprKind::CONST_STRING || ek == AOTExprKind::SELF_VARREF
+            || ek == AOTExprKind::LOCAL_VARREF || ek == AOTExprKind::GLOBAL_VARREF
+            || ek == AOTExprKind::HASHDECL_NEW || ek == AOTExprKind::COMPLEX_HASH_NEW
+            || ek == AOTExprKind::COMPLEX_LIST_NEW) {
+        rdr.readStringRef(p);
+        return;
+    }
+    // GENERIC_EVAL or unknown: no bytes to skip
+}
+
+static QoreValue readOneExpr(
+        const QoreAOTBinaryReader& rdr, const uint8_t*& p, const uint8_t* e,
+        std::string& err, QoreProgram* pgm,
+        LocalVar** locals, int num_locals,
+        Var** globals, int num_globals) {
+    uint8_t ekind = QoreAOTBinaryReader::readU8(p);
+    AOTExprKind ek = static_cast<AOTExprKind>(ekind);
+
+    // HASH_LITERAL: num_pairs(u8) + [key_str(stringref) + value(readOneExpr)] * N
+    // HASH_DEREF: left(base) + right(key) — reconstructs QoreHashObjectDereferenceOperatorNode
+    if (ek == AOTExprKind::HASH_DEREF) {
+        std::string left_err;
+        QoreValue left = readOneExpr(rdr, p, e, left_err, pgm, locals, num_locals, globals, num_globals);
+        if (!left_err.empty()) {
+            err = left_err;
+            return QoreValue();
+        }
+        std::string right_err;
+        QoreValue right = readOneExpr(rdr, p, e, right_err, pgm, locals, num_locals, globals, num_globals);
+        if (!right_err.empty()) {
+            err = right_err;
+            left.discard(nullptr);
+            return QoreValue();
+        }
+        return QoreValue(new QoreHashObjectDereferenceOperatorNode(&loc_builtin, left, right));
+    }
+
+    // PARSE_REF: \var lvalue reference — contains one inner lvalue expression
+    if (ek == AOTExprKind::PARSE_REF) {
+        std::string inner_err;
+        QoreValue inner = readOneExpr(rdr, p, e, inner_err, pgm, locals, num_locals, globals, num_globals);
+        if (!inner_err.empty()) {
+            err = inner_err;
+            return QoreValue();
+        }
+        return QoreValue(new ParseReferenceNode(&loc_builtin, inner));
+    }
+
+    if (ek == AOTExprKind::HASH_LITERAL) {
+        uint8_t num_pairs = QoreAOTBinaryReader::readU8(p);
+        QoreParseHashNode* phn = new QoreParseHashNode(&loc_builtin);
+        for (uint8_t j = 0; j < num_pairs; ++j) {
+            const char* key_str = rdr.readStringRef(p);
+            std::string val_err;
+            QoreValue val = readOneExpr(rdr, p, e, val_err, pgm,
+                locals, num_locals, globals, num_globals);
+            if (!val_err.empty()) {
+                err = val_err;
+                val.discard(nullptr);
+                phn->deref(nullptr);
+                return QoreValue();
+            }
+            phn->add(new QoreStringNode(key_str ? key_str : ""), val, &loc_builtin);
+        }
+        return QoreValue(phn);
+    }
+
+    // NEW_OBJECT / SCOPED_NEW_OBJECT: class_path + num_args + N×readOneExpr()
+    if (ek == AOTExprKind::NEW_OBJECT || ek == AOTExprKind::SCOPED_NEW_OBJECT) {
+        const char* class_path = rdr.readStringRef(p);
+        uint8_t num_args = QoreAOTBinaryReader::readU8(p);
+        QoreListNode* args_list = nullptr;
+        if (num_args > 0) {
+            // Create with needs_eval=true so evalList() evaluates VarRefNode args at call time.
+            // new QoreListNode(autoTypeInfo) defaults to value=true (no evaluation), but args
+            // may contain VarRefNode or other AST nodes that require runtime evaluation.
+            args_list = qore_list_private::newList(true);
+            for (uint8_t j = 0; j < num_args; ++j) {
+                std::string arg_err;
+                QoreValue arg = readOneExpr(rdr, p, e, arg_err, pgm,
+                    locals, num_locals, globals, num_globals);
+                if (!arg_err.empty()) {
+                    err = arg_err;
+                    args_list->deref(nullptr);
+                    return QoreValue();
+                }
+                args_list->push(arg, nullptr);
+            }
+        }
+        if (!class_path || !*class_path) {
+            if (args_list) {
+                args_list->deref(nullptr);
+            }
+            return QoreValue();
+        }
+        qore_program_private* pp = qore_program_private::get(*pgm);
+        const qore_ns_private* found_ns = nullptr;
+        const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
+            *pp->RootNS, class_path, found_ns);
+        if (!qc) {
+            if (args_list) {
+                args_list->deref(nullptr);
+            }
+            return QoreValue();
+        }
+        NewObjectCallNode* nocn = new NewObjectCallNode(qc, args_list);
+        return QoreValue(nocn);
+    }
+
+    const char* r1 = nullptr;
+    const char* r2 = nullptr;
+    switch (ek) {
+        case AOTExprKind::FUNC_CALL:
+        case AOTExprKind::RUNTIME_CONST_REF:
+        case AOTExprKind::CONST_NUMBER:
+        case AOTExprKind::CONST_BINARY:
+        case AOTExprKind::CONST_STRING:
+        case AOTExprKind::SELF_VARREF:
+        case AOTExprKind::LOCAL_VARREF:
+        case AOTExprKind::GLOBAL_VARREF:
+        case AOTExprKind::HASHDECL_NEW:
+        case AOTExprKind::COMPLEX_HASH_NEW:
+        case AOTExprKind::COMPLEX_LIST_NEW:
+            r1 = rdr.readStringRef(p);
+            break;
+        case AOTExprKind::SELF_METHOD_CALL:
+        case AOTExprKind::STATIC_METHOD_CALL:
+        case AOTExprKind::STATIC_VARREF:
+        case AOTExprKind::CONST_ENUM:
+            r1 = rdr.readStringRef(p);
+            r2 = rdr.readStringRef(p);
+            break;
+        default:
+            // GENERIC_EVAL or unknown — no additional bytes to read
+            return QoreValue();
+    }
+
+    // Handle LOCAL_VARREF using the passed-in locals array
+    if (ek == AOTExprKind::LOCAL_VARREF && r1) {
+        int local_slot = std::atoi(r1);
+        if (local_slot >= 0 && local_slot < num_locals && locals && locals[local_slot]) {
+            LocalVar* lv = locals[local_slot];
+            // NOTE: always use false for in_closure — VT_LOCAL type calls ref.id->eval() which
+            // internally checks closure_use and uses the correct lookup (local stack vs closure
+            // stack). VT_CLOSURE uses thread_get_runtime_closure_var() (pointer-based runtime
+            // closure env lookup) which returns null outside a closure execution context.
+            VarRefNode* vrn = new VarRefNode(&loc_builtin,
+                strdup(lv->getName()),
+                lv, false);
+            return QoreValue(vrn);
+        }
+        return QoreValue();
+    }
+
+    // Handle GLOBAL_VARREF using the passed-in globals array
+    if (ek == AOTExprKind::GLOBAL_VARREF && r1) {
+        int global_slot = std::atoi(r1);
+        if (global_slot >= 0 && global_slot < num_globals && globals && globals[global_slot]) {
+            Var* gvar = globals[global_slot];
+            GlobalVarRefNode* vrn = new GlobalVarRefNode(&loc_builtin, strdup(gvar->getName()), gvar);
+            return QoreValue(vrn);
+        }
+        return QoreValue();
+    }
+
+    uint64_t bits = resolveExprSlot(ek, r1, r2, pgm);
+    if (bits) {
+        QoreValue v;
+        memcpy(&v, &bits, sizeof(v));
+        return v;
+    }
+    return QoreValue();
 }
 
 // ---- Expression Tree Deserializer ----
@@ -752,20 +994,38 @@ class ExprTreeDeserializer {
                 std::string class_name = readStr();
                 std::string method_name = readStr();
                 uint16_t num_children = readU16();
-                SimpleRefHolder<QoreParseListNode> pln;
+                // Deserialize args into a QoreListNode (not QoreParseListNode)
+                // IMPORTANT: SelfFunctionCallNode stores args in parse_args when given
+                // QoreParseListNode, but crlr_selfcall_copy (used by background operator)
+                // only copies getArgs() = FunctionCallBase::args field. Using QoreListNode
+                // ensures args are preserved for background call copying.
+                QoreListNode* ql = nullptr;
                 if (num_children > 0) {
-                    pln = new QoreParseListNode(&loc_builtin);
+                    ql = qore_list_private::newList(true);  // needs_eval = true
                     for (uint16_t i = 0; i < num_children && !failed; ++i) {
-                        pln->add(deserializeValue(), &loc_builtin);
+                        QoreValue v = deserializeValue();
+                        if (failed) {
+                            if (v.hasNode()) {
+                                v.discard(nullptr);
+                            }
+                            break;
+                        }
+                        ql->push(v, nullptr);
                     }
                 }
                 if (failed) {
+                    if (ql) {
+                        ql->deref(nullptr);
+                    }
                     return QoreValue();
                 }
                 const QoreClass* qc = resolveClass(class_name);
                 if (!qc) {
                     printd(0, "AOT EXPR_TREE: cannot resolve class '%s' for self call '%s'\n",
                         class_name.c_str(), method_name.c_str());
+                    if (ql) {
+                        ql->deref(nullptr);
+                    }
                     return fail();
                 }
                 // Try runtime findMethod first (works for initialized classes)
@@ -785,13 +1045,21 @@ class ExprTreeDeserializer {
                 if (!m) {
                     printd(1, "AOT EXPR_TREE: cannot find method '%s::%s'\n",
                         class_name.c_str(), method_name.c_str());
+                    if (ql) {
+                        ql->deref(nullptr);
+                    }
                     return fail();
                 }
                 printd(5, "AOT EXPR_TREE: resolved self call '%s::%s' args=%d -> %p\n",
                     class_name.c_str(), method_name.c_str(), (int)num_children, m);
-                SelfFunctionCallNode* sfcn = new SelfFunctionCallNode(&loc_builtin,
-                    strdup(method_name.c_str()), pln.release(), m,
+                // Create base node (null parse args) then use copy constructor to set args field
+                // This ensures SelfFunctionCallNode::args (not parse_args) is set, which is
+                // what crlr_selfcall_copy uses when copying background operator expressions.
+                SelfFunctionCallNode* base = new SelfFunctionCallNode(&loc_builtin,
+                    strdup(method_name.c_str()), nullptr, m,
                     m->getClass(), qore_class_private::get(*m->getClass()));
+                SelfFunctionCallNode* sfcn = new SelfFunctionCallNode(*base, ql);
+                base->deref(nullptr);
                 return QoreValue(sfcn);
             }
 
@@ -1761,19 +2029,24 @@ static QoreAOTContext* buildContextFromSlotMap(
         switch (kind) {
             case AOTExprKind::NEW_OBJECT:
             case AOTExprKind::SCOPED_NEW_OBJECT: {
-                // ref1 = class path, followed by serialized constructor args
+                // ref1 = class path, followed by serialized constructor args.
+                // Args are in classifyAndWriteExpr format (AOTExprKind-tagged), NOT writeValue format.
+                // Use readOneExpr so VarRefNode args are reconstructed from ctx->locals[] and
+                // hash literal args (QoreParseHashNode) are reconstructed with proper VarRefNode values.
+                // The list must have value=false (needs_eval=true) so evalList() evaluates VarRefNodes.
                 ref1 = reader.readStringRef(ptr);
                 uint8_t num_args = QoreAOTBinaryReader::readU8(ptr);
                 QoreListNode* constructor_args = nullptr;
                 if (num_args > 0) {
-                    constructor_args = new QoreListNode(autoTypeInfo);
-                    std::string read_error;
+                    constructor_args = qore_list_private::newList(true);
                     for (uint8_t j = 0; j < num_args; ++j) {
-                        QoreValue arg = reader.readValue(ptr, end, read_error);
-                        if (!read_error.empty()) {
+                        std::string arg_err;
+                        QoreValue arg = readOneExpr(reader, ptr, end, arg_err, pgm,
+                            ctx->locals, ctx->num_locals, ctx->globals, ctx->num_globals);
+                        if (!arg_err.empty()) {
                             printd(0, "AOT v2: error reading constructor arg %d for '%s': %s\n",
-                                j, ref1 ? ref1 : "", read_error.c_str());
-                            read_error.clear();
+                                j, ref1 ? ref1 : "", arg_err.c_str());
+                            arg.discard(nullptr);
                             constructor_args->push(QoreValue(), nullptr);
                         } else {
                             constructor_args->push(arg, nullptr);
@@ -1811,6 +2084,7 @@ static QoreAOTContext* buildContextFromSlotMap(
             case AOTExprKind::GLOBAL_VARREF:
             case AOTExprKind::CONST_NUMBER:
             case AOTExprKind::CONST_BINARY:
+            case AOTExprKind::CONST_STRING:
             case AOTExprKind::SELF_VARREF:
             case AOTExprKind::HASHDECL_NEW:
             case AOTExprKind::COMPLEX_HASH_NEW:
@@ -1838,6 +2112,69 @@ static QoreAOTContext* buildContextFromSlotMap(
                     printd(2, "AOT v2: EXPR_TREE deserialization failed for expr slot %d of '%s'\n",
                         i, name);
                     has_unsupported = true;
+                }
+                continue;
+            }
+            case AOTExprKind::HASH_LITERAL: {
+                // num_pairs(u8) + [key_str(stringref) + value(readOneExpr)] * N
+                uint8_t num_pairs = QoreAOTBinaryReader::readU8(ptr);
+                QoreParseHashNode* phn = new QoreParseHashNode(&loc_builtin);
+                bool hash_ok = true;
+                for (uint8_t j = 0; j < num_pairs; ++j) {
+                    const char* key_str = reader.readStringRef(ptr);
+                    std::string val_err;
+                    // readOneExpr reads its own ekind byte from ptr
+                    QoreValue val = readOneExpr(reader, ptr, end, val_err, pgm,
+                        ctx->locals, num_locals, ctx->globals, num_globals);
+                    if (!hash_ok) {
+                        val.discard(nullptr);
+                    } else if (!val_err.empty()) {
+                        printd(2, "AOT v2: HASH_LITERAL value error for expr slot %d of '%s': %s\n",
+                            i, name, val_err.c_str());
+                        val.discard(nullptr);
+                        hash_ok = false;
+                    } else {
+                        phn->add(new QoreStringNode(key_str ? key_str : ""), val, &loc_builtin);
+                    }
+                }
+                if (hash_ok) {
+                    ctx->exprs[i] = toBitsNB(QoreValue(phn));
+                } else {
+                    phn->deref(nullptr);
+                    has_unsupported = true;
+                }
+                continue;
+            }
+            case AOTExprKind::PARSE_REF: {
+                // \var lvalue reference: inner lvalue expression (AOTExprKind-encoded)
+                std::string inner_err;
+                QoreValue inner = readOneExpr(reader, ptr, end, inner_err, pgm,
+                    ctx->locals, num_locals, ctx->globals, num_globals);
+                if (!inner_err.empty()) {
+                    printd(2, "AOT v2: PARSE_REF inner error for expr slot %d of '%s': %s\n",
+                        i, name, inner_err.c_str());
+                    inner.discard(nullptr);
+                    has_unsupported = true;
+                } else {
+                    ctx->exprs[i] = toBitsNB(QoreValue(new ParseReferenceNode(&loc_builtin, inner)));
+                }
+                continue;
+            }
+            case AOTExprKind::HASH_DEREF: {
+                // left (base expr) + right (key expr) — uses readOneExpr to consume both sub-expressions
+                std::string left_err;
+                QoreValue left = readOneExpr(reader, ptr, end, left_err, pgm,
+                    ctx->locals, num_locals, ctx->globals, num_globals);
+                std::string right_err;
+                QoreValue right = readOneExpr(reader, ptr, end, right_err, pgm,
+                    ctx->locals, num_locals, ctx->globals, num_globals);
+                if (!left_err.empty() || !right_err.empty()) {
+                    left.discard(nullptr);
+                    right.discard(nullptr);
+                    has_unsupported = true;
+                } else {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreHashObjectDereferenceOperatorNode(&loc_builtin, left, right)));
                 }
                 continue;
             }
@@ -1972,63 +2309,8 @@ static QoreAOTContext* buildContextFromSlotMap(
                 auto readExprCb = [pgm, ctx, num_locals, num_globals]
                         (const QoreAOTBinaryReader& rdr, const uint8_t*& p,
                         const uint8_t* e, std::string& err) -> QoreValue {
-                    uint8_t ekind = QoreAOTBinaryReader::readU8(p);
-                    AOTExprKind ek = static_cast<AOTExprKind>(ekind);
-                    const char* r1 = nullptr;
-                    const char* r2 = nullptr;
-                    switch (ek) {
-                        case AOTExprKind::FUNC_CALL:
-                        case AOTExprKind::RUNTIME_CONST_REF:
-                        case AOTExprKind::CONST_NUMBER:
-                        case AOTExprKind::CONST_BINARY:
-                        case AOTExprKind::SELF_VARREF:
-                        case AOTExprKind::LOCAL_VARREF:
-                        case AOTExprKind::GLOBAL_VARREF:
-                        case AOTExprKind::HASHDECL_NEW:
-                        case AOTExprKind::COMPLEX_HASH_NEW:
-                        case AOTExprKind::COMPLEX_LIST_NEW:
-                            r1 = rdr.readStringRef(p);
-                            break;
-                        case AOTExprKind::SELF_METHOD_CALL:
-                        case AOTExprKind::STATIC_METHOD_CALL:
-                        case AOTExprKind::STATIC_VARREF:
-                        case AOTExprKind::CONST_ENUM:
-                            r1 = rdr.readStringRef(p);
-                            r2 = rdr.readStringRef(p);
-                            break;
-                        default:
-                            return QoreValue();
-                    }
-                    // Handle LOCAL_VARREF
-                    if (ek == AOTExprKind::LOCAL_VARREF && r1) {
-                        int local_slot = std::atoi(r1);
-                        if (local_slot >= 0 && local_slot < num_locals && ctx->locals[local_slot]) {
-                            VarRefNode* vrn = new VarRefNode(&loc_builtin,
-                                strdup(ctx->locals[local_slot]->getName()),
-                                ctx->locals[local_slot], false);
-                            return QoreValue(vrn);
-                        }
-                        return QoreValue();
-                    }
-                    // Handle GLOBAL_VARREF
-                    if (ek == AOTExprKind::GLOBAL_VARREF && r1) {
-                        int global_slot = std::atoi(r1);
-                        if (global_slot >= 0 && global_slot < num_globals
-                                && ctx->globals[global_slot]) {
-                            Var* gvar = ctx->globals[global_slot];
-                            GlobalVarRefNode* vrn = new GlobalVarRefNode(&loc_builtin,
-                                strdup(gvar->getName()), gvar);
-                            return QoreValue(vrn);
-                        }
-                        return QoreValue();
-                    }
-                    uint64_t bits = resolveExprSlot(ek, r1, r2, pgm);
-                    if (bits) {
-                        QoreValue v;
-                        memcpy(&v, &bits, sizeof(v));
-                        return v;
-                    }
-                    return QoreValue();
+                    return readOneExpr(rdr, p, e, err, pgm,
+                        ctx->locals, num_locals, ctx->globals, num_globals);
                 };
                 auto closure_ir = deserializeIRFunction(reader, ptr, ir_end_ptr, pgm,
                     readExprCb, &enclosing_locals, ir_error);
@@ -2126,8 +2408,11 @@ static QoreAOTContext* buildContextFromSlotMap(
             int local_slot = std::atoi(ref1);
             if (local_slot >= 0 && local_slot < ctx->num_locals && ctx->locals[local_slot]) {
                 // Create a VarRefNode pointing to the local variable
-                VarRefNode* vrn = new VarRefNode(&loc_builtin, strdup(ctx->locals[local_slot]->getName()),
-                    ctx->locals[local_slot], false);
+                // NOTE: always use false for in_closure — VT_LOCAL type calls ref.id->eval() which
+                // internally checks closure_use and uses the correct lookup.
+                LocalVar* lv = ctx->locals[local_slot];
+                VarRefNode* vrn = new VarRefNode(&loc_builtin, strdup(lv->getName()),
+                    lv, false);
                 ctx->exprs[i] = toBitsNB(QoreValue(vrn));
                 continue;
             } else {
@@ -2260,83 +2545,33 @@ static QoreAOTContext* buildContextFromSlotMap(
                 std::string ir_error;
                 auto readExprCb = [pgm, ctx](const QoreAOTBinaryReader& rdr, const uint8_t*& p,
                         const uint8_t* e, std::string& err) -> QoreValue {
-                    // Read the AOTExprKind tag
+                    // Peek at kind byte for special cases
                     uint8_t kind_byte = QoreAOTBinaryReader::readU8(p);
                     auto kind = static_cast<AOTExprKind>(kind_byte);
                     if (kind == AOTExprKind::GENERIC_EVAL) {
-                        // Placeholder — expression not serialized
                         return QoreValue();
                     }
-                    // Read kind-specific refs and resolve
-                    const char* ref1 = nullptr;
-                    const char* ref2 = nullptr;
-                    switch (kind) {
-                        case AOTExprKind::FUNC_CALL:
-                        case AOTExprKind::NEW_OBJECT:
-                        case AOTExprKind::SCOPED_NEW_OBJECT:
-                        case AOTExprKind::RUNTIME_CONST_REF:
-                        case AOTExprKind::LOCAL_VARREF:
-                        case AOTExprKind::GLOBAL_VARREF:
-                        case AOTExprKind::CONST_NUMBER:
-                        case AOTExprKind::CONST_BINARY:
-                        case AOTExprKind::SELF_VARREF:
-                        case AOTExprKind::HASHDECL_NEW:
-                        case AOTExprKind::COMPLEX_HASH_NEW:
-                        case AOTExprKind::COMPLEX_LIST_NEW:
-                            ref1 = rdr.readStringRef(p);
-                            break;
-                        case AOTExprKind::SELF_METHOD_CALL:
-                        case AOTExprKind::STATIC_METHOD_CALL:
-                        case AOTExprKind::STATIC_VARREF:
-                        case AOTExprKind::CONST_ENUM:
-                            ref1 = rdr.readStringRef(p);
-                            ref2 = rdr.readStringRef(p);
-                            break;
-                        case AOTExprKind::EXPR_TREE: {
-                            uint32_t blob_size = QoreAOTBinaryReader::readU32(p);
-                            const uint8_t* blob_data = p;
-                            p += blob_size;
-                            ExprTreeDeserializer deser(blob_data, blob_size, pgm, ctx);
-                            uint64_t bits = deser.deserialize();
-                            if (bits) {
-                                QoreValue v;
-                                memcpy(&v, &bits, sizeof(v));
-                                return v;
-                            }
-                            return QoreValue();
-                        }
-                        default:
-                            break;
-                    }
-                    // Handle LOCAL_VARREF
-                    if (kind == AOTExprKind::LOCAL_VARREF && ref1) {
-                        int local_slot = std::atoi(ref1);
-                        if (local_slot >= 0 && local_slot < ctx->num_locals && ctx->locals[local_slot]) {
-                            VarRefNode* vrn = new VarRefNode(&loc_builtin,
-                                strdup(ctx->locals[local_slot]->getName()),
-                                ctx->locals[local_slot], false);
-                            return QoreValue(vrn);
+                    // EXPR_TREE: recursive expression tree (handler-specific)
+                    if (kind == AOTExprKind::EXPR_TREE) {
+                        uint32_t blob_size = QoreAOTBinaryReader::readU32(p);
+                        const uint8_t* blob_data = p;
+                        p += blob_size;
+                        ExprTreeDeserializer deser(blob_data, blob_size, pgm, ctx);
+                        uint64_t bits = deser.deserialize();
+                        if (bits) {
+                            QoreValue v;
+                            memcpy(&v, &bits, sizeof(v));
+                            return v;
                         }
                         return QoreValue();
                     }
-                    // Handle GLOBAL_VARREF
-                    if (kind == AOTExprKind::GLOBAL_VARREF && ref1) {
-                        int global_slot = std::atoi(ref1);
-                        if (global_slot >= 0 && global_slot < ctx->num_globals && ctx->globals[global_slot]) {
-                            Var* gvar = ctx->globals[global_slot];
-                            GlobalVarRefNode* vrn = new GlobalVarRefNode(&loc_builtin,
-                                strdup(gvar->getName()), gvar);
-                            return QoreValue(vrn);
-                        }
-                        return QoreValue();
-                    }
-                    uint64_t bits = resolveExprSlot(kind, ref1, ref2, pgm);
-                    if (bits) {
-                        QoreValue v;
-                        memcpy(&v, &bits, sizeof(v));
-                        return v;
-                    }
-                    return QoreValue();
+                    // Delegate to readOneExpr for all other kinds (including NEW_OBJECT with args)
+                    // We already consumed the kind byte, so "put it back" by passing it directly
+                    // via a temporary local buffer trick... actually readOneExpr reads the kind byte
+                    // itself. Use a wrapper that re-reads from p-1 by adjusting p.
+                    --p;  // unconsume the kind byte so readOneExpr can read it
+                    return readOneExpr(rdr, p, e, err, pgm,
+                        ctx->locals, ctx->num_locals, ctx->globals, ctx->num_globals);
                 };
                 auto handler = deserializeIRFunction(reader, ptr, end, pgm, readExprCb,
                     &handler_local_map, ir_error);
@@ -3450,7 +3685,8 @@ static QoreAOTContext* buildContextForVariant(UserVariantBase* uvb, const char* 
 */
 static void skipSlotMapEntry(const QoreAOTBinaryReader& reader, const uint8_t*& ptr,
         const uint8_t* end) {
-    reader.readStringRef(ptr); // name
+    const uint8_t* entry_start = ptr;
+    const char* skip_name = reader.readStringRef(ptr); // name
     uint16_t nl = QoreAOTBinaryReader::readU16(ptr);
     uint16_t ng = QoreAOTBinaryReader::readU16(ptr);
     uint16_t ne = QoreAOTBinaryReader::readU16(ptr);
@@ -3478,15 +3714,11 @@ static void skipSlotMapEntry(const QoreAOTBinaryReader& reader, const uint8_t*& 
         switch (static_cast<AOTExprKind>(kind)) {
             case AOTExprKind::NEW_OBJECT:
             case AOTExprKind::SCOPED_NEW_OBJECT: {
-                // ref1 = class path + u8 num_args + serialized values
-                reader.readStringRef(ptr);
+                // ref1 = class path + u8 num_args + N×classifyAndWriteExpr-encoded args
+                reader.readStringRef(ptr);  // class path
                 uint8_t num_args = QoreAOTBinaryReader::readU8(ptr);
                 for (uint8_t j = 0; j < num_args; ++j) {
-                    // Skip the serialized value by reading and discarding it
-                    std::string skip_error;
-                    QoreValue skip_val = reader.readValue(ptr, end ? end : ptr + 65536,
-                        skip_error);
-                    skip_val.discard(nullptr);
+                    skipOneExpr(reader, ptr, end);
                 }
                 break;
             }
@@ -3496,6 +3728,7 @@ static void skipSlotMapEntry(const QoreAOTBinaryReader& reader, const uint8_t*& 
             case AOTExprKind::GLOBAL_VARREF:
             case AOTExprKind::CONST_NUMBER:
             case AOTExprKind::CONST_BINARY:
+            case AOTExprKind::CONST_STRING:
             case AOTExprKind::SELF_VARREF:
             case AOTExprKind::HASHDECL_NEW:
             case AOTExprKind::COMPLEX_HASH_NEW:
@@ -3542,6 +3775,16 @@ static void skipSlotMapEntry(const QoreAOTBinaryReader& reader, const uint8_t*& 
                 if (skip_has_ir) {
                     uint32_t skip_ir_size = QoreAOTBinaryReader::readU32(ptr);
                     ptr += skip_ir_size;
+                }
+                break;
+            }
+            case AOTExprKind::HASH_LITERAL: {
+                // num_pairs(u8) + [key_str(stringref) + value(AOTExprKind)] * N
+                // Use skipOneExpr to advance past each value without allocating objects
+                uint8_t skip_npairs = QoreAOTBinaryReader::readU8(ptr);
+                for (uint8_t sp = 0; sp < skip_npairs; ++sp) {
+                    reader.readStringRef(ptr);  // key
+                    skipOneExpr(reader, ptr, end ? end : ptr + 65536);  // value
                 }
                 break;
             }
@@ -3924,6 +4167,89 @@ static void registerAOTFunctionsInNamespace(qore_ns_private* ns, QoreProgram* pg
         QoreNamespace* child_ns = ni->second;
         if (child_ns) {
             registerAOTFunctionsInNamespace(qore_ns_private::get(*child_ns), pgm, func_map, registered);
+        }
+    }
+}
+
+//! Transplant BCAList (base class constructor arguments) from fallback to main constructors.
+/** Constructors are registered from slot maps (for their native AOT fn_ptr), but the
+    deserialized UserConstructorVariant has bcal=nullptr because the BCAList is not
+    serialized in the binary. Without the BCAList, constructorPrelude() cannot pass
+    arguments to base class constructors, causing RUNTIME-OVERLOAD-ERROR.
+    This function walks all classes in the main namespace and transplants the BCAList
+    from the matching fallback constructor variant where bcal is missing.
+*/
+static void transplantConstructorBCALists(
+        qore_ns_private* fallback_ns,
+        qore_ns_private* main_ns) {
+    // Process classes in this namespace
+    ClassListIterator cli(main_ns->classList);
+    while (cli.next()) {
+        QoreClass* main_qc = cli.get();
+        if (!main_qc) {
+            continue;
+        }
+        // Find matching class in fallback namespace
+        QoreClass* fb_qc = fallback_ns->classList.find(main_qc->getName());
+        if (!fb_qc) {
+            continue;
+        }
+        qore_class_private* main_priv = qore_class_private::get(*main_qc);
+        qore_class_private* fb_priv = qore_class_private::get(*fb_qc);
+
+        // Find the constructor method in the main class
+        const QoreMethod* main_mc = main_priv->parseFindLocalMethod("constructor");
+        const QoreMethod* fb_mc = fb_priv->parseFindLocalMethod("constructor");
+        if (!main_mc || !fb_mc) {
+            continue;
+        }
+        MethodFunctionBase* main_mfb = qore_method_private::get(*main_mc)->getFunction();
+        MethodFunctionBase* fb_mfb = qore_method_private::get(*fb_mc)->getFunction();
+        if (!main_mfb || !fb_mfb) {
+            continue;
+        }
+
+        // Find UserConstructorVariant in main and fallback
+        UserConstructorVariant* main_ucv = nullptr;
+        UserConstructorVariant* fb_ucv = nullptr;
+        {
+            QoreFunctionIterator vi(*main_mfb);
+            while (vi.next()) {
+                main_ucv = const_cast<UserConstructorVariant*>(
+                    dynamic_cast<const UserConstructorVariant*>(vi.getVariant()));
+                if (main_ucv) {
+                    break;
+                }
+            }
+        }
+        {
+            QoreFunctionIterator vi(*fb_mfb);
+            while (vi.next()) {
+                fb_ucv = const_cast<UserConstructorVariant*>(
+                    dynamic_cast<const UserConstructorVariant*>(vi.getVariant()));
+                if (fb_ucv) {
+                    break;
+                }
+            }
+        }
+        if (main_ucv && fb_ucv) {
+            main_ucv->transplantBCAList(fb_ucv);
+            printd(5, "AOT: transplanted BCAList for %s::constructor\n", main_qc->getName());
+        }
+    }
+
+    // Recurse into sub-namespaces
+    for (auto ni = main_ns->nsl.nsmap.begin(), ne = main_ns->nsl.nsmap.end();
+            ni != ne; ++ni) {
+        QoreNamespace* main_child = ni->second;
+        if (!main_child) {
+            continue;
+        }
+        auto fb_ni = fallback_ns->nsl.nsmap.find(ni->first);
+        if (fb_ni != fallback_ns->nsl.nsmap.end() && fb_ni->second) {
+            transplantConstructorBCALists(
+                qore_ns_private::get(*fb_ni->second),
+                qore_ns_private::get(*main_child));
         }
     }
 }
@@ -4343,15 +4669,18 @@ extern "C" DLLEXPORT int qore_aot_run(
     qore_init(QL_MIT, nullptr, false, init_signals ? QLO_NONE : QLO_DISABLE_SIGNAL_HANDLING);
 
     int rc = 0;
-    {
+    // Use do-while(false) to ensure ~QoreProgramHelper() runs before qore_cleanup().
+    // ~QoreProgramHelper creates a QoreForeignThreadHelper which accesses Qore TLS;
+    // if qore_cleanup() is called first, TLS is gone and the destructor crashes.
+    do {
         ExceptionSink xsink;
         ExceptionSink wsink;
 
         QoreProgramHelper qpgm(parse_options, xsink);
         if (xsink.isException()) {
             xsink.handleExceptions();
-            qore_cleanup();
-            return 2;
+            rc = 2;
+            break;
         }
 
         // Set JIT execution mode so functions without pre-compiled code will JIT on demand
@@ -4469,7 +4798,7 @@ extern "C" DLLEXPORT int qore_aot_run(
         }
 
         xsink.handleExceptions();
-    }
+    } while (false);
 
     qore_cleanup();
     return rc;
@@ -4509,14 +4838,17 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
     qore_init(QL_MIT, nullptr, false, init_signals ? QLO_NONE : QLO_DISABLE_SIGNAL_HANDLING);
 
     int rc = 0;
-    {
+    // Use do-while(false) to ensure ~QoreProgramHelper() runs before qore_cleanup().
+    // ~QoreProgramHelper creates a QoreForeignThreadHelper which accesses Qore TLS;
+    // if qore_cleanup() is called first, TLS is gone and the destructor crashes.
+    do {
         ExceptionSink xsink;
 
         QoreProgramHelper qpgm(parse_options, xsink);
         if (xsink.isException()) {
             xsink.handleExceptions();
-            qore_cleanup();
-            return 2;
+            rc = 2;
+            break;
         }
 
         // Set JIT execution mode
@@ -4550,19 +4882,24 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
         // call parse_get_parse_options() which reads thread-local current_pgm
         QoreAOTBinaryDeserializer deserializer;
         std::string deser_error;
+        bool deser_ok = false;
         {
             ProgramRuntimeParseContextHelper pch(&xsink, *qpgm);
             if (xsink.isException()) {
                 xsink.handleExceptions();
-                qore_cleanup();
-                return 2;
+                rc = 2;
+                break;
             }
             if (!deserializer.deserializeIntoProgram(*qpgm,
                     metadata, static_cast<uint32_t>(metadata_len), deser_error)) {
                 printd(0, "AOT: metadata deserialization failed: %s\n", deser_error.c_str());
-                qore_cleanup();
-                return 2;
+                rc = 2;
+                break;
             }
+            deser_ok = true;
+        }
+        if (!deser_ok) {
+            break;
         }
 
         // Register pre-compiled function pointers
@@ -4643,6 +4980,16 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
                         transplantClassClosureValues(fb_root, main_root, *qpgm);
                     }
                 }
+            }
+
+            // Transplant BCAList for all constructors — needed even when registered from
+            // slot maps, because slot map registration only sets the native fn_ptr but
+            // doesn't provide the BCAList (base class constructor arguments).
+            if (fallback_pgm) {
+                qore_ns_private* fb_root = qore_ns_private::get(
+                    *qore_program_private::get(*fallback_pgm)->RootNS);
+                qore_ns_private* main_root = qore_ns_private::get(*pp->RootNS);
+                transplantConstructorBCALists(fb_root, main_root);
             }
 
             // Register the _toplevel function from slot maps
@@ -4778,7 +5125,7 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
             fallback_pgm->waitForTerminationAndDeref(nullptr);
             fallback_pgm = nullptr;
         }
-    }
+    } while (false);
 
     qore_cleanup();
     return rc;
@@ -5075,14 +5422,17 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
     qore_init(QL_MIT, nullptr, false, init_signals ? QLO_NONE : QLO_DISABLE_SIGNAL_HANDLING);
 
     int rc = 0;
-    {
+    // Use do-while(false) to ensure ~QoreProgramHelper() runs before qore_cleanup().
+    // ~QoreProgramHelper creates a QoreForeignThreadHelper which accesses Qore TLS;
+    // if qore_cleanup() is called first, TLS is gone and the destructor crashes.
+    do {
         ExceptionSink xsink;
 
         QoreProgramHelper qpgm(parse_options, xsink);
         if (xsink.isException()) {
             xsink.handleExceptions();
-            qore_cleanup();
-            return 2;
+            rc = 2;
+            break;
         }
 
         // Set JIT execution mode
@@ -5138,19 +5488,25 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
         // call parse_get_parse_options() which reads thread-local current_pgm
         QoreAOTBinaryDeserializer deserializer;
         std::string deser_error;
+        bool deser_ok = false;
         {
             ProgramRuntimeParseContextHelper pch(&xsink, *qpgm);
             if (xsink.isException()) {
                 xsink.handleExceptions();
-                qore_cleanup();
-                return 2;
+                rc = 2;
+                break;
             }
             if (!deserializer.deserializeIntoProgram(*qpgm,
                     metadata, static_cast<uint32_t>(metadata_len), deser_error)) {
-                printd(0, "AOT: metadata deserialization failed: %s\n", deser_error.c_str());
-                qore_cleanup();
-                return 2;
+                fprintf(stderr, "AOT: metadata deserialization failed: %s\n",
+                    deser_error.c_str());
+                rc = 2;
+                break;
             }
+            deser_ok = true;
+        }
+        if (!deser_ok) {
+            break;
         }
 
         // Advisory checks for source staleness and feature compatibility
@@ -5271,6 +5627,16 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
                         transplantClassClosureValues(fb_root, main_root, *qpgm);
                     }
                 }
+            }
+
+            // Transplant BCAList for all constructors — needed even when registered from
+            // slot maps, because slot map registration only sets the native fn_ptr but
+            // doesn't provide the BCAList (base class constructor arguments).
+            if (fallback_pgm) {
+                qore_ns_private* fb_root = qore_ns_private::get(
+                    *qore_program_private::get(*fallback_pgm)->RootNS);
+                qore_ns_private* main_root = qore_ns_private::get(*pp->RootNS);
+                transplantConstructorBCALists(fb_root, main_root);
             }
 
             // Register the _toplevel function from slot maps
@@ -5409,7 +5775,7 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
             fallback_pgm->waitForTerminationAndDeref(nullptr);
             fallback_pgm = nullptr;
         }
-    }
+    } while (false);
 
     qore_cleanup();
     return rc;

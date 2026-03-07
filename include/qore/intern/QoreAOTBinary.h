@@ -611,6 +611,10 @@ enum class AOTExprKind : uint8_t {
     COMPLEX_HASH_NEW   = 17,  //!< Complex hash construction: ref1=type_path
     COMPLEX_LIST_NEW   = 18,  //!< Complex list construction: ref1=type_path
     CONST_ENUM         = 19,  //!< Enum constant: ref1=enum_path, ref2=member_name
+    CONST_STRING       = 20,  //!< String constant: ref1=string content
+    HASH_LITERAL       = 21,  //!< Hash literal: num_pairs(u8) + [key_str(stringref) + value(AOTExprKind)] * N
+    HASH_DEREF         = 22,  //!< Hash/object dereference: left(AOTExprKind) + right(AOTExprKind)
+    PARSE_REF          = 23,  //!< Parse reference (\var): inner_lvalue(AOTExprKind)
     EXPR_TREE          = 0xFE, //!< Recursive expression tree: binary blob (inline bytes)
     GENERIC_EVAL       = 0xFF //!< Unsupported expression — function needs source fallback
 };

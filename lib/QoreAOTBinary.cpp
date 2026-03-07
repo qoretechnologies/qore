@@ -50,6 +50,10 @@
 #include "qore/intern/OnBlockExitStatement.h"
 #include "qore/intern/Function.h"
 #include "qore/intern/QoreClosureParseNode.h"
+#include "qore/intern/QoreParseHashNode.h"
+#include "qore/intern/QoreHashObjectDereferenceOperatorNode.h"
+#include "qore/intern/ScopedObjectCallNode.h"
+#include <qore/intern/ParseReferenceNode.h>
 #include <qore/QoreEnumDecl.h>
 
 #include "qore/intern/QoreIRBuilder.h"
@@ -1743,12 +1747,35 @@ static bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& e
         return true;
     }
 
+    // VarRefNewObjectNode: variable declaration with object constructor call
+    // (e.g., "Foo f("arg1", var)") — MUST check before VarRefNode since it
+    // inherits from VarRefNode and would be matched by the VarRefNode handler
+    if (auto* vrn = dynamic_cast<const VarRefNewObjectNode*>(node)) {
+        const QoreClass* qc = QoreTypeInfo::getUniqueReturnClass(vrn->getTypeInfo());
+        if (qc) {
+            writer.writeU8(static_cast<uint8_t>(AOTExprKind::NEW_OBJECT));
+            writer.writeStringRef(qc->getPath());
+            const QoreListNode* args = vrn->getArgs();
+            if (args && args->size() > 0) {
+                writer.writeU8(static_cast<uint8_t>(args->size()));
+                for (size_t j = 0; j < args->size(); ++j) {
+                    classifyAndWriteExpr(writer, args->retrieveEntry(j),
+                        parent_locals, parent_globals);
+                }
+            } else {
+                writer.writeU8(0);
+            }
+            return true;
+        }
+        // Non-class VarRefNewObjectNode (hashdecl, complex hash/list) — fall through
+    }
+
     // VarRefNode: local and global variable references
+    // Note: VarRefNewObjectNode inherits from VarRefNode, so must come AFTER above check
     if (auto* varref = dynamic_cast<const VarRefNode*>(node)) {
         if (varref->getType() == VT_LOCAL || varref->getType() == VT_LOCAL_TS ||
                 varref->getType() == VT_CLOSURE) {
             // Look up the local slot index from parent function's local slots
-            const void* lv_ptr = reinterpret_cast<const void*>(varref->ref.id);
             for (size_t i = 0; i < parent_locals.size(); ++i) {
                 // Compare by name since pointer identity may differ
                 if (varref->getName() && parent_locals[i].name == varref->getName()) {
@@ -1787,11 +1814,37 @@ static bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& e
         return true;
     }
 
-    // NewObjectCallNode: constructor call
+    // QoreStringNode: string literal constant (e.g., "" as constructor arg)
+    if (auto* str = dynamic_cast<const QoreStringNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::CONST_STRING));
+        writer.writeStringRef(str->c_str());
+        return true;
+    }
+
+    // ScopedObjectCallNode: namespace-scoped constructor call (e.g., "new Ns::Foo(args)")
+    // Used in inline IR context where the QoreIRNewObjectInstruction::expr holds this node.
+    // Must come BEFORE NewObjectCallNode since they have different class hierarchies.
+    if (auto* socn = dynamic_cast<const ScopedObjectCallNode*>(node)) {
+        if (socn->oc) {
+            writer.writeU8(static_cast<uint8_t>(AOTExprKind::SCOPED_NEW_OBJECT));
+            writer.writeStringRef(socn->oc->getPath());
+            const QoreListNode* args = socn->getArgs();
+            uint8_t num_args = args && args->size() <= 255 ? static_cast<uint8_t>(args->size()) : 0;
+            writer.writeU8(num_args);
+            for (uint8_t j = 0; j < num_args; ++j) {
+                classifyAndWriteExpr(writer, args->retrieveEntry(j), parent_locals, parent_globals);
+            }
+            return true;
+        }
+    }
+
+    // NewObjectCallNode: bare constructor call (e.g., "new Foo()")
     if (auto* no = dynamic_cast<const NewObjectCallNode*>(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::NEW_OBJECT));
         const QoreClass* qc = no->getClass();
         writer.writeStringRef(qc ? qc->getPath() : "");
+        // No args serialized for NewObjectCallNode (args are handled by native IR code)
+        writer.writeU8(0);
         return true;
     }
 
@@ -1817,6 +1870,56 @@ static bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& e
             hex.append(buf);
         }
         writer.writeStringRef(hex.c_str());
+        return true;
+    }
+
+    // QoreHashNode: already-evaluated hash (e.g., {}, {"key": "val"}) — serialize as HASH_LITERAL
+    // Only handles string-keyed hashes with simple values for safety; empty hash is the common case.
+    if (auto* qhn = dynamic_cast<const QoreHashNode*>(node)) {
+        if (qhn->size() <= 255) {
+            writer.writeU8(static_cast<uint8_t>(AOTExprKind::HASH_LITERAL));
+            writer.writeU8(static_cast<uint8_t>(qhn->size()));
+            ConstHashIterator it(qhn);
+            while (it.next()) {
+                writer.writeStringRef(it.getKey());
+                classifyAndWriteExpr(writer, it.get(), parent_locals, parent_globals);
+            }
+            return true;
+        }
+    }
+
+    // QoreParseHashNode: hash literal with runtime values (e.g., ("key": local_var))
+    if (auto* phn = dynamic_cast<const QoreParseHashNode*>(node)) {
+        const QoreParseHashNode::nvec_t& keys = phn->getKeys();
+        const QoreParseHashNode::nvec_t& vals = phn->getValues();
+        assert(keys.size() == vals.size());
+        if (keys.size() <= 255) {
+            writer.writeU8(static_cast<uint8_t>(AOTExprKind::HASH_LITERAL));
+            writer.writeU8(static_cast<uint8_t>(keys.size()));
+            for (size_t i = 0; i < keys.size(); ++i) {
+                // Keys are typically string constants
+                QoreStringValueHelper key(keys[i]);
+                writer.writeStringRef(key->c_str());
+                classifyAndWriteExpr(writer, vals[i], parent_locals, parent_globals);
+            }
+            return true;
+        }
+        // Hash too large for u8 count — fall through to GENERIC_EVAL
+    }
+
+    // QoreHashObjectDereferenceOperatorNode: hash.key or hash{key} dereference chains
+    // (e.g., oh.paths."/create".post — left=base, right=key, both recursively classified)
+    if (auto* hd = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::HASH_DEREF));
+        classifyAndWriteExpr(writer, hd->getLeft(), parent_locals, parent_globals);
+        classifyAndWriteExpr(writer, hd->getRight(), parent_locals, parent_globals);
+        return true;
+    }
+
+    // ParseReferenceNode: \var lvalue reference — serialize inner lvalue expression
+    if (auto* prn = dynamic_cast<const ParseReferenceNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::PARSE_REF));
+        classifyAndWriteExpr(writer, prn->getLVExp(), parent_locals, parent_globals);
         return true;
     }
 
@@ -1868,12 +1971,16 @@ void serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
             switch (expr.kind) {
                 case AOTExprKind::NEW_OBJECT:
                 case AOTExprKind::SCOPED_NEW_OBJECT:
-                    // ref1 = class path, followed by serialized constructor args
+                    // ref1 = class path, followed by serialized constructor args.
+                    // Use classifyAndWriteExpr (not writeValue) so runtime-evaluated args
+                    // like VarRefNode and hash literals are serialized with slot indices
+                    // and reconstructed correctly at load time.
                     writer.writeStringRef(expr.ref1.c_str());
                     if (expr.constructor_args && expr.constructor_args->size() > 0) {
                         writer.writeU8(static_cast<uint8_t>(expr.constructor_args->size()));
                         for (size_t j = 0; j < expr.constructor_args->size(); ++j) {
-                            writer.writeValue(expr.constructor_args->retrieveEntry(j));
+                            classifyAndWriteExpr(writer, expr.constructor_args->retrieveEntry(j),
+                                func.slot_ids.locals, func.slot_ids.globals);
                         }
                     } else {
                         writer.writeU8(0);
@@ -3941,12 +4048,16 @@ bool QoreAOTBinaryDeserializer::deserializeFunctions(std::string& error) {
                     reader.readStringRef(ptr);  // param name
                     reader.readStringRef(ptr);  // param type path
                     uint8_t has_default = QoreAOTBinaryReader::readU8(ptr);
-                    if (has_default) {
+                    if (has_default == 1) {
+                        // Constant default: skip value
                         QoreValue default_val = reader.readValue(ptr, end, error);
                         if (!error.empty()) {
                             return false;
                         }
                         default_val.discard(nullptr);
+                    } else if (has_default == 2) {
+                        // Expression default (no-arg function call): skip function name ref
+                        reader.readStringRef(ptr);
                     }
                 }
             }

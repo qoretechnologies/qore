@@ -3689,9 +3689,14 @@ extern "C" DLLEXPORT uint64_t qore_rt_invoke_expr_aot(QoreAOTContext* ctx, int32
 extern "C" DLLEXPORT uint64_t qore_rt_vrn_construct_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
     assert(ctx && idx >= 0 && idx < ctx->num_exprs);
     QoreValue expr = fromBits(ctx->exprs[idx]);
-    auto* vrn = dynamic_cast<const VarRefNewObjectNode*>(expr.getInternalNode());
-    assert(vrn);
-    return toBits(vrn->constructValue(xsink));
+    if (expr.hasNode()) {
+        if (auto* vrn = dynamic_cast<const VarRefNewObjectNode*>(expr.getInternalNode())) {
+            return toBits(vrn->constructValue(xsink));
+        }
+    }
+    // Fallback: eval the expression directly
+    // Handles NewHashDeclNode, NewComplexHashNode, NewComplexListNode stored by buildContextFromSlotMap
+    return qore_rt_invoke_expr(ctx->exprs[idx], xsink);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_lvalue_load_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {

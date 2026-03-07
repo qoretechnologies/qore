@@ -60,8 +60,6 @@ ThreadSafeLocalVarRuntimeEnvironment::ThreadSafeLocalVarRuntimeEnvironment(const
     //    "size: %d\n", this, vlist, vlist->size());
     for (lvar_set_t::const_iterator i = vlist->begin(), e = vlist->end(); i != e; ++i) {
         ClosureVarValue* cvar = thread_find_closure_var((*i)->getName());
-        //printd(5, "ThreadSafeLocalVarRuntimeEnvironment::ThreadSafeLocalVarRuntimeEnvironment() this: %p '%s' "
-        //    "i: %p cvar: %p val: %s\n", this, (*i)->getName(), *i, cvar, cvar->val.getTypeName());
         cmap[*i] = cvar;
         cvvset.insert(cvar);
         cvar->ref();

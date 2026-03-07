@@ -3543,8 +3543,37 @@ load_local_done:
             case QoreIROpcode::NewObject: {
                 auto* no_inst = static_cast<QoreIRNewObjectInstruction*>(inst);
                 RuntimeConfig& rc = rc_get_current_ref();
-                QoreValue out = qore_class_private::execConstructor(*no_inst->qc, rc,
-                        no_inst->variant, no_inst->args, xsink);
+                const QoreClass* qc = no_inst->qc;
+                const AbstractQoreFunctionVariant* variant = no_inst->variant;
+                const QoreListNode* args = no_inst->args;
+                if (!qc && no_inst->expr.hasNode()) {
+                    // AOT fallback: qc/variant/args not set at compile time;
+                    // recover class and args from the deserialized expression node
+                    auto* nocn = dynamic_cast<const NewObjectCallNode*>(
+                        no_inst->expr.getInternalNode());
+                    if (nocn) {
+                        qc = nocn->getClass();
+                        variant = nocn->getVariant();
+                        args = nocn->getArgs();
+                    } else {
+                        auto* socn = dynamic_cast<const ScopedObjectCallNode*>(
+                            no_inst->expr.getInternalNode());
+                        if (socn) {
+                            qc = socn->oc;
+                            variant = socn->getVariant();
+                            args = socn->getArgs();
+                        }
+                    }
+                }
+                if (!qc) {
+                    xsink->raiseException("RUNTIME-ERROR",
+                        "cannot construct object: class not resolved in AOT mode");
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
+                QoreValue out = qore_class_private::execConstructor(*qc, rc,
+                        variant, args, xsink);
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     cleanupLocalCaches();
@@ -3560,10 +3589,17 @@ load_local_done:
             case QoreIROpcode::LoadConstant: {
                 auto* lc_inst = static_cast<QoreIRLoadConstantInstruction*>(inst);
                 bool needs_deref = true;
-                QoreValue out = const_cast<RuntimeConstantRefNode*>(lc_inst->node)->eval(
-                        needs_deref, xsink);
-                if (!needs_deref && out.hasNode()) {
-                    out = out.refSelf();
+                QoreValue out;
+                if (lc_inst->node) {
+                    out = const_cast<RuntimeConstantRefNode*>(lc_inst->node)->eval(
+                            needs_deref, xsink);
+                    if (!needs_deref && out.hasNode()) {
+                        out = out.refSelf();
+                    }
+                } else {
+                    // AOT mode: node is null; expr holds the resolved constant value directly
+                    // (set by readOneExpr via resolveExprSlot for RUNTIME_CONST_REF)
+                    out = lc_inst->expr.refSelf();
                 }
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
@@ -3580,10 +3616,26 @@ load_local_done:
             case QoreIROpcode::CreateClosure: {
                 auto* cc_inst = static_cast<QoreIRCreateClosureInstruction*>(inst);
                 bool needs_deref = true;
-                QoreValue out = const_cast<QoreClosureParseNode*>(cc_inst->closure_node)->eval(
-                        needs_deref, xsink);
-                if (!needs_deref && out.hasNode()) {
-                    out = out.refSelf();
+                QoreValue out;
+                if (cc_inst->closure_node) {
+                    out = const_cast<QoreClosureParseNode*>(cc_inst->closure_node)->eval(
+                            needs_deref, xsink);
+                    if (!needs_deref && out.hasNode()) {
+                        out = out.refSelf();
+                    }
+                } else if (cc_inst->expr.hasNode()) {
+                    // AOT mode: closure_node is null; expr holds the resolved QoreClosureParseNode
+                    // (set by buildContextFromSlotMap/buildContextForVariant for CLOSURE_CREATE)
+                    out = cc_inst->expr.getInternalNode()->eval(needs_deref, xsink);
+                    if (!needs_deref && out.hasNode()) {
+                        out = out.refSelf();
+                    }
+                } else {
+                    xsink->raiseException("RUNTIME-ERROR",
+                        "closure expression not resolved in AOT mode");
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
                 }
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
@@ -3601,6 +3653,14 @@ load_local_done:
                 auto* cr_inst = static_cast<QoreIRCreateCallRefInstruction*>(inst);
                 bool needs_deref = true;
                 QoreValue ref_expr = cr_inst->expr.refSelf();
+                if (!ref_expr.hasNode()) {
+                    xsink->raiseException("RUNTIME-ERROR",
+                        "call reference expression not resolved in AOT mode");
+                    ref_expr.discard(xsink);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
                 QoreValue out = ref_expr.getInternalNode()->eval(needs_deref, xsink);
                 if (!needs_deref && out.hasNode()) {
                     out = out.refSelf();
@@ -3622,6 +3682,14 @@ load_local_done:
                 auto* mr_inst = static_cast<QoreIRCreateMethodRefInstruction*>(inst);
                 bool needs_deref = true;
                 QoreValue ref_expr = mr_inst->expr.refSelf();
+                if (!ref_expr.hasNode()) {
+                    xsink->raiseException("RUNTIME-ERROR",
+                        "method reference expression not resolved in AOT mode");
+                    ref_expr.discard(xsink);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
                 QoreValue out = ref_expr.getInternalNode()->eval(needs_deref, xsink);
                 if (!needs_deref && out.hasNode()) {
                     out = out.refSelf();
@@ -3642,10 +3710,23 @@ load_local_done:
             case QoreIROpcode::CreateParseRef: {
                 auto* pr_inst = static_cast<QoreIRCreateParseRefInstruction*>(inst);
                 bool needs_deref = true;
-                QoreValue out = const_cast<ParseReferenceNode*>(pr_inst->node)->eval(
-                        needs_deref, xsink);
-                if (!needs_deref && out.hasNode()) {
-                    out = out.refSelf();
+                QoreValue out;
+                if (pr_inst->node) {
+                    out = const_cast<ParseReferenceNode*>(pr_inst->node)->eval(needs_deref, xsink);
+                    if (!needs_deref && out.hasNode()) {
+                        out = out.refSelf();
+                    }
+                } else if (pr_inst->expr.hasNode()) {
+                    // AOT mode: node is null; expr holds the reconstructed ParseReferenceNode
+                    out = pr_inst->expr.getInternalNode()->eval(needs_deref, xsink);
+                    if (!needs_deref && out.hasNode()) {
+                        out = out.refSelf();
+                    }
+                } else {
+                    xsink->raiseException("RUNTIME-ERROR", "parse reference not resolved in AOT mode");
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
                 }
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);

@@ -360,10 +360,17 @@ QoreValue ParseSelfMethodReferenceNode::evalImpl(RuntimeConfig& rc, bool& needs_
     QoreObject* o = rc.getObject() ? rc.getObject() : runtime_get_stack_object();
     assert(o);
 
+    // meth may be null when this node is deserialized in an AOT binary (parse context not available);
+    // in that case fall back to runtime method lookup by name
+    if (!meth) {
+        return new RunTimeObjectMethodReferenceNode(loc, o, method.c_str());
+    }
+
     // return class with method already found at parse time if known
-    if (o->getClass() == meth->getClass())
+    if (o->getClass() == meth->getClass()) {
         return new RunTimeResolvedMethodReferenceNode(loc, o, meth,
             rc.getClass() ? rc.getClass() : runtime_get_class());
+    }
 
     return new RunTimeObjectMethodReferenceNode(loc, o, meth->getName());
 }
