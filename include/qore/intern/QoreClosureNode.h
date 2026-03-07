@@ -126,6 +126,16 @@ public:
         return closure->getFunction();
     }
 
+    //! Returns the captured variable vector for fast closure dispatch
+    DLLLOCAL cvv_vec_t* getCvec() const {
+        return cvec;
+    }
+
+    //! Returns the class context for fast closure dispatch
+    DLLLOCAL const qore_class_private* getClassCtx() const {
+        return class_ctx;
+    }
+
     DLLLOCAL virtual QoreObject* getObject() const {
         return nullptr;
     }

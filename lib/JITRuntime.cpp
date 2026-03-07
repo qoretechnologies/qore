@@ -1443,6 +1443,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_get_object_class(uint64_t obj_bits) {
     return 0;
 }
 
+// Forward declaration — implementation below after instantiateFastCallParams and execJITWithDeopt
+static uint64_t execClosureDirect(const QoreClosureBase* cb, const UserVariantBase* uvb,
+        int nargs, const uint64_t* args, ExceptionSink* xsink);
+
 // Fast-path helper for closure calls with no arguments — avoids QoreListNode allocation
 extern "C" DLLEXPORT uint64_t qore_rt_call_closure_0(uint64_t ref_bits, ExceptionSink* xsink) {
     if (check_stack(xsink)) {
@@ -1454,16 +1458,35 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_closure_0(uint64_t ref_bits, Exceptio
         return toBits(QoreValue());
     }
 
-    ResolvedCallReferenceNode* callref = dynamic_cast<ResolvedCallReferenceNode*>(
-        const_cast<AbstractQoreNode*>(ref_val.getInternalNode()));
-    if (!callref) {
-        xsink->raiseException("CALL-REFERENCE-ERROR", "value is not a call reference or closure");
-        return toBits(QoreValue());
+    const AbstractQoreNode* node = ref_val.getInternalNode();
+    qore_type_t ntype = node->getType();
+
+    // Fast path for closures: type check + static_cast instead of dynamic_cast
+    if (ntype == NT_RUNTIME_CLOSURE) {
+        const QoreClosureBase* cb = static_cast<const QoreClosureBase*>(node);
+        // Check if the closure variant supports direct dispatch (has cached IR or JIT)
+        UserClosureFunction* uf = static_cast<UserClosureFunction*>(cb->getFunction());
+        assert(uf);
+        const AbstractQoreFunctionVariant* variant = uf->first();
+        const UserVariantBase* uvb = variant->getUserVariantBase();
+        if (uvb && (uvb->hasCachedFunction() || uvb->getCachedIR())) {
+            return execClosureDirect(cb, uvb, 0, nullptr, xsink);
+        }
+        // Fall through to execValue for closures without cached IR/JIT
+        QoreValue result = const_cast<QoreClosureBase*>(cb)->execValue(nullptr, xsink);
+        return toBits(result);
     }
 
-    // Call with empty list (no heap allocation — nullptr arg list is handled by execValue)
-    QoreValue result = callref->execValue(nullptr, xsink);
-    return toBits(result);
+    // For function references (NT_FUNCREF) and other types: use type check + static_cast
+    if (ntype == NT_FUNCREF) {
+        ResolvedCallReferenceNode* callref = static_cast<ResolvedCallReferenceNode*>(
+            const_cast<AbstractQoreNode*>(node));
+        QoreValue result = callref->execValue(nullptr, xsink);
+        return toBits(result);
+    }
+
+    xsink->raiseException("CALL-REFERENCE-ERROR", "value is not a call reference or closure");
+    return toBits(QoreValue());
 }
 
 // Fast-path helper for closure calls with one argument — optimized list allocation
@@ -1477,9 +1500,27 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_closure_1(uint64_t ref_bits, uint64_t
         return toBits(QoreValue());
     }
 
-    ResolvedCallReferenceNode* callref = dynamic_cast<ResolvedCallReferenceNode*>(
-        const_cast<AbstractQoreNode*>(ref_val.getInternalNode()));
-    if (!callref) {
+    const AbstractQoreNode* node = ref_val.getInternalNode();
+    qore_type_t ntype = node->getType();
+
+    // Fast path for closures: bypass QoreListNode + dynamic_cast
+    if (ntype == NT_RUNTIME_CLOSURE) {
+        const QoreClosureBase* cb = static_cast<const QoreClosureBase*>(node);
+        UserClosureFunction* uf = static_cast<UserClosureFunction*>(cb->getFunction());
+        assert(uf);
+        const AbstractQoreFunctionVariant* variant = uf->first();
+        const UserVariantBase* uvb = variant->getUserVariantBase();
+        if (uvb && (uvb->hasCachedFunction() || uvb->getCachedIR())) {
+            return execClosureDirect(cb, uvb, 1, &arg0_bits, xsink);
+        }
+        // Fall through to execValue for closures without cached IR/JIT
+    }
+
+    // Slow path: build QoreListNode and call execValue
+    ResolvedCallReferenceNode* callref;
+    if (ntype == NT_RUNTIME_CLOSURE || ntype == NT_FUNCREF) {
+        callref = static_cast<ResolvedCallReferenceNode*>(const_cast<AbstractQoreNode*>(node));
+    } else {
         xsink->raiseException("CALL-REFERENCE-ERROR", "value is not a call reference or closure");
         return toBits(QoreValue());
     }
@@ -1508,15 +1549,32 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_closure_fast(uint64_t ref_bits, uint6
         return toBits(QoreValue());
     }
 
-    ResolvedCallReferenceNode* callref = dynamic_cast<ResolvedCallReferenceNode*>(
-        const_cast<AbstractQoreNode*>(ref_val.getInternalNode()));
-    if (!callref) {
+    const AbstractQoreNode* node = ref_val.getInternalNode();
+    qore_type_t ntype = node->getType();
+
+    // Fast path for closures: bypass QoreListNode + dynamic_cast
+    if (ntype == NT_RUNTIME_CLOSURE) {
+        const QoreClosureBase* cb = static_cast<const QoreClosureBase*>(node);
+        UserClosureFunction* uf = static_cast<UserClosureFunction*>(cb->getFunction());
+        assert(uf);
+        const AbstractQoreFunctionVariant* variant = uf->first();
+        const UserVariantBase* uvb = variant->getUserVariantBase();
+        if (uvb && (uvb->hasCachedFunction() || uvb->getCachedIR())) {
+            return execClosureDirect(cb, uvb, nargs, args, xsink);
+        }
+        // Fall through to execValue for closures without cached IR/JIT
+    }
+
+    // Slow path: build QoreListNode and call execValue
+    ResolvedCallReferenceNode* callref;
+    if (ntype == NT_RUNTIME_CLOSURE || ntype == NT_FUNCREF) {
+        callref = static_cast<ResolvedCallReferenceNode*>(const_cast<AbstractQoreNode*>(node));
+    } else {
         xsink->raiseException("CALL-REFERENCE-ERROR", "value is not a call reference or closure");
         return toBits(QoreValue());
     }
 
     // Build QoreListNode from NaN-boxed args
-    // Use pushIntern() to preserve complex types (e.g., hash<string, bool>)
     ReferenceHolder<QoreListNode> arg_list(nargs > 0 ? new QoreListNode(autoTypeInfo) : nullptr, xsink);
     if (nargs > 0) {
         qore_list_private* priv = qore_list_private::get(**arg_list);
@@ -1530,8 +1588,6 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_closure_fast(uint64_t ref_bits, uint6
         }
     }
 
-    // Call directly — no AST node copy, no dynamic_cast chain
-    // execValue borrows the arg list (const QoreListNode*), so we must NOT release ownership
     QoreValue result = callref->execValue(*arg_list, xsink);
     return toBits(result);
 }
@@ -3070,6 +3126,127 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast(const QoreFunction* func,
 
     // Apply return type coercion (e.g. softlist wrapping) to match
     // ReturnStatement::execImpl behavior
+    if (!*xsink) {
+        const QoreTypeInfo* rt = sig->getReturnTypeInfo();
+        QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
+    }
+
+    return toBits(val);
+}
+
+// --- Fast closure dispatch (bypasses QoreListNode + dynamic_cast for closures with cached IR/JIT) ---
+
+//! Execute a closure directly from NaN-boxed args, bypassing QoreListNode construction
+/** This is the fast path for closure calls in JIT/AOT/IR modes. It:
+    1. Pushes captured variables onto cvstack (CVecInstantiator)
+    2. Sets the closure runtime environment
+    3. Instantiates params directly from NaN-boxed args
+    4. Calls evalTiered/JIT/IR directly
+    5. Cleans up in reverse order
+
+    @param cb the closure base (QoreClosureNode or QoreObjectClosureNode)
+    @param uvb the user variant base (already resolved, has cached IR or JIT)
+    @param nargs number of NaN-boxed arguments
+    @param args pointer to NaN-boxed argument array (may be nullptr if nargs == 0)
+    @param xsink exception sink
+    @return NaN-boxed result value
+*/
+static uint64_t execClosureDirect(const QoreClosureBase* cb, const UserVariantBase* uvb,
+        int nargs, const uint64_t* args, ExceptionSink* xsink) {
+    const UserSignature* sig = uvb->getUserSignature();
+    unsigned num_params = sig->numParams();
+
+    // Push captured vars onto cvstack
+    CVecInstantiator cvi(cb->getCvec(), xsink);
+
+    // Set closure runtime environment so closure-captured vars are findable
+    ThreadSafeLocalVarRuntimeEnvironmentHelper ch(cb);
+
+    // Program context
+    ProgramThreadCountContextHelper ptcch(xsink, uvb->pgm, true);
+    if (*xsink) {
+        return toBits(QoreValue());
+    }
+
+    // Frame boundary for debugger/stack introspection
+    ThreadFrameBoundaryHelper tfbh(true);
+
+    // Handle self for object closures (closures defined inside methods)
+    QoreObject* self = const_cast<QoreObject*>(cb->getObject());
+    if (self && sig->selfid) {
+        sig->selfid->instantiateSelf(self);
+    }
+
+    // Instantiate params from NaN-boxed args
+    if (instantiateFastCallParams(sig, num_params, nargs, args, xsink) < 0) {
+        if (self && sig->selfid) {
+            sig->selfid->uninstantiateSelf();
+        }
+        return toBits(QoreValue());
+    }
+
+    // Build argv for excess arguments (varargs)
+    ReferenceHolder<QoreListNode> argv(xsink);
+    if (nargs > (int)num_params) {
+        argv = new QoreListNode(autoTypeInfo);
+        qore_list_private* argv_priv = qore_list_private::get(**argv);
+        argv_priv->reserve(nargs - num_params);
+        for (int i = num_params; i < nargs; ++i) {
+            QoreValue val = fromBits(args[i]);
+            if (val.hasNode()) {
+                val.refSelf();
+            }
+            argv_priv->pushIntern(val);
+        }
+    }
+
+    // Instantiate argv variable
+    if (sig->argvid) {
+        sig->argvid->instantiate(argv ? argv->refSelf() : nullptr);
+    }
+
+    // Get call name from cached IR if available, otherwise use static name
+    const QoreIRFunction* ir = uvb->getCachedIR();
+    static const std::string closure_name("<anonymous closure>");
+    const std::string& call_name = ir ? ir->name : closure_name;
+
+    QoreValue val{};
+    {
+        ArgvContextHelper argv_helper(argv.release(), xsink);
+        if (uvb->hasCachedFunction()) {
+            // JIT/AOT fast path
+            execJITWithDeopt(uvb, call_name, [uvb](ExceptionSink* xs, bool& inv) {
+                return uvb->execCachedFunction(xs, inv);
+            }, val, xsink);
+        } else {
+            // IR fast path
+            const QoreIRFunction* callee_ir = uvb->getCachedIR();
+            execJITWithDeopt(uvb, call_name, [callee_ir, uvb](ExceptionSink* xs, bool& inv) -> uint64_t {
+                QoreValue ir_return_value;
+                bool ok = QoreIRInterpreter::execute(*callee_ir, ir_return_value, xs, nullptr,
+                    nullptr, nullptr, callee_ir->cached_pre_instantiated, nullptr,
+                    uvb->getStatementBlock(), uvb->pgm);
+                if (!ok && !*xs) {
+                    inv = true;  // Request deopt to AST
+                    return 0;
+                }
+                return toBits(ir_return_value);
+            }, val, xsink);
+        }
+    }
+
+    // Cleanup in reverse order
+    if (sig->argvid) {
+        sig->argvid->uninstantiate(xsink);
+    }
+    for (int i = (int)num_params - 1; i >= 0; --i) {
+        sig->lv[i]->uninstantiate(xsink);
+    }
+    if (self && sig->selfid) {
+        sig->selfid->uninstantiateSelf();
+    }
+
+    // Apply return type coercion
     if (!*xsink) {
         const QoreTypeInfo* rt = sig->getReturnTypeInfo();
         QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
