@@ -2471,8 +2471,15 @@ void UserVariantBase::attemptIRLowering(const char* name) const {
         cached_pre_inst->insert(signature.selfid);
     }
     // Add ast_visible_body_locals (the filtered subset, not all_body_locals)
+    // Skip closure-use vars: they must NOT be pre-instantiated because the cvstack
+    // is a LIFO stack and block-scope cleanup pops from the top.  Pre-instantiating
+    // all closure-use vars at once creates wrong stack ordering, causing
+    // UninstantiateLocal to pop a different variable than intended.
+    // The IR interpreter handles them on-demand via ensureLocalInstantiated().
     for (LocalVar* lv : func->ast_visible_body_locals) {
-        cached_pre_inst->insert(lv);
+        if (!lv->closureUse()) {
+            cached_pre_inst->insert(lv);
+        }
     }
     func->cached_pre_instantiated = cached_pre_inst;
 
@@ -2955,7 +2962,12 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 // can find them on the thread-local variable stack.
                 const QoreParseOptions& po = pgm->getParseOptions();
                 for (LocalVar* lv : cached_ir->ast_visible_body_locals) {
-                    lv->instantiate(po);
+                    // Skip closure-use vars: the cvstack is LIFO and pre-instantiating
+                    // all closure-use vars at once breaks block-scope cleanup ordering.
+                    // The IR interpreter handles them on-demand via ensureLocalInstantiated().
+                    if (!lv->closureUse()) {
+                        lv->instantiate(po);
+                    }
                 }
 
                 // Swap in the program's parse options and set runtime_loc to the function's
@@ -2992,7 +3004,9 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                     // AST-visible locals FIRST (destroys any values from partial IR execution),
                     // then fall back to AST which manages its own locals
                     for (int i = (int)cached_ir->ast_visible_body_locals.size() - 1; i >= 0; --i) {
-                        cached_ir->ast_visible_body_locals[i]->uninstantiate(xsink);
+                        if (!cached_ir->ast_visible_body_locals[i]->closureUse()) {
+                            cached_ir->ast_visible_body_locals[i]->uninstantiate(xsink);
+                        }
                     }
                     fell_back_to_ast = true;
                     printd(2, "UserVariantBase::evalTiered() IR execution failed for '%s', "
@@ -3010,7 +3024,9 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 // do it before the AST fallback
                 if (!fell_back_to_ast) {
                     for (int i = (int)cached_ir->ast_visible_body_locals.size() - 1; i >= 0; --i) {
-                        cached_ir->ast_visible_body_locals[i]->uninstantiate(xsink);
+                        if (!cached_ir->ast_visible_body_locals[i]->closureUse()) {
+                            cached_ir->ast_visible_body_locals[i]->uninstantiate(xsink);
+                        }
                     }
                 }
 

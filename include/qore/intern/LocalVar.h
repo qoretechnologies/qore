@@ -444,11 +444,6 @@ public:
     }
 
     DLLLOCAL void instantiateIntern(QoreValue nval, bool assign) {
-        //printd(5, "LocalVar::instantiateIntern(%s, %d) this: %p '%s' value closure_use: %s pgm: %p val: %s "
-        //    "type: '%s' rti: '%s'\n", nval.getTypeName(), assign, this, name.c_str(),
-        //    closure_use ? "true" : "false", getProgram(), nval.getTypeName(), QoreTypeInfo::getName(typeInfo),
-        //    QoreTypeInfo::getName(refTypeInfo));
-
         if (!closure_use) {
             LocalVarValue* val = thread_instantiate_lvar();
             val->set(name.c_str(), typeInfo, nval, assign, false);
@@ -469,9 +464,6 @@ public:
     }
 
     DLLLOCAL void uninstantiate(ExceptionSink* xsink) const  {
-        //printd(5, "LocalVar::uninstantiate() this: %p '%s' closure_use: %s pgm: %p\n", this, name.c_str(),
-        //    closure_use ? "true" : "false", getProgram());
-
         if (!closure_use) {
             thread_uninstantiate_lvar(xsink);
         } else {
@@ -506,6 +498,10 @@ public:
         ClosureVarValue* val = thread_find_closure_var(name.c_str());
         if (!val) {
             val = thread_get_runtime_closure_var(this);
+        }
+        if (!val) {
+            needs_deref = false;
+            return QoreValue();
         }
         return val->eval(needs_deref, xsink);
     }
