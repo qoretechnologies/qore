@@ -414,17 +414,24 @@ bool QoreJIT::compileFunctionLocked(const QoreIRFunction& func, std::string& err
 
 bool QoreJIT::compileFunctionInternal(const QoreIRFunction& func, std::string& error,
         void* deopt_counter) {
+    // Copy func.name before any LLVM operations.
+    // On Linux, LLVM 21's addIRModule()/lookup() can corrupt adjacent heap memory
+    // (specifically the std::string::_M_string_length field) when compiling closures
+    // or functions with complex IR patterns.  The local copy is made before any LLVM
+    // heap activity and remains valid even if the original is corrupted.
+    const std::string func_name = func.name;
+
     // Re-check cache under compile lock (another thread may have compiled this function)
     {
         std::lock_guard<std::mutex> lock(cache_mutex);
-        if (compiled_functions.find(func.name) != compiled_functions.end()) {
+        if (compiled_functions.find(func_name) != compiled_functions.end()) {
             return true;
         }
     }
 
     // Create a new LLVM context and module for this compilation
     auto ctx = std::make_unique<llvm::LLVMContext>();
-    auto module = std::make_unique<llvm::Module>("qore_jit_" + func.name, *ctx);
+    auto module = std::make_unique<llvm::Module>("qore_jit_" + func_name, *ctx);
     module->setDataLayout(jit->getDataLayout());
 
     // Lower IR to LLVM IR
@@ -449,7 +456,7 @@ bool QoreJIT::compileFunctionInternal(const QoreIRFunction& func, std::string& e
     // Dump LLVM IR if requested (after optimization)
     if (getenv("QORE_DUMP_LLVM_IR")) {
         llvm::raw_fd_ostream llvm_dump(2, false);
-        llvm_dump << "=== LLVM IR for " << func.name << " ===\n";
+        llvm_dump << "=== LLVM IR for " << func_name << " ===\n";
         module->print(llvm_dump, nullptr);
         llvm_dump << "=== END LLVM IR ===\n";
     }
@@ -463,9 +470,9 @@ bool QoreJIT::compileFunctionInternal(const QoreIRFunction& func, std::string& e
     }
 
     // Look up the compiled function (triggers materialization/code generation inline)
-    auto sym = jit->lookup(func.name);
+    auto sym = jit->lookup(func_name);
     if (!sym) {
-        error = "failed to look up compiled function '" + func.name + "': " + llvm::toString(sym.takeError());
+        error = "failed to look up compiled function '" + func_name + "': " + llvm::toString(sym.takeError());
         return false;
     }
 
@@ -474,7 +481,7 @@ bool QoreJIT::compileFunctionInternal(const QoreIRFunction& func, std::string& e
     // Cache the compiled function pointer
     {
         std::lock_guard<std::mutex> lock(cache_mutex);
-        compiled_functions[func.name] = fn_ptr;
+        compiled_functions[func_name] = fn_ptr;
     }
 
     return true;
