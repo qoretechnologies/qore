@@ -1,5 +1,7 @@
 stages:
+  - build
   - test
+  - perf
 
 default:
   services:
@@ -34,9 +36,74 @@ variables:
   REDIS_URL: 'redis://redis:6379'
   MONGODB_URL: 'mongodb://mongodb:27017'
   QORE_TEST_OPTS: '-penable-debug'
+  QORE_EXCLUDE_PERF_TESTS: "1"
 
+# Build stage - compile once per platform, save build/ as artifact
+build-ubuntu-amd64:
+  stage: build
+  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
+  tags:
+    - k8s
+    - amd64
+  services: []
+  before_script: []
+  script:
+    - test/docker_test/build.sh
+  artifacts:
+    paths:
+      - build/
+    expire_in: 1 day
+
+build-ubuntu-arm64:
+  stage: build
+  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop-arm64
+  tags:
+    - k8s
+    - arm64
+  services: []
+  before_script: []
+  script:
+    - test/docker_test/build.sh
+  artifacts:
+    paths:
+      - build/
+    expire_in: 1 day
+
+build-alpine-amd64:
+  stage: build
+  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop-alpine
+  tags:
+    - k8s
+    - amd64
+  services: []
+  before_script: []
+  script:
+    - test/docker_test/build.sh
+  artifacts:
+    paths:
+      - build/
+    expire_in: 1 day
+
+build-alpine-arm64:
+  stage: build
+  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop-alpine-arm64
+  tags:
+    - k8s
+    - arm64
+  services: []
+  before_script: []
+  script:
+    - test/docker_test/build.sh
+  artifacts:
+    paths:
+      - build/
+    expire_in: 1 day
+
+# Test stage - install pre-built artifacts and run tests
 test-ubuntu-amd64:
   stage: test
+  parallel: 2
+  needs: [build-ubuntu-amd64]
   image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
   tags:
     - k8s
@@ -65,6 +132,8 @@ test-ubuntu-amd64:
 
 test-ubuntu-arm64:
   stage: test
+  parallel: 2
+  needs: [build-ubuntu-arm64]
   image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop-arm64
   tags:
     - k8s
@@ -93,6 +162,8 @@ test-ubuntu-arm64:
 
 test-alpine-amd64:
   stage: test
+  parallel: 2
+  needs: [build-alpine-amd64]
   image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop-alpine
   tags:
     - k8s
@@ -121,6 +192,8 @@ test-alpine-amd64:
 
 test-alpine-arm64:
   stage: test
+  parallel: 2
+  needs: [build-alpine-arm64]
   image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop-alpine-arm64
   tags:
     - k8s
@@ -245,6 +318,7 @@ test-macos:
   services: []
   variables:
     QORE_TEST_OPTS: '-penable-debug'
+    QORE_EXCLUDE_PERF_TESTS: "1"
   before_script:
     - |
         curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
@@ -263,6 +337,27 @@ test-macos:
             -d "{\"state\": \"failure\", \"context\": \"${REPO_NAME}-macos\", \"description\": \"Gitlab CI macOS\", \"target_url\": \"${CI_JOB_URL}\"}"
           exit 1
         fi
+  artifacts:
+    when: on_failure
+    paths:
+      - crash-dumps/
+    expire_in: 7 days
+
+test-perf:
+  stage: perf
+  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
+  tags:
+    - k8s
+    - amd64
+  services: []
+  allow_failure: true
+  variables:
+    QORE_PERF_TESTS_ONLY: "1"
+    QORE_EXCLUDE_PERF_TESTS: ""
+  before_script:
+    - set +e
+  script:
+    - test/docker_test/test-perf.sh
   artifacts:
     when: on_failure
     paths:

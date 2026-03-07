@@ -106,6 +106,9 @@ private:
     DLLLOCAL void configureSession(Ort::SessionOptions& opts, const QoreHashNode* config,
         ExceptionSink* xsink);
 
+    //! Auto-detect and append the best available GPU execution provider
+    DLLLOCAL void autoDetectProvider(Ort::SessionOptions& opts);
+
     //! Append an execution provider to session options
     DLLLOCAL void appendProvider(Ort::SessionOptions& opts, const std::string& name,
         const std::unordered_map<std::string, std::string>& provider_opts,

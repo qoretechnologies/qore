@@ -64,10 +64,12 @@ class QfmtTest inherits QUnit::Test {
     }
 
     private string get_qore_path() {
-        # Try to find qore in the build directory
-        string buildQore = normalize_dir(get_script_dir() + "/../../../../build/qore");
-        if (is_file(buildQore)) {
-            return buildQore;
+        # Try to find qore in known build directories
+        foreach string dir in ("build", "build-ci", "build-debug") {
+            string buildQore = normalize_dir(get_script_dir() + "/../../../../" + dir + "/qore");
+            if (is_file(buildQore)) {
+                return buildQore;
+            }
         }
         return "qore";
     }

@@ -13,7 +13,7 @@ cd "${QORE_SRC_DIR}"
 MAKE_JOBS="${MAKE_JOBS:-$(sysctl -n hw.ncpu)}"
 
 # Build directory - use a clean build each time
-BUILD_DIR="${QORE_SRC_DIR}/build-ci"
+BUILD_DIR="${QORE_SRC_DIR}/build"
 rm -rf "${BUILD_DIR}"
 mkdir -p "${BUILD_DIR}"
 

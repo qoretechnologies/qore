@@ -2748,6 +2748,8 @@ void UserVariantBase::attemptJITRecompilation() const {
     // Use a versioned name so LLVM ORC creates a new symbol (old one stays in memory)
     std::string orig_name = cached_ir->name;
     cached_ir->name = orig_name + "_reopt";
+    // Pre-copy the lookup name before compilation — LLVM 21 corrupts adjacent heap on Linux
+    const std::string lookup_name = cached_ir->name;
 
     // Recompile with the accumulated type profiles and deopt tracking
     std::string error;
@@ -2760,7 +2762,7 @@ void UserVariantBase::attemptJITRecompilation() const {
             orig_name.c_str(), error.c_str());
         return;
     }
-    JitFunctionPtr fn = QoreJIT::instance().lookupFunction(cached_ir->name);
+    JitFunctionPtr fn = QoreJIT::instance().lookupFunction(lookup_name);
     cached_ir->name = orig_name;
     QoreJIT::instance().releaseCompileLock();
     if (!fn) {

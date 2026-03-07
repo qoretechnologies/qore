@@ -778,8 +778,10 @@ JitFunctionPtr QoreJIT::lookupFunction(const std::string& name) const {
 
 bool QoreJIT::executeWithFallback(const QoreIRFunction& func, QoreValue& return_value, ExceptionSink* xsink,
         std::string& error, const std::unordered_set<const LocalVar*>* pre_instantiated) {
+    // Pre-copy name before compileFunction() — LLVM 21 corrupts adjacent heap on Linux
+    const std::string func_name = func.name;
     if (compileFunction(func, error)) {
-        JitFunctionPtr fn = lookupFunction(func.name);
+        JitFunctionPtr fn = lookupFunction(func_name);
         if (fn) {
             // Execute the JIT-compiled function
             // NOTE: Do NOT clear the runtime stack location here.
@@ -854,11 +856,24 @@ void QoreJIT::bgCompileThreadLoop() {
         // Acquire compile lock (blocking is OK here — this is a dedicated background thread)
         std::lock_guard<std::mutex> lock(compile_mutex);
 
+        // Pre-copy function names before any LLVM operations.
+        // LLVM 21's addIRModule()/lookup() corrupts adjacent heap memory
+        // (std::string::_M_string_length) on Linux, making any post-compilation
+        // access to ir_func->name crash with a multi-terabyte strlen.
+        const std::string saved_func_name = work.ir_func->name;
+        std::vector<std::string> saved_callee_names;
+        if (work.has_callees) {
+            saved_callee_names.reserve(work.callees.size());
+            for (const auto& callee : work.callees) {
+                saved_callee_names.push_back(callee.ir_func->name);
+            }
+        }
+
         std::string error;
         bool success;
 
         if (getenv("QORE_JIT_TIMING")) {
-            fprintf(stderr, "[BG-JIT] compiling '%s' on background thread\n", work.ir_func->name.c_str());
+            fprintf(stderr, "[BG-JIT] compiling '%s' on background thread\n", saved_func_name.c_str());
         }
 
         if (work.has_callees) {
@@ -871,7 +886,7 @@ void QoreJIT::bgCompileThreadLoop() {
 
         if (!success) {
             if (getenv("QORE_JIT_TIMING")) {
-                fprintf(stderr, "[BG-JIT] failed to compile '%s': %s\n", work.ir_func->name.c_str(), error.c_str());
+                fprintf(stderr, "[BG-JIT] failed to compile '%s': %s\n", saved_func_name.c_str(), error.c_str());
             }
             // Mark compilation as failed; uvb->jit_compile_failed will be set by evalTiered
             // Decrement active work and signal if queue is now empty
@@ -901,7 +916,7 @@ void QoreJIT::bgCompileThreadLoop() {
         if (state != 1) {
             // Compilation was cancelled, failed, or already completed
             if (getenv("QORE_JIT_TIMING")) {
-                fprintf(stderr, "[BG-JIT] compilation state is %d (not pending), skipping '%s'\n", state, work.ir_func->name.c_str());
+                fprintf(stderr, "[BG-JIT] compilation state is %d (not pending), skipping '%s'\n", state, saved_func_name.c_str());
             }
             // Decrement active work and signal if queue is now empty
             int remaining = bg_active_work.fetch_sub(1, std::memory_order_acq_rel) - 1;
@@ -912,10 +927,10 @@ void QoreJIT::bgCompileThreadLoop() {
         }
 
         // Lookup the compiled function
-        JitFunctionPtr fn = lookupFunction(work.ir_func->name);
+        JitFunctionPtr fn = lookupFunction(saved_func_name);
         if (!fn) {
             if (getenv("QORE_JIT_TIMING")) {
-                fprintf(stderr, "[BG-JIT] lookup failed for '%s'\n", work.ir_func->name.c_str());
+                fprintf(stderr, "[BG-JIT] lookup failed for '%s'\n", saved_func_name.c_str());
             }
             // Mark as failed
             const_cast<UserVariantBase*>(root_uvb)->jit_compile_state.store(2, std::memory_order_release);
@@ -936,13 +951,14 @@ void QoreJIT::bgCompileThreadLoop() {
         mutable_uvb->current_tier.store(UserVariantBase::TIER_JIT, std::memory_order_release);
 
         if (getenv("QORE_JIT_TIMING")) {
-            fprintf(stderr, "[BG-JIT] compiled '%s' and promoted to JIT tier\n", work.ir_func->name.c_str());
+            fprintf(stderr, "[BG-JIT] compiled '%s' and promoted to JIT tier\n", saved_func_name.c_str());
         }
 
         // Register compiled function pointers for batch-compiled callees
         if (work.has_callees) {
-            for (const auto& callee : work.callees) {
-                JitFunctionPtr callee_fn = lookupFunction(callee.ir_func->name);
+            for (size_t i = 0; i < work.callees.size(); ++i) {
+                const auto& callee = work.callees[i];
+                JitFunctionPtr callee_fn = lookupFunction(saved_callee_names[i]);
                 if (callee_fn && callee.variant) {
                     const UserVariantBase* callee_uvb = callee.variant->getUserVariantBase();
                     if (callee_uvb) {
@@ -950,7 +966,7 @@ void QoreJIT::bgCompileThreadLoop() {
                         mutable_callee->registerPrecompiledFunction(callee_fn);
                         if (getenv("QORE_JIT_TIMING")) {
                             fprintf(stderr, "[BG-JIT] batch-promoted callee '%s' to JIT tier\n",
-                                    callee.ir_func->name.c_str());
+                                    saved_callee_names[i].c_str());
                         }
                     }
                 }
@@ -1043,6 +1059,9 @@ void QoreJIT::shutdown() {
             bg_compile_queue.pop();
         }
 
+        // Pre-copy name before compilation — LLVM 21 corrupts adjacent heap on Linux
+        const std::string saved_func_name = work.ir_func->name;
+
         // Compile any remaining work synchronously
         std::string error;
         bool success;
@@ -1053,7 +1072,7 @@ void QoreJIT::shutdown() {
         }
 
         if (success) {
-            JitFunctionPtr fn = lookupFunction(work.ir_func->name);
+            JitFunctionPtr fn = lookupFunction(saved_func_name);
             if (fn && work.uvb) {
                 UserVariantBase* mutable_uvb = const_cast<UserVariantBase*>(work.uvb);
                 mutable_uvb->cached_jit_fn.store(fn, std::memory_order_release);

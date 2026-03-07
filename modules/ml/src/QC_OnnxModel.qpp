@@ -67,6 +67,9 @@ qclass OnnxModel [arg=QoreOnnxModel* model; ns=Qore::ML; flags=final; dom=FILESY
 //! Creates an OnnxModel by loading the ONNX model from the given file path
 /** @param model_path the filesystem path to the .onnx model file
 
+    The best available GPU execution provider is automatically selected (CUDA on Linux,
+    CoreML on macOS). Falls back to CPU if no GPU provider is available.
+
     @par Example:
     @code{.py}
 OnnxModel model("/path/to/model.onnx");
@@ -91,6 +94,10 @@ OnnxModel::constructor(string model_path) {
 //! Creates an OnnxModel with session configuration options
 /** @param model_path the filesystem path to the .onnx model file
     @param options session configuration including execution providers, threading, and optimization
+
+    If no \c providers are specified in the config, the best available GPU execution provider
+    is automatically selected (CUDA on Linux, CoreML on macOS), falling back to CPU.
+    An explicit empty \c providers list disables auto-detection and uses CPU only.
 
     @par Example:
     @code{.py}

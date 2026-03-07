@@ -37,7 +37,9 @@ if [ -z "${REDIS_URL}" ]; then
     setup_redis_on_host
 fi
 
-find / -name "libqore.so*" -exec rm -f {} \;
+find / -path "${QORE_SRC_DIR}/build" -prune -o -name "libqore.so*" -exec rm -f {} \;
+
+export MAKE_JOBS=${MAKE_JOBS:-6}
 
 # ensure LLVM static libraries are installed (needed for JIT/AOT linking)
 # Alpine splits static libs into -static and -gtest packages
@@ -100,6 +102,7 @@ if ! wait $RELEASE_BUILD_PID; then
     exit 1
 fi
 echo "Both builds completed successfully"
+
 
 # add Qore user and group
 if ! grep -q "^qore:x:${QORE_GID}" /etc/group; then

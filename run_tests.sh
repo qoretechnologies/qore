@@ -6,11 +6,17 @@ print_usage () {
   echo
   echo "  -d <dir>   Run only specified tests (as found in $BASE_TEST_PATH)."
   echo "  -j         Use --format=junit option for the tests, making them print JUnit output."
+  echo "  -E         Exclude performance/stress tests (matched by *Perf* or PipelineMemory pattern)."
+  echo "  -P         Run only performance/stress tests."
   echo "  -t         Measure execution time of the tests."
   echo "  -v         Use --format=plain option for the tests, making them print one statement per each test case."
   echo
   echo "Environment variables:"
-  echo "  QORE_TEST_OPTS   Additional options to pass to qore (e.g., '-penable-debug')."
+  echo "  QORE_TEST_OPTS           Additional options to pass to qore (e.g., '-penable-debug')."
+  echo "  CI_NODE_INDEX            Shard index (1-based) for parallel test execution."
+  echo "  CI_NODE_TOTAL            Total number of shards for parallel test execution."
+  echo "  QORE_EXCLUDE_PERF_TESTS  Set to '1' to exclude performance tests (same as -E)."
+  echo "  QORE_PERF_TESTS_ONLY    Set to '1' to run only performance tests (same as -P)."
 }
 
 err_multiple_format_opts() {
@@ -24,11 +30,21 @@ MEASURE_TIME=0
 PRINT_TEXT=1
 TEST_DIRS=""
 TEST_OUTPUT_FORMAT=""
+PERF_EXCLUDE=0
+PERF_ONLY=0
 
-while getopts ":d:jvt" opt; do
+# Support environment variables for CI integration
+if [ "${QORE_EXCLUDE_PERF_TESTS}" = "1" ]; then
+    PERF_EXCLUDE=1
+fi
+if [ "${QORE_PERF_TESTS_ONLY}" = "1" ]; then
+    PERF_ONLY=1
+fi
+
+while getopts ":d:jvtEP" opt; do
     case $opt in
         d)
-            TEST_DIRS="$TEST_DIRS \"$BASE_TEST_PATH/$OPTARG\""
+            TEST_DIRS="$TEST_DIRS $BASE_TEST_PATH/$OPTARG"
             ;;
         j)
             if [ -n "$TEST_OUTPUT_FORMAT" ]; then
@@ -48,6 +64,12 @@ while getopts ":d:jvt" opt; do
         t)
             MEASURE_TIME=1
             ;;
+        E)
+            PERF_EXCLUDE=1
+            ;;
+        P)
+            PERF_ONLY=1
+            ;;
         \?)
             echo "Unknown option: -$OPTARG" >&2
             print_usage
@@ -60,6 +82,11 @@ while getopts ":d:jvt" opt; do
             ;;
     esac
 done
+
+if [ $PERF_EXCLUDE -eq 1 ] && [ $PERF_ONLY -eq 1 ]; then
+    echo "Cannot use -E and -P together." >&2
+    exit 1
+fi
 
 # If no test dirs were specified, run all the tests
 if [ -z "$TEST_DIRS" ]; then
@@ -224,10 +251,59 @@ fi
 echo
 
 # Search for tests in the test directory.
-TESTS=`eval find "$TEST_DIRS" -name "*.qtest"`
+TESTS=`find $TEST_DIRS -name "*.qtest" | sort`
 FAILED_TESTS=""
 
+# Helper: check if a test matches the perf/stress test pattern
+is_perf_test() {
+    case "$(basename "$1")" in
+        *Perf*|PipelineMemory.qtest) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+# Filter perf tests if requested
+if [ $PERF_EXCLUDE -eq 1 ]; then
+    FILTERED=""
+    for test in $TESTS; do
+        if ! is_perf_test "$test"; then
+            FILTERED="$FILTERED $test"
+        fi
+    done
+    TESTS="$FILTERED"
+elif [ $PERF_ONLY -eq 1 ]; then
+    FILTERED=""
+    for test in $TESTS; do
+        if is_perf_test "$test"; then
+            FILTERED="$FILTERED $test"
+        fi
+    done
+    TESTS="$FILTERED"
+fi
+
+# Shard tests for parallel CI execution
+# GitLab sets CI_NODE_INDEX (1-based) and CI_NODE_TOTAL with parallel: N
+if [ -n "$CI_NODE_INDEX" ] && [ -n "$CI_NODE_TOTAL" ] && [ "$CI_NODE_TOTAL" -gt 1 ] 2>/dev/null; then
+    SHARDED=""
+    j=0
+    for test in $TESTS; do
+        shard=$(( (j % CI_NODE_TOTAL) + 1 ))
+        if [ $shard -eq $CI_NODE_INDEX ]; then
+            SHARDED="$SHARDED $test"
+        fi
+        j=$(( j + 1 ))
+    done
+    TESTS="$SHARDED"
+    if [ $PRINT_TEXT -eq 1 ]; then
+        echo "Shard $CI_NODE_INDEX/$CI_NODE_TOTAL selected"
+    fi
+fi
+
 TEST_COUNT=`echo $TESTS | wc -w`
+if [ $TEST_COUNT -eq 0 ]; then
+    echo "ERROR: no tests found to run" >&2
+    exit 1
+fi
 PASSED_TEST_COUNT=0
 FAILED_TEST_COUNT=0
 

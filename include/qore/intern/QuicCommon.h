@@ -291,17 +291,19 @@ inline int sendQuicPacketsBatch(int fd, const QuicPacketBatch& batch,
     int total = batch.size();
     int offset = 0;
 #ifdef __linux__
-    // Per-message cmsg buffers on stack: each message needs its own copy
-    // because sendmmsg() accesses all msg_control pointers during the single syscall.
-    // ~4KB total (64 * 64 bytes)
-    uint8_t cmsg_bufs[QUIC_COMMON_MAX_SEND_BATCH][QUIC_SEND_CMSG_BUF_SIZE];
+    // All large arrays are thread-local to avoid ~9KB of stack pressure per call.
+    // This inline function is called from many sites; without thread_local, the
+    // inlined arrays compound with callers' own stack usage, triggering stack
+    // protector failures under GCC 15+ (which enables -fstack-protector-strong
+    // by default).
+    // Per-message cmsg buffers: each message needs its own copy because
+    // sendmmsg() accesses all msg_control pointers during the single syscall.
+    static thread_local uint8_t cmsg_bufs[QUIC_COMMON_MAX_SEND_BATCH][QUIC_SEND_CMSG_BUF_SIZE];
+    static thread_local struct mmsghdr msgs[QUIC_COMMON_MAX_SEND_BATCH];
+    static thread_local struct iovec iovecs[QUIC_COMMON_MAX_SEND_BATCH];
 
     while (offset < total) {
         int batch_size = std::min(total - offset, QUIC_COMMON_MAX_SEND_BATCH);
-        // Stack-allocated: batch_size <= QUIC_COMMON_MAX_SEND_BATCH (64)
-        // ~9KB total on stack with cmsg (mmsghdr + iovec + cmsg_bufs)
-        struct mmsghdr msgs[QUIC_COMMON_MAX_SEND_BATCH];
-        struct iovec iovecs[QUIC_COMMON_MAX_SEND_BATCH];
         memset(msgs, 0, sizeof(struct mmsghdr) * batch_size);
 
         for (int i = 0; i < batch_size; ++i) {

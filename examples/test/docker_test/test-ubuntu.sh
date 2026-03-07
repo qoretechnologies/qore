@@ -36,7 +36,7 @@ if [ -z "${REDIS_URL}" ]; then
     setup_redis_on_host
 fi
 
-export MAKE_JOBS=6
+export MAKE_JOBS=${MAKE_JOBS:-6}
 
 # ensure LLVM dev libraries are installed (needed for JIT/AOT)
 if ! dpkg -l llvm-dev >/dev/null 2>&1; then
@@ -96,6 +96,7 @@ if ! wait $RELEASE_BUILD_PID; then
     exit 1
 fi
 echo "Both builds completed successfully"
+
 
 # add Qore user and group
 groupadd -o -g ${QORE_GID} qore
