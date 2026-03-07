@@ -235,10 +235,11 @@ static int recvAndDispatchQuicPackets(int fd, QoreDatagramDispatcher& dispatcher
     return 0;
 #else
     // Drain all available incoming packets one at a time
+    // Thread-local to reduce stack pressure (see QuicCommon.h for rationale)
+    static thread_local struct sockaddr_storage src_addr;
+    static thread_local uint8_t cmsg_buf[QUIC_CMSG_BUF_SIZE];
     while (true) {
-        struct sockaddr_storage src_addr;
         socklen_t src_addrlen = sizeof(src_addr);
-        uint8_t cmsg_buf[QUIC_CMSG_BUF_SIZE];
         size_t cmsg_len = sizeof(cmsg_buf);
         ssize_t nread = recvQuicPacket(fd, recv_buf, recv_buf_size, MSG_DONTWAIT,
                                         reinterpret_cast<struct sockaddr*>(&src_addr), &src_addrlen,
@@ -496,11 +497,12 @@ int SocketQuicClientPollOperation::sendPendingPackets(
 }
 
 int SocketQuicClientPollOperation::recvAndProcessPacket(ExceptionSink* xsink) {
-    struct sockaddr_storage src_addr;
+    // Thread-local to reduce stack pressure (see QuicCommon.h for rationale)
+    static thread_local struct sockaddr_storage src_addr;
+    static thread_local uint8_t cmsg_buf[QUIC_CMSG_BUF_SIZE];
     socklen_t src_addrlen = sizeof(src_addr);
 
     int fd = sock->priv->socket->getSocket();
-    uint8_t cmsg_buf[QUIC_CMSG_BUF_SIZE];
     size_t cmsg_len = sizeof(cmsg_buf);
     ssize_t nread = recvQuicPacket(fd, recv_buf_, sizeof(recv_buf_), 0,
                                     reinterpret_cast<struct sockaddr*>(&src_addr), &src_addrlen,
@@ -1191,11 +1193,12 @@ int SocketQuicServerPollOperation::processTimersAndSendAll(
 }
 
 int SocketQuicServerPollOperation::recvAndProcessPacket(ExceptionSink* xsink, QuicSession** target_out) {
-    struct sockaddr_storage src_addr;
+    // Thread-local to reduce stack pressure (see QuicCommon.h for rationale)
+    static thread_local struct sockaddr_storage src_addr;
+    static thread_local uint8_t cmsg_buf[QUIC_CMSG_BUF_SIZE];
     socklen_t src_addrlen = sizeof(src_addr);
 
     int fd = sock->priv->socket->getSocket();
-    uint8_t cmsg_buf[QUIC_CMSG_BUF_SIZE];
     size_t cmsg_len = sizeof(cmsg_buf);
     ssize_t nread = recvQuicPacket(fd, recv_buf_, sizeof(recv_buf_), 0,
                                     reinterpret_cast<struct sockaddr*>(&src_addr), &src_addrlen,
