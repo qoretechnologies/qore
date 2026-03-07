@@ -222,6 +222,8 @@ test-alpine-arm64:
 
 test-ir-ubuntu-amd64:
   stage: test
+  parallel: 2
+  needs: [build-ubuntu-amd64]
   image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
   tags:
     - k8s
@@ -249,9 +251,16 @@ test-ir-ubuntu-amd64:
             -d "{\"state\": \"failure\", \"context\": \"${REPO_NAME}-ir\", \"description\": \"Gitlab CI IR Mode\", \"target_url\": \"${CI_JOB_URL}\"}"
           exit 1
         fi
+  artifacts:
+    when: on_failure
+    paths:
+      - crash-dumps/
+    expire_in: 7 days
 
 test-jit-ubuntu-amd64:
   stage: test
+  parallel: 2
+  needs: [build-ubuntu-amd64]
   image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
   tags:
     - k8s
@@ -279,9 +288,16 @@ test-jit-ubuntu-amd64:
             -d "{\"state\": \"failure\", \"context\": \"${REPO_NAME}-jit\", \"description\": \"Gitlab CI JIT Mode\", \"target_url\": \"${CI_JOB_URL}\"}"
           exit 1
         fi
+  artifacts:
+    when: on_failure
+    paths:
+      - crash-dumps/
+    expire_in: 7 days
 
 test-tiered-ubuntu-amd64:
   stage: test
+  parallel: 2
+  needs: [build-ubuntu-amd64]
   image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
   tags:
     - k8s
@@ -309,6 +325,11 @@ test-tiered-ubuntu-amd64:
             -d "{\"state\": \"failure\", \"context\": \"${REPO_NAME}-tiered\", \"description\": \"Gitlab CI Tiered Mode\", \"target_url\": \"${CI_JOB_URL}\"}"
           exit 1
         fi
+  artifacts:
+    when: on_failure
+    paths:
+      - crash-dumps/
+    expire_in: 7 days
 
 test-macos:
   stage: test

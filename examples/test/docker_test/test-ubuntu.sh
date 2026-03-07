@@ -52,50 +52,81 @@ if [ -z "${CMAKE_PREFIX_PATH}" ]; then
     fi
 fi
 
-# install tree-sitter CLI for astparser module build
-if ! command -v tree-sitter > /dev/null 2>&1; then
-    echo && echo "-- installing tree-sitter CLI --"
-    cargo install tree-sitter-cli@0.26.5
-fi
-
-# build Qore Debug and Release in parallel
-echo && echo "-- building Qore Debug and Release in parallel --"
 cd ${QORE_SRC_DIR}
 
-# Build Debug in background
-(
-    echo "Building Debug mode..."
-    mkdir build
-    cd build
-    cmake .. -DCMAKE_BUILD_TYPE=debug -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX}
-    make -j${MAKE_JOBS}
-    make install
-    echo "Debug build complete"
-) &
-DEBUG_BUILD_PID=$!
+if [ -d "${QORE_SRC_DIR}/build" ] && [ -f "${QORE_SRC_DIR}/build/CMakeCache.txt" ]; then
+    # Pre-built debug artifact from build stage — install it, then build release in parallel
+    echo && echo "-- installing pre-built Qore (debug) and building release --"
+    (cd ${QORE_SRC_DIR}/build && cmake --install .) &
+    INSTALL_PID=$!
 
-# Build Release in background
-(
-    echo "Building Release mode..."
-    mkdir build-release
-    cd build-release
-    cmake .. -DCMAKE_BUILD_TYPE=release -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX}
-    make -j${MAKE_JOBS}
-    echo "Release build complete"
-) &
-RELEASE_BUILD_PID=$!
+    # install tree-sitter CLI for astparser module build (needed for release cmake)
+    if ! command -v tree-sitter > /dev/null 2>&1; then
+        echo && echo "-- installing tree-sitter CLI --"
+        cargo install tree-sitter-cli@0.26.5
+    fi
 
-# Wait for both builds to complete
-echo "Waiting for builds to complete..."
-if ! wait $DEBUG_BUILD_PID; then
-    echo "Debug build failed"
-    exit 1
+    (
+        echo "Building Release mode..."
+        mkdir -p build-release
+        cd build-release
+        cmake .. -DCMAKE_BUILD_TYPE=release -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX}
+        make -j${MAKE_JOBS}
+        echo "Release build complete"
+    ) &
+    RELEASE_BUILD_PID=$!
+
+    if ! wait $INSTALL_PID; then
+        echo "Debug install failed"
+        exit 1
+    fi
+    if ! wait $RELEASE_BUILD_PID; then
+        echo "Release build failed"
+        exit 1
+    fi
+    echo "Install and release build completed successfully"
+else
+    # No pre-built artifact — full parallel debug + release build
+    # install tree-sitter CLI for astparser module build
+    if ! command -v tree-sitter > /dev/null 2>&1; then
+        echo && echo "-- installing tree-sitter CLI --"
+        cargo install tree-sitter-cli@0.26.5
+    fi
+
+    echo && echo "-- building Qore Debug and Release in parallel --"
+
+    (
+        echo "Building Debug mode..."
+        mkdir -p build
+        cd build
+        cmake .. -DCMAKE_BUILD_TYPE=debug -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX}
+        make -j${MAKE_JOBS}
+        make install
+        echo "Debug build complete"
+    ) &
+    DEBUG_BUILD_PID=$!
+
+    (
+        echo "Building Release mode..."
+        mkdir -p build-release
+        cd build-release
+        cmake .. -DCMAKE_BUILD_TYPE=release -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX}
+        make -j${MAKE_JOBS}
+        echo "Release build complete"
+    ) &
+    RELEASE_BUILD_PID=$!
+
+    echo "Waiting for builds to complete..."
+    if ! wait $DEBUG_BUILD_PID; then
+        echo "Debug build failed"
+        exit 1
+    fi
+    if ! wait $RELEASE_BUILD_PID; then
+        echo "Release build failed"
+        exit 1
+    fi
+    echo "Both builds completed successfully"
 fi
-if ! wait $RELEASE_BUILD_PID; then
-    echo "Release build failed"
-    exit 1
-fi
-echo "Both builds completed successfully"
 
 
 # add Qore user and group
