@@ -3552,6 +3552,8 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
                 || QoreTypeInfo::isListType(ti)
                 || QoreTypeInfo::isHashType(ti)
                 || QoreTypeInfo::getBaseType(ti) == NT_BINARY
+                || QoreTypeInfo::getBaseType(ti) == NT_FLOAT
+                || QoreTypeInfo::getBaseType(ti) == NT_NUMBER
                 || QoreTypeInfo::isReference(ti)) {
             left_var = nullptr;  // Force lvalue path
         }
@@ -3682,10 +3684,16 @@ QoreIRValue QoreIRLowering::lowerMinusEquals(const QoreValue& expr, std::string&
     bool force_int = dynamic_cast<const QoreIntMinusEqualsOperatorNode*>(node) != nullptr;
     const AbstractQoreNode* left_node = op->getLeft().getInternalNode();
     auto* left_var = dynamic_cast<const VarRefNode*>(left_node);
-    // Reference-typed locals need lvalue semantics for write-through
-    if (left_var && left_var->getTypeInfo()
-            && QoreTypeInfo::isReference(left_var->getTypeInfo())) {
-        left_var = nullptr;
+    // Force lvalue path for types where load-compute-store produces wrong result types:
+    // - float/number: NOTHING - int = int (needs coercion to float/number)
+    // - References: need lvalue semantics for write-through
+    if (left_var && left_var->getTypeInfo()) {
+        const QoreTypeInfo* ti = left_var->getTypeInfo();
+        if (QoreTypeInfo::getBaseType(ti) == NT_FLOAT
+                || QoreTypeInfo::getBaseType(ti) == NT_NUMBER
+                || QoreTypeInfo::isReference(ti)) {
+            left_var = nullptr;
+        }
     }
     QoreValue right_expr(op->getRight());
     QoreIRValue right = lowerExpression(right_expr, error);
@@ -3782,10 +3790,14 @@ QoreIRValue QoreIRLowering::lowerMultiplyEquals(const QoreValue& expr, std::stri
 
     const AbstractQoreNode* left_node = op->getLeft().getInternalNode();
     auto* left_var = dynamic_cast<const VarRefNode*>(left_node);
-    // Reference-typed locals need lvalue semantics for write-through
-    if (left_var && left_var->getTypeInfo()
-            && QoreTypeInfo::isReference(left_var->getTypeInfo())) {
-        left_var = nullptr;
+    // Force lvalue path for types where load-compute-store produces wrong result types
+    if (left_var && left_var->getTypeInfo()) {
+        const QoreTypeInfo* ti = left_var->getTypeInfo();
+        if (QoreTypeInfo::getBaseType(ti) == NT_FLOAT
+                || QoreTypeInfo::getBaseType(ti) == NT_NUMBER
+                || QoreTypeInfo::isReference(ti)) {
+            left_var = nullptr;
+        }
     }
     QoreValue right_expr(op->getRight());
     QoreIRValue right = lowerExpression(right_expr, error);
@@ -3879,10 +3891,14 @@ QoreIRValue QoreIRLowering::lowerDivideEquals(const QoreValue& expr, std::string
 
     const AbstractQoreNode* left_node = op->getLeft().getInternalNode();
     auto* left_var = dynamic_cast<const VarRefNode*>(left_node);
-    // Reference-typed locals need lvalue semantics for write-through
-    if (left_var && left_var->getTypeInfo()
-            && QoreTypeInfo::isReference(left_var->getTypeInfo())) {
-        left_var = nullptr;
+    // Force lvalue path for types where load-compute-store produces wrong result types
+    if (left_var && left_var->getTypeInfo()) {
+        const QoreTypeInfo* ti = left_var->getTypeInfo();
+        if (QoreTypeInfo::getBaseType(ti) == NT_FLOAT
+                || QoreTypeInfo::getBaseType(ti) == NT_NUMBER
+                || QoreTypeInfo::isReference(ti)) {
+            left_var = nullptr;
+        }
     }
     QoreValue right_expr(op->getRight());
     QoreIRValue right = lowerExpression(right_expr, error);
@@ -7391,8 +7407,21 @@ QoreIRValue QoreIRLowering::lowerSelect(const QoreValue& expr, std::string& erro
         return result;
     }
 
-    // Native IR lowering with implicit argument context ($1, $#)
-    return lowerSelectNative(select, expr, error);
+    // Native loop-based select always wraps results in a list.  Only use it when
+    // the input is guaranteed to be a list or an iterable object.  For scalars and
+    // unknown (auto) types, fall back to QoreSelectOperatorNode which returns
+    // the scalar directly when the input is not a list.
+    const QoreTypeInfo* input_type = getExprTypeInfo(select->getLeft());
+    if (input_type
+            && (QoreTypeInfo::isListType(input_type)
+                || QoreTypeInfo::getUniqueReturnClass(input_type) != nullptr)) {
+        // Native IR lowering with implicit argument context ($1, $#)
+        return lowerSelectNative(select, expr, error);
+    }
+
+    // Fall back to AST evaluation for scalars and auto-typed inputs
+    std::vector<QoreIRValue> operands;
+    return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, select->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerMapSelect(const QoreValue& expr, std::string& error) {

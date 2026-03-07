@@ -5167,6 +5167,15 @@ load_local_done:
                     }
                 }
                 QoreValue val = getIRValue(values, lval_inst->operands[0]);
+                // Hold an explicit reference to the RHS value through
+                // pre-invalidation.  clearLoadSlots below discards values[]
+                // entries for the target variable, which may include the RHS
+                // operand if it was loaded from the same variable (e.g.,
+                // h.b = h).  Without this extra ref, the hash's refcount
+                // drops to 1 before LValueHelper is created, so
+                // ensureUnique() thinks it's unique and skips the COW copy,
+                // creating a circular self-reference.
+                ValueHolder val_holder(val.refSelf(), xsink);
                 // Targeted pre-invalidation BEFORE the lvalue operation so that
                 // LValueHelper::ensureUnique() sees the variable's natural
                 // refcount and only triggers COW when truly necessary.
