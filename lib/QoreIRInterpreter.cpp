@@ -65,7 +65,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 343,
+static_assert(QORE_IR_MAX_OPCODE == 344,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -578,8 +578,93 @@ int QoreIRInterpreter::execStatement(QoreIROpcode op, const AbstractStatement* s
     return -1;
 }
 
-static inline QoreValue getIRValue(const std::vector<QoreValue>& values, QoreIRValue id) {
-    // values vector is pre-sized to max_value_id + 1 via resize(), so all valid
+// Thread-local call frame pool — eliminates per-call heap allocation by
+// recycling all per-call data structures across function calls.
+// After warm-up (first visit to each recursion depth), subsequent calls at
+// that depth reuse the same vectors/sets with retained capacity → zero malloc.
+// For recursive functions like fibonacci, this eliminates millions of
+// allocations that otherwise dominate execution time.
+struct IRCallFrame {
+    std::vector<QoreValue> values;
+    std::vector<uint32_t> cleanup;
+    std::vector<QoreValue> locals_slot_cache;
+    std::vector<LocalVarValue*> locals_lvar_cache;
+    std::unordered_set<const LocalVar*> instantiated_locals;
+    std::unordered_set<const LocalVar*> locally_uninstantiated;
+    std::vector<bool> locals_ir_only;
+    std::vector<bool> locals_instantiated;
+    std::vector<uint32_t> local_init_slots;
+    std::vector<std::vector<uint32_t>> local_load_slots;
+    std::vector<bool> load_slot_registered;
+    // Ephemeral weak ref slots: value slot IDs holding LoadSelfMember/LoadStaticVar
+    // results that must be discarded at statement boundaries to prevent long-running
+    // threads from holding references that block object destruction.
+    std::vector<uint32_t> ephemeral_weak_ref_slots;
+
+    // Reset all fields for reuse.  clear() retains capacity, so no heap
+    // allocation after the first call at each recursion depth.
+    void reset(size_t reserve_size, size_t local_slot_count) {
+        values.clear();
+        values.resize(reserve_size);
+        cleanup.clear();
+        if (local_slot_count > 0) {
+            locals_slot_cache.clear();
+            locals_slot_cache.resize(local_slot_count);
+            locals_lvar_cache.assign(local_slot_count, nullptr);
+            locals_ir_only.assign(local_slot_count, false);
+            locals_instantiated.assign(local_slot_count, false);
+            local_init_slots.assign(local_slot_count, UINT32_MAX);
+            local_load_slots.clear();
+            local_load_slots.resize(local_slot_count);
+        } else {
+            locals_slot_cache.clear();
+            locals_lvar_cache.clear();
+            locals_ir_only.clear();
+            locals_instantiated.clear();
+            local_init_slots.clear();
+            local_load_slots.clear();
+        }
+        load_slot_registered.assign(reserve_size, false);
+        instantiated_locals.clear();
+        locally_uninstantiated.clear();
+        ephemeral_weak_ref_slots.clear();
+    }
+};
+
+struct IRCallFramePool {
+    std::vector<std::unique_ptr<IRCallFrame>> frames;
+    size_t top = 0;
+
+    IRCallFrame& push(size_t reserve_size, size_t local_slot_count) {
+        if (top >= frames.size()) {
+            frames.push_back(std::make_unique<IRCallFrame>());
+        }
+        IRCallFrame& frame = *frames[top++];
+        frame.reset(reserve_size, local_slot_count);
+        return frame;
+    }
+
+    void pop() {
+        assert(top > 0);
+        --top;
+    }
+};
+
+static thread_local IRCallFramePool tl_frame_pool;
+
+// Lightweight wrapper around a std::vector<QoreValue> that provides operator[]
+// and size(), allowing it to be used as a drop-in replacement for
+// std::vector<QoreValue> in function signatures without changing call sites.
+struct IRValueSlots {
+    std::vector<QoreValue>& vec;
+
+    QoreValue& operator[](size_t i) { return vec[i]; }
+    const QoreValue& operator[](size_t i) const { return vec[i]; }
+    size_t size() const { return vec.size(); }
+};
+
+static inline QoreValue getIRValue(const IRValueSlots& values, QoreIRValue id) {
+    // values array is pre-sized to max_value_id + 1 via arena push, so all valid
     // IR value IDs are guaranteed in-bounds.  Skip bounds check on the hot path.
     assert(id.isValid() && id.id < values.size());
     return values[id.id];
@@ -594,18 +679,9 @@ static void removeCleanupEntry(std::vector<uint32_t>& cleanup, uint32_t id) {
     }
 }
 
-// Ensures the values vector is large enough to hold the given slot ID
-static inline void ensureValueSlotSize(std::vector<QoreValue>& values, uint32_t id) {
-    if (id >= values.size()) {
-        // Grow vector exponentially to amortize allocation cost
-        size_t new_size = std::max((size_t)(id + 1), values.size() * 2);
-        values.resize(new_size);
-    }
-}
-
 // Sets a value slot without discarding the previous value (for simple assignments like Const)
-static inline void setValueSlotDirect(std::vector<QoreValue>& values, uint32_t id, QoreValue new_val) {
-    // values vector is pre-sized via resize(); assert in-bounds
+static inline void setValueSlotDirect(IRValueSlots& values, uint32_t id, QoreValue new_val) {
+    // values array is pre-sized via arena push; assert in-bounds
     assert(id < values.size());
     values[id] = new_val;
 }
@@ -614,15 +690,15 @@ static inline void setValueSlotDirect(std::vector<QoreValue>& values, uint32_t i
 // Each slot holds a +1 reference (from new, refSelf, or call result), so
 // discarding on overwrite is safe — SSA guarantees the old value is from a
 // prior iteration and no longer needed by the current computation.
-static inline void setValueSlot(std::vector<QoreValue>& values,
+static inline void setValueSlot(IRValueSlots& values,
         uint32_t id, QoreValue new_val, ExceptionSink* xsink) {
-    // values vector is pre-sized via resize(); assert in-bounds
+    // values array is pre-sized via arena push; assert in-bounds
     assert(id < values.size());
     values[id].discard(xsink);
     values[id] = new_val;
 }
 
-static void cleanupValues(std::vector<QoreValue>& values, std::vector<uint32_t>& cleanup,
+static void cleanupValues(IRValueSlots& values, std::vector<uint32_t>& cleanup,
         ExceptionSink* xsink, bool no_throw, std::vector<std::string>* cleanup_log) {
     // Iterate in reverse (LIFO) to clean up the latest values first.
     // Duplicate IDs in cleanup are safe: after the first discard, values[id]
@@ -817,7 +893,7 @@ static void updateLocalVarFromLvalue(
     }
 }
 
-static QoreListNode* buildArgList(const std::vector<QoreValue>& values,
+static QoreListNode* buildArgList(const IRValueSlots& values,
         const std::vector<QoreIRValue>& operands, size_t start_index, ExceptionSink* xsink) {
     QoreListNode* args = new QoreListNode(autoTypeInfo);
     qore_list_private* priv = qore_list_private::get(*args);
@@ -842,7 +918,7 @@ static QoreListNode* buildArgList(const std::vector<QoreValue>& values,
 // computed value as the result.  Using evalBinary with the operand values returns
 // the correct computed value.
 static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
-        const std::vector<QoreValue>& values, ExceptionSink* xsink) {
+        const IRValueSlots& values, ExceptionSink* xsink) {
     QoreIROpcode op = inv->invoke_opcode;
     switch (op) {
         // Unary computation opcodes
@@ -854,7 +930,8 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
         case QoreIROpcode::UnaryMinusFloat:
         case QoreIROpcode::UnaryMinusAny:
         case QoreIROpcode::ExistsAny:
-        case QoreIROpcode::ExistsBool: {
+        case QoreIROpcode::ExistsBool:
+        case QoreIROpcode::IsCollectionType: {
             QoreValue val = inv->operands.empty() ? QoreValue() : getIRValue(values, inv->operands[0]);
             return QoreIRInterpreter::evalUnary(op, val, xsink);
         }
@@ -1565,51 +1642,35 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         return false;
     }
 #endif
-    // Use vector for IR value slots for O(1) direct index access instead of O(1) hash lookup
-    // QoreIRFunction assigns IDs sequentially starting from 1, so vector[id] is direct access
-    std::vector<QoreValue> values;
-    // Pre-size the values vector so all valid IR value IDs are in-bounds.
-    // This eliminates per-instruction bounds checks in getIRValue/setValueSlot.
+    // Grab a pooled call frame from the thread-local pool.  After warm-up, this
+    // reuses an existing frame (clear+resize only, no heap allocation) — critical
+    // for recursive functions like fibonacci where millions of calls would otherwise
+    // malloc/free a dozen vectors per invocation.
     size_t reserve_size = func.max_value_id > 0 ? func.max_value_id + 1 : 128;
-    values.resize(reserve_size);
-    std::vector<uint32_t> cleanup;
-
-    // Use local_var_slots.size() (= number of slots assigned, i.e. next_local_slot) to correctly
-    // handle the case where max_local_slot_id == 0 (exactly one local with slot_id=0).
-    // Must be computed before locals_slot_cache/locals_lvar_cache which depend on it.
     size_t local_slot_count = func.local_var_slots.size();
+    IRCallFrame& frame = tl_frame_pool.push(reserve_size, local_slot_count);
+    // RAII guard: return the frame to the pool on any exit path
+    struct FrameGuard {
+        ~FrameGuard() { tl_frame_pool.pop(); }
+    } frame_guard;
 
-    // Flat array for fast local variable cache access
-    // Maps slot IDs to cached values for O(1) direct array access (vs hash lookup)
-    // This is the primary (and only) local variable cache for the IR interpreter
-    std::vector<QoreValue> locals_slot_cache;
-    if (local_slot_count > 0) {
-        locals_slot_cache.resize(local_slot_count);
-    }
-
-    // Cache of LocalVarValue* pointers for direct write-through to TLS variables.
-    // Populated lazily on first access; avoids repeated thread_find_lvar() TLS lookups
-    // in tight loops (fused opcodes: AddAssignLocalInt, IncrementLocalInt, StoreLocal).
-    // Pointers are stable during function execution (TLS stack is LIFO, single-threaded
-    // for non-closure locals). Cleared whenever cleanupLocalCaches() is called.
-    std::vector<LocalVarValue*> locals_lvar_cache;
-    if (local_slot_count > 0) {
-        locals_lvar_cache.resize(local_slot_count, nullptr);
-    }
-
-    std::unordered_set<const LocalVar*> instantiated_locals;
-    // Track pre_instantiated variables that have been explicitly uninstantiated by
-    // UninstantiateLocal during execution (e.g., loop-scope variables).
-    // These must be re-instantiated by ensureLocalInstantiated on next use, even though
-    // they appear in pre_instantiated (the caller won't re-instantiate them per-iteration).
-    std::unordered_set<const LocalVar*> locally_uninstantiated;
+    IRValueSlots values{frame.values};
+    auto& cleanup = frame.cleanup;
+    auto& locals_slot_cache = frame.locals_slot_cache;
+    auto& locals_lvar_cache = frame.locals_lvar_cache;
+    auto& instantiated_locals = frame.instantiated_locals;
+    auto& locally_uninstantiated = frame.locally_uninstantiated;
+    auto& locals_ir_only = frame.locals_ir_only;
+    auto& locals_instantiated = frame.locals_instantiated;
+    auto& local_init_slots = frame.local_init_slots;
+    auto& local_load_slots = frame.local_load_slots;
+    auto& load_slot_registered = frame.load_slot_registered;
 
     // Precompute bitmask of IR-only local slots.  After function calls (without
     // reference args), only non-IR-only slots need cache invalidation because callees
     // can access non-IR-only locals through the TLS variable stack (Qore's scoping
     // allows inner functions to access outer locals).  IR-only locals exist only in
     // the slot cache and cannot be accessed through TLS, so they stay valid.
-    std::vector<bool> locals_ir_only(local_slot_count, false);
     bool has_non_ir_only_locals = false;
     for (auto& [lvar, sid] : func.local_var_slots) {
         if (lvar && sid < local_slot_count) {
@@ -1620,21 +1681,6 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             }
         }
     }
-
-    // Fast O(1) instantiation check indexed by slot_id.
-    // Mirrors instantiated_locals but avoids hash lookups for variables with valid slot_ids.
-    // Must be kept in sync with instantiated_locals + locally_uninstantiated.
-    std::vector<bool> locals_instantiated(local_slot_count, false);
-    std::vector<uint32_t> local_init_slots(local_slot_count, UINT32_MAX);
-    // Track value slots from LoadLocal instructions for each LocalVar.
-    // When UninstantiateLocal fires, these slots must be cleaned up so the
-    // block-scoped object's refcount drops to zero and its destructor runs
-    // immediately — not deferred to function exit via cleanupValues().
-    // Indexed by slot_id for O(1) access
-    std::vector<std::vector<uint32_t>> local_load_slots(local_slot_count);
-    // Bitmap: has result.id already been registered in local_load_slots?
-    // Converts O(n) std::find to O(1) check on the LoadLocal hot path.
-    std::vector<bool> load_slot_registered(reserve_size, false);
     std::unordered_map<const void*, QoreValue> globals;
     std::unordered_map<const void*, QoreValue> threadlocals;
     std::unordered_map<const void*, QoreValue> closures;
@@ -1918,7 +1964,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // Fix: discard these "ephemeral" values at statement boundaries (line changes).
     // Uses a vector (not set) — duplicates are harmless (discard on NOTHING is a no-op)
     // and 0-2 entries per statement makes linear scan faster than hash table overhead.
-    std::vector<uint32_t> ephemeral_weak_ref_slots;
+    auto& ephemeral_weak_ref_slots = frame.ephemeral_weak_ref_slots;
     int last_ephemeral_line = -1;
 
     while (block) {
@@ -4874,7 +4920,8 @@ load_local_done:
             case QoreIROpcode::UnaryMinusFloat:
             case QoreIROpcode::UnaryMinusAny:
             case QoreIROpcode::ExistsAny:
-            case QoreIROpcode::ExistsBool: {
+            case QoreIROpcode::ExistsBool:
+            case QoreIROpcode::IsCollectionType: {
                 if (inst->operands.size() < 1) {
                     if (xsink) {
                         xsink->raiseException("IR-EXEC-ERROR", "unary op missing operand");
@@ -6599,6 +6646,10 @@ QoreValue QoreIRInterpreter::evalUnary(QoreIROpcode op, const QoreValue& value, 
         case QoreIROpcode::ExistsAny:
         case QoreIROpcode::ExistsBool:
             return QoreValue(!value.isNothing());
+        case QoreIROpcode::IsCollectionType: {
+            qore_type_t t = value.getType();
+            return QoreValue(t == NT_LIST || t == NT_OBJECT);
+        }
         default:
             break;
     }

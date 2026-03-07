@@ -386,6 +386,7 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::AddAssignLocalInt: return "add.assign.local.int";
         case QoreIROpcode::IncrementLocalInt: return "increment.local.int";
         case QoreIROpcode::BranchIfLtLocalInt: return "br.if.lt.local.int";
+        case QoreIROpcode::IsCollectionType: return "is.collection.type";
     }
     return "unknown";
 }
