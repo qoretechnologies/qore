@@ -1218,7 +1218,7 @@ struct qore_httpclient_priv {
         // Send CONNECTION_CLOSE for graceful shutdown (best-effort, non-blocking).
         // The UDP socket is connect()-ed, so send() works without specifying the peer.
         if (quic_session && quic_fd >= 0) {
-            uint8_t close_buf[1280];
+            static thread_local uint8_t close_buf[1280];
             ssize_t nwrite = quic_session->writeConnectionClose(close_buf, sizeof(close_buf));
             if (nwrite > 0) {
                 // Best-effort: ignore send errors (fd may already be invalid)
@@ -5886,10 +5886,11 @@ int qore_httpclient_priv::connectQuic(ExceptionSink* xsink, con_info& connection
 
         if (pr > 0 && (pfd.revents & POLLIN)) {
             // Drain all available packets (not just one), matching driveQuicIo pattern
-            // Buffers declared outside the loop to reduce stack frame churn
-            uint8_t buf[QUIC_RECV_BUF_SIZE];
-            struct sockaddr_storage peer_addr;
-            uint8_t cmsg_buf[QUIC_CMSG_BUF_SIZE];
+            // Thread-local to avoid ~2.3KB stack pressure that triggers stack
+            // protector failures under GCC 15+ on ARM64
+            static thread_local uint8_t buf[QUIC_RECV_BUF_SIZE];
+            static thread_local struct sockaddr_storage peer_addr;
+            static thread_local uint8_t cmsg_buf[QUIC_CMSG_BUF_SIZE];
             while (true) {
                 socklen_t peer_addrlen = sizeof(peer_addr);
                 size_t cmsg_len = sizeof(cmsg_buf);
@@ -6066,10 +6067,11 @@ static int driveQuicIo(QuicSession* session, int fd,
 
     if (pr > 0 && (pfd.revents & POLLIN)) {
         // Drain all available packets (not just one)
-        // Buffers declared outside the loop to reduce stack frame churn
-        uint8_t buf[QUIC_RECV_BUF_SIZE];
-        struct sockaddr_storage peer_addr;
-        uint8_t cmsg_buf[QUIC_CMSG_BUF_SIZE];
+        // Thread-local to avoid ~2.3KB stack pressure that triggers stack
+        // protector failures under GCC 15+ on ARM64
+        static thread_local uint8_t buf[QUIC_RECV_BUF_SIZE];
+        static thread_local struct sockaddr_storage peer_addr;
+        static thread_local uint8_t cmsg_buf[QUIC_CMSG_BUF_SIZE];
         while (true) {
             socklen_t peer_addrlen = sizeof(peer_addr);
             size_t cmsg_len = sizeof(cmsg_buf);
