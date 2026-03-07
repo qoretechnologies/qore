@@ -2528,6 +2528,16 @@ public class HttpAsyncSocketIoController {
         # send operation which would conflict with h2op's non-blocking mode management.
         if (result.code && !result.streaming) {
             try {
+                # Convert send_callback to InputStream for HTTP/2 (send_callback is
+                # HTTP/1.x chunked-only; HTTP/2 uses DATA frames via InputStream)
+                if (result.send_callback && !result.input_stream) {
+                    auto cb = result.send_callback;
+                    result.input_stream = new HttpServer::CallbackInputStream(
+                        auto sub() { return cb(); }, cinfo.sock);
+                    remove result.send_callback;
+                    remove result.hdr."Transfer-Encoding";
+                }
+
                 # Try to submit InputStream to I/O thread; C++ enforces isIoThreadSafe()
                 # and returns 1 if not safe (no headers sent yet), so we fall through
                 # to handler-thread streaming

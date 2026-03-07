@@ -1606,15 +1606,23 @@ public class AbstractStreamRequest {
             # the InputStream in arbitrary block sizes.
             rv.no_content_encoding = True;
             if (cx."header-info".http2) {
-                # HTTP/2: buffer all chunks and send as a single response body.
-                # HTTP/2 DATA frames do not preserve per-chunk boundaries, and the DataStream
-                # receiver expects either per-chunk delivery (HTTP/1.x) or a complete body (HTTP/2).
                 remove rv.hdr."Transfer-Encoding";
-                binary buf;
-                while (*data chunk = send()) {
-                    buf += binary(chunk);
+                if (rv.hdr."Content-Type" =~ /^application\/connect\+/) {
+                    # Connect protocol: frames are self-describing (5-byte length prefix),
+                    # so per-chunk boundaries are not needed. Stream via CallbackInputStream
+                    # + HTTP/2 DATA frames for true streaming without buffering.
+                    AbstractStreamRequest stream_ref = self;
+                    rv.body = new CallbackInputStream(auto sub() { return stream_ref.send(); }, self);
+                } else {
+                    # DataStream v1: relies on per-chunk boundaries for YAML record parsing.
+                    # Buffer all chunks and send as a single response body since HTTP/2 DATA
+                    # frames do not preserve per-chunk boundaries.
+                    binary buf;
+                    while (*data chunk = send()) {
+                        buf += binary(chunk);
+                    }
+                    rv.body = buf;
                 }
-                rv.body = buf;
             } else {
                 # HTTP/1.x: set callback for the response-sending code to use with
                 # sendHTTPResponseWithCallback, preserving per-chunk record boundaries.

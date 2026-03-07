@@ -917,7 +917,11 @@ public namespace RestHandler {
                 rethrow;
             }
             try {
-                RestStreamRequest req(rsh, listener, rh, s, cx, cx.hdr, cx.hdr."content-length" ? cx.body : NOTHING);
+                # For HTTP/2/3 with Connect protocol, the body was pre-read and saved
+                # in cx."stream-body" (bypassing REST parseRequest deserialization).
+                # For HTTP/1.x, the body is only available if content-length was set.
+                *data sb = cx."stream-body" ?? (cx.hdr."content-length" ? cx.body : NOTHING);
+                RestStreamRequest req(rsh, listener, rh, s, cx, cx.hdr, sb);
                 return req.handleRequest();
             } catch (hash<ExceptionInfo> ex) {
                 # make sure the error is registered with the stream handler
@@ -1317,6 +1321,16 @@ public namespace RestHandler {
 
             auto body = b;
 
+            # For Connect protocol (DataStream 2.0), the body is Connect-framed binary data
+            # that will be processed by the stream handler. Don't pass it to parseRequest
+            # for deserialization — the REST validator doesn't know how to parse Connect frames.
+            # This is analogous to HTTP/1.x chunked streams where the body is not pre-read.
+            *data stream_body;
+            if (b && hdr."content-type" =~ /^application\/connect\+/) {
+                stream_body = b;
+                body = NOTHING;
+            }
+
             # get rest class name
             string path = cx.url.path ?? "";
 
@@ -1324,8 +1338,8 @@ public namespace RestHandler {
 
             hash<RestRequestServerInfo> req;
             try {
-                if (b) {
-                    string bstr = maskData(b.typeCode() == NT_STRING ? trim(b) : sprintf("%y", b));
+                if (body) {
+                    string bstr = maskData(body.typeCode() == NT_STRING ? trim(body) : sprintf("%y", body));
                     logDebug("REST DBG: body: %s", bstr);
                 }
 
@@ -1455,6 +1469,7 @@ public namespace RestHandler {
                 "body": body,
                 "aih": aih,
                 "orig-request-body": b,
+                "stream-body": stream_body,
                 "rest_api_path": ah.method,
             };
 
