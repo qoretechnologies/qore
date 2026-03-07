@@ -5099,6 +5099,28 @@ try {
             string result = trim(runScript(closure_trycatch, mode));
             assertEq("DIVISION-BY-ZERO", result, sprintf("closure trycatch %s", mode));
         }
+
+        # Test closure-over-loop-variable: each closure must capture its own iteration value
+        # (regression: IR/JIT shared a single CVV across iterations, all closures saw last value)
+        string closure_over_loop_var = "%modern
+list<code> closures = ();
+for (int i = 0; i < 5; ++i) {
+    int captured = i;
+    closures += int sub() { return captured; };
+}
+list<int> results = map $1(), closures;
+bool ok = True;
+for (int i = 0; i < 5; ++i) {
+    if (results[i] != i) {
+        ok = False;
+    }
+}
+printf(\"%s\\n\", ok ? \"PASS\" : \"FAIL\");
+";
+        foreach string mode in ("ast", "ir", "tiered", "jit") {
+            string result = trim(runScript(closure_over_loop_var, mode));
+            assertEq("PASS", result, sprintf("closure over loop variable %s", mode));
+        }
     }
 
     testDotEvalMethodFastCall() {

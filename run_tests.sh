@@ -170,6 +170,9 @@ if [ -n "$BUILD_MODULE_DIRS" ]; then
 else
     export QORE_MODULE_DIR=./qlib:$QORE_MODULE_DIR
 fi
+# Export build qore binary path so that tests spawning sub-processes (via backquote, etc.)
+# use the same build binary rather than the system-installed qore.
+export QORE_EXECUTABLE="$QORE"
 
 if [ $MEASURE_TIME -eq 1 ]; then
     # Test time commands.

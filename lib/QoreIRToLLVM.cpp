@@ -654,6 +654,7 @@ void QoreIRToLLVM::collectLocals(const QoreIRFunction& func) {
     instantiated_non_entry_locals.clear();
     block_scoped_locals.clear();
     local_cleanup_allocas.clear();
+    closure_pre_inst_flags.clear();
 
     // First pass: identify block-scoped locals (those with explicit UninstantiateLocal)
     for (const auto& block : func.blocks) {
@@ -899,6 +900,27 @@ void QoreIRToLLVM::preCreateLocalAllocas(llvm::Module& module, llvm::Function* l
         }
         local_allocas[key] = alloca;
     }
+
+    // Create i1 flag allocas for pre-instantiated closure-use block-scoped locals.
+    // These track whether the CVV is currently on the cvstack:
+    //   true  = instantiated (normal state and evalTiered's initial pre-instantiation)
+    //   false = popped by UninstantiateLocal (needs re-push before next StoreLocal or exit)
+    if (!aot_mode && pre_instantiated_locals) {
+        llvm::Type* i1_type = llvm::Type::getInt1Ty(module.getContext());
+        for (LocalVar* var : function_locals) {
+            auto key = reinterpret_cast<const void*>(var);
+            if (pre_instantiated_locals->count(key)
+                    && block_scoped_locals.count(key)
+                    && var->closureUse()
+                    && !ir_only_body_locals.count(key)) {
+                llvm::AllocaInst* flag = alloca_builder.CreateAlloca(i1_type, nullptr,
+                        "closure_pre_inst_active");
+                // Starts as true: evalTiered pre-instantiated this var before execute()
+                alloca_builder.CreateStore(llvm::ConstantInt::get(i1_type, 1), flag);
+                closure_pre_inst_flags[key] = flag;
+            }
+        }
+    }
 }
 
 void QoreIRToLLVM::emitLocalUninstantiation(llvm::Module& module) {
@@ -934,6 +956,38 @@ void QoreIRToLLVM::emitLocalUninstantiation(llvm::Module& module) {
     }
 }
 
+void QoreIRToLLVM::emitPreInstClosureReInstantiation(llvm::Module& module) {
+    if (closure_pre_inst_flags.empty()) {
+        return;
+    }
+    // For each pre-instantiated closure-use block-scoped local whose CVV was popped
+    // mid-execution (flag == false), push an empty CVV so evalTiered's cleanup can
+    // pop exactly one CVV per var (maintaining the cvstack invariant).
+    llvm::Function* func = builder->GetInsertBlock()->getParent();
+    llvm::Type* i1_type = llvm::Type::getInt1Ty(module.getContext());
+    auto inst_helper = module.getOrInsertFunction("qore_rt_instantiate_local",
+            llvm::FunctionType::get(void_type, {ptr_type}, false));
+
+    for (auto& [key, flag] : closure_pre_inst_flags) {
+        llvm::Value* is_active = builder->CreateLoad(i1_type, flag);
+        // If active, no re-instantiation needed
+        llvm::BasicBlock* skip_block = llvm::BasicBlock::Create(
+                module.getContext(), "closure_reinst_skip", func);
+        llvm::BasicBlock* reinst_block = llvm::BasicBlock::Create(
+                module.getContext(), "closure_reinst_exit", func);
+        builder->CreateCondBr(is_active, skip_block, reinst_block);
+
+        builder->SetInsertPoint(reinst_block);
+        llvm::Value* var_ptr = llvm::ConstantInt::get(i64_type,
+                reinterpret_cast<uint64_t>(key));
+        llvm::Value* var_as_ptr = builder->CreateIntToPtr(var_ptr, ptr_type);
+        builder->CreateCall(inst_helper, {var_as_ptr});
+        builder->CreateBr(skip_block);
+
+        builder->SetInsertPoint(skip_block);
+    }
+}
+
 void QoreIRToLLVM::emitOnBlockExitExec(llvm::Module& module) {
     if (!obe_saved_count) {
         return;
@@ -944,6 +998,11 @@ void QoreIRToLLVM::emitOnBlockExitExec(llvm::Module& module) {
 }
 
 void QoreIRToLLVM::emitPreinstantiatedCleanup(llvm::Module& module) {
+    // Re-instantiate closure-use pre-instantiated block-scoped locals that were popped
+    // mid-execution (e.g. loop-body closure captures) so evalTiered's cleanup can pop
+    // exactly one CVV per var.  Must happen before function return.
+    emitPreInstClosureReInstantiation(module);
+
     auto helper = module.getOrInsertFunction("qore_rt_decref",
             llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
 
@@ -1043,6 +1102,17 @@ void QoreIRToLLVM::reloadLocalFromRuntime(const void* key, llvm::Module& module,
     // Skip IR-only locals — they are never modified by AST callbacks,
     // so their LLVM alloca cache is always current.
     if (ir_only_locals_set && ir_only_locals_set->count(key)) {
+        return;
+    }
+
+    // Skip closure-use variables — their allocas are never read by LoadLocal
+    // (which always calls qore_rt_load_local() for closure vars directly).
+    // Reloading them is unnecessary and dangerous: block-scoped closure-use
+    // vars (like loop-body `int captured`) have their CVV popped by
+    // UninstantiateLocal mid-function, so calling qore_rt_load_local() at a
+    // reload point after that pop would crash (null CVV).
+    const LocalVar* var_ptr = reinterpret_cast<const LocalVar*>(key);
+    if (var_ptr && var_ptr->closureUse()) {
         return;
     }
 
@@ -2863,6 +2933,32 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // Sync to Qore thread-local variable stack so AST callbacks can resolve this local.
             // Skip sync for IR-only locals — they are never accessed by AST callbacks.
             if (linst->local && !is_ir_only) {
+                // For closure-captured pre-instantiated block-scoped locals (loop-body vars):
+                // the CVV may have been popped by a previous UninstantiateLocal.  Re-instantiate
+                // (push fresh CVV) before assigning so qore_rt_assign_local finds it on the stack.
+                auto flag_it = closure_pre_inst_flags.find(key);
+                if (!aot_mode && flag_it != closure_pre_inst_flags.end()) {
+                    llvm::Type* i1_type = llvm::Type::getInt1Ty(module.getContext());
+                    llvm::Value* is_active = builder->CreateLoad(i1_type, flag_it->second);
+                    llvm::BasicBlock* need_reinst = llvm::BasicBlock::Create(
+                            module.getContext(), "closure_reinst_store", llvm_func);
+                    llvm::BasicBlock* after_reinst = llvm::BasicBlock::Create(
+                            module.getContext(), "after_closure_reinst", llvm_func);
+                    builder->CreateCondBr(is_active, after_reinst, need_reinst);
+
+                    builder->SetInsertPoint(need_reinst);
+                    auto inst_helper = module.getOrInsertFunction("qore_rt_instantiate_local",
+                            llvm::FunctionType::get(void_type, {ptr_type}, false));
+                    llvm::Value* var_ptr_inst = llvm::ConstantInt::get(i64_type,
+                            reinterpret_cast<uint64_t>(linst->local));
+                    llvm::Value* var_as_ptr_inst = builder->CreateIntToPtr(var_ptr_inst, ptr_type);
+                    builder->CreateCall(inst_helper, {var_as_ptr_inst});
+                    builder->CreateStore(llvm::ConstantInt::get(i1_type, 1), flag_it->second);
+                    builder->CreateBr(after_reinst);
+
+                    builder->SetInsertPoint(after_reinst);
+                }
+
                 // For complex-typed locals, use no-coerce variant because coercion was already
                 // applied above via qore_rt_coerce_value. This avoids double-coercion.
                 const char* aot_helper_name = is_complex_typed ? "qore_rt_assign_local_no_coerce_aot"
@@ -2956,19 +3052,53 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 // (fast call path skips instantiation when areAllBodyLocalsIROnly()),
                 // so there is nothing to clear on the runtime stack.
                 if (!ir_only_body_locals.count(key)) {
-                    if (aot_mode) {
-                        auto clear_helper = module.getOrInsertFunction("qore_rt_clear_local_aot",
-                                llvm::FunctionType::get(void_type, {ptr_type, i32_type, ptr_type}, false));
-                        int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
-                        builder->CreateCall(clear_helper, {aot_ctx_arg,
-                                llvm::ConstantInt::get(i32_type, slot), xsink_arg});
+                    if (linst->is_closure) {
+                        // Closure-captured pre-instantiated loop variables: pop the old
+                        // ClosureVarValue (giving each iteration an independent binding so
+                        // closures capture their own CVV).  We do NOT push a fresh CVV here.
+                        // - The next iteration's StoreLocal (via closure_pre_inst_flags check)
+                        //   will re-push when needed.
+                        // - emitPreInstClosureReInstantiation at function exit re-pushes any
+                        //   remaining popped CVVs so evalTiered cleanup can pop one per var.
+                        if (aot_mode) {
+                            auto uninst_helper = module.getOrInsertFunction("qore_rt_uninstantiate_local_aot",
+                                    llvm::FunctionType::get(void_type, {ptr_type, i32_type, ptr_type}, false));
+                            int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
+                            builder->CreateCall(uninst_helper, {aot_ctx_arg,
+                                    llvm::ConstantInt::get(i32_type, slot), xsink_arg});
+                            // AOT mode: no re-instantiation (AOT doesn't use evalTiered
+                            // pre-instantiation for body locals, so no stack invariant to maintain)
+                        } else {
+                            auto uninst_helper = module.getOrInsertFunction("qore_rt_uninstantiate_local",
+                                    llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false));
+                            llvm::Value* var_ptr = llvm::ConstantInt::get(i64_type,
+                                    reinterpret_cast<uint64_t>(linst->local));
+                            llvm::Value* var_as_ptr = builder->CreateIntToPtr(var_ptr, ptr_type);
+                            builder->CreateCall(uninst_helper, {var_as_ptr, xsink_arg});
+                            // Clear the is_active flag so emitPreInstClosureReInstantiation and
+                            // StoreLocal know to re-instantiate before next use.
+                            auto flag_it = closure_pre_inst_flags.find(key);
+                            if (flag_it != closure_pre_inst_flags.end()) {
+                                llvm::Type* i1_type = llvm::Type::getInt1Ty(module.getContext());
+                                builder->CreateStore(
+                                        llvm::ConstantInt::get(i1_type, 0), flag_it->second);
+                            }
+                        }
                     } else {
-                        auto clear_helper = module.getOrInsertFunction("qore_rt_clear_local",
-                                llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false));
-                        llvm::Value* var_ptr = llvm::ConstantInt::get(i64_type,
-                                reinterpret_cast<uint64_t>(linst->local));
-                        llvm::Value* var_as_ptr = builder->CreateIntToPtr(var_ptr, ptr_type);
-                        builder->CreateCall(clear_helper, {var_as_ptr, xsink_arg});
+                        if (aot_mode) {
+                            auto clear_helper = module.getOrInsertFunction("qore_rt_clear_local_aot",
+                                    llvm::FunctionType::get(void_type, {ptr_type, i32_type, ptr_type}, false));
+                            int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
+                            builder->CreateCall(clear_helper, {aot_ctx_arg,
+                                    llvm::ConstantInt::get(i32_type, slot), xsink_arg});
+                        } else {
+                            auto clear_helper = module.getOrInsertFunction("qore_rt_clear_local",
+                                    llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false));
+                            llvm::Value* var_ptr = llvm::ConstantInt::get(i64_type,
+                                    reinterpret_cast<uint64_t>(linst->local));
+                            llvm::Value* var_as_ptr = builder->CreateIntToPtr(var_ptr, ptr_type);
+                            builder->CreateCall(clear_helper, {var_as_ptr, xsink_arg});
+                        }
                     }
                 }
 

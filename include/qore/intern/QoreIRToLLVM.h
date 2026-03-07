@@ -181,6 +181,14 @@ private:
     // (block-scoped locals that need mid-function destruction)
     std::unordered_set<const void*> block_scoped_locals;
 
+    // For pre-instantiated closure-use block-scoped locals (loop-body closure captures):
+    // i1 alloca flags tracking whether the CVV is currently on the cvstack.
+    // Initialized to true (evalTiered pre-instantiates them).  Cleared to false by
+    // UninstantiateLocal (pop-only).  Set to true by StoreLocal (conditional re-push).
+    // Used by emitPreInstClosureReInstantiation() at function exit to re-push any
+    // remaining popped CVVs so evalTiered's cleanup can pop exactly one per variable.
+    std::unordered_map<const void*, llvm::AllocaInst*> closure_pre_inst_flags;
+
     // Track which value IDs already contain NaN-boxed i64 (from Invoke, Call, CatchException,
     // make_string, .any ops, LoadLocal).  Values NOT in this set are raw typed values.
     std::unordered_set<uint32_t> nanboxed_values;
@@ -349,6 +357,11 @@ private:
 
     // Emit qore_rt_decref calls for pre-instantiated local entry loads
     void emitPreinstantiatedCleanup(llvm::Module& module);
+
+    // Conditionally re-instantiate pre-instantiated closure-use block-scoped locals
+    // that were popped mid-execution (e.g. loop-body closure captures).  Called at
+    // every function exit point so evalTiered's cleanup can pop exactly one CVV per var.
+    void emitPreInstClosureReInstantiation(llvm::Module& module);
 
     // Emit qore_rt_decref calls for tracked runtime call results
     void emitInvokeCleanup(llvm::Module& module);

@@ -685,13 +685,20 @@ static void ensureLocalInstantiated(LocalVar* var, std::unordered_set<const Loca
     }
     if (locals.insert(var).second) {
         // Pre-instantiated variables (params, argvid, selfid, ast_visible_body_locals)
-        // are already on the thread-local stack from evalTiered and must never be
-        // re-instantiated by the IR interpreter.  When UninstantiateLocal processes a
-        // pre-instantiated variable (e.g., at the end of a loop iteration), it only
-        // clears the value (clearValue/del) without popping the stack entry, so the
-        // entry remains on the stack for reuse on the next iteration.
-        bool skip_instantiation = pre_instantiated
-            && pre_instantiated->find(var) != pre_instantiated->end();
+        // are already on the thread-local stack from evalTiered.  We skip re-instantiation
+        // UNLESS the variable was explicitly uninstantiated mid-execution (e.g., a
+        // closure-use loop-body variable whose CVV was popped by UninstantiateLocal at
+        // the end of the previous loop iteration).  In that case we MUST re-instantiate
+        // so the current iteration has a fresh CVV to capture.
+        bool locally_uninst = locally_uninstantiated && locally_uninstantiated->count(var);
+        bool is_pre = pre_instantiated && pre_instantiated->count(var) > 0;
+        // For pre-instantiated closure-use vars explicitly uninstantiated: need new CVV
+        // (the old CVV was popped by UninstantiateLocal, so we must push a fresh one for
+        //  the next loop iteration to capture a unique binding).
+        // For pre-instantiated non-closure vars explicitly uninstantiated: the LVV stays
+        //  on the lvstack (UninstantiateLocal only del()'d the value), so do NOT push
+        //  another one — that would create a double-push and make locals_lvar_cache stale.
+        bool skip_instantiation = is_pre && !(locally_uninst && var->closureUse());
 
         if (!skip_instantiation) {
             var->instantiate(QoreParseOptions());
@@ -1728,7 +1735,22 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // Helper to clear all variable caches (slot cache, globals, threadlocals, closures)
     // after AST function/method calls. The calls may have modified any of these variable types,
     // so all caches must be invalidated to force re-read from the runtime stack on next access.
+    // Also re-instantiates pre-instantiated closure vars that were popped mid-execution
+    // (e.g. loop-body closure-capture vars whose CVV was popped by UninstantiateLocal) so that
+    // evalTiered's cleanup can pop exactly one CVV per ast_visible_body_locals var.
     auto cleanupLocalCaches = [&]() {
+        // Re-instantiate pre-instantiated closure vars still in locally_uninstantiated.
+        // evalTiered pushes exactly one CVV per ast_visible_body_locals var and pops exactly
+        // one on cleanup — we must leave one CVV on the cvstack at execute() exit.
+        if (pre_instantiated && !locally_uninstantiated.empty()) {
+            for (const LocalVar* lv : locally_uninstantiated) {
+                if (pre_instantiated->count(lv) && lv->closureUse()) {
+                    const_cast<LocalVar*>(lv)->instantiate(QoreParseOptions());
+                }
+            }
+            // Clear to prevent double-instantiation if cleanupLocalCaches is called again.
+            locally_uninstantiated.clear();
+        }
         for (size_t i = 0; i < locals_slot_cache.size(); ++i) {
             locals_slot_cache[i].discard(xsink);
             locals_slot_cache[i] = QoreValue();
@@ -4110,19 +4132,19 @@ load_local_done:
                         // Drop value slot references (init + load slots)
                         cleanupLocalSlots(local_inst->slot_id);
 
-                        // lvar->del() / cvv->clearValue() is the FINAL deref that
+                        // lvar->del() / cvv uninstantiate is the FINAL deref that
                         // triggers the destructor.  After this call, invalidate the
                         // globals cache since the destructor runs AST code.
-                        // For closure-captured locals: only clear the value if no
-                        // closures still hold references (references == 1 means only
-                        // the cvstack entry remains).  When references > 1, closures
-                        // may still need the value (e.g., submitted to a thread pool).
+                        // For closure-captured pre-instantiated locals (e.g. loop body
+                        // vars): pop the old ClosureVarValue (giving each iteration an
+                        // independent CVV so closures capture their own binding, not the
+                        // shared last value).  We do NOT push a fresh CVV here; the next
+                        // iteration's ensureLocalInstantiated will re-push when first
+                        // accessed (because locally_uninstantiated is set above).
+                        // At function exit, cleanupLocalCaches() re-pushes an empty CVV
+                        // for evalTiered's cleanup to pop (maintaining the stack invariant).
                         if (local_inst->is_closure) {
-                            ClosureVarValue* cvv = thread_find_closure_var(
-                                local_inst->local->getName());
-                            if (cvv && cvv->references.load(std::memory_order_acquire) == 1) {
-                                cvv->clearValue(xsink);
-                            }
+                            local_inst->local->uninstantiate(xsink);
                         } else {
                             LocalVarValue* lvar = thread_find_lvar(local_inst->local->getName());
                             if (lvar) {
