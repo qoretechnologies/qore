@@ -5886,11 +5886,12 @@ int qore_httpclient_priv::connectQuic(ExceptionSink* xsink, con_info& connection
 
         if (pr > 0 && (pfd.revents & POLLIN)) {
             // Drain all available packets (not just one), matching driveQuicIo pattern
+            // Buffers declared outside the loop to reduce stack frame churn
+            uint8_t buf[QUIC_RECV_BUF_SIZE];
+            struct sockaddr_storage peer_addr;
+            uint8_t cmsg_buf[QUIC_CMSG_BUF_SIZE];
             while (true) {
-                uint8_t buf[QUIC_RECV_BUF_SIZE];
-                struct sockaddr_storage peer_addr;
                 socklen_t peer_addrlen = sizeof(peer_addr);
-                uint8_t cmsg_buf[QUIC_CMSG_BUF_SIZE];
                 size_t cmsg_len = sizeof(cmsg_buf);
                 ssize_t nread = recvQuicPacket(quic_fd, buf, sizeof(buf), MSG_DONTWAIT,
                     reinterpret_cast<struct sockaddr*>(&peer_addr), &peer_addrlen,
@@ -6065,11 +6066,12 @@ static int driveQuicIo(QuicSession* session, int fd,
 
     if (pr > 0 && (pfd.revents & POLLIN)) {
         // Drain all available packets (not just one)
+        // Buffers declared outside the loop to reduce stack frame churn
+        uint8_t buf[QUIC_RECV_BUF_SIZE];
+        struct sockaddr_storage peer_addr;
+        uint8_t cmsg_buf[QUIC_CMSG_BUF_SIZE];
         while (true) {
-            uint8_t buf[QUIC_RECV_BUF_SIZE];
-            struct sockaddr_storage peer_addr;
             socklen_t peer_addrlen = sizeof(peer_addr);
-            uint8_t cmsg_buf[QUIC_CMSG_BUF_SIZE];
             size_t cmsg_len = sizeof(cmsg_buf);
             ssize_t nread = recvQuicPacket(fd, buf, sizeof(buf), MSG_DONTWAIT,
                 reinterpret_cast<struct sockaddr*>(&peer_addr), &peer_addrlen,

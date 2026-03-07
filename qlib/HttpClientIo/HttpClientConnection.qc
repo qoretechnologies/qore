@@ -393,13 +393,23 @@ public class HttpClientConnection {
             return True;
         }
 
+        # Honor protocol-level poll timeout hint (e.g., QUIC retransmission
+        # timer expiry) by using the shorter of the caller's timeout and the
+        # hint.  Without this, QUIC timers are delayed by up to poll_timeout_ms
+        # per cycle, causing stalls for large transfers on slow systems.
+        timeout actual_timeout = poll_timeout_ms;
+        if (exists poll_info.poll_timeout_ms
+                && poll_info.poll_timeout_ms < actual_timeout) {
+            actual_timeout = poll_info.poll_timeout_ms;
+        }
+
         Socket::poll(cast<list<hash<SocketPollInfo>>>((
             poll_info,
             <SocketPollInfo>{
                 "events": SOCK_POLLIN,
                 "socket": poll_notifier,
             },
-        )), poll_timeout_ms);
+        )), actual_timeout);
         poll_notifier.acknowledge();
         handlePollResult();
         return !isClosed() && !getPollOperation().hasError();
