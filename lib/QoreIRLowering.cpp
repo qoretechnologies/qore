@@ -1916,6 +1916,12 @@ static bool isConstKeyHashSubscript(const QoreValue& expr,
     qore_var_t vtype = vr->getType();
     // Allow local, local_ts, and closure variables
     if (vtype != VT_LOCAL && vtype != VT_LOCAL_TS && vtype != VT_CLOSURE) return false;
+    // Reference-type variables must use the lvalue path to write through the reference
+    // binding to the original variable.  The HashKeyStore optimization bypasses references.
+    if (vr->ref.id && QoreTypeInfo::isReference(
+            reinterpret_cast<const LocalVar*>(vr->ref.id)->getTypeInfo())) {
+        return false;
+    }
     container_var = vr;
     return true;
 }
@@ -1944,6 +1950,12 @@ static bool isConstIndexListSubscript(const QoreValue& expr,
     // Verify it's a local, local_ts, or closure variable
     qore_var_t vtype = vr->getType();
     if (vtype != VT_LOCAL && vtype != VT_LOCAL_TS && vtype != VT_CLOSURE) return false;
+    // Reference-type variables must use the lvalue path to write through the reference
+    // binding to the original variable.  The ListIndexStore optimization bypasses references.
+    if (vr->ref.id && QoreTypeInfo::isReference(
+            reinterpret_cast<const LocalVar*>(vr->ref.id)->getTypeInfo())) {
+        return false;
+    }
 
     // Set output parameters and succeed
     container_var = vr;

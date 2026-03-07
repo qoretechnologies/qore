@@ -163,6 +163,7 @@ class JITSmokeTest inherits QUnit::Test {
         addTestCase("hash key access int missing key", \testHashKeyAccessIntMissingKey());
         addTestCase("weak assignment (:=)", \testWeakAssignment());
         addTestCase("guard deopt fires on_block_exit handlers", \testGuardDeoptOnBlockExit());
+        addTestCase("reference compound assignment writes through", \testReferenceCompoundAssignment());
         set_return_value(main());
     }
 
@@ -5786,6 +5787,75 @@ printf(\"%y\\n\", log);
             string result = trim(runScript(error_code, mode));
             assertEq("[\"success\", \"exit\", \"error\", \"exit\", \"success\", \"exit\"]", result,
                 sprintf("on_error/on_success across tiers %s", mode));
+        }
+    }
+
+    testReferenceCompoundAssignment() {
+        # Regression test: compound assignment (+=) on a reference<hash> variable
+        # must write through the reference to the original hash, not bypass it
+        # via the hash-key compound optimization (HashKeyStore).
+        string code = "%modern
+hashdecl EM {
+    int val = 0;
+}
+
+class C {
+    private {
+        hash<string, hash<EM>> data;
+    }
+
+    constructor() {
+        data{\"a\"} = <EM>{};
+    }
+
+    update(string key, int v) {
+        reference<hash<EM>> em = \\data{key};
+        em.val += v;
+    }
+
+    auto dump() {
+        return data;
+    }
+}
+
+C c();
+for (int i = 0; i < 200; ++i) {
+    c.update(\"a\", 1);
+}
+# After 200 iterations, data{\"a\"}.val must be 200
+printf(\"%d\\n\", c.dump(){\"a\"}.val);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("200", result, sprintf("reference compound assignment %s", mode));
+        }
+
+        # Also test list subscript with reference
+        string list_code = "%modern
+class LC {
+    private {
+        list<int> data = (0, 0);
+    }
+
+    update(int idx, int v) {
+        reference<int> r = \\data[idx];
+        r += v;
+    }
+
+    auto dump() {
+        return data;
+    }
+}
+
+LC lc();
+for (int i = 0; i < 200; ++i) {
+    lc.update(0, 1);
+}
+printf(\"%d\\n\", lc.dump()[0]);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(list_code, mode));
+            assertEq("200", result, sprintf("reference list compound assignment %s", mode));
         }
     }
 }
