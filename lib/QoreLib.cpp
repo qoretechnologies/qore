@@ -1635,6 +1635,20 @@ const char* check_hash_key(const QoreHashNode* h, const char* key, const char* e
    return p.get<const QoreStringNode>()->c_str();
 }
 
+// Handle GNU strerror_r() which returns char*
+static inline void q_strerror_handle_result(QoreString& str, char* result, int) {
+   str.concat(result);
+}
+
+// Handle XSI strerror_r() which returns int
+static inline void q_strerror_handle_result(QoreString& str, int result, int err) {
+   if (result && result != EINVAL && result != ERANGE) {
+      str.sprintf("unable to retrieve error code %d: strerror() returned unexpected error code %d", err, result);
+   } else {
+      str.terminate(str.strlen() + strlen(str.getBuffer() + str.strlen()));
+   }
+}
+
 void q_strerror(QoreString &str, int err) {
 #ifdef HAVE_STRERROR_R
 
@@ -1643,19 +1657,9 @@ void q_strerror(QoreString &str, int err) {
 #endif
 
    str.allocate(str.strlen() + STRERR_BUFSIZE);
-   // ignore strerror() error message
-#ifdef STRERROR_R_CHAR_P
-   // we can't help but get this version because some of the Linux
-   // header files define _GNU_SOURCE for us :-(
-   str.concat(strerror_r(err, (char* )(str.getBuffer() + str.strlen()), STRERR_BUFSIZE));
-#else
-   // use portable XSI version of strerror_r()
-   int rc = strerror_r(err, (char* )(str.getBuffer() + str.strlen()), STRERR_BUFSIZE);
-   if (rc && rc != EINVAL && rc != ERANGE)
-      str.sprintf("unable to retrieve error code %d: strerror() returned unexpected error code %d", err, rc);
-   else
-      str.terminate(str.strlen() + strlen(str.getBuffer() + str.strlen()));
-#endif
+   // Use overload resolution to handle both GNU (char*) and XSI (int) strerror_r() variants
+   // at compile time, since cmake detection is unreliable when system headers define _GNU_SOURCE
+   q_strerror_handle_result(str, strerror_r(err, (char*)(str.getBuffer() + str.strlen()), STRERR_BUFSIZE), err);
 
 #else
    // global static lock for strerror() access

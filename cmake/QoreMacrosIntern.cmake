@@ -674,20 +674,10 @@ if(HAVE_DECL_STRERROR_R)
    check_function_exists(strerror_r HAVE_STRERROR_R)
    if(HAVE_STRERROR_R)
       message(STATUS "Looking for strerror_r - found")
-      message(STATUS "Checking the return type of strerror_r")
-      check_cxx_source_compiles("
-      #include <string.h>
-      int main(void) {
-      char strbuf[100];
-      char *retbuf = NULL;
-      retbuf = strerror_r(0, strbuf, sizeof(strbuf));
-      return 0;
-      }" STRERROR_R_CHAR_P)
-      if(STRERROR_R_CHAR_P)
-         message(STATUS "Checking the return type of strerror_r - char*")
-      else()
-         message(STATUS "Checking the return type of strerror_r - int")
-      endif()
+      # NOTE: return type detection (STRERROR_R_CHAR_P) removed — the code now handles both
+      # GNU (char*) and XSI (int) variants at compile time via function overloading, because
+      # cmake's check_cxx_source_compiles cannot reliably detect the return type when other
+      # headers in the build define _GNU_SOURCE (switching strerror_r from XSI to GNU variant)
    else()
       message(STATUS "Looking for strerror_r - not found")
    endif()
