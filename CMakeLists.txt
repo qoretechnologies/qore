@@ -543,7 +543,8 @@ else()
     find_library(NGTCP2_CRYPTO_OSSL_LIBRARY NAMES ngtcp2_crypto_ossl)
     find_path(NGHTTP3_INCLUDE_DIR nghttp3/nghttp3.h)
     find_library(NGHTTP3_LIBRARY NAMES nghttp3)
-    if (NGTCP2_INCLUDE_DIR AND NGTCP2_LIBRARY AND NGTCP2_CRYPTO_OSSL_LIBRARY AND NGHTTP3_INCLUDE_DIR AND NGHTTP3_LIBRARY)
+    if (NGTCP2_INCLUDE_DIR AND NGTCP2_LIBRARY AND NGTCP2_CRYPTO_OSSL_LIBRARY AND NGHTTP3_INCLUDE_DIR AND NGHTTP3_LIBRARY
+            AND EXISTS "${NGHTTP3_INCLUDE_DIR}/nghttp3/version.h")
         # Verify nghttp3 >= 1.14.0 (0x010e00): v1.13.x has a bug where the
         # client-side SETTINGS decoder skips enable_connect_protocol
         file(STRINGS "${NGHTTP3_INCLUDE_DIR}/nghttp3/version.h" _nghttp3_ver
