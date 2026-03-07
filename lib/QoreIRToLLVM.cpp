@@ -6228,6 +6228,33 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // Result is native int64, NOT nanboxed — no trackResultForCleanup needed
             return true;
         }
+        case QoreIROpcode::ListIndexAccess: {
+            std::string err;
+            auto* list_v = getVal(inst->operands[0].id, err);
+            auto* idx_v = getVal(inst->operands[1].id, err);
+            if (!list_v || !idx_v) {
+                error = err;
+                return false;
+            }
+            llvm::Value* list_boxed = boxValue(list_v, inst->operands[0].id);
+            // Index must be native i64
+            llvm::Value* idx_int;
+            if (nanboxed_values.count(inst->operands[1].id)) {
+                auto unbox_fn = module.getOrInsertFunction("qore_rt_get_int64",
+                        llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
+                idx_int = builder->CreateCall(unbox_fn, {idx_v, xsink_arg});
+            } else {
+                idx_int = idx_v;
+            }
+            auto helper = module.getOrInsertFunction("qore_rt_list_index_access",
+                    llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
+            values[inst->result.id] = builder->CreateCall(helper,
+                    {list_boxed, idx_int, xsink_arg});
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(values[inst->result.id], inst->result.id, llvm_func);
+            emitExceptionCheck(module, llvm_func, inst);
+            return true;
+        }
         case QoreIROpcode::HashKeyStore: {
             const auto* hks_inst = static_cast<const QoreIRHashKeyStoreInstruction*>(inst);
             std::string err;
@@ -6868,8 +6895,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         case QoreIROpcode::PreDecLValue:
         case QoreIROpcode::PostIncLValue:
         case QoreIROpcode::PostDecLValue:
-        case QoreIROpcode::ShiftLValue:
-        case QoreIROpcode::UnshiftLValue: {
+        case QoreIROpcode::ShiftLValue: {
             const auto* lvinst = static_cast<const QoreIRLValueInstruction*>(inst);
             QoreValue lv = lvinst->lvalue;
             uint64_t lv_bits;
@@ -6893,6 +6919,47 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             {i32_type, i64_type, ptr_type}, false));
                 result = builder->CreateCall(helper,
                         {opcode_val, lv_const, xsink_arg});
+            }
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            {
+                const void* local_key = findLvalueRootLocalKey(lvinst->lvalue);
+                if (local_key) {
+                    reloadLocalFromRuntime(local_key, module, llvm_func);
+                }
+            }
+            emitExceptionCheck(module, llvm_func, inst);
+            return true;
+        }
+        case QoreIROpcode::UnshiftLValue: {
+            // UnshiftLValue is a binary lvalue op (lvalue + right operand)
+            const auto* lvinst = static_cast<const QoreIRLValueInstruction*>(inst);
+            auto* val = getVal(inst->operands[0].id, error);
+            if (!val) { return false; }
+            QoreValue lv = lvinst->lvalue;
+            uint64_t lv_bits;
+            std::memcpy(&lv_bits, &lv, sizeof(lv_bits));
+            llvm::Value* val_boxed = boxValue(val, inst->operands[0].id);
+            emitPreDecrefAndClearTracker(inst->result.id, lvinst, module, llvm_func);
+            llvm::Value* opcode_val = llvm::ConstantInt::get(i32_type,
+                    static_cast<int>(inst->opcode));
+            llvm::Value* result;
+            if (aot_mode) {
+                int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(lv_bits);
+                auto helper = module.getOrInsertFunction("qore_rt_lvalue_binary_aot",
+                        llvm::FunctionType::get(i64_type,
+                            {i32_type, ptr_type, i32_type, i64_type, ptr_type}, false));
+                result = builder->CreateCall(helper,
+                        {opcode_val, aot_ctx_arg,
+                         llvm::ConstantInt::get(i32_type, slot), val_boxed, xsink_arg});
+            } else {
+                llvm::Value* lv_const = llvm::ConstantInt::get(i64_type, lv_bits);
+                auto helper = module.getOrInsertFunction("qore_rt_lvalue_binary",
+                        llvm::FunctionType::get(i64_type,
+                            {i32_type, i64_type, i64_type, ptr_type}, false));
+                result = builder->CreateCall(helper,
+                        {opcode_val, lv_const, val_boxed, xsink_arg});
             }
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);

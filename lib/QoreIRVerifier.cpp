@@ -295,6 +295,7 @@ static bool requiresResult(QoreIROpcode op) {
         case QoreIROpcode::LoadThreadLocal:
         case QoreIROpcode::HashKeyAccess:
         case QoreIROpcode::HashKeyAccessInt:
+        case QoreIROpcode::ListIndexAccess:
         case QoreIROpcode::LoadSelfMember:
         case QoreIROpcode::LoadStaticVar:
         case QoreIROpcode::NewObject:

@@ -6240,20 +6240,6 @@ QoreIRValue QoreIRLowering::emitHashKeyCompoundOp(
         const QoreValue& full_expr, const QoreProgramLocation* loc, std::string& error) {
     // TRACE: emitHashKeyCompoundOp entry
 
-    // Fast path only works in function context (inside try/catch blocks where exception handlers are active).
-    // For top-level code that's evaluated as pure AST (fallback), we must NOT use the fast path.
-    // However, top-level code that's being IR-compiled (in a "_toplevel" function) can use fast path.
-    // We distinguish by checking: empty exception_stack AND NOT in a _toplevel function.
-    if (exception_stack.empty() && builder.getFunction()) {
-        const std::string& func_name = builder.getFunction()->name;
-        // Allow fast path for _toplevel functions (top-level IR compilation)
-        // Reject fast path for pure AST evaluation (no _toplevel wrapper)
-        if (func_name.find("_toplevel") == std::string::npos) {
-            // Not in a _toplevel function and empty exception stack = pure AST eval, reject fast path
-            return QoreIRValue();
-        }
-    }
-
     // Load the hash container without refcount inflation (auto_ref=false)
     // This allows HashKeyStore's is_unique() check to accurately detect if COW is needed
     // based on whether the hash is shared with other code, not just with LoadLocal's cache
@@ -6297,20 +6283,6 @@ QoreIRValue QoreIRLowering::emitListKeyCompoundOp(
         const VarRefNode* container_var, const QoreValue& index_expr,
         QoreIROpcode arith_op, const QoreIRValue& right,
         const QoreValue& full_expr, const QoreProgramLocation* loc, std::string& error) {
-    // Fast path only works in function context (inside try/catch blocks where exception handlers are active).
-    // For top-level code that's evaluated as pure AST (fallback), we must NOT use the fast path.
-    // However, top-level code that's being IR-compiled (in a "_toplevel" function) can use fast path.
-    // We distinguish by checking: empty exception_stack AND NOT in a _toplevel function.
-    if (exception_stack.empty() && builder.getFunction()) {
-        const std::string& func_name = builder.getFunction()->name;
-        // Allow fast path for _toplevel functions (top-level IR compilation)
-        // Reject fast path for pure AST evaluation (no _toplevel wrapper)
-        if (func_name.find("_toplevel") == std::string::npos) {
-            // Not in a _toplevel function and empty exception stack = pure AST eval, reject fast path
-            return QoreIRValue();
-        }
-    }
-
     // Load the list container without refcount inflation (auto_ref=false)
     // This allows ListIndexStore's is_unique() check to accurately detect if COW is needed
     QoreIRValue list_val;

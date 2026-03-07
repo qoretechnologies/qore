@@ -3099,6 +3099,24 @@ load_local_done:
                 ++ip;
                 break;
             }
+            case QoreIROpcode::ListIndexAccess: {
+                QoreValue list_val = getIRValue(values, inst->operands[0]);
+                QoreValue idx_val = getIRValue(values, inst->operands[1]);
+                int64_t index = idx_val.getAsBigInt();
+                QoreValue out;
+                if (list_val.getType() == NT_LIST) {
+                    const QoreListNode* l = list_val.get<const QoreListNode>();
+                    if (index >= 0 && static_cast<size_t>(index) < l->size()) {
+                        out = l->getReferencedEntry(static_cast<size_t>(index));
+                    }
+                }
+                setValueSlot(values, inst->result.id, out, xsink);
+                if (out.hasNode()) {
+                    cleanup.push_back(inst->result.id);
+                }
+                ++ip;
+                break;
+            }
             case QoreIROpcode::ListIndexStore: {
                 auto* lis_inst = static_cast<QoreIRListIndexStoreInstruction*>(inst);
                 QoreValue list_val = getIRValue(values, lis_inst->operands[0]);
