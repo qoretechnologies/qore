@@ -1045,11 +1045,13 @@ void QoreJIT::shutdown() {
 
     // Then shut down LLVM (acquire compile_mutex to serialize with any ongoing compilation)
     std::lock_guard<std::mutex> compile_lock(compile_mutex);
-#if defined(__aarch64__)
-    // Workaround: LLVM 21's LLJIT destructor crashes at process exit on aarch64 when
-    // JIT-compiled functions contain loops, hash operations, closures, or other patterns
-    // that generate complex LLVM IR. The crash occurs after correct program output,
-    // indicating a bug in the ORC JIT cleanup path on this platform.
+#if defined(__linux__)
+    // Workaround: LLVM 21's LLJIT destructor crashes at process exit on Linux (both
+    // x86-64 and aarch64) when JIT-compiled functions contain loops, hash operations,
+    // closures, or other patterns that generate complex LLVM IR. The crash occurs after
+    // correct program output, indicating a bug in the GDB JIT interface deregistration
+    // path used by LLVM's ORC JIT on Linux. This does not occur on macOS where a
+    // different JIT debug registration mechanism is used.
     // Leak the LLJIT object — the OS reclaims all memory at process exit.
     (void)jit.release();
 #else
