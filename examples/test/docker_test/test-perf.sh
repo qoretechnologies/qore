@@ -33,7 +33,8 @@ fi
 # build Qore with Release optimization
 echo && echo "-- building Qore (Release) --"
 cd ${QORE_SRC_DIR}
-mkdir -p build
+rm -rf build
+mkdir build
 cd build
 cmake .. -DCMAKE_BUILD_TYPE=Release -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX}
 make -j${MAKE_JOBS}
