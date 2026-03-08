@@ -162,6 +162,7 @@ private:
     //! Native IR lowering for hash map+select operator
     QoreIRValue lowerHashMapSelectNative(const QoreHashMapSelectOperatorNode* hms, const QoreValue& expr, std::string& error);
     QoreIRValue lowerCast(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerBuiltinTypeConversion(const QoreValue& expr, std::string& error);
     QoreIRValue lowerFunctionCall(const QoreValue& expr, std::string& error);
     QoreIRValue lowerCallReference(const QoreValue& expr, std::string& error);
     QoreIRValue lowerSelfCall(const QoreValue& expr, std::string& error);

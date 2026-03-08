@@ -1134,6 +1134,35 @@ extern "C" DLLEXPORT uint64_t qore_rt_make_hash(uint64_t* kv_pairs, int count, E
     return toBits(QoreValue(hash.release()));
 }
 
+extern "C" DLLEXPORT uint64_t qore_rt_to_string(uint64_t val_bits) {
+    QoreValue val = fromBits(val_bits);
+    QoreStringNode* str;
+    switch (val.getType()) {
+        case NT_STRING:
+            str = val.get<const QoreStringNode>()->stringRefSelf();
+            break;
+        case NT_INT:
+            str = new QoreStringNode(val.getAsBigInt());
+            break;
+        case NT_FLOAT:
+            str = q_fix_decimal(new QoreStringNodeMaker("%.9g", val.getAsFloat()), 0);
+            break;
+        case NT_BOOLEAN:
+            str = new QoreStringNode(val.getAsBigInt());
+            break;
+        case NT_NOTHING:
+        case NT_NULL:
+            str = new QoreStringNode();
+            break;
+        default: {
+            QoreStringValueHelper sv(val);
+            str = new QoreStringNode(*sv);
+            break;
+        }
+    }
+    return toBits(QoreValue(str));
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_make_hash_const_keys(const char** keys, uint64_t* vals,
         int count, ExceptionSink* xsink) {
     ReferenceHolder<QoreHashNode> hash(new QoreHashNode(autoTypeInfo), xsink);

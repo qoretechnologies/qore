@@ -37,7 +37,7 @@
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 345,
+static_assert(QORE_IR_MAX_OPCODE == 346,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 #include "qore/intern/QoreLibIntern.h"
@@ -2438,6 +2438,19 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 error = "unsupported type for ToBool lowering";
                 return false;
             }
+            return true;
+        }
+
+        case QoreIROpcode::ToString: {
+            auto* val = getVal(inst->operands[0].id, error);
+            if (!val) { return false; }
+            llvm::Value* val_boxed = boxValue(val, inst->operands[0].id);
+            auto helper = module.getOrInsertFunction("qore_rt_to_string",
+                    llvm::FunctionType::get(i64_type, {i64_type}, false));
+            llvm::Value* result = builder->CreateCall(helper, {val_boxed});
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
             return true;
         }
 

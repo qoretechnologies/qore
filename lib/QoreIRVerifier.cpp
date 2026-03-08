@@ -229,6 +229,7 @@ static bool requiresResult(QoreIROpcode op) {
         case QoreIROpcode::MakeList:
         case QoreIROpcode::MakeHash:
         case QoreIROpcode::MakeHashConstKeys:
+        case QoreIROpcode::ToString:
         case QoreIROpcode::CreateEmptyList:
         case QoreIROpcode::CreateSizedList:
         case QoreIROpcode::ListSize:

@@ -2488,6 +2488,10 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
     if (result.isValid() || !error.empty()) {
         return result;
     }
+    result = lowerBuiltinTypeConversion(expr, error);
+    if (result.isValid() || !error.empty()) {
+        return result;
+    }
     result = lowerFunctionCall(expr, error);
     if (result.isValid() || !error.empty()) {
         return result;
@@ -6468,6 +6472,36 @@ QoreIRValue QoreIRLowering::lowerCast(const QoreValue& expr, std::string& error)
     // but undo the ast_delegate_count increment since cast opcodes are now native.
     auto result = lowerExprOpOrInvoke(opcode, expr, operands, cast_node->loc, error);
     --ast_delegate_count;
+    return result;
+}
+
+QoreIRValue QoreIRLowering::lowerBuiltinTypeConversion(const QoreValue& expr, std::string& error) {
+    const AbstractQoreNode* node = expr.getInternalNode();
+    auto* call = dynamic_cast<const FunctionCallNode*>(node);
+    if (!call) {
+        return QoreIRValue();
+    }
+    const char* func_name = call->getName();
+    if (!func_name || strcmp(func_name, "string") != 0) {
+        return QoreIRValue();
+    }
+    // Match string(expr) with exactly 1 argument and no encoding parameter
+    const QoreListNode* args = call->getArgs();
+    const QoreParseListNode* parse_args = call->getParseArgs();
+    size_t nargs = args ? args->size() : (parse_args ? parse_args->size() : 0);
+    if (nargs != 1) {
+        return QoreIRValue();
+    }
+    // Lower the single argument
+    std::vector<QoreIRValue> operands;
+    if (!lowerCallArgs(parse_args, args, operands, error)) {
+        return QoreIRValue();
+    }
+    // ToString never throws — always emit as a plain ExprOp, not Invoke.
+    // The argument's call (if any) is already lowered as Invoke by lowerCallArgs.
+    QoreIRValue result = builder.createExprOp(QoreIROpcode::ToString, expr, operands, call->loc)->result;
+    // ToString always returns a string, never NOTHING
+    never_nothing_values.insert(result.id);
     return result;
 }
 

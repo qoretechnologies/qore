@@ -530,7 +530,10 @@ enum class QoreIROpcode : uint16_t {
     //! Make a hash from constant string keys and value operands (avoids key boxing/conversion)
     MakeHashConstKeys   = 345,
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (346, 347, ...)
+    //! Convert any value to string (replaces builtin string() function call)
+    ToString            = 346,
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (347, 348, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -538,8 +541,8 @@ enum class QoreIROpcode : uint16_t {
 //! NOTE: Both QoreIRInterpreter.cpp and QoreIRToLLVM.cpp have matching
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
-constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::MakeHashConstKeys);
-static_assert(QORE_IR_MAX_OPCODE == 345, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::ToString);
+static_assert(QORE_IR_MAX_OPCODE == 346, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! Returns true if the opcode is a unary computation op (used by Invoke dispatch)

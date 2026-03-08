@@ -1812,16 +1812,16 @@ printf(\"%d\\n\", result);
         }
 
         # Edge case: empty list
-        # AST mode returns NOTHING, IR/JIT return identity value (0 for sum, 1 for product)
-        # This is existing behavior difference between AST and IR/JIT optimized paths
+        # All modes return NOTHING for foldl on empty list
         string empty_code = "%modern
 list<int> empty = ();
 auto result = (foldl $1 + $2, (map $1 * 2, empty));
 printf(\"%s\\n\", exists result ? string(result) : \"NOTHING\");
 ";
-        assertEq("NOTHING", trim(runScript(empty_code, "ast")), "fused map foldl empty list ast");
-        assertEq("0", trim(runScript(empty_code, "ir")), "fused map foldl empty list ir");
-        assertEq("0", trim(runScript(empty_code, "jit")), "fused map foldl empty list jit");
+        foreach string mode in ("ast", "ir", "jit") {
+            assertEq("NOTHING", trim(runScript(empty_code, mode)),
+                    sprintf("fused map foldl empty list %s", mode));
+        }
 
         # Test float precision - ensure no truncation to int
         string precision_code = "%modern
@@ -4934,16 +4934,16 @@ printf(\"%s\\n\", result);
             assertEq("hello world", result, sprintf("foldl string concat %s", mode));
         }
 
-        # Test foldl on empty typed list
-        # AST returns NOTHING, IR/JIT return identity value (0 for sum) — known behavior difference
+        # All modes return NOTHING for foldl on empty typed list
         string foldl_empty = "%modern
 list<int> input = ();
 auto result = foldl $1 + $2, input;
 printf(\"%s\\n\", exists result ? string(result) : \"NOTHING\");
 ";
-        assertEq("NOTHING", trim(runScript(foldl_empty, "ast")), "foldl empty direct-index ast");
-        assertEq("0", trim(runScript(foldl_empty, "ir")), "foldl empty direct-index ir");
-        assertEq("0", trim(runScript(foldl_empty, "jit")), "foldl empty direct-index jit");
+        foreach string mode in ("ast", "ir", "jit") {
+            assertEq("NOTHING", trim(runScript(foldl_empty, mode)),
+                    sprintf("foldl empty direct-index %s", mode));
+        }
 
         # Test foldl on single-element typed list
         string foldl_single = "%modern
@@ -5625,19 +5625,16 @@ printf(\"%d\\n\", present);
                     sprintf("HashKeyAccessInt present key %s", mode));
         }
 
-        # Missing key in hash<string, int> assigned to auto — returns NOTHING in AST,
-        # returns 0 in IR/JIT (native int64_t has no NOTHING representation)
+        # Missing key in hash<string, int> assigned to auto — all modes return NOTHING
         code = "%modern
 hash<string, int> h = {\"a\": 1, \"b\": 2};
 auto missing = h.nonexistent;
 printf(\"%s\\n\", exists missing ? string(missing) : \"NOTHING\");
 ";
-        assertEq("NOTHING", trim(runScript(code, "ast")),
-                "HashKeyAccessInt missing key ast returns NOTHING");
-        assertEq("0", trim(runScript(code, "ir")),
-                "HashKeyAccessInt missing key ir returns 0");
-        assertEq("0", trim(runScript(code, "jit")),
-                "HashKeyAccessInt missing key jit returns 0");
+        foreach string mode in ("ast", "ir", "jit") {
+            assertEq("NOTHING", trim(runScript(code, mode)),
+                    sprintf("HashKeyAccessInt missing key %s returns NOTHING", mode));
+        }
 
         # Map over hash<string, int> with present keys — all modes agree
         code = "%modern

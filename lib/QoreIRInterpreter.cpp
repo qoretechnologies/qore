@@ -65,7 +65,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 345,
+static_assert(QORE_IR_MAX_OPCODE == 346,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -934,6 +934,26 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
         case QoreIROpcode::IsCollectionType: {
             QoreValue val = inv->operands.empty() ? QoreValue() : getIRValue(values, inv->operands[0]);
             return QoreIRInterpreter::evalUnary(op, val, xsink);
+        }
+        case QoreIROpcode::ToString: {
+            QoreValue val = inv->operands.empty() ? QoreValue() : getIRValue(values, inv->operands[0]);
+            switch (val.getType()) {
+                case NT_STRING:
+                    return QoreValue(val.get<const QoreStringNode>()->stringRefSelf());
+                case NT_INT:
+                    return QoreValue(new QoreStringNode(val.getAsBigInt()));
+                case NT_FLOAT:
+                    return QoreValue(q_fix_decimal(new QoreStringNodeMaker("%.9g", val.getAsFloat()), 0));
+                case NT_BOOLEAN:
+                    return QoreValue(new QoreStringNode(val.getAsBigInt()));
+                case NT_NOTHING:
+                case NT_NULL:
+                    return QoreValue(new QoreStringNode());
+                default: {
+                    QoreStringValueHelper sv(val);
+                    return QoreValue(new QoreStringNode(*sv));
+                }
+            }
         }
         // Binary computation opcodes (arithmetic, bitwise, compound assignments, comparisons, etc.)
         case QoreIROpcode::AddInt:
@@ -4977,6 +4997,38 @@ load_local_done:
                 if (res.hasNode()) {
                     cleanup.push_back(inst->result.id);
                 }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::ToString: {
+                QoreValue val = getIRValue(values, inst->operands[0]);
+                QoreStringNode* str;
+                switch (val.getType()) {
+                    case NT_STRING:
+                        str = val.get<const QoreStringNode>()->stringRefSelf();
+                        break;
+                    case NT_INT:
+                        str = new QoreStringNode(val.getAsBigInt());
+                        break;
+                    case NT_FLOAT:
+                        str = q_fix_decimal(new QoreStringNodeMaker("%.9g", val.getAsFloat()), 0);
+                        break;
+                    case NT_BOOLEAN:
+                        str = new QoreStringNode(val.getAsBigInt());
+                        break;
+                    case NT_NOTHING:
+                    case NT_NULL:
+                        str = new QoreStringNode();
+                        break;
+                    default: {
+                        // General fallback: use QoreStringValueHelper
+                        QoreStringValueHelper sv(val);
+                        str = new QoreStringNode(*sv);
+                        break;
+                    }
+                }
+                setValueSlot(values, inst->result.id, QoreValue(str), xsink);
+                cleanup.push_back(inst->result.id);
                 ++ip;
                 break;
             }
