@@ -50,6 +50,7 @@ class QoreIRFunction;
 class QoreNamespace;
 class QoreProgram;
 class QoreStringNode;
+class QoreValue;
 class StatementBlock;
 class Var;
 
@@ -452,5 +453,27 @@ class StatementBlock;
 */
 void collectStmtSlotStatements(const StatementBlock* block,
         std::vector<const AbstractStatement*>& stmts);
+
+//! Serialize a QoreValue expression tree to a binary blob using the EXPR_TREE format.
+/** Used by AOT binary serialization to persist BCA (Base Class Constructor Argument) expressions.
+    @param v the expression value to serialize
+    @param slots the slot map for resolving local/global variable references
+    @param out receives the serialized binary blob
+    @param debug if true, print debug info for unsupported node types
+    @return true if successful, false if the tree contains unsupported nodes
+*/
+bool serializeExprTreeToBlob(QoreValue v, const AOTSlotMap& slots, std::vector<uint8_t>& out, bool debug = false);
+
+//! Deserialize a binary EXPR_TREE blob back into a QoreValue expression tree.
+/** Used by AOT binary deserialization to reconstruct BCA (Base Class Constructor Argument) expressions.
+    @param data pointer to the blob data
+    @param size size of the blob data
+    @param pgm the QoreProgram for namespace resolution
+    @param locals array of LocalVar* pointers for local var slot resolution
+    @param num_locals number of locals in the array
+    @return the deserialized QoreValue, or QoreValue() on failure
+*/
+QoreValue deserializeExprTreeFromBlob(const uint8_t* data, uint32_t size, QoreProgram* pgm,
+        LocalVar** locals, int num_locals);
 
 #endif

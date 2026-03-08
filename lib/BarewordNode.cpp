@@ -98,8 +98,17 @@ int BarewordNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context)
         // parse exception already raised
         return -1;
     }
+    // Save the typeInfo from the constant lookup (e.g., for object constants
+    // whose values are NOTHING in AOT modules but have correct type metadata).
+    const QoreTypeInfo* constantTypeInfo = parse_context.typeInfo;
     parse_context.typeInfo = nullptr;
     int err = parse_init_value(n, parse_context);
+    // Restore the constant's typeInfo if it was set — the constant's declared type
+    // takes priority over the value's runtime type (which may be NOTHING for
+    // unserialized object constants in AOT modules).
+    if (constantTypeInfo) {
+        parse_context.typeInfo = constantTypeInfo;
+    }
     val = n;
     deref(nullptr);
     return err;

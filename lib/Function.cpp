@@ -61,7 +61,6 @@
 #include <cctype>
 #include <chrono>
 #include <cmath>
-#include <cstdio>
 #include <cstring>
 #include <pthread.h>
 
@@ -1137,9 +1136,10 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
     const AbstractQoreFunctionVariant* variant = nullptr;
     //const AbstractQoreFunctionVariant* saved_variant = nullptr;
 
-    //printd(5, "QoreFunction::runtimeFindVariant() this: %p %s%s%s() vlist: %d ilist: %d args: %p (%d) "
-    //  cctx: %p '%s'\n", this, className() ? className() : "", className() ? "::" : "", getName(), vlist.size(),
-    //  ilist.size(), args, args ? args->size() : 0, class_ctx, class_ctx ? class_ctx->name.c_str() : "n/a");
+    if (className() && !strcmp(getName(), "constructor") && nargs == 0) {
+        printd(5, "runtimeFindVariant() %s::constructor() nargs=0 vlist=%d ilist=%d\n",
+            className(), (int)vlist.size(), (int)ilist.size());
+    }
 
     const QoreFunction* aqf = nullptr;
     AbstractFunctionSignature* sig = nullptr;
@@ -1228,14 +1228,15 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
                     n = args->retrieveEntry(pi);
                 }
 
-                //printd(5, "QoreFunction::runtimeFindVariant() this: %p %s(%s) i: %d param: %s arg: %s\n", this,
-                //    getName(), sig->getSignatureText(), pi, QoreTypeInfo::getName(t), n.getFullTypeName());
-
                 int rc;
                 if (n.isNothing() && sig->hasDefaultArg(pi)) {
                     rc = QTI_IGNORE;
                 } else {
                     rc = QoreTypeInfo::runtimeAcceptsValue(t, n);
+                    if (className() && !strcmp(getName(), "constructor") && nargs == 0) {
+                        printd(5, "  param[%d] type='%s' hasDefault=%d acceptsNothing=%d rc=%d\n",
+                            pi, QoreTypeInfo::getName(t), sig->hasDefaultArg(pi), (int)rc, (int)(rc == QTI_NOT_EQUAL));
+                    }
                     if (rc == QTI_NOT_EQUAL) {
                         ok = false;
                         break;
@@ -2499,7 +2500,7 @@ static bool isApproachBEligible(const UserVariantBase* uvb, const QoreIRFunction
     // Must be same program (no ProgramThreadCountContextHelper needed)
     if (uvb->pgm != root_pgm) {
         if (debug) {
-            fprintf(stderr, "  APPROACH_B: '%s' ineligible: different program\n",
+            printd(5, "  APPROACH_B: '%s' ineligible: different program\n",
                 callee_ir->name.c_str());
         }
         return false;
@@ -2510,7 +2511,7 @@ static bool isApproachBEligible(const UserVariantBase* uvb, const QoreIRFunction
     // but for Approach B, no body locals is trivially fine.
     if (!callee_ir->all_body_locals.empty() && !callee_ir->areAllBodyLocalsIROnly()) {
         if (debug) {
-            fprintf(stderr, "  APPROACH_B: '%s' ineligible: body locals not all IR-only"
+            printd(5, "  APPROACH_B: '%s' ineligible: body locals not all IR-only"
                 " (body_locals=%d, ir_only=%d)\n",
                 callee_ir->name.c_str(), (int)callee_ir->all_body_locals.size(),
                 (int)callee_ir->ir_only_locals.size());
@@ -2526,7 +2527,7 @@ static bool isApproachBEligible(const UserVariantBase* uvb, const QoreIRFunction
         const void* argv_key = reinterpret_cast<const void*>(sig->argvid);
         if (callee_ir->ir_only_locals.count(argv_key)) {
             if (debug) {
-                fprintf(stderr, "  APPROACH_B: '%s' ineligible: argvid referenced in IR\n",
+                printd(5, "  APPROACH_B: '%s' ineligible: argvid referenced in IR\n",
                     callee_ir->name.c_str());
             }
             return false;
@@ -2542,7 +2543,7 @@ static bool isApproachBEligible(const UserVariantBase* uvb, const QoreIRFunction
         // Param must be IR-only
         if (!callee_ir->ir_only_locals.count(key)) {
             if (debug) {
-                fprintf(stderr, "  APPROACH_B: '%s' ineligible: param '%s' not IR-only\n",
+                printd(5, "  APPROACH_B: '%s' ineligible: param '%s' not IR-only\n",
                     callee_ir->name.c_str(), lv->getName());
             }
             return false;
@@ -2551,7 +2552,7 @@ static bool isApproachBEligible(const UserVariantBase* uvb, const QoreIRFunction
         // No closure-captured params
         if (lv->closureUse()) {
             if (debug) {
-                fprintf(stderr, "  APPROACH_B: '%s' ineligible: param '%s' closure-captured\n",
+                printd(5, "  APPROACH_B: '%s' ineligible: param '%s' closure-captured\n",
                     callee_ir->name.c_str(), lv->getName());
             }
             return false;
@@ -2560,7 +2561,7 @@ static bool isApproachBEligible(const UserVariantBase* uvb, const QoreIRFunction
         // No reference-type params
         if (QoreTypeInfo::isReference(lv->getTypeInfo())) {
             if (debug) {
-                fprintf(stderr, "  APPROACH_B: '%s' ineligible: param '%s' is reference type\n",
+                printd(5, "  APPROACH_B: '%s' ineligible: param '%s' is reference type\n",
                     callee_ir->name.c_str(), lv->getName());
             }
             return false;
@@ -2568,7 +2569,7 @@ static bool isApproachBEligible(const UserVariantBase* uvb, const QoreIRFunction
     }
 
     if (debug) {
-        fprintf(stderr, "  APPROACH_B: '%s' eligible (%d params)\n",
+        printd(5, "  APPROACH_B: '%s' eligible (%d params)\n",
             callee_ir->name.c_str(), num_params);
     }
     return true;
@@ -2686,14 +2687,13 @@ void UserVariantBase::attemptJITCompilation() const {
 
     if (!callees.empty()) {
         if (getenv("QORE_BATCH_DEBUG")) {
-            fprintf(stderr, "BATCH: '%s' enqueued with %d callees:",
+            printd(5, "BATCH: '%s' enqueued with %d callees:",
                 cached_ir->name.c_str(), (int)callees.size());
             for (const auto& c : callees) {
-                fprintf(stderr, " %s%s", c.ir_func->name.c_str(),
+                printd(5, " %s%s", c.ir_func->name.c_str(),
                     c.approach_b_eligible ? "(B)" : "");
             }
-            fprintf(stderr, "\n");
-            fflush(stderr);
+            printd(5, "\n");
         }
         printd(3, "UserVariantBase::attemptJITCompilation() '%s' batch enqueued with %d callees\n",
             cached_ir->name.c_str(), (int)callees.size());

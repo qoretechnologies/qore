@@ -136,6 +136,10 @@
 #include "qore/intern/ParseReferenceNode.h"
 #include "qore/intern/NewComplexTypeNode.h"
 #include "qore/intern/QoreSquareBracketsRangeOperatorNode.h"
+#include "qore/intern/QoreMapOperatorNode.h"
+#include "qore/intern/QoreMapSelectOperatorNode.h"
+#include "qore/intern/QoreHashMapOperatorNode.h"
+#include "qore/intern/QoreHashMapSelectOperatorNode.h"
 #include "qore/intern/QoreRegex.h"
 #include "qore/intern/QoreRegexSubst.h"
 #include "qore/intern/QoreTransliteration.h"
@@ -277,7 +281,27 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
                 printd(0, "AOT v2: cannot resolve class '%s' for new object\n", ref1);
                 return 0;
             }
+            const QoreMethod* cons = qc->getConstructor();
+            printd(5, "AOT NEW_OBJECT: class='%s' id=%d constructor=%p hm_size=%d\n",
+                qc->getName(), qc->getID(), (void*)cons,
+                (int)qore_class_private::get(*qc)->hm.size());
+            if (cons) {
+                const QoreFunction* cf = qore_method_private::get(*cons)->getFunction();
+                printd(5, "  constructor vlist=%d\n",
+                    (int)cf->numVariants());
+                if (cf->numVariants() > 0) {
+                    auto* sig = cf->first()->getSignature();
+                    printd(5, "  first variant sig='%s' numParams=%d minParams=%d\n",
+                        sig->getSignatureText(), sig->numParams(), sig->getMinParamTypes());
+                    for (unsigned i = 0; i < sig->numParams(); ++i) {
+                        printd(5, "    param[%d] type='%s' hasDefault=%d\n",
+                            i, QoreTypeInfo::getName(sig->getParamTypeInfo(i)),
+                            sig->hasDefaultArg(i));
+                    }
+                }
+            }
             NewObjectCallNode* nocn = new NewObjectCallNode(qc, nullptr);
+            printd(5, "  nocn variant=%p\n", (void*)nocn->getVariant());
             return toBitsNB(QoreValue(nocn));
         }
 
@@ -1275,7 +1299,18 @@ class ExprTreeDeserializer {
                         class_name.c_str());
                     return fail();
                 }
-                return QoreValue(new NewObjectCallNode(qc, args_list.release()));
+                {
+                    const QoreMethod* cons = qc->getConstructor();
+                    printd(5, "AOT EXPR_TREE EN_NEW: class='%s' id=%d nargs=%d constructor=%p\n",
+                        qc->getName(), qc->getID(), (int)num_children, (void*)cons);
+                    if (cons) {
+                        const QoreFunction* cf = qore_method_private::get(*cons)->getFunction();
+                        printd(5, "  constructor vlist=%d\n", (int)cf->numVariants());
+                    }
+                }
+                NewObjectCallNode* nocn = new NewObjectCallNode(qc, args_list.release());
+                printd(5, "  nocn variant=%p\n", (void*)nocn->getVariant());
+                return QoreValue(nocn);
             }
 
             case AOTExprNodeKind::EN_SCOPED_NEW: {
@@ -1868,6 +1903,52 @@ class ExprTreeDeserializer {
                 return fail();
             }
 
+            case AOTExprNodeKind::EN_STATIC_METH_REF: {
+                std::string class_path = readStr();
+                std::string method_name = readStr();
+                readU16(); // 0 children
+                ExceptionSink xsink;
+                const QoreClass* qc = pgm->findClass(class_path.c_str(), &xsink);
+                if (xsink.isException()) {
+                    xsink.clear();
+                }
+                if (qc) {
+                    const QoreMethod* m = qc->findStaticMethod(method_name.c_str());
+                    if (!m) {
+                        m = qc->findMethod(method_name.c_str());
+                    }
+                    if (m) {
+                        return QoreValue(new LocalStaticMethodCallReferenceNode(&loc_builtin, m));
+                    }
+                }
+                printd(0, "AOT EXPR_TREE: cannot resolve static method ref '%s::%s'\n",
+                    class_path.c_str(), method_name.c_str());
+                return fail();
+            }
+
+            case AOTExprNodeKind::EN_BOUND_METH_REF: {
+                std::string class_path = readStr();
+                std::string method_name = readStr();
+                readU16(); // 0 children
+                ExceptionSink xsink;
+                const QoreClass* qc = pgm->findClass(class_path.c_str(), &xsink);
+                if (xsink.isException()) {
+                    xsink.clear();
+                }
+                if (qc) {
+                    const QoreMethod* m = qc->findMethod(method_name.c_str());
+                    if (!m) {
+                        m = qc->findStaticMethod(method_name.c_str());
+                    }
+                    if (m) {
+                        return QoreValue(new LocalMethodCallReferenceNode(&loc_builtin, m));
+                    }
+                }
+                printd(0, "AOT EXPR_TREE: cannot resolve bound method ref '%s::%s'\n",
+                    class_path.c_str(), method_name.c_str());
+                return fail();
+            }
+
             case AOTExprNodeKind::EN_CLOSURE: {
                 uint32_t slot = readU32();
                 readU16(); // 0 children
@@ -1953,6 +2034,69 @@ class ExprTreeDeserializer {
                     target, start, end_val));
             }
 
+            case AOTExprNodeKind::EN_MAP: {
+                uint16_t num_children = readU16();
+                QoreValue map_expr, source;
+                if (num_children >= 1) {
+                    map_expr = deserializeValue();
+                }
+                if (num_children >= 2) {
+                    source = deserializeValue();
+                }
+                return QoreValue(new QoreMapOperatorNode(&loc_builtin, map_expr, source));
+            }
+
+            case AOTExprNodeKind::EN_MAP_SELECT: {
+                uint16_t num_children = readU16();
+                QoreValue map_expr, source, where_expr;
+                if (num_children >= 1) {
+                    map_expr = deserializeValue();
+                }
+                if (num_children >= 2) {
+                    source = deserializeValue();
+                }
+                if (num_children >= 3) {
+                    where_expr = deserializeValue();
+                }
+                return QoreValue(new QoreMapSelectOperatorNode(&loc_builtin,
+                    map_expr, source, where_expr));
+            }
+
+            case AOTExprNodeKind::EN_HASH_MAP: {
+                uint16_t num_children = readU16();
+                QoreValue key_expr, val_expr, source;
+                if (num_children >= 1) {
+                    key_expr = deserializeValue();
+                }
+                if (num_children >= 2) {
+                    val_expr = deserializeValue();
+                }
+                if (num_children >= 3) {
+                    source = deserializeValue();
+                }
+                return QoreValue(new QoreHashMapOperatorNode(&loc_builtin,
+                    key_expr, val_expr, source));
+            }
+
+            case AOTExprNodeKind::EN_HASH_MAP_SELECT: {
+                uint16_t num_children = readU16();
+                QoreValue key_expr, val_expr, source, where_expr;
+                if (num_children >= 1) {
+                    key_expr = deserializeValue();
+                }
+                if (num_children >= 2) {
+                    val_expr = deserializeValue();
+                }
+                if (num_children >= 3) {
+                    source = deserializeValue();
+                }
+                if (num_children >= 4) {
+                    where_expr = deserializeValue();
+                }
+                return QoreValue(new QoreHashMapSelectOperatorNode(&loc_builtin,
+                    key_expr, val_expr, source, where_expr));
+            }
+
             default:
                 printd(0, "AOT EXPR_TREE: unknown node kind %d\n", (int)kind);
                 return fail();
@@ -1974,6 +2118,26 @@ public:
         return toBitsNB(v);
     }
 };
+
+QoreValue deserializeExprTreeFromBlob(const uint8_t* data, uint32_t size, QoreProgram* pgm,
+        LocalVar** locals, int num_locals) {
+    // Build a minimal QoreAOTContext for the deserializer with just local var slots.
+    // We borrow the locals pointer; must null it before ctx destructor runs (which frees it).
+    QoreAOTContext ctx;
+    ctx.locals = locals;
+    ctx.num_locals = num_locals;
+    ExprTreeDeserializer deser(data, size, pgm, &ctx);
+    uint64_t bits = deser.deserialize();
+    // Null out borrowed pointer before destructor frees it
+    ctx.locals = nullptr;
+    ctx.num_locals = 0;
+    if (!bits) {
+        return QoreValue();
+    }
+    QoreValue v;
+    memcpy(&v, &bits, sizeof(v));
+    return v;
+}
 
 // Forward declaration for hybrid closure resolution
 static QoreAOTContext* buildContextForVariant(UserVariantBase* uvb, const char* name,
@@ -2207,7 +2371,22 @@ static QoreAOTContext* buildContextFromSlotMap(
                     if (qc) {
                         // Use NewObjectCallNode for both kinds — evalImpl is identical
                         // (both call qore_class_private::execConstructor with the same args)
+                        {
+                            const QoreMethod* cons = qc->getConstructor();
+                            printd(5, "AOT buildCtx NEW_OBJECT: class='%s' id=%d nargs=%d constructor=%p\n",
+                                qc->getName(), qc->getID(), (int)num_args, (void*)cons);
+                            if (cons) {
+                                const QoreFunction* cf = qore_method_private::get(*cons)->getFunction();
+                                printd(5, "  constructor vlist=%d\n", (int)cf->numVariants());
+                                if (cf->numVariants() > 0) {
+                                    auto* sig2 = cf->first()->getSignature();
+                                    printd(5, "  first variant sig='%s' np=%d minp=%d\n",
+                                        sig2->getSignatureText(), sig2->numParams(), sig2->getMinParamTypes());
+                                }
+                            }
+                        }
                         NewObjectCallNode* nocn = new NewObjectCallNode(qc, constructor_args);
+                        printd(5, "  nocn->variant=%p\n", (void*)nocn->getVariant());
                         ctx->exprs[i] = toBitsNB(QoreValue(nocn));
                     } else {
                         printd(0, "AOT v2: cannot resolve class '%s' for new object\n", ref1);
@@ -4111,16 +4290,26 @@ static void skipSlotMapEntry(const QoreAOTBinaryReader& reader, const uint8_t*& 
     }
 }
 
+//! Collected init function context for later execution
+struct AOTInitFuncExecInfo {
+    QoreAOTContext* ctx;
+    AotFunctionPtr fn_ptr;
+    std::string name;
+};
+
 //! Register AOT functions using slot maps from deserialized metadata (V2 — no IR re-lowering)
 /** Walks the SLOT_MAPS section, finds matching functions in the namespace tree,
     and builds context from slot identities.
+    If init_func_contexts is non-null, init functions (names starting with "__const_init::"
+    or "__svar_init::") are collected instead of being discarded.
 */
 static void registerAOTFunctionsFromSlotMaps(
         const QoreAOTBinaryReader& reader,
         qore_ns_private* root_ns,
         QoreProgram* pgm,
         std::unordered_map<std::string, const QoreAOTFunc*>& func_map,
-        int& registered) {
+        int& registered,
+        std::vector<AOTInitFuncExecInfo>* init_func_contexts = nullptr) {
     const QoreAOTSectionHeader* sec = reader.findSection(QoreAOTSectionType::SLOT_MAPS);
     if (!sec) {
         printd(0, "AOT v2: no SLOT_MAPS section found\n");
@@ -4135,6 +4324,21 @@ static void registerAOTFunctionsFromSlotMaps(
 
     uint32_t num_funcs = QoreAOTBinaryReader::readU32(ptr);
 
+    // Debug: count init functions in func_map
+    if (init_func_contexts) {
+        int init_count = 0;
+        for (auto& kv : func_map) {
+            if (kv.first.substr(0, 14) == "__const_init::" || kv.first.substr(0, 13) == "__svar_init::") {
+                ++init_count;
+                if (init_count <= 5) {
+                    printd(5, "  init func in func_map: '%s'\n", kv.first.c_str());
+                }
+            }
+        }
+        printd(5, "AOT registerFromSlotMaps: num_funcs=%d, func_map.size=%d, init_funcs_in_map=%d\n",
+            num_funcs, (int)func_map.size(), init_count);
+    }
+
     for (uint32_t f = 0; f < num_funcs; ++f) {
         // Peek at function name (first field in slot map entry)
         const uint8_t* entry_start = ptr;
@@ -4147,6 +4351,13 @@ static void registerAOTFunctionsFromSlotMaps(
             printd(2, "AOT v2: skipping unnamed slot map entry\n");
             skipSlotMapEntry(reader, ptr, end);
             continue;
+        }
+
+        // Debug: print init function slot map entries
+        if (init_func_contexts && (strncmp(func_name, "__const_init::", 14) == 0
+                || strncmp(func_name, "__svar_init::", 13) == 0)) {
+            printd(5, "  slot map entry: '%s' (in func_map: %s)\n",
+                func_name, func_map.count(func_name) ? "YES" : "NO");
         }
 
         // Find matching AOT function
@@ -4336,6 +4547,12 @@ static void registerAOTFunctionsFromSlotMaps(
 
         // Build context from slot map
         QoreAOTContext* ctx = buildContextFromSlotMap(reader, ptr, end, uvb, pgm, *aot_func, func_name);
+        // Debug: trace init function context building
+        if (init_func_contexts && (strncmp(func_name, "__const_init::", 14) == 0
+                || strncmp(func_name, "__svar_init::", 13) == 0)) {
+            printd(5, "  buildContextFromSlotMap('%s'): ctx=%p uvb=%p\n",
+                func_name, (void*)ctx, (void*)uvb);
+        }
         if (ctx && uvb) {
             uvb->registerPrecompiledAOTFunction(aot_func->fn_ptr, ctx);
             ++registered;
@@ -4343,10 +4560,23 @@ static void registerAOTFunctionsFromSlotMaps(
             func_map.erase(func_name);
             printd(2, "AOT slot-reg: registered '%s' from slot map\n", func_name);
         } else if (ctx) {
-            // Toplevel or unresolved — handled separately
-            delete ctx;
-            printd(2, "AOT slot-reg: context built for '%s' but no variant (uvb=%p)\n",
-                func_name, (void*)uvb);
+            // Check if this is an init function (for constants/static vars)
+            bool is_init_func = (strncmp(func_name, "__const_init::", 14) == 0
+                || strncmp(func_name, "__svar_init::", 13) == 0);
+            if (is_init_func && init_func_contexts) {
+                AOTInitFuncExecInfo info;
+                info.ctx = ctx;
+                info.fn_ptr = aot_func->fn_ptr;
+                info.name = func_name;
+                init_func_contexts->push_back(std::move(info));
+                func_map.erase(func_name);
+                printd(2, "AOT slot-reg: collected init function '%s' for execution\n", func_name);
+            } else {
+                // Toplevel or unresolved — handled separately
+                delete ctx;
+                printd(2, "AOT slot-reg: context built for '%s' but no variant (uvb=%p)\n",
+                    func_name, (void*)uvb);
+            }
         } else {
             printd(2, "AOT slot-reg: SKIP '%s' (unsupported) uvb=%p\n",
                 func_name, (void*)uvb);
@@ -4628,6 +4858,62 @@ static void transplantClassClosureValues(
             printd(5, "AOT: transplanted member default '%s::%s' from fallback\n",
                 main_qc->getName(), mi.first);
         }
+
+        // Transplant static variable values from the fallback program.
+        // The fallback program's parseCommitRuntimeInit() has already evaluated
+        // the init expressions (e.g., "Class::forName('NullDataProvider')"), so
+        // we copy the evaluated values directly rather than the expressions
+        // (which would fail to evaluate in the main program's context).
+        for (auto& vi : main_priv->vars.member_list) {
+            if (vi.second->eval_init) {
+                continue;  // already initialized
+            }
+
+            // Find corresponding static var in fallback class
+            QoreVarInfo* fb_vi = fb_priv->vars.find(vi.first);
+            if (!fb_vi || !fb_vi->eval_init) {
+                continue;  // fallback var not evaluated yet
+            }
+
+            // Read the evaluated value from the fallback static var
+            QoreValue fb_val = fb_vi->val.getValue();
+            if (fb_val.isNothing()) {
+                // Even if the value is NOTHING, mark as initialized to prevent
+                // re-evaluation of a missing init expression
+                vi.second->eval_init = true;
+                continue;
+            }
+
+            // Assign the evaluated value to the main static var
+            discard(vi.second->assignInit(fb_val.refSelf()), nullptr);
+            vi.second->eval_init = true;
+            printd(5, "AOT: transplanted static var value '%s::%s' from fallback\n",
+                main_qc->getName(), vi.first);
+        }
+    }
+
+    // Transplant namespace-level constants with NOTHING values (e.g., object constants
+    // like "public const EpochIntToDateType = new EpochIntToDateType()" that can't be
+    // serialized in the binary format because writeValue() doesn't support NT_OBJECT).
+    ConstConstantListIterator ns_ci(main_ns->constant);
+    while (ns_ci.next()) {
+        const ConstantEntry* main_ce = ns_ci.getEntry();
+        if (!main_ce->isUser() || !main_ce->getValue().isNothing()) {
+            continue;  // skip system constants and non-NOTHING values
+        }
+
+        // Find corresponding constant in fallback namespace
+        ConstantEntry* fb_ce = fallback_ns->constant.findEntry(main_ce->getName());
+        if (!fb_ce || fb_ce->getValue().isNothing()) {
+            continue;  // no fallback value available
+        }
+
+        // Transplant: set the main constant's value from the fallback constant.
+        ConstantEntry* writable_ce = const_cast<ConstantEntry*>(main_ce);
+        writable_ce->val = fb_ce->getReferencedValue();
+        writable_ce->init = true;
+        printd(5, "AOT: transplanted namespace constant '%s::%s' from fallback\n",
+            main_ns->name.c_str(), main_ce->getName());
     }
 
     // Recurse into sub-namespaces
@@ -5431,12 +5717,22 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
 // ---- AOT Module Runtime Functions ----
 
 //! Per-module state for AOT-compiled modules
+// Forward declaration
+static void executeInitFunctions(QoreProgram* pgm,
+    const std::vector<AOTInitFuncExecInfo>& exec_infos,
+    const std::vector<AOTInitFuncDescriptor>& descriptors,
+    const char* mod_name);
+
 struct AotModuleState {
     QoreProgram* pgm = nullptr;
     const QoreAOTFunc* funcs = nullptr;
     int num_funcs = 0;
     //! Modules that should be reexported (from %requires(reexport) directives)
     std::vector<std::string> reexport_deps;
+    //! Serialized metadata for deferred init function processing in ns_init
+    std::vector<uint8_t> metadata;
+    //! Init function descriptors (target type, ns path, item name) read during module_init
+    std::vector<AOTInitFuncDescriptor> init_descriptors;
 };
 
 //! Map from module name to per-module state
@@ -5795,7 +6091,7 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
             }
             if (!deserializer.deserializeIntoProgram(*qpgm,
                     metadata, static_cast<uint32_t>(metadata_len), deser_error)) {
-                fprintf(stderr, "AOT: metadata deserialization failed: %s\n",
+                printd(0, "AOT: metadata deserialization failed: %s\n",
                     deser_error.c_str());
                 rc = 2;
                 break;
@@ -5872,8 +6168,6 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
             // Needed for: (1) functions with stmt_slots that couldn't resolve from slot map,
             // (2) _toplevel fallback if slot map registration failed,
             // (3) any functions that failed slot map registration.
-            printd(2, "AOT v3: hasFallbackSource=%d func_map.size=%d\n",
-                (int)deserializer.hasFallbackSource(), (int)func_map.size());
             if (deserializer.hasFallbackSource()) {
                 ExceptionSink wsink;
                 // Strip PO_NO_TOP_LEVEL_STATEMENTS from fallback parse options because the
@@ -5892,13 +6186,13 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
                     // Fallback source parsing failed (e.g., module class conflicts).
                     // This is non-fatal: module functions are available from runtime module
                     // loading, only test-local functions that failed compilation are lost.
-                    printd(0, "AOT v3: fallback source parse FAILED (exception)\n");
+                    printd(0, "AOT v2 '%s': fallback source parse failed\n", label);
                     xsink.clear();
                     fallback_pgm->waitForTerminationAndDeref(nullptr);
                     fallback_pgm = nullptr;
                 } else {
-                    printd(2, "AOT v3: fallback source parsed OK, func_map.size=%d\n",
-                        (int)func_map.size());
+                    printd(5, "AOT v2 '%s': fallback source parsed OK, remaining funcs=%d\n",
+                        label, (int)func_map.size());
                     // Register remaining functions from fallback via IR re-lowering.
                     // Build contexts from fallback AST but register on main program's variants
                     // for consistent LocalVar* pointer identity with the thread-local stack.
@@ -6251,6 +6545,7 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init(
 }
 
 extern "C" DLLEXPORT void qore_aot_module_ns_init(QoreNamespace* root_ns, QoreNamespace* qore_ns) {
+    printd(5, "AOT ns_init called: root_ns=%p qore_ns=%p\n", (void*)root_ns, (void*)qore_ns);
     // Look up the correct module program from the per-module map.
     // When QoreBuiltinModule::addToProgramImpl calls module_ns_init, it has set up
     // QoreModuleContextHelper with the module's name. We use get_module_context() to
@@ -6363,6 +6658,51 @@ extern "C" DLLEXPORT void qore_aot_module_ns_init(QoreNamespace* root_ns, QoreNa
     }
 
     printd(5, "AOT module ns_init '%s': merge complete\n", mod_name);
+
+    // Execute deferred init functions for constants/static vars.
+    // This must happen AFTER namespace merge so that class hierarchies are fully
+    // committed and object constructors can find base class private data slots.
+    // We build init function contexts HERE using the TARGET program's namespace tree
+    // (which has properly committed classes) rather than the module program's tree.
+    if (mod_name) {
+        auto it = aot_module_map.find(mod_name);
+        if (it != aot_module_map.end() && !it->second.init_descriptors.empty()
+                && !it->second.metadata.empty()) {
+            // Build function table from the stored function pointers
+            std::unordered_map<std::string, const QoreAOTFunc*> func_map;
+            for (int i = 0; i < it->second.num_funcs; ++i) {
+                if (it->second.funcs[i].name && it->second.funcs[i].fn_ptr) {
+                    func_map[it->second.funcs[i].name] = &it->second.funcs[i];
+                }
+            }
+
+            // Build init function contexts from slot maps using the TARGET program
+            // (tpgm) which has properly committed class hierarchies after merge
+            QoreAOTBinaryReader init_reader;
+            std::string reader_error;
+            if (init_reader.open(it->second.metadata.data(),
+                    static_cast<uint32_t>(it->second.metadata.size()), reader_error)) {
+                qore_ns_private* target_root_priv = qore_ns_private::get(
+                    *static_cast<RootQoreNamespace*>(root_ns));
+                std::vector<AOTInitFuncExecInfo> init_func_contexts;
+                int registered = 0;
+                registerAOTFunctionsFromSlotMaps(init_reader, target_root_priv,
+                    tpgm, func_map, registered, &init_func_contexts);
+
+                printd(2, "AOT ns_init '%s': got %d init func contexts\n",
+                    mod_name, (int)init_func_contexts.size());
+                if (!init_func_contexts.empty()) {
+                    printd(2, "AOT ns_init '%s': executing %d init functions\n",
+                        mod_name, (int)init_func_contexts.size());
+                    executeInitFunctions(tpgm, init_func_contexts,
+                        it->second.init_descriptors, mod_name);
+                }
+            }
+            // Clear stored metadata
+            it->second.metadata.clear();
+            it->second.init_descriptors.clear();
+        }
+    }
 }
 
 extern "C" DLLEXPORT void qore_aot_module_delete() {
@@ -6515,6 +6855,206 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
     return nullptr;  // success
 }
 
+//! Navigate a namespace path like "Ns1::Ns2" from root to find the target namespace
+static qore_ns_private* findNamespaceByPath(qore_ns_private* root, const std::string& path) {
+    if (path.empty()) {
+        return root;
+    }
+
+    qore_ns_private* current = root;
+    size_t start = 0;
+    while (start < path.size()) {
+        size_t sep = path.find("::", start);
+        std::string component;
+        if (sep == std::string::npos) {
+            component = path.substr(start);
+            start = path.size();
+        } else {
+            component = path.substr(start, sep - start);
+            start = sep + 2;
+        }
+
+        // Search child namespaces
+        bool found = false;
+        for (auto ni = current->nsl.nsmap.begin(); ni != current->nsl.nsmap.end(); ++ni) {
+            if (ni->first == component && ni->second) {
+                current = qore_ns_private::get(*ni->second);
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            return nullptr;
+        }
+    }
+    return current;
+}
+
+//! Execute collected init functions and store results in target constants/static vars
+/** Called after AOT function registration to initialize constants and static vars
+    whose values come from lowered init expressions (delayed_eval constants, object
+    constructors, runtime-dependent expressions like now()).
+
+    Init functions are executed in serialization order, which matches the order
+    the parser originally processed them — this ensures dependencies between
+    constants are satisfied.
+*/
+static void executeInitFunctions(
+        QoreProgram* pgm,
+        const std::vector<AOTInitFuncExecInfo>& exec_infos,
+        const std::vector<AOTInitFuncDescriptor>& descriptors,
+        const char* mod_name) {
+    if (exec_infos.empty() || descriptors.empty()) {
+        return;
+    }
+
+    // Build name → exec info map
+    std::unordered_map<std::string, const AOTInitFuncExecInfo*> exec_map;
+    for (auto& info : exec_infos) {
+        exec_map[info.name] = &info;
+    }
+
+    qore_program_private* pp = qore_program_private::get(*pgm);
+    qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
+
+    int executed = 0;
+    int failed = 0;
+
+    // Execute in descriptor order (matches compilation/parser order)
+    for (auto& desc : descriptors) {
+        auto it = exec_map.find(desc.name);
+        if (it == exec_map.end()) {
+            printd(2, "AOT init: no context for '%s' — skipping\n", desc.name.c_str());
+            continue;
+        }
+
+        const AOTInitFuncExecInfo* info = it->second;
+
+        // Call the init function
+        printd(5, "AOT init: calling '%s' fn_ptr=%p ctx=%p\n",
+            desc.name.c_str(), (void*)info->fn_ptr, (void*)info->ctx);
+        ExceptionSink xsink;
+        uint64_t raw_result = info->fn_ptr(info->ctx, &xsink);
+        printd(5, "AOT init: '%s' returned raw=%llu\n", desc.name.c_str(), (unsigned long long)raw_result);
+
+        if (xsink.isException()) {
+            QoreValue err_val = xsink.getExceptionErr();
+            QoreValue desc_val = xsink.getExceptionDesc();
+            printd(5, "AOT init: '%s' raised exception: %s: %s\n",
+                desc.name.c_str(),
+                err_val.getType() == NT_STRING ? err_val.get<const QoreStringNode>()->c_str() : "?",
+                desc_val.getType() == NT_STRING ? desc_val.get<const QoreStringNode>()->c_str() : "?");
+            xsink.clear();
+            ++failed;
+            continue;
+        }
+
+        // Convert raw result to QoreValue
+        QoreValue result;
+        memcpy(&result, &raw_result, sizeof(uint64_t));
+
+        // Store the result in the target constant or static var
+        switch (desc.target_type) {
+            case AOTCompiledInitFunc::NS_CONSTANT: {
+                qore_ns_private* ns = findNamespaceByPath(root_ns, desc.ns_path);
+                if (!ns) {
+                    printd(0, "AOT init: namespace '%s' not found for constant '%s'\n",
+                        desc.ns_path.c_str(), desc.item_name.c_str());
+                    result.discard(&xsink);
+                    ++failed;
+                    break;
+                }
+                ConstantEntry* ce = ns->constant.findEntry(desc.item_name.c_str());
+                if (!ce) {
+                    printd(0, "AOT init: constant '%s' not found in namespace '%s'\n",
+                        desc.item_name.c_str(), desc.ns_path.c_str());
+                    result.discard(&xsink);
+                    ++failed;
+                    break;
+                }
+                // Discard old value and store new one
+                ce->val.discard(&xsink);
+                ce->val = result;
+                ce->init = true;
+                ++executed;
+                printd(2, "AOT init: initialized namespace constant '%s::%s' type=%s\n",
+                    desc.ns_path.c_str(), desc.item_name.c_str(), result.getTypeName());
+                break;
+            }
+
+            case AOTCompiledInitFunc::CLASS_CONSTANT: {
+                // ns_path is the class path like "DataProvider::AbstractDataProvider"
+                const qore_ns_private* found_ns = nullptr;
+                const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
+                    *pp->RootNS, desc.ns_path.c_str(), found_ns);
+                if (!qc) {
+                    printd(0, "AOT init: class '%s' not found for constant '%s'\n",
+                        desc.ns_path.c_str(), desc.item_name.c_str());
+                    result.discard(&xsink);
+                    ++failed;
+                    break;
+                }
+                qore_class_private* qcp = qore_class_private::get(
+                    *const_cast<QoreClass*>(qc));
+                ConstantEntry* ce = qcp->constlist.findEntry(desc.item_name.c_str());
+                if (!ce) {
+                    printd(0, "AOT init: constant '%s' not found in class '%s'\n",
+                        desc.item_name.c_str(), desc.ns_path.c_str());
+                    result.discard(&xsink);
+                    ++failed;
+                    break;
+                }
+                ce->val.discard(&xsink);
+                ce->val = result;
+                ce->init = true;
+                ++executed;
+                printd(2, "AOT init: initialized class constant '%s::%s' type=%s\n",
+                    desc.ns_path.c_str(), desc.item_name.c_str(), result.getTypeName());
+                break;
+            }
+
+            case AOTCompiledInitFunc::STATIC_VAR: {
+                // ns_path is the class path
+                const qore_ns_private* found_ns = nullptr;
+                const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
+                    *pp->RootNS, desc.ns_path.c_str(), found_ns);
+                if (!qc) {
+                    printd(0, "AOT init: class '%s' not found for static var '%s'\n",
+                        desc.ns_path.c_str(), desc.item_name.c_str());
+                    result.discard(&xsink);
+                    ++failed;
+                    break;
+                }
+                qore_class_private* qcp = qore_class_private::get(
+                    *const_cast<QoreClass*>(qc));
+                // Find and set the static var value
+                QoreVarInfo* vi = qcp->vars.find(desc.item_name.c_str());
+                if (!vi) {
+                    printd(0, "AOT init: static var '%s' not found in class '%s'\n",
+                        desc.item_name.c_str(), desc.ns_path.c_str());
+                    result.discard(&xsink);
+                    ++failed;
+                    break;
+                }
+                vi->assignInit(result);
+                vi->eval_init = true;
+                ++executed;
+                printd(2, "AOT init: initialized static var '%s::%s' type=%s\n",
+                    desc.ns_path.c_str(), desc.item_name.c_str(), result.getTypeName());
+                break;
+            }
+        }
+    }
+
+    // Clean up init function contexts
+    for (auto& info : exec_infos) {
+        delete info.ctx;
+    }
+
+    printd(5, "AOT module '%s': executed %d/%d init functions (%d failed)\n",
+        mod_name, executed, (int)exec_infos.size(), failed);
+}
+
 //! C ABI entry point for AOT modules (v3 - full 128-bit parse options)
 extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
     const uint8_t* metadata, int metadata_len,
@@ -6523,6 +7063,8 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
     const char* mod_name,
     const QoreAOTFunc* functions, int num_functions
 ) {
+    printd(5, "AOT v3 ENTRY '%s': num_functions=%d functions=%p\n",
+        mod_name, num_functions, (const void*)functions);
     // Construct full 128-bit parse options from lo+hi components
     QoreParseOptions parse_options(parse_options_lo, parse_options_hi);
 
@@ -6658,13 +7200,76 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
             mod_name, registered, num_functions);
     }
 
+    // Read init function descriptors for deferred execution in ns_init.
+    // Init functions can't run here because module classes haven't been committed
+    // to the target program's namespace tree yet (ns_init does the namespace merge).
+    // Object constructors called by init functions need fully resolved class hierarchies.
+    // The metadata and function table are stored so ns_init can build contexts using
+    // the TARGET program's namespace tree (which has properly committed classes).
+    std::vector<AOTInitFuncDescriptor> init_descriptors;
+    {
+        std::string init_error;
+        if (readInitFuncs(metadata, static_cast<uint32_t>(metadata_len),
+                init_descriptors, init_error)) {
+            printd(2, "AOT v3 '%s': read %d init descriptors, deferring for ns_init\n",
+                mod_name, (int)init_descriptors.size());
+        } else {
+            // No INIT_FUNCS section or read error — not an error, just no init functions
+            printd(5, "AOT v3 '%s': no INIT_FUNCS section: %s\n",
+                mod_name, init_error.c_str());
+        }
+    }
+
+    // Parse fallback source if available to recover values that can't be serialized
+    // (e.g., object constants, closure constants, static member initializers).
+    if (deserializer.hasFallbackSource()) {
+        ExceptionSink wsink;
+        QoreProgram* fallback_pgm = new QoreProgram(parse_options & ~PO_NO_TOP_LEVEL_STATEMENTS);
+        fallback_pgm->setScriptPath(label);
+        fallback_pgm->parse(deserializer.getFallbackSource(), label, &xsink, &wsink,
+            QP_WARN_DEFAULT);
+        if (wsink.isException()) {
+            wsink.handleWarnings();
+        }
+        if (xsink.isException()) {
+            printd(0, "AOT v3 '%s': fallback source parse failed\n", mod_name);
+            xsink.clear();
+            fallback_pgm->waitForTerminationAndDeref(nullptr);
+        } else {
+            // Transplant object constants and closure values from fallback to main program.
+            qore_program_private* pp = qore_program_private::get(*local_pgm);
+            qore_ns_private* fb_root = qore_ns_private::get(
+                *qore_program_private::get(*fallback_pgm)->RootNS);
+            qore_ns_private* main_root = qore_ns_private::get(*pp->RootNS);
+            transplantClassClosureValues(fb_root, main_root, local_pgm);
+
+            // Transplant BCAList for constructors.
+            transplantConstructorBCALists(fb_root, main_root);
+
+            // Note: fallback_pgm is NOT cleaned up here — it may contain values
+            // (closures, objects) referenced by the main program's constants.
+        }
+    }
+
     // Store per-module state so ns_init can find the correct program.
     // Also update the global for the fallback path in ns_init.
     aot_module_pgm = local_pgm;
     aot_module_name = mod_name;
     aot_module_funcs = functions;
     aot_module_num_funcs = num_functions;
-    aot_module_map[mod_name] = {local_pgm, functions, num_functions, std::move(reexport_deps)};
+    {
+        AotModuleState state;
+        state.pgm = local_pgm;
+        state.funcs = functions;
+        state.num_funcs = num_functions;
+        state.reexport_deps = std::move(reexport_deps);
+        state.init_descriptors = std::move(init_descriptors);
+        // Store metadata copy for ns_init to build init function contexts
+        if (!state.init_descriptors.empty()) {
+            state.metadata.assign(metadata, metadata + metadata_len);
+        }
+        aot_module_map[mod_name] = std::move(state);
+    }
 
     return nullptr;  // success
 }

@@ -47,7 +47,7 @@ const char* ClassNs::getName() const {
 ConstantEntry::ConstantEntry(const QoreProgramLocation* loc, const char* n, QoreValue val, const QoreTypeInfo* ti,
         bool n_pub, bool n_init, bool n_builtin, ClassAccess n_access)
         : loc(loc), name(n), typeInfo(ti), val(val), in_init(false), pub(n_pub),
-        init(n_init), builtin(n_builtin), delayed_eval(false), access(n_access) {
+        init(n_init), builtin(n_builtin), delayed_eval(false), has_init_expr(false), access(n_access) {
     QoreProgram* pgm = getProgram();
     if (pgm)
         pwo = qore_program_private::getParseWarnOptions(pgm);
@@ -65,6 +65,7 @@ ConstantEntry::ConstantEntry(const ConstantEntry& old)
         : loc(old.loc), pwo(old.pwo), name(old.name),
         typeInfo(old.typeInfo), val(old.val.refSelf()),
         in_init(false), pub(old.pub), init(true), builtin(old.builtin), delayed_eval(old.delayed_eval),
+        has_init_expr(old.has_init_expr),
         saved_val(old.saved_val.refSelf()),
         access(old.access), from_module(old.from_module) {
     assert(!old.in_init);
@@ -76,6 +77,10 @@ ConstantEntry::ConstantEntry(const ConstantEntry& old)
 void ConstantEntry::del(QoreListNode& l) {
     //printd(5, "ConstantEntry::del(l) this: %p '%s' node: %p (%d) %s %d (saved_val: %s)\n", this, name.c_str(),
     //  node, get_node_type(node), get_type_name(node), node->reference_count(), saved_val.getTypeName());
+    aot_init_expr.discard(nullptr);
+#ifdef DEBUG
+    aot_init_expr.clear();
+#endif
     if (saved_val) {
         val.discard(nullptr);
         l.push(saved_val, nullptr);
@@ -94,6 +99,10 @@ void ConstantEntry::del(QoreListNode& l) {
 }
 
 void ConstantEntry::del(ExceptionSink* xsink) {
+    aot_init_expr.discard(xsink);
+#ifdef DEBUG
+    aot_init_expr.clear();
+#endif
     if (saved_val) {
         val.discard(xsink);
         saved_val.discard(xsink);
@@ -181,8 +190,13 @@ int ConstantEntry::parseCommitRuntimeInit() {
         return 0;
     }
     delayed_eval = false;
+    has_init_expr = true;
     assert(saved_val);
     assert(saved_val.needsEval());
+
+    // Preserve the init expression for AOT lowering before evaluation consumes it.
+    // The expression AST is ref-counted; this keeps it alive after saved_val is replaced.
+    aot_init_expr = saved_val.refSelf();
 
     int err = 0;
 

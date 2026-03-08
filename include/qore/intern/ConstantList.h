@@ -100,7 +100,8 @@ public:
         pub : 1,          // public constant (modules only)
         init : 1,         // already initialized
         builtin : 1,      // builtin vs user
-        delayed_eval : 1  // delayed evaluation
+        delayed_eval : 1, // delayed evaluation
+        has_init_expr : 1 // had a delayed-eval init expression (for AOT)
         ;
 
     DLLLOCAL ConstantEntry(const QoreProgramLocation* loc, const char* n, QoreValue v,
@@ -188,13 +189,30 @@ public:
         return from_module.empty() ? nullptr : from_module.c_str();
     }
 
+    //! Returns true if this constant had a delayed-eval init expression
+    DLLLOCAL bool hasInitExpr() const {
+        return has_init_expr;
+    }
+
+    //! Returns the preserved init expression (for AOT lowering); NOTHING if not preserved
+    DLLLOCAL const QoreValue getInitExpr() const {
+        return aot_init_expr;
+    }
+
+    //! Discard the preserved init expression (call after AOT lowering is complete)
+    DLLLOCAL void discardInitExpr(ExceptionSink* xsink) {
+        aot_init_expr.discard(xsink);
+    }
+
 protected:
     QoreValue saved_val{};
+    QoreValue aot_init_expr{};  //!< preserved init expression for AOT lowering
     ClassAccess access;
     std::string from_module;
 
     DLLLOCAL ~ConstantEntry() {
         assert(saved_val.isNothing());
+        assert(aot_init_expr.isNothing());
         assert(val.isNothing());
     }
 

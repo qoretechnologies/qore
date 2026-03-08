@@ -58,12 +58,15 @@
 #include "qore/intern/QoreCastOperatorNode.h"
 #include <qore/QoreEnumDecl.h>
 
+#include "qore/intern/QoreAOT.h"
 #include "qore/intern/QoreIRBuilder.h"
 #include "qore/intern/QoreIRLowering.h"
 #include "qore/intern/QoreIRVerifier.h"
 
 #include <cassert>
 #include <cstring>
+#include <deque>
+#include <unordered_set>
 
 // Defined in Function.cpp - collects all local variables from a StatementBlock and nested blocks
 extern void collectAllStatementLocals(const StatementBlock* block, std::vector<LocalVar*>& locals);
@@ -1354,10 +1357,15 @@ static void writeClassesSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
                     writer.writeStringRef(ce->getName());
                     writer.writeStringRef(getTypePath(ce->typeInfo));
                     writer.writeU8(static_cast<uint8_t>(ce->getAccess()));
-                    // Use getReferencedValue() for the actual evaluated value
-                    QoreValue actual_val = ce->getReferencedValue();
-                    writer.writeValue(actual_val);
-                    actual_val.discard(nullptr);
+                    if (ce->hasInitExpr()) {
+                        // Class constants with init expressions get NOTHING placeholder
+                        writer.writeValue(QoreValue());
+                    } else {
+                        // Use getReferencedValue() for the actual evaluated value
+                        QoreValue actual_val = ce->getReferencedValue();
+                        writer.writeValue(actual_val);
+                        actual_val.discard(nullptr);
+                    }
                 }
             }
         }
@@ -1491,12 +1499,18 @@ static void writeConstantsSection(QoreAOTBinaryWriter& writer, const AOTSerializ
         writer.writeU32(ci.ns_idx);
         writer.writeU8(static_cast<uint8_t>(ce->getAccess()));
         writer.writeU8(ce->isPublic() ? 1 : 0);
-        // Use getReferencedValue() to get the actual evaluated value.
-        // ce->val may hold a RuntimeConstantRefNode (NT_RTCONSTREF) which is
-        // just a reference to the constant's evaluated saved_val.
-        QoreValue actual_val = ce->getReferencedValue();
-        writer.writeValue(actual_val);
-        actual_val.discard(nullptr);
+        if (ce->hasInitExpr()) {
+            // Constants with init expressions will be initialized at runtime
+            // by their lowered init function — serialize NOTHING as placeholder
+            writer.writeValue(QoreValue());
+        } else {
+            // Use getReferencedValue() to get the actual evaluated value.
+            // ce->val may hold a RuntimeConstantRefNode (NT_RTCONSTREF) which is
+            // just a reference to the constant's evaluated saved_val.
+            QoreValue actual_val = ce->getReferencedValue();
+            writer.writeValue(actual_val);
+            actual_val.discard(nullptr);
+        }
     }
 
     writer.endSection(sec_idx);
@@ -1598,6 +1612,8 @@ static void writeMethodsSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
 
         // write user variant signatures
         {
+            bool is_constructor = strcmp(method->getName(), "constructor") == 0;
+            bool debug = getenv("QORE_AOT_DEBUG") != nullptr;
             QoreFunctionIterator qfi(*static_cast<const QoreFunction*>(mfb));
             while (qfi.next()) {
                 const AbstractQoreFunctionVariant* v = qfi.getVariant();
@@ -1614,6 +1630,87 @@ static void writeMethodsSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
                     }
                     writer.writeU8(mflags);
                     writeVariantSignature(writer, v);
+
+                    // Serialize BCA (Base Class Constructor Arguments) for constructors
+                    if (is_constructor) {
+                        const ConstructorMethodVariant* cmv = CONMV_const(mvb);
+                        const BCAList* bcal = cmv->getBaseClassArgumentList();
+                        if (debug) {
+                            fprintf(stderr, "AOT BCA: %s::constructor bcal=%p size=%d\n",
+                                mi.method->getClass()->getName(),
+                                (const void*)bcal, bcal ? (int)bcal->size() : -1);
+                        }
+                        if (bcal && !bcal->empty()) {
+                            writer.writeU8(1);  // has_bca = true
+                            writer.writeU16(static_cast<uint16_t>(bcal->size()));
+
+                            // Build slot map from constructor's signature params
+                            // Must use dynamic_cast due to multiple inheritance:
+                            // UserConstructorVariant inherits both ConstructorMethodVariant
+                            // (via MethodVariantBase -> AbstractQoreFunctionVariant) and
+                            // UserVariantBase. reinterpret_cast gives wrong pointer offset.
+                            const UserConstructorVariant* ucv =
+                                dynamic_cast<const UserConstructorVariant*>(cmv);
+                            const UserSignature* sig = ucv
+                                ? const_cast<UserConstructorVariant*>(ucv)->getUserSignature()
+                                : nullptr;
+                            AOTSlotMap bca_slots;
+                            if (sig) {
+                                for (unsigned i = 0; i < sig->numParams(); ++i) {
+                                    bca_slots.local_slots[reinterpret_cast<const void*>(sig->lv[i])] = i;
+                                }
+                                // Also map selfid if present
+                                if (sig->selfid) {
+                                    bca_slots.local_slots[reinterpret_cast<const void*>(sig->selfid)] =
+                                        static_cast<int32_t>(sig->numParams());
+                                }
+                                // Also map argvid if present
+                                if (sig->argvid) {
+                                    bca_slots.local_slots[reinterpret_cast<const void*>(sig->argvid)] =
+                                        static_cast<int32_t>(sig->numParams() + (sig->selfid ? 1 : 0));
+                                }
+                            }
+
+                            for (const BCANode* bca : *bcal) {
+                                // Write base class path for runtime resolution
+                                const QoreClass* base_cls = nullptr;
+                                if (bca->classid) {
+                                    const qore_class_private* cls_priv =
+                                        qore_class_private::get(*mi.method->getClass());
+                                    if (cls_priv->scl) {
+                                        ClassAccess access;
+                                        base_cls = cls_priv->scl->getClass(
+                                            bca->classid, access, true);
+                                    }
+                                }
+                                writer.writeStringRef(base_cls ? base_cls->getPath() : "");
+
+                                // Serialize args as individual EXPR_TREE blobs
+                                const QoreListNode* args = bca->getArgs();
+                                uint16_t num_args = args ? static_cast<uint16_t>(args->size()) : 0;
+                                writer.writeU16(num_args);
+
+                                for (uint16_t ai = 0; ai < num_args; ++ai) {
+                                    QoreValue arg_val = args->retrieveEntry(ai);
+                                    std::vector<uint8_t> blob;
+                                    if (serializeExprTreeToBlob(arg_val, bca_slots, blob, debug)) {
+                                        writer.writeU32(static_cast<uint32_t>(blob.size()));
+                                        if (!blob.empty()) {
+                                            writer.writeBytes(blob.data(),
+                                                static_cast<uint32_t>(blob.size()));
+                                        }
+                                    } else {
+                                        printd(0, "AOT: failed to serialize BCA arg %d for %s::%s\n",
+                                            ai, mi.method->getClass()->getName(), method->getName());
+                                        // Write empty blob to keep format consistent
+                                        writer.writeU32(0);
+                                    }
+                                }
+                            }
+                        } else {
+                            writer.writeU8(0);  // has_bca = false
+                        }
+                    }
                 }
             }
         }
@@ -2250,6 +2347,141 @@ void serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
     writer.endSection(sec_idx);
 }
 
+// ---- Init Functions Section ----
+
+//! Topologically sort init functions by their dependency graph.
+//! Returns indices in execution order. Detects and reports circular dependencies.
+static std::vector<size_t> topologicalSortInitFuncs(
+        const std::vector<AOTCompiledInitFunc>& init_funcs) {
+    size_t n = init_funcs.size();
+
+    // Build name → index map
+    std::unordered_map<std::string, size_t> name_to_idx;
+    for (size_t i = 0; i < n; ++i) {
+        name_to_idx[init_funcs[i].name] = i;
+    }
+
+    // Build adjacency list and in-degree count
+    std::vector<std::vector<size_t>> dependents(n);  // dependents[i] = list of funcs that depend on i
+    std::vector<int> in_degree(n, 0);
+
+    for (size_t i = 0; i < n; ++i) {
+        for (auto& dep_name : init_funcs[i].deps) {
+            auto it = name_to_idx.find(dep_name);
+            if (it != name_to_idx.end()) {
+                dependents[it->second].push_back(i);
+                ++in_degree[i];
+            }
+        }
+    }
+
+    // Kahn's algorithm
+    std::vector<size_t> order;
+    order.reserve(n);
+    std::deque<size_t> queue;
+    for (size_t i = 0; i < n; ++i) {
+        if (in_degree[i] == 0) {
+            queue.push_back(i);
+        }
+    }
+
+    while (!queue.empty()) {
+        size_t idx = queue.front();
+        queue.pop_front();
+        order.push_back(idx);
+        for (size_t dep_idx : dependents[idx]) {
+            if (--in_degree[dep_idx] == 0) {
+                queue.push_back(dep_idx);
+            }
+        }
+    }
+
+    if (order.size() < n) {
+        // Circular dependency detected — report and include remaining in original order
+        printd(0, "AOT WARNING: circular dependency detected among %d init functions\n",
+            (int)(n - order.size()));
+        std::unordered_set<size_t> added(order.begin(), order.end());
+        for (size_t i = 0; i < n; ++i) {
+            if (added.find(i) == added.end()) {
+                printd(0, "AOT WARNING: circular dependency involves '%s'\n",
+                    init_funcs[i].name.c_str());
+                order.push_back(i);
+            }
+        }
+    }
+
+    return order;
+}
+
+void serializeInitFuncs(QoreAOTBinaryWriter& writer,
+        const std::vector<AOTCompiledInitFunc>& init_funcs) {
+    // Topologically sort to ensure dependencies are initialized first
+    std::vector<size_t> order = topologicalSortInitFuncs(init_funcs);
+
+    uint32_t sec_idx = writer.beginSection(QoreAOTSectionType::INIT_FUNCS);
+
+    writer.writeU32(static_cast<uint32_t>(init_funcs.size()));
+    for (size_t idx : order) {
+        auto& cif = init_funcs[idx];
+        writer.writeStringRef(cif.name.c_str());
+        writer.writeU8(static_cast<uint8_t>(cif.target_type));
+        writer.writeStringRef(cif.ns_path.c_str());
+        writer.writeStringRef(cif.item_name.c_str());
+    }
+
+    writer.endSection(sec_idx);
+}
+
+bool readInitFuncs(const uint8_t* data, uint32_t size,
+        std::vector<AOTInitFuncDescriptor>& init_funcs, std::string& error) {
+    QoreAOTBinaryReader reader;
+    if (!reader.open(data, size, error)) {
+        return false;
+    }
+
+    const QoreAOTSectionHeader* sec = reader.findSection(QoreAOTSectionType::INIT_FUNCS);
+    if (!sec) {
+        // No init funcs section — this is OK
+        return true;
+    }
+
+    const uint8_t* ptr = reader.getSectionData(*sec);
+    if (!ptr) {
+        error = "invalid INIT_FUNCS section data";
+        return false;
+    }
+
+    uint32_t count = QoreAOTBinaryReader::readU32(ptr);
+    init_funcs.reserve(count);
+
+    for (uint32_t i = 0; i < count; ++i) {
+        AOTInitFuncDescriptor desc;
+        const char* name = reader.readStringRef(ptr);
+        if (!name) {
+            error = "invalid init func name at index " + std::to_string(i);
+            return false;
+        }
+        desc.name = name;
+        desc.target_type = static_cast<AOTCompiledInitFunc::TargetType>(
+            QoreAOTBinaryReader::readU8(ptr));
+        const char* ns_path = reader.readStringRef(ptr);
+        if (!ns_path) {
+            error = "invalid init func ns_path at index " + std::to_string(i);
+            return false;
+        }
+        desc.ns_path = ns_path;
+        const char* item_name = reader.readStringRef(ptr);
+        if (!item_name) {
+            error = "invalid init func item_name at index " + std::to_string(i);
+            return false;
+        }
+        desc.item_name = item_name;
+        init_funcs.push_back(std::move(desc));
+    }
+
+    return true;
+}
+
 // ---- Per-Function Source Fallback (Phase 6) ----
 
 void serializeFallbackSources(QoreAOTBinaryWriter& writer,
@@ -2275,18 +2507,8 @@ void serializeFallbackSources(QoreAOTBinaryWriter& writer,
                 continue;
             }
         }
-        // Check for constructor/destructor/copy methods
-        size_t sep = func.name.find("::");
-        if (sep != std::string::npos) {
-            std::string method = func.name.substr(sep + 2);
-            size_t paren = method.find('(');
-            if (paren != std::string::npos) {
-                method = method.substr(0, paren);
-            }
-            if (method == "constructor" || method == "destructor" || method == "copy") {
-                fallback_funcs.push_back(&func);
-            }
-        }
+        // NOTE: constructor/destructor/copy methods no longer need blanket source
+        // fallback — BCA data is serialized in the METHODS section (v2 format)
     }
 
     // Always write the FUNC_SOURCES section when called (caller controls whether
@@ -3414,8 +3636,9 @@ bool QoreAOTBinaryDeserializer::resolveClassBases(std::string& error) {
                 // Add base class to this class with proper access level
                 qc->addBaseClass(const_cast<QoreClass*>(base),
                     static_cast<ClassAccess>(pbc.access), pbc.is_virtual);
-                printd(5, "AOT deser: resolved base class '%s' for class '%s' (access: %d)\n",
-                    pbc.base_path.c_str(), qc->getName(), pbc.access);
+                printd(5, "AOT deser: resolved base class '%s' (id: %d) for class '%s' (id: %d)\n",
+                    pbc.base_path.c_str(), base->getID(),
+                    qc->getName(), qc->getID());
             } else {
                 error = "cannot resolve base class '" + pbc.base_path + "' for class '" +
                     std::string(qc->getName()) + "'";
@@ -3559,8 +3782,8 @@ bool QoreAOTBinaryDeserializer::resolveHashdeclMembers(std::string& error) {
             const QoreTypeInfo* mti = type_resolver->resolve(phm.type_path.c_str(), error);
             if (!error.empty()) {
                 // Fall back to auto type when the type can't be resolved
-                printd(2, "AOT deser: cannot resolve type '%s' for member '%s' in hashdecl '%s': %s "
-                    "(falling back to auto)\n",
+                printd(0, "AOT: cannot resolve type '%s' for member '%s' "
+                    "in hashdecl '%s': %s (falling back to auto)\n",
                     phm.type_path.c_str(), phm.name.c_str(), hd->getName(), error.c_str());
                 error.clear();
                 mti = autoTypeInfo;
@@ -3933,17 +4156,20 @@ bool QoreAOTBinaryDeserializer::deserializeConstants(std::string& error) {
         const QoreTypeInfo* ti = type_resolver->resolve(type_path, error);
         if (!error.empty()) {
             val.discard(nullptr);
+            printd(0, "AOT: failed to resolve type '%s' for const '%s': %s\n",
+                type_path ? type_path : "(null)", name ? name : "(null)", error.c_str());
             error = "cannot resolve type '" + std::string(type_path ? type_path : "(null)") +
                 "' for constant '" + std::string(name) + "': " + error;
             return false;
         }
+        const QoreTypeInfo* final_ti = ti ? ti : val.getTypeInfo();
         // Create as user constant (not builtin) with proper pub flag.
         // Using add() would mark the constant as builtin, which causes
         // scanMergeCommittedNamespace to skip it (isUserPublic() returns false).
         // Create the ConstantEntry directly with: pub = is_pub, init = true (value
         // already resolved), builtin = false (user constant from AOT module).
         ConstantEntry* ce = new ConstantEntry(&loc_builtin, name, val,
-            ti ? ti : val.getTypeInfo(), is_pub != 0, true, false,
+            final_ti, is_pub != 0, true, false,
             static_cast<ClassAccess>(access));
         ns_list[ns_idx]->constant.addEntry(name, ce);
     }
@@ -4043,7 +4269,7 @@ static bool readAndSetupVariantSignature(
             // Fall back to auto type when the type can't be resolved (e.g., module-private
             // types that were filtered from the metadata). The compiled code already has
             // the type checks baked in, so this only affects variant matching.
-            printd(2, "AOT deser: cannot resolve type '%s' for parameter '%s': %s "
+            printd(0, "AOT: cannot resolve type '%s' for parameter '%s': %s "
                 "(falling back to auto)\n",
                 ptype_path ? ptype_path : "(null)", param_names[j].c_str(), error.c_str());
             error.clear();
@@ -4274,6 +4500,96 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
                     umv, has_varargs, error, qc)) {
                 delete mvb;
                 return false;
+            }
+
+            // Deserialize BCA (Base Class Constructor Arguments) for constructors
+            if (is_constructor && ptr < end) {
+                uint8_t has_bca = QoreAOTBinaryReader::readU8(ptr);
+                if (has_bca) {
+                    uint16_t num_bca = QoreAOTBinaryReader::readU16(ptr);
+                    if (num_bca > 0) {
+                        BCAList* bcal = new BCAList();
+
+                        // Build local var array from constructor's signature params
+                        UserSignature* sig = umv->getUserSignature();
+                        std::vector<LocalVar*> local_vars;
+                        if (sig) {
+                            for (unsigned pi = 0; pi < sig->numParams(); ++pi) {
+                                local_vars.push_back(sig->lv[pi]);
+                            }
+                            if (sig->selfid) {
+                                local_vars.push_back(sig->selfid);
+                            }
+                            if (sig->argvid) {
+                                local_vars.push_back(sig->argvid);
+                            }
+                        }
+
+                        for (uint16_t bi = 0; bi < num_bca; ++bi) {
+                            // Read base class path
+                            const char* base_path = reader.readStringRef(ptr);
+
+                            // Resolve base class by path
+                            qore_classid_t base_classid = 0;
+                            if (base_path && base_path[0]) {
+                                ExceptionSink xsink;
+                                const QoreClass* base_cls = pgm->findClass(base_path, &xsink);
+                                if (xsink.isException()) {
+                                    xsink.clear();
+                                }
+                                if (base_cls) {
+                                    base_classid = base_cls->getID();
+                                } else {
+                                    printd(0, "AOT deser: cannot resolve BCA base class '%s' "
+                                        "for %s::constructor\n", base_path, qc->getName());
+                                }
+                            }
+
+                            // Read and deserialize args
+                            uint16_t num_args = QoreAOTBinaryReader::readU16(ptr);
+                            QoreListNode* arg_list = nullptr;
+                            if (num_args > 0) {
+                                // Must use newList(true) so the list has value=false and
+                                // needs_eval=true; otherwise evalList() returns the list as-is
+                                // without evaluating expression nodes
+                                arg_list = qore_list_private::newList(true);
+                                qore_list_private::get(*arg_list)->complexTypeInfo =
+                                    qore_get_complex_list_type(autoTypeInfo);
+                                for (uint16_t ai = 0; ai < num_args; ++ai) {
+                                    uint32_t blob_size = QoreAOTBinaryReader::readU32(ptr);
+                                    if (blob_size > 0 && ptr + blob_size <= end) {
+                                        QoreValue arg_val = deserializeExprTreeFromBlob(
+                                            ptr, blob_size, pgm,
+                                            local_vars.empty() ? nullptr : local_vars.data(),
+                                            static_cast<int>(local_vars.size()));
+                                        ptr += blob_size;
+                                        arg_list->push(arg_val, nullptr);
+                                    } else {
+                                        ptr += blob_size;
+                                        arg_list->push(QoreValue(), nullptr);
+                                    }
+                                }
+                            }
+
+                            // Create BCANode with pre-resolved data
+                            BCANode* bca_node = new BCANode(base_classid, arg_list);
+                            bcal->push_back(bca_node);
+
+                            printd(5, "AOT deser: BCA entry %d/%d: base='%s' classid=%d "
+                                "num_args=%d for %s::constructor\n",
+                                bi + 1, num_bca, base_path ? base_path : "",
+                                base_classid, num_args, qc->getName());
+                        }
+
+                        // Set BCA on the constructor variant
+                        UserConstructorVariant* ucv = dynamic_cast<UserConstructorVariant*>(mvb);
+                        if (ucv) {
+                            ucv->setBCAList(bcal);
+                        } else {
+                            delete bcal;
+                        }
+                    }
+                }
             }
 
             // Skip methods for classes that already existed from module loading

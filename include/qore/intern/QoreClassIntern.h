@@ -447,6 +447,9 @@ public:
             src->bcal = nullptr;
         }
     }
+
+    //! Set the BCAList for AOT deserialization (takes ownership)
+    DLLLOCAL void setBCAList(BCAList* n_bcal);  // defined in QoreClass.cpp
 };
 
 #define UCONV(f) (reinterpret_cast<UserConstructorVariant*>(f))
@@ -1392,10 +1395,20 @@ public:
         assert(loc->start_line > 0);
     }
 
+    //! AOT constructor: takes pre-resolved classid and evaluated args (no parse_args/name/ns)
+    /** Used during AOT binary deserialization to reconstruct BCANode with pre-resolved data.
+        Takes ownership of n_args.
+    */
+    DLLLOCAL BCANode(qore_classid_t n_classid, QoreListNode* n_args)
+            : FunctionCallBase(nullptr, n_args), loc(&loc_builtin), classid(n_classid),
+              ns(nullptr), name(nullptr) {
+    }
+
     DLLLOCAL ~BCANode() {
         delete ns;
-        if (name)
+        if (name) {
             free(name);
+        }
     }
 
     // resolves classes, parses arguments, and attempts to find constructor variant
@@ -1410,6 +1423,10 @@ typedef std::vector<BCANode*> bcalist_t;
 // to a subprogram object
 class BCAList : public bcalist_t {
 public:
+   //! Default constructor for building list incrementally (AOT deserialization)
+   DLLLOCAL BCAList() {
+   }
+
    DLLLOCAL BCAList(BCANode* n) {
       push_back(n);
    }

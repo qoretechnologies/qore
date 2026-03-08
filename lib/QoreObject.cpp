@@ -947,8 +947,18 @@ void qore_object_private::addVirtualPrivateData(qore_classid_t key, AbstractPriv
     // first get parent class corresponding to "key"
     const QoreClass* qc = theclass->getClass(key);
 
-    //printd(5, "qore_object_private::addVirtualPrivateData() this: %p privateData: %p key: %d apd: %p qc: %p '%s'\n",
-    //  this, privateData, key, apd, qc, qc->getName());
+    printd(0, "qore_object_private::addVirtualPrivateData() this: %p theclass: %p '%s' (id: %d) privateData: %p key: %d apd: %p qc: %p\n",
+        this, theclass, theclass ? theclass->getName() : "n/a", theclass ? theclass->getID() : -1, privateData, key, apd, qc);
+    if (!qc) {
+        printd(0, "qore_object_private::addVirtualPrivateData() ERROR: getClass(%d) returned null for theclass '%s' (id: %d)\n",
+            key, theclass->getName(), theclass->getID());
+        // dump class hierarchy
+        if (theclass->getClass(theclass->getID())) {
+            printd(0, " + theclass itself found by its own ID %d\n", theclass->getID());
+        }
+        assert(false);
+        return;
+    }
     assert(qc);
     BCSMList* sml = qore_class_private::get(*qc)->getBCSMList();
     //printd(5, "qore_object_private::addVirtualPrivateData() this: %p qc: %p '%s' sml: %p\n", this, qc,

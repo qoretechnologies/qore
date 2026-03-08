@@ -5092,6 +5092,24 @@ qore_type_result_e qore_class_private::runtimeCheckCompatibleClassIntern(const q
 
     ClassAccess access = Public;
     if (!oc.scl || !oc.scl->getClass(*this, access, true)) {
+        // Debug: log failed type check for AbstractDataProviderType hierarchy
+        if (name == "AbstractDataProviderType" || oc.name == "QoreDataType") {
+            printd(0, "AOT DEBUG runtimeCheckCompat FAILED: expected '%s' (id: %d, priv: %p) "
+                "vs obj '%s' (id: %d, priv: %p, scl: %p)\n",
+                name.c_str(), classID, (void*)this,
+                oc.name.c_str(), oc.classID, (void*)&oc,
+                (void*)oc.scl);
+            // Dump the object class's hierarchy
+            if (oc.scl) {
+                for (auto& bc : *oc.scl) {
+                    if (bc->sclass) {
+                        printd(0, "  AOT DEBUG: '%s' hierarchy has base '%s' (id: %d, priv: %p)\n",
+                            oc.name.c_str(), bc->sclass->getName(),
+                            bc->sclass->priv->classID, (void*)bc->sclass->priv);
+                    }
+                }
+            }
+        }
         return QTI_NOT_EQUAL;
     }
 
@@ -5634,6 +5652,11 @@ UserConstructorVariant::~UserConstructorVariant() {
     delete bcal;
 }
 
+void UserConstructorVariant::setBCAList(BCAList* n_bcal) {
+    delete bcal;
+    bcal = n_bcal;
+}
+
 void UserConstructorVariant::evalConstructor(const QoreClass &thisclass, QoreObject* self,
         CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const {
     UserVariantExecHelper uveh(this, &ceh, xsink);
@@ -5827,8 +5850,11 @@ void ConstructorMethodFunction::evalConstructor(const AbstractQoreFunctionVarian
     // setup call, save runtime position, and evaluate arguments
     CodeEvaluationHelper ceh(xsink, rc, this, variant, "constructor", args, self,
         qore_class_private::get(thisclass));
-    if (*xsink)
+    if (*xsink) {
+        printd(5, "ConstructorMethodFunction::evalConstructor() %s variant=%p args=%p nargs=%d EXCEPTION in CEH\n",
+            thisclass.getName(), (void*)variant, (void*)args, args ? (int)args->size() : 0);
         return;
+    }
 
     CONMV_const(variant)->evalConstructor(thisclass, self, ceh, bcl, bceal, xsink);
 }

@@ -52,8 +52,10 @@ class LocalVar;
 //! Magic number: "QORD" in little-endian (0x44524F51)
 constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 
-//! Current binary format version (clean v1 format with full 128-bit parse options + source hash)
-constexpr uint16_t QORE_AOT_BINARY_VERSION = 1;
+//! Current binary format version
+//! v1: initial format with full 128-bit parse options + source hash
+//! v2: added BCA (Base Class Constructor Arguments) serialization for constructors
+constexpr uint16_t QORE_AOT_BINARY_VERSION = 2;
 
 //! On-disk header size (60 bytes)
 constexpr uint32_t QORE_AOT_HEADER_SIZE = 60;
@@ -93,6 +95,7 @@ enum class QoreAOTSectionType : uint16_t {
     DEPENDENCIES  = 14,  //!< Module dependencies (for strip-source modules)
     REEXPORT_MODULES = 15,  //!< Modules that should be reexported (for strip-source modules)
     PROGRAM_METADATA = 16,  //!< Program-level metadata (exec-class name, etc.)
+    INIT_FUNCS       = 17,  //!< Init functions for constants/static vars with lowered init expressions
 };
 
 //! Value type tags for serialized constant values
@@ -723,6 +726,8 @@ enum class AOTExprNodeKind : uint8_t {
     EN_SELF_METH_REF = 101, //!< u16 method_len + bytes; 0 children
     EN_CLOSURE       = 102, //!< u32 expr_slot_index; 0 children — references CLOSURE_CREATE expr slot
     EN_FUNC_REF      = 103, //!< u16 name_len + bytes; 0 children (function reference)
+    EN_STATIC_METH_REF = 104, //!< u16 class_len + bytes + u16 method_len + bytes; 0 children
+    EN_BOUND_METH_REF  = 105, //!< u16 class_len + bytes + u16 method_len + bytes; 0 children (bound to self)
 
     // Assignment (2 children = [lvalue, rvalue])
     EN_ASSIGN        = 110, //!< no metadata
@@ -765,6 +770,12 @@ enum class AOTExprNodeKind : uint8_t {
 
     // Square brackets range (x[m..n])
     EN_SQ_BRKT_RANGE = 155, //!< 3 children: [target, start, end]
+
+    // List processing operators
+    EN_MAP           = 160, //!< 2 children: [map_expr, source]
+    EN_MAP_SELECT    = 161, //!< 3 children: [map_expr, source, where_expr]
+    EN_HASH_MAP      = 162, //!< 3 children: [key_expr, val_expr, source]
+    EN_HASH_MAP_SELECT = 163, //!< 4 children: [key_expr, val_expr, source, where_expr]
 };
 
 //! Identity for a local variable slot
@@ -832,6 +843,32 @@ struct AOTCompiledFuncWithSlots {
     std::vector<const QoreIRFunction*> handler_irs;
 };
 
+//! Descriptor for a compiled constant/static-var init function
+struct AOTCompiledInitFunc {
+    std::string name;               //!< init function name (e.g. "__const_init::Ns::ConstName")
+    std::string llvm_symbol;        //!< LLVM symbol name in the module
+    int num_locals = 0;
+    int num_globals = 0;
+    int num_exprs = 0;
+    int num_stmts = 0;
+    int num_regex_cases = 0;
+    AOTSlotIdentities slot_ids;
+    uint64_t feature_flags = 0;
+
+    //! Target type for the init function result
+    enum TargetType : uint8_t {
+        NS_CONSTANT = 0,      //!< namespace-level constant
+        CLASS_CONSTANT = 1,   //!< class-level constant
+        STATIC_VAR = 2,       //!< static class variable
+    };
+    TargetType target_type = NS_CONSTANT;
+    std::string ns_path;            //!< namespace path or class path
+    std::string item_name;          //!< constant or variable name
+
+    //! Names of other init functions this one depends on (for topological sort)
+    std::vector<std::string> deps;
+};
+
 //! Serialize slot maps for compiled functions into the SLOT_MAPS binary section
 /** @param writer the binary writer to write to
     @param funcs vector of compiled function descriptors with slot identities
@@ -851,6 +888,36 @@ void serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
 void serializeFallbackSources(QoreAOTBinaryWriter& writer,
     const std::vector<AOTCompiledFuncWithSlots>& funcs,
     const char* source_text, int source_len);
+
+//! Serialize init function descriptors into the INIT_FUNCS binary section
+/** Each entry maps an init function name to its target (namespace constant,
+    class constant, or static variable). The init functions themselves are
+    registered via the SLOT_MAPS section like regular AOT functions.
+*/
+void serializeInitFuncs(QoreAOTBinaryWriter& writer,
+    const std::vector<AOTCompiledInitFunc>& init_funcs);
+
+//! Descriptor for a deserialized init function (read from INIT_FUNCS section)
+struct AOTInitFuncDescriptor {
+    std::string name;                               //!< init function name (matches QoreAOTFunc::name)
+    AOTCompiledInitFunc::TargetType target_type;    //!< what the init function initializes
+    std::string ns_path;                            //!< namespace path or class path
+    std::string item_name;                          //!< constant or variable name
+};
+
+//! Read init function descriptors from binary metadata
+/** Reads the INIT_FUNCS section from serialized binary metadata.
+    Returns the list of init function descriptors that map init function names
+    to their target constants/static vars.
+
+    @param data pointer to the binary metadata blob
+    @param size size of the binary metadata blob
+    @param init_funcs receives the list of init function descriptors
+    @param error receives error message on failure
+    @return true on success (even if section is absent), false on failure
+*/
+bool readInitFuncs(const uint8_t* data, uint32_t size,
+    std::vector<AOTInitFuncDescriptor>& init_funcs, std::string& error);
 
 // ---- Namespace Deserialization (Phase 4) ----
 
