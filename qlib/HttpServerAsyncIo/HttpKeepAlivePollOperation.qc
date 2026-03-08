@@ -193,10 +193,17 @@ public class HttpKeepAlivePollOperation inherits AbstractPollOperation {
             return transitionToHeaderPhase();
         }
 
-        # Need to wait for data
+        # Need to wait for data; include poll_timeout_ms so the EventLoop wakes up
+        # when the idle deadline expires, not just when the full operation timeout
+        # (TTL + DefaultIoOperationTimeout) expires
+        int remaining_ms = (deadline - now_us()).durationMilliseconds();
+        if (remaining_ms <= 0) {
+            remaining_ms = 1;
+        }
         return <SocketPollInfo>{
             "events": SOCK_POLLIN,
             "socket": sock,
+            "poll_timeout_ms": remaining_ms,
         };
     }
 
