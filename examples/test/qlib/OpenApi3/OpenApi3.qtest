@@ -59,8 +59,7 @@ class HttpTestServer {
 
     done() {
         end.dec();
-        # wait for listener thread to fully complete (including socket close)
-        # before returning, so restart() doesn't race with the old listener
+        # Wait for the listener thread to finish cleanup before returning
         listener_done.waitForZero();
     }
 

@@ -754,6 +754,12 @@ find_package(JNI)
 if (JNI_FOUND AND DEFINED JAVA_JVM_LIBRARY AND NOT DEFINED ENV{QORE_WITHOUT_JSIG})
     get_filename_component(JAVA_LIB_DIR ${JAVA_JVM_LIBRARY} DIRECTORY)
     set(LIBJSIG "${JAVA_LIB_DIR}/libjsig${CMAKE_SHARED_LIBRARY_SUFFIX}")
+    if (EXISTS "${LIBJSIG}")
+        message(STATUS "Found libjsig: ${LIBJSIG}")
+    else()
+        message(WARNING "libjsig not found at ${LIBJSIG} (JAVA_JVM_LIBRARY=${JAVA_JVM_LIBRARY})")
+        unset(LIBJSIG)
+    endif()
 endif()
 
 # check if we need libatomic

@@ -139,8 +139,6 @@
 #cmakedefine HAVE_GETIFADDRS
 #cmakedefine HAVE_WORKING_FORK
 #cmakedefine HAVE_WORKING_VFORK
-#cmakedefine STRERROR_R_CHAR_P
-
 /* OpenSSL */
 #cmakedefine HAVE_OPENSSL_CONST
 #cmakedefine HAVE_OPENSSL_HMAC_RV

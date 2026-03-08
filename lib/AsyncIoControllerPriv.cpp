@@ -1441,7 +1441,14 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
             }
         }
         cmdq.clear();
+    }
 
+    // Log the exit message before signaling waitStop(), so the per-controller
+    // logger receives this message instead of the global logger
+    log(QORE_LOG_LEVEL_DEBUG, "I/O thread exited");
+
+    {
+        AutoLocker al(m);
         tid = 0;
         io_exiting = false;
         ready_flag = false;
@@ -1452,8 +1459,6 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
             io_cond.broadcast();
         }
     }
-
-    log(QORE_LOG_LEVEL_DEBUG, "I/O thread exited");
 }
 
 bool AsyncIoControllerPriv::processCommands(ExceptionSink* xsink) {

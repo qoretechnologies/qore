@@ -2655,10 +2655,22 @@ OKKqgBjNAlYDdPhOy8O8Agk=
                 clients += client;
             }
 
-            # Verify cache has grown (connections are active)
-            int active_cache_size = server.getHttpAsyncIo().getTotalCacheSize();
+            # Verify cache has grown (connections are active); the async I/O
+            # system may not have registered all connections yet, so allow a
+            # brief window for the cache to update
+            int active_cache_size;
+            int retries = 0;
+            while (True) {
+                active_cache_size = server.getHttpAsyncIo().getTotalCacheSize();
+                if (active_cache_size > baseline_cache_size || retries >= 20) {
+                    break;
+                }
+                usleep(50ms);
+                ++retries;
+            }
             if (m_options.verbose > 1) {
-                printf("Active cache size with %d connections: %d\n", num_connections, active_cache_size);
+                printf("Active cache size with %d connections: %d (after %d retries)\n",
+                    num_connections, active_cache_size, retries);
             }
             assertTrue(active_cache_size > baseline_cache_size,
                 "cache should grow when connections are active");
@@ -2713,10 +2725,21 @@ OKKqgBjNAlYDdPhOy8O8Agk=
                 clients += client;
             }
 
-            # Verify cache has grown (HTTP/2 connections are active)
-            int h2_active = server.getHttpAsyncIo().getTotalCacheSize();
+            # Verify cache has grown (HTTP/2 connections are active); allow a
+            # brief window for the async I/O system to register them
+            int h2_active;
+            int retries = 0;
+            while (True) {
+                h2_active = server.getHttpAsyncIo().getTotalCacheSize();
+                if (h2_active > h2_baseline || retries >= 20) {
+                    break;
+                }
+                usleep(50ms);
+                ++retries;
+            }
             if (m_options.verbose > 1) {
-                printf("HTTP/2 active cache size with %d connections: %d\n", num_connections, h2_active);
+                printf("HTTP/2 active cache size with %d connections: %d (after %d retries)\n",
+                    num_connections, h2_active, retries);
             }
             assertTrue(h2_active > h2_baseline,
                 "cache should grow when HTTP/2 connections are active");

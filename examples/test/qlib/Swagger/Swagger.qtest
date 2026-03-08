@@ -47,6 +47,7 @@ class HttpTestServer {
 
     private {
         Counter end();
+        Counter listener_done();
         string resp;
         Socket s();
     }
@@ -59,16 +60,21 @@ class HttpTestServer {
 
     done() {
         end.dec();
+        # Wait for the listener thread to finish cleanup before returning
+        listener_done.waitForZero();
     }
 
     restart() {
         end.inc();
+        listener_done.inc();
         # start a fake server
-        if (s.bind(port, True))
+        if (s.bind(port, True)) {
             throw "BIND-ERROR", strerror();
+        }
 
-        if (s.listen())
+        if (s.listen()) {
             throw "LISTEN-ERROR", strerror();
+        }
 
         if (!port) {
             port = s.getSocketInfo().port;
@@ -77,12 +83,14 @@ class HttpTestServer {
     }
 
     private startListener(Socket s) {
+        on_exit listener_done.dec();
         Socket s1 = s.accept();
         hash h = s1.readHTTPHeader();
-        if (h."content-length")
+        if (h."content-length") {
             body = s1.recv(h."content-length");
-        else if (h."transfer-encoding" == "chunked")
+        } else if (h."transfer-encoding" == "chunked") {
             body = s1.readHTTPChunkedBody().body;
+        }
         s1.send(resp);
         end.waitForZero();
         s.close();

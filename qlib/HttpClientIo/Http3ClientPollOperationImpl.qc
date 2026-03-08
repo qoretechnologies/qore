@@ -250,11 +250,6 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
                                 sprintf("connection closed during STREAM_ID_BLOCKED "
                                     "retry (state: %y)", current_state);
                         }
-                        if (active_stream_count >= max_streams) {
-                            throw "HTTP3-CAPACITY-ERROR",
-                                sprintf("connection at capacity after retry: %d/%d streams",
-                                    active_stream_count, max_streams);
-                        }
                         continue;
                     }
                     rethrow;
@@ -427,12 +422,6 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
                 log(LoggerLevel::DEBUG, "GOAWAY received from server");
             }
 
-            # Signal threads waiting on STREAM_ID_BLOCKED
-            if (stream_blocked_waiters > 0) {
-                AutoLock al(stream_lock);
-                stream_capacity_cond.broadcast();
-            }
-
             # Drain ALL completed responses
             int drain_count = 0;
             while (True) {
@@ -480,6 +469,13 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
                     remove stream_ctxs{sid};
                     --active_stream_count;
                 }
+            }
+
+            # Signal threads waiting on STREAM_ID_BLOCKED after draining
+            # responses and decrementing active_stream_count
+            if (drain_count > 0 && stream_blocked_waiters > 0) {
+                AutoLock al(stream_lock);
+                stream_capacity_cond.broadcast();
             }
 
             bool dispatched;
