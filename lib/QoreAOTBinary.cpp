@@ -2693,6 +2693,21 @@ static QoreIRInstGroup classifyInstruction(const QoreIRInstruction* inst) {
     if (dynamic_cast<const QoreIRRefForeachInitInstruction*>(inst)) {
         return QoreIRInstGroup::RefForeachInit;
     }
+    if (dynamic_cast<const QoreIRMakeHashConstKeysInstruction*>(inst)) {
+        return QoreIRInstGroup::MakeHashConstKeys;
+    }
+    if (dynamic_cast<const QoreIRSwitchCaseMatchInstruction*>(inst)) {
+        return QoreIRInstGroup::SwitchCaseMatch;
+    }
+    if (dynamic_cast<const QoreIRContextInstruction*>(inst)) {
+        return QoreIRInstGroup::Context;
+    }
+    if (dynamic_cast<const QoreIRSummarizeInstruction*>(inst)) {
+        return QoreIRInstGroup::Summarize;
+    }
+    if (dynamic_cast<const QoreIRListIndexAccessInstruction*>(inst)) {
+        return QoreIRInstGroup::ListIndexAccess;
+    }
     if (dynamic_cast<const QoreIRExprInstruction*>(inst)) {
         return QoreIRInstGroup::Expr;
     }
@@ -3242,9 +3257,40 @@ static bool serializeIRInstruction(QoreAOTBinaryWriter& writer, const QoreIRInst
 
         // These instruction groups hold AST statement pointers that cannot be serialized.
         // They are rare in handler/closure bodies and mark the function as non-serializable.
+        case QoreIRInstGroup::MakeHashConstKeys: {
+            auto* mhck = static_cast<const QoreIRMakeHashConstKeysInstruction*>(inst);
+            writer.writeU16(static_cast<uint16_t>(mhck->keys.size()));
+            for (const auto& key : mhck->keys) {
+                writer.writeStringRef(key.c_str());
+            }
+            break;
+        }
+
+        case QoreIRInstGroup::SwitchCaseMatch: {
+            auto* scm = static_cast<const QoreIRSwitchCaseMatchInstruction*>(inst);
+            // Serialize the case value expression for matching
+            if (scm->case_node && scm->case_node->val) {
+                writer.writeU8(1);  // has_val
+                if (!writeExpr(writer, scm->case_node->val)) {
+                    return false;
+                }
+            } else {
+                writer.writeU8(0);  // no val (default case)
+            }
+            break;
+        }
+
+        case QoreIRInstGroup::ListIndexAccess:
+            // No extra fields beyond base operands
+            break;
+
+        // These instruction groups hold AST statement pointers that cannot be serialized.
+        // They are rare in handler/closure bodies and mark the function as non-serializable.
         case QoreIRInstGroup::Foreach:
         case QoreIRInstGroup::Debug:
         case QoreIRInstGroup::Assert:
+        case QoreIRInstGroup::Context:
+        case QoreIRInstGroup::Summarize:
         case QoreIRInstGroup::Unsupported:
             printd(0, "AOT IR serialize: unsupported instruction group %d (opcode %d)\n",
                 (int)group, (int)inst->opcode);

@@ -1710,7 +1710,14 @@ public:
             : QoreIRInstruction(QoreIROpcode::SwitchCaseMatch), case_node(n_case_node) {
     }
 
+    ~QoreIRSwitchCaseMatchInstruction() override {
+        if (owns_case_node) {
+            delete case_node;
+        }
+    }
+
     const CaseNode* case_node = nullptr;  //!< The case node for match evaluation
+    bool owns_case_node = false;  //!< True when case_node was created during deserialization
 };
 
 //! Reference foreach init instruction — stores the ParseReferenceNode expression

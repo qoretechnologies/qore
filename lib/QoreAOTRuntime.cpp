@@ -49,6 +49,7 @@
 #include "qore/intern/QoreIRLowering.h"
 #include "qore/intern/QoreIRVerifier.h"
 #include "qore/intern/CaseNodeRegex.h"
+#include "qore/intern/SwitchStatement.h"
 
 #include "qore/intern/ModuleInfo.h"
 #include "qore/intern/VarRefNode.h"
@@ -4104,6 +4105,49 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
             inst.reset(sri);
             break;
         }
+
+        case QoreIRInstGroup::MakeHashConstKeys: {
+            uint16_t key_count = QoreAOTBinaryReader::readU16(ptr);
+            std::vector<std::string> keys;
+            keys.reserve(key_count);
+            for (uint16_t k = 0; k < key_count; ++k) {
+                const char* key = reader.readStringRef(ptr);
+                keys.push_back(key ? key : "");
+            }
+            inst.reset(new QoreIRMakeHashConstKeysInstruction(std::move(keys)));
+            break;
+        }
+
+        case QoreIRInstGroup::SwitchCaseMatch: {
+            uint8_t has_val = QoreAOTBinaryReader::readU8(ptr);
+            QoreValue case_val;
+            if (has_val) {
+                case_val = readExpr(reader, ptr, end, error);
+                if (!error.empty()) {
+                    return nullptr;
+                }
+            }
+            // Create a CaseNode with the deserialized value expression
+            auto* cnode = new CaseNode(&loc_builtin, case_val, nullptr);
+            auto* scm = new QoreIRSwitchCaseMatchInstruction(cnode);
+            scm->owns_case_node = true;
+            inst.reset(scm);
+            break;
+        }
+
+        case QoreIRInstGroup::ListIndexAccess: {
+            inst.reset(new QoreIRListIndexAccessInstruction());
+            break;
+        }
+
+        // These groups hold AST pointers; encountering them is a serialization error
+        case QoreIRInstGroup::Foreach:
+        case QoreIRInstGroup::Debug:
+        case QoreIRInstGroup::Assert:
+        case QoreIRInstGroup::Context:
+        case QoreIRInstGroup::Summarize:
+            error = "unsupported AST-delegation instruction group " + std::to_string(group_byte);
+            return nullptr;
 
         default:
             error = "unsupported IR instruction group " + std::to_string(group_byte);

@@ -1151,6 +1151,11 @@ enum class QoreIRInstGroup : uint8_t {
     RefForeachInit = 49,    //!< QoreIRRefForeachInitInstruction
     Debug = 50,             //!< QoreIRDebugInstruction
     Assert = 51,            //!< QoreIRAssertInstruction
+    MakeHashConstKeys = 52, //!< QoreIRMakeHashConstKeysInstruction
+    SwitchCaseMatch = 53,   //!< QoreIRSwitchCaseMatchInstruction
+    Context = 54,           //!< QoreIRContextInstruction
+    Summarize = 55,         //!< QoreIRSummarizeInstruction
+    ListIndexAccess = 56,   //!< QoreIRListIndexAccessInstruction
     Unsupported = 0xFF,     //!< Instruction cannot be serialized
 };
 
