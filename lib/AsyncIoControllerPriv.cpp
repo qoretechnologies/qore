@@ -1606,8 +1606,13 @@ bool AsyncIoControllerPriv::processCommands(ExceptionSink* xsink) {
                         }
                     }
 
-                    // Signal done
+                    // Signal done — must hold lock so the caller's
+                    // stack-allocated done_cond remains valid until
+                    // pthread_cond_broadcast() fully returns.
+                    // On musl, broadcasting without the lock races with
+                    // the caller destroying the cond var after waking up.
                     if (cmd.done_cond) {
+                        AutoLocker al(m);
                         cmd.done_cond->broadcast();
                     }
                     break;
