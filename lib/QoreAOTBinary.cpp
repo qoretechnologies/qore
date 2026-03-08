@@ -2187,11 +2187,17 @@ void serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
                 case AOTExprKind::GLOBAL_VARREF:
                 case AOTExprKind::CONST_NUMBER:
                 case AOTExprKind::CONST_BINARY:
+                case AOTExprKind::CONST_INT:
+                case AOTExprKind::CONST_FLOAT:
+                case AOTExprKind::CONST_BOOL:
                 case AOTExprKind::HASHDECL_NEW:
                 case AOTExprKind::COMPLEX_HASH_NEW:
                 case AOTExprKind::COMPLEX_LIST_NEW:
                     // ref1 = name/value/index/path/slot
                     writer.writeStringRef(expr.ref1.c_str());
+                    break;
+                case AOTExprKind::CONST_NOTHING:
+                    // no additional data needed
                     break;
                 case AOTExprKind::SELF_METHOD_CALL:
                 case AOTExprKind::STATIC_METHOD_CALL:

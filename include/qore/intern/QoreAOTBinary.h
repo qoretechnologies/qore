@@ -776,6 +776,10 @@ enum class AOTExprNodeKind : uint8_t {
     EN_MAP_SELECT    = 161, //!< 3 children: [map_expr, source, where_expr]
     EN_HASH_MAP      = 162, //!< 3 children: [key_expr, val_expr, source]
     EN_HASH_MAP_SELECT = 163, //!< 4 children: [key_expr, val_expr, source, where_expr]
+    EN_DATE          = 8,   //!< u8 is_relative + date data; 0 children
+
+    EN_FOLDL         = 164, //!< 2 children: [accumulator_expr, source]
+    EN_FOLDR         = 165, //!< 2 children: [accumulator_expr, source]
 };
 
 //! Identity for a local variable slot

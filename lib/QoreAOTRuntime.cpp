@@ -140,6 +140,7 @@
 #include "qore/intern/QoreMapSelectOperatorNode.h"
 #include "qore/intern/QoreHashMapOperatorNode.h"
 #include "qore/intern/QoreHashMapSelectOperatorNode.h"
+#include "qore/intern/QoreFoldlOperatorNode.h"
 #include "qore/intern/QoreRegex.h"
 #include "qore/intern/QoreRegexSubst.h"
 #include "qore/intern/QoreTransliteration.h"
@@ -793,6 +794,20 @@ static QoreValue readOneExpr(
         case AOTExprKind::COMPLEX_LIST_NEW:
             r1 = rdr.readStringRef(p);
             break;
+        case AOTExprKind::CONST_INT: {
+            r1 = rdr.readStringRef(p);
+            return QoreValue(strtoll(r1 ? r1 : "0", nullptr, 10));
+        }
+        case AOTExprKind::CONST_FLOAT: {
+            r1 = rdr.readStringRef(p);
+            return QoreValue(strtod(r1 ? r1 : "0", nullptr));
+        }
+        case AOTExprKind::CONST_BOOL: {
+            r1 = rdr.readStringRef(p);
+            return QoreValue((bool)(r1 && r1[0] == '1'));
+        }
+        case AOTExprKind::CONST_NOTHING:
+            return QoreValue();
         case AOTExprKind::SELF_METHOD_CALL:
         case AOTExprKind::STATIC_METHOD_CALL:
         case AOTExprKind::STATIC_VARREF:
@@ -816,20 +831,6 @@ static QoreValue readOneExpr(
             }
             return QoreValue();
         }
-        case AOTExprKind::CONST_INT: {
-            int64_t v = QoreAOTBinaryReader::readI64(p);
-            return QoreValue(v);
-        }
-        case AOTExprKind::CONST_FLOAT: {
-            double v = QoreAOTBinaryReader::readF64(p);
-            return QoreValue(v);
-        }
-        case AOTExprKind::CONST_BOOL: {
-            uint8_t v = QoreAOTBinaryReader::readU8(p);
-            return QoreValue((bool)(v != 0));
-        }
-        case AOTExprKind::CONST_NOTHING:
-            return QoreValue();
         default:
             // GENERIC_EVAL or unknown — no additional bytes to read
             return QoreValue();
@@ -906,6 +907,17 @@ class ExprTreeDeserializer {
             | (static_cast<uint32_t>(ptr[2]) << 16) | (static_cast<uint32_t>(ptr[3]) << 24);
         ptr += 4;
         return v;
+    }
+
+    int32_t readI32() {
+        if (ptr + 4 > end) {
+            return 0;
+        }
+        uint32_t v = ptr[0] | (ptr[1] << 8) | (ptr[2] << 16) | (ptr[3] << 24);
+        ptr += 4;
+        int32_t r;
+        memcpy(&r, &v, sizeof(r));
+        return r;
     }
 
     int64_t readI64() {
@@ -1028,6 +1040,32 @@ class ExprTreeDeserializer {
                 }
                 readU16();
                 return QoreValue(bin.release());
+            }
+
+            case AOTExprNodeKind::EN_DATE: {
+                uint8_t is_relative = readU8();
+                if (is_relative) {
+                    int32_t year = readI32();
+                    int32_t month = readI32();
+                    int32_t day = readI32();
+                    int32_t hour = readI32();
+                    int32_t minute = readI32();
+                    int32_t second = readI32();
+                    int32_t us = readI32();
+                    readU16();
+                    return QoreValue(DateTimeNode::makeRelative(
+                        year, month, day, hour, minute, second, us));
+                } else {
+                    int64_t epoch = readI64();
+                    int32_t us = readI32();
+                    std::string zname = readStr();
+                    readU16();
+                    ExceptionSink tz_xsink;
+                    const AbstractQoreZoneInfo* zone = QTZM.findLoadRegion(
+                        zname.c_str(), &tz_xsink);
+                    return QoreValue(DateTimeNode::makeAbsolute(
+                        zone, epoch, us));
+                }
             }
 
             // ---- Variable references ----
@@ -2097,6 +2135,30 @@ class ExprTreeDeserializer {
                     key_expr, val_expr, source, where_expr));
             }
 
+            case AOTExprNodeKind::EN_FOLDL: {
+                uint16_t num_children = readU16();
+                QoreValue left, right;
+                if (num_children >= 1) {
+                    left = deserializeValue();
+                }
+                if (num_children >= 2) {
+                    right = deserializeValue();
+                }
+                return QoreValue(new QoreFoldlOperatorNode(&loc_builtin, left, right));
+            }
+
+            case AOTExprNodeKind::EN_FOLDR: {
+                uint16_t num_children = readU16();
+                QoreValue left, right;
+                if (num_children >= 1) {
+                    left = deserializeValue();
+                }
+                if (num_children >= 2) {
+                    right = deserializeValue();
+                }
+                return QoreValue(new QoreFoldrOperatorNode(&loc_builtin, left, right));
+            }
+
             default:
                 printd(0, "AOT EXPR_TREE: unknown node kind %d\n", (int)kind);
                 return fail();
@@ -2823,18 +2885,18 @@ static QoreAOTContext* buildContextFromSlotMap(
                 continue;
             }
             case AOTExprKind::CONST_INT: {
-                int64_t v = QoreAOTBinaryReader::readI64(ptr);
-                ctx->exprs[i] = toBitsNB(QoreValue(v));
+                const char* sv = reader.readStringRef(ptr);
+                ctx->exprs[i] = toBitsNB(QoreValue(strtoll(sv ? sv : "0", nullptr, 10)));
                 continue;
             }
             case AOTExprKind::CONST_FLOAT: {
-                double v = QoreAOTBinaryReader::readF64(ptr);
-                ctx->exprs[i] = toBitsNB(QoreValue(v));
+                const char* sv = reader.readStringRef(ptr);
+                ctx->exprs[i] = toBitsNB(QoreValue(strtod(sv ? sv : "0", nullptr)));
                 continue;
             }
             case AOTExprKind::CONST_BOOL: {
-                uint8_t v = QoreAOTBinaryReader::readU8(ptr);
-                ctx->exprs[i] = toBitsNB(QoreValue((bool)(v != 0)));
+                const char* sv = reader.readStringRef(ptr);
+                ctx->exprs[i] = toBitsNB(QoreValue((bool)(sv && sv[0] == '1')));
                 continue;
             }
             case AOTExprKind::CONST_NOTHING:
@@ -4254,13 +4316,9 @@ static void skipSlotMapEntry(const QoreAOTBinaryReader& reader, const uint8_t*& 
                 break;
             }
             case AOTExprKind::CONST_INT:
-                ptr += 8;
-                break;
             case AOTExprKind::CONST_FLOAT:
-                ptr += 8;
-                break;
             case AOTExprKind::CONST_BOOL:
-                QoreAOTBinaryReader::readU8(ptr);
+                reader.readStringRef(ptr);
                 break;
             case AOTExprKind::CONST_NOTHING:
                 break;

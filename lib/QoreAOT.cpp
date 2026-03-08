@@ -135,6 +135,9 @@
 #include "qore/intern/QoreShiftLeftEqualsOperatorNode.h"
 #include "qore/intern/QoreShiftRightEqualsOperatorNode.h"
 #include "qore/intern/QoreCastOperatorNode.h"
+#include "qore/intern/QoreIntPostIncrementOperatorNode.h"
+#include "qore/intern/QoreIntPostDecrementOperatorNode.h"
+#include "qore/intern/QoreFoldlOperatorNode.h"
 #include "qore/intern/QoreImplicitArgumentNode.h"
 #include "qore/intern/QoreImplicitElementNode.h"
 #include "qore/intern/ParseReferenceNode.h"
@@ -345,6 +348,10 @@ static void reportAOTCompileStats(const char* label, int compiled_count, int tot
     for (auto& cf : compiled_funcs) {
         if (cf.slot_ids.has_unsupported_exprs) {
             ++unsupported_count;
+            if (getenv("QORE_AOT_DEBUG")) {
+                fprintf(stderr, "AOT: function '%s' needs source fallback (unsupported exprs)\n",
+                    cf.name.c_str());
+            }
         }
     }
     printf("AOT %s: %d/%d functions pre-compiled (%d failed, %d skipped)\n",
@@ -363,8 +370,9 @@ static void reportAOTCompileStats(const char* label, int compiled_count, int tot
 /** A function needs source fallback if it has:
     - unsupported expressions that can't be reconstructed from binary
     - statement slots (on_exit/on_success/on_error) without serialized handler IR
-    - constructor/destructor/copy methods that need BCAList from source parsing
     Note: closures are fully serialized and no longer trigger fallback.
+    Note: constructor/destructor/copy methods no longer need blanket source fallback
+    since BCA data is serialized in the METHODS section (v2 format).
 */
 static bool funcNeedsFallback(const AOTCompiledFuncWithSlots& f) {
     if (f.slot_ids.has_unsupported_exprs) {
@@ -376,19 +384,6 @@ static bool funcNeedsFallback(const AOTCompiledFuncWithSlots& f) {
             && std::all_of(f.handler_irs.begin(), f.handler_irs.end(),
                 [](const QoreIRFunction* hir) { return hir != nullptr; });
         if (!all_have_ir) {
-            return true;
-        }
-    }
-    // Check if this is a constructor/destructor/copy method — these need source
-    // fallback to reconstruct BCAList (base class constructor arguments) at runtime
-    size_t sep = f.name.find("::");
-    if (sep != std::string::npos) {
-        std::string method = f.name.substr(sep + 2);
-        size_t paren = method.find('(');
-        if (paren != std::string::npos) {
-            method = method.substr(0, paren);
-        }
-        if (method == "constructor" || method == "destructor" || method == "copy") {
             return true;
         }
     }
@@ -474,10 +469,15 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
     return 0;
 }
 
+// Reverse map from constant value node pointer to fully-qualified constant name
+typedef std::unordered_map<const AbstractQoreNode*, std::string> AOTConstantReverseMap;
+
 // Forward declarations for slot identity extraction (defined after buildAOTContext)
-static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots);
+static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
+        const AOTConstantReverseMap* const_reverse_map = nullptr);
 static void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slots,
-        UserVariantBase* uvb, AOTSlotIdentities& out);
+        UserVariantBase* uvb, AOTSlotIdentities& out,
+        const AOTConstantReverseMap* const_reverse_map = nullptr);
 static std::vector<std::unique_ptr<QoreIRFunction>> extractHandlerIRs(
         QoreIRFunction& func, const AOTSlotMap& slots);
 
@@ -559,6 +559,41 @@ static inline bool shouldSkipModuleItem(const char* item_module, const char* com
     return strcmp(item_module, compile_module) != 0;
 }
 
+//! Recursively walk namespace tree and build reverse map from constant value pointers
+//! to fully-qualified constant names (e.g., "Swagger::TypeObject")
+static void buildConstantReverseMapImpl(qore_ns_private* ns, AOTConstantReverseMap& crm) {
+    // Get namespace path prefix (strip leading "::")
+    std::string ns_path;
+    ns->getPath(ns_path, false, true);
+
+    // Iterate constants in this namespace
+    for (auto& kv : ns->constant.cnemap) {
+        ConstantEntry* ce = kv.second;
+        if (!ce || !ce->val.hasNode()) {
+            continue;
+        }
+        const AbstractQoreNode* node = ce->val.getInternalNode();
+        if (node) {
+            std::string fqn = ns_path + ce->name;
+            crm.emplace(node, std::move(fqn));
+        }
+    }
+
+    // Recurse into child namespaces
+    for (auto& ni : ns->nsl.nsmap) {
+        if (ni.second) {
+            buildConstantReverseMapImpl(qore_ns_private::get(*ni.second), crm);
+        }
+    }
+}
+
+//! Build a reverse map from constant value node pointers to fully-qualified names
+static AOTConstantReverseMap buildConstantReverseMap(qore_ns_private* root_ns) {
+    AOTConstantReverseMap crm;
+    buildConstantReverseMapImpl(root_ns, crm);
+    return crm;
+}
+
 static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
         llvm::LLVMContext& ctx, llvm::Module& module,
         llvm::DIBuilder& di_builder, llvm::DICompileUnit* di_cu,
@@ -566,6 +601,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
         std::vector<AOTCompiledInitFunc>& compiled_init_funcs,
         int& total_funcs, int& compiled_count, int& failed_count,
         size_t& total_ir_insts_all,
+        const AOTConstantReverseMap* const_reverse_map = nullptr,
         std::set<std::string>* compiled_keys = nullptr,
         const char* compile_module = nullptr) {
     // Track compiled variant keys to skip duplicates from iterator yielding
@@ -667,7 +703,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     cf.num_stmts = static_cast<int>(slots.stmt_slots.size());
                     cf.num_regex_cases = static_cast<int>(slots.regex_case_slots.size());
                     // Extract slot identities for source-stripped mode
-                    extractAOTSlotIdentities(*ir_func, slots, uvb, cf.slot_ids);
+                    extractAOTSlotIdentities(*ir_func, slots, uvb, cf.slot_ids,
+                        const_reverse_map);
                     // Extract handler IR from OnBlockExit instructions (moves ownership)
                     if (!slots.stmt_slots.empty()) {
                         cf.handler_irs = extractHandlerIRs(*ir_func, slots);
@@ -799,7 +836,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         cf.num_stmts = static_cast<int>(slots.stmt_slots.size());
                         cf.num_regex_cases = static_cast<int>(slots.regex_case_slots.size());
                         // Extract slot identities for source-stripped mode
-                        extractAOTSlotIdentities(*ir_func, slots, uvb, cf.slot_ids);
+                        extractAOTSlotIdentities(*ir_func, slots, uvb, cf.slot_ids,
+                            const_reverse_map);
                         // Extract handler IR from OnBlockExit instructions (moves ownership)
                         if (!slots.stmt_slots.empty()) {
                             cf.handler_irs = extractHandlerIRs(*ir_func, slots);
@@ -891,7 +929,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
             cif.num_exprs = static_cast<int>(slots.expr_slots.size());
             cif.num_stmts = static_cast<int>(slots.stmt_slots.size());
             cif.num_regex_cases = static_cast<int>(slots.regex_case_slots.size());
-            extractAOTSlotIdentities(*ir_func, slots, nullptr, cif.slot_ids);
+            extractAOTSlotIdentities(*ir_func, slots, nullptr, cif.slot_ids,
+                const_reverse_map);
             cif.feature_flags = scanIRFeatureFlags(*ir_func);
             cif.target_type = target_type;
             cif.ns_path = container_path;
@@ -1063,7 +1102,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
             compileNamespaceFunctions(qore_ns_private::get(*child_ns), pgm, ctx, module,
                 di_builder, di_cu,
                 compiled_funcs, compiled_init_funcs, total_funcs, compiled_count,
-                failed_count, total_ir_insts_all, compiled_keys, compile_module);
+                failed_count, total_ir_insts_all, const_reverse_map, compiled_keys,
+                compile_module);
         }
     }
 }
@@ -1455,11 +1495,16 @@ bool QoreAOT::compile(QoreProgram* pgm,
 
     qore_program_private* pp = qore_program_private::get(*pgm);
     qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
+
+    // Build reverse map from constant value pointers to fully-qualified names
+    // for serializing QoreObject/complex constant references in expression trees
+    AOTConstantReverseMap const_reverse_map = buildConstantReverseMap(root_ns);
+
     // Pass "" as compile_module to filter out module-originated functions/classes;
     // module functions are available at runtime via runTimeLoadModule()
     compileNamespaceFunctions(root_ns, pgm, ctx, *module, di_builder, di_cu,
         compiled_funcs, compiled_init_funcs, total_funcs, compiled_count, failed_count,
-        total_ir_insts_all, nullptr, "");
+        total_ir_insts_all, &const_reverse_map, nullptr, "");
 
     // Step 2: Try to compile top-level code with AOT mode
     {
@@ -1525,7 +1570,8 @@ bool QoreAOT::compile(QoreProgram* pgm,
                     cf.num_stmts = static_cast<int>(slots.stmt_slots.size());
                     cf.num_regex_cases = static_cast<int>(slots.regex_case_slots.size());
                     // Extract slot identities (no uvb for toplevel)
-                    extractAOTSlotIdentities(*ir_func, slots, nullptr, cf.slot_ids);
+                    extractAOTSlotIdentities(*ir_func, slots, nullptr, cf.slot_ids,
+                        &const_reverse_map);
                     // Scan IR function for required features
                     cf.feature_flags = scanIRFeatureFlags(*ir_func);
                     compiled_funcs.push_back(std::move(cf));
@@ -1657,8 +1703,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
 
         // Serialize fallback sources when needed: either explicitly requested via
         // --include-source, or when any functions require AST fallback (unsupported
-        // expressions, closures, or constructor/destructor/copy methods that need
-        // BCAList from source parsing).
+        // expressions or statement slots lacking handler IR).
         {
             bool has_fallback_funcs = std::any_of(func_slots.begin(), func_slots.end(),
                 funcNeedsFallback);
@@ -2649,6 +2694,9 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
     qore_program_private* pp = qore_program_private::get(**qpgm);
     qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
 
+    // Build reverse map from constant value pointers to fully-qualified names
+    AOTConstantReverseMap const_reverse_map = buildConstantReverseMap(root_ns);
+
     // Compile functions from namespaces that BELONG to this module (not from dependencies)
     // Use the namespace's from_module field to identify ownership:
     // - Empty from_module: namespace defined in current parsing context (this module)
@@ -2672,7 +2720,7 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         found_any = true;
         compileNamespaceFunctions(ns_priv, *qpgm, ctx, *module, di_builder, di_cu,
             compiled_funcs, compiled_init_funcs, total_funcs, compiled_count, failed_count,
-            total_ir_insts_all);
+            total_ir_insts_all, &const_reverse_map);
     }
     if (!found_any) {
         error = "no module namespaces found after parsing (expected at least '" + mod_info.name + "')";
@@ -3016,6 +3064,9 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
         qore_program_private* pp = qore_program_private::get(**qpgm);
         qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
 
+        // Build reverse map from constant value pointers to fully-qualified names
+        AOTConstantReverseMap const_reverse_map = buildConstantReverseMap(root_ns);
+
         // Compile functions from namespaces that BELONG to this module (not from dependencies)
         // Use the namespace's from_module field to identify ownership
         bool found_any = false;
@@ -3040,7 +3091,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
             found_any = true;
             compileNamespaceFunctions(ns_priv, *qpgm, ctx, *module, di_builder, di_cu,
                 compiled_funcs, compiled_init_funcs, total_funcs, compiled_count,
-                failed_count, total_ir_insts_all);
+                failed_count, total_ir_insts_all, &const_reverse_map);
         }
         if (!found_any) {
             error = "no module namespaces found after parsing (expected at least '" + mod_name + "')";
@@ -4387,6 +4438,7 @@ static std::string getSlotTypePath(const QoreTypeInfo* ti) {
 class ExprTreeSerializer {
     std::vector<uint8_t> buf;
     const AOTSlotMap& slots;
+    const AOTConstantReverseMap* const_reverse_map;
     bool debug;
     bool failed = false;
 
@@ -4404,6 +4456,15 @@ class ExprTreeSerializer {
         buf.push_back((v >> 8) & 0xFF);
         buf.push_back((v >> 16) & 0xFF);
         buf.push_back((v >> 24) & 0xFF);
+    }
+
+    void writeI32(int32_t v) {
+        uint32_t u;
+        memcpy(&u, &v, sizeof(u));
+        buf.push_back(u & 0xFF);
+        buf.push_back((u >> 8) & 0xFF);
+        buf.push_back((u >> 16) & 0xFF);
+        buf.push_back((u >> 24) & 0xFF);
     }
 
     void writeI64(int64_t v) {
@@ -4497,6 +4558,13 @@ class ExprTreeSerializer {
 
         // ---- Leaf constants ----
 
+        // Null node (NULL singleton)
+        if (dynamic_cast<const QoreNullNode*>(node)) {
+            writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_NULL));
+            writeU16(0);
+            return true;
+        }
+
         // String constant
         if (auto* str = dynamic_cast<const QoreStringNode*>(node)) {
             writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_STRING));
@@ -4522,6 +4590,31 @@ class ExprTreeSerializer {
             writeU32(len);
             const uint8_t* data = static_cast<const uint8_t*>(bin->getPtr());
             buf.insert(buf.end(), data, data + len);
+            writeU16(0);
+            return true;
+        }
+
+        // DateTime constant
+        if (auto* dt = dynamic_cast<const DateTimeNode*>(node)) {
+            writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_DATE));
+            if (dt->isRelative()) {
+                writeU8(1);
+                qore_tm info;
+                dt->getInfo(info);
+                writeI32(info.year);
+                writeI32(info.month);
+                writeI32(info.day);
+                writeI32(info.hour);
+                writeI32(info.minute);
+                writeI32(info.second);
+                writeI32(info.us);
+            } else {
+                writeU8(0);
+                writeI64(dt->getEpochSecondsUTC());
+                writeI32(dt->getMicrosecond());
+                const char* zname = AbstractQoreZoneInfo::getRegionName(dt->getZone());
+                writeStr(zname ? zname : "UTC");
+            }
             writeU16(0);
             return true;
         }
@@ -4810,6 +4903,14 @@ class ExprTreeSerializer {
         }
         if (auto* op = dynamic_cast<const QorePreDecrementOperatorNode*>(node)) {
             return serializeUnary(AOTExprNodeKind::EN_PRE_DEC, op->getExp());
+        }
+        // Int-specialized post-inc/dec must be checked BEFORE generic versions
+        // (they don't inherit from QorePostIncrementOperatorNode)
+        if (auto* op = dynamic_cast<const QoreIntPostDecrementOperatorNode*>(node)) {
+            return serializeUnary(AOTExprNodeKind::EN_POST_DEC, op->getExp());
+        }
+        if (auto* op = dynamic_cast<const QoreIntPostIncrementOperatorNode*>(node)) {
+            return serializeUnary(AOTExprNodeKind::EN_POST_INC, op->getExp());
         }
         if (auto* op = dynamic_cast<const QorePostIncrementOperatorNode*>(node)) {
             return serializeUnary(AOTExprNodeKind::EN_POST_INC, op->getExp());
@@ -5229,6 +5330,14 @@ class ExprTreeSerializer {
             return serializeValue(hmp->get(2));
         }
 
+        // Foldl/foldr operators (check foldr before foldl — foldr inherits from foldl)
+        if (auto* op = dynamic_cast<const QoreFoldrOperatorNode*>(node)) {
+            return serializeBinary(AOTExprNodeKind::EN_FOLDR, op->getLeft(), op->getRight());
+        }
+        if (auto* op = dynamic_cast<const QoreFoldlOperatorNode*>(node)) {
+            return serializeBinary(AOTExprNodeKind::EN_FOLDL, op->getLeft(), op->getRight());
+        }
+
         // Closure — serialize as expression slot reference
         if (dynamic_cast<const QoreClosureParseNode*>(node)) {
             QoreValue closure_val(const_cast<AbstractQoreNode*>(node));
@@ -5272,6 +5381,21 @@ class ExprTreeSerializer {
             return true;
         }
 
+        // Try reverse constant lookup for unsupported node types (e.g., QoreObject)
+        if (const_reverse_map) {
+            auto it = const_reverse_map->find(node);
+            if (it != const_reverse_map->end()) {
+                writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_CONST_REF));
+                writeStr(it->second);
+                writeU16(0);
+                if (debug) {
+                    fprintf(stderr, "EXPR_TREE: resolved '%s' (type %d) via constant reverse lookup: '%s'\n",
+                        node->getTypeName(), node->getType(), it->second.c_str());
+                }
+                return true;
+            }
+        }
+
         // Unsupported node type
         if (debug) {
             fprintf(stderr, "EXPR_TREE: unsupported node type '%s' (type %d)\n",
@@ -5281,7 +5405,8 @@ class ExprTreeSerializer {
     }
 
 public:
-    ExprTreeSerializer(const AOTSlotMap& s) : slots(s), debug(getenv("QORE_AOT_DEBUG") != nullptr) {
+    ExprTreeSerializer(const AOTSlotMap& s, const AOTConstantReverseMap* crm = nullptr)
+        : slots(s), const_reverse_map(crm), debug(getenv("QORE_AOT_DEBUG") != nullptr) {
     }
 
     //! Serialize a QoreValue (scalar or node) into a binary blob
@@ -5357,7 +5482,8 @@ bool serializeExprTreeToBlob(QoreValue v, const AOTSlotMap& slots, std::vector<u
 /** Checks the AST node type and extracts identity info for supported types.
     Returns AOTExprKind::GENERIC_EVAL for unsupported types (function needs source fallback).
 */
-static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots) {
+static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
+        const AOTConstantReverseMap* const_reverse_map) {
     AOTExprSlotId id;
     QoreValue v;
     memcpy(&v, &bits, sizeof(v));
@@ -5370,7 +5496,32 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots) 
             id.ref2 = member->getName();
             return id;
         }
-        // Scalar constant — shouldn't normally appear in expression slots
+        // Handle inline scalar constants in expression slots
+        switch (v.getType()) {
+            case QV_Int:
+                id.kind = AOTExprKind::CONST_INT;
+                id.ref1 = std::to_string(v.getAsBigInt());
+                return id;
+            case QV_Float:
+                id.kind = AOTExprKind::CONST_FLOAT;
+                // Use snprintf with enough precision for round-trip fidelity
+                {
+                    char fbuf[64];
+                    snprintf(fbuf, sizeof(fbuf), "%.17g", v.getAsFloat());
+                    id.ref1 = fbuf;
+                }
+                return id;
+            case QV_Bool:
+                id.kind = AOTExprKind::CONST_BOOL;
+                id.ref1 = v.getAsBool() ? "1" : "0";
+                return id;
+            default:
+                break;
+        }
+        if (v.isNothing()) {
+            id.kind = AOTExprKind::CONST_NOTHING;
+            return id;
+        }
         id.kind = AOTExprKind::GENERIC_EVAL;
         return id;
     }
@@ -5581,7 +5732,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots) 
 
     // Try recursive expression tree serialization before falling back to GENERIC_EVAL
     {
-        ExprTreeSerializer serializer(slots);
+        ExprTreeSerializer serializer(slots, const_reverse_map);
         if (serializer.serialize(v)) {
             id.kind = AOTExprKind::EXPR_TREE;
             id.ref1 = serializer.getBuffer();
@@ -5614,7 +5765,8 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots) 
     @param out receives the extracted identities
 */
 void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slots,
-        UserVariantBase* uvb, AOTSlotIdentities& out) {
+        UserVariantBase* uvb, AOTSlotIdentities& out,
+        const AOTConstantReverseMap* const_reverse_map) {
     // Get signature info for local classification
     UserSignature* sig = uvb ? uvb->getUserSignature() : nullptr;
     std::unordered_map<const void*, uint16_t> param_indices;
@@ -5639,9 +5791,23 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
     out.has_unsupported_exprs = false;
     out.has_closure_exprs = false;
     for (auto& [bits, slot] : slots.expr_slots) {
-        out.exprs[slot] = classifyExpression(bits, slots);
+        out.exprs[slot] = classifyExpression(bits, slots, const_reverse_map);
         if (out.exprs[slot].kind == AOTExprKind::GENERIC_EVAL) {
             out.has_unsupported_exprs = true;
+            if (getenv("QORE_AOT_DEBUG")) {
+                QoreValue dbg_v;
+                memcpy(&dbg_v, &bits, sizeof(dbg_v));
+                if (dbg_v.hasNode() && dbg_v.getInternalNode()) {
+                    fprintf(stderr, "AOT: func '%s' has GENERIC_EVAL expr slot %d: '%s' (type %d)\n",
+                        func.name.c_str(), slot,
+                        dbg_v.getInternalNode()->getTypeName(),
+                        dbg_v.getInternalNode()->getType());
+                } else {
+                    fprintf(stderr, "AOT: func '%s' has GENERIC_EVAL expr slot %d: "
+                        "non-node value (type=%d)\n",
+                        func.name.c_str(), slot, (int)dbg_v.getType());
+                }
+            }
         } else if (out.exprs[slot].kind == AOTExprKind::CLOSURE_CREATE) {
             out.has_closure_exprs = true;
         }
