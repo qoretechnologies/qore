@@ -1134,6 +1134,37 @@ extern "C" DLLEXPORT uint64_t qore_rt_make_hash(uint64_t* kv_pairs, int count, E
     return toBits(QoreValue(hash.release()));
 }
 
+extern "C" DLLEXPORT uint64_t qore_rt_make_hash_const_keys(const char** keys, uint64_t* vals,
+        int count, ExceptionSink* xsink) {
+    ReferenceHolder<QoreHashNode> hash(new QoreHashNode(autoTypeInfo), xsink);
+    qore_hash_private* hp = qore_hash_private::get(*hash);
+    hp->hm.reserve(count);
+    const QoreTypeInfo* vtype = nullptr;
+    bool vcommon = false;
+    for (int i = 0; i < count; i++) {
+        QoreValue val = fromBits(vals[i]);
+        if (val.hasNode()) {
+            val.refSelf();
+        }
+        const QoreTypeInfo* vt = val.getTypeInfo();
+        if (!i) {
+            vtype = vt;
+            vcommon = true;
+        } else if (vcommon && !QoreTypeInfo::matchCommonType(vtype, vt)) {
+            vcommon = false;
+        }
+        hash->setKeyValue(keys[i], val, xsink);
+        if (*xsink) {
+            return toBits(QoreValue());
+        }
+    }
+    if (!vtype || vtype == anyTypeInfo) {
+        vtype = autoTypeInfo;
+    }
+    hp->complexTypeInfo = qore_get_complex_hash_type(vtype);
+    return toBits(QoreValue(hash.release()));
+}
+
 // --- Statement execution helpers ---
 
 extern "C" DLLEXPORT uint64_t qore_rt_exec_statement(int opcode, const AbstractStatement* stmt, ExceptionSink* xsink) {
@@ -3965,6 +3996,96 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_direct_aot(QoreAOTContext* ctx, int32
 
     // Use pre-resolved call target (populated during buildAOTContext) to avoid per-call dynamic_cast
     const QoreAOTCallTarget& target = ctx->call_targets[slot];
+
+    // Fast path: pre-resolved user variant — inline the call_fast logic to avoid double
+    // check_stack and extra function call overhead (critical for tight recursive calls)
+    if (target.uvb) {
+        const UserVariantBase* uvb = target.uvb;
+
+        // If the callee has neither JIT nor IR, fall back to the slow path
+        if (!uvb->hasCachedFunction() && !uvb->getCachedIR()) {
+            return qore_rt_call_function_direct(target.func, target.variant, target.pgm,
+                args, nargs, xsink);
+        }
+
+        const UserSignature* sig = uvb->getUserSignature();
+        unsigned num_params = sig->numParams();
+
+        // Set up program thread context (only if program differs from caller's program)
+        std::optional<ProgramThreadCountContextHelper> ptcch;
+        if (uvb->pgm != getProgram()) {
+            ptcch.emplace(xsink, uvb->pgm, true);
+            if (*xsink) {
+                return toBits(QoreValue());
+            }
+        }
+        ThreadFrameBoundaryHelper tfbh(true);
+
+        // Instantiate parameter locals directly from NaN-boxed args
+        if (instantiateFastCallParams(sig, num_params, nargs, args, xsink) < 0) {
+            return toBits(QoreValue());
+        }
+
+        // Build argv for excess arguments (varargs)
+        ReferenceHolder<QoreListNode> argv(xsink);
+        if (nargs > (int)num_params) {
+            argv = new QoreListNode(autoTypeInfo);
+            qore_list_private* argv_priv = qore_list_private::get(**argv);
+            argv_priv->reserve(nargs - num_params);
+            for (int i = num_params; i < nargs; ++i) {
+                QoreValue val = fromBits(args[i]);
+                if (val.hasNode()) {
+                    val.refSelf();
+                }
+                argv_priv->pushIntern(val);
+            }
+        }
+        if (sig->argvid) {
+            sig->argvid->instantiate(argv ? argv->refSelf() : nullptr);
+        }
+
+        const QoreIRFunction* ir = uvb->getCachedIR();
+        const std::string& call_name = ir ? ir->name : jit_empty_call_name;
+
+        QoreValue val{};
+        {
+            ArgvContextHelper argv_helper(argv.release(), xsink);
+            if (uvb->hasCachedFunction()) {
+                execJITWithDeopt(uvb, call_name, [uvb](ExceptionSink* xs, bool& inv) {
+                    return uvb->execCachedFunction(xs, inv);
+                }, val, xsink);
+            } else {
+                const QoreIRFunction* callee_ir = uvb->getCachedIR();
+                execJITWithDeopt(uvb, call_name, [callee_ir, uvb](ExceptionSink* xs, bool& inv) -> uint64_t {
+                    QoreValue ir_return_value;
+                    bool ok = QoreIRInterpreter::execute(*callee_ir, ir_return_value, xs, nullptr,
+                        nullptr, nullptr, callee_ir->cached_pre_instantiated, nullptr,
+                        uvb->getStatementBlock(), uvb->pgm);
+                    if (!ok && !*xs) {
+                        inv = true;
+                        return 0;
+                    }
+                    return toBits(ir_return_value);
+                }, val, xsink);
+            }
+        }
+
+        if (sig->argvid) {
+            sig->argvid->uninstantiate(xsink);
+        }
+        for (int i = (int)num_params - 1; i >= 0; --i) {
+            sig->lv[i]->uninstantiate(xsink);
+        }
+
+        if (!*xsink) {
+            const QoreTypeInfo* rt = sig->getReturnTypeInfo();
+            QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
+        }
+
+        return toBits(val);
+    }
+
+    // Medium path: pre-resolved function but no user variant (builtin)
     if (target.func) {
         return qore_rt_call_fast(target.func, target.variant, target.pgm, args, nargs, xsink);
     }
@@ -4568,17 +4689,31 @@ static uint64_t dot_eval_fallback_with_args(QoreValue base, const char* method_n
 extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_method_direct_aot(QoreAOTContext* ctx, int32_t slot,
         uint64_t base_bits, uint64_t* args, int nargs, ExceptionSink* xsink) {
     assert(ctx && slot >= 0 && slot < ctx->num_exprs);
+
+    // Use pre-resolved method target to avoid per-call dynamic_cast
+    const QoreAOTCallTarget& target = ctx->call_targets[slot];
+    if (target.method) {
+        return target.is_pseudo
+            ? qore_rt_dot_eval_pseudo_method_direct(base_bits, target.method, target.qc,
+                target.variant, args, nargs, xsink)
+            : qore_rt_dot_eval_method_direct(base_bits, target.method, target.qc,
+                target.variant, args, nargs, xsink);
+    }
+    // Pre-resolved with name but no method pointer — use name-based dispatch
+    if (target.method_name) {
+        QoreValue base = fromBits(base_bits);
+        return dot_eval_fallback_with_args(base, target.method_name, args, nargs, xsink);
+    }
+
+    // Fallback: dynamic resolution
     QoreValue expr;
     std::memcpy(&expr, &ctx->exprs[slot], sizeof(expr));
-    // Resolve method/qc/variant from the DotEvalOperator's MethodCallNode
     auto* dot_eval = dynamic_cast<const QoreDotEvalOperatorNode*>(expr.getInternalNode());
     if (!dot_eval) {
         xsink->raiseException("AOT-ERROR", "invalid expression for dot-eval method direct AOT call");
         return toBits(QoreValue());
     }
     auto* m = dot_eval->getMethodCall();
-    // If method is not resolved (e.g., EXPR_TREE deserialized node), fall back to
-    // name-based runtime dispatch with the pre-evaluated args from LLVM
     if (!m->getMethod()) {
         QoreValue base = fromBits(base_bits);
         return dot_eval_fallback_with_args(base, m->getName(), args, nargs, xsink);
@@ -4593,6 +4728,19 @@ extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_method_direct_aot(QoreAOTContext*
 extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_pseudo_method_direct_aot(QoreAOTContext* ctx, int32_t slot,
         uint64_t base_bits, uint64_t* args, int nargs, ExceptionSink* xsink) {
     assert(ctx && slot >= 0 && slot < ctx->num_exprs);
+
+    // Use pre-resolved method target to avoid per-call dynamic_cast
+    const QoreAOTCallTarget& target = ctx->call_targets[slot];
+    if (target.method) {
+        return qore_rt_dot_eval_pseudo_method_direct(base_bits, target.method, target.qc,
+            target.variant, args, nargs, xsink);
+    }
+    if (target.method_name) {
+        QoreValue base = fromBits(base_bits);
+        return dot_eval_fallback_with_args(base, target.method_name, args, nargs, xsink);
+    }
+
+    // Fallback: dynamic resolution
     QoreValue expr;
     std::memcpy(&expr, &ctx->exprs[slot], sizeof(expr));
     auto* dot_eval = dynamic_cast<const QoreDotEvalOperatorNode*>(expr.getInternalNode());
@@ -4601,8 +4749,6 @@ extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_pseudo_method_direct_aot(QoreAOTC
         return toBits(QoreValue());
     }
     auto* m = dot_eval->getMethodCall();
-    // If method is not resolved (e.g., EXPR_TREE deserialized node), fall back to
-    // name-based runtime dispatch with the pre-evaluated args from LLVM
     if (!m->getMethod()) {
         QoreValue base = fromBits(base_bits);
         return dot_eval_fallback_with_args(base, m->getName(), args, nargs, xsink);
@@ -4735,6 +4881,15 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_static_method_direct_v2(const QoreMet
 extern "C" DLLEXPORT uint64_t qore_rt_call_static_method_direct_aot(QoreAOTContext* ctx, int32_t slot,
         uint64_t* args, int nargs, ExceptionSink* xsink) {
     assert(ctx && slot >= 0 && slot < ctx->num_exprs);
+
+    // Use pre-resolved method target (populated during buildAOTContext) to avoid per-call
+    // dynamic_cast and nullptr variant slow path
+    const QoreAOTCallTarget& target = ctx->call_targets[slot];
+    if (target.method) {
+        return qore_rt_call_static_method_direct(target.method, target.variant, args, nargs, xsink);
+    }
+
+    // Fallback: dynamic resolution for unresolved slots
     QoreValue expr;
     std::memcpy(&expr, &ctx->exprs[slot], sizeof(expr));
     auto* call = dynamic_cast<const StaticMethodCallNode*>(expr.getInternalNode());
@@ -4747,14 +4902,20 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_static_method_direct_aot(QoreAOTConte
         xsink->raiseException("AOT-ERROR", "null method in static method direct AOT call");
         return toBits(QoreValue());
     }
-    // For AOT-deserialized nodes, always pass nullptr as variant to force the slow path
-    // that dynamically looks up the method, avoiding garbage variant pointers from compilation
-    return qore_rt_call_static_method_direct(method, nullptr, args, nargs, xsink);
+    return qore_rt_call_static_method_direct(method, call->getVariant(), args, nargs, xsink);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_call_method_direct_aot(QoreAOTContext* ctx, int32_t slot,
         uint64_t* args, int nargs, ExceptionSink* xsink) {
     assert(ctx && slot >= 0 && slot < ctx->num_exprs);
+
+    // Use pre-resolved method target to avoid per-call dynamic_cast
+    const QoreAOTCallTarget& target = ctx->call_targets[slot];
+    if (target.method) {
+        return qore_rt_call_method_direct(target.method, args, nargs, xsink);
+    }
+
+    // Fallback: dynamic resolution
     QoreValue expr;
     std::memcpy(&expr, &ctx->exprs[slot], sizeof(expr));
     auto* call = dynamic_cast<const SelfFunctionCallNode*>(expr.getInternalNode());

@@ -527,7 +527,10 @@ enum class QoreIROpcode : uint16_t {
     // Used by select to determine if the result should be returned as a list or unwrapped to a scalar
     IsCollectionType    = 344,
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (345, 346, ...)
+    //! Make a hash from constant string keys and value operands (avoids key boxing/conversion)
+    MakeHashConstKeys   = 345,
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (346, 347, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -535,8 +538,8 @@ enum class QoreIROpcode : uint16_t {
 //! NOTE: Both QoreIRInterpreter.cpp and QoreIRToLLVM.cpp have matching
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
-constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::IsCollectionType);
-static_assert(QORE_IR_MAX_OPCODE == 344, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::MakeHashConstKeys);
+static_assert(QORE_IR_MAX_OPCODE == 345, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! Returns true if the opcode is a unary computation op (used by Invoke dispatch)
@@ -1095,6 +1098,16 @@ public:
 
     std::string key1;  //!< primary key name
     std::string key2;  //!< secondary key (HashMapTwoKeys only)
+};
+
+//! Make hash with constant string keys - operands are values only, keys are pre-stored
+class QoreIRMakeHashConstKeysInstruction : public QoreIRInstruction {
+public:
+    QoreIRMakeHashConstKeysInstruction(std::vector<std::string>&& n_keys)
+            : QoreIRInstruction(QoreIROpcode::MakeHashConstKeys), keys(std::move(n_keys)) {
+    }
+
+    std::vector<std::string> keys;  //!< constant key names (one per value operand)
 };
 
 //! Self member access instruction - loads self.member_name

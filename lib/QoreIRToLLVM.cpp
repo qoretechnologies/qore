@@ -37,7 +37,7 @@
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 344,
+static_assert(QORE_IR_MAX_OPCODE == 345,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 #include "qore/intern/QoreLibIntern.h"
@@ -7198,6 +7198,46 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     llvm::FunctionType::get(i64_type,
                         {ptr_type, llvm::Type::getInt32Ty(ctx), ptr_type}, false));
             llvm::Value* hash_result = builder->CreateCall(helper, {arr, count_val, xsink_arg});
+            values[inst->result.id] = hash_result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(hash_result, inst->result.id, llvm_func);
+            emitExceptionCheck(module, llvm_func, inst);
+            return true;
+        }
+
+        case QoreIROpcode::MakeHashConstKeys: {
+            const auto* mhck = static_cast<const QoreIRMakeHashConstKeysInstruction*>(inst);
+            int count = static_cast<int>(mhck->keys.size());
+            assert(count == static_cast<int>(inst->operands.size()));
+            // Hoist allocas to entry block
+            llvm::IRBuilder<> ab(&llvm_func->getEntryBlock(),
+                    llvm_func->getEntryBlock().begin());
+            // Keys array: const char* pointers
+            llvm::Value* keys_arr = ab.CreateAlloca(ptr_type,
+                    llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), count));
+            // Values array: NaN-boxed uint64_t
+            llvm::Value* vals_arr = ab.CreateAlloca(i64_type,
+                    llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), count));
+            for (int i = 0; i < count; i++) {
+                // Store constant key pointer
+                llvm::Value* key_str = builder->CreateGlobalString(mhck->keys[i], "hck_" + mhck->keys[i]);
+                llvm::Value* key_gep = builder->CreateGEP(ptr_type, keys_arr,
+                        {llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), i)});
+                builder->CreateStore(key_str, key_gep);
+                // Store boxed value
+                auto* val = getVal(inst->operands[i].id, error);
+                if (!val) { return false; }
+                llvm::Value* val_boxed = boxValue(val, inst->operands[i].id);
+                llvm::Value* val_gep = builder->CreateGEP(i64_type, vals_arr,
+                        {llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), i)});
+                builder->CreateStore(val_boxed, val_gep);
+            }
+            auto helper = module.getOrInsertFunction("qore_rt_make_hash_const_keys",
+                    llvm::FunctionType::get(i64_type,
+                        {ptr_type, ptr_type, llvm::Type::getInt32Ty(ctx), ptr_type}, false));
+            llvm::Value* hash_result = builder->CreateCall(helper,
+                    {keys_arr, vals_arr, llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), count),
+                     xsink_arg});
             values[inst->result.id] = hash_result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(hash_result, inst->result.id, llvm_func);

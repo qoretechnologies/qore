@@ -158,6 +158,15 @@ QoreIRInstruction* QoreIRBuilder::createMakeHash(const std::vector<QoreIRValue>&
     return inst;
 }
 
+QoreIRInstruction* QoreIRBuilder::createMakeHashConstKeys(std::vector<std::string>&& keys,
+        const std::vector<QoreIRValue>& values, const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRMakeHashConstKeysInstruction>(std::move(keys));
+    inst->loc = loc;
+    inst->result = func->createValue();
+    inst->operands = values;
+    return inst;
+}
+
 QoreIRInstruction* QoreIRBuilder::createEmptyList(const QoreProgramLocation* loc) {
     auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::CreateEmptyList);
     inst->loc = loc;

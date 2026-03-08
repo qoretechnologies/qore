@@ -228,6 +228,7 @@ static bool requiresResult(QoreIROpcode op) {
         case QoreIROpcode::RangeSliceFloat:
         case QoreIROpcode::MakeList:
         case QoreIROpcode::MakeHash:
+        case QoreIROpcode::MakeHashConstKeys:
         case QoreIROpcode::CreateEmptyList:
         case QoreIROpcode::CreateSizedList:
         case QoreIROpcode::ListSize:
@@ -679,6 +680,7 @@ static int expectedOperands(QoreIROpcode op) {
             return 0;
         case QoreIROpcode::MakeList:
         case QoreIROpcode::MakeHash:
+        case QoreIROpcode::MakeHashConstKeys:
         case QoreIROpcode::StringConcat:
             return -1;
         case QoreIROpcode::Call:

@@ -45,13 +45,16 @@ class AbstractQoreFunctionVariant;
 class CaseNodeRegex;
 class ExceptionSink;
 class LocalVar;
+class QoreClass;
 class QoreFunction;
 class QoreIRFunction;
+class QoreMethod;
 class QoreNamespace;
 class QoreProgram;
 class QoreStringNode;
 class QoreValue;
 class StatementBlock;
+class UserVariantBase;
 class Var;
 
 //! Pre-resolved function call target for AOT fast calls (avoids per-call dynamic_cast)
@@ -59,6 +62,11 @@ struct QoreAOTCallTarget {
     const QoreFunction* func = nullptr;
     const AbstractQoreFunctionVariant* variant = nullptr;
     QoreProgram* pgm = nullptr;
+    const UserVariantBase* uvb = nullptr;  //!< cached user variant base for inlined fast path
+    const QoreMethod* method = nullptr;    //!< for static/self method calls (pre-resolved)
+    const QoreClass* qc = nullptr;         //!< for dot-eval method calls (pre-resolved)
+    const char* method_name = nullptr;     //!< for dot-eval fallback (name-based dispatch)
+    bool is_pseudo = false;                //!< for dot-eval pseudo-method calls
 };
 
 //! AOT context: runtime-resolved pointer tables for AOT-compiled functions.

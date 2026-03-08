@@ -65,7 +65,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 344,
+static_assert(QORE_IR_MAX_OPCODE == 345,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -2211,6 +2211,42 @@ next_instruction:
                     vtype = autoTypeInfo;
                 }
                 qore_hash_private::get(*hash)->complexTypeInfo = qore_get_complex_hash_type(vtype);
+                setValueSlot(values, inst->result.id, QoreValue(hash.release()), xsink);
+                cleanup.push_back(inst->result.id);
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::MakeHashConstKeys: {
+                const auto* mhck = static_cast<const QoreIRMakeHashConstKeysInstruction*>(inst);
+                const auto& ckeys = mhck->keys;
+                size_t n = ckeys.size();
+                assert(n == inst->operands.size());
+                ReferenceHolder<QoreHashNode> hash(new QoreHashNode(autoTypeInfo), xsink);
+                qore_hash_private* hp = qore_hash_private::get(*hash);
+                hp->hm.reserve(n);
+                const QoreTypeInfo* vtype = nullptr;
+                bool vcommon = false;
+                for (size_t i = 0; i < n; ++i) {
+                    QoreValue value = getIRValue(values, inst->operands[i]);
+                    QoreValue stored = value.hasNode() ? value.refSelf() : value;
+                    const QoreTypeInfo* vt = stored.getTypeInfo();
+                    if (!i) {
+                        vtype = vt;
+                        vcommon = true;
+                    } else if (vcommon && !QoreTypeInfo::matchCommonType(vtype, vt)) {
+                        vcommon = false;
+                    }
+                    hash->setKeyValue(ckeys[i].c_str(), stored, xsink);
+                    if (xsink && *xsink) {
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupLocalCaches();
+                        return false;
+                    }
+                }
+                if (!vtype || vtype == anyTypeInfo) {
+                    vtype = autoTypeInfo;
+                }
+                hp->complexTypeInfo = qore_get_complex_hash_type(vtype);
                 setValueSlot(values, inst->result.id, QoreValue(hash.release()), xsink);
                 cleanup.push_back(inst->result.id);
                 ++ip;

@@ -58,6 +58,8 @@ public:
         const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createMakeHash(const std::vector<QoreIRValue>& values,
         const QoreProgramLocation* loc = nullptr);
+    QoreIRInstruction* createMakeHashConstKeys(std::vector<std::string>&& keys,
+        const std::vector<QoreIRValue>& values, const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createEmptyList(const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createSizedList(QoreIRValue capacity, const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createListAppend(QoreIRValue list, QoreIRValue value,

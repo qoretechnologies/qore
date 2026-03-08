@@ -4164,6 +4164,26 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                             ctx->call_targets[slot].func = call->getFunction();
                             ctx->call_targets[slot].variant = call->getVariant();
                             ctx->call_targets[slot].pgm = call->getProgram();
+                            ctx->call_targets[slot].uvb = call->getVariant()->getUserVariantBase();
+                        }
+                        // Pre-resolve static method or self method call target
+                        if (!call) {
+                            const auto* static_call = dynamic_cast<const StaticMethodCallNode*>(
+                                expr_val.getInternalNode());
+                            if (static_call && static_call->getMethod()) {
+                                ctx->call_targets[slot].method = static_call->getMethod();
+                                const AbstractQoreFunctionVariant* v = static_call->getVariant();
+                                if (v) {
+                                    ctx->call_targets[slot].variant = v;
+                                    ctx->call_targets[slot].uvb = v->getUserVariantBase();
+                                }
+                            } else {
+                                const auto* self_call = dynamic_cast<const SelfFunctionCallNode*>(
+                                    expr_val.getInternalNode());
+                                if (self_call && self_call->getMethod()) {
+                                    ctx->call_targets[slot].method = self_call->getMethod();
+                                }
+                            }
                         }
                     }
                     break;
@@ -4801,6 +4821,10 @@ class ExprTreeSerializer {
             writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_DOT_EVAL));
             MethodCallNode* mc = de->getMethodCall();
             writeStr(mc ? mc->getName() : "");
+            // Serialize class path for method resolution at deserialization time
+            const QoreClass* dot_qc = mc ? mc->getClass() : nullptr;
+            writeStr(dot_qc ? dot_qc->getPath() : "");
+            writeU8(mc && mc->isPseudo() ? 1 : 0);
             // children[0] = target expression, [1..] = args
             size_t count_pos = buf.size();
             writeU16(0);

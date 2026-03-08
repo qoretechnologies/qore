@@ -6053,6 +6053,35 @@ QoreIRValue QoreIRLowering::lowerParseHash(const QoreValue& expr, std::string& e
         error = "parse hash node key/value size mismatch";
         return QoreIRValue();
     }
+
+    // Check if all keys are constant strings — use optimized MakeHashConstKeys
+    bool all_const_keys = true;
+    std::vector<std::string> const_keys;
+    const_keys.reserve(keys.size());
+    for (size_t i = 0; i < keys.size(); ++i) {
+        if (keys[i].getType() == NT_STRING) {
+            const_keys.push_back(keys[i].get<const QoreStringNode>()->c_str());
+        } else {
+            all_const_keys = false;
+            break;
+        }
+    }
+
+    if (all_const_keys) {
+        // Optimized path: only value operands, key names embedded in instruction
+        std::vector<QoreIRValue> value_operands;
+        value_operands.reserve(keys.size());
+        for (size_t i = 0; i < values_vec.size(); ++i) {
+            QoreIRValue value = lowerExpression(values_vec[i], error);
+            if (!value.isValid()) {
+                return QoreIRValue();
+            }
+            value_operands.push_back(value);
+        }
+        return builder.createMakeHashConstKeys(std::move(const_keys), value_operands, hash->loc)->result;
+    }
+
+    // General path: alternating key-value operands
     std::vector<QoreIRValue> operands;
     operands.reserve(keys.size() * 2);
     for (size_t i = 0; i < keys.size(); ++i) {

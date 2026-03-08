@@ -1313,6 +1313,8 @@ class ExprTreeDeserializer {
 
             case AOTExprNodeKind::EN_DOT_EVAL: {
                 std::string method_name = readStr();
+                std::string class_path = readStr();
+                uint8_t is_pseudo = readU8();
                 uint16_t num_children = readU16();
                 // First child = target expression
                 QoreValue target;
@@ -1333,6 +1335,18 @@ class ExprTreeDeserializer {
                 }
                 MethodCallNode* mc = new MethodCallNode(&loc_builtin,
                     strdup(method_name.c_str()), pln.release());
+                // Resolve class and method from serialized class path
+                if (!class_path.empty()) {
+                    const QoreClass* dot_qc = resolveClass(class_path);
+                    if (dot_qc) {
+                        const QoreMethod* dot_method = is_pseudo
+                            ? dot_qc->findMethod(method_name.c_str())
+                            : dot_qc->findMethod(method_name.c_str());
+                        if (dot_method) {
+                            mc->parseSetClassAndMethod(dot_qc, dot_method);
+                        }
+                    }
+                }
                 return QoreValue(new QoreDotEvalOperatorNode(&loc_builtin, target, mc));
             }
 
@@ -2983,6 +2997,75 @@ static QoreAOTContext* buildContextFromSlotMap(
             printd(2, "AOT v2: EXPR_TREE deserialization failed for expr slot %d of '%s'\n",
                 dt.slot, name);
             has_unsupported = true;
+        }
+    }
+
+    // Pre-resolve call targets for expr slots to avoid per-call dynamic_cast overhead
+    // in qore_rt_call_direct_aot, qore_rt_call_static_method_direct_aot, etc.
+    for (int i = 0; i < num_exprs; ++i) {
+        if (!ctx->exprs[i]) {
+            continue;
+        }
+        QoreValue expr_val;
+        std::memcpy(&expr_val, &ctx->exprs[i], sizeof(expr_val));
+        if (!expr_val.hasNode()) {
+            continue;
+        }
+        const AbstractQoreNode* node = expr_val.getInternalNode();
+        // Function call
+        const auto* fcn = dynamic_cast<const FunctionCallNode*>(node);
+        if (fcn && fcn->getFunction()) {
+            ctx->call_targets[i].func = fcn->getFunction();
+            ctx->call_targets[i].pgm = fcn->getProgram();
+            // Variant may not be resolved on AOT-created FunctionCallNode (no args).
+            // Fall back to finding the first variant from the function.
+            const AbstractQoreFunctionVariant* v = fcn->getVariant();
+            if (!v && fcn->getFunction()->numVariants() > 0) {
+                v = fcn->getFunction()->first();
+            }
+            if (v) {
+                ctx->call_targets[i].variant = v;
+                ctx->call_targets[i].uvb = v->getUserVariantBase();
+            }
+            continue;
+        }
+        // Static method call
+        const auto* smc = dynamic_cast<const StaticMethodCallNode*>(node);
+        if (smc && smc->getMethod()) {
+            ctx->call_targets[i].method = smc->getMethod();
+            const AbstractQoreFunctionVariant* v = smc->getVariant();
+            if (v) {
+                ctx->call_targets[i].variant = v;
+                ctx->call_targets[i].uvb = v->getUserVariantBase();
+            }
+            continue;
+        }
+        // Self method call
+        const auto* self_call = dynamic_cast<const SelfFunctionCallNode*>(node);
+        if (self_call && self_call->getMethod()) {
+            ctx->call_targets[i].method = self_call->getMethod();
+            continue;
+        }
+        // Dot-eval method call (obj.method())
+        const auto* dot_eval = dynamic_cast<const QoreDotEvalOperatorNode*>(node);
+        if (dot_eval) {
+            auto* mc = dot_eval->getMethodCall();
+            if (mc) {
+                ctx->call_targets[i].method = mc->getMethod();
+                ctx->call_targets[i].qc = mc->getClass();
+                ctx->call_targets[i].variant = mc->getVariant();
+                ctx->call_targets[i].is_pseudo = mc->isPseudo();
+                ctx->call_targets[i].method_name = mc->getName();
+                // Resolve variant from method if not set (needed for fast dispatch)
+                if (ctx->call_targets[i].method && !ctx->call_targets[i].variant) {
+                    MethodFunctionBase* mfb = qore_method_private::get(
+                        *ctx->call_targets[i].method)->getFunction();
+                    if (mfb && mfb->numVariants() > 0) {
+                        ctx->call_targets[i].variant = mfb->first();
+                    }
+                }
+            }
+            continue;
         }
     }
 
