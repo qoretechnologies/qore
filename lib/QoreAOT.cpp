@@ -345,21 +345,44 @@ static uint64_t computeSourceHash(const char* label) {
 static void reportAOTCompileStats(const char* label, int compiled_count, int total_funcs,
         int failed_count, const std::vector<AOTCompiledFunc>& compiled_funcs) {
     int unsupported_count = 0;
+    int handler_fallback_count = 0;
     for (auto& cf : compiled_funcs) {
-        if (cf.slot_ids.has_unsupported_exprs) {
-            ++unsupported_count;
-            if (getenv("QORE_AOT_DEBUG")) {
-                fprintf(stderr, "AOT: function '%s' needs source fallback (unsupported exprs)\n",
-                    cf.name.c_str());
+        bool has_unsup = cf.slot_ids.has_unsupported_exprs;
+        // Check handler IRs for statement slots
+        bool has_handler_issue = false;
+        for (auto& hir : cf.handler_irs) {
+            if (!hir) {
+                has_handler_issue = true;
+                break;
             }
+        }
+        if (has_unsup) {
+            ++unsupported_count;
+        }
+        if (has_handler_issue && !has_unsup) {
+            ++handler_fallback_count;
+        }
+        if ((has_unsup || has_handler_issue) && getenv("QORE_AOT_DEBUG")) {
+            fprintf(stderr, "AOT: function '%s' needs source fallback (%s%s)\n",
+                cf.name.c_str(),
+                has_unsup ? "unsupported exprs" : "",
+                has_handler_issue ? (has_unsup ? " + missing handler IRs" : "missing handler IRs") : "");
         }
     }
     printf("AOT %s: %d/%d functions pre-compiled (%d failed, %d skipped)\n",
         label, compiled_count, total_funcs, failed_count,
         total_funcs - compiled_count - failed_count);
-    if (unsupported_count > 0) {
-        printf("AOT: %d/%d functions fully serialized, %d need source fallback\n",
-            compiled_count - unsupported_count, compiled_count, unsupported_count);
+    int total_fallback = unsupported_count + handler_fallback_count;
+    if (total_fallback > 0) {
+        printf("AOT: %d/%d functions fully serialized, %d need source fallback",
+            compiled_count - total_fallback, compiled_count, total_fallback);
+        if (unsupported_count > 0 && handler_fallback_count > 0) {
+            printf(" (%d unsupported exprs, %d missing handlers)",
+                unsupported_count, handler_fallback_count);
+        } else if (handler_fallback_count > 0) {
+            printf(" (%d missing handlers)", handler_fallback_count);
+        }
+        printf("\n");
     } else {
         printf("AOT: all %d functions fully serialized (no source fallback needed)\n",
             compiled_count);
@@ -376,6 +399,10 @@ static void reportAOTCompileStats(const char* label, int compiled_count, int tot
 */
 static bool funcNeedsFallback(const AOTCompiledFuncWithSlots& f) {
     if (f.slot_ids.has_unsupported_exprs) {
+        if (getenv("QORE_AOT_DEBUG")) {
+            fprintf(stderr, "AOT: function '%s' needs source fallback (unsupported exprs)\n",
+                f.name.c_str());
+        }
         return true;
     }
     // Check if any stmt slots lack handler IR (need AST fallback)
@@ -384,6 +411,16 @@ static bool funcNeedsFallback(const AOTCompiledFuncWithSlots& f) {
             && std::all_of(f.handler_irs.begin(), f.handler_irs.end(),
                 [](const QoreIRFunction* hir) { return hir != nullptr; });
         if (!all_have_ir) {
+            if (getenv("QORE_AOT_DEBUG")) {
+                fprintf(stderr, "AOT: function '%s' needs source fallback (missing handler IRs: "
+                    "have %d/%d)\n", f.name.c_str(),
+                    (int)f.handler_irs.size(), f.num_stmts);
+                for (int i = 0; i < (int)f.handler_irs.size(); ++i) {
+                    if (!f.handler_irs[i]) {
+                        fprintf(stderr, "AOT:   stmt handler %d is null\n", i);
+                    }
+                }
+            }
             return true;
         }
     }
@@ -576,6 +613,28 @@ static void buildConstantReverseMapImpl(qore_ns_private* ns, AOTConstantReverseM
         if (node) {
             std::string fqn = ns_path + ce->name;
             crm.emplace(node, std::move(fqn));
+        }
+    }
+
+    // Iterate class constants (e.g., LoggerLevel::LevelTrace)
+    ClassListIterator cli(ns->classList);
+    while (cli.next()) {
+        QoreClass* qc = cli.get();
+        if (!qc) {
+            continue;
+        }
+        std::string class_prefix = std::string(qc->getPath() + 2) + "::";  // strip leading "::"
+        ConstConstantListIterator cci(qore_class_private::get(*qc)->constlist);
+        while (cci.next()) {
+            QoreValue v = cci.getValue();
+            if (!v.hasNode()) {
+                continue;
+            }
+            const AbstractQoreNode* node = v.getInternalNode();
+            if (node) {
+                std::string fqn = class_prefix + cci.getName();
+                crm.emplace(node, std::move(fqn));
+            }
         }
     }
 
@@ -5422,6 +5481,25 @@ public:
                 writeU16(0);
                 return true;
             }
+            // Inline enum value (NaN-boxed enum member pointer)
+            if (v.isEnum()) {
+                const QoreEnumMember* member = v.getEnumMember();
+                writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_ENUM));
+                writeStr(member->getEnumDecl()->getNamespacePath());
+                writeStr(member->getName());
+                writeU16(0);
+                return true;
+            }
+            // Inline short string (NaN-boxed, up to 6 bytes)
+            if (v.isShortString()) {
+                char ssbuf[8];
+                v.getShortString(ssbuf);
+                size_t sslen = v.shortStringLen();
+                writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_STRING));
+                writeStr(ssbuf, sslen);
+                writeU16(0);
+                return true;
+            }
             qore_type_t t = v.getType();
             if (t == NT_INT) {
                 writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_INT));
@@ -5440,6 +5518,10 @@ public:
                 writeU8(v.getAsBool() ? 1 : 0);
                 writeU16(0);
                 return true;
+            }
+            if (debug) {
+                fprintf(stderr, "EXPR_TREE: serializeValue: unhandled non-node QoreValue type %d\n",
+                    (int)t);
             }
             return false;
         }
@@ -5494,6 +5576,15 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
             id.kind = AOTExprKind::CONST_ENUM;
             id.ref1 = member->getEnumDecl()->getNamespacePath();
             id.ref2 = member->getName();
+            return id;
+        }
+        // Handle inline short strings (NaN-boxed, up to 6 bytes)
+        if (v.isShortString()) {
+            char ssbuf[8];
+            v.getShortString(ssbuf);
+            size_t sslen = v.shortStringLen();
+            id.kind = AOTExprKind::CONST_STRING;
+            id.ref1 = std::string(ssbuf, sslen);
             return id;
         }
         // Handle inline scalar constants in expression slots

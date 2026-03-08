@@ -1042,6 +1042,25 @@ class ExprTreeDeserializer {
                 return QoreValue(bin.release());
             }
 
+            case AOTExprNodeKind::EN_ENUM: {
+                std::string enum_path = readStr();
+                std::string member_name = readStr();
+                readU16(); // num_children (0)
+                const QoreNamespace* pns = nullptr;
+                const QoreEnumDecl* ed = pgm->findEnum(enum_path.c_str(), pns);
+                if (!ed) {
+                    printd(0, "AOT expr tree: cannot resolve enum '%s'\n", enum_path.c_str());
+                    return QoreValue();
+                }
+                const QoreEnumMember* member = ed->findMember(member_name.c_str());
+                if (!member) {
+                    printd(0, "AOT expr tree: cannot find enum member '%s::%s'\n",
+                        enum_path.c_str(), member_name.c_str());
+                    return QoreValue();
+                }
+                return QoreValue::makeEnum(member);
+            }
+
             case AOTExprNodeKind::EN_DATE: {
                 uint8_t is_relative = readU8();
                 if (is_relative) {

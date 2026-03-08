@@ -777,6 +777,7 @@ enum class AOTExprNodeKind : uint8_t {
     EN_HASH_MAP      = 162, //!< 3 children: [key_expr, val_expr, source]
     EN_HASH_MAP_SELECT = 163, //!< 4 children: [key_expr, val_expr, source, where_expr]
     EN_DATE          = 8,   //!< u8 is_relative + date data; 0 children
+    EN_ENUM          = 9,   //!< u16 enum_path_len + bytes + u16 member_name_len + bytes; 0 children
 
     EN_FOLDL         = 164, //!< 2 children: [accumulator_expr, source]
     EN_FOLDR         = 165, //!< 2 children: [accumulator_expr, source]
