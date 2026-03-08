@@ -459,6 +459,7 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
     std::vector<PollInfo> direct_pinfos;
 
     QoreCondition done_cond;
+    bool cancel_done = false;
 
     {
         AutoLocker al(m);
@@ -473,7 +474,8 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
         if (count > 0) {
             if (tid && !io_exiting) {
                 // I/O thread is running — enqueue the cancel command
-                do_signal = enqueueCmdLocked(IoCommand::CancelOwner, std::string(), owner_str, &done_cond);
+                do_signal = enqueueCmdLocked(IoCommand::CancelOwner, std::string(), owner_str, &done_cond,
+                    &cancel_done);
             } else {
                 // I/O thread not running — handle cancel directly
                 std::vector<std::string> keys;
@@ -508,39 +510,29 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
         // Wait for all cancellations to complete
         {
             AutoLocker al(m);
-            // The CancelOwner handler will signal done_cond when all ops are canceled.
-            // Also check !tid: if the I/O thread exits (e.g. via autostop or crash)
-            // before processing the CancelOwner command, we must not hang.
-            while (tid) {
-                // Check if there are still operations for this owner
-                bool found = false;
-                for (auto& it : cache) {
-                    if (it.second.owner == owner_str) {
-                        found = true;
-                        break;
-                    }
-                }
-                if (!found) {
-                    break;
-                }
+            // Wait for the I/O thread to set cancel_done under lock before broadcasting.
+            // This prevents a race where a spurious wakeup causes the caller to observe
+            // an empty cache and exit, destroying the stack-allocated done_cond before
+            // the I/O thread broadcasts on it.
+            while (!cancel_done) {
                 done_cond.wait(m);
             }
 
-            // If tid dropped to 0 but matching ops remain, collect them for direct cancel
-            if (!tid) {
-                std::vector<std::string> keys;
-                for (auto& [key, pinfo] : cache) {
-                    if (pinfo.owner == owner_str) {
-                        keys.push_back(key);
-                    }
+            // If the I/O thread exited without processing the CancelOwner command
+            // (e.g., via autostop), it sets cancel_done in exit cleanup but ops may
+            // still remain in cache — collect them for direct cancel
+            std::vector<std::string> keys;
+            for (auto& [key, pinfo] : cache) {
+                if (pinfo.owner == owner_str) {
+                    keys.push_back(key);
                 }
-                for (auto& key : keys) {
-                    auto it = cache.find(key);
-                    if (it != cache.end()) {
-                        direct_pinfos.push_back(it->second);
-                        it->second = PollInfo();
-                        cache.erase(it);
-                    }
+            }
+            for (auto& key : keys) {
+                auto it = cache.find(key);
+                if (it != cache.end()) {
+                    direct_pinfos.push_back(it->second);
+                    it->second = PollInfo();
+                    cache.erase(it);
                 }
             }
         }
@@ -1434,9 +1426,14 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
         timer_info_map.clear();
 
         // Signal any pending CancelOwner done_cond waiters in the command queue
-        // so cancelByOwner() doesn't hang when the I/O thread exits
+        // so cancelByOwner() doesn't hang when the I/O thread exits.
+        // Must set cancel_done_flag under lock before broadcasting to prevent
+        // use-after-free of the stack-allocated done_cond.
         for (auto& pending_cmd : cmdq) {
             if (pending_cmd.done_cond) {
+                if (pending_cmd.cancel_done_flag) {
+                    *pending_cmd.cancel_done_flag = true;
+                }
                 pending_cmd.done_cond->broadcast();
             }
         }
@@ -1606,8 +1603,15 @@ bool AsyncIoControllerPriv::processCommands(ExceptionSink* xsink) {
                         }
                     }
 
-                    // Signal done
+                    // Signal done — set cancel_done_flag under lock BEFORE
+                    // broadcasting to prevent a race where a spurious wakeup
+                    // causes the caller to exit and destroy done_cond before
+                    // we broadcast on it.
                     if (cmd.done_cond) {
+                        AutoLocker al(m);
+                        if (cmd.cancel_done_flag) {
+                            *cmd.cancel_done_flag = true;
+                        }
                         cmd.done_cond->broadcast();
                     }
                     break;
@@ -1916,7 +1920,7 @@ void AsyncIoControllerPriv::unregisterExtraFds(const std::string& key, Exception
 }
 
 bool AsyncIoControllerPriv::enqueueCmdLocked(IoCommand cmd, const std::string& key,
-        const std::string& owner, QoreCondition* done_cond) {
+        const std::string& owner, QoreCondition* done_cond, bool* cancel_done_flag) {
     // Caller must hold lock
     if (io_exiting || !tid) {
         // Need to restart
@@ -1932,6 +1936,7 @@ bool AsyncIoControllerPriv::enqueueCmdLocked(IoCommand cmd, const std::string& k
     c.key = key;
     c.owner = owner;
     c.done_cond = done_cond;
+    c.cancel_done_flag = cancel_done_flag;
     cmdq.push_back(std::move(c));
     return true;
 }

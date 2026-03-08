@@ -217,6 +217,7 @@ private:
         std::string key;                //!< For Cancel: the cache key
         std::string owner;              //!< For CancelOwner: the owner string
         QoreCondition* done_cond = nullptr; //!< For CancelOwner: signaled when all canceled
+        bool* cancel_done_flag = nullptr; //!< For CancelOwner: set to true under lock before broadcast
         int64_t timer_deadline_us = 0;  //!< For AddTimer: absolute deadline in microseconds
         int64_t timer_id = 0;           //!< For AddTimer/CancelTimer: timer ID
     };
@@ -352,7 +353,8 @@ private:
     /** @return true if the notifier should be signaled
     */
     DLLLOCAL bool enqueueCmdLocked(IoCommand cmd, const std::string& key = std::string(),
-        const std::string& owner = std::string(), QoreCondition* done_cond = nullptr);
+        const std::string& owner = std::string(), QoreCondition* done_cond = nullptr,
+        bool* cancel_done_flag = nullptr);
 
     //! Wait for a cancel to complete
     DLLLOCAL void waitCancel(const std::string& key);
