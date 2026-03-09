@@ -144,7 +144,10 @@ log("started listener on %s", lh.desc);
 
     @subsection http1_6 HttpServer 1.6
     - added HTTP/3 (QUIC) support with automatic listener creation for TLS listeners
-    - added \c Alt-Svc header support for advertising HTTP/3 availability
+    - added per-listener \c Alt-Svc header support for advertising HTTP/3 availability; each TCP
+      listener only advertises its own QUIC counterpart to prevent browsers from confusing origins
+    - QUIC listeners inherit all configuration from their parent TCP listener (\c additional_info)
+      including cookie names, cookie domains, OIDC flags, and public URLs
     - added \c enable_h3 and \c alt_svc_max_age configuration options
     - added maximum HTTP request body size enforcement (\c max_request_body_size)
     - added \c sync option to allow non-blocking listener addition in async I/O mode
@@ -749,6 +752,11 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         */
         hash<string, int> quic_alt_svc_max_age;
 
+        #! Map of TCP listener ID -> per-listener Alt-Svc header value
+        /** Each TCP listener advertises only its own QUIC counterpart, not all QUIC ports.
+        */
+        hash<string, string> listener_alt_svc;
+
         #! Async I/O controller (when async mode is enabled)
         *HttpServerAsyncIo::HttpAsyncSocketIoController asyncIo;
 
@@ -1085,7 +1093,12 @@ public class HttpServer inherits HttpServer::AbstractLogger {
     }
 
     #! Adds an HTTP/3 QUIC listener on the given UDP port
-    /** @param opts listener options; \c cert and \c key are required for QUIC TLS 1.3
+    /** The QUIC listener inherits \c additional_info from the options (if provided), ensuring
+        that custom listener configuration (cookie names, OIDC flags, public URLs, etc.) is
+        propagated from the parent TCP listener.
+
+        @param opts listener options; \c cert and \c key are required for QUIC TLS 1.3;
+        \c additional_info is passed through to the underlying HttpListener
         @param port the UDP port to bind for QUIC (0 for random port)
 
         @return a hash with \c port and \c name keys
@@ -1133,7 +1146,7 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         # pass UDP socket info via ext_info so getInfo() includes address/family details
         int lid = seqListeners.next();
         string lname = name + sprintf("-%d", lid);
-        HttpListener http_listener = getListener(self, lid, <HttpListenerOptionInfo>{
+        hash<HttpListenerOptionInfo> listener_opts = <HttpListenerOptionInfo>{
             "name": lname,
             "cert": opts.cert,
             "key": opts.key,
@@ -1143,7 +1156,11 @@ public class HttpServer inherits HttpServer::AbstractLogger {
             "no_bind": True,
             "ext_info": sock_info{"address", "address_desc", "family", "familystr", "port",
                 "hostname", "hostname_desc"},
-        });
+        };
+        if (opts.additional_info) {
+            listener_opts.additional_info = opts.additional_info;
+        }
+        HttpListener http_listener = getListener(self, lid, listener_opts);
         # Increment listener counter; decremented by HttpListener::listenerStopped()
         # when the listener is stopped/deleted (on_error handles setup failures)
         c.add();
@@ -1845,7 +1862,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             s.setEncoding(encoding);
         }
 
-        hash<auto> hdr += self.hdr;
+        hash<auto> hdr += getResponseHeaders(cx."listener-id");
 
         if (!extra_hdrs."Content-Type") {
             hdr."Content-Type" = MimeTypeHtml + ";charset=" + encoding;
@@ -2109,28 +2126,45 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         }
     }
 
-    #! Updates the Alt-Svc response header based on active QUIC listeners
-    /** Rebuilds the \c Alt-Svc header from all active QUIC listener ports.
+    #! Updates the per-listener Alt-Svc response headers based on active QUIC listeners
+    /** Rebuilds the \c Alt-Svc header for each TCP listener that has a QUIC counterpart.
+        Each TCP listener only advertises its own QUIC port (not all QUIC ports) to prevent
+        browsers from connecting to the wrong QUIC listener when multiple listeners are active.
         Called whenever QUIC listeners are added or removed.
 
         @since HttpServer 1.6
     */
     private updateAltSvcHeader() {
-        # Build Alt-Svc header from all active QUIC listeners.
+        # Build per-listener Alt-Svc headers.  Each TCP listener advertises
+        # only its own QUIC counterpart so browsers don't confuse origins.
         # NOTE: thread-safe because Qore hash/string value assignments are
-        # atomic (reference-counted); readers of hdr."Alt-Svc" get the old
-        # or new value, never a partial/corrupt value.
-        list<string> alt_svc_entries = ();
+        # atomic (reference-counted); readers get the old or new value,
+        # never a partial/corrupt value.
         foreach string lid in (keys quic_port_map) {
             int quic_port = quic_port_map{lid};
             int ma = quic_alt_svc_max_age{lid} ?? alt_svc_max_age;
-            alt_svc_entries += sprintf("h3=\":%d\"; ma=%d", quic_port, ma);
+            listener_alt_svc{lid} = sprintf("h3=\":%d\"; ma=%d", quic_port, ma);
         }
-        if (alt_svc_entries) {
-            hdr."Alt-Svc" = alt_svc_entries.join(", ");
-        } else {
-            remove hdr."Alt-Svc";
+        # Remove entries for TCP listeners that no longer have QUIC counterparts
+        foreach string lid in (keys listener_alt_svc) {
+            if (!quic_port_map.hasKey(lid)) {
+                remove listener_alt_svc{lid};
+            }
         }
+        # Keep global hdr clean (no Alt-Svc) — it's injected per-listener
+        remove hdr."Alt-Svc";
+    }
+
+    #! Returns response headers with per-listener Alt-Svc injected
+    /** @param listener_id the TCP listener ID (from cx."listener-id")
+        @return the base response headers with Alt-Svc for this listener's QUIC counterpart
+    */
+    private hash<auto> getResponseHeaders(int listener_id) {
+        hash<auto> rv = self.hdr;
+        if (*string alt_svc = listener_alt_svc{listener_id}) {
+            rv."Alt-Svc" = alt_svc;
+        }
+        return rv;
     }
 
     #! returns the listener ID from the bind name or throws an exception if not valid
@@ -2251,13 +2285,17 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                     # Use the actual listener socket info to get the resolved address
                     # and family, since the original info may have AF_UNSPEC / no node
                     hash<auto> linfo = l.getInfo();
-                    hash<auto> quic_info = addQuicListener(<HttpListenerOptionInfo>{
+                    hash<HttpListenerOptionInfo> quic_opts = <HttpListenerOptionInfo>{
                         "cert": info.cert,
                         "key": info.key,
                         "node": linfo.address ?? info.node,
                         "family": linfo.family,
                         "alt_svc_max_age": info.alt_svc_max_age,
-                    }, linfo.port);
+                    };
+                    if (info.additional_info) {
+                        quic_opts.additional_info = info.additional_info;
+                    }
+                    hash<auto> quic_info = addQuicListener(quic_opts, linfo.port);
                     quic_port_map{id} = quic_info.port;
                     quic_alt_svc_max_age{id} = quic_info.alt_svc_max_age;
                     quic_listener_map{id} = quic_info.id;
@@ -2856,7 +2894,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             encoding = s.getEncoding().lwr();
         }
         string err_body = acceptsHtml(cx) ? getHtmlErrorMessage(status_code, msg) : msg;
-        hash<auto> err_hdr = self.hdr + {
+        hash<auto> err_hdr = getResponseHeaders(cx."listener-id") + {
             "Content-Type": MimeTypeHtml + ";charset=" + encoding,
             "Date": getDateHeader(),
         };
@@ -2903,7 +2941,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         # MUST NOT include a message-body. All other responses do include a
         # message-body, although it MAY be of zero length.
 
-        rv.hdr = self.hdr + rv.hdr;
+        rv.hdr = getResponseHeaders(cx."listener-id") + rv.hdr;
 
         if ((exists rv.body || (bool chunked_body = rv.hasKeyValue("chunked_body")))
             && (head
