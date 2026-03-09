@@ -697,6 +697,57 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
             delete hc;
             assertThrows("OBJECT-ALREADY-DELETED", \spop.continuePoll());
         }
+
+        # HTTP/3 poll test - only runs if QUIC/HTTP/3 upgrade succeeds
+        {
+            TempFile cert("cert.pem", TestCert);
+
+            RealTestHttpServer serv(cert.getPath(), cert.getPath());
+            on_exit delete serv;
+
+            # Create client without http_version constraint to allow HTTP/3 upgrade
+            HTTPClient hc({
+                "url": "https://localhost:" + serv.getPort(),
+            });
+
+            # Make a synchronous request first to trigger Alt-Svc upgrade
+            hc.send("test", "PUT");
+
+            if (hc.isHttp3Active()) {
+                string msg = get_random_string(100);
+
+                SocketPollOperation spop = hc.startPollSendRecv("PUT", "/", msg);
+                assertEq("received", spop.getGoal());
+                assertEq("h3-active", spop.getState());
+                pollSocketOperation(spop, 30s);
+                assertEq("received", spop.getState());
+                assertTrue(spop.goalReached());
+                hash<auto> h = spop.getOutput();
+                assertEq(200, h."code");
+                assertEq(msg, h."response-body".toString());
+
+                # Test with larger message
+                binary bigmsg = get_random_bytes(1024 * 64);
+                spop = hc.startPollSendRecv("PUT", "/", bigmsg, {"Content-Type": MimeTypeOctetStream});
+                assertEq("received", spop.getGoal());
+                assertEq("h3-active", spop.getState());
+                pollSocketOperation(spop, 30s);
+                assertEq("received", spop.getState());
+                assertTrue(spop.goalReached());
+                h = spop.getOutput();
+                assertEq(200, h."code");
+                assertEq(bigmsg.size(), h."response-body".size());
+
+                # Test connect-only with HTTP/3
+                spop = hc.startPollConnect();
+                assertEq("connect", spop.getGoal());
+                # should immediately reach connected since QUIC session is already active
+                assertEq("connected", spop.getState());
+                assertTrue(spop.goalReached());
+            } else {
+                testSkip("HTTP/3 not active (server did not advertise Alt-Svc)");
+            }
+        }
     }
 
     assumedEncoding() {
