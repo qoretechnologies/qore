@@ -1765,7 +1765,7 @@ set(QORE_QM_METADATA_SUBDIR core-qlib)
 set(QORE_QM_METADATA_ENV
     "QORE_MODULE_DIR=${CMAKE_BINARY_DIR}/modules/astparser:${CMAKE_BINARY_DIR}/modules/reflection:${CMAKE_SOURCE_DIR}/qlib"
     "LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}")
-set(QORE_QM_METADATA_DEPENDS qore astparser)
+set(QORE_QM_METADATA_DEPENDS qore astparser reflection)
 find_program(_qore_exe NAMES qore HINTS ${CMAKE_INSTALL_FULL_BINDIR})
 if(_qore_exe)
     execute_process(
