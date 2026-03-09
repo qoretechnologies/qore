@@ -902,8 +902,8 @@ int qore_program_private::internParseCommit(bool standard_parse) {
             str_vec_hwm = str_vec.size();
             pgmloc_hwm = pgmloc.size();
 
-            // Eagerly compile all functions if --exec-mode=ir or --exec-mode=jit was specified
-            if ((exec_mode == QEM_IR || exec_mode == QEM_JIT) && standard_parse) {
+            // Eagerly compile all functions if --exec-mode=ir, --exec-mode=jit, or --exec-mode=tiered was specified
+            if ((exec_mode == QEM_IR || exec_mode == QEM_JIT || exec_mode == QEM_TIERED) && standard_parse) {
                 qore_root_ns_private* root_ns_priv = qore_root_ns_private::get(*RootNS);
                 eagerlyCompileAllFunctions(root_ns_priv, exec_mode);
             }
@@ -1969,8 +1969,8 @@ void QoreProgram::parsePending(const char* code, const char* label, ExceptionSin
 }
 
 static void ensureIrExecMode(qore_program_private* priv) {
-    // JIT/IR exec mode only supports PO_MODERN; fallback to AST otherwise.
-    if ((priv->exec_mode == QEM_IR || priv->exec_mode == QEM_JIT)
+    // JIT/IR/Tiered exec modes only support PO_MODERN; fallback to AST otherwise.
+    if ((priv->exec_mode == QEM_IR || priv->exec_mode == QEM_JIT || priv->exec_mode == QEM_TIERED)
         && (priv->pwo.parse_options & PO_MODERN) != PO_MODERN) {
         if (!priv->ir_fallback_warned) {
             printd(5, "IR exec fallback to AST: requires %%modern (PO_MODERN)\n");

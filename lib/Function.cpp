@@ -2731,11 +2731,11 @@ void UserVariantBase::attemptJITCompilation() const {
 }
 
 void UserVariantBase::eagerlyCompileForExecMode(const char* name, qore_exec_mode_t exec_mode) const {
-    // Eagerly compile to IR when --exec-mode=ir or --exec-mode=jit
+    // Eagerly compile to IR when --exec-mode=ir, --exec-mode=jit, or --exec-mode=tiered
     // This respects the user's explicit request to execute in a specific mode
     // rather than using the threshold-based promotion mechanism
 
-    if (exec_mode != QEM_IR && exec_mode != QEM_JIT) {
+    if (exec_mode != QEM_IR && exec_mode != QEM_JIT && exec_mode != QEM_TIERED) {
         return;
     }
 
@@ -2751,6 +2751,12 @@ void UserVariantBase::eagerlyCompileForExecMode(const char* name, qore_exec_mode
         current_tier.store(TIER_IR, std::memory_order_release);
         attemptJITCompilation();
         printd(3, "UserVariantBase::eagerlyCompileForExecMode() '%s' enqueued for background JIT\n", name);
+    } else if (exec_mode == QEM_TIERED && cached_ir) {
+        // For tiered mode, start with IR tier and enqueue for background JIT
+        // This provides 2x speedup immediately while hot code still gets JIT benefit
+        current_tier.store(TIER_IR, std::memory_order_release);
+        attemptJITCompilation();
+        printd(3, "UserVariantBase::eagerlyCompileForExecMode() '%s' (tiered) starting with IR, enqueued for background JIT\n", name);
     } else if (exec_mode == QEM_IR && cached_ir) {
         // For IR mode, mark tier as TIER_IR (skip threshold-based promotion)
         current_tier.store(TIER_IR, std::memory_order_release);
