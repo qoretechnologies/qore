@@ -111,6 +111,8 @@ public class ConnectionSchemeCache {
 
             "freshbooks": "FreshBooksRestClient",
 
+            "gohighlevelres": "GoHighLevelRestClient",
+
             "qdrantrest": "QdrantDataProvider",
             "qdrantrests": "QdrantDataProvider",
 
