@@ -184,11 +184,9 @@ class QoreProcessorsTest inherits QUnit::Test {
     }
 
     filterNoOptions() {
-        # a filter with no options is valid for navigation, but processRecord should throw
+        # a filter with no options passes all records through unfiltered
         QoreFilterRecordsProcessor proc();
-        assertThrows("PROCESSOR-ERROR", sub () {
-            proc.processRecord({"a": 1});
-        });
+        assertEq({"a": 1}, proc.processRecord({"a": 1}));
     }
 
     # --- Select Fields Tests ---
