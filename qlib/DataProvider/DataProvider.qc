@@ -109,6 +109,7 @@ public class DataProvider {
             "ftpclient": "FtpClientDataProvider",
             "ftppoller": "FtpPoller",
             "gcal": "GoogleCalendarDataProvider",
+            "gohighlevel": "GoHighLevelDataProvider",
             "generator": "GeneratorDataProvider",
 
             # provided by the geos module
