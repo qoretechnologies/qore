@@ -505,7 +505,9 @@ class PipelineQueue {
             map $1.waitDone(), elems.last();
         }
 
-        do_flush = True;
+        if (!id) {
+            do_flush = True;
+        }
         while (!id && !queue_stop && do_flush) {
             if (data_waiting) {
                 cond.broadcast();
@@ -515,6 +517,46 @@ class PipelineQueue {
             --flush_waiting;
         }
 
+        if (data_flushed) {
+            if (elems.last().typeCode() == NT_LIST) {
+                map $1.waitDone(), elems.last();
+            }
+            remove data_flushed;
+        }
+    }
+
+    #! Signals this queue's worker thread to flush its elements
+    /** Called by the parent queue's \c flushIntern() to propagate flush to child queues.
+        The worker thread will process any queued data first, then call \c flushIntern()
+        in its own thread context, ensuring thread-affine resources are accessed from the
+        correct thread.
+
+        @note Called with the pipeline lock held
+
+        @since DataProvider 3.4
+    */
+    requestFlush() {
+        do_flush = True;
+        if (data_waiting) {
+            cond.broadcast();
+        }
+    }
+
+    #! Waits for this queue's worker thread to complete its flush
+    /** Blocks until the worker thread has finished executing \c flushIntern() and cleared
+        the \c do_flush flag.
+
+        @note Called with the pipeline lock held
+
+        @since DataProvider 3.4
+    */
+    awaitFlush() {
+        while (!queue_stop && do_flush) {
+            ++flush_waiting;
+            flush_cond.wait(lck);
+            --flush_waiting;
+        }
+        # If the child's flush produced data for grandchildren, wait for them to finish
         if (data_flushed) {
             if (elems.last().typeCode() == NT_LIST) {
                 map $1.waitDone(), elems.last();
@@ -556,7 +598,7 @@ class PipelineQueue {
                         \acc_completed, \acc_processing_us, \acc_queue_wait_us);
                 }
 
-                if (!id && do_flush) {
+                if (do_flush) {
                     flushIntern();
                     do_flush = False;
                     if (flush_waiting) {
@@ -897,7 +939,11 @@ class PipelineQueue {
                     }
                 } else {
                     # must be the last entry in the list - propagate flush to child queues
-                    map $1.flushIntern(), elem;
+                    # Signal each child queue to flush in its own worker thread, ensuring
+                    # thread-affine resources (e.g. OutputStreamWrapper) are accessed from the
+                    # same thread that executed submit/processRecord
+                    map $1.requestFlush(), elem;
+                    map $1.awaitFlush(), elem;
                 }
                 ++elem_index;
             }

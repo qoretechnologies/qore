@@ -133,8 +133,8 @@ public class QoreFilterRecordsProcessor inherits AbstractDataProvider {
     */
     private *auto processRecordImpl(auto record) {
         if (!where_expr) {
-            throw "PROCESSOR-ERROR", "QoreFilterRecordsProcessor: no filter expression configured; "
-                "provide 'where_cond' option";
+            # No expression configured — pass all records through unfiltered
+            return record;
         }
         # Bulk mode: hash-of-lists where first value is a list
         if (record.typeCode() == NT_HASH && record.firstValue().typeCode() == NT_LIST) {
