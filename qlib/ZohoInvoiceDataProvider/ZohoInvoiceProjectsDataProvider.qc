@@ -35,6 +35,7 @@ public class ZohoInvoiceProjectsDataProvider inherits ZohoInvoiceDataProviderBas
             "type": "ZohoInvoiceProjectsDataProvider",
             "supports_read": True,
             "supports_native_search": True,
+            "has_record": True,
             "constructor_options": ConstructorOptions,
             "search_options": SearchOptions,
         };
@@ -60,7 +61,11 @@ public class ZohoInvoiceProjectsDataProvider inherits ZohoInvoiceDataProviderBas
                 "display_name": "Status",
                 "short_desc": "Filter by status",
                 "type": AbstractDataProviderType::get(SoftStringOrNothingType),
-                "desc": "Filter projects by status (active, inactive, all)",
+                "desc": "Filter projects by status",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "active", "desc": "Active projects"},
+                    <AllowedValueInfo>{"value": "inactive", "desc": "Inactive projects"},
+                ),
             },
             "customer_id": <DataProviderOptionInfo>{
                 "display_name": "Customer ID",
@@ -104,8 +109,8 @@ public class ZohoInvoiceProjectsDataProvider inherits ZohoInvoiceDataProviderBas
     }
 
     #! Returns the record type
-    private *AbstractDataProviderType getRecordTypeImpl() {
-        return new ZohoInvoiceProjectDataType();
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return new ZohoInvoiceProjectDataType().getFields();
     }
 
     #! Returns an iterator for records matching the search criteria

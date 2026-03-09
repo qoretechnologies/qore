@@ -114,7 +114,6 @@ module TableauDataProvider {
                     "short_desc": "The datasource ID",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
-                    "preselected": True,
                     "ref_data": "datasources",
                 },
             },
@@ -130,41 +129,8 @@ module TableauDataProvider {
             "short_desc": "Update an existing datasource",
             "desc": "Update an existing datasource in Tableau",
             "action_code": DPAT_API,
-            "options": {
-                "datasource_id": <ActionOptionInfo>{
-                    "display_name": "Datasource ID",
-                    "short_desc": "The datasource to update",
-                    "type": AbstractDataProviderTypeMap."string",
-                    "required": True,
-                    "preselected": True,
-                    "ref_data": "datasources",
-                },
-                "name": <ActionOptionInfo>{
-                    "display_name": "Name",
-                    "short_desc": "The new datasource name",
-                    "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "The new name of the datasource",
-                },
-                "project_id": <ActionOptionInfo>{
-                    "display_name": "Project ID",
-                    "short_desc": "Move to a different project",
-                    "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "The ID of the project to move the datasource to",
-                    "ref_data": "projects",
-                },
-                "is_certified": <ActionOptionInfo>{
-                    "display_name": "Is Certified",
-                    "short_desc": "Whether the datasource is certified",
-                    "type": AbstractDataProviderTypeMap."*bool",
-                    "desc": "Whether the datasource is certified",
-                },
-                "certification_note": <ActionOptionInfo>{
-                    "display_name": "Certification Note",
-                    "short_desc": "The certification note",
-                    "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "A note about the datasource certification",
-                },
-            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                TableauUpdateDatasourceRequestDataType::Fields),
             "output_type": TableauUpdateDatasourceDataProvider::ResponseType,
         });
 
@@ -178,16 +144,8 @@ module TableauDataProvider {
             "short_desc": "Delete a datasource",
             "desc": "Delete a datasource from Tableau",
             "action_code": DPAT_API,
-            "options": {
-                "datasource_id": <ActionOptionInfo>{
-                    "display_name": "Datasource ID",
-                    "short_desc": "The datasource to delete",
-                    "type": AbstractDataProviderTypeMap."string",
-                    "required": True,
-                    "preselected": True,
-                    "ref_data": "datasources",
-                },
-            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                TableauDeleteDatasourceRequestDataType::Fields),
             "output_type": TableauDeleteDatasourceDataProvider::ResponseType,
         });
 
@@ -201,16 +159,8 @@ module TableauDataProvider {
             "short_desc": "Download a datasource file",
             "desc": "Download the datasource file content from Tableau",
             "action_code": DPAT_API,
-            "options": {
-                "datasource_id": <ActionOptionInfo>{
-                    "display_name": "Datasource ID",
-                    "short_desc": "The datasource to download",
-                    "type": AbstractDataProviderTypeMap."string",
-                    "required": True,
-                    "preselected": True,
-                    "ref_data": "datasources",
-                },
-            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                TableauDownloadDatasourceRequestDataType::Fields),
             "output_type": TableauDownloadDatasourceDataProvider::ResponseType,
         });
 
@@ -224,24 +174,8 @@ module TableauDataProvider {
             "short_desc": "Add a tag to a datasource",
             "desc": "Add a tag to a datasource in Tableau",
             "action_code": DPAT_API,
-            "options": {
-                "datasource_id": <ActionOptionInfo>{
-                    "display_name": "Datasource ID",
-                    "short_desc": "The datasource to tag",
-                    "type": AbstractDataProviderTypeMap."string",
-                    "required": True,
-                    "preselected": True,
-                    "ref_data": "datasources",
-                },
-                "tag_name": <ActionOptionInfo>{
-                    "display_name": "Tag Name",
-                    "short_desc": "The tag to add",
-                    "type": AbstractDataProviderTypeMap."string",
-                    "required": True,
-                    "preselected": True,
-                    "desc": "The name of the tag to add to the datasource",
-                },
-            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                TableauAddTagToDatasourceRequestDataType::Fields),
             "output_type": TableauAddTagToDatasourceDataProvider::ResponseType,
         });
 
@@ -255,24 +189,8 @@ module TableauDataProvider {
             "short_desc": "Remove a tag from a datasource",
             "desc": "Remove a tag from a datasource in Tableau",
             "action_code": DPAT_API,
-            "options": {
-                "datasource_id": <ActionOptionInfo>{
-                    "display_name": "Datasource ID",
-                    "short_desc": "The datasource to remove the tag from",
-                    "type": AbstractDataProviderTypeMap."string",
-                    "required": True,
-                    "preselected": True,
-                    "ref_data": "datasources",
-                },
-                "tag_name": <ActionOptionInfo>{
-                    "display_name": "Tag Name",
-                    "short_desc": "The tag to remove",
-                    "type": AbstractDataProviderTypeMap."string",
-                    "required": True,
-                    "preselected": True,
-                    "desc": "The name of the tag to remove from the datasource",
-                },
-            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                TableauDeleteTagFromDatasourceRequestDataType::Fields),
             "output_type": TableauDeleteTagFromDatasourceDataProvider::ResponseType,
         });
 
@@ -328,7 +246,6 @@ module TableauDataProvider {
                     "short_desc": "The project ID",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
-                    "preselected": True,
                     "ref_data": "projects",
                 },
             },
@@ -344,40 +261,8 @@ module TableauDataProvider {
             "short_desc": "Create a new project",
             "desc": "Create a new project in Tableau",
             "action_code": DPAT_API,
-            "options": {
-                "name": <ActionOptionInfo>{
-                    "display_name": "Name",
-                    "short_desc": "The project name",
-                    "type": AbstractDataProviderTypeMap."string",
-                    "required": True,
-                    "preselected": True,
-                    "desc": "The name of the project to create",
-                },
-                "description": <ActionOptionInfo>{
-                    "display_name": "Description",
-                    "short_desc": "The project description",
-                    "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "A description of the project",
-                },
-                "parent_project_id": <ActionOptionInfo>{
-                    "display_name": "Parent Project ID",
-                    "short_desc": "The parent project ID",
-                    "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "The ID of the parent project, if creating a nested project",
-                    "ref_data": "projects",
-                },
-                "content_permissions": <ActionOptionInfo>{
-                    "display_name": "Content Permissions",
-                    "short_desc": "The content permissions mode",
-                    "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "The content permissions mode for the project",
-                    "allowed_values": (
-                        <AllowedValueInfo>{"value": "ManagedByOwner", "display_name": "Managed By Owner"},
-                        <AllowedValueInfo>{"value": "LockedToProject", "display_name": "Locked To Project"},
-                        <AllowedValueInfo>{"value": "LockedToProjectWithoutNested", "display_name": "Locked To Project Without Nested"},
-                    ),
-                },
-            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                TableauCreateProjectRequestDataType::Fields),
             "output_type": TableauCreateProjectDataProvider::ResponseType,
         });
 
@@ -391,46 +276,8 @@ module TableauDataProvider {
             "short_desc": "Update an existing project",
             "desc": "Update an existing project in Tableau",
             "action_code": DPAT_API,
-            "options": {
-                "project_id": <ActionOptionInfo>{
-                    "display_name": "Project ID",
-                    "short_desc": "The project to update",
-                    "type": AbstractDataProviderTypeMap."string",
-                    "required": True,
-                    "preselected": True,
-                    "ref_data": "projects",
-                },
-                "name": <ActionOptionInfo>{
-                    "display_name": "Name",
-                    "short_desc": "The new project name",
-                    "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "The new name of the project",
-                },
-                "description": <ActionOptionInfo>{
-                    "display_name": "Description",
-                    "short_desc": "The new project description",
-                    "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "The new description of the project",
-                },
-                "parent_project_id": <ActionOptionInfo>{
-                    "display_name": "Parent Project ID",
-                    "short_desc": "The new parent project ID",
-                    "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "The new parent project ID for moving the project",
-                    "ref_data": "projects",
-                },
-                "content_permissions": <ActionOptionInfo>{
-                    "display_name": "Content Permissions",
-                    "short_desc": "The content permissions mode",
-                    "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "The content permissions mode for the project",
-                    "allowed_values": (
-                        <AllowedValueInfo>{"value": "ManagedByOwner", "display_name": "Managed By Owner"},
-                        <AllowedValueInfo>{"value": "LockedToProject", "display_name": "Locked To Project"},
-                        <AllowedValueInfo>{"value": "LockedToProjectWithoutNested", "display_name": "Locked To Project Without Nested"},
-                    ),
-                },
-            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                TableauUpdateProjectRequestDataType::Fields),
             "output_type": TableauUpdateProjectDataProvider::ResponseType,
         });
 
@@ -444,16 +291,8 @@ module TableauDataProvider {
             "short_desc": "Delete a project",
             "desc": "Delete a project from Tableau",
             "action_code": DPAT_API,
-            "options": {
-                "project_id": <ActionOptionInfo>{
-                    "display_name": "Project ID",
-                    "short_desc": "The project to delete",
-                    "type": AbstractDataProviderTypeMap."string",
-                    "required": True,
-                    "preselected": True,
-                    "ref_data": "projects",
-                },
-            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                TableauDeleteProjectRequestDataType::Fields),
             "output_type": TableauDeleteProjectDataProvider::ResponseType,
         });
 
@@ -524,7 +363,6 @@ module TableauDataProvider {
                     "short_desc": "The user ID",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
-                    "preselected": True,
                     "ref_data": "users",
                 },
             },
@@ -540,39 +378,8 @@ module TableauDataProvider {
             "short_desc": "Create a new user",
             "desc": "Create a new user in Tableau",
             "action_code": DPAT_API,
-            "options": {
-                "name": <ActionOptionInfo>{
-                    "display_name": "Username",
-                    "short_desc": "The username",
-                    "type": AbstractDataProviderTypeMap."string",
-                    "required": True,
-                    "preselected": True,
-                    "desc": "The username for the new user",
-                },
-                "site_role": <ActionOptionInfo>{
-                    "display_name": "Site Role",
-                    "short_desc": "The site role for the user",
-                    "type": AbstractDataProviderTypeMap."string",
-                    "required": True,
-                    "preselected": True,
-                    "desc": "The site role for the user",
-                    "allowed_values": (
-                        <AllowedValueInfo>{"value": "Creator", "display_name": "Creator"},
-                        <AllowedValueInfo>{"value": "Explorer", "display_name": "Explorer"},
-                        <AllowedValueInfo>{"value": "ExplorerCanPublish", "display_name": "Explorer (Can Publish)"},
-                        <AllowedValueInfo>{"value": "SiteAdministratorCreator", "display_name": "Site Administrator Creator"},
-                        <AllowedValueInfo>{"value": "SiteAdministratorExplorer", "display_name": "Site Administrator Explorer"},
-                        <AllowedValueInfo>{"value": "Unlicensed", "display_name": "Unlicensed"},
-                        <AllowedValueInfo>{"value": "Viewer", "display_name": "Viewer"},
-                    ),
-                },
-                "auth_setting": <ActionOptionInfo>{
-                    "display_name": "Auth Setting",
-                    "short_desc": "The authentication setting",
-                    "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "The authentication setting for the user",
-                },
-            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                TableauCreateUserRequestDataType::Fields),
             "output_type": TableauCreateUserDataProvider::ResponseType,
         });
 
@@ -586,49 +393,8 @@ module TableauDataProvider {
             "short_desc": "Update an existing user",
             "desc": "Update an existing user in Tableau",
             "action_code": DPAT_API,
-            "options": {
-                "user_id": <ActionOptionInfo>{
-                    "display_name": "User ID",
-                    "short_desc": "The user to update",
-                    "type": AbstractDataProviderTypeMap."string",
-                    "required": True,
-                    "preselected": True,
-                    "ref_data": "users",
-                },
-                "full_name": <ActionOptionInfo>{
-                    "display_name": "Full Name",
-                    "short_desc": "The user's full name",
-                    "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "The new full name of the user",
-                },
-                "email": <ActionOptionInfo>{
-                    "display_name": "Email",
-                    "short_desc": "The user's email address",
-                    "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "The new email address of the user",
-                },
-                "site_role": <ActionOptionInfo>{
-                    "display_name": "Site Role",
-                    "short_desc": "The user's site role",
-                    "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "The new site role for the user",
-                    "allowed_values": (
-                        <AllowedValueInfo>{"value": "Creator", "display_name": "Creator"},
-                        <AllowedValueInfo>{"value": "Explorer", "display_name": "Explorer"},
-                        <AllowedValueInfo>{"value": "ExplorerCanPublish", "display_name": "Explorer (Can Publish)"},
-                        <AllowedValueInfo>{"value": "SiteAdministratorCreator", "display_name": "Site Administrator Creator"},
-                        <AllowedValueInfo>{"value": "SiteAdministratorExplorer", "display_name": "Site Administrator Explorer"},
-                        <AllowedValueInfo>{"value": "Unlicensed", "display_name": "Unlicensed"},
-                        <AllowedValueInfo>{"value": "Viewer", "display_name": "Viewer"},
-                    ),
-                },
-                "auth_setting": <ActionOptionInfo>{
-                    "display_name": "Auth Setting",
-                    "short_desc": "The authentication setting",
-                    "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "The new authentication setting for the user",
-                },
-            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                TableauUpdateUserRequestDataType::Fields),
             "output_type": TableauUpdateUserDataProvider::ResponseType,
         });
 
@@ -642,16 +408,8 @@ module TableauDataProvider {
             "short_desc": "Delete a user",
             "desc": "Delete a user from Tableau",
             "action_code": DPAT_API,
-            "options": {
-                "user_id": <ActionOptionInfo>{
-                    "display_name": "User ID",
-                    "short_desc": "The user to delete",
-                    "type": AbstractDataProviderTypeMap."string",
-                    "required": True,
-                    "preselected": True,
-                    "ref_data": "users",
-                },
-            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                TableauDeleteUserRequestDataType::Fields),
             "output_type": TableauDeleteUserDataProvider::ResponseType,
         });
 
@@ -700,7 +458,6 @@ module TableauDataProvider {
                     "short_desc": "The task ID",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
-                    "preselected": True,
                 },
             },
         });
@@ -715,15 +472,8 @@ module TableauDataProvider {
             "short_desc": "Delete an extract refresh task",
             "desc": "Delete an extract refresh task from Tableau",
             "action_code": DPAT_API,
-            "options": {
-                "task_id": <ActionOptionInfo>{
-                    "display_name": "Task ID",
-                    "short_desc": "The task to delete",
-                    "type": AbstractDataProviderTypeMap."string",
-                    "required": True,
-                    "preselected": True,
-                },
-            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                TableauDeleteExtractRefreshTaskRequestDataType::Fields),
             "output_type": TableauDeleteExtractRefreshTaskDataProvider::ResponseType,
         });
 
@@ -745,7 +495,6 @@ module TableauDataProvider {
                     "short_desc": "The HTTP method",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
-                    "preselected": True,
                     "desc": "The HTTP method to use for the API call",
                     "allowed_values": (
                         <AllowedValueInfo>{"value": "GET", "display_name": "GET"},
@@ -753,15 +502,16 @@ module TableauDataProvider {
                         <AllowedValueInfo>{"value": "PUT", "display_name": "PUT"},
                         <AllowedValueInfo>{"value": "DELETE", "display_name": "DELETE"},
                     ),
+                    "example_value": "GET",
                 },
                 "path": <ActionOptionInfo>{
                     "display_name": "API Path",
-                    "short_desc": "The API path",
+                    "short_desc": "The relative API path",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
-                    "preselected": True,
-                    "desc": "The relative API path (e.g. 'projects' or "
-                        "'datasources/DATASOURCE_ID')",
+                    "desc": "The relative API path (e.g. `projects` or "
+                        "`datasources/DATASOURCE_ID`)",
+                    "example_value": "projects",
                 },
                 "body": <ActionOptionInfo>{
                     "display_name": "Request Body",

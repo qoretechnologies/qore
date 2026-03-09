@@ -50,18 +50,25 @@ public class Cin7CoreFindSaleInvoiceDataProvider inherits Cin7CoreDataProviderBa
                 "short_desc": "Filter by sale ID",
                 "type": AbstractDataProviderType::get(StringOrNothingType),
                 "desc": "Return invoices for a specific sale",
+                "preselected": True,
             },
             "InvoiceNumber": <DataProviderOptionInfo>{
                 "display_name": "Invoice Number",
                 "short_desc": "Filter by invoice number",
                 "type": AbstractDataProviderType::get(StringOrNothingType),
                 "desc": "Return a specific invoice by number",
+                "preselected": True,
             },
             "Status": <DataProviderOptionInfo>{
                 "display_name": "Status",
                 "short_desc": "Filter by status",
                 "type": AbstractDataProviderType::get(StringOrNothingType),
-                "desc": "Filter invoices by status (Draft, Authorized, Void)",
+                "desc": "Filter invoices by status",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "Draft", "desc": "Draft invoice"},
+                    <AllowedValueInfo>{"value": "Authorized", "desc": "Authorized invoice"},
+                    <AllowedValueInfo>{"value": "Void", "desc": "Voided invoice"},
+                ),
             },
             "ModifiedSince": <DataProviderOptionInfo>{
                 "display_name": "Modified Since",
@@ -162,7 +169,7 @@ public class Cin7CoreFindSaleInvoiceDataProvider inherits Cin7CoreDataProviderBa
 
 #! Invoice data type
 public class Cin7CoreInvoiceDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions
         const Fields = {
             "ID": {
@@ -232,7 +239,7 @@ public class Cin7CoreInvoiceDataType inherits HashDataType {
                 "desc": "The remaining balance due",
             },
             "Lines": {
-                "type": AutoListOrNothingType,
+                "type": new ListDataType("Lines", new Cin7CoreSaleLineItemDataType(), True),
                 "display_name": "Lines",
                 "short_desc": "Invoice lines",
                 "desc": "The line items on the invoice",

@@ -32,6 +32,7 @@ public class DeelSignContractRequestDataType inherits HashDataType {
             "contract_id": {
                 "type": StringType,
                 "display_name": "Contract ID",
+                "ref_data": "contracts",
                 "short_desc": "The contract ID to sign",
                 "desc": "The unique identifier of the contract to sign",
                 "required": True,

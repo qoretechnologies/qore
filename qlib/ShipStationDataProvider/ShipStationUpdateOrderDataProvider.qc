@@ -27,7 +27,7 @@ public namespace ShipStationDataProvider {
 
 #! Request type for updating an order
 public class ShipStationUpdateOrderRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "orderId": {
                 "type": IntType,
@@ -35,6 +35,7 @@ public class ShipStationUpdateOrderRequestDataType inherits HashDataType {
                 "short_desc": "The order ID to update",
                 "desc": "The ShipStation order ID to update",
                 "required": True,
+                "preselected": True,
             },
             "orderNumber": {
                 "type": StringType,
@@ -42,6 +43,7 @@ public class ShipStationUpdateOrderRequestDataType inherits HashDataType {
                 "short_desc": "Your internal order number",
                 "desc": "A unique identifier for the order in your system",
                 "required": True,
+                "preselected": True,
             },
             "orderKey": {
                 "type": SoftStringOrNothingType,
@@ -55,6 +57,7 @@ public class ShipStationUpdateOrderRequestDataType inherits HashDataType {
                 "short_desc": "Date the order was placed",
                 "desc": "The date the order was placed",
                 "required": True,
+                "preselected": True,
             },
             "orderStatus": {
                 "type": StringType,
@@ -62,6 +65,7 @@ public class ShipStationUpdateOrderRequestDataType inherits HashDataType {
                 "short_desc": "Order status",
                 "desc": "The status of the order",
                 "required": True,
+                "preselected": True,
                 "allowed_values": (
                     <AllowedValueInfo>{"value": "awaiting_payment", "desc": "Awaiting payment"},
                     <AllowedValueInfo>{"value": "awaiting_shipment", "desc": "Awaiting shipment"},
@@ -76,6 +80,7 @@ public class ShipStationUpdateOrderRequestDataType inherits HashDataType {
                 "short_desc": "Billing address",
                 "desc": "The billing address for the order",
                 "required": True,
+                "preselected": True,
             },
             "shipTo": {
                 "type": new ShipStationAddressDataType(),
@@ -83,9 +88,10 @@ public class ShipStationUpdateOrderRequestDataType inherits HashDataType {
                 "short_desc": "Shipping address",
                 "desc": "The shipping destination address",
                 "required": True,
+                "preselected": True,
             },
             "items": {
-                "type": SoftAutoListOrNothingType,
+                "type": new ListDataType("OrderItems", new ShipStationOrderItemDataType(), True),
                 "display_name": "Items",
                 "short_desc": "Order line items",
                 "desc": "Array of order items",

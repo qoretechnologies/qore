@@ -45,7 +45,7 @@ class WaveIncomeExpenseCreateDataType inherits HashDataType {
                 "required": True,
             },
             "date": {
-                "type": StringOrNothingType,
+                "type": DateOrNothingType,
                 "display_name": "Date",
                 "short_desc": "The transaction date",
                 "desc": "The date of the income or expense entry",
@@ -58,17 +58,16 @@ class WaveIncomeExpenseCreateDataType inherits HashDataType {
                 "example_value": "Office supplies purchase",
             },
             "lineItems": {
-                "type": AutoListOrNothingType,
+                "type": new ListDataType("TransactionLineItemInputList", new WaveTransactionLineItemInputDataType(), True),
                 "display_name": "Line Items",
                 "short_desc": "The transaction line items",
-                "desc": "The line items for the transaction (list of line item input objects with "
-                    "accountId, amount, balance type)",
+                "desc": "The line items for the transaction (accountId, amount, balance type)",
             },
             "anchor": {
-                "type": AutoHashOrNothingType,
+                "type": new WaveTransactionAnchorInputDataType(),
                 "display_name": "Anchor",
                 "short_desc": "The anchor account",
-                "desc": "The anchor account for the transaction (hash with accountId and amount)",
+                "desc": "The anchor account for the transaction (accountId, amount, direction)",
             },
             "type": {
                 "type": StringOrNothingType,

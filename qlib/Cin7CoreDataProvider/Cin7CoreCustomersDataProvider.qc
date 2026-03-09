@@ -50,12 +50,14 @@ public class Cin7CoreCustomersDataProvider inherits Cin7CoreDataProviderBase {
                 "short_desc": "Filter by customer ID",
                 "type": AbstractDataProviderType::get(StringOrNothingType),
                 "desc": "Return a specific customer by ID",
+                "preselected": True,
             },
             "Name": <DataProviderOptionInfo>{
                 "display_name": "Name",
                 "short_desc": "Filter by name",
                 "type": AbstractDataProviderType::get(StringOrNothingType),
                 "desc": "Filter customers by name (partial match)",
+                "preselected": True,
             },
             "ContactFilter": <DataProviderOptionInfo>{
                 "display_name": "Contact Filter",

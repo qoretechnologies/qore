@@ -11,6 +11,7 @@ public class ZohoBooksBillsDataProvider inherits ZohoBooksDataProviderBase {
             "type": "ZohoBooksBillsDataProvider",
             "supports_read": True,
             "supports_native_search": True,
+            "has_record": True,
             "constructor_options": BaseConstructorOptions,
             "search_options": SearchOptions,
         };
@@ -27,7 +28,14 @@ public class ZohoBooksBillsDataProvider inherits ZohoBooksDataProviderBase {
                 "display_name": "Status",
                 "short_desc": "Filter by bill status",
                 "type": AbstractDataProviderType::get(SoftStringOrNothingType),
-                "desc": "Filter bills by status (open, overdue, paid, void, partially_paid)",
+                "desc": "Filter bills by status",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "open", "desc": "Open bills"},
+                    <AllowedValueInfo>{"value": "overdue", "desc": "Overdue bills"},
+                    <AllowedValueInfo>{"value": "paid", "desc": "Paid bills"},
+                    <AllowedValueInfo>{"value": "void", "desc": "Voided bills"},
+                    <AllowedValueInfo>{"value": "partially_paid", "desc": "Partially paid bills"},
+                ),
             },
             "vendor_id": <DataProviderOptionInfo>{
                 "display_name": "Vendor ID",
@@ -44,8 +52,8 @@ public class ZohoBooksBillsDataProvider inherits ZohoBooksDataProviderBase {
     string getName() { return "bills"; }
     *string getDesc() { return "Zoho Books bills data provider for listing bills"; }
 
-    private *AbstractDataProviderType getRecordTypeImpl() {
-        return new ZohoBooksBillDataType();
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return new ZohoBooksBillDataType().getFields();
     }
 
     private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
@@ -71,7 +79,7 @@ public class ZohoBooksCreateBillDataProvider inherits ZohoBooksDataProviderBase 
     constructor(ZohoBooksRestClient::ZohoBooksRestClient rest) : ZohoBooksDataProviderBase(rest) {}
     string getName() { return "create-bill"; }
     private *AbstractDataProviderType getRequestTypeImpl() { return AbstractDataProviderTypeMap."hash"; }
-    private *AbstractDataProviderType getResponseTypeImpl() { return AbstractDataProviderTypeMap."hash"; }
+    private *AbstractDataProviderType getResponseTypeImpl() { return new ZohoBooksBillDataType(); }
     private auto doRequestImpl(auto req, *hash<auto> request_options) { return doPost("/bills", req).bill; }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 }
@@ -81,7 +89,7 @@ public class ZohoBooksUpdateBillDataProvider inherits ZohoBooksDataProviderBase 
     constructor(ZohoBooksRestClient::ZohoBooksRestClient rest) : ZohoBooksDataProviderBase(rest) {}
     string getName() { return "update-bill"; }
     private *AbstractDataProviderType getRequestTypeImpl() { return AbstractDataProviderTypeMap."hash"; }
-    private *AbstractDataProviderType getResponseTypeImpl() { return AbstractDataProviderTypeMap."hash"; }
+    private *AbstractDataProviderType getResponseTypeImpl() { return new ZohoBooksBillDataType(); }
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         string id = req.bill_id ?? request_options.bill_id;
         if (!id) throw "ZOHOBOOKS-ERROR", "bill_id required";
@@ -109,7 +117,7 @@ public class ZohoBooksGetBillDataProvider inherits ZohoBooksDataProviderBase {
     constructor(ZohoBooksRestClient::ZohoBooksRestClient rest) : ZohoBooksDataProviderBase(rest) {}
     string getName() { return "get-bill"; }
     private *AbstractDataProviderType getRequestTypeImpl() { return AbstractDataProviderTypeMap."hash"; }
-    private *AbstractDataProviderType getResponseTypeImpl() { return AbstractDataProviderTypeMap."hash"; }
+    private *AbstractDataProviderType getResponseTypeImpl() { return new ZohoBooksBillDataType(); }
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         string id = req.bill_id ?? request_options.bill_id;
         if (!id) throw "ZOHOBOOKS-ERROR", "bill_id required";

@@ -35,6 +35,7 @@ public class ZohoInvoiceItemsDataProvider inherits ZohoInvoiceDataProviderBase {
             "type": "ZohoInvoiceItemsDataProvider",
             "supports_read": True,
             "supports_native_search": True,
+            "has_record": True,
             "constructor_options": ConstructorOptions,
             "search_options": SearchOptions,
         };
@@ -104,8 +105,8 @@ public class ZohoInvoiceItemsDataProvider inherits ZohoInvoiceDataProviderBase {
     }
 
     #! Returns the record type
-    private *AbstractDataProviderType getRecordTypeImpl() {
-        return new ZohoInvoiceItemDataType();
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return new ZohoInvoiceItemDataType().getFields();
     }
 
     #! Returns an iterator for records matching the search criteria

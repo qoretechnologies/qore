@@ -27,7 +27,7 @@ public namespace SquarespaceDataProvider {
 
 #! Request type for updating a product variant
 public class SquarespaceUpdateProductVariantRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "product_id": {
                 "type": StringType,
@@ -35,6 +35,7 @@ public class SquarespaceUpdateProductVariantRequestDataType inherits HashDataTyp
                 "short_desc": "The product ID containing the variant",
                 "desc": "The product ID containing the variant",
                 "required": True,
+                "ref_data": "products",
             },
             "variant_id": {
                 "type": StringType,
@@ -50,28 +51,30 @@ public class SquarespaceUpdateProductVariantRequestDataType inherits HashDataTyp
                 "desc": "The stock keeping unit identifier for the variant",
             },
             "pricing": {
-                "type": AutoHashOrNothingType,
+                "type": new SquarespaceFullPricingDataType(AutoHashOrNothingType),
                 "display_name": "Pricing",
-                "short_desc": "The variant pricing (basePrice, salePrice, onSale)",
-                "desc": "The variant pricing (basePrice, salePrice, onSale)",
+                "short_desc": "The variant pricing",
+                "desc": "The variant pricing including `basePrice`, `salePrice`, and `onSale`",
+                "preselected": True,
             },
             "stock": {
-                "type": AutoHashOrNothingType,
+                "type": new SquarespaceStockDataType(AutoHashOrNothingType),
                 "display_name": "Stock",
-                "short_desc": "The stock information (quantity, unlimited)",
-                "desc": "The stock information (quantity, unlimited)",
+                "short_desc": "The stock information",
+                "desc": "The stock information including `quantity` and `unlimited`",
+                "preselected": True,
             },
             "attributes": {
                 "type": AutoHashOrNothingType,
                 "display_name": "Attributes",
                 "short_desc": "The variant attributes (key-value pairs)",
-                "desc": "The variant attributes (key-value pairs)",
+                "desc": "The variant attributes (freeform key-value pairs)",
             },
             "shippingMeasurements": {
-                "type": AutoHashOrNothingType,
+                "type": new SquarespaceShippingMeasurementsDataType(AutoHashOrNothingType),
                 "display_name": "Shipping Measurements",
-                "short_desc": "The shipping measurements (weight, dimensions)",
-                "desc": "The shipping measurements (weight, dimensions)",
+                "short_desc": "The shipping measurements",
+                "desc": "The shipping measurements including `weight` and `dimensions`",
             },
         };
     }

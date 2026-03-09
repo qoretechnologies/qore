@@ -27,7 +27,7 @@ public namespace Cin7CoreDataProvider {
 
 #! Cin7Core address data type
 public class Cin7CoreAddressDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions
         const Fields = {
             "Line1": {
@@ -73,11 +73,16 @@ public class Cin7CoreAddressDataType inherits HashDataType {
     constructor() : HashDataType("Cin7CoreAddressDataType") {
         addQoreFields(Fields);
     }
+
+    #! Creates the object with a base type
+    constructor(Type base_type) : HashDataType(base_type, "Cin7CoreAddressDataType") {
+        addQoreFields(Fields);
+    }
 }
 
 #! Cin7Core contact data type
 public class Cin7CoreContactDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions
         const Fields = {
             "ID": {
@@ -139,6 +144,11 @@ public class Cin7CoreContactDataType inherits HashDataType {
 
     #! Creates the object
     constructor() : HashDataType("Cin7CoreContactDataType") {
+        addQoreFields(Fields);
+    }
+
+    #! Creates the object with a base type
+    constructor(Type base_type) : HashDataType(base_type, "Cin7CoreContactDataType") {
         addQoreFields(Fields);
     }
 }

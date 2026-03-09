@@ -50,18 +50,25 @@ public class Cin7CoreFindSaleCreditNoteDataProvider inherits Cin7CoreDataProvide
                 "short_desc": "Filter by sale ID",
                 "type": AbstractDataProviderType::get(StringOrNothingType),
                 "desc": "Return credit notes for a specific sale",
+                "preselected": True,
             },
             "CreditNoteNumber": <DataProviderOptionInfo>{
                 "display_name": "Credit Note Number",
                 "short_desc": "Filter by credit note number",
                 "type": AbstractDataProviderType::get(StringOrNothingType),
                 "desc": "Return a specific credit note by number",
+                "preselected": True,
             },
             "Status": <DataProviderOptionInfo>{
                 "display_name": "Status",
                 "short_desc": "Filter by status",
                 "type": AbstractDataProviderType::get(StringOrNothingType),
-                "desc": "Filter credit notes by status (Draft, Authorized, Void)",
+                "desc": "Filter credit notes by status",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "Draft", "desc": "Draft credit note"},
+                    <AllowedValueInfo>{"value": "Authorized", "desc": "Authorized credit note"},
+                    <AllowedValueInfo>{"value": "Void", "desc": "Voided credit note"},
+                ),
             },
             "ModifiedSince": <DataProviderOptionInfo>{
                 "display_name": "Modified Since",
@@ -162,7 +169,7 @@ public class Cin7CoreFindSaleCreditNoteDataProvider inherits Cin7CoreDataProvide
 
 #! Credit note data type
 public class Cin7CoreCreditNoteDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions
         const Fields = {
             "ID": {
@@ -214,7 +221,7 @@ public class Cin7CoreCreditNoteDataType inherits HashDataType {
                 "desc": "The total tax on the credit note",
             },
             "Lines": {
-                "type": AutoListOrNothingType,
+                "type": new ListDataType("Lines", new Cin7CoreSaleLineItemDataType(), True),
                 "display_name": "Lines",
                 "short_desc": "Credit note lines",
                 "desc": "The line items on the credit note",

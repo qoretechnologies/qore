@@ -29,7 +29,7 @@ public namespace ShipStationDataProvider {
 /** Used for package and order weights.
 */
 public class ShipStationWeightDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for ShipStation weight
         const Fields = {
             "value": {
@@ -74,6 +74,10 @@ public class ShipStationWeightDataType inherits HashDataType {
 
     #! Creates the type
     constructor() {
+        addQoreFields(Fields);
+    }
+
+    constructor(Type base_type) : HashDataType(base_type) {
         addQoreFields(Fields);
     }
 }

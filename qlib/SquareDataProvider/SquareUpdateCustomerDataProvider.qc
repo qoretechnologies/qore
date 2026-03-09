@@ -27,7 +27,7 @@ public namespace SquareDataProvider {
 
 #! Request type for updating a customer
 public class SquareUpdateCustomerRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "customer_id": {
                 "type": StringType,

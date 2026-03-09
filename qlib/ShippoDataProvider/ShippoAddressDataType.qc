@@ -112,7 +112,7 @@ public class ShippoAddressDataType inherits HashDataType {
                 "type": SoftBoolOrNothingType,
                 "display_name": "Validate",
                 "short_desc": "Validate address",
-                "desc": "Set to true to automatically validate the address",
+                "desc": "Set to `True` to automatically validate the address",
             },
             "is_complete": {
                 "type": SoftBoolOrNothingType,
@@ -121,10 +121,11 @@ public class ShippoAddressDataType inherits HashDataType {
                 "desc": "Indicates if the address has all required fields",
             },
             "validation_results": {
-                "type": AutoHashOrNothingType,
+                "type": new ShippoValidationResultsDataType(AutoHashOrNothingType),
                 "display_name": "Validation Results",
                 "short_desc": "Address validation results",
-                "desc": "Results from address validation including any suggested corrections",
+                "desc": "Results from address validation including `is_valid` flag and `messages` "
+                    "array with correction details",
             },
             "object_created": {
                 "type": SoftStringOrNothingType,
@@ -240,13 +241,18 @@ public class ShippoAddressInputDataType inherits HashDataType {
                 "type": SoftBoolOrNothingType,
                 "display_name": "Validate",
                 "short_desc": "Validate address",
-                "desc": "Set to true to automatically validate the address",
+                "desc": "Set to `True` to automatically validate the address",
             },
         };
     }
 
     #! Creates the object
     constructor() : HashDataType("ShippoAddressInputDataType") {
+        addQoreFields(Fields);
+    }
+
+    #! Creates the object with a base type (for optional fields)
+    constructor(Type base_type) : HashDataType(base_type, "ShippoAddressInputDataType") {
         addQoreFields(Fields);
     }
 }

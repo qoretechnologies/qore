@@ -72,8 +72,14 @@ public class DeelCreateWorkerRequestDataType inherits HashDataType {
                 "type": StringOrNothingType,
                 "display_name": "Seniority",
                 "short_desc": "The worker's seniority level",
-                "desc": "The seniority level of the worker (e.g., `junior`, `mid`, `senior`)",
+                "desc": "The seniority level of the worker",
                 "example_value": "senior",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "junior", "desc": "Junior level"},
+                    <AllowedValueInfo>{"value": "mid", "desc": "Mid level"},
+                    <AllowedValueInfo>{"value": "senior", "desc": "Senior level"},
+                    <AllowedValueInfo>{"value": "lead", "desc": "Lead level"},
+                ),
             },
             "phone": {
                 "type": StringOrNothingType,

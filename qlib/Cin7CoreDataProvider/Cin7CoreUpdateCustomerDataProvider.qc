@@ -120,7 +120,7 @@ public class Cin7CoreUpdateCustomerDataProvider inherits Cin7CoreDataProviderBas
 
 #! Request data type for updating a customer
 public class Cin7CoreUpdateCustomerRequestDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions
         const Fields = {
             "ID": {
@@ -202,13 +202,13 @@ public class Cin7CoreUpdateCustomerRequestDataType inherits HashDataType {
                 "desc": "The customer's credit limit",
             },
             "Contacts": {
-                "type": SoftAutoListOrNothingType,
+                "type": new ListDataType("Contacts", new Cin7CoreContactDataType(), True),
                 "display_name": "Contacts",
                 "short_desc": "Contact list",
                 "desc": "List of contacts for this customer",
             },
             "Addresses": {
-                "type": SoftAutoListOrNothingType,
+                "type": new ListDataType("Addresses", new Cin7CoreAddressDataType(), True),
                 "display_name": "Addresses",
                 "short_desc": "Address list",
                 "desc": "List of addresses for this customer",

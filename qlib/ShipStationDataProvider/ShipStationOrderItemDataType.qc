@@ -29,7 +29,7 @@ public namespace ShipStationDataProvider {
 /** Represents a line item within an order.
 */
 public class ShipStationOrderItemDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for ShipStation order items
         const Fields = {
             "orderItemId": {

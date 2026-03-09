@@ -27,7 +27,7 @@ public namespace ShipStationDataProvider {
 
 #! Request type for unassigning a user from an order
 public class ShipStationUnassignUserFromOrderRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "orderIds": {
                 "type": SoftAutoListType,
@@ -35,6 +35,7 @@ public class ShipStationUnassignUserFromOrderRequestDataType inherits HashDataTy
                 "short_desc": "The order IDs to unassign",
                 "desc": "Array of order IDs to unassign the user from",
                 "required": True,
+                "preselected": True,
             },
         };
     }
@@ -46,7 +47,7 @@ public class ShipStationUnassignUserFromOrderRequestDataType inherits HashDataTy
 
 #! Response type for unassign user operation
 public class ShipStationUnassignUserResponseDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "success": {
                 "type": SoftBoolType,

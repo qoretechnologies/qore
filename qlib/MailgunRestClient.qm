@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file MailgunRestClient.qm Qore user module for calling Mailgun REST API services
 
-/*  MailgunRestClient.qm Copyright (C) 2025 Qore Technologies, s.r.o.
+/*  MailgunRestClient.qm Copyright (C) 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -442,7 +442,7 @@ public class MailgunRestConnection inherits RestClient::RestConnection {
         @return a @ref MailgunRestClient object
     */
     private MailgunRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
-        return new MailgunRestClient(getConnectionOptions(), !connect);
+        return new MailgunRestClient(getConnectionOptions(rtopts), !connect);
     }
 
     #! Returns the ConnectionSchemeInfo hash for this object

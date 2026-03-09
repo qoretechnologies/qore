@@ -49,6 +49,7 @@ public class ShipStationDataProviderBase inherits DataProvider::AbstractDataProv
                 "desc": "The ShipStation API key for authentication (used as Basic Auth username)",
                 "sensitive": True,
                 "required": True,
+                "preselected": True,
             },
             "api_secret": <DataProviderOptionInfo>{
                 "display_name": "API Secret",
@@ -57,6 +58,7 @@ public class ShipStationDataProviderBase inherits DataProvider::AbstractDataProv
                 "desc": "The ShipStation API secret for authentication (used as Basic Auth password)",
                 "sensitive": True,
                 "required": True,
+                "preselected": True,
             },
         };
     }

@@ -27,7 +27,7 @@ public namespace ChargebeeDataProvider {
 
 #! Request type for deleting a customer
 public class ChargebeeDeleteCustomerRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "id": {
                 "type": StringType,
@@ -40,7 +40,7 @@ public class ChargebeeDeleteCustomerRequestDataType inherits HashDataType {
                 "type": SoftBoolOrNothingType,
                 "display_name": "Delete Payment Method",
                 "short_desc": "Whether to delete payment method",
-                "desc": "If true, the payment method associated with the customer will also be deleted",
+                "desc": "If `True`, the payment method associated with the customer will also be deleted",
             },
         };
     }

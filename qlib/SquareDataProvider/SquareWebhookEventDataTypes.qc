@@ -27,7 +27,7 @@ public namespace SquareDataProvider {
 
 #! Data type for Square Events API event payloads
 public class SquareWebhookEventDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for Square events
         const Fields = {
             "event_id": {

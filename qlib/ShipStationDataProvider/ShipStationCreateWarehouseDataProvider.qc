@@ -27,7 +27,7 @@ public namespace ShipStationDataProvider {
 
 #! Request type for creating a warehouse
 public class ShipStationCreateWarehouseRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "warehouseName": {
                 "type": StringType,
@@ -35,6 +35,7 @@ public class ShipStationCreateWarehouseRequestDataType inherits HashDataType {
                 "short_desc": "Name for the warehouse",
                 "desc": "A descriptive name for the warehouse",
                 "required": True,
+                "preselected": True,
             },
             "originAddress": {
                 "type": new ShipStationAddressDataType(),
@@ -42,6 +43,7 @@ public class ShipStationCreateWarehouseRequestDataType inherits HashDataType {
                 "short_desc": "Warehouse address",
                 "desc": "The ship-from address for this warehouse",
                 "required": True,
+                "preselected": True,
             },
             "returnAddress": {
                 "type": new ShipStationAddressDataType(),

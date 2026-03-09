@@ -57,13 +57,20 @@ public class ZohoInvoiceEstimateDataType inherits HashDataType {
             "status": {
                 "display_name": "Status",
                 "short_desc": "Estimate status",
-                "desc": "Status of the estimate (draft, sent, accepted, declined, invoiced)",
+                "desc": "Status of the estimate",
                 "type": SoftStringOrNothingType,
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "draft", "desc": "Draft estimate"},
+                    <AllowedValueInfo>{"value": "sent", "desc": "Sent estimate"},
+                    <AllowedValueInfo>{"value": "accepted", "desc": "Accepted estimate"},
+                    <AllowedValueInfo>{"value": "declined", "desc": "Declined estimate"},
+                    <AllowedValueInfo>{"value": "invoiced", "desc": "Invoiced estimate"},
+                ),
             },
             "date": {
                 "display_name": "Estimate Date",
                 "short_desc": "Date of the estimate",
-                "desc": "The date of the estimate (YYYY-MM-DD format)",
+                "desc": "The date of the estimate (`YYYY-MM-DD` format)",
                 "type": SoftStringOrNothingType,
             },
             "expiry_date": {
@@ -155,8 +162,7 @@ public class ZohoInvoiceEstimateDataType inherits HashDataType {
 
     #! Creates the object
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 
@@ -175,7 +181,7 @@ public class ZohoInvoiceCreateEstimateRequestDataType inherits HashDataType {
             "date": {
                 "display_name": "Estimate Date",
                 "short_desc": "Date of the estimate",
-                "desc": "The date of the estimate (YYYY-MM-DD format)",
+                "desc": "The date of the estimate (`YYYY-MM-DD` format)",
                 "type": SoftStringOrNothingType,
             },
             "expiry_date": {
@@ -238,8 +244,7 @@ public class ZohoInvoiceCreateEstimateRequestDataType inherits HashDataType {
 
     #! Creates the object
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 

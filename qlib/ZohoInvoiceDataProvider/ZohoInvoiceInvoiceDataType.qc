@@ -57,13 +57,22 @@ public class ZohoInvoiceInvoiceDataType inherits HashDataType {
             "status": {
                 "display_name": "Status",
                 "short_desc": "Invoice status",
-                "desc": "Status of the invoice (draft, sent, overdue, paid, void, etc.)",
+                "desc": "Status of the invoice",
                 "type": SoftStringOrNothingType,
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "draft", "desc": "Draft invoice"},
+                    <AllowedValueInfo>{"value": "sent", "desc": "Sent invoice"},
+                    <AllowedValueInfo>{"value": "overdue", "desc": "Overdue invoice"},
+                    <AllowedValueInfo>{"value": "paid", "desc": "Paid invoice"},
+                    <AllowedValueInfo>{"value": "void", "desc": "Voided invoice"},
+                    <AllowedValueInfo>{"value": "unpaid", "desc": "Unpaid invoice"},
+                    <AllowedValueInfo>{"value": "partially_paid", "desc": "Partially paid invoice"},
+                ),
             },
             "date": {
                 "display_name": "Invoice Date",
                 "short_desc": "Date of the invoice",
-                "desc": "The date of the invoice (YYYY-MM-DD format)",
+                "desc": "The date of the invoice (`YYYY-MM-DD` format)",
                 "type": SoftStringOrNothingType,
             },
             "due_date": {
@@ -209,8 +218,7 @@ public class ZohoInvoiceInvoiceDataType inherits HashDataType {
 
     #! Creates the object
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 
@@ -229,13 +237,13 @@ public class ZohoInvoiceCreateInvoiceRequestDataType inherits HashDataType {
             "date": {
                 "display_name": "Invoice Date",
                 "short_desc": "Date of the invoice",
-                "desc": "The date of the invoice (YYYY-MM-DD format)",
+                "desc": "The date of the invoice (`YYYY-MM-DD` format)",
                 "type": SoftStringOrNothingType,
             },
             "due_date": {
                 "display_name": "Due Date",
                 "short_desc": "Payment due date",
-                "desc": "The date payment is due (YYYY-MM-DD format)",
+                "desc": "The date payment is due (`YYYY-MM-DD` format)",
                 "type": SoftStringOrNothingType,
             },
             "invoice_number": {
@@ -334,8 +342,7 @@ public class ZohoInvoiceCreateInvoiceRequestDataType inherits HashDataType {
 
     #! Creates the object
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 

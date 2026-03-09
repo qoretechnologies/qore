@@ -133,7 +133,7 @@ public class ShippoValidateAddressDataProvider inherits ShippoDataProviderBase {
 
 #! Request data type for validating an address
 public class ShippoValidateAddressRequestDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions
         const Fields = {
             "name": {
@@ -225,7 +225,7 @@ public class ShippoValidateAddressRequestDataType inherits HashDataType {
 
 #! Response data type for address validation
 public class ShippoAddressValidationResponseDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions
         const Fields = {
             "object_id": {
@@ -241,10 +241,11 @@ public class ShippoAddressValidationResponseDataType inherits HashDataType {
                 "desc": "Indicates if the address has all required fields and is deliverable",
             },
             "validation_results": {
-                "type": AutoHashOrNothingType,
+                "type": new ShippoValidationResultsDataType(AutoHashOrNothingType),
                 "display_name": "Validation Results",
                 "short_desc": "Address validation results",
-                "desc": "Detailed validation results including any suggested corrections",
+                "desc": "Detailed validation results including `is_valid` flag and `messages` "
+                    "array with correction details",
             },
             "name": {
                 "type": SoftStringOrNothingType,

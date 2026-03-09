@@ -556,6 +556,7 @@ module WaveDataProvider {
                     "ref_data": "customers",
                 },
             },
+            "output_type": new WaveDeleteCustomerResponseDataType(),
         });
 
         # Action 10: send-invoice (DPAT_API)
@@ -721,6 +722,7 @@ module WaveDataProvider {
                     "type": AbstractDataProviderTypeMap."*hash",
                 },
             },
+            "output_type": AbstractDataProviderType::get(AutoHashType),
         });
 
         # Action 14: search-customers (DPAT_FIND)

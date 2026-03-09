@@ -37,7 +37,7 @@ public class ShippoWatchDataProviderBase inherits ShippoDataProviderBase,
             "poll_interval": <DataProviderOptionInfo>{
                 "display_name": "Poll Interval",
                 "short_desc": "How often to poll for new records (seconds)",
-                "type": AbstractDataProviderType::get(SoftIntType),
+                "type": AbstractDataProviderType::get(SoftIntOrNothingType),
                 "desc": "Polling interval in seconds (minimum 30)",
                 "default_value": DefaultPollInterval,
             },

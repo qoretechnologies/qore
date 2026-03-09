@@ -29,7 +29,7 @@ public namespace ChargebeeDataProvider {
 /** Represents a coupon in Chargebee.
 */
 public class ChargebeeCouponDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for Chargebee coupons
         const Fields = {
             "id": {
@@ -73,19 +73,19 @@ public class ChargebeeCouponDataType inherits HashDataType {
                 "type": FloatOrNothingType,
                 "display_name": "Discount Percentage",
                 "short_desc": "Percentage discount value",
-                "desc": "The percentage discount (applicable when discount_type is 'percentage')",
+                "desc": "The percentage discount (applicable when discount_type is `percentage`)",
             },
             "discount_amount": {
                 "type": IntOrNothingType,
                 "display_name": "Discount Amount",
                 "short_desc": "Fixed discount amount",
-                "desc": "The fixed discount amount in cents (applicable when discount_type is 'fixed_amount')",
+                "desc": "The fixed discount amount in cents (applicable when discount_type is `fixed_amount`)",
             },
             "discount_quantity": {
                 "type": IntOrNothingType,
                 "display_name": "Discount Quantity",
                 "short_desc": "Quantity discount value",
-                "desc": "The quantity discount (applicable when discount_type is 'offer_quantity')",
+                "desc": "The quantity discount (applicable when discount_type is `offer_quantity`)",
             },
             "currency_code": {
                 "type": StringOrNothingType,

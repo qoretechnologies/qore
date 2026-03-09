@@ -27,16 +27,19 @@ public namespace BigCommerceDataProvider {
 
 #! Request type for getting a shipment
 public class BigCommerceGetShipmentRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "order_id": {
                 "display_name": "Order ID",
+                "short_desc": "The order the shipment belongs to",
                 "type": IntType,
                 "desc": "The ID of the order the shipment belongs to",
                 "required": True,
+                "ref_data": "orders",
             },
             "shipment_id": {
                 "display_name": "Shipment ID",
+                "short_desc": "The shipment to retrieve",
                 "type": IntType,
                 "desc": "The ID of the shipment to retrieve",
                 "required": True,

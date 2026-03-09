@@ -35,6 +35,7 @@ public class ZohoInvoiceContactsDataProvider inherits ZohoInvoiceDataProviderBas
             "type": "ZohoInvoiceContactsDataProvider",
             "supports_read": True,
             "supports_native_search": True,
+            "has_record": True,
             "constructor_options": ConstructorOptions,
             "search_options": SearchOptions,
         };
@@ -60,7 +61,13 @@ public class ZohoInvoiceContactsDataProvider inherits ZohoInvoiceDataProviderBas
                 "display_name": "Status",
                 "short_desc": "Filter by status",
                 "type": AbstractDataProviderType::get(SoftStringOrNothingType),
-                "desc": "Filter contacts by status (active, inactive, duplicate, all)",
+                "desc": "Filter contacts by status",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "active", "desc": "Active contacts"},
+                    <AllowedValueInfo>{"value": "inactive", "desc": "Inactive contacts"},
+                    <AllowedValueInfo>{"value": "duplicate", "desc": "Duplicate contacts"},
+                    <AllowedValueInfo>{"value": "all", "desc": "All contacts"},
+                ),
             },
             "contact_name": <DataProviderOptionInfo>{
                 "display_name": "Contact Name",
@@ -110,8 +117,8 @@ public class ZohoInvoiceContactsDataProvider inherits ZohoInvoiceDataProviderBas
     }
 
     #! Returns the record type
-    private *AbstractDataProviderType getRecordTypeImpl() {
-        return new ZohoInvoiceContactDataType();
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return new ZohoInvoiceContactDataType().getFields();
     }
 
     #! Returns an iterator for records matching the search criteria

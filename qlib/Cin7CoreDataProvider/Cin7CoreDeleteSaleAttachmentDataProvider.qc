@@ -99,7 +99,7 @@ public class Cin7CoreDeleteSaleAttachmentDataProvider inherits Cin7CoreDataProvi
 
 #! Request data type for deleting a sale attachment
 public class Cin7CoreDeleteSaleAttachmentRequestDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions
         const Fields = {
             "SaleID": {

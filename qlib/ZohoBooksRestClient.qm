@@ -304,9 +304,9 @@ ZohoBooksRestClient zoho({
 
         if (!token_only) {
             # Build OAuth2 URLs from subdomain and domain
-            rv.oauth2_auth_url = opts.oauth2_auth_url ?? sprintf("https://accounts.%s%s/oauth/v2/auth",
+            rv.oauth2_auth_url = sprintf("https://accounts.%s%s/oauth/v2/auth",
                 subdomain, domain);
-            rv.oauth2_token_url = opts.oauth2_token_url ?? sprintf("https://accounts.%s%s/oauth/v2/token",
+            rv.oauth2_token_url = sprintf("https://accounts.%s%s/oauth/v2/token",
                 subdomain, domain);
 
             # Set default scopes if not provided

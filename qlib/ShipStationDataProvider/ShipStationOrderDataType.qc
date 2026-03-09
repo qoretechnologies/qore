@@ -29,7 +29,7 @@ public namespace ShipStationDataProvider {
 /** Represents a complete order in ShipStation.
 */
 public class ShipStationOrderDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for ShipStation orders
         const Fields = {
             "orderId": {
@@ -215,7 +215,7 @@ public class ShipStationOrderDataType inherits HashDataType {
                 "type": StringOrNothingType,
                 "display_name": "Carrier Code",
                 "short_desc": "Shipping carrier",
-                "desc": "The carrier code for shipping (e.g., 'stamps_com', 'fedex', 'ups')",
+                "desc": "The carrier code for shipping (e.g., `stamps_com`, `fedex`, `ups`)",
                 "ref_data": "carriers",
             },
             "serviceCode": {

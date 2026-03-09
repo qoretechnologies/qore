@@ -11,6 +11,7 @@ public class ZohoBooksSalesOrdersDataProvider inherits ZohoBooksDataProviderBase
             "type": "ZohoBooksSalesOrdersDataProvider",
             "supports_read": True,
             "supports_native_search": True,
+            "has_record": True,
             "search_options": SearchOptions,
         };
 
@@ -26,7 +27,7 @@ public class ZohoBooksSalesOrdersDataProvider inherits ZohoBooksDataProviderBase
     }
     constructor(ZohoBooksRestClient::ZohoBooksRestClient rest) : ZohoBooksDataProviderBase(rest) {}
     string getName() { return "salesorders"; }
-    private *AbstractDataProviderType getRecordTypeImpl() { return new ZohoBooksSalesOrderDataType(); }
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) { return new ZohoBooksSalesOrderDataType().getFields(); }
     private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
         hash<auto> params;
         if (search_options.organization_id) {
@@ -43,7 +44,7 @@ public class ZohoBooksCreateSalesOrderDataProvider inherits ZohoBooksDataProvide
     constructor(ZohoBooksRestClient::ZohoBooksRestClient rest) : ZohoBooksDataProviderBase(rest) {}
     string getName() { return "create-salesorder"; }
     private *AbstractDataProviderType getRequestTypeImpl() { return AbstractDataProviderTypeMap."hash"; }
-    private *AbstractDataProviderType getResponseTypeImpl() { return AbstractDataProviderTypeMap."hash"; }
+    private *AbstractDataProviderType getResponseTypeImpl() { return new ZohoBooksSalesOrderDataType(); }
     private auto doRequestImpl(auto req, *hash<auto> request_options) { return doPost("/salesorders", req).salesorder; }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 }
@@ -53,7 +54,7 @@ public class ZohoBooksUpdateSalesOrderDataProvider inherits ZohoBooksDataProvide
     constructor(ZohoBooksRestClient::ZohoBooksRestClient rest) : ZohoBooksDataProviderBase(rest) {}
     string getName() { return "update-salesorder"; }
     private *AbstractDataProviderType getRequestTypeImpl() { return AbstractDataProviderTypeMap."hash"; }
-    private *AbstractDataProviderType getResponseTypeImpl() { return AbstractDataProviderTypeMap."hash"; }
+    private *AbstractDataProviderType getResponseTypeImpl() { return new ZohoBooksSalesOrderDataType(); }
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         string id = req.salesorder_id ?? request_options.salesorder_id;
         if (!id) throw "ZOHOBOOKS-ERROR", "salesorder_id required";

@@ -29,7 +29,7 @@ public namespace ChargebeeDataProvider {
 /** Represents a customer in Chargebee.
 */
 public class ChargebeeCustomerDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for Chargebee customers
         const Fields = {
             "id": {
@@ -146,7 +146,7 @@ public class ChargebeeCustomerDataType inherits HashDataType {
                 "type": StringOrNothingType,
                 "display_name": "Locale",
                 "short_desc": "Customer's locale",
-                "desc": "The locale code for the customer (e.g., 'en-US', 'fr-FR')",
+                "desc": "The locale code for the customer (e.g., `en-US`, `fr-FR`)",
             },
             "preferred_currency_code": {
                 "type": StringOrNothingType,

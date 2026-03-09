@@ -103,7 +103,7 @@ public class ShippoGetOrderDataProvider inherits ShippoDataProviderBase {
 
 #! Request data type for getting an order
 public class ShippoGetOrderRequestDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions
         const Fields = {
             "order_id": {

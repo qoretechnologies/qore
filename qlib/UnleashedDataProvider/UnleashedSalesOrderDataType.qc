@@ -27,7 +27,7 @@ public namespace UnleashedDataProvider {
 
 #! Sales order data type for Unleashed
 public class UnleashedSalesOrderDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "Guid": {
                 "type": SoftStringOrNothingType,
@@ -134,7 +134,7 @@ public class UnleashedSalesOrderDataType inherits HashDataType {
                 "desc": "The total order amount including tax",
             },
             "SalesOrderLines": {
-                "type": SoftAutoListOrNothingType,
+                "type": new ListDataType("SalesOrderLines", new UnleashedSalesOrderLineDataType(), True),
                 "display_name": "Sales Order Lines",
                 "short_desc": "Order line items",
                 "desc": "The line items for this sales order",
@@ -222,7 +222,7 @@ public class UnleashedSalesOrderDataType inherits HashDataType {
 
 #! Sales order line data type
 public class UnleashedSalesOrderLineDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "Guid": {
                 "type": SoftStringOrNothingType,

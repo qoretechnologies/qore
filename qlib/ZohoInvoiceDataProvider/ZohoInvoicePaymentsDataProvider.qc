@@ -35,6 +35,7 @@ public class ZohoInvoicePaymentsDataProvider inherits ZohoInvoiceDataProviderBas
             "type": "ZohoInvoicePaymentsDataProvider",
             "supports_read": True,
             "supports_native_search": True,
+            "has_record": True,
             "constructor_options": ConstructorOptions,
             "search_options": SearchOptions,
         };
@@ -66,13 +67,13 @@ public class ZohoInvoicePaymentsDataProvider inherits ZohoInvoiceDataProviderBas
                 "display_name": "Date Start",
                 "short_desc": "Filter by start date",
                 "type": AbstractDataProviderType::get(SoftStringOrNothingType),
-                "desc": "Filter payments on or after this date (YYYY-MM-DD)",
+                "desc": "Filter payments on or after this date (`YYYY-MM-DD`)",
             },
             "date_end": <DataProviderOptionInfo>{
                 "display_name": "Date End",
                 "short_desc": "Filter by end date",
                 "type": AbstractDataProviderType::get(SoftStringOrNothingType),
-                "desc": "Filter payments on or before this date (YYYY-MM-DD)",
+                "desc": "Filter payments on or before this date (`YYYY-MM-DD`)",
             },
             "payment_mode": <DataProviderOptionInfo>{
                 "display_name": "Payment Mode",
@@ -116,8 +117,8 @@ public class ZohoInvoicePaymentsDataProvider inherits ZohoInvoiceDataProviderBas
     }
 
     #! Returns the record type
-    private *AbstractDataProviderType getRecordTypeImpl() {
-        return new ZohoInvoicePaymentDataType();
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return new ZohoInvoicePaymentDataType().getFields();
     }
 
     #! Returns an iterator for records matching the search criteria

@@ -98,7 +98,7 @@ public class UnleashedGetCustomerDataProvider inherits UnleashedDataProviderBase
 
 #! Request data type for getting a customer
 public class UnleashedGetCustomerRequestDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions
         const Fields = {
             "guid": {

@@ -27,7 +27,7 @@ public namespace SquarespaceDataProvider {
 
 #! Squarespace inventory item record type
 public class SquarespaceInventoryItemDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for Squarespace inventory items
         const Fields = {
             "variantId": {

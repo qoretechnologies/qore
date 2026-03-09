@@ -27,7 +27,7 @@ public namespace SquareDataProvider {
 
 #! Request type for adding a customer to a group
 public class SquareAddCustomerToGroupRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "customer_id": {
                 "type": StringType,

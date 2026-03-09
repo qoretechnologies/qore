@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore JotformDataProvider module definition
 
-/*  JotformDataProvider.qc Copyright 2025 Qore Technologies, s.r.o.
+/*  JotformDataProvider.qc Copyright 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -46,6 +46,7 @@ public class JotformDataProvider inherits JotformDataProviderBase {
         const ChildMap = {
             "forms": Class::forName("JotformFormsDataProvider"),
             "submissions": Class::forName("JotformFormSubmissionsDataProvider"),
+            "reports": Class::forName("JotformFormReportsDataProvider"),
             "events": Class::forName("JotformEventsDataProvider"),
             "create-submission": Class::forName("JotformCreateSubmissionDataProvider"),
             "update-submission": Class::forName("JotformUpdateSubmissionDataProvider"),

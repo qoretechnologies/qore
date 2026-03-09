@@ -102,11 +102,20 @@ module ZohoInventoryDataProvider {
                     "display_name": "Status",
                     "short_desc": "Filter by contact status",
                     "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "active", "desc": "Active contacts"},
+                        <AllowedValueInfo>{"value": "inactive", "desc": "Inactive contacts"},
+                    ),
                 },
                 "contact_type": <ActionOptionInfo>{
                     "display_name": "Contact Type",
-                    "short_desc": "Filter by contact type (customer or vendor)",
+                    "short_desc": "Filter by contact type",
                     "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "customer", "desc": "Customer contact"},
+                        <AllowedValueInfo>{"value": "vendor", "desc": "Vendor contact"},
+                    ),
                 },
             },
         });
@@ -145,7 +154,11 @@ module ZohoInventoryDataProvider {
                     "display_name": "Contact Type",
                     "short_desc": "Type of contact",
                     "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "customer or vendor",
+                    "desc": "The type of contact",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "customer", "desc": "Customer contact"},
+                        <AllowedValueInfo>{"value": "vendor", "desc": "Vendor contact"},
+                    ),
                 },
                 "payment_terms": <ActionOptionInfo>{
                     "display_name": "Payment Terms",
@@ -169,6 +182,7 @@ module ZohoInventoryDataProvider {
                     "type": AbstractDataProviderTypeMap."*string",
                 },
             },
+            "output_type": new ZohoInventoryContactDataType(),
         });
 
         # Get Contact
@@ -199,6 +213,7 @@ module ZohoInventoryDataProvider {
                     "ref_data": "contacts",
                 },
             },
+            "output_type": new ZohoInventoryContactDataType(),
         });
 
         # Update Contact
@@ -242,7 +257,11 @@ module ZohoInventoryDataProvider {
                     "display_name": "Contact Type",
                     "short_desc": "Type of contact",
                     "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "customer or vendor",
+                    "desc": "The type of contact",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "customer", "desc": "Customer contact"},
+                        <AllowedValueInfo>{"value": "vendor", "desc": "Vendor contact"},
+                    ),
                 },
                 "payment_terms": <ActionOptionInfo>{
                     "display_name": "Payment Terms",
@@ -260,6 +279,7 @@ module ZohoInventoryDataProvider {
                     "type": AbstractDataProviderTypeMap."*string",
                 },
             },
+            "output_type": new ZohoInventoryContactDataType(),
         });
 
         # Delete Contact
@@ -290,6 +310,7 @@ module ZohoInventoryDataProvider {
                     "ref_data": "contacts",
                 },
             },
+            "output_type": new ZohoInventoryDeleteResponseDataType(),
         });
 
         # Mark Contact Active/Inactive
@@ -324,9 +345,10 @@ module ZohoInventoryDataProvider {
                     "short_desc": "Active status",
                     "type": AbstractDataProviderTypeMap."bool",
                     "required": True,
-                    "desc": "True to mark active, False to mark inactive",
+                    "desc": "`True` to mark active, `False` to mark inactive",
                 },
             },
+            "output_type": new ZohoInventoryDeleteResponseDataType(),
         });
 
         # ========== CONTACT PERSON ACTIONS ==========
@@ -415,6 +437,7 @@ module ZohoInventoryDataProvider {
                     "type": AbstractDataProviderTypeMap."*string",
                 },
             },
+            "output_type": new ZohoInventoryContactPersonDataType(),
         });
 
         # Get Contact Person
@@ -444,6 +467,7 @@ module ZohoInventoryDataProvider {
                     "ref_data": "contact_persons",
                 },
             },
+            "output_type": new ZohoInventoryContactPersonDataType(),
         });
 
         # Update Contact Person
@@ -498,6 +522,7 @@ module ZohoInventoryDataProvider {
                     "type": AbstractDataProviderTypeMap."*string",
                 },
             },
+            "output_type": new ZohoInventoryContactPersonDataType(),
         });
 
         # Delete Contact Person
@@ -527,6 +552,7 @@ module ZohoInventoryDataProvider {
                     "ref_data": "contact_persons",
                 },
             },
+            "output_type": new ZohoInventoryDeleteResponseDataType(),
         });
 
         # Mark Contact Person Primary
@@ -556,6 +582,7 @@ module ZohoInventoryDataProvider {
                     "ref_data": "contact_persons",
                 },
             },
+            "output_type": new ZohoInventoryDeleteResponseDataType(),
         });
 
         # ========== ITEM ACTIONS ==========
@@ -593,6 +620,13 @@ module ZohoInventoryDataProvider {
                     "display_name": "Item Type",
                     "short_desc": "Filter by item type",
                     "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "inventory", "desc": "Inventory items"},
+                        <AllowedValueInfo>{"value": "sales", "desc": "Sales items"},
+                        <AllowedValueInfo>{"value": "purchases", "desc": "Purchase items"},
+                        <AllowedValueInfo>{"value": "sales_and_purchases", "desc": "Sales and purchase items"},
+                    ),
                 },
             },
         });
@@ -647,7 +681,13 @@ module ZohoInventoryDataProvider {
                     "display_name": "Item Type",
                     "short_desc": "Type of item",
                     "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "inventory, sales, purchases, sales_and_purchases",
+                    "desc": "The type of the item",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "inventory", "desc": "Inventory item"},
+                        <AllowedValueInfo>{"value": "sales", "desc": "Sales item"},
+                        <AllowedValueInfo>{"value": "purchases", "desc": "Purchase item"},
+                        <AllowedValueInfo>{"value": "sales_and_purchases", "desc": "Sales and purchase item"},
+                    ),
                 },
                 "purchase_rate": <ActionOptionInfo>{
                     "display_name": "Purchase Rate",
@@ -670,6 +710,7 @@ module ZohoInventoryDataProvider {
                     "type": AbstractDataProviderTypeMap."*string",
                 },
             },
+            "output_type": new ZohoInventoryItemDataType(),
         });
 
         # Get Item
@@ -700,6 +741,7 @@ module ZohoInventoryDataProvider {
                     "ref_data": "items",
                 },
             },
+            "output_type": new ZohoInventoryItemDataType(),
         });
 
         # Update Item
@@ -760,6 +802,7 @@ module ZohoInventoryDataProvider {
                     "type": AbstractDataProviderTypeMap."*float",
                 },
             },
+            "output_type": new ZohoInventoryItemDataType(),
         });
 
         # Mark Item Active/Inactive
@@ -796,6 +839,7 @@ module ZohoInventoryDataProvider {
                     "required": True,
                 },
             },
+            "output_type": new ZohoInventoryDeleteResponseDataType(),
         });
 
         # Delete Item
@@ -826,6 +870,7 @@ module ZohoInventoryDataProvider {
                     "ref_data": "items",
                 },
             },
+            "output_type": new ZohoInventoryDeleteResponseDataType(),
         });
 
         # ========== ITEM GROUP ACTIONS ==========
@@ -910,6 +955,7 @@ module ZohoInventoryDataProvider {
                     "desc": "List of items in the group with attributes",
                 },
             },
+            "output_type": new ZohoInventoryItemGroupDataType(),
         });
 
         # Get Item Group
@@ -940,6 +986,7 @@ module ZohoInventoryDataProvider {
                     "ref_data": "item_groups",
                 },
             },
+            "output_type": new ZohoInventoryItemGroupDataType(),
         });
 
         # Update Item Group
@@ -1000,6 +1047,7 @@ module ZohoInventoryDataProvider {
                     "type": AbstractDataProviderTypeMap."*list",
                 },
             },
+            "output_type": new ZohoInventoryItemGroupDataType(),
         });
 
         # Delete Item Group
@@ -1030,6 +1078,7 @@ module ZohoInventoryDataProvider {
                     "ref_data": "item_groups",
                 },
             },
+            "output_type": new ZohoInventoryDeleteResponseDataType(),
         });
 
         # ========== ITEM ADJUSTMENT ACTIONS ==========
@@ -1092,7 +1141,11 @@ module ZohoInventoryDataProvider {
                     "short_desc": "Type of adjustment",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
-                    "desc": "quantity or value",
+                    "desc": "The type of inventory adjustment",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "quantity", "desc": "Quantity adjustment"},
+                        <AllowedValueInfo>{"value": "value", "desc": "Value adjustment"},
+                    ),
                 },
                 "line_items": <ActionOptionInfo>{
                     "display_name": "Line Items",
@@ -1112,6 +1165,7 @@ module ZohoInventoryDataProvider {
                     "type": AbstractDataProviderTypeMap."*string",
                 },
             },
+            "output_type": new ZohoInventoryItemAdjustmentDataType(),
         });
 
         # Get Item Adjustment
@@ -1142,6 +1196,7 @@ module ZohoInventoryDataProvider {
                     "ref_data": "inventory_adjustments",
                 },
             },
+            "output_type": new ZohoInventoryItemAdjustmentDataType(),
         });
 
         # Delete Item Adjustment
@@ -1172,6 +1227,7 @@ module ZohoInventoryDataProvider {
                     "ref_data": "inventory_adjustments",
                 },
             },
+            "output_type": new ZohoInventoryDeleteResponseDataType(),
         });
 
         # ========== PACKAGE ACTIONS ==========
@@ -1260,6 +1316,7 @@ module ZohoInventoryDataProvider {
                     "type": AbstractDataProviderTypeMap."*string",
                 },
             },
+            "output_type": new ZohoInventoryPackageDataType(),
         });
 
         # Get Package
@@ -1290,6 +1347,7 @@ module ZohoInventoryDataProvider {
                     "ref_data": "packages",
                 },
             },
+            "output_type": new ZohoInventoryPackageDataType(),
         });
 
         # Update Package
@@ -1335,6 +1393,7 @@ module ZohoInventoryDataProvider {
                     "type": AbstractDataProviderTypeMap."*string",
                 },
             },
+            "output_type": new ZohoInventoryPackageDataType(),
         });
 
         # Delete Package
@@ -1365,6 +1424,7 @@ module ZohoInventoryDataProvider {
                     "ref_data": "packages",
                 },
             },
+            "output_type": new ZohoInventoryDeleteResponseDataType(),
         });
 
         # ========== PURCHASE ORDER ACTIONS ==========
@@ -1392,12 +1452,21 @@ module ZohoInventoryDataProvider {
                     "display_name": "Vendor",
                     "short_desc": "Filter by vendor",
                     "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
                     "ref_data": "vendors",
                 },
                 "status": <ActionOptionInfo>{
                     "display_name": "Status",
                     "short_desc": "Filter by purchase order status",
                     "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "issued", "desc": "Issued purchase orders"},
+                        <AllowedValueInfo>{"value": "cancelled", "desc": "Cancelled purchase orders"},
+                        <AllowedValueInfo>{"value": "open", "desc": "Open purchase orders"},
+                        <AllowedValueInfo>{"value": "closed", "desc": "Closed purchase orders"},
+                        <AllowedValueInfo>{"value": "billed", "desc": "Billed purchase orders"},
+                    ),
                 },
             },
         });
@@ -1461,6 +1530,7 @@ module ZohoInventoryDataProvider {
                     "type": AbstractDataProviderTypeMap."*string",
                 },
             },
+            "output_type": new ZohoInventoryPurchaseOrderDataType(),
         });
 
         # Get Purchase Order
@@ -1491,6 +1561,7 @@ module ZohoInventoryDataProvider {
                     "ref_data": "purchaseorders",
                 },
             },
+            "output_type": new ZohoInventoryPurchaseOrderDataType(),
         });
 
         # Update Purchase Order
@@ -1552,6 +1623,7 @@ module ZohoInventoryDataProvider {
                     "type": AbstractDataProviderTypeMap."*string",
                 },
             },
+            "output_type": new ZohoInventoryPurchaseOrderDataType(),
         });
 
         # Delete Purchase Order
@@ -1582,6 +1654,7 @@ module ZohoInventoryDataProvider {
                     "ref_data": "purchaseorders",
                 },
             },
+            "output_type": new ZohoInventoryDeleteResponseDataType(),
         });
 
         # ========== SALES ORDER ACTIONS ==========
@@ -1609,12 +1682,20 @@ module ZohoInventoryDataProvider {
                     "display_name": "Customer",
                     "short_desc": "Filter by customer",
                     "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
                     "ref_data": "customers",
                 },
                 "status": <ActionOptionInfo>{
                     "display_name": "Status",
                     "short_desc": "Filter by sales order status",
                     "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "open", "desc": "Open sales orders"},
+                        <AllowedValueInfo>{"value": "confirmed", "desc": "Confirmed sales orders"},
+                        <AllowedValueInfo>{"value": "fulfilled", "desc": "Fulfilled sales orders"},
+                        <AllowedValueInfo>{"value": "void", "desc": "Void sales orders"},
+                    ),
                 },
             },
         });
@@ -1683,6 +1764,7 @@ module ZohoInventoryDataProvider {
                     "type": AbstractDataProviderTypeMap."*string",
                 },
             },
+            "output_type": new ZohoInventorySalesOrderDataType(),
         });
 
         # Get Sales Order
@@ -1713,6 +1795,7 @@ module ZohoInventoryDataProvider {
                     "ref_data": "salesorders",
                 },
             },
+            "output_type": new ZohoInventorySalesOrderDataType(),
         });
 
         # Update Sales Order
@@ -1779,6 +1862,7 @@ module ZohoInventoryDataProvider {
                     "type": AbstractDataProviderTypeMap."*string",
                 },
             },
+            "output_type": new ZohoInventorySalesOrderDataType(),
         });
 
         # Delete Sales Order
@@ -1809,6 +1893,7 @@ module ZohoInventoryDataProvider {
                     "ref_data": "salesorders",
                 },
             },
+            "output_type": new ZohoInventoryDeleteResponseDataType(),
         });
 
         # ========== INVOICE ACTIONS ==========
@@ -1842,12 +1927,23 @@ module ZohoInventoryDataProvider {
                     "display_name": "Customer",
                     "short_desc": "Filter by customer",
                     "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
                     "ref_data": "customers",
                 },
                 "status": <ActionOptionInfo>{
                     "display_name": "Status",
                     "short_desc": "Filter by invoice status",
                     "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "draft", "desc": "Draft invoices"},
+                        <AllowedValueInfo>{"value": "sent", "desc": "Sent invoices"},
+                        <AllowedValueInfo>{"value": "overdue", "desc": "Overdue invoices"},
+                        <AllowedValueInfo>{"value": "paid", "desc": "Paid invoices"},
+                        <AllowedValueInfo>{"value": "void", "desc": "Void invoices"},
+                        <AllowedValueInfo>{"value": "unpaid", "desc": "Unpaid invoices"},
+                        <AllowedValueInfo>{"value": "partially_paid", "desc": "Partially paid invoices"},
+                    ),
                 },
             },
         });
@@ -1933,6 +2029,7 @@ module ZohoInventoryDataProvider {
                     "ref_data": "salesorders",
                 },
             },
+            "output_type": new ZohoInventoryInvoiceDataType(),
         });
 
         # Get Invoice
@@ -1963,6 +2060,7 @@ module ZohoInventoryDataProvider {
                     "ref_data": "invoices",
                 },
             },
+            "output_type": new ZohoInventoryInvoiceDataType(),
         });
 
         # Update Invoice
@@ -2039,6 +2137,7 @@ module ZohoInventoryDataProvider {
                     "type": AbstractDataProviderTypeMap."*string",
                 },
             },
+            "output_type": new ZohoInventoryInvoiceDataType(),
         });
 
         # Delete Invoice
@@ -2069,6 +2168,7 @@ module ZohoInventoryDataProvider {
                     "ref_data": "invoices",
                 },
             },
+            "output_type": new ZohoInventoryDeleteResponseDataType(),
         });
 
         # ========== SHIPMENT ORDER ACTIONS ==========
@@ -2096,12 +2196,14 @@ module ZohoInventoryDataProvider {
                     "display_name": "Sales Order",
                     "short_desc": "Filter by sales order",
                     "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
                     "ref_data": "salesorders",
                 },
                 "status": <ActionOptionInfo>{
                     "display_name": "Status",
                     "short_desc": "Filter by shipment status",
                     "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
                 },
             },
         });
@@ -2174,6 +2276,7 @@ module ZohoInventoryDataProvider {
                     "type": AbstractDataProviderTypeMap."*string",
                 },
             },
+            "output_type": new ZohoInventoryShipmentOrderDataType(),
         });
 
         # Get Shipment Order
@@ -2204,6 +2307,7 @@ module ZohoInventoryDataProvider {
                     "ref_data": "shipmentorders",
                 },
             },
+            "output_type": new ZohoInventoryShipmentOrderDataType(),
         });
 
         # Update Shipment Order
@@ -2264,6 +2368,7 @@ module ZohoInventoryDataProvider {
                     "type": AbstractDataProviderTypeMap."*string",
                 },
             },
+            "output_type": new ZohoInventoryShipmentOrderDataType(),
         });
 
         # Delete Shipment Order
@@ -2294,6 +2399,7 @@ module ZohoInventoryDataProvider {
                     "ref_data": "shipmentorders",
                 },
             },
+            "output_type": new ZohoInventoryDeleteResponseDataType(),
         });
 
         # Mark Shipment Delivered
@@ -2324,6 +2430,7 @@ module ZohoInventoryDataProvider {
                     "ref_data": "shipmentorders",
                 },
             },
+            "output_type": new ZohoInventoryDeleteResponseDataType(),
         });
 
         # ========== UTILITY ACTIONS ==========
@@ -2351,7 +2458,13 @@ module ZohoInventoryDataProvider {
                     "short_desc": "HTTP method to use",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
-                    "desc": "HTTP method: GET, POST, PUT, DELETE",
+                    "desc": "The HTTP method to use for the API call",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "GET", "desc": "HTTP GET request"},
+                        <AllowedValueInfo>{"value": "POST", "desc": "HTTP POST request"},
+                        <AllowedValueInfo>{"value": "PUT", "desc": "HTTP PUT request"},
+                        <AllowedValueInfo>{"value": "DELETE", "desc": "HTTP DELETE request"},
+                    ),
                 },
                 "path": <ActionOptionInfo>{
                     "display_name": "API Path",
@@ -2367,6 +2480,7 @@ module ZohoInventoryDataProvider {
                     "desc": "Request body for POST/PUT requests",
                 },
             },
+            "output_type": AbstractDataProviderType::get(AutoHashType),
         });
 
         # ========== TRIGGER ACTIONS (POLLING) ==========

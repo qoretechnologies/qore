@@ -101,6 +101,9 @@ module Cin7CoreDataProvider {
             "desc": "Create a new customer in Cin7Core with contact information, addresses, and payment terms.",
             "action_code": DPAT_API,
             "data_provider_info": Cin7CoreCreateCustomerDataProvider::ProviderInfo,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                Cin7CoreCreateCustomerRequestDataType::Fields),
+            "output_type": Cin7CoreCreateCustomerDataProvider::ResponseType,
         });
 
         # Get Customer
@@ -114,16 +117,9 @@ module Cin7CoreDataProvider {
             "desc": "Retrieve detailed information about a specific customer by their unique identifier.",
             "action_code": DPAT_API,
             "data_provider_info": Cin7CoreGetCustomerDataProvider::ProviderInfo,
-            "options": {
-                "ID": <ActionOptionInfo>{
-                    "display_name": "Customer ID",
-                    "short_desc": "The customer ID",
-                    "desc": "The unique identifier (GUID) of the customer to retrieve",
-                    "type": AbstractDataProviderTypeMap."string",
-                    "required": True,
-                    "ref_data": "customers",
-                },
-            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                Cin7CoreGetCustomerRequestDataType::Fields),
+            "output_type": Cin7CoreGetCustomerDataProvider::ResponseType,
         });
 
         # Update Customer
@@ -137,6 +133,9 @@ module Cin7CoreDataProvider {
             "desc": "Update an existing customer's information in Cin7Core.",
             "action_code": DPAT_API,
             "data_provider_info": Cin7CoreUpdateCustomerDataProvider::ProviderInfo,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                Cin7CoreUpdateCustomerRequestDataType::Fields),
+            "output_type": Cin7CoreUpdateCustomerDataProvider::ResponseType,
         });
 
         # ========== SUPPLIER ACTIONS ==========
@@ -168,6 +167,9 @@ module Cin7CoreDataProvider {
             "desc": "Create a new supplier in Cin7Core with contact information and payment terms.",
             "action_code": DPAT_API,
             "data_provider_info": Cin7CoreCreateSupplierDataProvider::ProviderInfo,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                Cin7CoreCreateSupplierRequestDataType::Fields),
+            "output_type": Cin7CoreCreateSupplierDataProvider::ResponseType,
         });
 
         # Get Supplier
@@ -181,16 +183,9 @@ module Cin7CoreDataProvider {
             "desc": "Retrieve detailed information about a specific supplier.",
             "action_code": DPAT_API,
             "data_provider_info": Cin7CoreGetSupplierDataProvider::ProviderInfo,
-            "options": {
-                "ID": <ActionOptionInfo>{
-                    "display_name": "Supplier ID",
-                    "short_desc": "The supplier ID",
-                    "desc": "The unique identifier (GUID) of the supplier to retrieve",
-                    "type": AbstractDataProviderTypeMap."string",
-                    "required": True,
-                    "ref_data": "suppliers",
-                },
-            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                Cin7CoreGetSupplierRequestDataType::Fields),
+            "output_type": Cin7CoreGetSupplierDataProvider::ResponseType,
         });
 
         # Update Supplier
@@ -204,6 +199,9 @@ module Cin7CoreDataProvider {
             "desc": "Update an existing supplier's information in Cin7Core.",
             "action_code": DPAT_API,
             "data_provider_info": Cin7CoreUpdateSupplierDataProvider::ProviderInfo,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                Cin7CoreUpdateSupplierRequestDataType::Fields),
+            "output_type": Cin7CoreUpdateSupplierDataProvider::ResponseType,
         });
 
         # ========== PRODUCT ACTIONS ==========
@@ -236,16 +234,9 @@ module Cin7CoreDataProvider {
             "desc": "Retrieve detailed information about a specific product.",
             "action_code": DPAT_API,
             "data_provider_info": Cin7CoreGetProductDataProvider::ProviderInfo,
-            "options": {
-                "ID": <ActionOptionInfo>{
-                    "display_name": "Product ID",
-                    "short_desc": "The product ID",
-                    "desc": "The unique identifier (GUID) of the product to retrieve",
-                    "type": AbstractDataProviderTypeMap."string",
-                    "required": True,
-                    "ref_data": "products",
-                },
-            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                Cin7CoreGetProductRequestDataType::Fields),
+            "output_type": Cin7CoreGetProductDataProvider::ResponseType,
         });
 
         # Find Product Availability
@@ -293,6 +284,9 @@ module Cin7CoreDataProvider {
             "desc": "Create a new sale order in Cin7Core with customer, line items, and shipping details.",
             "action_code": DPAT_API,
             "data_provider_info": Cin7CoreCreateSaleDataProvider::ProviderInfo,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                Cin7CoreCreateSaleRequestDataType::Fields),
+            "output_type": Cin7CoreCreateSaleDataProvider::ResponseType,
         });
 
         # Get Sale
@@ -306,16 +300,9 @@ module Cin7CoreDataProvider {
             "desc": "Retrieve detailed information about a specific sale order.",
             "action_code": DPAT_API,
             "data_provider_info": Cin7CoreGetSaleDataProvider::ProviderInfo,
-            "options": {
-                "ID": <ActionOptionInfo>{
-                    "display_name": "Sale ID",
-                    "short_desc": "The sale ID",
-                    "desc": "The unique identifier (GUID) of the sale to retrieve",
-                    "type": AbstractDataProviderTypeMap."string",
-                    "required": True,
-                    "ref_data": "sales",
-                },
-            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                Cin7CoreGetSaleRequestDataType::Fields),
+            "output_type": Cin7CoreGetSaleDataProvider::ResponseType,
         });
 
         # Update Sale
@@ -329,6 +316,9 @@ module Cin7CoreDataProvider {
             "desc": "Update an existing sale order in Cin7Core.",
             "action_code": DPAT_API,
             "data_provider_info": Cin7CoreUpdateSaleDataProvider::ProviderInfo,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                Cin7CoreUpdateSaleRequestDataType::Fields),
+            "output_type": Cin7CoreUpdateSaleDataProvider::ResponseType,
         });
 
         # Delete Sale
@@ -342,6 +332,9 @@ module Cin7CoreDataProvider {
             "desc": "Delete or void a sale order in Cin7Core.",
             "action_code": DPAT_API,
             "data_provider_info": Cin7CoreDeleteSaleDataProvider::ProviderInfo,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                Cin7CoreDeleteSaleRequestDataType::Fields),
+            "output_type": Cin7CoreDeleteSaleDataProvider::ResponseType,
         });
 
         # ========== SALE PAYMENT ACTIONS ==========
@@ -373,6 +366,9 @@ module Cin7CoreDataProvider {
             "desc": "Record a payment against a sale order.",
             "action_code": DPAT_API,
             "data_provider_info": Cin7CoreAddSalePaymentDataProvider::ProviderInfo,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                Cin7CoreAddSalePaymentRequestDataType::Fields),
+            "output_type": Cin7CoreAddSalePaymentDataProvider::ResponseType,
         });
 
         # Update Sale Payment
@@ -386,6 +382,9 @@ module Cin7CoreDataProvider {
             "desc": "Update an existing payment on a sale order.",
             "action_code": DPAT_API,
             "data_provider_info": Cin7CoreUpdateSalePaymentDataProvider::ProviderInfo,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                Cin7CoreUpdateSalePaymentRequestDataType::Fields),
+            "output_type": Cin7CoreUpdateSalePaymentDataProvider::ResponseType,
         });
 
         # Delete Sale Payment
@@ -399,6 +398,9 @@ module Cin7CoreDataProvider {
             "desc": "Remove a payment from a sale order.",
             "action_code": DPAT_API,
             "data_provider_info": Cin7CoreDeleteSalePaymentDataProvider::ProviderInfo,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                Cin7CoreDeleteSalePaymentRequestDataType::Fields),
+            "output_type": Cin7CoreDeleteSalePaymentDataProvider::ResponseType,
         });
 
         # ========== SALE ATTACHMENT ACTIONS ==========
@@ -414,6 +416,9 @@ module Cin7CoreDataProvider {
             "desc": "Upload a file attachment to a sale order.",
             "action_code": DPAT_API,
             "data_provider_info": Cin7CoreAddSaleAttachmentDataProvider::ProviderInfo,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                Cin7CoreAddSaleAttachmentRequestDataType::Fields),
+            "output_type": Cin7CoreAddSaleAttachmentDataProvider::ResponseType,
         });
 
         # Delete Sale Attachment
@@ -427,6 +432,9 @@ module Cin7CoreDataProvider {
             "desc": "Remove a file attachment from a sale order.",
             "action_code": DPAT_API,
             "data_provider_info": Cin7CoreDeleteSaleAttachmentDataProvider::ProviderInfo,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                Cin7CoreDeleteSaleAttachmentRequestDataType::Fields),
+            "output_type": Cin7CoreDeleteSaleAttachmentDataProvider::ResponseType,
         });
 
         # ========== SALE FULFILLMENT ACTIONS ==========
@@ -442,6 +450,9 @@ module Cin7CoreDataProvider {
             "desc": "Create a pack or pick task for fulfilling a sale order.",
             "action_code": DPAT_API,
             "data_provider_info": Cin7CoreAddSalePackDataProvider::ProviderInfo,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                Cin7CoreAddSalePackRequestDataType::Fields),
+            "output_type": Cin7CoreAddSalePackDataProvider::ResponseType,
         });
 
         # Get Sale Pack
@@ -455,6 +466,9 @@ module Cin7CoreDataProvider {
             "desc": "Retrieve pack/pick details for a sale order.",
             "action_code": DPAT_API,
             "data_provider_info": Cin7CoreGetSalePackDataProvider::ProviderInfo,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                Cin7CoreGetSalePackRequestDataType::Fields),
+            "output_type": Cin7CoreGetSalePackDataProvider::ResponseType,
         });
 
         # Add Sale Shipment
@@ -468,6 +482,9 @@ module Cin7CoreDataProvider {
             "desc": "Add shipment details and tracking information to a sale order.",
             "action_code": DPAT_API,
             "data_provider_info": Cin7CoreAddSaleShipmentDataProvider::ProviderInfo,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                Cin7CoreAddSaleShipmentRequestDataType::Fields),
+            "output_type": Cin7CoreAddSaleShipmentDataProvider::ResponseType,
         });
 
         # Find Sale Fulfilment
@@ -549,6 +566,9 @@ module Cin7CoreDataProvider {
             "desc": "Create a new stock adjustment to modify inventory levels.",
             "action_code": DPAT_API,
             "data_provider_info": Cin7CoreCreateStockAdjustmentDataProvider::ProviderInfo,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                Cin7CoreCreateStockAdjustmentRequestDataType::Fields),
+            "output_type": Cin7CoreCreateStockAdjustmentDataProvider::ResponseType,
         });
 
         # Get Stock Adjustment
@@ -562,6 +582,9 @@ module Cin7CoreDataProvider {
             "desc": "Retrieve detailed information about a specific stock adjustment.",
             "action_code": DPAT_API,
             "data_provider_info": Cin7CoreGetStockAdjustmentDataProvider::ProviderInfo,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                Cin7CoreGetStockAdjustmentRequestDataType::Fields),
+            "output_type": Cin7CoreGetStockAdjustmentDataProvider::ResponseType,
         });
 
         # Update Stock Adjustment
@@ -575,6 +598,9 @@ module Cin7CoreDataProvider {
             "desc": "Update an existing stock adjustment in Cin7Core.",
             "action_code": DPAT_API,
             "data_provider_info": Cin7CoreUpdateStockAdjustmentDataProvider::ProviderInfo,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                Cin7CoreUpdateStockAdjustmentRequestDataType::Fields),
+            "output_type": Cin7CoreUpdateStockAdjustmentDataProvider::ResponseType,
         });
 
         # Delete Stock Adjustment
@@ -588,6 +614,9 @@ module Cin7CoreDataProvider {
             "desc": "Delete or void a stock adjustment in Cin7Core.",
             "action_code": DPAT_API,
             "data_provider_info": Cin7CoreDeleteStockAdjustmentDataProvider::ProviderInfo,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                Cin7CoreDeleteStockAdjustmentRequestDataType::Fields),
+            "output_type": Cin7CoreDeleteStockAdjustmentDataProvider::ResponseType,
         });
 
         # ========== ASSEMBLY ACTIONS ==========

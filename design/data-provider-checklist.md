@@ -67,6 +67,7 @@ See also: [data-provider-development-guide.md](data-provider-development-guide.m
 - [ ] `ProviderInfo` includes `"search_options": SearchOptions`
 - [ ] `searchRecordsImpl()` handles all `SearchOptions`
 - [ ] DPAT_FIND_SINGLE points to collection provider (e.g., `/items`, not `/items/get`)
+- [ ] **`getRecordTypeImpl()` returns `*hash<string, AbstractDataField>`** — call `.getFields()` on the data type instance; returning the type object directly (`new XxxDataType()`) causes `RUNTIME-TYPE-ERROR` when the action catalog acquires the type description. See [pitfall #15](#15-wrong-getrecordtypeimpl-return-type).
 
 ### Field Ordering in Request Types
 - [ ] Fields with `required_groups` are declared first in the `Fields` constant
@@ -78,7 +79,7 @@ See also: [data-provider-development-guide.md](data-provider-development-guide.m
 - [ ] Provider implements `doRequestImpl()`
 - [ ] **Action has `options` populated** via `DataProviderActionCatalog::getActionOptionFromFields()` (without this, the action shows no form fields and is unusable)
 - [ ] **Action has `output_type` set** to the response type (e.g., `MyDataProvider::ResponseType`)
-- [ ] Required/core fields passed with `{"preselected": True, "required": True}`; remaining fields added separately as optional
+- [ ] Non-required options that users will most likely use have `{"preselected": True}` so they appear upfront in the form (required options are automatically preselected by the framework)
 - [ ] Single-key hash slices use trailing comma: `Fields{"key",}` (without trailing comma, `Fields{"key"}` returns the value, not a hash — causes `OPTION-ERROR` at module load)
 - [ ] `getRequestTypeWithDataImpl()` validates dynamic fields (if applicable)
 - [ ] ISO timestamp fields use `DateType`, not `SoftStringType`
@@ -116,8 +117,8 @@ The goal: actions should expose enough API functionality to be genuinely useful,
 - [ ] **Every action has `options` populated** — no exceptions
 - [ ] Options generated via `DataProviderActionCatalog::getActionOptionFromFields()` from request type fields (keeps options in sync with request types)
 - [ ] Preferred: use `ClassName::Fields{"key1", "key2"}` (class constant) instead of `instance.getFields(){"key1", "key2"}`
-- [ ] Core/required fields passed with `{"preselected": True, "required": True}`
-- [ ] Remaining fields added as optional (no extra flags)
+- [ ] Non-required options that users will most likely use have `{"preselected": True}` (required options are automatically preselected)
+- [ ] Remaining rarely-used fields added without `preselected`
 - [ ] Single-key hash slices use trailing comma: `Fields{"key",}` (without trailing comma, `Fields{"key"}` returns a value, not a hash)
 
 ### output_type
@@ -183,6 +184,7 @@ The goal: actions should expose enough API functionality to be genuinely useful,
 - [ ] Request type classes declare `const Fields` in a `public {}` block (enables `ClassName::Fields` in action registration)
 - [ ] Type classes are declared **inside** the `public namespace ModuleName { ... }` block (not outside it — class constants are unresolvable from `.qm` if outside)
 - [ ] Data provider classes declare `static ... ResponseType()` and `static ... RequestType()` in `public {}` blocks
+- [ ] **Every `AutoHashType`/`AutoHashOrNothingType` field verified against API spec** — never assume a field is freeform without checking. Fields named `extra`, `options`, `config`, `settings` often have well-defined schemas. Must look up API docs and either create a typed sub-type (if 2+ defined keys) or confirm freeform with evidence.
 
 ---
 
@@ -234,16 +236,15 @@ For each major resource (identified by having a list action), verify CRUD covera
 
 ## 12. Option Preselection
 
-The UI uses `preselected: True` on action options to determine which fields to show upfront in the form. Without preselection, actions with no required options show an empty form, and users must manually discover available options.
+The UI uses `preselected: True` on action options to determine which fields to show upfront in the form. Required options are automatically preselected by the framework, so `preselected: True` only needs to be explicitly set on **non-required** options that users will most likely use. Without preselection, actions with no required options show an empty form, and users must manually discover available options.
 
 ### Rules
+- [ ] Required options do NOT need `"preselected": True` — they are automatically preselected
 - [ ] Actions with **no required options** have at least 2-3 commonly-used options marked `"preselected": True`
-- [ ] Actions with required options have those required options marked `"preselected": True`
-- [ ] Key optional options that are commonly used are also preselected (e.g., `status`, `limit`, `name`)
+- [ ] Key optional options that users will most likely use are preselected (e.g., `status`, `limit`, `name`)
 - [ ] Metadata, advanced, and system fields are NOT preselected (`meta_data`, `resource_version`, `channel`)
 
-### What to Preselect
-- All required options
+### What to Preselect (non-required options)
 - ID/lookup fields (`id`, `customer_id`)
 - Common filter fields (`status`, `limit`, date ranges)
 - Fields that define the core purpose of the action (`amount`, `name`, `email`)
@@ -254,7 +255,7 @@ The UI uses `preselected: True` on action options to determine which fields to s
     "display_name": "Invoice ID",
     "type": AbstractDataProviderTypeMap."string",
     "required": True,
-    "preselected": True,   # Shown upfront
+    # No need for "preselected" - required options are automatically preselected
 },
 "status": <ActionOptionInfo>{
     "display_name": "Status",

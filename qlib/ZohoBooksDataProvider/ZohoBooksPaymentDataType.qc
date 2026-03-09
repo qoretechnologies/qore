@@ -69,14 +69,22 @@ public class ZohoBooksPaymentDataType inherits HashDataType {
             "date": {
                 "display_name": "Payment Date",
                 "short_desc": "Date of the payment",
-                "desc": "The date of the payment (YYYY-MM-DD format)",
+                "desc": "The date of the payment (`YYYY-MM-DD` format)",
                 "type": SoftStringOrNothingType,
             },
             "payment_mode": {
                 "display_name": "Payment Mode",
                 "short_desc": "Mode of payment",
-                "desc": "The mode of payment (e.g., cash, check, credit card)",
+                "desc": "The mode of payment used",
                 "type": SoftStringOrNothingType,
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "cash", "desc": "Cash payment"},
+                    <AllowedValueInfo>{"value": "check", "desc": "Check payment"},
+                    <AllowedValueInfo>{"value": "creditcard", "desc": "Credit card payment"},
+                    <AllowedValueInfo>{"value": "banktransfer", "desc": "Bank transfer"},
+                    <AllowedValueInfo>{"value": "bankremittance", "desc": "Bank remittance"},
+                    <AllowedValueInfo>{"value": "autotransaction", "desc": "Auto transaction"},
+                ),
             },
             "reference_number": {
                 "display_name": "Reference Number",
@@ -149,8 +157,7 @@ public class ZohoBooksPaymentDataType inherits HashDataType {
 
     #! Creates the object
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 

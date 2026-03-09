@@ -27,22 +27,25 @@ public namespace ChargebeeDataProvider {
 
 #! Data type for Chargebee event records
 public class ChargebeeEventDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions
         const Fields = {
             "id": {
                 "display_name": "Event ID",
+                "short_desc": "Unique event identifier",
                 "type": StringType,
                 "desc": "Unique identifier of the event",
                 "required": True,
             },
             "occurred_at": {
                 "display_name": "Occurred At",
+                "short_desc": "Event timestamp",
                 "type": IntOrNothingType,
                 "desc": "Timestamp (UTC, seconds) when the event occurred",
             },
             "source": {
                 "display_name": "Source",
+                "short_desc": "Event source",
                 "type": StringOrNothingType,
                 "desc": "Source of the event",
                 "allowed_values": (
@@ -58,26 +61,31 @@ public class ChargebeeEventDataType inherits HashDataType {
             },
             "event_type": {
                 "display_name": "Event Type",
+                "short_desc": "Type of event",
                 "type": StringOrNothingType,
-                "desc": "The type of event (e.g., customer_created, subscription_cancelled)",
+                "desc": "The type of event (e.g., `customer_created`, `subscription_cancelled`)",
             },
             "api_version": {
                 "display_name": "API Version",
+                "short_desc": "API version of event data",
                 "type": StringOrNothingType,
                 "desc": "API version of the event data",
             },
             "user": {
                 "display_name": "User",
+                "short_desc": "User who triggered the event",
                 "type": StringOrNothingType,
                 "desc": "The user who triggered the event, if applicable",
             },
             "content": {
                 "display_name": "Content",
+                "short_desc": "Event resource data",
                 "type": AutoHashOrNothingType,
                 "desc": "Event content containing the affected resource data",
             },
             "webhooks": {
                 "display_name": "Webhooks",
+                "short_desc": "Webhook call status",
                 "type": SoftListOrNothingType,
                 "desc": "Webhook call status information",
             },

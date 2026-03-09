@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore JotformDataProvider module definition
 
-/*  JotformFormDataType.qc Copyright 2025 Qore Technologies, s.r.o.
+/*  JotformFormDataType.qc Copyright 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -27,7 +27,7 @@ public namespace JotformDataProvider {
 
 #! JotForm form record type
 public class JotformFormDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for JotForm forms
         const Fields = {
             "id": {
@@ -62,7 +62,7 @@ public class JotformFormDataType inherits HashDataType {
                 "type": StringOrNothingType,
                 "display_name": "Status",
                 "short_desc": "The form status",
-                "desc": "The status of the form (ENABLED, DISABLED, DELETED)",
+                "desc": "The status of the form (`ENABLED`, `DISABLED`, `DELETED`)",
                 "example_value": "ENABLED",
             },
             "new": {
@@ -90,21 +90,21 @@ public class JotformFormDataType inherits HashDataType {
                 "type": StringOrNothingType,
                 "display_name": "Form Type",
                 "short_desc": "The type of form",
-                "desc": "The type of form (e.g., LEGACY, CARD)",
+                "desc": "The type of form (e.g., `LEGACY`, `CARD`)",
                 "example_value": "LEGACY",
             },
             "favorite": {
                 "type": StringOrNothingType,
                 "display_name": "Favorite",
                 "short_desc": "Whether the form is marked as favorite",
-                "desc": "Indicates if the form is marked as a favorite (0 = no, 1 = yes)",
+                "desc": "Indicates if the form is marked as a favorite (`0` = no, `1` = yes)",
                 "example_value": "0",
             },
             "archived": {
                 "type": StringOrNothingType,
                 "display_name": "Archived",
                 "short_desc": "Whether the form is archived",
-                "desc": "Indicates if the form is archived (0 = no, 1 = yes)",
+                "desc": "Indicates if the form is archived (`0` = no, `1` = yes)",
                 "example_value": "0",
             },
             "created_at": {
@@ -139,7 +139,7 @@ public class JotformFormDataType inherits HashDataType {
 
 #! JotForm report record type
 public class JotformReportDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for JotForm reports
         const Fields = {
             "id": {
@@ -167,7 +167,7 @@ public class JotformReportDataType inherits HashDataType {
                 "type": StringOrNothingType,
                 "display_name": "List Type",
                 "short_desc": "The type of report",
-                "desc": "The type of report (e.g., csv, excel, pdf)",
+                "desc": "The type of report (e.g., `csv`, `excel`, `pdf`)",
                 "example_value": "csv",
             },
             "fields": {
@@ -181,7 +181,7 @@ public class JotformReportDataType inherits HashDataType {
                 "type": StringOrNothingType,
                 "display_name": "Status",
                 "short_desc": "The report status",
-                "desc": "The status of the report (ENABLED, DISABLED)",
+                "desc": "The status of the report (`ENABLED`, `DISABLED`)",
                 "example_value": "ENABLED",
             },
             "created_at": {

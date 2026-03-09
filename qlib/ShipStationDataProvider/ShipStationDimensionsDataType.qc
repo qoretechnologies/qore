@@ -29,7 +29,7 @@ public namespace ShipStationDataProvider {
 /** Used for package dimensions.
 */
 public class ShipStationDimensionsDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for ShipStation dimensions
         const Fields = {
             "length": {
@@ -77,6 +77,10 @@ public class ShipStationDimensionsDataType inherits HashDataType {
 
     #! Creates the type
     constructor() {
+        addQoreFields(Fields);
+    }
+
+    constructor(Type base_type) : HashDataType(base_type) {
         addQoreFields(Fields);
     }
 }

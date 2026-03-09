@@ -27,7 +27,7 @@ public namespace ShipStationDataProvider {
 
 #! Request type for assigning a user to an order
 public class ShipStationAssignUserToOrderRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "orderIds": {
                 "type": SoftAutoListType,
@@ -35,6 +35,7 @@ public class ShipStationAssignUserToOrderRequestDataType inherits HashDataType {
                 "short_desc": "The order IDs to assign",
                 "desc": "Array of order IDs to assign the user to",
                 "required": True,
+                "preselected": True,
             },
             "userId": {
                 "type": SoftStringType,
@@ -42,6 +43,7 @@ public class ShipStationAssignUserToOrderRequestDataType inherits HashDataType {
                 "short_desc": "The user ID to assign",
                 "desc": "The user ID (GUID) to assign to the orders",
                 "required": True,
+                "preselected": True,
             },
         };
     }
@@ -53,7 +55,7 @@ public class ShipStationAssignUserToOrderRequestDataType inherits HashDataType {
 
 #! Response type for assign user operation
 public class ShipStationAssignUserResponseDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "success": {
                 "type": SoftBoolType,

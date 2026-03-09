@@ -27,7 +27,7 @@ public namespace SquarespaceDataProvider {
 
 #! Request type for fulfilling an order
 public class SquarespaceFulfillOrderRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "order_id": {
                 "type": StringType,
@@ -35,6 +35,7 @@ public class SquarespaceFulfillOrderRequestDataType inherits HashDataType {
                 "short_desc": "The order ID to fulfill",
                 "desc": "The order ID to fulfill",
                 "required": True,
+                "ref_data": "orders",
             },
             "shouldSendNotification": {
                 "type": SoftBoolType,
@@ -44,10 +45,10 @@ public class SquarespaceFulfillOrderRequestDataType inherits HashDataType {
                 "required": True,
             },
             "shipments": {
-                "type": SoftListType,
+                "type": new ListDataType("ShipmentList", new SquarespaceShipmentDataType(), True),
                 "display_name": "Shipments",
-                "short_desc": "Array of shipment objects (shipDate, carrierName, service, trackingNumber, trackingUrl)",
-                "desc": "Array of shipment objects (shipDate, carrierName, service, trackingNumber, trackingUrl)",
+                "short_desc": "Shipment tracking details",
+                "desc": "The list of shipment tracking details for the fulfillment",
                 "required": True,
             },
         };

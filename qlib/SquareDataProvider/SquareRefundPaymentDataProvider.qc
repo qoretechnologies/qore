@@ -27,7 +27,7 @@ public namespace SquareDataProvider {
 
 #! Request type for refunding a payment (user-friendly flattened fields)
 public class SquareRefundPaymentRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "payment_id": {
                 "type": StringType,

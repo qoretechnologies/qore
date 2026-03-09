@@ -27,7 +27,7 @@ public namespace TableauDataProvider {
 
 #! Tableau datasource record type
 public class TableauDatasourceDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for Tableau datasources
         const Fields = {
             "id": {
@@ -55,13 +55,13 @@ public class TableauDatasourceDataType inherits HashDataType {
                 "desc": "The type of the datasource",
             },
             "createdAt": {
-                "type": StringOrNothingType,
+                "type": DateOrNothingType,
                 "display_name": "Created At",
                 "short_desc": "When the datasource was created",
                 "desc": "When the datasource was created",
             },
             "updatedAt": {
-                "type": StringOrNothingType,
+                "type": DateOrNothingType,
                 "display_name": "Updated At",
                 "short_desc": "When the datasource was last updated",
                 "desc": "When the datasource was last updated",
@@ -85,7 +85,7 @@ public class TableauDatasourceDataType inherits HashDataType {
                 "desc": "Description of the datasource",
             },
             "encryptExtracts": {
-                "type": StringOrNothingType,
+                "type": SoftBoolOrNothingType,
                 "display_name": "Encrypt Extracts",
                 "short_desc": "Whether extracts are encrypted",
                 "desc": "Whether extracts are encrypted",

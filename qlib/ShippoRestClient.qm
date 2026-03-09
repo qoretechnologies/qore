@@ -413,7 +413,7 @@ public class ShippoRestConnection inherits RestClient::RestConnection {
         @return a @ref ShippoRestClient object
     */
     private ShippoRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
-        return new ShippoRestClient(getConnectionOptions(), !connect);
+        return new ShippoRestClient(getConnectionOptions(rtopts), !connect);
     }
 
     #! Returns the ConnectionSchemeInfo hash for this object

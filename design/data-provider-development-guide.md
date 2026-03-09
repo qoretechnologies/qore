@@ -675,7 +675,7 @@ public class MyScoredPointRecordType inherits DataProvider::HashDataType {
 | `upsertRecordImpl(hash<auto> rec, *hash<auto> upsert_options)` | Upserts, returns `UpsertResultInserted` or `UpsertResultUpdated` |
 | `updateRecordsImpl(hash<auto> set, *hash<auto> where_cond, *hash<auto> search_options)` | Returns count updated |
 | `deleteRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options)` | Returns count deleted |
-| `getRecordTypeImpl(*hash<auto> search_options)` | Returns record field definitions |
+| `getRecordTypeImpl(*hash<auto> search_options)` | Returns `*hash<string, AbstractDataField>` — call `.getFields()` on the data type instance |
 | `getStaticInfoImpl()` | Returns `ProviderInfo` |
 
 ### Record Iterator Pattern
@@ -1102,3 +1102,36 @@ Type classes declared in a `.qc` file **must** be inside the `public namespace M
 - **Lowercase sentence starts**: Every sentence in `desc` must start with a capital letter
 - **Wall-of-text long descriptions**: Descriptions >500 chars should use bold section headers (`**Section**:`) and bullet lists (`- `item``) — see [Description Formatting](#description-formatting)
 - **Unclosed backticks**: Always verify backtick pairs are matched; a missing opening or closing backtick breaks markdown rendering for the rest of the description
+
+### 15. Wrong `getRecordTypeImpl()` return type
+
+Collection data providers (those supporting `DPAT_FIND`) must override `getRecordTypeImpl()` with the correct signature and return type. The base class declares:
+
+```qore
+private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+    throwUnimplementedException();
+}
+```
+
+**Wrong** — returns the data type object, not its fields:
+```qore
+private *AbstractDataProviderType getRecordTypeImpl() {
+    return new MyRecordDataType();  # WRONG: causes RUNTIME-TYPE-ERROR
+}
+```
+
+**Correct** — returns the fields hash with matching signature:
+```qore
+private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+    return new MyRecordDataType().getFields();  # Correct
+}
+```
+
+Returning `new XxxDataType()` directly creates a no-arg overload that does not properly override the base method. When the action catalog calls `getRecordType()` to acquire the output type description for a `DPAT_FIND` action, the base class tries to return the result of `getRecordTypeImpl()` as `*hash<string, AbstractDataField>`, causing:
+
+```
+RUNTIME-TYPE-ERROR: <return statement> expects type '*hash<string, object<AbstractDataField>>',
+but got an object of class 'MyRecordDataType' instead
+```
+
+The fix is to always call `.getFields()` on the data type instance and use the correct method signature.

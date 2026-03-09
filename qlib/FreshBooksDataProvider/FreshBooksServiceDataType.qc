@@ -27,7 +27,7 @@ public namespace FreshBooksDataProvider {
 
 #! FreshBooks service record type
 public class FreshBooksServiceDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for FreshBooks services
         const Fields = {
             "id": {
@@ -59,7 +59,12 @@ public class FreshBooksServiceDataType inherits HashDataType {
                 "type": IntOrNothingType,
                 "display_name": "Visibility State",
                 "short_desc": "The visibility state",
-                "desc": "The visibility state of the service (0=active, 1=deleted, 2=archived)",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": 0, "desc": "Active"},
+                    <AllowedValueInfo>{"value": 1, "desc": "Deleted"},
+                    <AllowedValueInfo>{"value": 2, "desc": "Archived"},
+                ),
+                "desc": "The visibility state of the service",
             },
         };
     }
@@ -72,7 +77,7 @@ public class FreshBooksServiceDataType inherits HashDataType {
 
 #! FreshBooks service create request type
 public class FreshBooksServiceCreateDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for creating services
         const Fields = FreshBooksDataProviderBase::BusinessIdField + {
             "name": {
@@ -100,7 +105,7 @@ public class FreshBooksServiceCreateDataType inherits HashDataType {
 
 #! FreshBooks service update request type
 public class FreshBooksServiceUpdateDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for updating services
         const Fields = FreshBooksDataProviderBase::BusinessIdField + {
             "id": {
@@ -127,7 +132,12 @@ public class FreshBooksServiceUpdateDataType inherits HashDataType {
                 "type": IntOrNothingType,
                 "display_name": "Visibility State",
                 "short_desc": "The visibility state",
-                "desc": "The new visibility state of the service (0=active, 1=deleted, 2=archived)",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": 0, "desc": "Active"},
+                    <AllowedValueInfo>{"value": 1, "desc": "Deleted"},
+                    <AllowedValueInfo>{"value": 2, "desc": "Archived"},
+                ),
+                "desc": "The new visibility state of the service",
             },
         };
     }

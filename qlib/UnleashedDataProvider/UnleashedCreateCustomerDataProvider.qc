@@ -115,7 +115,7 @@ public class UnleashedCreateCustomerDataProvider inherits UnleashedDataProviderB
 
 #! Currency data type for customer creation
 public class UnleashedCustomerCurrencyDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "CurrencyCode": {
                 "type": SoftStringType,
@@ -134,7 +134,7 @@ public class UnleashedCustomerCurrencyDataType inherits HashDataType {
 
 #! Address data type for customer creation
 public class UnleashedCustomerAddressDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "AddressType": {
                 "type": SoftStringType,
@@ -189,7 +189,7 @@ public class UnleashedCustomerAddressDataType inherits HashDataType {
 
 #! Customer creation request data type
 public class UnleashedCreateCustomerRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "CustomerCode": {
                 "type": SoftStringType,

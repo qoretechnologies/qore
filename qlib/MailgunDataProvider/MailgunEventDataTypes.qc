@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore MailgunDataProvider module definition
 
-/*  MailgunEventDataTypes.qc Copyright 2025 Qore Technologies, s.r.o.
+/*  MailgunEventDataTypes.qc Copyright 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -27,7 +27,7 @@ public namespace MailgunDataProvider {
 
 #! Base event data type with common fields
 public class MailgunBaseEventDataType inherits HashDataType {
-    private {
+    public {
         #! Common field definitions for all Mailgun events
         const CommonFields = {
             "event": {
@@ -89,7 +89,7 @@ public class MailgunBaseEventDataType inherits HashDataType {
 
 #! Mailgun clicked event data type
 public class MailgunClickedEventDataType inherits MailgunBaseEventDataType {
-    private {
+    public {
         #! Additional fields for click events
         const ClickFields = {
             "url": {
@@ -127,7 +127,7 @@ public class MailgunClickedEventDataType inherits MailgunBaseEventDataType {
 
 #! Mailgun delivered event data type
 public class MailgunDeliveredEventDataType inherits MailgunBaseEventDataType {
-    private {
+    public {
         #! Additional fields for delivery events
         const DeliveryFields = {
             "delivery-status": {
@@ -153,7 +153,7 @@ public class MailgunDeliveredEventDataType inherits MailgunBaseEventDataType {
 
 #! Mailgun opened event data type
 public class MailgunOpenedEventDataType inherits MailgunBaseEventDataType {
-    private {
+    public {
         #! Additional fields for open events
         const OpenFields = {
             "ip": {
@@ -185,7 +185,7 @@ public class MailgunOpenedEventDataType inherits MailgunBaseEventDataType {
 
 #! Mailgun permanent failure event data type
 public class MailgunPermanentFailEventDataType inherits MailgunBaseEventDataType {
-    private {
+    public {
         #! Additional fields for permanent failure events
         const FailureFields = {
             "severity": {
@@ -239,7 +239,7 @@ public class MailgunComplainedEventDataType inherits MailgunBaseEventDataType {
 
 #! Mailgun unsubscribed event data type
 public class MailgunUnsubscribedEventDataType inherits MailgunBaseEventDataType {
-    private {
+    public {
         #! Additional fields for unsubscribe events
         const UnsubscribeFields = {
             "ip": {

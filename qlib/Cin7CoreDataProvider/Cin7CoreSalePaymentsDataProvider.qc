@@ -50,6 +50,7 @@ public class Cin7CoreSalePaymentsDataProvider inherits Cin7CoreDataProviderBase 
                 "short_desc": "Filter by sale ID",
                 "type": AbstractDataProviderType::get(StringOrNothingType),
                 "desc": "Return payments for a specific sale",
+                "preselected": True,
             },
             "ModifiedSince": <DataProviderOptionInfo>{
                 "display_name": "Modified Since",

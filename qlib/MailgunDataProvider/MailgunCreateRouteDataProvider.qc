@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore MailgunDataProvider module definition
 
-/*  MailgunCreateRouteDataProvider.qc Copyright 2025 Qore Technologies, s.r.o.
+/*  MailgunCreateRouteDataProvider.qc Copyright 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -27,7 +27,7 @@ public namespace MailgunDataProvider {
 
 #! Request type for creating a route
 public class MailgunCreateRouteRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "priority": {
                 "type": IntOrNothingType,

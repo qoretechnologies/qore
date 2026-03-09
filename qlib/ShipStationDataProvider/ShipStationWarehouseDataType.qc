@@ -27,7 +27,7 @@ public namespace ShipStationDataProvider {
 
 #! ShipStation warehouse (Ship From Location) record type
 public class ShipStationWarehouseDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "warehouseId": {
                 "type": IntOrNothingType,

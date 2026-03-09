@@ -57,8 +57,12 @@ public class ZohoInvoiceContactDataType inherits HashDataType {
             "status": {
                 "display_name": "Status",
                 "short_desc": "Contact status",
-                "desc": "Status of the contact (active, inactive)",
+                "desc": "Status of the contact",
                 "type": SoftStringOrNothingType,
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "active", "desc": "Active contact"},
+                    <AllowedValueInfo>{"value": "inactive", "desc": "Inactive contact"},
+                ),
             },
             "email": {
                 "display_name": "Email",
@@ -155,8 +159,7 @@ public class ZohoInvoiceContactDataType inherits HashDataType {
 
     #! Creates the object
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 
@@ -243,8 +246,7 @@ public class ZohoInvoiceCreateContactRequestDataType inherits HashDataType {
 
     #! Creates the object
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 

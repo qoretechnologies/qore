@@ -103,14 +103,15 @@ public class UnleashedCreateCreditNoteDataProvider inherits UnleashedDataProvide
 
 #! Request data type for creating a credit note
 public class UnleashedCreateCreditNoteRequestDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions
         const Fields = {
             "Customer": {
                 "type": AutoHashOrNothingType,
                 "display_name": "Customer",
                 "short_desc": "Customer information",
-                "desc": "The customer for this credit note (must include Guid)",
+                "desc": "The customer for this credit note. Must include `Guid` (the customer GUID)",
+                "preselected": True,
             },
             "CreditNoteNumber": {
                 "type": SoftStringOrNothingType,
@@ -125,10 +126,11 @@ public class UnleashedCreateCreditNoteRequestDataType inherits HashDataType {
                 "desc": "The credit note date",
             },
             "CreditNoteLines": {
-                "type": SoftAutoListOrNothingType,
+                "type": new ListDataType("CreditNoteLines", new UnleashedCreditNoteLineDataType(), True),
                 "display_name": "Credit Note Lines",
                 "short_desc": "Credit note line items",
                 "desc": "List of line items for this credit note",
+                "preselected": True,
             },
             "Comments": {
                 "type": SoftStringOrNothingType,

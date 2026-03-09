@@ -27,13 +27,15 @@ public namespace BigCommerceDataProvider {
 
 #! Request type for getting a blog post
 public class BigCommerceGetBlogPostRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "blog_post_id": {
                 "display_name": "Blog Post ID",
+                "short_desc": "The blog post to retrieve",
                 "type": IntType,
                 "desc": "The ID of the blog post to retrieve",
                 "required": True,
+                "ref_data": "blog_posts",
             },
         };
     }

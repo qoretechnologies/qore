@@ -27,7 +27,7 @@ public namespace SquareDataProvider {
 
 #! Request type for batch getting orders
 public class SquareGetOrdersRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "order_ids": {
                 "type": new Type("list<string>"),
@@ -52,7 +52,7 @@ public class SquareGetOrdersRequestDataType inherits HashDataType {
 
 #! Response type for batch get orders (list of orders)
 public class SquareGetOrdersResponseDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "orders": {
                 "type": AutoListOrNothingType,

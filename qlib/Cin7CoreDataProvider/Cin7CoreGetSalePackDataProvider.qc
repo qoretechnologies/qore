@@ -102,7 +102,7 @@ public class Cin7CoreGetSalePackDataProvider inherits Cin7CoreDataProviderBase {
 
 #! Request data type for getting a sale pack
 public class Cin7CoreGetSalePackRequestDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions
         const Fields = {
             "SaleID": {

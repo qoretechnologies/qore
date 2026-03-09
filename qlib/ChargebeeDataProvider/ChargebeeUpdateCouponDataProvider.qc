@@ -27,7 +27,7 @@ public namespace ChargebeeDataProvider {
 
 #! Request type for updating a coupon
 public class ChargebeeUpdateCouponRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "id": {
                 "type": StringType,

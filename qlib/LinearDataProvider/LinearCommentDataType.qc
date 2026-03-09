@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore LinearDataProvider module definition
 
-/*  LinearCommentDataType.qc Copyright 2025 Qore Technologies, s.r.o.
+/*  LinearCommentDataType.qc Copyright 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -81,7 +81,7 @@ public class LinearCommentDataType inherits HashDataType {
                 "type": BoolOrNothingType,
                 "display_name": "Edited",
                 "short_desc": "Whether the comment was edited",
-                "desc": "True if the comment has been edited after creation",
+                "desc": "`True` if the comment has been edited after creation",
                 "example_value": False,
             },
             "archivedAt": {

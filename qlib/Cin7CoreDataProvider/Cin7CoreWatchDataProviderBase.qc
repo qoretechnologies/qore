@@ -30,10 +30,9 @@ public const WatchConstructorOptions = Cin7CoreDataProviderBase::BaseConstructor
     "poll_interval": <DataProviderOptionInfo>{
         "display_name": "Poll Interval",
         "short_desc": "Polling interval in seconds",
-        "type": AbstractDataProviderType::get(IntType),
+        "type": AbstractDataProviderType::get(SoftIntOrNothingType),
         "desc": "The polling interval in seconds (minimum " + MinPollInterval + ", default " + DefaultPollInterval + ")",
         "default_value": DefaultPollInterval,
-        "required": True,
     },
     "since": <DataProviderOptionInfo>{
         "display_name": "Since",

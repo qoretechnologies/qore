@@ -27,14 +27,14 @@ public namespace SquarespaceDataProvider {
 
 #! Base request type for creating a product (uses PHYSICAL variant type as default)
 public class SquarespaceCreateProductRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "type": {
                 "type": StringType,
                 "display_name": "Type",
                 "short_desc": "The product type",
-                "desc": "The product type: PHYSICAL, SERVICE, or GIFT_CARD. "
-                    "Note: DIGITAL products cannot be created via the API.",
+                "desc": "The product type: `PHYSICAL`, `SERVICE`, or `GIFT_CARD`. "
+                    "Note: `DIGITAL` products cannot be created via the API.",
                 "required": True,
                 "allowed_values": (
                     <AllowedValueInfo>{"value": "PHYSICAL", "desc": "Physical product with shipping"},

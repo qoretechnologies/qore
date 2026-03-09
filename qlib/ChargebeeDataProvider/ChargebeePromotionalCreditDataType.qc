@@ -29,7 +29,7 @@ public namespace ChargebeeDataProvider {
 /** Represents a promotional credit entry in Chargebee.
 */
 public class ChargebeePromotionalCreditDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for Chargebee promotional credits
         const Fields = {
             "id": {

@@ -58,7 +58,12 @@ public class ZohoInvoiceMarkEstimateDataProvider inherits ZohoInvoiceDataProvide
             "status": {
                 "display_name": "Status",
                 "type": SoftStringType,
-                "desc": "The status to set (sent, accepted, declined)",
+                "desc": "The status to set",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "sent", "desc": "Mark as sent"},
+                    <AllowedValueInfo>{"value": "accepted", "desc": "Mark as accepted"},
+                    <AllowedValueInfo>{"value": "declined", "desc": "Mark as declined"},
+                ),
             },
         });
 

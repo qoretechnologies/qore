@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore MailgunDataProvider module definition
 
-/*  MailgunMessageDataType.qc Copyright 2025 Qore Technologies, s.r.o.
+/*  MailgunMessageDataType.qc Copyright 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -27,7 +27,7 @@ public namespace MailgunDataProvider {
 
 #! Mailgun send email request type
 public class MailgunSendEmailRequestDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for sending emails
         const Fields = {
             "from": {
@@ -123,7 +123,7 @@ public class MailgunSendEmailRequestDataType inherits HashDataType {
 
 #! Mailgun send email response type
 public class MailgunSendEmailResponseDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for send email response
         const Fields = {
             "id": {
@@ -151,7 +151,7 @@ public class MailgunSendEmailResponseDataType inherits HashDataType {
 
 #! Mailgun email validation request type
 public class MailgunValidateEmailRequestDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for email validation request
         const Fields = {
             "address": {
@@ -173,7 +173,7 @@ public class MailgunValidateEmailRequestDataType inherits HashDataType {
 
 #! Mailgun email validation response type
 public class MailgunValidateEmailResponseDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for email validation response
         const Fields = {
             "address": {
@@ -204,14 +204,14 @@ public class MailgunValidateEmailResponseDataType inherits HashDataType {
                 "type": StringOrNothingType,
                 "display_name": "Result",
                 "short_desc": "Validation result",
-                "desc": "The validation result (deliverable, undeliverable, do_not_send, catch_all, unknown)",
+                "desc": "The validation result (`deliverable`, `undeliverable`, `do_not_send`, `catch_all`, `unknown`)",
                 "example_value": "deliverable",
             },
             "risk": {
                 "type": StringOrNothingType,
                 "display_name": "Risk",
                 "short_desc": "Risk level",
-                "desc": "The risk level of the email address (low, medium, high, unknown)",
+                "desc": "The risk level of the email address (`low`, `medium`, `high`, `unknown`)",
                 "example_value": "low",
             },
         };

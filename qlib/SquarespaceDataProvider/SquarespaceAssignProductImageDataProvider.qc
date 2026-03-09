@@ -27,7 +27,7 @@ public namespace SquarespaceDataProvider {
 
 #! Request type for assigning a product image to a variant
 public class SquarespaceAssignProductImageRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "product_id": {
                 "type": StringType,
@@ -35,6 +35,7 @@ public class SquarespaceAssignProductImageRequestDataType inherits HashDataType 
                 "short_desc": "The product ID",
                 "desc": "The ID of the product to assign the image to",
                 "required": True,
+                "ref_data": "products",
             },
             "image_id": {
                 "type": StringType,

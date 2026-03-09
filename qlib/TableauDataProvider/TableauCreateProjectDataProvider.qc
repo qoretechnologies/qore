@@ -50,12 +50,14 @@ public class TableauCreateProjectRequestDataType inherits HashDataType {
                 "short_desc": "The parent project ID",
                 "desc": "The ID of the parent project, if creating a nested project",
                 "example_value": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+                "ref_data": "projects",
             },
             "content_permissions": {
                 "type": StringOrNothingType,
                 "display_name": "Content Permissions",
                 "short_desc": "The content permissions mode",
                 "desc": "The content permissions mode for the project",
+                "preselected": True,
                 "allowed_values": (
                     <AllowedValueInfo>{"value": "ManagedByOwner", "display_name": "Managed By Owner"},
                     <AllowedValueInfo>{"value": "LockedToProject", "display_name": "Locked To Project"},

@@ -109,7 +109,7 @@ public class UnleashedUpdateProductDataProvider inherits UnleashedDataProviderBa
 
 #! Request data type for updating a product
 public class UnleashedUpdateProductRequestDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions
         const Fields = {
             "guid": {
@@ -125,6 +125,7 @@ public class UnleashedUpdateProductRequestDataType inherits HashDataType {
                 "display_name": "Product Description",
                 "short_desc": "Product description",
                 "desc": "The product description",
+                "preselected": True,
             },
             "Barcode": {
                 "type": SoftStringOrNothingType,

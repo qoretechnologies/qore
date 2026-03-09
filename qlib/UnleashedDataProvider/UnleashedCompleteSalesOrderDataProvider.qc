@@ -98,7 +98,7 @@ public class UnleashedCompleteSalesOrderDataProvider inherits UnleashedDataProvi
 
 #! Request data type for completing a sales order
 public class UnleashedCompleteSalesOrderRequestDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions
         const Fields = {
             "guid": {
