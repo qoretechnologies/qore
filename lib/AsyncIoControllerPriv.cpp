@@ -1887,6 +1887,9 @@ void AsyncIoControllerPriv::updateExtraFds(const std::string& key, QoreObject* s
     // Add new fds (not previously registered)
     // Use the Socket QoreObject* as udata so the event dispatch code
     // marks the same socket hash as ready, waking up continuePoll()
+    // Collect fds that fail to add in a separate set to avoid erasing
+    // from new_fds during iteration (undefined behavior with unordered_set)
+    std::vector<int> failed_fds;
     for (int fd : new_fds) {
         if (!prev_fds.count(fd)) {
             int ev_flags = QORE_EV_READ;  // InputStreams only need read
@@ -1896,10 +1899,12 @@ void AsyncIoControllerPriv::updateExtraFds(const std::string& key, QoreObject* s
                 // The I/O loop still drives streaming via POLLOUT on the socket fd
                 printd(2, "updateExtraFds() failed to add fd %d to event loop; skipping\n", fd);
                 xsink->clear();
-                new_fds.erase(fd);
-                continue;
+                failed_fds.push_back(fd);
             }
         }
+    }
+    for (int fd : failed_fds) {
+        new_fds.erase(fd);
     }
 
     if (new_fds.empty()) {
