@@ -27,10 +27,11 @@ public namespace BigCommerceDataProvider {
 
 #! Request type for creating a product
 public class BigCommerceCreateProductRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "name": {
                 "display_name": "Name",
+                "short_desc": "Product name",
                 "type": StringType,
                 "desc": "Product name",
                 "required": True,
@@ -38,6 +39,7 @@ public class BigCommerceCreateProductRequestDataType inherits HashDataType {
             },
             "type": {
                 "display_name": "Type",
+                "short_desc": "Product type",
                 "type": StringType,
                 "desc": "Product type",
                 "required": True,
@@ -49,48 +51,58 @@ public class BigCommerceCreateProductRequestDataType inherits HashDataType {
             },
             "weight": {
                 "display_name": "Weight",
+                "short_desc": "Product weight",
                 "type": FloatType,
                 "desc": "Product weight",
                 "required": True,
             },
             "price": {
                 "display_name": "Price",
+                "short_desc": "Product price",
                 "type": FloatType,
                 "desc": "Product price",
                 "required": True,
             },
             "sku": {
                 "display_name": "SKU",
+                "short_desc": "SKU identifier",
                 "type": StringOrNothingType,
                 "desc": "Stock Keeping Unit identifier",
             },
             "description": {
                 "display_name": "Description",
+                "short_desc": "Product description",
                 "type": StringOrNothingType,
                 "desc": "Product description (HTML allowed)",
             },
             "categories": {
                 "display_name": "Categories",
+                "short_desc": "Category IDs",
                 "type": AutoListOrNothingType,
                 "desc": "Array of category IDs this product belongs to",
             },
             "brand_id": {
                 "display_name": "Brand ID",
+                "short_desc": "Brand ID",
                 "type": IntOrNothingType,
                 "desc": "ID of the product brand",
+                "ref_data": "brands",
             },
             "is_visible": {
                 "display_name": "Is Visible",
+                "short_desc": "Storefront visibility",
                 "type": SoftBoolOrNothingType,
                 "desc": "Whether the product is visible on the storefront",
             },
             "inventory_level": {
                 "display_name": "Inventory Level",
+                "short_desc": "Inventory level",
                 "type": IntOrNothingType,
                 "desc": "Current inventory level",
             },
             "inventory_tracking": {
                 "display_name": "Inventory Tracking",
+                "short_desc": "Inventory tracking method",
                 "type": StringOrNothingType,
                 "desc": "Inventory tracking method",
                 "allowed_values": (
@@ -103,6 +115,7 @@ public class BigCommerceCreateProductRequestDataType inherits HashDataType {
             },
             "condition": {
                 "display_name": "Condition",
+                "short_desc": "Product condition",
                 "type": StringOrNothingType,
                 "desc": "Product condition",
                 "allowed_values": (
@@ -114,16 +127,19 @@ public class BigCommerceCreateProductRequestDataType inherits HashDataType {
             },
             "cost_price": {
                 "display_name": "Cost Price",
+                "short_desc": "Cost price",
                 "type": FloatOrNothingType,
                 "desc": "Cost price of the product",
             },
             "retail_price": {
                 "display_name": "Retail Price",
+                "short_desc": "Retail price (MSRP)",
                 "type": FloatOrNothingType,
                 "desc": "Retail price (MSRP)",
             },
             "sale_price": {
                 "display_name": "Sale Price",
+                "short_desc": "Sale price",
                 "type": FloatOrNothingType,
                 "desc": "Sale price (overrides price when set)",
             },

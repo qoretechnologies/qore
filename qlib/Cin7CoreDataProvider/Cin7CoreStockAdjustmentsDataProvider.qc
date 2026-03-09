@@ -50,6 +50,7 @@ public class Cin7CoreStockAdjustmentsDataProvider inherits Cin7CoreDataProviderB
                 "short_desc": "Filter by adjustment ID",
                 "type": AbstractDataProviderType::get(StringOrNothingType),
                 "desc": "Return a specific stock adjustment by ID",
+                "preselected": True,
             },
             "TaskID": <DataProviderOptionInfo>{
                 "display_name": "Task ID",
@@ -61,7 +62,13 @@ public class Cin7CoreStockAdjustmentsDataProvider inherits Cin7CoreDataProviderB
                 "display_name": "Status",
                 "short_desc": "Filter by status",
                 "type": AbstractDataProviderType::get(StringOrNothingType),
-                "desc": "Filter by status (Draft, Authorized, Void)",
+                "desc": "Filter by stock adjustment status",
+                "preselected": True,
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "Draft", "desc": "Draft adjustment"},
+                    <AllowedValueInfo>{"value": "Authorized", "desc": "Authorized adjustment"},
+                    <AllowedValueInfo>{"value": "Void", "desc": "Voided adjustment"},
+                ),
             },
             "Location": <DataProviderOptionInfo>{
                 "display_name": "Location",

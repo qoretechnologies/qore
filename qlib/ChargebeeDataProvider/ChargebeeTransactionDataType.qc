@@ -29,7 +29,7 @@ public namespace ChargebeeDataProvider {
 /** Represents a transaction in Chargebee.
 */
 public class ChargebeeTransactionDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for Chargebee transactions
         const Fields = {
             "id": {

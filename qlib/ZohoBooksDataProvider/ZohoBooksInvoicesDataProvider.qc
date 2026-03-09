@@ -35,6 +35,7 @@ public class ZohoBooksInvoicesDataProvider inherits ZohoBooksDataProviderBase {
             "type": "ZohoBooksInvoicesDataProvider",
             "supports_read": True,
             "supports_native_search": True,
+            "has_record": True,
             "constructor_options": ConstructorOptions,
             "search_options": SearchOptions,
         };
@@ -55,7 +56,16 @@ public class ZohoBooksInvoicesDataProvider inherits ZohoBooksDataProviderBase {
                 "display_name": "Status",
                 "short_desc": "Filter by invoice status",
                 "type": AbstractDataProviderType::get(SoftStringOrNothingType),
-                "desc": "Filter invoices by status (draft, sent, overdue, paid, void, unpaid, partially_paid)",
+                "desc": "Filter invoices by status",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "draft", "desc": "Draft invoices"},
+                    <AllowedValueInfo>{"value": "sent", "desc": "Sent invoices"},
+                    <AllowedValueInfo>{"value": "overdue", "desc": "Overdue invoices"},
+                    <AllowedValueInfo>{"value": "paid", "desc": "Paid invoices"},
+                    <AllowedValueInfo>{"value": "void", "desc": "Voided invoices"},
+                    <AllowedValueInfo>{"value": "unpaid", "desc": "Unpaid invoices"},
+                    <AllowedValueInfo>{"value": "partially_paid", "desc": "Partially paid invoices"},
+                ),
             },
             "customer_id": <DataProviderOptionInfo>{
                 "display_name": "Customer ID",
@@ -67,13 +77,13 @@ public class ZohoBooksInvoicesDataProvider inherits ZohoBooksDataProviderBase {
                 "display_name": "Date Start",
                 "short_desc": "Filter by start date",
                 "type": AbstractDataProviderType::get(SoftStringOrNothingType),
-                "desc": "Filter invoices created on or after this date (YYYY-MM-DD)",
+                "desc": "Filter invoices created on or after this date (`YYYY-MM-DD`)",
             },
             "date_end": <DataProviderOptionInfo>{
                 "display_name": "Date End",
                 "short_desc": "Filter by end date",
                 "type": AbstractDataProviderType::get(SoftStringOrNothingType),
-                "desc": "Filter invoices created on or before this date (YYYY-MM-DD)",
+                "desc": "Filter invoices created on or before this date (`YYYY-MM-DD`)",
             },
             "page": <DataProviderOptionInfo>{
                 "display_name": "Page",
@@ -105,8 +115,8 @@ public class ZohoBooksInvoicesDataProvider inherits ZohoBooksDataProviderBase {
     }
 
     #! Returns the record type
-    private *AbstractDataProviderType getRecordTypeImpl() {
-        return new ZohoBooksInvoiceDataType();
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return new ZohoBooksInvoiceDataType().getFields();
     }
 
     #! Returns an iterator for records matching the search criteria

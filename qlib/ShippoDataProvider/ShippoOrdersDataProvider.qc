@@ -68,6 +68,7 @@ public class ShippoOrdersDataProvider inherits ShippoDataProviderBase {
                 "short_desc": "Filter by order status",
                 "type": AbstractDataProviderType::get(StringOrNothingType),
                 "desc": "Filter orders by status",
+                "preselected": True,
                 "allowed_values": (
                     <AllowedValueInfo>{"value": "UNKNOWN", "desc": "Unknown status"},
                     <AllowedValueInfo>{"value": "AWAITPAY", "desc": "Awaiting payment"},

@@ -35,6 +35,7 @@ public class ZohoInvoiceRecurringExpensesDataProvider inherits ZohoInvoiceDataPr
             "type": "ZohoInvoiceRecurringExpensesDataProvider",
             "supports_read": True,
             "supports_native_search": True,
+            "has_record": True,
             "constructor_options": ConstructorOptions,
             "search_options": SearchOptions,
         };
@@ -60,7 +61,12 @@ public class ZohoInvoiceRecurringExpensesDataProvider inherits ZohoInvoiceDataPr
                 "display_name": "Status",
                 "short_desc": "Filter by status",
                 "type": AbstractDataProviderType::get(SoftStringOrNothingType),
-                "desc": "Filter recurring expenses by status (active, stopped, expired)",
+                "desc": "Filter recurring expenses by status",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "active", "desc": "Active recurring expenses"},
+                    <AllowedValueInfo>{"value": "stopped", "desc": "Stopped recurring expenses"},
+                    <AllowedValueInfo>{"value": "expired", "desc": "Expired recurring expenses"},
+                ),
             },
             "customer_id": <DataProviderOptionInfo>{
                 "display_name": "Customer ID",
@@ -110,8 +116,8 @@ public class ZohoInvoiceRecurringExpensesDataProvider inherits ZohoInvoiceDataPr
     }
 
     #! Returns the record type
-    private *AbstractDataProviderType getRecordTypeImpl() {
-        return new ZohoInvoiceRecurringExpenseDataType();
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return new ZohoInvoiceRecurringExpenseDataType().getFields();
     }
 
     #! Returns an iterator for records matching the search criteria

@@ -35,6 +35,7 @@ public class ZohoInvoiceExpensesDataProvider inherits ZohoInvoiceDataProviderBas
             "type": "ZohoInvoiceExpensesDataProvider",
             "supports_read": True,
             "supports_native_search": True,
+            "has_record": True,
             "constructor_options": ConstructorOptions,
             "search_options": SearchOptions,
         };
@@ -60,7 +61,13 @@ public class ZohoInvoiceExpensesDataProvider inherits ZohoInvoiceDataProviderBas
                 "display_name": "Status",
                 "short_desc": "Filter by status",
                 "type": AbstractDataProviderType::get(SoftStringOrNothingType),
-                "desc": "Filter expenses by status (unbilled, invoiced, reimbursed, all)",
+                "desc": "Filter expenses by status",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "unbilled", "desc": "Unbilled expenses"},
+                    <AllowedValueInfo>{"value": "invoiced", "desc": "Invoiced expenses"},
+                    <AllowedValueInfo>{"value": "reimbursed", "desc": "Reimbursed expenses"},
+                    <AllowedValueInfo>{"value": "all", "desc": "All expenses"},
+                ),
             },
             "customer_id": <DataProviderOptionInfo>{
                 "display_name": "Customer ID",
@@ -78,13 +85,13 @@ public class ZohoInvoiceExpensesDataProvider inherits ZohoInvoiceDataProviderBas
                 "display_name": "Date Start",
                 "short_desc": "Filter by start date",
                 "type": AbstractDataProviderType::get(SoftStringOrNothingType),
-                "desc": "Filter expenses on or after this date (YYYY-MM-DD)",
+                "desc": "Filter expenses on or after this date (`YYYY-MM-DD`)",
             },
             "date_end": <DataProviderOptionInfo>{
                 "display_name": "Date End",
                 "short_desc": "Filter by end date",
                 "type": AbstractDataProviderType::get(SoftStringOrNothingType),
-                "desc": "Filter expenses on or before this date (YYYY-MM-DD)",
+                "desc": "Filter expenses on or before this date (`YYYY-MM-DD`)",
             },
             "page": <DataProviderOptionInfo>{
                 "display_name": "Page",
@@ -116,8 +123,8 @@ public class ZohoInvoiceExpensesDataProvider inherits ZohoInvoiceDataProviderBas
     }
 
     #! Returns the record type
-    private *AbstractDataProviderType getRecordTypeImpl() {
-        return new ZohoInvoiceExpenseDataType();
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return new ZohoInvoiceExpenseDataType().getFields();
     }
 
     #! Returns an iterator for records matching the search criteria

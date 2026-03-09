@@ -32,6 +32,7 @@ public class DeelUpdateTimesheetRequestDataType inherits HashDataType {
             "timesheet_id": {
                 "type": StringType,
                 "display_name": "Timesheet ID",
+                "ref_data": "timesheets",
                 "short_desc": "The timesheet ID to update",
                 "desc": "The unique identifier of the timesheet entry to update",
                 "required": True,

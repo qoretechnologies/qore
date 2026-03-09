@@ -104,8 +104,8 @@ public class SquarespaceProductVariantsDataProvider inherits SquarespaceDataProv
     }
 
     #! Returns the record type
-    private *AbstractDataProviderType getRecordTypeImpl() {
-        return new SquarespaceProductVariantDataType();
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return new SquarespaceProductVariantDataType().getFields();
     }
 
     #! Returns an iterator for records matching the search criteria

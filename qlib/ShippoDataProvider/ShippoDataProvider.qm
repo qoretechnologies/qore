@@ -81,6 +81,8 @@ module ShippoDataProvider {
                 "shipping rates from multiple carriers.",
             "action_code": DPAT_API,
             "data_provider_info": ShippoCreateShipmentDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return ShippoCreateShipmentDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(ShippoCreateShipmentRequestDataType::Fields),
         });
 
         # Get Shipment
@@ -95,16 +97,8 @@ module ShippoDataProvider {
                 "parcels, and available rates.",
             "action_code": DPAT_API,
             "data_provider_info": ShippoGetShipmentDataProvider::ProviderInfo,
-            "options": {
-                "shipment_id": <ActionOptionInfo>{
-                    "display_name": "Shipment ID",
-                    "short_desc": "The shipment object ID",
-                    "desc": "The unique identifier of the shipment to retrieve",
-                    "type": AbstractDataProviderTypeMap."string",
-                    "required": True,
-                    "ref_data": "shipments",
-                },
-            },
+            "get_output_type": AbstractDataProviderType sub () { return ShippoGetShipmentDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(ShippoGetShipmentRequestDataType::Fields),
         });
 
         # Search Shipments
@@ -137,6 +131,8 @@ module ShippoDataProvider {
                 "This generates a printable label and tracking number.",
             "action_code": DPAT_API,
             "data_provider_info": ShippoCreateLabelByRateDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return ShippoCreateLabelByRateDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(ShippoCreateLabelByRateRequestDataType::Fields),
         });
 
         # Get Transaction (Shipping Label)
@@ -151,16 +147,8 @@ module ShippoDataProvider {
                 "tracking number, label URL, and status.",
             "action_code": DPAT_API,
             "data_provider_info": ShippoGetTransactionDataProvider::ProviderInfo,
-            "options": {
-                "transaction_id": <ActionOptionInfo>{
-                    "display_name": "Transaction ID",
-                    "short_desc": "The transaction object ID",
-                    "desc": "The unique identifier of the transaction (shipping label) to retrieve",
-                    "type": AbstractDataProviderTypeMap."string",
-                    "required": True,
-                    "ref_data": "transactions",
-                },
-            },
+            "get_output_type": AbstractDataProviderType sub () { return ShippoGetTransactionDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(ShippoGetTransactionRequestDataType::Fields),
         });
 
         # Search Transactions (Shipping Labels)
@@ -184,6 +172,7 @@ module ShippoDataProvider {
                     "short_desc": "Filter by label status",
                     "desc": "Filter transactions by their creation status",
                     "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
                     "allowed_values": (
                         <AllowedValueInfo>{"value": "QUEUED", "desc": "Label creation pending"},
                         <AllowedValueInfo>{"value": "SUCCESS", "desc": "Label created successfully"},
@@ -196,6 +185,7 @@ module ShippoDataProvider {
                     "short_desc": "Filter by tracking status",
                     "desc": "Filter transactions by their tracking status",
                     "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
                     "allowed_values": (
                         <AllowedValueInfo>{"value": "UNKNOWN", "desc": "Unknown tracking status"},
                         <AllowedValueInfo>{"value": "PRE_TRANSIT", "desc": "Pre-transit"},
@@ -222,6 +212,8 @@ module ShippoDataProvider {
                 "Orders can be used to manage fulfillment workflows.",
             "action_code": DPAT_API,
             "data_provider_info": ShippoCreateOrderDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return ShippoCreateOrderDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(ShippoCreateOrderRequestDataType::Fields),
         });
 
         # Get Order
@@ -236,16 +228,8 @@ module ShippoDataProvider {
                 "and fulfillment status.",
             "action_code": DPAT_API,
             "data_provider_info": ShippoGetOrderDataProvider::ProviderInfo,
-            "options": {
-                "order_id": <ActionOptionInfo>{
-                    "display_name": "Order ID",
-                    "short_desc": "The order object ID",
-                    "desc": "The unique identifier of the order to retrieve",
-                    "type": AbstractDataProviderTypeMap."string",
-                    "required": True,
-                    "ref_data": "orders",
-                },
-            },
+            "get_output_type": AbstractDataProviderType sub () { return ShippoGetOrderDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(ShippoGetOrderRequestDataType::Fields),
         });
 
         # List Orders
@@ -269,6 +253,7 @@ module ShippoDataProvider {
                     "short_desc": "Filter by order status",
                     "desc": "Filter orders by their status",
                     "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
                     "allowed_values": (
                         <AllowedValueInfo>{"value": "UNKNOWN", "desc": "Unknown status"},
                         <AllowedValueInfo>{"value": "AWAITPAY", "desc": "Awaiting payment"},
@@ -296,6 +281,8 @@ module ShippoDataProvider {
                 "validated address with any corrections and validation status.",
             "action_code": DPAT_API,
             "data_provider_info": ShippoValidateAddressDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return ShippoValidateAddressDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(ShippoValidateAddressRequestDataType::Fields),
         });
 
         # ========== TRIGGER ACTIONS (POLLING EVENTS) ==========

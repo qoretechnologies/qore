@@ -57,13 +57,21 @@ public class ZohoBooksBillDataType inherits HashDataType {
             "status": {
                 "display_name": "Status",
                 "short_desc": "Bill status",
-                "desc": "Status of the bill (draft, open, overdue, paid, void, etc.)",
+                "desc": "Status of the bill",
                 "type": SoftStringOrNothingType,
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "draft", "desc": "Draft bill"},
+                    <AllowedValueInfo>{"value": "open", "desc": "Open bill"},
+                    <AllowedValueInfo>{"value": "overdue", "desc": "Overdue bill"},
+                    <AllowedValueInfo>{"value": "paid", "desc": "Fully paid"},
+                    <AllowedValueInfo>{"value": "void", "desc": "Voided bill"},
+                    <AllowedValueInfo>{"value": "partially_paid", "desc": "Partially paid"},
+                ),
             },
             "date": {
                 "display_name": "Bill Date",
                 "short_desc": "Date of the bill",
-                "desc": "The date of the bill (YYYY-MM-DD format)",
+                "desc": "The date of the bill (`YYYY-MM-DD` format)",
                 "type": SoftStringOrNothingType,
             },
             "due_date": {
@@ -155,8 +163,7 @@ public class ZohoBooksBillDataType inherits HashDataType {
 
     #! Creates the object
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 

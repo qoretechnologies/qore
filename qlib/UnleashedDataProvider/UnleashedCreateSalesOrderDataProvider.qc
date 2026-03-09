@@ -113,14 +113,15 @@ public class UnleashedCreateSalesOrderDataProvider inherits UnleashedDataProvide
 
 #! Request data type for creating a sales order
 public class UnleashedCreateSalesOrderRequestDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions
         const Fields = {
             "Customer": {
                 "type": AutoHashOrNothingType,
                 "display_name": "Customer",
                 "short_desc": "Customer information",
-                "desc": "The customer for this sales order (must include Guid)",
+                "desc": "The customer for this sales order. Must include `Guid` (the customer GUID)",
+                "preselected": True,
             },
             "OrderNumber": {
                 "type": SoftStringOrNothingType,
@@ -144,13 +145,19 @@ public class UnleashedCreateSalesOrderRequestDataType inherits HashDataType {
                 "type": SoftStringOrNothingType,
                 "display_name": "Order Status",
                 "short_desc": "Order status",
-                "desc": "The order status (e.g., 'Parked', 'Placed')",
+                "desc": "The order status",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "Parked", "desc": "Draft/parked order"},
+                    <AllowedValueInfo>{"value": "Placed", "desc": "Placed order"},
+                    <AllowedValueInfo>{"value": "Backordered", "desc": "Backordered order"},
+                ),
             },
             "SalesOrderLines": {
-                "type": SoftAutoListOrNothingType,
+                "type": new ListDataType("SalesOrderLines", new UnleashedSalesOrderLineDataType(), True),
                 "display_name": "Sales Order Lines",
                 "short_desc": "Order line items",
                 "desc": "List of line items for this sales order",
+                "preselected": True,
             },
             "Comments": {
                 "type": SoftStringOrNothingType,

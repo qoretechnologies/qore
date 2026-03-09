@@ -27,7 +27,7 @@ public namespace SquarespaceDataProvider {
 
 #! Request type for updating a product
 public class SquarespaceUpdateProductRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "product_id": {
                 "type": StringType,
@@ -35,18 +35,21 @@ public class SquarespaceUpdateProductRequestDataType inherits HashDataType {
                 "short_desc": "The product ID to update",
                 "desc": "The product ID to update",
                 "required": True,
+                "ref_data": "products",
             },
             "name": {
                 "type": StringOrNothingType,
                 "display_name": "Name",
                 "short_desc": "The product name",
                 "desc": "The product name",
+                "preselected": True,
             },
             "description": {
                 "type": StringOrNothingType,
                 "display_name": "Description",
                 "short_desc": "The product description (HTML)",
                 "desc": "The product description (HTML)",
+                "preselected": True,
             },
             "urlSlug": {
                 "type": StringOrNothingType,
@@ -67,10 +70,10 @@ public class SquarespaceUpdateProductRequestDataType inherits HashDataType {
                 "desc": "Whether the product is visible on the store",
             },
             "seoOptions": {
-                "type": AutoHashOrNothingType,
+                "type": new SquarespaceSeoOptionsDataType(AutoHashOrNothingType),
                 "display_name": "SEO Options",
-                "short_desc": "SEO configuration (title, description)",
-                "desc": "SEO configuration (title, description)",
+                "short_desc": "SEO configuration",
+                "desc": "SEO configuration (`title`, `description`)",
             },
             "variantAttributes": {
                 "type": SoftListOrNothingType,

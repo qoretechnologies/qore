@@ -58,8 +58,8 @@ public class TableauExecuteApiCallDataProvider inherits TableauDataProviderBase 
             "path": {
                 "display_name": "API Path",
                 "type": StringType,
-                "desc": "The relative API path (e.g. 'projects' or "
-                    "'datasources/DATASOURCE_ID')",
+                "desc": "The relative API path (e.g. `projects` or "
+                    "`datasources/DATASOURCE_ID`)",
                 "required": True,
                 "example_value": "projects",
             },

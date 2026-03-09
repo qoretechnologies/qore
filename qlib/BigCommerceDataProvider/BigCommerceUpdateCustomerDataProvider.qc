@@ -27,48 +27,58 @@ public namespace BigCommerceDataProvider {
 
 #! Request type for updating a customer
 public class BigCommerceUpdateCustomerRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "id": {
                 "display_name": "Customer ID",
+                "short_desc": "The customer to update",
                 "type": IntType,
                 "desc": "The ID of the customer to update",
                 "required": True,
+                "ref_data": "customers",
             },
             "first_name": {
                 "display_name": "First Name",
+                "short_desc": "Customer first name",
                 "type": StringOrNothingType,
                 "desc": "The customer's first name",
             },
             "last_name": {
                 "display_name": "Last Name",
+                "short_desc": "Customer last name",
                 "type": StringOrNothingType,
                 "desc": "The customer's last name",
             },
             "email": {
                 "display_name": "Email",
+                "short_desc": "Customer email address",
                 "type": StringOrNothingType,
                 "desc": "The customer's email address",
             },
             "company": {
                 "display_name": "Company",
+                "short_desc": "Company name",
                 "type": StringOrNothingType,
                 "desc": "The customer's company name",
             },
             "phone": {
                 "display_name": "Phone",
+                "short_desc": "Phone number",
                 "type": StringOrNothingType,
                 "desc": "The customer's phone number",
             },
             "notes": {
                 "display_name": "Notes",
+                "short_desc": "Admin notes",
                 "type": StringOrNothingType,
                 "desc": "Admin notes about the customer",
             },
             "customer_group_id": {
                 "display_name": "Customer Group ID",
+                "short_desc": "Customer group ID",
                 "type": IntOrNothingType,
                 "desc": "ID of the customer group to assign",
+                "ref_data": "customer_groups",
             },
         };
     }

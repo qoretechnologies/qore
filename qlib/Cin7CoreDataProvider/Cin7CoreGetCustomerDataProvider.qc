@@ -103,7 +103,7 @@ public class Cin7CoreGetCustomerDataProvider inherits Cin7CoreDataProviderBase {
 
 #! Request data type for getting a customer
 public class Cin7CoreGetCustomerRequestDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions
         const Fields = {
             "ID": {

@@ -27,7 +27,7 @@ public namespace SquarespaceDataProvider {
 
 #! Squarespace product variant record type
 public class SquarespaceProductVariantDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for Squarespace product variants
         const Fields = {
             "id": {
@@ -43,16 +43,16 @@ public class SquarespaceProductVariantDataType inherits HashDataType {
                 "desc": "The stock keeping unit identifier for the variant",
             },
             "pricing": {
-                "type": AutoHashOrNothingType,
+                "type": new SquarespaceFullPricingDataType(AutoHashOrNothingType),
                 "display_name": "Pricing",
                 "short_desc": "The variant pricing",
-                "desc": "The pricing information for the variant (basePrice, salePrice, onSale)",
+                "desc": "The pricing information for the variant (`basePrice`, `salePrice`, `onSale`)",
             },
             "stock": {
-                "type": AutoHashOrNothingType,
+                "type": new SquarespaceStockDataType(AutoHashOrNothingType),
                 "display_name": "Stock",
                 "short_desc": "The stock information",
-                "desc": "The stock information for the variant (quantity, unlimited)",
+                "desc": "The stock information for the variant (`quantity`, `unlimited`)",
             },
             "attributes": {
                 "type": AutoHashOrNothingType,
@@ -61,10 +61,10 @@ public class SquarespaceProductVariantDataType inherits HashDataType {
                 "desc": "The key-value pairs of variant attributes",
             },
             "shippingMeasurements": {
-                "type": AutoHashOrNothingType,
+                "type": new SquarespaceShippingMeasurementsDataType(AutoHashOrNothingType),
                 "display_name": "Shipping Measurements",
                 "short_desc": "The shipping measurements",
-                "desc": "The shipping measurements for the variant (weight, dimensions)",
+                "desc": "The shipping measurements for the variant (`weight`, `dimensions`)",
             },
             "image": {
                 "type": AutoHashOrNothingType,

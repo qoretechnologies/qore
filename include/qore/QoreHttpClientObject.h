@@ -432,6 +432,16 @@ public:
     */
     DLLEXPORT bool isHttp3Active() const;
 
+    //! Returns the pollable file descriptor for this connection
+    /** When HTTP/3 is active, returns the QUIC UDP socket fd instead of the
+        (closed) TCP socket fd.
+
+        @return the file descriptor to use for polling, or -1 if not open
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT int getPollableDescriptor() const override;
+
     //! sets the connection URL
     /** @param url the URL to use for connection parameters
         @param xsink if an error occurs, the Qore-language exception information will be added here

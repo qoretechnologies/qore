@@ -11,6 +11,7 @@ public class ZohoBooksPaymentsDataProvider inherits ZohoBooksDataProviderBase {
             "type": "ZohoBooksPaymentsDataProvider",
             "supports_read": True,
             "supports_native_search": True,
+            "has_record": True,
             "search_options": SearchOptions,
         };
 
@@ -26,7 +27,7 @@ public class ZohoBooksPaymentsDataProvider inherits ZohoBooksDataProviderBase {
     }
     constructor(ZohoBooksRestClient::ZohoBooksRestClient rest) : ZohoBooksDataProviderBase(rest) {}
     string getName() { return "payments"; }
-    private *AbstractDataProviderType getRecordTypeImpl() { return new ZohoBooksPaymentDataType(); }
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) { return new ZohoBooksPaymentDataType().getFields(); }
     private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
         hash<auto> params;
         if (search_options.organization_id) {
@@ -43,7 +44,7 @@ public class ZohoBooksCreatePaymentDataProvider inherits ZohoBooksDataProviderBa
     constructor(ZohoBooksRestClient::ZohoBooksRestClient rest) : ZohoBooksDataProviderBase(rest) {}
     string getName() { return "create-payment"; }
     private *AbstractDataProviderType getRequestTypeImpl() { return AbstractDataProviderTypeMap."hash"; }
-    private *AbstractDataProviderType getResponseTypeImpl() { return AbstractDataProviderTypeMap."hash"; }
+    private *AbstractDataProviderType getResponseTypeImpl() { return new ZohoBooksPaymentDataType(); }
     private auto doRequestImpl(auto req, *hash<auto> request_options) { return doPost("/customerpayments", req).payment; }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 }
@@ -53,7 +54,7 @@ public class ZohoBooksUpdatePaymentDataProvider inherits ZohoBooksDataProviderBa
     constructor(ZohoBooksRestClient::ZohoBooksRestClient rest) : ZohoBooksDataProviderBase(rest) {}
     string getName() { return "update-payment"; }
     private *AbstractDataProviderType getRequestTypeImpl() { return AbstractDataProviderTypeMap."hash"; }
-    private *AbstractDataProviderType getResponseTypeImpl() { return AbstractDataProviderTypeMap."hash"; }
+    private *AbstractDataProviderType getResponseTypeImpl() { return new ZohoBooksPaymentDataType(); }
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         string id = req.payment_id ?? request_options.payment_id;
         if (!id) throw "ZOHOBOOKS-ERROR", "payment_id required";
@@ -81,7 +82,7 @@ public class ZohoBooksGetPaymentDataProvider inherits ZohoBooksDataProviderBase 
     constructor(ZohoBooksRestClient::ZohoBooksRestClient rest) : ZohoBooksDataProviderBase(rest) {}
     string getName() { return "get-payment"; }
     private *AbstractDataProviderType getRequestTypeImpl() { return AbstractDataProviderTypeMap."hash"; }
-    private *AbstractDataProviderType getResponseTypeImpl() { return AbstractDataProviderTypeMap."hash"; }
+    private *AbstractDataProviderType getResponseTypeImpl() { return new ZohoBooksPaymentDataType(); }
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         string id = req.payment_id ?? request_options.payment_id;
         if (!id) throw "ZOHOBOOKS-ERROR", "payment_id required";

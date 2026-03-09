@@ -57,7 +57,7 @@ public class ZohoInvoicePaymentDataType inherits HashDataType {
             "date": {
                 "display_name": "Payment Date",
                 "short_desc": "Date of the payment",
-                "desc": "The date of the payment (YYYY-MM-DD format)",
+                "desc": "The date of the payment (`YYYY-MM-DD` format)",
                 "type": SoftStringOrNothingType,
             },
             "amount": {
@@ -137,8 +137,7 @@ public class ZohoInvoicePaymentDataType inherits HashDataType {
 
     #! Creates the object
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 
@@ -157,7 +156,7 @@ public class ZohoInvoiceCreatePaymentRequestDataType inherits HashDataType {
             "date": {
                 "display_name": "Payment Date",
                 "short_desc": "Date of the payment",
-                "desc": "The date of the payment (YYYY-MM-DD format)",
+                "desc": "The date of the payment (`YYYY-MM-DD` format)",
                 "type": SoftStringOrNothingType,
             },
             "amount": {
@@ -208,8 +207,7 @@ public class ZohoInvoiceCreatePaymentRequestDataType inherits HashDataType {
 
     #! Creates the object
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 

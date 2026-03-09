@@ -27,66 +27,79 @@ public namespace BigCommerceDataProvider {
 
 #! Request type for updating a customer address
 public class BigCommerceUpdateCustomerAddressRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "id": {
                 "display_name": "Address ID",
+                "short_desc": "The address to update",
                 "type": IntType,
                 "desc": "The ID of the address to update",
                 "required": True,
+                "ref_data": "customer_addresses",
             },
             "first_name": {
                 "display_name": "First Name",
+                "short_desc": "Recipient first name",
                 "type": StringOrNothingType,
                 "desc": "First name of the address recipient",
             },
             "last_name": {
                 "display_name": "Last Name",
+                "short_desc": "Recipient last name",
                 "type": StringOrNothingType,
                 "desc": "Last name of the address recipient",
             },
             "address1": {
                 "display_name": "Address Line 1",
+                "short_desc": "Street address line 1",
                 "type": StringOrNothingType,
                 "desc": "First line of the street address",
             },
             "address2": {
                 "display_name": "Address Line 2",
+                "short_desc": "Street address line 2",
                 "type": StringOrNothingType,
                 "desc": "Second line of the street address",
             },
             "city": {
                 "display_name": "City",
+                "short_desc": "City name",
                 "type": StringOrNothingType,
                 "desc": "City name",
             },
             "state_or_province": {
                 "display_name": "State/Province",
+                "short_desc": "State or province",
                 "type": StringOrNothingType,
                 "desc": "State or province name",
             },
             "postal_code": {
                 "display_name": "Postal Code",
+                "short_desc": "Postal or ZIP code",
                 "type": StringOrNothingType,
                 "desc": "Postal or ZIP code",
             },
             "country_code": {
                 "display_name": "Country Code",
+                "short_desc": "Country code (ISO 3166-1)",
                 "type": StringOrNothingType,
                 "desc": "ISO 3166-1 alpha-2 country code (e.g., US, GB, DE)",
             },
             "company": {
                 "display_name": "Company",
+                "short_desc": "Company name",
                 "type": StringOrNothingType,
                 "desc": "Company name for the address",
             },
             "phone": {
                 "display_name": "Phone",
+                "short_desc": "Phone number",
                 "type": StringOrNothingType,
                 "desc": "Phone number for the address",
             },
             "address_type": {
                 "display_name": "Address Type",
+                "short_desc": "Type of address",
                 "type": StringOrNothingType,
                 "desc": "Type of address",
                 "allowed_values": (

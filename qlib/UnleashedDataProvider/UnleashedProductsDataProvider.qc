@@ -50,12 +50,14 @@ public class UnleashedProductsDataProvider inherits UnleashedDataProviderBase {
                 "short_desc": "Filter by product code",
                 "type": AbstractDataProviderType::get(StringOrNothingType),
                 "desc": "Filter products by code (partial match from start)",
+                "preselected": True,
             },
             "productDescription": <DataProviderOptionInfo>{
                 "display_name": "Product Description",
                 "short_desc": "Filter by product description",
                 "type": AbstractDataProviderType::get(StringOrNothingType),
                 "desc": "Filter products by description (partial match from start)",
+                "preselected": True,
             },
             "productGroup": <DataProviderOptionInfo>{
                 "display_name": "Product Group",
@@ -96,7 +98,7 @@ public class UnleashedProductsDataProvider inherits UnleashedDataProviderBase {
         };
     }
 
-    private {
+    public {
         #! Record type
         static UnleashedProductDataType recordType();
     }

@@ -87,13 +87,13 @@ public class ShippoOrderDataType inherits HashDataType {
                 "desc": "The destination address for the order",
             },
             "from_address": {
-                "type": AutoHashOrNothingType,
+                "type": new ShippoAddressDataType(),
                 "display_name": "From Address",
                 "short_desc": "Sender address",
                 "desc": "The origin address for the order (optional)",
             },
             "line_items": {
-                "type": SoftAutoListOrNothingType,
+                "type": new ListDataType("line_items", new ShippoLineItemDataType(), True),
                 "display_name": "Line Items",
                 "short_desc": "Order items",
                 "desc": "Array of line items in the order",

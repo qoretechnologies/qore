@@ -50,12 +50,14 @@ public class Cin7CoreFindProductAvailabilityDataProvider inherits Cin7CoreDataPr
                 "short_desc": "Filter by product ID",
                 "type": AbstractDataProviderType::get(StringOrNothingType),
                 "desc": "Return availability for a specific product by ID",
+                "preselected": True,
             },
             "SKU": <DataProviderOptionInfo>{
                 "display_name": "SKU",
                 "short_desc": "Filter by SKU",
                 "type": AbstractDataProviderType::get(StringOrNothingType),
                 "desc": "Filter availability by product SKU",
+                "preselected": True,
             },
             "Name": <DataProviderOptionInfo>{
                 "display_name": "Name",
@@ -68,6 +70,7 @@ public class Cin7CoreFindProductAvailabilityDataProvider inherits Cin7CoreDataPr
                 "short_desc": "Filter by location",
                 "type": AbstractDataProviderType::get(StringOrNothingType),
                 "desc": "Filter availability by location name",
+                "preselected": True,
             },
             "Category": <DataProviderOptionInfo>{
                 "display_name": "Category",

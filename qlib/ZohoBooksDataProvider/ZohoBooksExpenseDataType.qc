@@ -51,7 +51,7 @@ public class ZohoBooksExpenseDataType inherits HashDataType {
             "date": {
                 "display_name": "Expense Date",
                 "short_desc": "Date of the expense",
-                "desc": "The date of the expense (YYYY-MM-DD format)",
+                "desc": "The date of the expense (`YYYY-MM-DD` format)",
                 "type": SoftStringOrNothingType,
             },
             "amount": {
@@ -149,8 +149,7 @@ public class ZohoBooksExpenseDataType inherits HashDataType {
 
     #! Creates the object
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 

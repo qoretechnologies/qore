@@ -29,7 +29,7 @@ public namespace ChargebeeDataProvider {
 /** Represents a subscription in Chargebee.
 */
 public class ChargebeeSubscriptionDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for Chargebee subscriptions
         const Fields = {
             "id": {

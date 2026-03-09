@@ -27,48 +27,57 @@ public namespace BigCommerceDataProvider {
 
 #! Request type for creating a shipment
 public class BigCommerceCreateShipmentRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "order_id": {
                 "display_name": "Order ID",
+                "short_desc": "The order to ship",
                 "type": IntType,
                 "desc": "The ID of the order to create a shipment for",
                 "required": True,
+                "ref_data": "orders",
             },
             "order_address_id": {
                 "display_name": "Order Address ID",
+                "short_desc": "Shipping address ID",
                 "type": IntType,
                 "desc": "ID of the shipping address for this shipment",
                 "required": True,
             },
             "items": {
                 "display_name": "Items",
+                "short_desc": "Items to ship",
                 "type": AutoListType,
                 "desc": "Array of items to ship, each with `order_product_id` and `quantity`",
                 "required": True,
             },
             "tracking_number": {
                 "display_name": "Tracking Number",
+                "short_desc": "Tracking number",
                 "type": StringOrNothingType,
                 "desc": "Tracking number for the shipment",
             },
             "shipping_method": {
                 "display_name": "Shipping Method",
+                "short_desc": "Shipping method",
                 "type": StringOrNothingType,
                 "desc": "Name of the shipping method",
             },
             "shipping_provider": {
                 "display_name": "Shipping Provider",
+                "short_desc": "Shipping provider",
                 "type": StringOrNothingType,
                 "desc": "Name of the shipping provider",
             },
             "tracking_carrier": {
                 "display_name": "Tracking Carrier",
+                "short_desc": "Tracking carrier",
                 "type": StringOrNothingType,
                 "desc": "Carrier name for tracking",
             },
             "comments": {
                 "display_name": "Comments",
+                "short_desc": "Shipment comments",
                 "type": StringOrNothingType,
                 "desc": "Comments about the shipment",
             },

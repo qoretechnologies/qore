@@ -111,7 +111,7 @@ public class Cin7CoreAddSaleShipmentDataProvider inherits Cin7CoreDataProviderBa
 
 #! Request data type for adding a sale shipment
 public class Cin7CoreAddSaleShipmentRequestDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions
         const Fields = {
             "SaleID": {
@@ -129,7 +129,7 @@ public class Cin7CoreAddSaleShipmentRequestDataType inherits HashDataType {
                 "desc": "The fulfilment task ID to add shipment to",
             },
             "Lines": {
-                "type": AutoListOrNothingType,
+                "type": new ListDataType("Lines", new Cin7CoreFulfilmentLineDataType(), True),
                 "display_name": "Lines",
                 "short_desc": "Shipment lines",
                 "desc": "List of lines to ship with quantities",
@@ -181,7 +181,7 @@ public class Cin7CoreAddSaleShipmentRequestDataType inherits HashDataType {
 
 #! Response data type for sale shipment
 public class Cin7CoreSaleShipmentDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions
         const Fields = {
             "TaskID": {
@@ -221,7 +221,7 @@ public class Cin7CoreSaleShipmentDataType inherits HashDataType {
                 "desc": "The date the items were shipped",
             },
             "Lines": {
-                "type": AutoListOrNothingType,
+                "type": new ListDataType("Lines", new Cin7CoreFulfilmentLineDataType(), True),
                 "display_name": "Lines",
                 "short_desc": "Shipped lines",
                 "desc": "List of shipped lines",

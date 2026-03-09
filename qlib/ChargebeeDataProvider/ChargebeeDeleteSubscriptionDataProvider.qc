@@ -27,7 +27,7 @@ public namespace ChargebeeDataProvider {
 
 #! Request type for deleting a subscription
 public class ChargebeeDeleteSubscriptionRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "id": {
                 "type": StringType,

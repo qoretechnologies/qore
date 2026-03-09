@@ -103,7 +103,7 @@ public class UnleashedCreateCreditNoteLineDataProvider inherits UnleashedDataPro
 
 #! Request data type for creating a credit note line
 public class UnleashedCreateCreditNoteLineRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "guid": {
                 "type": StringType,
@@ -111,24 +111,28 @@ public class UnleashedCreateCreditNoteLineRequestDataType inherits HashDataType 
                 "short_desc": "The credit note GUID",
                 "desc": "The unique identifier (GUID) of the credit note",
                 "required": True,
+                "ref_data": "creditnotes",
             },
             "Product": {
                 "type": AutoHashOrNothingType,
                 "display_name": "Product",
                 "short_desc": "Product information",
-                "desc": "The product for this line (must include Guid)",
+                "desc": "The product for this line. Must include `Guid` (the product GUID)",
+                "preselected": True,
             },
             "Qty": {
                 "type": SoftFloatOrNothingType,
                 "display_name": "Quantity",
                 "short_desc": "Line quantity",
                 "desc": "The quantity for this line",
+                "preselected": True,
             },
             "UnitPrice": {
                 "type": SoftFloatOrNothingType,
                 "display_name": "Unit Price",
                 "short_desc": "Unit price",
                 "desc": "The unit price for this line",
+                "preselected": True,
             },
         };
     }

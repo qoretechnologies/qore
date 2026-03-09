@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore MailgunDataProvider module definition
 
-/*  MailgunMailingListMemberDataType.qc Copyright 2025 Qore Technologies, s.r.o.
+/*  MailgunMailingListMemberDataType.qc Copyright 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -27,7 +27,7 @@ public namespace MailgunDataProvider {
 
 #! Mailgun mailing list record type
 public class MailgunMailingListDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for Mailgun mailing lists
         const Fields = {
             "address": {
@@ -55,14 +55,14 @@ public class MailgunMailingListDataType inherits HashDataType {
                 "type": StringOrNothingType,
                 "display_name": "Access Level",
                 "short_desc": "Who can post to the list",
-                "desc": "The access level for posting (readonly, members, everyone)",
+                "desc": "The access level for posting (`readonly`, `members`, `everyone`)",
                 "example_value": "members",
             },
             "reply_preference": {
                 "type": StringOrNothingType,
                 "display_name": "Reply Preference",
                 "short_desc": "Reply-to behavior",
-                "desc": "How replies are handled (list or sender)",
+                "desc": "How replies are handled (`list` or `sender`)",
                 "example_value": "list",
             },
             "members_count": {
@@ -90,7 +90,7 @@ public class MailgunMailingListDataType inherits HashDataType {
 
 #! Mailgun mailing list member record type
 public class MailgunMailingListMemberDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for Mailgun mailing list members
         const Fields = {
             "address": {

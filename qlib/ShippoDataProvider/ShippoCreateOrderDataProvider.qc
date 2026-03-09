@@ -146,7 +146,7 @@ public class ShippoCreateOrderDataProvider inherits ShippoDataProviderBase {
 
 #! Request data type for creating orders
 public class ShippoCreateOrderRequestDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions
         const Fields = {
             "to_address": {
@@ -157,7 +157,7 @@ public class ShippoCreateOrderRequestDataType inherits HashDataType {
                 "required": True,
             },
             "from_address": {
-                "type": AutoHashOrNothingType,
+                "type": new ShippoAddressInputDataType(AutoHashOrNothingType),
                 "display_name": "From Address",
                 "short_desc": "Sender address",
                 "desc": "The origin address for the order (optional)",
@@ -167,6 +167,7 @@ public class ShippoCreateOrderRequestDataType inherits HashDataType {
                 "display_name": "Order Number",
                 "short_desc": "Your order number",
                 "desc": "Your internal order number or reference",
+                "attr": {"preselected": True},
             },
             "order_status": {
                 "type": SoftStringOrNothingType,
@@ -190,10 +191,11 @@ public class ShippoCreateOrderRequestDataType inherits HashDataType {
                 "required": True,
             },
             "line_items": {
-                "type": SoftAutoListOrNothingType,
+                "type": new ListDataType("line_items", new ShippoLineItemDataType(), True),
                 "display_name": "Line Items",
                 "short_desc": "Order items",
                 "desc": "Array of line items in the order",
+                "attr": {"preselected": True},
             },
             "shipping_cost": {
                 "type": SoftStringOrNothingType,

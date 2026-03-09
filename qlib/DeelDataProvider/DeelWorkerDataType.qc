@@ -90,9 +90,14 @@ public class DeelWorkerDataType inherits HashDataType {
                 "type": StringOrNothingType,
                 "display_name": "Seniority",
                 "short_desc": "The worker's seniority level",
-                "desc": "The seniority level of the worker "
-                    "(e.g., `junior`, `mid`, `senior`, `lead`)",
+                "desc": "The seniority level of the worker",
                 "example_value": "senior",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "junior", "desc": "Junior level"},
+                    <AllowedValueInfo>{"value": "mid", "desc": "Mid level"},
+                    <AllowedValueInfo>{"value": "senior", "desc": "Senior level"},
+                    <AllowedValueInfo>{"value": "lead", "desc": "Lead level"},
+                ),
             },
             "created_at": {
                 "type": StringOrNothingType,

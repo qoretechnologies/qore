@@ -7030,12 +7030,15 @@ list<hash<DataProviderDebugInfo>> info = collector.getAll();
         @since %DataProvider 3.4
     */
     static auto getFieldValue(hash<auto> record, string field_path) {
+        # Strip hashdecl type to plain hash<auto> so that accessing unknown members returns
+        # NOTHING instead of throwing INVALID-MEMBER
+        hash<auto> rec = {} + record;
         int dot = field_path.find(".");
         if (dot < 0) {
-            return record{field_path};
+            return rec{field_path};
         }
         # traverse dot-notation path
-        auto current = record;
+        auto current = rec;
         list<string> parts = field_path.split(".");
         foreach string part in (parts) {
             if (current.typeCode() != NT_HASH) {

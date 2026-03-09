@@ -11,6 +11,7 @@ public class ZohoBooksPurchaseOrdersDataProvider inherits ZohoBooksDataProviderB
             "type": "ZohoBooksPurchaseOrdersDataProvider",
             "supports_read": True,
             "supports_native_search": True,
+            "has_record": True,
             "search_options": SearchOptions,
         };
 
@@ -26,7 +27,7 @@ public class ZohoBooksPurchaseOrdersDataProvider inherits ZohoBooksDataProviderB
     }
     constructor(ZohoBooksRestClient::ZohoBooksRestClient rest) : ZohoBooksDataProviderBase(rest) {}
     string getName() { return "purchaseorders"; }
-    private *AbstractDataProviderType getRecordTypeImpl() { return new ZohoBooksPurchaseOrderDataType(); }
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) { return new ZohoBooksPurchaseOrderDataType().getFields(); }
     private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
         hash<auto> params;
         if (search_options.organization_id) {

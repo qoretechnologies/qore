@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore JotformDataProvider module definition
 
-/*  JotformFormReportsDataProvider.qc Copyright 2025 Qore Technologies, s.r.o.
+/*  JotformFormReportsDataProvider.qc Copyright 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -34,7 +34,9 @@ public class JotformFormReportsDataProvider inherits JotformDataProviderBase {
             "desc": "JotForm form reports data provider",
             "type": "JotformFormReportsDataProvider",
             "supports_read": True,
+            "supports_native_search": True,
             "has_record": True,
+            "search_options": SearchOptions,
             "constructor_options": ConstructorOptions,
         };
 
@@ -48,25 +50,33 @@ public class JotformFormReportsDataProvider inherits JotformDataProviderBase {
                 "required": True,
             },
         };
+
+        #! Search options
+        const SearchOptions = {
+            "formID": <DataProviderOptionInfo>{
+                "display_name": "Form",
+                "short_desc": "The form to get reports for",
+                "type": AbstractDataProviderType::get(StringOrNothingType),
+                "desc": "The ID of the form to retrieve reports for",
+            },
+        };
     }
 
     private {
         #! The form ID
-        string formID;
+        *string formID;
 
         #! Record type
         static JotformReportDataType recordType();
     }
 
     #! Creates the object with a REST client
-    constructor(JotformRestClient::JotformRestClient rest, string formID) : JotformDataProviderBase(rest) {
-        @assert(formID.val(), "form ID cannot be empty");
+    constructor(JotformRestClient::JotformRestClient rest, *string formID) : JotformDataProviderBase(rest) {
         self.formID = formID;
     }
 
     #! Creates the object with a connection
-    constructor(JotformRestClient::JotformRestConnection conn, string formID) : JotformDataProviderBase(conn) {
-        @assert(formID.val(), "form ID cannot be empty");
+    constructor(JotformRestClient::JotformRestConnection conn, *string formID) : JotformDataProviderBase(conn) {
         self.formID = formID;
     }
 
@@ -88,7 +98,9 @@ public class JotformFormReportsDataProvider inherits JotformDataProviderBase {
     #! Searches for reports
     private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
-        hash<auto> response = doGet(sprintf("/form/%s/reports", formID));
+        string form_id = search_options.formID ?? formID;
+        @assert(form_id.val(), "formID is required to get reports");
+        hash<auto> response = doGet(sprintf("/form/%s/reports", form_id));
         list<hash<auto>> records = ();
         if (response.content) {
             # Ensure content is a list

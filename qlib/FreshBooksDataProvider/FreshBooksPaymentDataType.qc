@@ -27,7 +27,7 @@ public namespace FreshBooksDataProvider {
 
 #! FreshBooks payment record type
 public class FreshBooksPaymentDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for FreshBooks payments
         const Fields = {
             "id": {
@@ -58,7 +58,7 @@ public class FreshBooksPaymentDataType inherits HashDataType {
                 "type": AutoHashType,
                 "display_name": "Amount",
                 "short_desc": "The payment amount",
-                "desc": "The payment amount (hash with 'amount' and 'code' keys)",
+                "desc": "The payment amount (hash with `amount` and `code` keys)",
             },
             "date": {
                 "type": StringOrNothingType,
@@ -70,7 +70,15 @@ public class FreshBooksPaymentDataType inherits HashDataType {
                 "type": StringOrNothingType,
                 "display_name": "Type",
                 "short_desc": "The payment type",
-                "desc": "The payment method type (e.g. Credit Card, Cash, Check)",
+                "desc": "The payment method type",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "Credit Card", "desc": "Credit card payment"},
+                    <AllowedValueInfo>{"value": "Cash", "desc": "Cash payment"},
+                    <AllowedValueInfo>{"value": "Check", "desc": "Check payment"},
+                    <AllowedValueInfo>{"value": "Bank Transfer", "desc": "Bank transfer payment"},
+                    <AllowedValueInfo>{"value": "PayPal", "desc": "PayPal payment"},
+                    <AllowedValueInfo>{"value": "Other", "desc": "Other payment type"},
+                ),
             },
             "note": {
                 "type": StringOrNothingType,
@@ -82,7 +90,12 @@ public class FreshBooksPaymentDataType inherits HashDataType {
                 "type": IntOrNothingType,
                 "display_name": "Visibility State",
                 "short_desc": "The visibility state",
-                "desc": "The visibility state of the payment (0=active, 1=deleted, 2=archived)",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": 0, "desc": "Active"},
+                    <AllowedValueInfo>{"value": 1, "desc": "Deleted"},
+                    <AllowedValueInfo>{"value": 2, "desc": "Archived"},
+                ),
+                "desc": "The visibility state of the payment",
             },
             "created_at": {
                 "type": StringOrNothingType,
@@ -107,7 +120,7 @@ public class FreshBooksPaymentDataType inherits HashDataType {
 
 #! FreshBooks payment create request type
 public class FreshBooksPaymentCreateDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for creating payments
         const Fields = FreshBooksDataProviderBase::AccountIdField + {
             "invoiceid": {
@@ -121,7 +134,7 @@ public class FreshBooksPaymentCreateDataType inherits HashDataType {
                 "type": AutoHashType,
                 "display_name": "Amount",
                 "short_desc": "The payment amount (required)",
-                "desc": "The payment amount (hash with 'amount' string and 'code' currency keys)",
+                "desc": "The payment amount (hash with `amount` string and `code` currency keys)",
                 "required": True,
             },
             "date": {
@@ -134,7 +147,15 @@ public class FreshBooksPaymentCreateDataType inherits HashDataType {
                 "type": StringOrNothingType,
                 "display_name": "Type",
                 "short_desc": "The payment type",
-                "desc": "The payment method type (e.g. Credit Card, Cash, Check)",
+                "desc": "The payment method type",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "Credit Card", "desc": "Credit card payment"},
+                    <AllowedValueInfo>{"value": "Cash", "desc": "Cash payment"},
+                    <AllowedValueInfo>{"value": "Check", "desc": "Check payment"},
+                    <AllowedValueInfo>{"value": "Bank Transfer", "desc": "Bank transfer payment"},
+                    <AllowedValueInfo>{"value": "PayPal", "desc": "PayPal payment"},
+                    <AllowedValueInfo>{"value": "Other", "desc": "Other payment type"},
+                ),
             },
             "note": {
                 "type": StringOrNothingType,
@@ -153,7 +174,7 @@ public class FreshBooksPaymentCreateDataType inherits HashDataType {
 
 #! FreshBooks payment update request type
 public class FreshBooksPaymentUpdateDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for updating payments
         const Fields = FreshBooksDataProviderBase::AccountIdField + {
             "id": {
@@ -167,7 +188,7 @@ public class FreshBooksPaymentUpdateDataType inherits HashDataType {
                 "type": AutoHashOrNothingType,
                 "display_name": "Amount",
                 "short_desc": "The payment amount",
-                "desc": "The new payment amount (hash with 'amount' string and 'code' currency keys)",
+                "desc": "The new payment amount (hash with `amount` string and `code` currency keys)",
             },
             "date": {
                 "type": StringOrNothingType,

@@ -142,10 +142,17 @@ public class FreshBooksRestClient inherits RestClient::RestClient {
             "Accept": MimeTypeJson,
         };
 
+        #! Default OAuth2 auth args for refresh tokens
+        const DefaultAuthArgs = {
+            "access_type": "offline",
+            "prompt": "consent",
+        };
+
         #! Default constructor options
         const DefaultOptions = {
             "data": DefaultData,
             "headers": DefaultHeaders,
+            "oauth2_auth_args": DefaultAuthArgs,
             "ping_headers": DefaultPingHeaders,
             "ping_method": DefaultPingMethod,
             "ping_path": DefaultPingPath,
@@ -154,6 +161,7 @@ public class FreshBooksRestClient inherits RestClient::RestClient {
 
         #! OAuth2 options (added when OAuth2 credentials are provided)
         const OAuth2Options = {
+            "oauth2_auth_args": DefaultAuthArgs,
             "oauth2_auth_url": DefaultAuthUrl,
             "oauth2_grant_type": DefaultGrantType,
             "oauth2_token_url": DefaultTokenUrl,
@@ -321,6 +329,10 @@ public class FreshBooksRestConnection inherits RestClient::RestConnection {
                 + <ConnectionOptionInfo>{
                     "default_value": FreshBooksRestClient::DefaultGrantType,
                 },
+                "oauth2_auth_args": RestConnection::ConnectionScheme.options.oauth2_auth_args
+                + <ConnectionOptionInfo>{
+                    "default_value": FreshBooksRestClient::DefaultAuthArgs,
+                },
             },
             "required_options": "oauth2_client_id,oauth2_client_secret",
         };
@@ -377,6 +389,9 @@ public class FreshBooksRestConnection inherits RestClient::RestConnection {
         if (!rv.oauth2_grant_type) {
             rv.oauth2_grant_type = FreshBooksRestClient::DefaultGrantType;
         }
+        if (!rv.oauth2_auth_args) {
+            rv.oauth2_auth_args = FreshBooksRestClient::DefaultAuthArgs;
+        }
         return rv;
     }
 
@@ -406,6 +421,7 @@ public class FreshBooksRestConnection inherits RestClient::RestConnection {
     private setChildCapabilities() {
         children_can_support_records = True;
         children_can_support_apis = True;
+        children_can_support_observers = True;
     }
 
     #! Sets the update options code for the connection

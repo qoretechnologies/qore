@@ -62,6 +62,7 @@ public class ShippoTransactionsDataProvider inherits ShippoDataProviderBase {
                 "short_desc": "Filter by transaction status",
                 "type": AbstractDataProviderType::get(StringOrNothingType),
                 "desc": "Filter transactions by status",
+                "preselected": True,
                 "allowed_values": (
                     <AllowedValueInfo>{"value": "QUEUED", "desc": "Label creation pending"},
                     <AllowedValueInfo>{"value": "WAITING", "desc": "Waiting for carrier"},
@@ -83,6 +84,7 @@ public class ShippoTransactionsDataProvider inherits ShippoDataProviderBase {
                 "short_desc": "Filter by tracking status",
                 "type": AbstractDataProviderType::get(StringOrNothingType),
                 "desc": "Filter by tracking status",
+                "preselected": True,
                 "allowed_values": (
                     <AllowedValueInfo>{"value": "UNKNOWN", "desc": "Unknown tracking status"},
                     <AllowedValueInfo>{"value": "PRE_TRANSIT", "desc": "Pre-transit"},

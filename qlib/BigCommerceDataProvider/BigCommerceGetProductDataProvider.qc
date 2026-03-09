@@ -27,13 +27,15 @@ public namespace BigCommerceDataProvider {
 
 #! Request type for getting a product
 public class BigCommerceGetProductRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "product_id": {
                 "display_name": "Product ID",
+                "short_desc": "The product to retrieve",
                 "type": IntType,
                 "desc": "The ID of the product to retrieve",
                 "required": True,
+                "ref_data": "products",
             },
         };
     }

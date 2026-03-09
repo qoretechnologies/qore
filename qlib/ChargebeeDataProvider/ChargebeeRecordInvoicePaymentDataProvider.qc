@@ -27,7 +27,7 @@ public namespace ChargebeeDataProvider {
 
 #! Request type for recording a payment on an invoice
 public class ChargebeeRecordInvoicePaymentRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "id": {
                 "type": StringType,

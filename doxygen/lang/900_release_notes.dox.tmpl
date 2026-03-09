@@ -881,6 +881,17 @@ cargo install tree-sitter-cli@0.26.5
       - bulk write operations support via bulk data provider
       - record-based interface for collections with search, create, update, upsert, and delete operations
       - connection support with \c mongodb:// URL scheme
+    - @ref jotformrestclientintro "JotformRestClient" module
+      - new module providing a REST client for the JotForm REST API
+      - supports API key authentication
+      - provides JotformRestConnection for connection management with \c jotform:// URL scheme
+      - supports multiple API domains (standard, EU, HIPAA)
+    - @ref jotformdataproviderintro "JotformDataProvider" module
+      - new module providing a data provider API for JotForm form and submission management
+      - form and submission CRUD with dynamic field resolution based on form questions
+      - webhook-based event providers for new submissions and payments
+      - reference data support for forms and form questions
+      - action catalog integration with sensible default actions
     - @ref linearrestclientintro "LinearRestClient" module
       - new module providing a REST client for Linear's GraphQL API
       - supports API key and OAuth2 authentication

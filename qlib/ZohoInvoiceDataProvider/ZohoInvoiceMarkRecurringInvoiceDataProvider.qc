@@ -58,7 +58,11 @@ public class ZohoInvoiceMarkRecurringInvoiceDataProvider inherits ZohoInvoiceDat
             "status": {
                 "display_name": "Status",
                 "type": SoftStringType,
-                "desc": "The action to take (stop, resume)",
+                "desc": "The action to take",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "stop", "desc": "Stop recurring invoice"},
+                    <AllowedValueInfo>{"value": "resume", "desc": "Resume recurring invoice"},
+                ),
             },
         });
 

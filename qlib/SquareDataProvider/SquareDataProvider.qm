@@ -82,6 +82,7 @@ module SquareDataProvider {
                     "type": AbstractDataProviderTypeMap."*string",
                     "desc": "First name of the customer",
                     "example_value": "John",
+                    "preselected": True,
                 },
                 "family_name": <ActionOptionInfo>{
                     "display_name": "Last Name",
@@ -89,6 +90,7 @@ module SquareDataProvider {
                     "type": AbstractDataProviderTypeMap."*string",
                     "desc": "Last name of the customer",
                     "example_value": "Smith",
+                    "preselected": True,
                 },
                 "email_address": <ActionOptionInfo>{
                     "display_name": "Email",
@@ -96,6 +98,7 @@ module SquareDataProvider {
                     "type": AbstractDataProviderTypeMap."*string",
                     "desc": "Email address of the customer",
                     "example_value": "john@example.com",
+                    "preselected": True,
                 },
                 "phone_number": <ActionOptionInfo>{
                     "display_name": "Phone",
@@ -122,6 +125,7 @@ module SquareDataProvider {
                     "desc": "An external reference ID for the customer",
                 },
             },
+            "get_output_type": AbstractDataProviderType sub () { return new SquareCustomerDataType(); },
         });
 
         # Update a Customer
@@ -140,8 +144,7 @@ module SquareDataProvider {
                     "short_desc": "The customer to update",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
-                    "preselected": True,
-                    "ref_data": "customers",
+                                        "ref_data": "customers",
                 },
                 "given_name": <ActionOptionInfo>{
                     "display_name": "First Name",
@@ -174,6 +177,7 @@ module SquareDataProvider {
                     "type": AbstractDataProviderTypeMap."*string",
                 },
             },
+            "get_output_type": AbstractDataProviderType sub () { return new SquareCustomerDataType(); },
         });
 
         # Add Customer to Group
@@ -192,8 +196,7 @@ module SquareDataProvider {
                     "short_desc": "The customer",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
-                    "preselected": True,
-                    "ref_data": "customers",
+                                        "ref_data": "customers",
                 },
                 "group_id": <ActionOptionInfo>{
                     "display_name": "Group ID",
@@ -204,6 +207,7 @@ module SquareDataProvider {
                     "ref_data": "customer_groups",
                 },
             },
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
         });
 
         # Remove Customer From Group
@@ -222,8 +226,7 @@ module SquareDataProvider {
                     "short_desc": "The customer",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
-                    "preselected": True,
-                    "ref_data": "customers",
+                                        "ref_data": "customers",
                 },
                 "group_id": <ActionOptionInfo>{
                     "display_name": "Group ID",
@@ -234,6 +237,7 @@ module SquareDataProvider {
                     "ref_data": "customer_groups",
                 },
             },
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
         });
 
         # List Customers
@@ -257,18 +261,39 @@ module SquareDataProvider {
                     "short_desc": "Maximum results",
                     "type": AbstractDataProviderTypeMap."*int",
                     "desc": "Maximum number of results to return",
+                    "preselected": True,
                 },
                 "sort_field": <ActionOptionInfo>{
                     "display_name": "Sort Field",
                     "short_desc": "Field to sort by",
                     "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "Field to sort by (DEFAULT, CREATED_AT)",
+                    "desc": "The field to sort results by",
+                    "allowed_values": (
+                        <AllowedValueInfo>{
+                            "value": "DEFAULT",
+                            "desc": "Default sort order",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "CREATED_AT",
+                            "desc": "Sort by creation time",
+                        },
+                    ),
                 },
                 "sort_order": <ActionOptionInfo>{
                     "display_name": "Sort Order",
                     "short_desc": "Sort direction",
                     "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "Sort direction (ASC, DESC)",
+                    "desc": "The sort direction for results",
+                    "allowed_values": (
+                        <AllowedValueInfo>{
+                            "value": "ASC",
+                            "desc": "Ascending order",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "DESC",
+                            "desc": "Descending order",
+                        },
+                    ),
                 },
             },
         });
@@ -289,8 +314,7 @@ module SquareDataProvider {
                     "short_desc": "The customer ID",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
-                    "preselected": True,
-                    "ref_data": "customers",
+                                        "ref_data": "customers",
                 },
             },
         });
@@ -311,8 +335,7 @@ module SquareDataProvider {
                     "short_desc": "The customer to delete",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
-                    "preselected": True,
-                    "ref_data": "customers",
+                                        "ref_data": "customers",
                 },
                 "version": <ActionOptionInfo>{
                     "display_name": "Version",
@@ -321,6 +344,7 @@ module SquareDataProvider {
                     "desc": "The current version of the customer profile (for optimistic concurrency)",
                 },
             },
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
         });
 
         # ========== ORDER ACTIONS ==========
@@ -362,6 +386,7 @@ module SquareDataProvider {
                     "type": AbstractDataProviderTypeMap."*string",
                 },
             },
+            "get_output_type": AbstractDataProviderType sub () { return new SquareOrderDataType(); },
         });
 
         # Create Paid Order
@@ -401,6 +426,7 @@ module SquareDataProvider {
                     "desc": "List of payment IDs to apply. If empty, uses external payment.",
                 },
             },
+            "get_output_type": AbstractDataProviderType sub () { return new SquareOrderDataType(); },
         });
 
         # Get Orders (Batch)
@@ -428,6 +454,7 @@ module SquareDataProvider {
                     "ref_data": "locations",
                 },
             },
+            "get_output_type": AbstractDataProviderType sub () { return new SquareGetOrdersResponseDataType(); },
         });
 
         # Search Orders
@@ -456,7 +483,26 @@ module SquareDataProvider {
                     "display_name": "State",
                     "short_desc": "Filter by order state",
                     "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "Order state filter (OPEN, COMPLETED, CANCELED, DRAFT)",
+                    "preselected": True,
+                    "desc": "Filter orders by state",
+                    "allowed_values": (
+                        <AllowedValueInfo>{
+                            "value": "OPEN",
+                            "desc": "Open orders",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "COMPLETED",
+                            "desc": "Completed orders",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "CANCELED",
+                            "desc": "Canceled orders",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "DRAFT",
+                            "desc": "Draft orders",
+                        },
+                    ),
                 },
                 "created_at_start": <ActionOptionInfo>{
                     "display_name": "Created After",
@@ -503,8 +549,7 @@ module SquareDataProvider {
                     "short_desc": "The order ID",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
-                    "preselected": True,
-                    "ref_data": "orders",
+                                        "ref_data": "orders",
                 },
             },
         });
@@ -525,8 +570,7 @@ module SquareDataProvider {
                     "short_desc": "The order to cancel",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
-                    "preselected": True,
-                    "ref_data": "orders",
+                                        "ref_data": "orders",
                 },
                 "version": <ActionOptionInfo>{
                     "display_name": "Version",
@@ -535,6 +579,7 @@ module SquareDataProvider {
                     "desc": "The current version of the order (for optimistic concurrency)",
                 },
             },
+            "get_output_type": AbstractDataProviderType sub () { return new SquareOrderDataType(); },
         });
 
         # ========== PAYMENT ACTIONS ==========
@@ -605,10 +650,11 @@ module SquareDataProvider {
                     "display_name": "Autocomplete",
                     "short_desc": "Complete immediately",
                     "type": AbstractDataProviderTypeMap."*bool",
-                    "desc": "If true (default), payment completes immediately. If false, "
+                    "desc": "If `True` (default), payment completes immediately. If `False`, "
                         "must be completed later with complete-payment.",
                 },
             },
+            "get_output_type": AbstractDataProviderType sub () { return new SquarePaymentDataType(); },
         });
 
         # Complete Payment
@@ -627,8 +673,7 @@ module SquareDataProvider {
                     "short_desc": "The payment to complete",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
-                    "preselected": True,
-                    "ref_data": "payments",
+                                        "ref_data": "payments",
                 },
                 "version_token": <ActionOptionInfo>{
                     "display_name": "Version Token",
@@ -636,6 +681,7 @@ module SquareDataProvider {
                     "type": AbstractDataProviderTypeMap."*string",
                 },
             },
+            "get_output_type": AbstractDataProviderType sub () { return new SquarePaymentDataType(); },
         });
 
         # Refund Payment
@@ -654,8 +700,7 @@ module SquareDataProvider {
                     "short_desc": "The payment to refund",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
-                    "preselected": True,
-                    "ref_data": "payments",
+                                        "ref_data": "payments",
                 },
                 "amount": <ActionOptionInfo>{
                     "display_name": "Amount",
@@ -678,6 +723,7 @@ module SquareDataProvider {
                     "type": AbstractDataProviderTypeMap."*string",
                 },
             },
+            "get_output_type": AbstractDataProviderType sub () { return new SquareRefundDataType(); },
         });
 
         # List Payments
@@ -701,6 +747,7 @@ module SquareDataProvider {
                     "short_desc": "Start of time range",
                     "type": AbstractDataProviderTypeMap."*date",
                     "desc": "Return payments created at or after this timestamp (RFC 3339)",
+                    "preselected": True,
                 },
                 "end_time": <ActionOptionInfo>{
                     "display_name": "End Time",
@@ -711,7 +758,17 @@ module SquareDataProvider {
                     "display_name": "Sort Order",
                     "short_desc": "Sort direction",
                     "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "Sort direction (ASC, DESC)",
+                    "desc": "The sort direction for results",
+                    "allowed_values": (
+                        <AllowedValueInfo>{
+                            "value": "ASC",
+                            "desc": "Ascending order",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "DESC",
+                            "desc": "Descending order",
+                        },
+                    ),
                 },
                 "location_id": <ActionOptionInfo>{
                     "display_name": "Location ID",
@@ -743,8 +800,7 @@ module SquareDataProvider {
                     "short_desc": "The payment ID",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
-                    "preselected": True,
-                    "ref_data": "payments",
+                                        "ref_data": "payments",
                 },
             },
         });
@@ -787,7 +843,21 @@ module SquareDataProvider {
                     "display_name": "Payment Type",
                     "short_desc": "Payment request type",
                     "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "Payment request type (BALANCE, DEPOSIT, INSTALLMENT). Default: BALANCE",
+                    "desc": "The type of payment request for this invoice",
+                    "allowed_values": (
+                        <AllowedValueInfo>{
+                            "value": "BALANCE",
+                            "desc": "Full balance payment",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "DEPOSIT",
+                            "desc": "Deposit payment",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "INSTALLMENT",
+                            "desc": "Installment payment",
+                        },
+                    ),
                     "default_value": "BALANCE",
                 },
                 "due_date": <ActionOptionInfo>{
@@ -800,7 +870,21 @@ module SquareDataProvider {
                     "display_name": "Delivery Method",
                     "short_desc": "How to deliver",
                     "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "Delivery method (EMAIL, SHARE_MANUALLY, SMS)",
+                    "desc": "How to deliver the invoice to the customer",
+                    "allowed_values": (
+                        <AllowedValueInfo>{
+                            "value": "EMAIL",
+                            "desc": "Send via email",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "SHARE_MANUALLY",
+                            "desc": "Share manually",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "SMS",
+                            "desc": "Send via SMS",
+                        },
+                    ),
                 },
                 "title": <ActionOptionInfo>{
                     "display_name": "Title",
@@ -813,6 +897,7 @@ module SquareDataProvider {
                     "type": AbstractDataProviderTypeMap."*string",
                 },
             },
+            "get_output_type": AbstractDataProviderType sub () { return new SquareInvoiceDataType(); },
         });
 
         # List Invoices
@@ -833,6 +918,7 @@ module SquareDataProvider {
                     "desc": "Filter invoices by location (required by Square API, "
                         "auto-detected if not provided)",
                     "ref_data": "locations",
+                    "preselected": True,
                 },
                 "limit": <ActionOptionInfo>{
                     "display_name": "Limit",
@@ -858,8 +944,7 @@ module SquareDataProvider {
                     "short_desc": "The invoice ID",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
-                    "preselected": True,
-                    "ref_data": "invoices",
+                                        "ref_data": "invoices",
                 },
             },
         });
@@ -880,8 +965,7 @@ module SquareDataProvider {
                     "short_desc": "The invoice to send",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
-                    "preselected": True,
-                    "ref_data": "invoices",
+                                        "ref_data": "invoices",
                 },
                 "version": <ActionOptionInfo>{
                     "display_name": "Version",
@@ -891,6 +975,7 @@ module SquareDataProvider {
                     "desc": "The current version of the invoice (for optimistic concurrency)",
                 },
             },
+            "get_output_type": AbstractDataProviderType sub () { return new SquareInvoiceDataType(); },
         });
 
         # Cancel Invoice
@@ -909,8 +994,7 @@ module SquareDataProvider {
                     "short_desc": "The invoice to cancel",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
-                    "preselected": True,
-                    "ref_data": "invoices",
+                                        "ref_data": "invoices",
                 },
                 "version": <ActionOptionInfo>{
                     "display_name": "Version",
@@ -920,6 +1004,7 @@ module SquareDataProvider {
                     "desc": "The current version of the invoice (for optimistic concurrency)",
                 },
             },
+            "get_output_type": AbstractDataProviderType sub () { return new SquareInvoiceDataType(); },
         });
 
         # ========== BOOKING ACTIONS ==========
@@ -980,6 +1065,7 @@ module SquareDataProvider {
                     "type": AbstractDataProviderTypeMap."*string",
                 },
             },
+            "get_output_type": AbstractDataProviderType sub () { return new SquareBookingDataType(); },
         });
 
         # List Bookings
@@ -998,6 +1084,7 @@ module SquareDataProvider {
                     "short_desc": "Filter by location",
                     "type": AbstractDataProviderTypeMap."*string",
                     "ref_data": "locations",
+                    "preselected": True,
                 },
                 "start_at_min": <ActionOptionInfo>{
                     "display_name": "Start At Min",
@@ -1047,8 +1134,7 @@ module SquareDataProvider {
                     "short_desc": "The booking ID",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
-                    "preselected": True,
-                    "ref_data": "bookings",
+                                        "ref_data": "bookings",
                 },
             },
         });
@@ -1069,8 +1155,7 @@ module SquareDataProvider {
                     "short_desc": "The booking to cancel",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
-                    "preselected": True,
-                    "ref_data": "bookings",
+                                        "ref_data": "bookings",
                 },
                 "booking_version": <ActionOptionInfo>{
                     "display_name": "Booking Version",
@@ -1079,6 +1164,7 @@ module SquareDataProvider {
                     "desc": "The current version of the booking (for optimistic concurrency)",
                 },
             },
+            "get_output_type": AbstractDataProviderType sub () { return new SquareBookingDataType(); },
         });
 
         # ========== INVENTORY ACTIONS ==========
@@ -1099,7 +1185,17 @@ module SquareDataProvider {
                     "short_desc": "Type of change",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
-                    "desc": "ADJUSTMENT (add/remove stock) or PHYSICAL_COUNT (set absolute count)",
+                    "desc": "The type of inventory change to apply",
+                    "allowed_values": (
+                        <AllowedValueInfo>{
+                            "value": "ADJUSTMENT",
+                            "desc": "Add or remove stock (delta quantity)",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "PHYSICAL_COUNT",
+                            "desc": "Set absolute inventory count",
+                        },
+                    ),
                 },
                 "catalog_object_id": <ActionOptionInfo>{
                     "display_name": "Catalog Object ID",
@@ -1128,15 +1224,52 @@ module SquareDataProvider {
                     "display_name": "From State",
                     "short_desc": "Starting state",
                     "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "Starting inventory state for ADJUSTMENT (default: NONE)",
+                    "desc": "Starting inventory state for adjustment changes",
+                    "allowed_values": (
+                        <AllowedValueInfo>{
+                            "value": "NONE",
+                            "desc": "No state (default)",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "IN_STOCK",
+                            "desc": "In stock",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "SOLD",
+                            "desc": "Sold",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "WASTE",
+                            "desc": "Waste / damaged",
+                        },
+                    ),
                 },
                 "to_state": <ActionOptionInfo>{
                     "display_name": "To State",
                     "short_desc": "Ending state",
                     "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "Ending inventory state for ADJUSTMENT (default: IN_STOCK)",
+                    "desc": "Ending inventory state for adjustment changes",
+                    "allowed_values": (
+                        <AllowedValueInfo>{
+                            "value": "IN_STOCK",
+                            "desc": "In stock (default)",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "SOLD",
+                            "desc": "Sold",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "WASTE",
+                            "desc": "Waste / damaged",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "NONE",
+                            "desc": "No state",
+                        },
+                    ),
                 },
             },
+            "get_output_type": AbstractDataProviderType sub () { return new SquareInventoryCountDataType(); },
         });
 
         # Get Inventory Count
@@ -1164,6 +1297,7 @@ module SquareDataProvider {
                     "desc": "Optional list of location IDs to filter counts by",
                 },
             },
+            "get_output_type": AbstractDataProviderType sub () { return new SquareGetInventoryCountResponseDataType(); },
         });
 
         # ========== CATALOG / SERVICE ACTIONS ==========
@@ -1183,6 +1317,7 @@ module SquareDataProvider {
                     "display_name": "Object Types",
                     "short_desc": "Filter by object types",
                     "type": AbstractDataProviderTypeMap."*list",
+                    "preselected": True,
                     "desc": "Filter by catalog object types (ITEM, ITEM_VARIATION, CATEGORY, "
                         "DISCOUNT, TAX, MODIFIER, MODIFIER_LIST, IMAGE)",
                 },
@@ -1216,6 +1351,7 @@ module SquareDataProvider {
                     "short_desc": "Service name filter",
                     "type": AbstractDataProviderTypeMap."*string",
                     "desc": "Filter services by name (partial match)",
+                    "preselected": True,
                 },
                 "limit": <ActionOptionInfo>{
                     "display_name": "Limit",
@@ -1253,7 +1389,17 @@ module SquareDataProvider {
                     "display_name": "Sort Order",
                     "short_desc": "Sort direction",
                     "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "Sort direction (ASC, DESC)",
+                    "desc": "The sort direction for results",
+                    "allowed_values": (
+                        <AllowedValueInfo>{
+                            "value": "ASC",
+                            "desc": "Ascending order",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "DESC",
+                            "desc": "Descending order",
+                        },
+                    ),
                 },
                 "location_id": <ActionOptionInfo>{
                     "display_name": "Location ID",
@@ -1265,13 +1411,54 @@ module SquareDataProvider {
                     "display_name": "Status",
                     "short_desc": "Filter by status",
                     "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "Filter by refund status (PENDING, COMPLETED, REJECTED, FAILED)",
+                    "preselected": True,
+                    "desc": "Filter refunds by status",
+                    "allowed_values": (
+                        <AllowedValueInfo>{
+                            "value": "PENDING",
+                            "desc": "Pending refunds",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "COMPLETED",
+                            "desc": "Completed refunds",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "REJECTED",
+                            "desc": "Rejected refunds",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "FAILED",
+                            "desc": "Failed refunds",
+                        },
+                    ),
                 },
                 "source_type": <ActionOptionInfo>{
                     "display_name": "Source Type",
                     "short_desc": "Filter by source type",
                     "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "Filter by payment source type (CARD, BANK_ACCOUNT, etc.)",
+                    "desc": "Filter refunds by payment source type",
+                    "allowed_values": (
+                        <AllowedValueInfo>{
+                            "value": "CARD",
+                            "desc": "Card payment",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "BANK_ACCOUNT",
+                            "desc": "Bank account payment",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "WALLET",
+                            "desc": "Digital wallet payment",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "CASH",
+                            "desc": "Cash payment",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "EXTERNAL",
+                            "desc": "External payment",
+                        },
+                    ),
                 },
                 "limit": <ActionOptionInfo>{
                     "display_name": "Limit",
@@ -1297,8 +1484,7 @@ module SquareDataProvider {
                     "short_desc": "The refund ID",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
-                    "preselected": True,
-                    "ref_data": "refunds",
+                                        "ref_data": "refunds",
                 },
             },
         });
@@ -1321,7 +1507,25 @@ module SquareDataProvider {
                     "short_desc": "The HTTP method",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
-                    "desc": "The HTTP method to use (GET, POST, PUT, DELETE)",
+                    "desc": "The HTTP method to use for the API call",
+                    "allowed_values": (
+                        <AllowedValueInfo>{
+                            "value": "GET",
+                            "desc": "Retrieve data",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "POST",
+                            "desc": "Create data",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "PUT",
+                            "desc": "Update data",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "DELETE",
+                            "desc": "Delete data",
+                        },
+                    ),
                     "example_value": "GET",
                 },
                 "path": <ActionOptionInfo>{
@@ -1340,6 +1544,7 @@ module SquareDataProvider {
                     "desc": "Optional request body for POST and PUT requests",
                 },
             },
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
         });
 
         # ========== TRIGGERS ==========

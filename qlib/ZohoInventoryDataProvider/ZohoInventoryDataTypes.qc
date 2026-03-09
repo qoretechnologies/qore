@@ -29,7 +29,7 @@ public namespace ZohoInventoryDataProvider {
 
 #! Common delete response type
 public class ZohoInventoryDeleteResponseDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "code": {
                 "type": SoftIntType,
@@ -55,7 +55,7 @@ public class ZohoInventoryDeleteResponseDataType inherits HashDataType {
 
 #! Zoho Inventory contact record type
 public class ZohoInventoryContactDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "contact_id": {
                 "type": SoftStringOrNothingType,
@@ -177,7 +177,7 @@ public class ZohoInventoryContactDataType inherits HashDataType {
 
 #! Zoho Inventory contact create request type
 public class ZohoInventoryContactCreateDataType inherits HashDataType {
-    private {
+    public {
         const Fields = ZohoInventoryDataProviderBase::OrganizationIdField + {
             "contact_name": {
                 "type": SoftStringType,
@@ -261,7 +261,7 @@ public class ZohoInventoryContactCreateDataType inherits HashDataType {
 
 #! Zoho Inventory contact update request type
 public class ZohoInventoryContactUpdateDataType inherits HashDataType {
-    private {
+    public {
         const Fields = ZohoInventoryDataProviderBase::OrganizationIdField + {
             "contact_id": {
                 "type": SoftStringType,
@@ -352,7 +352,7 @@ public class ZohoInventoryContactUpdateDataType inherits HashDataType {
 
 #! Zoho Inventory contact person record type
 public class ZohoInventoryContactPersonDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "contact_person_id": {
                 "type": SoftStringOrNothingType,
@@ -432,7 +432,7 @@ public class ZohoInventoryContactPersonDataType inherits HashDataType {
 
 #! Zoho Inventory contact person create request type
 public class ZohoInventoryContactPersonCreateDataType inherits HashDataType {
-    private {
+    public {
         const Fields = ZohoInventoryDataProviderBase::OrganizationIdField + {
             "contact_id": {
                 "type": SoftStringType,
@@ -501,7 +501,7 @@ public class ZohoInventoryContactPersonCreateDataType inherits HashDataType {
 
 #! Zoho Inventory contact person update request type
 public class ZohoInventoryContactPersonUpdateDataType inherits HashDataType {
-    private {
+    public {
         const Fields = ZohoInventoryDataProviderBase::OrganizationIdField + {
             "contact_id": {
                 "type": SoftStringType,
@@ -577,7 +577,7 @@ public class ZohoInventoryContactPersonUpdateDataType inherits HashDataType {
 
 #! Zoho Inventory item record type
 public class ZohoInventoryItemDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "item_id": {
                 "type": SoftStringOrNothingType,
@@ -706,7 +706,7 @@ public class ZohoInventoryItemDataType inherits HashDataType {
 
 #! Zoho Inventory item create request type
 public class ZohoInventoryItemCreateDataType inherits HashDataType {
-    private {
+    public {
         const Fields = ZohoInventoryDataProviderBase::OrganizationIdField + {
             "name": {
                 "type": SoftStringType,
@@ -788,7 +788,7 @@ public class ZohoInventoryItemCreateDataType inherits HashDataType {
 
 #! Zoho Inventory item update request type
 public class ZohoInventoryItemUpdateDataType inherits HashDataType {
-    private {
+    public {
         const Fields = ZohoInventoryDataProviderBase::OrganizationIdField + {
             "item_id": {
                 "type": SoftStringType,
@@ -863,7 +863,7 @@ public class ZohoInventoryItemUpdateDataType inherits HashDataType {
 
 #! Zoho Inventory item group record type
 public class ZohoInventoryItemGroupDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "group_id": {
                 "type": SoftStringOrNothingType,
@@ -942,7 +942,7 @@ public class ZohoInventoryItemGroupDataType inherits HashDataType {
 
 #! Zoho Inventory item group create request type
 public class ZohoInventoryItemGroupCreateDataType inherits HashDataType {
-    private {
+    public {
         const Fields = ZohoInventoryDataProviderBase::OrganizationIdField + {
             "group_name": {
                 "type": SoftStringType,
@@ -993,7 +993,7 @@ public class ZohoInventoryItemGroupCreateDataType inherits HashDataType {
 
 #! Zoho Inventory item group update request type
 public class ZohoInventoryItemGroupUpdateDataType inherits HashDataType {
-    private {
+    public {
         const Fields = ZohoInventoryDataProviderBase::OrganizationIdField + {
             "group_id": {
                 "type": SoftStringType,
@@ -1050,7 +1050,7 @@ public class ZohoInventoryItemGroupUpdateDataType inherits HashDataType {
 
 #! Zoho Inventory item adjustment record type
 public class ZohoInventoryItemAdjustmentDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "inventory_adjustment_id": {
                 "type": SoftStringOrNothingType,
@@ -1126,7 +1126,7 @@ public class ZohoInventoryItemAdjustmentDataType inherits HashDataType {
 
 #! Zoho Inventory item adjustment create request type
 public class ZohoInventoryItemAdjustmentCreateDataType inherits HashDataType {
-    private {
+    public {
         const Fields = ZohoInventoryDataProviderBase::OrganizationIdField + {
             "adjustment_type": {
                 "type": SoftStringType,
@@ -1183,7 +1183,7 @@ public class ZohoInventoryItemAdjustmentCreateDataType inherits HashDataType {
 
 #! Zoho Inventory invoice record type
 public class ZohoInventoryInvoiceDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "invoice_id": {
                 "type": SoftStringOrNothingType,
@@ -1325,7 +1325,7 @@ public class ZohoInventoryInvoiceDataType inherits HashDataType {
 
 #! Zoho Inventory invoice create request type
 public class ZohoInventoryInvoiceCreateDataType inherits HashDataType {
-    private {
+    public {
         const Fields = ZohoInventoryDataProviderBase::OrganizationIdField + {
             "customer_id": {
                 "type": SoftStringType,
@@ -1405,7 +1405,7 @@ public class ZohoInventoryInvoiceCreateDataType inherits HashDataType {
 
 #! Zoho Inventory invoice update request type
 public class ZohoInventoryInvoiceUpdateDataType inherits HashDataType {
-    private {
+    public {
         const Fields = ZohoInventoryDataProviderBase::OrganizationIdField + {
             "invoice_id": {
                 "type": SoftStringType,
@@ -1486,7 +1486,7 @@ public class ZohoInventoryInvoiceUpdateDataType inherits HashDataType {
 
 #! Zoho Inventory sales order record type
 public class ZohoInventorySalesOrderDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "salesorder_id": {
                 "type": SoftStringOrNothingType,
@@ -1614,7 +1614,7 @@ public class ZohoInventorySalesOrderDataType inherits HashDataType {
 
 #! Zoho Inventory sales order create request type
 public class ZohoInventorySalesOrderCreateDataType inherits HashDataType {
-    private {
+    public {
         const Fields = ZohoInventoryDataProviderBase::OrganizationIdField + {
             "customer_id": {
                 "type": SoftStringType,
@@ -1688,7 +1688,7 @@ public class ZohoInventorySalesOrderCreateDataType inherits HashDataType {
 
 #! Zoho Inventory sales order update request type
 public class ZohoInventorySalesOrderUpdateDataType inherits HashDataType {
-    private {
+    public {
         const Fields = ZohoInventoryDataProviderBase::OrganizationIdField + {
             "salesorder_id": {
                 "type": SoftStringType,
@@ -1763,7 +1763,7 @@ public class ZohoInventorySalesOrderUpdateDataType inherits HashDataType {
 
 #! Zoho Inventory purchase order record type
 public class ZohoInventoryPurchaseOrderDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "purchaseorder_id": {
                 "type": SoftStringOrNothingType,
@@ -1884,7 +1884,7 @@ public class ZohoInventoryPurchaseOrderDataType inherits HashDataType {
 
 #! Zoho Inventory purchase order create request type
 public class ZohoInventoryPurchaseOrderCreateDataType inherits HashDataType {
-    private {
+    public {
         const Fields = ZohoInventoryDataProviderBase::OrganizationIdField + {
             "vendor_id": {
                 "type": SoftStringType,
@@ -1952,7 +1952,7 @@ public class ZohoInventoryPurchaseOrderCreateDataType inherits HashDataType {
 
 #! Zoho Inventory purchase order update request type
 public class ZohoInventoryPurchaseOrderUpdateDataType inherits HashDataType {
-    private {
+    public {
         const Fields = ZohoInventoryDataProviderBase::OrganizationIdField + {
             "purchaseorder_id": {
                 "type": SoftStringType,
@@ -2021,7 +2021,7 @@ public class ZohoInventoryPurchaseOrderUpdateDataType inherits HashDataType {
 
 #! Zoho Inventory package record type
 public class ZohoInventoryPackageDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "package_id": {
                 "type": SoftStringOrNothingType,
@@ -2106,7 +2106,7 @@ public class ZohoInventoryPackageDataType inherits HashDataType {
 
 #! Zoho Inventory package create request type
 public class ZohoInventoryPackageCreateDataType inherits HashDataType {
-    private {
+    public {
         const Fields = ZohoInventoryDataProviderBase::OrganizationIdField + {
             "salesorder_id": {
                 "type": SoftStringType,
@@ -2150,7 +2150,7 @@ public class ZohoInventoryPackageCreateDataType inherits HashDataType {
 
 #! Zoho Inventory package update request type
 public class ZohoInventoryPackageUpdateDataType inherits HashDataType {
-    private {
+    public {
         const Fields = ZohoInventoryDataProviderBase::OrganizationIdField + {
             "package_id": {
                 "type": SoftStringType,
@@ -2196,7 +2196,7 @@ public class ZohoInventoryPackageUpdateDataType inherits HashDataType {
 
 #! Zoho Inventory shipment order record type
 public class ZohoInventoryShipmentOrderDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "shipment_id": {
                 "type": SoftStringOrNothingType,
@@ -2298,7 +2298,7 @@ public class ZohoInventoryShipmentOrderDataType inherits HashDataType {
 
 #! Zoho Inventory shipment order create request type
 public class ZohoInventoryShipmentOrderCreateDataType inherits HashDataType {
-    private {
+    public {
         const Fields = ZohoInventoryDataProviderBase::OrganizationIdField + {
             "salesorder_id": {
                 "type": SoftStringType,
@@ -2359,7 +2359,7 @@ public class ZohoInventoryShipmentOrderCreateDataType inherits HashDataType {
 
 #! Zoho Inventory shipment order update request type
 public class ZohoInventoryShipmentOrderUpdateDataType inherits HashDataType {
-    private {
+    public {
         const Fields = ZohoInventoryDataProviderBase::OrganizationIdField + {
             "shipment_id": {
                 "type": SoftStringType,

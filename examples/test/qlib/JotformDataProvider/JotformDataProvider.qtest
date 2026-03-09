@@ -349,9 +349,9 @@ public class JotformDataProviderTest inherits QUnit::Test {
         # Verify connection scheme is registered
         hash<ConnectionSchemeInfo> scheme = ConnectionSchemeCache::getScheme("jotform");
         assertEq("JotForm REST Connection", scheme.display_name);
-        assertTrue(scheme.options.hasKey("token"));
+        assertTrue(scheme.options.hasKey("apikey"));
         assertTrue(scheme.options.hasKey("api_domain"));
-        assertTrue(scheme.options."token".sensitive);
+        assertTrue(scheme.options."apikey".sensitive);
 
         # Check API domain allowed values
         assertTrue(scheme.options.api_domain.allowed_values.size() == 3);

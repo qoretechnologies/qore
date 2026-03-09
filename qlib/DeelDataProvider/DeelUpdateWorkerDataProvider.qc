@@ -32,6 +32,7 @@ public class DeelUpdateWorkerRequestDataType inherits HashDataType {
             "worker_id": {
                 "type": StringType,
                 "display_name": "Worker ID",
+                "ref_data": "workers",
                 "short_desc": "The worker ID to update",
                 "desc": "The unique identifier of the worker to update",
                 "required": True,
@@ -63,6 +64,12 @@ public class DeelUpdateWorkerRequestDataType inherits HashDataType {
                 "short_desc": "The worker's seniority level",
                 "desc": "The updated seniority level of the worker",
                 "example_value": "senior",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "junior", "desc": "Junior level"},
+                    <AllowedValueInfo>{"value": "mid", "desc": "Mid level"},
+                    <AllowedValueInfo>{"value": "senior", "desc": "Senior level"},
+                    <AllowedValueInfo>{"value": "lead", "desc": "Lead level"},
+                ),
             },
             "phone": {
                 "type": StringOrNothingType,

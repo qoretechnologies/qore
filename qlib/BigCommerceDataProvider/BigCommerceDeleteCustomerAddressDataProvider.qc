@@ -27,13 +27,15 @@ public namespace BigCommerceDataProvider {
 
 #! Request type for deleting a customer address
 public class BigCommerceDeleteCustomerAddressRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "address_id": {
                 "display_name": "Address ID",
+                "short_desc": "The address to delete",
                 "type": IntType,
                 "desc": "The ID of the customer address to delete",
                 "required": True,
+                "ref_data": "customer_addresses",
             },
         };
     }

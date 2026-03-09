@@ -50,18 +50,21 @@ public class Cin7CoreProductsDataProvider inherits Cin7CoreDataProviderBase {
                 "short_desc": "Filter by product ID",
                 "type": AbstractDataProviderType::get(StringOrNothingType),
                 "desc": "Return a specific product by ID",
+                "preselected": True,
             },
             "SKU": <DataProviderOptionInfo>{
                 "display_name": "SKU",
                 "short_desc": "Filter by SKU",
                 "type": AbstractDataProviderType::get(StringOrNothingType),
                 "desc": "Filter products by SKU",
+                "preselected": True,
             },
             "Name": <DataProviderOptionInfo>{
                 "display_name": "Name",
                 "short_desc": "Filter by name",
                 "type": AbstractDataProviderType::get(StringOrNothingType),
                 "desc": "Filter products by name (partial match)",
+                "preselected": True,
             },
             "Category": <DataProviderOptionInfo>{
                 "display_name": "Category",

@@ -27,7 +27,7 @@ public namespace ChargebeeDataProvider {
 
 #! Request type for setting promotional credits for a customer
 public class ChargebeeSetPromotionalCreditRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "customer_id": {
                 "type": StringType,
@@ -48,7 +48,7 @@ public class ChargebeeSetPromotionalCreditRequestDataType inherits HashDataType 
                 "type": StringType,
                 "display_name": "Currency Code",
                 "short_desc": "Currency for the credits",
-                "desc": "The currency code for the promotional credits (e.g., 'USD', 'EUR')",
+                "desc": "The currency code for the promotional credits (e.g., `USD`, `EUR`)",
                 "required": True,
             },
             "description": {

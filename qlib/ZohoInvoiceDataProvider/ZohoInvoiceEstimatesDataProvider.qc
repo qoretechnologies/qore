@@ -35,6 +35,7 @@ public class ZohoInvoiceEstimatesDataProvider inherits ZohoInvoiceDataProviderBa
             "type": "ZohoInvoiceEstimatesDataProvider",
             "supports_read": True,
             "supports_native_search": True,
+            "has_record": True,
             "constructor_options": ConstructorOptions,
             "search_options": SearchOptions,
         };
@@ -60,7 +61,15 @@ public class ZohoInvoiceEstimatesDataProvider inherits ZohoInvoiceDataProviderBa
                 "display_name": "Status",
                 "short_desc": "Filter by status",
                 "type": AbstractDataProviderType::get(SoftStringOrNothingType),
-                "desc": "Filter estimates by status (draft, sent, accepted, declined, invoiced, expired)",
+                "desc": "Filter estimates by status",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "draft", "desc": "Draft estimates"},
+                    <AllowedValueInfo>{"value": "sent", "desc": "Sent estimates"},
+                    <AllowedValueInfo>{"value": "accepted", "desc": "Accepted estimates"},
+                    <AllowedValueInfo>{"value": "declined", "desc": "Declined estimates"},
+                    <AllowedValueInfo>{"value": "invoiced", "desc": "Invoiced estimates"},
+                    <AllowedValueInfo>{"value": "expired", "desc": "Expired estimates"},
+                ),
             },
             "customer_id": <DataProviderOptionInfo>{
                 "display_name": "Customer ID",
@@ -72,13 +81,13 @@ public class ZohoInvoiceEstimatesDataProvider inherits ZohoInvoiceDataProviderBa
                 "display_name": "Date Start",
                 "short_desc": "Filter by start date",
                 "type": AbstractDataProviderType::get(SoftStringOrNothingType),
-                "desc": "Filter estimates on or after this date (YYYY-MM-DD)",
+                "desc": "Filter estimates on or after this date (`YYYY-MM-DD`)",
             },
             "date_end": <DataProviderOptionInfo>{
                 "display_name": "Date End",
                 "short_desc": "Filter by end date",
                 "type": AbstractDataProviderType::get(SoftStringOrNothingType),
-                "desc": "Filter estimates on or before this date (YYYY-MM-DD)",
+                "desc": "Filter estimates on or before this date (`YYYY-MM-DD`)",
             },
             "estimate_number": <DataProviderOptionInfo>{
                 "display_name": "Estimate Number",
@@ -116,8 +125,8 @@ public class ZohoInvoiceEstimatesDataProvider inherits ZohoInvoiceDataProviderBa
     }
 
     #! Returns the record type
-    private *AbstractDataProviderType getRecordTypeImpl() {
-        return new ZohoInvoiceEstimateDataType();
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return new ZohoInvoiceEstimateDataType().getFields();
     }
 
     #! Returns an iterator for records matching the search criteria

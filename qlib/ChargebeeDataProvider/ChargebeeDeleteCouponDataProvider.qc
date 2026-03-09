@@ -27,7 +27,7 @@ public namespace ChargebeeDataProvider {
 
 #! Request type for deleting a coupon
 public class ChargebeeDeleteCouponRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "id": {
                 "type": StringType,

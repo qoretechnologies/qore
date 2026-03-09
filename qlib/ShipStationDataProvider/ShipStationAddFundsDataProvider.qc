@@ -27,14 +27,15 @@ public namespace ShipStationDataProvider {
 
 #! Request type for adding funds to a carrier
 public class ShipStationAddFundsRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "carrierCode": {
                 "type": StringType,
                 "display_name": "Carrier Code",
                 "short_desc": "The carrier code",
-                "desc": "The carrier code to add funds to (typically 'stamps_com')",
+                "desc": "The carrier code to add funds to (typically `stamps_com`)",
                 "required": True,
+                "preselected": True,
             },
             "amount": {
                 "type": SoftFloatType,
@@ -42,6 +43,7 @@ public class ShipStationAddFundsRequestDataType inherits HashDataType {
                 "short_desc": "Amount to add",
                 "desc": "The amount to add to the carrier account (in USD)",
                 "required": True,
+                "preselected": True,
             },
         };
     }
@@ -53,7 +55,7 @@ public class ShipStationAddFundsRequestDataType inherits HashDataType {
 
 #! Response type for adding funds
 public class ShipStationAddFundsResponseDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "name": {
                 "type": SoftStringOrNothingType,

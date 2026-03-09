@@ -102,7 +102,7 @@ public class Cin7CoreGetStockAdjustmentDataProvider inherits Cin7CoreDataProvide
 
 #! Request data type for getting a stock adjustment
 public class Cin7CoreGetStockAdjustmentRequestDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions
         const Fields = {
             "TaskID": {

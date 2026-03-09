@@ -27,7 +27,7 @@ public namespace SquarespaceDataProvider {
 
 #! Request type for deleting a product variant
 public class SquarespaceDeleteProductVariantRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "product_id": {
                 "type": StringType,
@@ -35,6 +35,7 @@ public class SquarespaceDeleteProductVariantRequestDataType inherits HashDataTyp
                 "short_desc": "The product ID containing the variant",
                 "desc": "The product ID containing the variant",
                 "required": True,
+                "ref_data": "products",
             },
             "variant_id": {
                 "type": StringType,

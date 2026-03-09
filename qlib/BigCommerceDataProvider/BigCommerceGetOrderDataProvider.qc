@@ -27,13 +27,15 @@ public namespace BigCommerceDataProvider {
 
 #! Request type for getting an order
 public class BigCommerceGetOrderRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "order_id": {
                 "display_name": "Order ID",
+                "short_desc": "The order to retrieve",
                 "type": IntType,
                 "desc": "The ID of the order to retrieve",
                 "required": True,
+                "ref_data": "orders",
             },
         };
     }

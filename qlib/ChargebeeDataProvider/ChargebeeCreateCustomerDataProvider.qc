@@ -27,7 +27,7 @@ public namespace ChargebeeDataProvider {
 
 #! Request type for creating a customer
 public class ChargebeeCreateCustomerRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "first_name": {
                 "type": StringOrNothingType,
@@ -63,8 +63,8 @@ public class ChargebeeCreateCustomerRequestDataType inherits HashDataType {
                 "type": StringOrNothingType,
                 "display_name": "Auto Collection",
                 "short_desc": "Auto-collect payments",
-                "desc": "Whether to automatically collect charges. When set to 'on', charges will be "
-                    "automatically collected; when 'off', invoices will be created as pending",
+                "desc": "Whether to automatically collect charges. When set to `on`, charges will be "
+                    "automatically collected; when `off`, invoices will be created as pending",
                 "allowed_values": (
                     <AllowedValueInfo>{"value": "on", "desc": "Automatically collect charges"},
                     <AllowedValueInfo>{"value": "off", "desc": "Do not automatically collect charges"},
@@ -86,7 +86,7 @@ public class ChargebeeCreateCustomerRequestDataType inherits HashDataType {
                 "type": StringOrNothingType,
                 "display_name": "Locale",
                 "short_desc": "Customer's locale",
-                "desc": "The locale of the customer (e.g., 'en-US', 'fr-FR')",
+                "desc": "The locale of the customer (e.g., `en-US`, `fr-FR`)",
             },
             "meta_data": {
                 "type": AutoHashOrNothingType,

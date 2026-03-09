@@ -98,7 +98,7 @@ public class Cin7CoreDeleteStockAdjustmentDataProvider inherits Cin7CoreDataProv
 
 #! Request data type for deleting a stock adjustment
 public class Cin7CoreDeleteStockAdjustmentRequestDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions
         const Fields = {
             "TaskID": {

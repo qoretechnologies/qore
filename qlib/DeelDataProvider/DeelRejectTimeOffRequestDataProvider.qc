@@ -32,6 +32,7 @@ public class DeelRejectTimeOffRequestRequestDataType inherits HashDataType {
             "request_id": {
                 "type": StringType,
                 "display_name": "Request ID",
+                "ref_data": "time_off_requests",
                 "short_desc": "The time-off request ID to reject",
                 "desc": "The unique identifier of the time-off request to reject",
                 "required": True,

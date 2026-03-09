@@ -27,7 +27,7 @@ public namespace ChargebeeDataProvider {
 
 #! Request type for getting a transaction
 public class ChargebeeGetTransactionRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "id": {
                 "type": StringType,

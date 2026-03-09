@@ -27,7 +27,7 @@ public namespace ShipStationDataProvider {
 
 #! Request type for adding a tag to an order
 public class ShipStationAddTagToOrderRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "orderId": {
                 "type": IntType,
@@ -35,6 +35,7 @@ public class ShipStationAddTagToOrderRequestDataType inherits HashDataType {
                 "short_desc": "The order ID",
                 "desc": "The ShipStation order ID to add the tag to",
                 "required": True,
+                "preselected": True,
             },
             "tagId": {
                 "type": IntType,
@@ -42,6 +43,7 @@ public class ShipStationAddTagToOrderRequestDataType inherits HashDataType {
                 "short_desc": "The tag ID to add",
                 "desc": "The ID of the tag to add to the order",
                 "required": True,
+                "preselected": True,
             },
         };
     }
@@ -53,7 +55,7 @@ public class ShipStationAddTagToOrderRequestDataType inherits HashDataType {
 
 #! Response type for add tag operation
 public class ShipStationAddTagResponseDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "success": {
                 "type": SoftBoolType,

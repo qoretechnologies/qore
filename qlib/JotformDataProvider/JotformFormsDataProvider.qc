@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore JotformDataProvider module definition
 
-/*  JotformFormsDataProvider.qc Copyright 2025 Qore Technologies, s.r.o.
+/*  JotformFormsDataProvider.qc Copyright 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -63,7 +63,7 @@ public class JotformFormsDataProvider inherits JotformDataProviderBase {
                 "display_name": "Order By",
                 "short_desc": "Sort order",
                 "type": AbstractDataProviderType::get(StringOrNothingType),
-                "desc": "Field to sort by (e.g., 'created_at', 'updated_at', 'title')",
+                "desc": "Field to sort by (e.g., `created_at`, `updated_at`, `title`)",
             },
             "limit": <DataProviderOptionInfo>{
                 "display_name": "Limit",

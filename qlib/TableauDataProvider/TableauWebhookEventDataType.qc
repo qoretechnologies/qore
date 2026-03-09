@@ -27,7 +27,7 @@ public namespace TableauDataProvider {
 
 #! Tableau webhook event record type
 public class TableauWebhookEventDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for Tableau webhook events
         const Fields = {
             "resource": {

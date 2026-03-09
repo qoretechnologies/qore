@@ -27,7 +27,7 @@ public namespace ChargebeeDataProvider {
 
 #! Request type for creating a coupon
 public class ChargebeeCreateCouponRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "id": {
                 "type": StringType,
@@ -59,14 +59,14 @@ public class ChargebeeCreateCouponRequestDataType inherits HashDataType {
                 "type": SoftFloatOrNothingType,
                 "display_name": "Discount Percentage",
                 "short_desc": "Percentage discount value",
-                "desc": "The discount percentage (applicable when discount_type is 'percentage')",
+                "desc": "The discount percentage (applicable when discount_type is `percentage`)",
             },
             "discount_amount": {
                 "type": IntOrNothingType,
                 "display_name": "Discount Amount",
                 "short_desc": "Fixed discount amount in cents",
                 "desc": "The discount amount in the smallest currency unit (applicable when "
-                    "discount_type is 'fixed_amount')",
+                    "discount_type is `fixed_amount`)",
             },
             "duration_type": {
                 "type": StringType,
@@ -106,7 +106,7 @@ public class ChargebeeCreateCouponRequestDataType inherits HashDataType {
                 "type": StringOrNothingType,
                 "display_name": "Currency Code",
                 "short_desc": "Currency for the coupon",
-                "desc": "The currency code for the coupon (e.g., 'USD', 'EUR'). Required for "
+                "desc": "The currency code for the coupon (e.g., `USD`, `EUR`). Required for "
                     "fixed_amount discount type",
             },
             "meta_data": {

@@ -55,14 +55,14 @@ public class SquarespaceTransactionsDataProvider inherits SquarespaceDataProvide
             "modified_after": <DataProviderOptionInfo>{
                 "display_name": "Modified After",
                 "short_desc": "Filter by modification date",
-                "type": AbstractDataProviderType::get(SoftStringOrNothingType),
-                "desc": "Filter transactions modified after this ISO 8601 datetime",
+                "type": AbstractDataProviderType::get(SoftDateOrNothingType),
+                "desc": "Filter transactions modified after this datetime",
             },
             "modified_before": <DataProviderOptionInfo>{
                 "display_name": "Modified Before",
                 "short_desc": "Filter by modification date",
-                "type": AbstractDataProviderType::get(SoftStringOrNothingType),
-                "desc": "Filter transactions modified before this ISO 8601 datetime",
+                "type": AbstractDataProviderType::get(SoftDateOrNothingType),
+                "desc": "Filter transactions modified before this datetime",
             },
             "limit": <DataProviderOptionInfo>{
                 "display_name": "Limit",
@@ -88,8 +88,8 @@ public class SquarespaceTransactionsDataProvider inherits SquarespaceDataProvide
     }
 
     #! Returns the record type
-    private *AbstractDataProviderType getRecordTypeImpl() {
-        return new SquarespaceTransactionDataType();
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return new SquarespaceTransactionDataType().getFields();
     }
 
     #! Returns an iterator for records matching the search criteria

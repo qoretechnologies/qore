@@ -27,7 +27,7 @@ public namespace SquareDataProvider {
 
 #! Request type for getting inventory counts
 public class SquareGetInventoryCountRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "catalog_object_id": {
                 "type": StringType,
@@ -52,7 +52,7 @@ public class SquareGetInventoryCountRequestDataType inherits HashDataType {
 
 #! Response type for getting inventory counts (list of counts)
 public class SquareGetInventoryCountResponseDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "counts": {
                 "type": AutoListOrNothingType,

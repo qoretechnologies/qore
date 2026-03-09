@@ -57,13 +57,20 @@ public class ZohoBooksEstimateDataType inherits HashDataType {
             "status": {
                 "display_name": "Status",
                 "short_desc": "Estimate status",
-                "desc": "Status of the estimate (draft, sent, accepted, declined, invoiced, etc.)",
+                "desc": "Status of the estimate",
                 "type": SoftStringOrNothingType,
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "draft", "desc": "Draft estimate"},
+                    <AllowedValueInfo>{"value": "sent", "desc": "Sent to customer"},
+                    <AllowedValueInfo>{"value": "accepted", "desc": "Accepted by customer"},
+                    <AllowedValueInfo>{"value": "declined", "desc": "Declined by customer"},
+                    <AllowedValueInfo>{"value": "invoiced", "desc": "Converted to invoice"},
+                ),
             },
             "date": {
                 "display_name": "Estimate Date",
                 "short_desc": "Date of the estimate",
-                "desc": "The date of the estimate (YYYY-MM-DD format)",
+                "desc": "The date of the estimate (`YYYY-MM-DD` format)",
                 "type": SoftStringOrNothingType,
             },
             "expiry_date": {
@@ -161,8 +168,7 @@ public class ZohoBooksEstimateDataType inherits HashDataType {
 
     #! Creates the object
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 

@@ -27,7 +27,7 @@ public namespace SquarespaceDataProvider {
 
 #! Squarespace transaction record type
 public class SquarespaceTransactionDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for Squarespace transactions
         const Fields = {
             "id": {
@@ -37,16 +37,16 @@ public class SquarespaceTransactionDataType inherits HashDataType {
                 "desc": "The unique identifier of the transaction",
             },
             "createdOn": {
-                "type": StringOrNothingType,
+                "type": DateOrNothingType,
                 "display_name": "Created On",
                 "short_desc": "When the transaction was created",
-                "desc": "The timestamp when the transaction was created (ISO 8601 format)",
+                "desc": "The timestamp when the transaction was created",
             },
             "modifiedOn": {
-                "type": StringOrNothingType,
+                "type": DateOrNothingType,
                 "display_name": "Modified On",
                 "short_desc": "When the transaction was last modified",
-                "desc": "The timestamp when the transaction was last modified (ISO 8601 format)",
+                "desc": "The timestamp when the transaction was last modified",
             },
             "customerEmail": {
                 "type": StringOrNothingType,
@@ -67,37 +67,37 @@ public class SquarespaceTransactionDataType inherits HashDataType {
                 "desc": "Indicates whether the transaction has been voided",
             },
             "totalSales": {
-                "type": AutoHashOrNothingType,
+                "type": new SquarespaceMoneyDataType(AutoHashOrNothingType),
                 "display_name": "Total Sales",
                 "short_desc": "The total sales amount",
                 "desc": "The total sales amount for the transaction",
             },
             "totalNetSales": {
-                "type": AutoHashOrNothingType,
+                "type": new SquarespaceMoneyDataType(AutoHashOrNothingType),
                 "display_name": "Total Net Sales",
                 "short_desc": "The total net sales amount",
                 "desc": "The total net sales amount for the transaction",
             },
             "totalNetShipping": {
-                "type": AutoHashOrNothingType,
+                "type": new SquarespaceMoneyDataType(AutoHashOrNothingType),
                 "display_name": "Total Net Shipping",
                 "short_desc": "The total net shipping amount",
                 "desc": "The total net shipping amount for the transaction",
             },
             "totalTaxes": {
-                "type": AutoHashOrNothingType,
+                "type": new SquarespaceMoneyDataType(AutoHashOrNothingType),
                 "display_name": "Total Taxes",
                 "short_desc": "The total tax amount",
                 "desc": "The total tax amount for the transaction",
             },
             "total": {
-                "type": AutoHashOrNothingType,
+                "type": new SquarespaceMoneyDataType(AutoHashOrNothingType),
                 "display_name": "Total",
                 "short_desc": "The transaction total",
                 "desc": "The total amount for the transaction",
             },
             "totalNetPayment": {
-                "type": AutoHashOrNothingType,
+                "type": new SquarespaceMoneyDataType(AutoHashOrNothingType),
                 "display_name": "Total Net Payment",
                 "short_desc": "The total net payment amount",
                 "desc": "The total net payment amount for the transaction",

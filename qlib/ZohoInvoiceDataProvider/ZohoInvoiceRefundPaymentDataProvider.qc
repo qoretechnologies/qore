@@ -63,7 +63,7 @@ public class ZohoInvoiceRefundPaymentDataProvider inherits ZohoInvoiceDataProvid
             "date": {
                 "display_name": "Refund Date",
                 "type": SoftStringOrNothingType,
-                "desc": "The date of the refund (YYYY-MM-DD)",
+                "desc": "The date of the refund (`YYYY-MM-DD`)",
             },
             "description": {
                 "display_name": "Description",

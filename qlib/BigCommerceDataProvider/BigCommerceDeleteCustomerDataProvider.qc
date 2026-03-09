@@ -27,13 +27,15 @@ public namespace BigCommerceDataProvider {
 
 #! Request type for deleting a customer
 public class BigCommerceDeleteCustomerRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "customer_id": {
                 "display_name": "Customer ID",
+                "short_desc": "The customer to delete",
                 "type": IntType,
                 "desc": "The ID of the customer to delete",
                 "required": True,
+                "ref_data": "customers",
             },
         };
     }
@@ -45,7 +47,7 @@ public class BigCommerceDeleteCustomerRequestDataType inherits HashDataType {
 
 #! Response type for delete operations
 public class BigCommerceDeleteResponseDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "success": {
                 "display_name": "Success",

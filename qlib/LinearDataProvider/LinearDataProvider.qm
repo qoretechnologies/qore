@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore LinearDataProvider module definition
 
-/*  LinearDataProvider.qm Copyright 2025 Qore Technologies, s.r.o.
+/*  LinearDataProvider.qm Copyright 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -188,6 +188,13 @@ module LinearDataProvider {
                     "type": AbstractDataProviderTypeMap."*string",
                     "ref_data": "projects",
                 },
+                "cycleId": <ActionOptionInfo>{
+                    "display_name": "Cycle",
+                    "short_desc": "Filter by cycle",
+                    "desc": "Filter issues by cycle (sprint)",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "cycles",
+                },
                 "assigneeId": <ActionOptionInfo>{
                     "display_name": "Assignee",
                     "short_desc": "Filter by assignee",
@@ -202,6 +209,19 @@ module LinearDataProvider {
                     "type": AbstractDataProviderTypeMap."*string",
                     "ref_data": "states",
                 },
+                "priority": <ActionOptionInfo>{
+                    "display_name": "Priority",
+                    "short_desc": "Filter by priority",
+                    "desc": "Filter issues by priority level",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": 0, "display_name": "No Priority"},
+                        <AllowedValueInfo>{"value": 1, "display_name": "Urgent"},
+                        <AllowedValueInfo>{"value": 2, "display_name": "High"},
+                        <AllowedValueInfo>{"value": 3, "display_name": "Normal"},
+                        <AllowedValueInfo>{"value": 4, "display_name": "Low"},
+                    ),
+                },
                 "limit": <ActionOptionInfo>{
                     "display_name": "Limit",
                     "short_desc": "Maximum number of results",
@@ -214,7 +234,7 @@ module LinearDataProvider {
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": LinearDataProvider::AppName,
-            "path": "/issues/get",
+            "path": "/issues",
             "action": "get-issue",
             "groups": "Issues",
             "display_name": "Get Issue",
@@ -358,6 +378,7 @@ module LinearDataProvider {
                     "ref_data": "issues",
                 },
             },
+            "output_type": LinearArchiveIssueDataProvider::ResponseType,
         });
 
         # Register actions for comments
@@ -452,16 +473,16 @@ module LinearDataProvider {
                 "startDate": <ActionOptionInfo>{
                     "display_name": "Start Date",
                     "short_desc": "The project start date",
-                    "desc": "The planned start date of the project (YYYY-MM-DD format)",
-                    "type": AbstractDataProviderTypeMap."*string",
-                    "example_value": "2025-01-15",
+                    "desc": "The planned start date of the project",
+                    "type": AbstractDataProviderTypeMap."*date",
+                    "example_value": 2025-01-15,
                 },
                 "targetDate": <ActionOptionInfo>{
                     "display_name": "Target Date",
                     "short_desc": "The project target date",
-                    "desc": "The target completion date of the project (YYYY-MM-DD format)",
-                    "type": AbstractDataProviderTypeMap."*string",
-                    "example_value": "2025-03-31",
+                    "desc": "The target completion date of the project",
+                    "type": AbstractDataProviderTypeMap."*date",
+                    "example_value": 2025-03-31,
                 },
             },
             "output_type": new LinearProjectDataType(),
@@ -484,6 +505,7 @@ module LinearDataProvider {
                     "short_desc": "Filter by project state",
                     "desc": "Filter projects by state",
                     "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
                     "allowed_values": (
                         <AllowedValueInfo>{"value": "planned", "display_name": "Planned", "desc": "Planned projects"},
                         <AllowedValueInfo>{"value": "started", "display_name": "Started", "desc": "Started projects"},
@@ -497,6 +519,7 @@ module LinearDataProvider {
                     "short_desc": "Maximum number of results",
                     "desc": "Maximum number of results to return",
                     "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
                     "example_value": 50,
                 },
             },
@@ -533,16 +556,16 @@ module LinearDataProvider {
                 "startsAt": <ActionOptionInfo>{
                     "display_name": "Starts At",
                     "short_desc": "When the cycle starts",
-                    "desc": "The start date of the cycle (ISO 8601 format)",
-                    "type": AbstractDataProviderTypeMap."*string",
-                    "example_value": "2025-01-15T00:00:00Z",
+                    "desc": "The start date of the cycle",
+                    "type": AbstractDataProviderTypeMap."*date",
+                    "example_value": 2025-01-15,
                 },
                 "endsAt": <ActionOptionInfo>{
                     "display_name": "Ends At",
                     "short_desc": "When the cycle ends",
-                    "desc": "The end date of the cycle (ISO 8601 format)",
-                    "type": AbstractDataProviderTypeMap."*string",
-                    "example_value": "2025-01-29T00:00:00Z",
+                    "desc": "The end date of the cycle",
+                    "type": AbstractDataProviderTypeMap."*date",
+                    "example_value": 2025-01-29,
                 },
             },
             "output_type": new LinearCycleDataType(),
@@ -639,8 +662,9 @@ module LinearDataProvider {
                 "teamId": <ActionOptionInfo>{
                     "display_name": "Team",
                     "short_desc": "Filter by team",
-                    "desc": "Filter labels by team (null for workspace labels)",
+                    "desc": "Filter labels by team (`NOTHING` for workspace labels)",
                     "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
                     "ref_data": "teams",
                 },
                 "limit": <ActionOptionInfo>{
@@ -671,6 +695,7 @@ module LinearDataProvider {
                     "short_desc": "Maximum number of results",
                     "desc": "Maximum number of results to return",
                     "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
                     "example_value": 50,
                 },
             },
@@ -678,7 +703,7 @@ module LinearDataProvider {
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": LinearDataProvider::AppName,
-            "path": "/teams/get",
+            "path": "/teams",
             "action": "get-team",
             "groups": "Teams",
             "display_name": "Get Team",

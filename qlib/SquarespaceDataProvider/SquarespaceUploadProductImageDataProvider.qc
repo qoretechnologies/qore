@@ -27,7 +27,7 @@ public namespace SquarespaceDataProvider {
 
 #! Request type for uploading a product image
 public class SquarespaceUploadProductImageRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "product_id": {
                 "type": StringType,
@@ -35,6 +35,7 @@ public class SquarespaceUploadProductImageRequestDataType inherits HashDataType 
                 "short_desc": "The product ID to upload the image for",
                 "desc": "The product ID to upload the image for",
                 "required": True,
+                "ref_data": "products",
             },
             "fileName": {
                 "type": StringType,

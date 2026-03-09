@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore MailgunDataProvider module definition
 
-/*  MailgunDomainDataType.qc Copyright 2025 Qore Technologies, s.r.o.
+/*  MailgunDomainDataType.qc Copyright 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -27,7 +27,7 @@ public namespace MailgunDataProvider {
 
 #! Mailgun domain record type
 public class MailgunDomainDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for Mailgun domains
         const Fields = {
             "name": {
@@ -41,14 +41,14 @@ public class MailgunDomainDataType inherits HashDataType {
                 "type": StringOrNothingType,
                 "display_name": "State",
                 "short_desc": "Domain verification state",
-                "desc": "The verification state of the domain (active, unverified, disabled)",
+                "desc": "The verification state of the domain (`active`, `unverified`, `disabled`)",
                 "example_value": "active",
             },
             "type": {
                 "type": StringOrNothingType,
                 "display_name": "Type",
                 "short_desc": "Domain type",
-                "desc": "The type of domain (custom or sandbox)",
+                "desc": "The type of domain (`custom` or `sandbox`)",
                 "example_value": "custom",
             },
             "created_at": {
@@ -83,7 +83,7 @@ public class MailgunDomainDataType inherits HashDataType {
                 "type": StringOrNothingType,
                 "display_name": "Web Scheme",
                 "short_desc": "URL scheme for tracking",
-                "desc": "The URL scheme used for tracking links (http or https)",
+                "desc": "The URL scheme used for tracking links (`http` or `https`)",
                 "example_value": "https",
             },
             "spam_action": {

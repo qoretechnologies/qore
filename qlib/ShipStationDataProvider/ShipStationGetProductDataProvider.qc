@@ -27,7 +27,7 @@ public namespace ShipStationDataProvider {
 
 #! Request type for getting a product
 public class ShipStationGetProductRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "productId": {
                 "type": IntType,
@@ -35,6 +35,7 @@ public class ShipStationGetProductRequestDataType inherits HashDataType {
                 "short_desc": "The product ID to retrieve",
                 "desc": "The unique ShipStation product ID",
                 "required": True,
+                "preselected": True,
             },
         };
     }

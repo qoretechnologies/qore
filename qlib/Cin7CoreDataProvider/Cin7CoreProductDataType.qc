@@ -27,7 +27,7 @@ public namespace Cin7CoreDataProvider {
 
 #! Cin7Core product data type
 public class Cin7CoreProductDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions
         const Fields = {
             "ID": {
@@ -64,13 +64,24 @@ public class Cin7CoreProductDataType inherits HashDataType {
                 "type": SoftStringOrNothingType,
                 "display_name": "Type",
                 "short_desc": "Product type",
-                "desc": "The product type (Stock, Non-Stock, Service, etc.)",
+                "desc": "The product type",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "Stock", "desc": "Stocked/inventory product"},
+                    <AllowedValueInfo>{"value": "Non-Stock", "desc": "Non-stocked product"},
+                    <AllowedValueInfo>{"value": "Service", "desc": "Service item"},
+                ),
             },
             "CostingMethod": {
                 "type": SoftStringOrNothingType,
                 "display_name": "Costing Method",
                 "short_desc": "Costing method",
-                "desc": "The costing method (FIFO, FEFO, Special Batch, etc.)",
+                "desc": "The inventory costing method",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "FIFO", "desc": "First In, First Out"},
+                    <AllowedValueInfo>{"value": "FEFO", "desc": "First Expired, First Out"},
+                    <AllowedValueInfo>{"value": "Special - Loss", "desc": "Special batch - loss on disposal"},
+                    <AllowedValueInfo>{"value": "Special - Margin", "desc": "Special batch - margin-based"},
+                ),
             },
             "Status": {
                 "type": SoftStringOrNothingType,
@@ -155,13 +166,13 @@ public class Cin7CoreProductDataType inherits HashDataType {
                 "desc": "Quantity to reorder",
             },
             "PriceTiers": {
-                "type": SoftAutoListOrNothingType,
+                "type": new ListDataType("PriceTiers", new Cin7CorePriceTierDataType(), True),
                 "display_name": "Price Tiers",
                 "short_desc": "Pricing tiers",
                 "desc": "List of price tier settings",
             },
             "SupplierInfo": {
-                "type": SoftAutoListOrNothingType,
+                "type": new ListDataType("SupplierInfo", new Cin7CoreProductSupplierDataType(), True),
                 "display_name": "Supplier Info",
                 "short_desc": "Supplier details",
                 "desc": "List of supplier information",
@@ -189,7 +200,7 @@ public class Cin7CoreProductDataType inherits HashDataType {
 
 #! Cin7Core product availability data type
 public class Cin7CoreProductAvailabilityDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions
         const Fields = {
             "ID": {
@@ -263,6 +274,100 @@ public class Cin7CoreProductAvailabilityDataType inherits HashDataType {
 
     #! Creates the object
     constructor() : HashDataType("Cin7CoreProductAvailabilityDataType") {
+        addQoreFields(Fields);
+    }
+}
+
+#! Cin7Core price tier data type
+public class Cin7CorePriceTierDataType inherits HashDataType {
+    public {
+        #! Field definitions
+        const Fields = {
+            "PriceTierName": {
+                "type": SoftStringOrNothingType,
+                "display_name": "Price Tier Name",
+                "short_desc": "Tier name",
+                "desc": "The name of the price tier",
+            },
+            "Price": {
+                "type": SoftFloatOrNothingType,
+                "display_name": "Price",
+                "short_desc": "Tier price",
+                "desc": "The price for this tier",
+            },
+        };
+    }
+
+    #! Creates the object
+    constructor() : HashDataType("Cin7CorePriceTierDataType") {
+        addQoreFields(Fields);
+    }
+}
+
+#! Cin7Core product supplier data type
+public class Cin7CoreProductSupplierDataType inherits HashDataType {
+    public {
+        #! Field definitions
+        const Fields = {
+            "SupplierID": {
+                "type": SoftStringOrNothingType,
+                "display_name": "Supplier ID",
+                "short_desc": "Supplier identifier",
+                "desc": "The unique identifier of the supplier",
+            },
+            "SupplierInventoryCode": {
+                "type": SoftStringOrNothingType,
+                "display_name": "Supplier Inventory Code",
+                "short_desc": "Supplier SKU",
+                "desc": "The supplier's inventory code for this product",
+            },
+            "SupplierProductName": {
+                "type": SoftStringOrNothingType,
+                "display_name": "Supplier Product Name",
+                "short_desc": "Supplier product name",
+                "desc": "The product name as used by the supplier",
+            },
+            "Cost": {
+                "type": SoftFloatOrNothingType,
+                "display_name": "Cost",
+                "short_desc": "Unit cost",
+                "desc": "The unit cost from this supplier",
+            },
+            "FixedCost": {
+                "type": SoftFloatOrNothingType,
+                "display_name": "Fixed Cost",
+                "short_desc": "Fixed cost",
+                "desc": "The fixed cost from this supplier",
+            },
+            "Currency": {
+                "type": SoftStringOrNothingType,
+                "display_name": "Currency",
+                "short_desc": "Currency code",
+                "desc": "The currency for pricing from this supplier",
+            },
+            "DropShip": {
+                "type": SoftBoolOrNothingType,
+                "display_name": "Drop Ship",
+                "short_desc": "Drop ship flag",
+                "desc": "Whether this supplier supports drop shipping",
+            },
+            "URL": {
+                "type": SoftStringOrNothingType,
+                "display_name": "URL",
+                "short_desc": "Supplier URL",
+                "desc": "The URL for this product at the supplier",
+            },
+            "LastSupplied": {
+                "type": SoftDateOrNothingType,
+                "display_name": "Last Supplied",
+                "short_desc": "Last supplied date",
+                "desc": "The date this product was last supplied",
+            },
+        };
+    }
+
+    #! Creates the object
+    constructor() : HashDataType("Cin7CoreProductSupplierDataType") {
         addQoreFields(Fields);
     }
 }

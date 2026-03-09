@@ -27,7 +27,7 @@ public namespace SquarespaceDataProvider {
 
 #! Squarespace order record type
 public class SquarespaceOrderDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for Squarespace orders
         const Fields = {
             "id": {
@@ -43,16 +43,16 @@ public class SquarespaceOrderDataType inherits HashDataType {
                 "desc": "The customer-facing order number",
             },
             "createdOn": {
-                "type": StringOrNothingType,
+                "type": DateOrNothingType,
                 "display_name": "Created On",
                 "short_desc": "When the order was created",
-                "desc": "The timestamp when the order was created (ISO 8601 format)",
+                "desc": "The timestamp when the order was created",
             },
             "modifiedOn": {
-                "type": StringOrNothingType,
+                "type": DateOrNothingType,
                 "display_name": "Modified On",
                 "short_desc": "When the order was last modified",
-                "desc": "The timestamp when the order was last modified (ISO 8601 format)",
+                "desc": "The timestamp when the order was last modified",
             },
             "channel": {
                 "type": StringOrNothingType,
@@ -73,13 +73,13 @@ public class SquarespaceOrderDataType inherits HashDataType {
                 "desc": "The email address of the customer who placed the order",
             },
             "billingAddress": {
-                "type": AutoHashOrNothingType,
+                "type": new SquarespaceAddressDataType(AutoHashOrNothingType),
                 "display_name": "Billing Address",
                 "short_desc": "The billing address",
                 "desc": "The billing address for the order",
             },
             "shippingAddress": {
-                "type": AutoHashOrNothingType,
+                "type": new SquarespaceAddressDataType(AutoHashOrNothingType),
                 "display_name": "Shipping Address",
                 "short_desc": "The shipping address",
                 "desc": "The shipping address for the order",
@@ -88,7 +88,7 @@ public class SquarespaceOrderDataType inherits HashDataType {
                 "type": StringOrNothingType,
                 "display_name": "Fulfillment Status",
                 "short_desc": "The fulfillment status of the order",
-                "desc": "The fulfillment status of the order (PENDING, FULFILLED, or CANCELED)",
+                "desc": "The fulfillment status of the order (`PENDING`, `FULFILLED`, or `CANCELED`)",
                 "allowed_values": (
                     <AllowedValueInfo>{"value": "PENDING", "desc": "Pending fulfillment"},
                     <AllowedValueInfo>{"value": "FULFILLED", "desc": "Fulfilled"},
@@ -132,37 +132,37 @@ public class SquarespaceOrderDataType inherits HashDataType {
                 "desc": "The list of fulfillments for the order",
             },
             "subtotal": {
-                "type": AutoHashOrNothingType,
+                "type": new SquarespaceMoneyDataType(AutoHashOrNothingType),
                 "display_name": "Subtotal",
                 "short_desc": "The order subtotal",
                 "desc": "The subtotal of the order before shipping, taxes, and discounts",
             },
             "shippingTotal": {
-                "type": AutoHashOrNothingType,
+                "type": new SquarespaceMoneyDataType(AutoHashOrNothingType),
                 "display_name": "Shipping Total",
                 "short_desc": "The total shipping cost",
                 "desc": "The total shipping cost for the order",
             },
             "discountTotal": {
-                "type": AutoHashOrNothingType,
+                "type": new SquarespaceMoneyDataType(AutoHashOrNothingType),
                 "display_name": "Discount Total",
                 "short_desc": "The total discount amount",
                 "desc": "The total discount amount applied to the order",
             },
             "taxTotal": {
-                "type": AutoHashOrNothingType,
+                "type": new SquarespaceMoneyDataType(AutoHashOrNothingType),
                 "display_name": "Tax Total",
                 "short_desc": "The total tax amount",
                 "desc": "The total tax amount for the order",
             },
             "refundedTotal": {
-                "type": AutoHashOrNothingType,
+                "type": new SquarespaceMoneyDataType(AutoHashOrNothingType),
                 "display_name": "Refunded Total",
                 "short_desc": "The total refunded amount",
                 "desc": "The total amount refunded for the order",
             },
             "grandTotal": {
-                "type": AutoHashOrNothingType,
+                "type": new SquarespaceMoneyDataType(AutoHashOrNothingType),
                 "display_name": "Grand Total",
                 "short_desc": "The order grand total",
                 "desc": "The grand total of the order including shipping, taxes, and discounts",
@@ -180,10 +180,10 @@ public class SquarespaceOrderDataType inherits HashDataType {
                 "desc": "The external reference identifier for the order",
             },
             "fulfilledOn": {
-                "type": StringOrNothingType,
+                "type": DateOrNothingType,
                 "display_name": "Fulfilled On",
                 "short_desc": "When the order was fulfilled",
-                "desc": "The timestamp when the order was fulfilled (ISO 8601 format)",
+                "desc": "The timestamp when the order was fulfilled",
             },
             "priceTaxInterpretation": {
                 "type": StringOrNothingType,

@@ -27,7 +27,7 @@ public namespace SquareDataProvider {
 
 #! Request type for deleting a customer
 public class SquareDeleteCustomerRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "customer_id": {
                 "type": StringType,

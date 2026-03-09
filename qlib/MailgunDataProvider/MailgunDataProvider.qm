@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore MailgunDataProvider module definition
 
-/*  MailgunDataProvider.qm Copyright 2025 Qore Technologies, s.r.o.
+/*  MailgunDataProvider.qm Copyright 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -81,6 +81,16 @@ module MailgunDataProvider {
                 "tracking options, and custom headers.",
             "action_code": DPAT_API,
             "data_provider_info": MailgunSendEmailDataProvider::ProviderInfo,
+            "output_type": new MailgunSendEmailResponseDataType(),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                MailgunSendEmailRequestDataType::Fields{"from", "to", "subject", "text", "html"}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                MailgunSendEmailRequestDataType::Fields{"cc", "bcc", "o:tag", "o:tracking",
+                    "o:tracking-clicks", "o:tracking-opens", "h:Reply-To"}
+            ),
         });
 
         # Validate Email
@@ -95,6 +105,13 @@ module MailgunDataProvider {
                 "about deliverability, risk assessment, and suggested corrections.",
             "action_code": DPAT_API,
             "data_provider_info": MailgunValidateEmailDataProvider::ProviderInfo,
+            "output_type": new MailgunValidateEmailResponseDataType(),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                MailgunValidateEmailRequestDataType::Fields{"address",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ),
         });
 
         # ========== MAILING LIST ACTIONS ==========
@@ -110,6 +127,7 @@ module MailgunDataProvider {
             "desc": "Add a new member to a Mailgun mailing list. Supports custom variables and upsert mode.",
             "action_code": DPAT_API,
             "data_provider_info": MailgunAddMailingListMemberDataProvider::ProviderInfo,
+            "output_type": new MailgunMailingListMemberDataType(),
             "options": {
                 "list_address": <ActionOptionInfo>{
                     "display_name": "Mailing List",
@@ -120,7 +138,14 @@ module MailgunDataProvider {
                     "preselected": True,
                     "ref_data": "mailing_lists",
                 },
-            },
+            } + DataProviderActionCatalog::getActionOptionFromFields(
+                MailgunAddMailingListMemberRequestDataType::Fields{"address",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                MailgunAddMailingListMemberRequestDataType::Fields{"name", "vars", "subscribed", "upsert"}
+            ),
         });
 
         # Get Mailing List Member
@@ -134,6 +159,7 @@ module MailgunDataProvider {
             "desc": "Retrieve a specific member from a Mailgun mailing list by their email address.",
             "action_code": DPAT_API,
             "data_provider_info": MailgunGetMailingListMemberDataProvider::ProviderInfo,
+            "output_type": new MailgunMailingListMemberDataType(),
             "options": {
                 "list_address": <ActionOptionInfo>{
                     "display_name": "Mailing List",
@@ -144,7 +170,12 @@ module MailgunDataProvider {
                     "preselected": True,
                     "ref_data": "mailing_lists",
                 },
-            },
+            } + DataProviderActionCatalog::getActionOptionFromFields(
+                MailgunGetMailingListMemberRequestDataType::Fields{"member_address",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ),
         });
 
         # Delete Mailing List Member
@@ -158,6 +189,7 @@ module MailgunDataProvider {
             "desc": "Remove a member from a Mailgun mailing list by their email address.",
             "action_code": DPAT_API,
             "data_provider_info": MailgunDeleteMailingListMemberDataProvider::ProviderInfo,
+            "output_type": new MailgunDeleteMailingListMemberResponseDataType(),
             "options": {
                 "list_address": <ActionOptionInfo>{
                     "display_name": "Mailing List",
@@ -168,7 +200,12 @@ module MailgunDataProvider {
                     "preselected": True,
                     "ref_data": "mailing_lists",
                 },
-            },
+            } + DataProviderActionCatalog::getActionOptionFromFields(
+                MailgunDeleteMailingListMemberRequestDataType::Fields{"member_address",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ),
         });
 
         # List Mailing List Members
@@ -200,6 +237,7 @@ module MailgunDataProvider {
                     "short_desc": "Filter by subscription status",
                     "desc": "Filter members by subscription status",
                     "type": AbstractDataProviderTypeMap."*bool",
+                    "preselected": True,
                 },
                 "limit": <ActionOptionInfo>{
                     "display_name": "Limit",
@@ -225,6 +263,69 @@ module MailgunDataProvider {
                 "to match incoming messages and execute actions like forwarding or storing.",
             "action_code": DPAT_API,
             "data_provider_info": MailgunCreateRouteDataProvider::ProviderInfo,
+            "output_type": new MailgunRouteDataType(),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                MailgunCreateRouteRequestDataType::Fields{"expression", "action"}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                MailgunCreateRouteRequestDataType::Fields{"priority", "description"}
+            ),
+        });
+
+        # List Routes
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MailgunDataProvider::AppName,
+            "path": "/routes",
+            "action": "list-routes",
+            "groups": "Routes",
+            "display_name": "List Routes",
+            "short_desc": "List all inbound email routes",
+            "desc": "List all configured inbound email routes for processing incoming emails.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": MailgunRoutesDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("RouteList", new MailgunRouteDataType(), True);
+            },
+            "options": {
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "desc": "Maximum number of routes to return",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "example_value": 100,
+                    "preselected": True,
+                },
+            },
+        });
+
+        # ========== MAILING LIST COLLECTION ACTIONS ==========
+
+        # List Mailing Lists
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MailgunDataProvider::AppName,
+            "path": "/mailing-lists",
+            "action": "list-mailing-lists",
+            "groups": "Mailing Lists",
+            "display_name": "List Mailing Lists",
+            "short_desc": "List all mailing lists",
+            "desc": "List all mailing lists configured in your Mailgun account.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": MailgunMailingListsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("MailingListList", new MailgunMailingListDataType(), True);
+            },
+            "options": {
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "desc": "Maximum number of mailing lists to return",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "example_value": 100,
+                    "preselected": True,
+                },
+            },
         });
 
         # ========== DOMAIN ACTIONS ==========
@@ -249,6 +350,7 @@ module MailgunDataProvider {
                     "short_desc": "Filter by domain state",
                     "desc": "Filter domains by state (`active`, `unverified`, `disabled`)",
                     "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
                     "allowed_values": (
                         <AllowedValueInfo>{
                             "value": "active",
@@ -270,6 +372,7 @@ module MailgunDataProvider {
                     "desc": "Maximum number of domains to return",
                     "type": AbstractDataProviderTypeMap."*int",
                     "example_value": 100,
+                    "preselected": True,
                 },
             },
         });

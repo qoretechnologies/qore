@@ -40,8 +40,18 @@ public class WaveInvoiceDataType inherits HashDataType {
                 "type": StringOrNothingType,
                 "display_name": "Status",
                 "short_desc": "The invoice status",
-                "desc": "The current status of the invoice (DRAFT, SENT, VIEWED, PAID, OVERDUE, etc.)",
+                "desc": "The current status of the invoice",
                 "example_value": "SENT",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "DRAFT", "desc": "Draft invoice"},
+                    <AllowedValueInfo>{"value": "SAVED", "desc": "Saved invoice"},
+                    <AllowedValueInfo>{"value": "SENT", "desc": "Sent invoice"},
+                    <AllowedValueInfo>{"value": "VIEWED", "desc": "Viewed by customer"},
+                    <AllowedValueInfo>{"value": "OVERDUE", "desc": "Overdue invoice"},
+                    <AllowedValueInfo>{"value": "PAID", "desc": "Paid invoice"},
+                    <AllowedValueInfo>{"value": "PARTIAL", "desc": "Partially paid"},
+                    <AllowedValueInfo>{"value": "UNPAID", "desc": "Unpaid invoice"},
+                ),
             },
             "title": {
                 "type": StringOrNothingType,
@@ -156,14 +166,14 @@ public class WaveInvoiceDataType inherits HashDataType {
                 "type": BoolOrNothingType,
                 "display_name": "Disable Credit Card Payments",
                 "short_desc": "Whether credit card payments are disabled",
-                "desc": "If true, credit card payments are disabled for this invoice",
+                "desc": "If `True`, credit card payments are disabled for this invoice",
                 "example_value": False,
             },
             "disableBankPayments": {
                 "type": BoolOrNothingType,
                 "display_name": "Disable Bank Payments",
                 "short_desc": "Whether bank payments are disabled",
-                "desc": "If true, bank payments are disabled for this invoice",
+                "desc": "If `True`, bank payments are disabled for this invoice",
                 "example_value": False,
             },
             "itemTitle": {
@@ -198,35 +208,35 @@ public class WaveInvoiceDataType inherits HashDataType {
                 "type": BoolOrNothingType,
                 "display_name": "Hide Name",
                 "short_desc": "Whether to hide the item name",
-                "desc": "If true, the item name column is hidden on the invoice",
+                "desc": "If `True`, the item name column is hidden on the invoice",
                 "example_value": False,
             },
             "hideDescription": {
                 "type": BoolOrNothingType,
                 "display_name": "Hide Description",
                 "short_desc": "Whether to hide the description",
-                "desc": "If true, the description column is hidden on the invoice",
+                "desc": "If `True`, the description column is hidden on the invoice",
                 "example_value": False,
             },
             "hideUnit": {
                 "type": BoolOrNothingType,
                 "display_name": "Hide Unit",
                 "short_desc": "Whether to hide the unit column",
-                "desc": "If true, the unit/quantity column is hidden on the invoice",
+                "desc": "If `True`, the unit/quantity column is hidden on the invoice",
                 "example_value": False,
             },
             "hidePrice": {
                 "type": BoolOrNothingType,
                 "display_name": "Hide Price",
                 "short_desc": "Whether to hide the price column",
-                "desc": "If true, the price column is hidden on the invoice",
+                "desc": "If `True`, the price column is hidden on the invoice",
                 "example_value": False,
             },
             "hideAmount": {
                 "type": BoolOrNothingType,
                 "display_name": "Hide Amount",
                 "short_desc": "Whether to hide the amount column",
-                "desc": "If true, the amount column is hidden on the invoice",
+                "desc": "If `True`, the amount column is hidden on the invoice",
                 "example_value": False,
             },
             "lastSentAt": {
@@ -296,11 +306,10 @@ public class WaveInvoiceCreateDataType inherits HashDataType {
                 "required": True,
             },
             "items": {
-                "type": AutoListOrNothingType,
+                "type": new ListDataType("InvoiceCreateItemInputList", new WaveInvoiceCreateItemInputDataType(), True),
                 "display_name": "Items",
                 "short_desc": "The invoice line items",
-                "desc": "The line items for the invoice (list of item input objects with productId, "
-                    "description, quantity, unitPrice, etc.)",
+                "desc": "The line items for the invoice (productId, description, quantity, unitPrice, taxIds)",
             },
             "invoiceDate": {
                 "type": DateOrNothingType,
@@ -325,8 +334,12 @@ public class WaveInvoiceCreateDataType inherits HashDataType {
                 "type": StringOrNothingType,
                 "display_name": "Status",
                 "short_desc": "The invoice status",
-                "desc": "The initial status of the invoice (DRAFT, SENT, etc.)",
+                "desc": "The initial status of the invoice",
                 "example_value": "DRAFT",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "DRAFT", "desc": "Draft invoice"},
+                    <AllowedValueInfo>{"value": "SENT", "desc": "Sent invoice"},
+                ),
             },
             "memo": {
                 "type": StringOrNothingType,
@@ -368,6 +381,53 @@ public class WaveInvoiceCreateDataType inherits HashDataType {
 
     #! Creates the type
     constructor() {
+        addQoreFields(Fields);
+    }
+}
+
+#! Wave invoice create item input type (for items in invoice create mutations)
+public class WaveInvoiceCreateItemInputDataType inherits HashDataType {
+    private {
+        #! Field definitions for invoice create item inputs
+        const Fields = {
+            "productId": {
+                "type": StringType,
+                "display_name": "Product ID",
+                "short_desc": "The product or service ID (required)",
+                "desc": "The ID of the product or service for this line item",
+                "required": True,
+            },
+            "description": {
+                "type": StringOrNothingType,
+                "display_name": "Description",
+                "short_desc": "The line item description",
+                "desc": "The description for this line item",
+                "example_value": "Web development services",
+            },
+            "quantity": {
+                "type": FloatOrNothingType,
+                "display_name": "Quantity",
+                "short_desc": "The item quantity",
+                "desc": "The quantity of the item (defaults to 1)",
+                "example_value": 1.0,
+            },
+            "unitPrice": {
+                "type": FloatOrNothingType,
+                "display_name": "Unit Price",
+                "short_desc": "The unit price",
+                "desc": "The price per unit of the item (overrides the product default price)",
+                "example_value": 150.0,
+            },
+            "taxIds": {
+                "type": new ListDataType("TaxIdList", StringType, True),
+                "display_name": "Tax IDs",
+                "short_desc": "The sales tax IDs to apply",
+                "desc": "A list of sales tax IDs to apply to this line item",
+            },
+        };
+    }
+
+    constructor() : HashDataType("InvoiceCreateItemInput") {
         addQoreFields(Fields);
     }
 }

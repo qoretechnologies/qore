@@ -27,7 +27,7 @@ public namespace SquareDataProvider {
 
 #! Request type for creating a payment
 public class SquareCreatePaymentRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "source_id": {
                 "type": StringType,
@@ -86,7 +86,7 @@ public class SquareCreatePaymentRequestDataType inherits HashDataType {
                 "type": SoftBoolOrNothingType,
                 "display_name": "Autocomplete",
                 "short_desc": "Autocomplete the payment",
-                "desc": "If true (default), the payment is completed immediately. If false, "
+                "desc": "If `True` (default), the payment is completed immediately. If `False`, "
                     "the payment must be completed later with complete-payment.",
             },
         };

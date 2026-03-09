@@ -115,7 +115,7 @@ public class UnleashedUpdateCustomerDataProvider inherits UnleashedDataProviderB
 
 #! Request data type for updating a customer
 public class UnleashedUpdateCustomerRequestDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions
         const Fields = {
             "guid": {
@@ -138,6 +138,7 @@ public class UnleashedUpdateCustomerRequestDataType inherits HashDataType {
                 "display_name": "Customer Name",
                 "short_desc": "Customer name",
                 "desc": "The customer's display name",
+                "preselected": True,
             },
             "ContactFirstName": {
                 "type": SoftStringOrNothingType,

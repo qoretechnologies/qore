@@ -50,6 +50,7 @@ public class Cin7CoreSalesDataProvider inherits Cin7CoreDataProviderBase {
                 "short_desc": "Filter by sale ID",
                 "type": AbstractDataProviderType::get(StringOrNothingType),
                 "desc": "Return a specific sale by its unique identifier (GUID)",
+                "preselected": True,
             },
             "SaleOrderNumber": <DataProviderOptionInfo>{
                 "display_name": "Sale Order Number",
@@ -62,6 +63,7 @@ public class Cin7CoreSalesDataProvider inherits Cin7CoreDataProviderBase {
                 "short_desc": "Filter by status",
                 "type": AbstractDataProviderType::get(StringOrNothingType),
                 "desc": "Filter sales by status",
+                "preselected": True,
                 "allowed_values": (
                     <AllowedValueInfo>{"value": "Draft", "desc": "Draft orders"},
                     <AllowedValueInfo>{"value": "Authorised", "desc": "Authorised orders"},

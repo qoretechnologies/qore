@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore MailgunDataProvider module definition
 
-/*  MailgunTemporaryFailEventDataProvider.qc Copyright 2025 Qore Technologies, s.r.o.
+/*  MailgunTemporaryFailEventDataProvider.qc Copyright 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -76,6 +76,26 @@ public class MailgunTemporaryFailEventDataProvider inherits MailgunBaseEventData
             "reason": event_data.reason,
             "delivery-status": event_data."delivery-status",
             "envelope": event_data.envelope,
+        };
+    }
+
+    #! Returns example data for the given observable event
+    private auto getExampleEventDataImpl(string event_id) {
+        return MailgunBaseEventDataProvider::getExampleEventDataImpl(event_id) + {
+            "severity": "temporary",
+            "reason": "generic",
+            "delivery-status": {
+                "code": 452,
+                "message": "4.2.2 The email account that you tried to reach is over quota",
+                "description": "Mailbox full",
+                "attempt-no": 1,
+            },
+            "envelope": {
+                "sender": "sender@example.com",
+                "transport": "smtp",
+                "targets": "full@example.com",
+                "sending-ip": "198.51.100.1",
+            },
         };
     }
 

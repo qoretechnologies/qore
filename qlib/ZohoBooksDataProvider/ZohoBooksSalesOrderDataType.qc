@@ -57,13 +57,19 @@ public class ZohoBooksSalesOrderDataType inherits HashDataType {
             "status": {
                 "display_name": "Status",
                 "short_desc": "Sales order status",
-                "desc": "Status of the sales order (draft, open, closed, void, etc.)",
+                "desc": "Status of the sales order",
                 "type": SoftStringOrNothingType,
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "draft", "desc": "Draft sales order"},
+                    <AllowedValueInfo>{"value": "open", "desc": "Open sales order"},
+                    <AllowedValueInfo>{"value": "closed", "desc": "Closed sales order"},
+                    <AllowedValueInfo>{"value": "void", "desc": "Voided sales order"},
+                ),
             },
             "date": {
                 "display_name": "Sales Order Date",
                 "short_desc": "Date of the sales order",
-                "desc": "The date of the sales order (YYYY-MM-DD format)",
+                "desc": "The date of the sales order (`YYYY-MM-DD` format)",
                 "type": SoftStringOrNothingType,
             },
             "shipment_date": {
@@ -167,8 +173,7 @@ public class ZohoBooksSalesOrderDataType inherits HashDataType {
 
     #! Creates the object
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 

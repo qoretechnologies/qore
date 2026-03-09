@@ -27,7 +27,7 @@ public namespace FreshBooksDataProvider {
 
 #! FreshBooks invoice line item type
 public class FreshBooksInvoiceLineDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for FreshBooks invoice line items
         const Fields = {
             "lineid": {
@@ -46,7 +46,7 @@ public class FreshBooksInvoiceLineDataType inherits HashDataType {
                 "type": AutoHashType,
                 "display_name": "Amount",
                 "short_desc": "The line amount",
-                "desc": "The total amount of the line item (hash with 'amount' and 'code' keys)",
+                "desc": "The total amount of the line item (hash with `amount` and `code` keys)",
             },
             "quantity": {
                 "type": StringOrNothingType,
@@ -58,7 +58,7 @@ public class FreshBooksInvoiceLineDataType inherits HashDataType {
                 "type": AutoHashType,
                 "display_name": "Unit Cost",
                 "short_desc": "The unit cost",
-                "desc": "The unit cost of the line item (hash with 'amount' and 'code' keys)",
+                "desc": "The unit cost of the line item (hash with `amount` and `code` keys)",
             },
             "taxName1": {
                 "type": StringOrNothingType,
@@ -100,7 +100,11 @@ public class FreshBooksInvoiceLineDataType inherits HashDataType {
                 "type": IntOrNothingType,
                 "display_name": "Type",
                 "short_desc": "The line type",
-                "desc": "The type of the line item (0=normal, 1=rebilling)",
+                "desc": "The type of the line item",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": 0, "desc": "Normal line item"},
+                    <AllowedValueInfo>{"value": 1, "desc": "Rebilling line item"},
+                ),
             },
         };
     }
@@ -113,7 +117,7 @@ public class FreshBooksInvoiceLineDataType inherits HashDataType {
 
 #! FreshBooks invoice record type
 public class FreshBooksInvoiceDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for FreshBooks invoices
         const Fields = {
             "id": {
@@ -176,13 +180,13 @@ public class FreshBooksInvoiceDataType inherits HashDataType {
                 "type": AutoHashType,
                 "display_name": "Amount",
                 "short_desc": "The total amount",
-                "desc": "The total amount of the invoice (hash with 'amount' and 'code' keys)",
+                "desc": "The total amount of the invoice (hash with `amount` and `code` keys)",
             },
             "outstanding": {
                 "type": AutoHashType,
                 "display_name": "Outstanding",
                 "short_desc": "The outstanding amount",
-                "desc": "The outstanding amount of the invoice (hash with 'amount' and 'code' keys)",
+                "desc": "The outstanding amount of the invoice (hash with `amount` and `code` keys)",
             },
             "discount_value": {
                 "type": StringOrNothingType,
@@ -212,7 +216,12 @@ public class FreshBooksInvoiceDataType inherits HashDataType {
                 "type": IntOrNothingType,
                 "display_name": "Visibility State",
                 "short_desc": "The visibility state",
-                "desc": "The visibility state of the invoice (0=active, 1=deleted, 2=archived)",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": 0, "desc": "Active"},
+                    <AllowedValueInfo>{"value": 1, "desc": "Deleted"},
+                    <AllowedValueInfo>{"value": 2, "desc": "Archived"},
+                ),
+                "desc": "The visibility state of the invoice",
             },
         };
     }
@@ -225,7 +234,7 @@ public class FreshBooksInvoiceDataType inherits HashDataType {
 
 #! FreshBooks invoice create request type
 public class FreshBooksInvoiceCreateDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for creating invoices
         const Fields = FreshBooksDataProviderBase::AccountIdField + {
             "customerid": {
@@ -292,11 +301,10 @@ public class FreshBooksInvoiceCreateDataType inherits HashDataType {
                 "desc": "The purchase order number to associate with the invoice",
             },
             "lines": {
-                "type": AutoListOrNothingType,
+                "type": new ListDataType("InvoiceLineList", new FreshBooksInvoiceLineDataType(), True),
                 "display_name": "Line Items",
                 "short_desc": "Invoice line items",
-                "desc": "List of line items, each with fields: description, qty, unit_cost "
-                    "(hash with 'amount' and 'code'), name, taxName1, taxAmount1, taxName2, taxAmount2",
+                "desc": "List of invoice line items",
             },
         };
     }
@@ -309,7 +317,7 @@ public class FreshBooksInvoiceCreateDataType inherits HashDataType {
 
 #! FreshBooks invoice update request type
 public class FreshBooksInvoiceUpdateDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for updating invoices
         const Fields = FreshBooksDataProviderBase::AccountIdField + {
             "id": {
@@ -382,18 +390,21 @@ public class FreshBooksInvoiceUpdateDataType inherits HashDataType {
                 "desc": "The new purchase order number for the invoice",
             },
             "lines": {
-                "type": AutoListOrNothingType,
+                "type": new ListDataType("InvoiceLineList", new FreshBooksInvoiceLineDataType(), True),
                 "display_name": "Line Items",
                 "short_desc": "Invoice line items",
-                "desc": "List of line items (replaces existing lines - include ALL desired lines). "
-                    "Each with fields: description, qty, unit_cost (hash with 'amount' and 'code'), "
-                    "name, taxName1, taxAmount1, taxName2, taxAmount2",
+                "desc": "List of line items (replaces existing lines - include ALL desired lines)",
             },
             "vis_state": {
                 "type": IntOrNothingType,
                 "display_name": "Visibility State",
                 "short_desc": "The visibility state",
-                "desc": "The new visibility state of the invoice (0=active, 1=deleted, 2=archived)",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": 0, "desc": "Active"},
+                    <AllowedValueInfo>{"value": 1, "desc": "Deleted"},
+                    <AllowedValueInfo>{"value": 2, "desc": "Archived"},
+                ),
+                "desc": "The new visibility state of the invoice",
             },
         };
     }

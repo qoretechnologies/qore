@@ -35,6 +35,8 @@ public class ZohoInventoryContactsDataProvider inherits ZohoInventoryDataProvide
             "type": "ZohoInventoryContactsDataProvider",
             "supports_read": True,
             "supports_native_search": True,
+            "has_record": True,
+            "constructor_options": BaseConstructorOptions,
             "search_options": SearchOptions,
         };
 
@@ -116,8 +118,8 @@ public class ZohoInventoryContactsDataProvider inherits ZohoInventoryDataProvide
     }
 
     #! Returns the record type
-    private *AbstractDataProviderType getRecordTypeImpl() {
-        return new ZohoInventoryContactDataType();
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return new ZohoInventoryContactDataType().getFields();
     }
 
     #! Searches for contacts

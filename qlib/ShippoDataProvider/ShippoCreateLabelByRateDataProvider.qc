@@ -117,7 +117,7 @@ public class ShippoCreateLabelByRateDataProvider inherits ShippoDataProviderBase
 
 #! Request data type for creating a label by rate
 public class ShippoCreateLabelByRateRequestDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions
         const Fields = {
             "rate": {
@@ -133,6 +133,7 @@ public class ShippoCreateLabelByRateRequestDataType inherits HashDataType {
                 "display_name": "Label File Type",
                 "short_desc": "Label format",
                 "desc": "The file format for the shipping label",
+                "attr": {"preselected": True},
                 "allowed_values": (
                     <AllowedValueInfo>{"value": "PNG", "desc": "PNG image"},
                     <AllowedValueInfo>{"value": "PNG_2.3x7.5", "desc": "PNG 2.3x7.5 inches"},
@@ -156,7 +157,7 @@ public class ShippoCreateLabelByRateRequestDataType inherits HashDataType {
                 "type": SoftBoolOrNothingType,
                 "display_name": "Async",
                 "short_desc": "Asynchronous processing",
-                "desc": "If true, the label will be generated asynchronously. Default is false.",
+                "desc": "If `True`, the label will be generated asynchronously. Default is `False`.",
             },
         };
     }
