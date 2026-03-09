@@ -1378,7 +1378,6 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow_aot(
     QoreValue val = fromBits(value_bits);
     if (hv.getType() == NT_HASH) {
         QoreHashNode* h = hv.get<QoreHashNode>();
-        QoreHashNode* orig_h = h;  // Keep track of original for deref
         // Only COW if shared with other references (caller holds +1 from LoadLocal, variable holds +1 or more)
         if (h->reference_count() > 2) {
             QoreHashNode* new_h = h->copy();
@@ -1387,9 +1386,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow_aot(
                 new_h->deref(nullptr);
                 return toBits(QoreValue());
             }
+            // Release copy()'s original ref; variable holds sole ref
+            new_h->deref(nullptr);
             h = new_h;
-            // Consume the caller's original reference by dereffing the original hash
-            orig_h->deref(nullptr);
+            // DO NOT deref orig_h: LLVM cleanup-A releases the original LoadLocal ref
         }
         // setKeyValue() may require refcount == 1 internally
         // Temporarily deref caller's reference if needed
