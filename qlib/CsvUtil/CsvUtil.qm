@@ -30,6 +30,10 @@
 %requires(reexport) DataProvider
 %requires(reexport) FileLocationHandler
 
+%try-module yaml
+%define NoCsvYaml
+%endtry
+
 # assume local var scope, do not use "$" for vars, members, and method calls
 %modern
 

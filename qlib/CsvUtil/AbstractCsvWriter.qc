@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Qore AbstractCsvWriter class definition
 
-/*  AbstractCsvWriter.qc Copyright 2012 - 2024 Qore Technologies, s.r.o.
+/*  AbstractCsvWriter.qc Copyright 2012 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -569,27 +569,61 @@ public namespace CsvUtil {
             if (!optimal_quotes) {
                 # make full line template
                 string template = strmul(baseTemplate, elements values, 1) + eol;
-                # escape separators in strings
-                list<auto> row = map replace(string($1), quote, m_quoteEscapeChar + quote), values;
+                # escape separators in strings; complex types are serialized via csvValueToString()
+                list<auto> row = map replace(csvValueToString($1), quote, m_quoteEscapeChar + quote), values;
 
                 return vsprintf(template, row);
             }
 
             list<auto> l = ();
             foreach auto v in (values) {
+                # Convert non-string-printable values (hash, list, etc.) to a string
+                # representation; the result is then quoted like any other string value;
+                # NOTHING produces an empty field
+                if (!exists v) {
+                    l += "";
+                    continue;
+                }
+                if (!v.strp()) {
+                    v = serializeValue(v);
+                }
                 if (v.typeCode() == NT_STRING) {
                     if (v.find(quote) >= 0) {
                         v = replace(v, quote, m_quoteEscapeChar + quote);
                         v = sprintf("\"%s\"", v);
-                    }
-                    else if (v.find(separator) >= 0)
+                    } else if (v.find(separator) >= 0) {
                         v = sprintf("\"%s\"", v);
+                    }
                     l += v;
                     continue;
                 }
                 l += string(v);
             }
             return (foldl $1 + separator + $2, l) + eol;
+        }
+
+        #! Converts a value to a string suitable for CSV output
+        /** Values that can be converted to a string via \c toString() are converted
+            directly; complex types (hashes, lists, etc.) are serialized via
+            \c serializeValue().
+        */
+        private static string csvValueToString(auto v) {
+            if (!exists v) {
+                return "";
+            }
+            return v.strp() ? v.toString() : serializeValue(v);
+        }
+
+        #! Serializes a complex value to a string
+        /** Uses YAML serialization when the yaml module is available; otherwise
+            falls back to \c sprintf("%y").
+        */
+        private static string serializeValue(auto v) {
+%ifndef NoCsvYaml
+            return regex_subst(trim(make_yaml(v)), "^%YAML [0-9.]+\\n---\\s*", "");
+%else
+            return sprintf("%y", v);
+%endif
         }
 
     } # AbstractCsvWriter class
