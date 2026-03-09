@@ -3125,23 +3125,28 @@ load_local_done:
                 QoreValue val      = getIRValue(values, hks_inst->operands[1]);
                 if (hash_val.getType() == NT_HASH) {
                     QoreHashNode* h = hash_val.get<QoreHashNode>();
-                    // COW check: the hash was loaded via LoadLocal with auto_ref=false,
-                    // which adds a +1 ref tracked in cleanup/local_load_slots.
-                    // So refcount=2 (variable + LoadLocal ref) means the hash is
-                    // effectively unique to our execution context.  Only COW when
-                    // refcount > 2, indicating genuinely shared data.
+
+                    // Step 1: Release all IR-held refs for the container.
+                    // Hold an explicit reference to the container during slot clearing.
+                    ValueHolder h_holder(QoreValue(h->refSelf()), xsink);
+
+                    // 1a. Release any auto_ref=true LoadLocal result slots for this container variable.
+                    clearLoadSlots(hks_inst->container_slot_id);
+
+                    // 1b. Release the slot cache ref.
+                    uint32_t csid = hks_inst->container_slot_id;
+                    if (csid != UINT32_MAX && csid < locals_slot_cache.size()) {
+                        locals_slot_cache[csid].discard(xsink);
+                        locals_slot_cache[csid] = QoreValue();
+                    }
+
+                    // At this point, refcount = TLS (1) + h_holder (1) = 2.
+                    // Trigger COW if there are additional external references beyond TLS.
                     if (h->reference_count() > 2) {
                         // COW: create unique copy and update the local variable
                         QoreHashNode* new_h = h->copy();
                         LocalVar* lv = const_cast<LocalVar*>(
                             reinterpret_cast<const LocalVar*>(hks_inst->container->ref.id));
-                        // Invalidate slot cache (matches StoreLocal pattern)
-                        if (hks_inst->container_slot_id != UINT32_MAX
-                                && hks_inst->container_slot_id < locals_slot_cache.size()) {
-                            locals_slot_cache[hks_inst->container_slot_id].discard(xsink);
-                            locals_slot_cache[hks_inst->container_slot_id] = QoreValue();
-                        }
-                        // Write new_h to thread-local stack (follows references)
                         assignLocalVarValue(lv, QoreValue(new_h), xsink);
                         if (xsink && *xsink) {
                             new_h->deref(xsink);
@@ -3149,34 +3154,20 @@ load_local_done:
                             cleanupLocalCaches();
                             return false;
                         }
-                        // Release the original copy() reference; assignLocalVarValue()
-                        // took its own ref via refSelf() internally.  Without this deref,
-                        // every COW copy leaks.  The object is still alive because the
-                        // variable stack holds a reference (refcount >= 1).
+                        // Release copy()'s ref; TLS now owns the new_h
                         new_h->deref(xsink);
                         h = new_h;
                     }
-                    // setKeyValue() requires refcount == 1. We conditionally deref only if the
-                    // hash has external references. If refcount == 1 (unique), no atomic ops needed!
-                    bool had_external_ref = h->reference_count() > 1;
-                    if (had_external_ref) {
-                        // Hash is shared; temporarily reduce refcount so setKeyValue sees 1
-                        h->deref(xsink);
-                    }
 
-                    // Clear the values slot (no deref to avoid use-after-free)
-                    values[hks_inst->operands[0].id] = QoreValue();
+                    // h is now unique (refcount == 1 in TLS + 1 in h_holder = 2).
+                    // Deref h_holder so refcount drops to 1 before setKeyValue.
+                    h_holder->discard(xsink);
 
-                    // Now safe to call setKeyValue
+                    // Now h->reference_count() == 1. Call setKeyValue directly.
                     h->setKeyValue(hks_inst->key_name.c_str(), val.refSelf(), xsink);
 
-                    // Re-acquire values[] ref if we had external references
-                    if (had_external_ref) {
-                        values[hks_inst->operands[0].id] = QoreValue(h->refSelf());
-                    } else {
-                        // If refcount was already 1, just track the variable's ref
-                        values[hks_inst->operands[0].id] = QoreValue(h->refSelf());
-                    }
+                    // Re-acquire values[] ref for cleanup tracking
+                    values[hks_inst->operands[0].id] = QoreValue(h->refSelf());
                 } else if (hash_val.getType() == NT_OBJECT) {
                     const_cast<QoreObject*>(hash_val.get<const QoreObject>())->setValue(
                         hks_inst->key_name.c_str(), val.refSelf(), xsink);
@@ -3218,23 +3209,28 @@ load_local_done:
                 int64_t index = idx_val.getAsBigInt();
                 if (list_val.getType() == NT_LIST) {
                     QoreListNode* l = list_val.get<QoreListNode>();
-                    // COW check: the list was loaded via LoadLocal with auto_ref=false,
-                    // which adds a +1 ref tracked in cleanup/local_load_slots.
-                    // So refcount=2 (variable + LoadLocal ref) means the list is
-                    // effectively unique to our execution context.  Only COW when
-                    // refcount > 2, indicating genuinely shared data.
+
+                    // Step 1: Release all IR-held refs for the container.
+                    // Hold an explicit reference to the container during slot clearing.
+                    ValueHolder l_holder(QoreValue(l->refSelf()), xsink);
+
+                    // 1a. Release any auto_ref=true LoadLocal result slots for this container variable.
+                    clearLoadSlots(lis_inst->container_slot_id);
+
+                    // 1b. Release the slot cache ref.
+                    uint32_t csid = lis_inst->container_slot_id;
+                    if (csid != UINT32_MAX && csid < locals_slot_cache.size()) {
+                        locals_slot_cache[csid].discard(xsink);
+                        locals_slot_cache[csid] = QoreValue();
+                    }
+
+                    // At this point, refcount = TLS (1) + l_holder (1) = 2.
+                    // Trigger COW if there are additional external references beyond TLS.
                     if (l->reference_count() > 2) {
                         // COW: create unique copy and update the local variable
                         QoreListNode* new_l = l->copy();
                         LocalVar* lv = const_cast<LocalVar*>(
                             reinterpret_cast<const LocalVar*>(lis_inst->container->ref.id));
-                        // Invalidate slot cache (matches StoreLocal pattern)
-                        if (lis_inst->container_slot_id != UINT32_MAX
-                                && lis_inst->container_slot_id < locals_slot_cache.size()) {
-                            locals_slot_cache[lis_inst->container_slot_id].discard(xsink);
-                            locals_slot_cache[lis_inst->container_slot_id] = QoreValue();
-                        }
-                        // Write new_l to thread-local stack (follows references)
                         assignLocalVarValue(lv, QoreValue(new_l), xsink);
                         if (xsink && *xsink) {
                             new_l->deref(xsink);
@@ -3242,34 +3238,20 @@ load_local_done:
                             cleanupLocalCaches();
                             return false;
                         }
-                        // Release the original copy() reference; assignLocalVarValue()
-                        // took its own ref via refSelf() internally.  Without this deref,
-                        // every COW copy leaks.  The object is still alive because the
-                        // variable stack holds a reference (refcount >= 1).
+                        // Release copy()'s ref; TLS now owns the new_l
                         new_l->deref(xsink);
                         l = new_l;
                     }
-                    // setEntry() requires refcount == 1. We conditionally deref only if the
-                    // list has external references. If refcount == 1 (unique), no atomic ops needed!
-                    bool had_external_ref = l->reference_count() > 1;
-                    if (had_external_ref) {
-                        // List is shared; temporarily reduce refcount so setEntry sees 1
-                        l->deref(xsink);
-                    }
 
-                    // Clear the values slot (no deref to avoid use-after-free)
-                    values[lis_inst->operands[0].id] = QoreValue();
+                    // l is now unique (refcount == 1 in TLS + 1 in l_holder = 2).
+                    // Deref l_holder so refcount drops to 1 before setEntry.
+                    l_holder->discard(xsink);
 
-                    // Now safe to call setEntry
+                    // Now l->reference_count() == 1. Call setEntry directly.
                     l->setEntry(index, val.refSelf(), xsink);
 
-                    // Re-acquire values[] ref if we had external references
-                    if (had_external_ref) {
-                        values[lis_inst->operands[0].id] = QoreValue(l->refSelf());
-                    } else {
-                        // If refcount was already 1, just track the variable's ref
-                        values[lis_inst->operands[0].id] = QoreValue(l->refSelf());
-                    }
+                    // Re-acquire values[] ref for cleanup tracking
+                    values[lis_inst->operands[0].id] = QoreValue(l->refSelf());
                 }
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
