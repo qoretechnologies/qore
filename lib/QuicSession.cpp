@@ -2282,6 +2282,11 @@ int QuicSession::resetStream(int64_t stream_id) {
         streams_.erase(it);
     }
     stream_notifiers_.erase(stream_id);
+    // Clean up any buffered extended-CONNECT tunnel data for this stream
+    {
+        std::lock_guard<std::mutex> cg(connect_data_mutex_);
+        connect_stream_data_.erase(stream_id);
+    }
     return result;
 }
 

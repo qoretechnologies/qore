@@ -3748,7 +3748,10 @@ BinaryNode* QoreSocket::readHttp2StreamDataBlock(int32_t stream_id, int timeout_
                 return nullptr;
             }
             if (!has_data) {
-                // Timeout
+                // Timeout — raise exception so callers can distinguish
+                // from normal stream completion (END_STREAM)
+                xsink->raiseException("HTTP2-STREAM-TIMEOUT",
+                    "timeout reading HTTP/2 stream %d data", stream_id);
                 return nullptr;
             }
         }
