@@ -3872,10 +3872,10 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
 
     #! Returns options for creating a new connection
     *hash<auto> getConnectionOptions(*hash<auto> rtopts) {
-        return real_opts + (rtopts.validator ? {"validator": rtopts.validator} : NOTHING + {
+        return real_opts + {
             "logger": logger,
             "update_options": update_options,
-        });
+        } + (rtopts.validator ? {"validator": rtopts.validator} : NOTHING);
     }
 
     #! Sets alt token signer code and the header for it
