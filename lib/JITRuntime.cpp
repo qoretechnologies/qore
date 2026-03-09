@@ -1339,7 +1339,6 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow(
     QoreValue val = fromBits(value_bits);
     if (hv.getType() == NT_HASH) {
         QoreHashNode* h = hv.get<QoreHashNode>();
-        QoreHashNode* orig_h = h;  // Keep track of original for deref
         // Only COW if shared with other references (caller holds +1 from LoadLocal, variable holds +1 or more)
         if (h->reference_count() > 2) {
             QoreHashNode* new_h = h->copy();
@@ -1348,9 +1347,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow(
                 new_h->deref(nullptr);
                 return toBits(QoreValue());
             }
+            // Release copy()'s original ref; variable holds sole ref
+            new_h->deref(nullptr);
             h = new_h;
-            // Consume the caller's original reference by dereffing the original hash
-            orig_h->deref(nullptr);
+            // DO NOT deref orig_h: LLVM cleanup-A releases the original LoadLocal ref
         }
         // setKeyValue() may require refcount == 1 internally
         // Temporarily deref caller's reference if needed
@@ -1415,9 +1415,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow(
         uint64_t val_bits, ExceptionSink* xsink) {
     QoreValue lv = fromBits(list_bits);
     QoreValue val = fromBits(val_bits);
+
     if (lv.getType() == NT_LIST) {
         QoreListNode* l = lv.get<QoreListNode>();
-        QoreListNode* orig_l = l;  // Keep track of original for deref
         // Only COW if shared with other references (caller holds +1 from LoadLocal, variable holds +1 or more)
         if (l->reference_count() > 2) {
             QoreListNode* new_l = l->copy();
@@ -1426,13 +1426,16 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow(
                 new_l->deref(nullptr);
                 return toBits(QoreValue());
             }
+            // Release copy()'s original ref; variable holds sole ref (refcount==1)
+            new_l->deref(nullptr);
             l = new_l;
-            // Consume the caller's original reference by dereffing the original list
-            orig_l->deref(nullptr);
+            // DO NOT deref orig_l: LLVM cleanup-A releases the original LoadLocal ref
         }
+
         // setEntry() requires refcount == 1, but if !COW we have refcount >= 2 (variable + caller)
         // Temporarily deref caller's reference so setEntry sees refcount == 1
         bool had_caller_ref = l->reference_count() > 1;
+
         if (had_caller_ref) {
             l->deref(nullptr);
         }
@@ -1456,7 +1459,6 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow_aot(
     QoreValue val = fromBits(val_bits);
     if (lv.getType() == NT_LIST) {
         QoreListNode* l = lv.get<QoreListNode>();
-        QoreListNode* orig_l = l;  // Keep track of original for deref
         // Only COW if shared with other references (caller holds +1 from LoadLocal, variable holds +1 or more)
         if (l->reference_count() > 2) {
             QoreListNode* new_l = l->copy();
@@ -1465,9 +1467,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow_aot(
                 new_l->deref(nullptr);
                 return toBits(QoreValue());
             }
+            // Release copy()'s original ref; variable holds sole ref (refcount==1)
+            new_l->deref(nullptr);
             l = new_l;
-            // Consume the caller's original reference by dereffing the original list
-            orig_l->deref(nullptr);
+            // DO NOT deref orig_l: LLVM cleanup-A releases the original LoadLocal ref
         }
         // setEntry() requires refcount == 1, but if !COW we have refcount >= 2 (variable + caller)
         // Temporarily deref caller's reference so setEntry sees refcount == 1

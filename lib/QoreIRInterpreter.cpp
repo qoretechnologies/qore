@@ -3156,16 +3156,27 @@ load_local_done:
                         new_h->deref(xsink);
                         h = new_h;
                     }
-                    // Temporarily release the values[] +1 ref so setKeyValue sees
-                    // reference_count()==1 (only the local variable holds a ref).
-                    // For the COW path this also discards the old (pre-COW) hash's ref.
-                    // The deref from refcount 2→1 is a safe atomic decrement (no deletion).
-                    values[hks_inst->operands[0].id].discard(xsink);
+                    // setKeyValue() requires refcount == 1. We conditionally deref only if the
+                    // hash has external references. If refcount == 1 (unique), no atomic ops needed!
+                    bool had_external_ref = h->reference_count() > 1;
+                    if (had_external_ref) {
+                        // Hash is shared; temporarily reduce refcount so setKeyValue sees 1
+                        h->deref(xsink);
+                    }
+
+                    // Clear the values slot (no deref to avoid use-after-free)
                     values[hks_inst->operands[0].id] = QoreValue();
+
+                    // Now safe to call setKeyValue
                     h->setKeyValue(hks_inst->key_name.c_str(), val.refSelf(), xsink);
-                    // Re-acquire values[] ref for proper cleanup/local_load_slots tracking.
-                    // h is alive via the local variable (refcount >= 1).
-                    values[hks_inst->operands[0].id] = QoreValue(h->refSelf());
+
+                    // Re-acquire values[] ref if we had external references
+                    if (had_external_ref) {
+                        values[hks_inst->operands[0].id] = QoreValue(h->refSelf());
+                    } else {
+                        // If refcount was already 1, just track the variable's ref
+                        values[hks_inst->operands[0].id] = QoreValue(h->refSelf());
+                    }
                 } else if (hash_val.getType() == NT_OBJECT) {
                     const_cast<QoreObject*>(hash_val.get<const QoreObject>())->setValue(
                         hks_inst->key_name.c_str(), val.refSelf(), xsink);
@@ -3238,14 +3249,27 @@ load_local_done:
                         new_l->deref(xsink);
                         l = new_l;
                     }
-                    // Temporarily release the values[] +1 ref so setEntry sees
-                    // reference_count()==1 (only the local variable holds a ref).
-                    // For the COW path this also discards the old (pre-COW) list's ref.
-                    values[lis_inst->operands[0].id].discard(xsink);
+                    // setEntry() requires refcount == 1. We conditionally deref only if the
+                    // list has external references. If refcount == 1 (unique), no atomic ops needed!
+                    bool had_external_ref = l->reference_count() > 1;
+                    if (had_external_ref) {
+                        // List is shared; temporarily reduce refcount so setEntry sees 1
+                        l->deref(xsink);
+                    }
+
+                    // Clear the values slot (no deref to avoid use-after-free)
                     values[lis_inst->operands[0].id] = QoreValue();
+
+                    // Now safe to call setEntry
                     l->setEntry(index, val.refSelf(), xsink);
-                    // Re-acquire values[] ref for proper cleanup/local_load_slots tracking.
-                    values[lis_inst->operands[0].id] = QoreValue(l->refSelf());
+
+                    // Re-acquire values[] ref if we had external references
+                    if (had_external_ref) {
+                        values[lis_inst->operands[0].id] = QoreValue(l->refSelf());
+                    } else {
+                        // If refcount was already 1, just track the variable's ref
+                        values[lis_inst->operands[0].id] = QoreValue(l->refSelf());
+                    }
                 }
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
