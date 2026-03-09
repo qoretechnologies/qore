@@ -282,12 +282,20 @@ public:
         memcpy(&local_addr_, &local_addr, local_addrlen);
         local_addrlen_ = local_addrlen;
 
-        // Set fd to non-blocking mode
+        // Set fd to non-blocking mode — required for poll-based I/O
         int flags = fcntl(quic_fd, F_GETFL, 0);
-        if (flags >= 0 && !(flags & O_NONBLOCK)) {
-            if (fcntl(quic_fd, F_SETFL, flags | O_NONBLOCK) == 0) {
-                fd_was_blocking = true;
+        if (flags < 0) {
+            xsink->raiseErrnoException("HTTP3-POLL-ERROR", errno,
+                "error in fcntl() getting socket descriptor status flag");
+            return;
+        }
+        if (!(flags & O_NONBLOCK)) {
+            if (fcntl(quic_fd, F_SETFL, flags | O_NONBLOCK) < 0) {
+                xsink->raiseErrnoException("HTTP3-POLL-ERROR", errno,
+                    "error in fcntl() setting socket descriptor to non-blocking");
+                return;
             }
+            fd_was_blocking = true;
         }
 
         // Submit the request
