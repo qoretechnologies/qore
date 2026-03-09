@@ -5250,3 +5250,79 @@ extern "C" DLLEXPORT uint64_t qore_rt_switch_case_match(const void* case_node_pt
     bool match = cn->matches(switch_val, xsink);
     return toBits(QoreValue(match));
 }
+
+// ============================================================================
+// Phase 2: Optimized pseudo-method helpers for LLVM JIT (faster than dispatch)
+// ============================================================================
+
+//! Fast pseudo-method: typeCode() - return type code as NaN-boxed int
+extern "C" DLLEXPORT uint64_t qore_rt_pseudo_typeCode(uint64_t val_bits) {
+    QoreValue v = fromBits(val_bits);
+    return toBits(QoreValue(static_cast<int64_t>(v.getType())));
+}
+
+//! Fast pseudo-method: size() - return size as NaN-boxed int for list/string/hash
+extern "C" DLLEXPORT uint64_t qore_rt_pseudo_size(uint64_t val_bits) {
+    QoreValue v = fromBits(val_bits);
+    int64_t size = 0;
+    switch (v.getType()) {
+        case NT_LIST:
+            size = static_cast<int64_t>(v.get<const QoreListNode>()->size());
+            break;
+        case NT_STRING:
+            size = static_cast<int64_t>(v.get<const QoreStringNode>()->strlen());
+            break;
+        case NT_HASH:
+            size = static_cast<int64_t>(v.get<const QoreHashNode>()->size());
+            break;
+        default:
+            break;
+    }
+    return toBits(QoreValue(size));
+}
+
+//! Fast pseudo-method: empty() - return true if size == 0
+extern "C" DLLEXPORT uint64_t qore_rt_pseudo_empty(uint64_t val_bits) {
+    QoreValue v = fromBits(val_bits);
+    bool is_empty = false;
+    switch (v.getType()) {
+        case NT_LIST:
+            is_empty = v.get<const QoreListNode>()->empty();
+            break;
+        case NT_STRING:
+            is_empty = v.get<const QoreStringNode>()->strlen() == 0;
+            break;
+        case NT_HASH:
+            is_empty = v.get<const QoreHashNode>()->empty();
+            break;
+        default:
+            break;
+    }
+    return toBits(QoreValue(is_empty));
+}
+
+//! Fast pseudo-method: val() - return true if size != 0 (opposite of empty)
+extern "C" DLLEXPORT uint64_t qore_rt_pseudo_val(uint64_t val_bits) {
+    QoreValue v = fromBits(val_bits);
+    bool has_value = false;
+    switch (v.getType()) {
+        case NT_LIST:
+            has_value = !v.get<const QoreListNode>()->empty();
+            break;
+        case NT_STRING:
+            has_value = v.get<const QoreStringNode>()->strlen() != 0;
+            break;
+        case NT_HASH:
+            has_value = !v.get<const QoreHashNode>()->empty();
+            break;
+        default:
+            break;
+    }
+    return toBits(QoreValue(has_value));
+}
+
+//! Fast pseudo-method: type() - return type name string
+extern "C" DLLEXPORT uint64_t qore_rt_pseudo_type(uint64_t val_bits) {
+    QoreValue v = fromBits(val_bits);
+    return toBits(QoreValue(new QoreStringNode(v.getTypeName())));
+}

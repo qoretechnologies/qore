@@ -5331,7 +5331,74 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             }
 
             llvm::Value* call_result;
-            if (aot_mode) {
+
+            // Check for optimizable pseudo-methods (no arguments, known fast paths)
+            if (direct_inst->pseudo && nargs == 0) {
+                const char* method_name = direct_inst->method->getName();
+
+                if (!strcmp(method_name, "typeCode")) {
+                    // Fast: typeCode() returns NaN-boxed int
+                    auto helper = module.getOrInsertFunction("qore_rt_pseudo_typeCode",
+                            llvm::FunctionType::get(i64_type, {i64_type}, false));
+                    call_result = builder->CreateCall(helper, {base_boxed});
+                } else if (!strcmp(method_name, "size")) {
+                    // Fast: size() returns NaN-boxed int
+                    auto helper = module.getOrInsertFunction("qore_rt_pseudo_size",
+                            llvm::FunctionType::get(i64_type, {i64_type}, false));
+                    call_result = builder->CreateCall(helper, {base_boxed});
+                } else if (!strcmp(method_name, "strlen") || !strcmp(method_name, "length")) {
+                    // Fast: strlen/length returns NaN-boxed int
+                    auto helper = module.getOrInsertFunction("qore_rt_pseudo_size",
+                            llvm::FunctionType::get(i64_type, {i64_type}, false));
+                    call_result = builder->CreateCall(helper, {base_boxed});
+                } else if (!strcmp(method_name, "empty")) {
+                    // Fast: empty() returns NaN-boxed bool
+                    auto helper = module.getOrInsertFunction("qore_rt_pseudo_empty",
+                            llvm::FunctionType::get(i64_type, {i64_type}, false));
+                    call_result = builder->CreateCall(helper, {base_boxed});
+                } else if (!strcmp(method_name, "val")) {
+                    // Fast: val() returns NaN-boxed bool (opposite of empty)
+                    auto helper = module.getOrInsertFunction("qore_rt_pseudo_val",
+                            llvm::FunctionType::get(i64_type, {i64_type}, false));
+                    call_result = builder->CreateCall(helper, {base_boxed});
+                } else if (!strcmp(method_name, "type")) {
+                    // Fast: type() returns NaN-boxed string
+                    auto helper = module.getOrInsertFunction("qore_rt_pseudo_type",
+                            llvm::FunctionType::get(i64_type, {i64_type}, false));
+                    call_result = builder->CreateCall(helper, {base_boxed});
+                } else {
+                    // Unsupported pseudo-method, use generic dispatch
+                    if (aot_mode) {
+                        QoreValue expr_val = direct_inst->expr;
+                        uint64_t expr_bits;
+                        std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
+                        int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
+                        auto helper = module.getOrInsertFunction("qore_rt_dot_eval_pseudo_method_direct_aot",
+                                llvm::FunctionType::get(i64_type,
+                                    {ptr_type, i32_type, i64_type, ptr_type, i32_type, ptr_type}, false));
+                        call_result = builder->CreateCall(helper, {aot_ctx_arg,
+                                llvm::ConstantInt::get(i32_type, slot), base_boxed, args_array,
+                                llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                    } else {
+                        llvm::Value* method_ptr = builder->CreateIntToPtr(
+                                llvm::ConstantInt::get(i64_type,
+                                    reinterpret_cast<uint64_t>(direct_inst->method)), ptr_type);
+                        llvm::Value* qc_ptr = builder->CreateIntToPtr(
+                                llvm::ConstantInt::get(i64_type,
+                                    reinterpret_cast<uint64_t>(direct_inst->qc)), ptr_type);
+                        llvm::Value* variant_ptr = builder->CreateIntToPtr(
+                                llvm::ConstantInt::get(i64_type,
+                                    reinterpret_cast<uint64_t>(direct_inst->variant)), ptr_type);
+                        auto helper = module.getOrInsertFunction("qore_rt_dot_eval_pseudo_method_direct",
+                                llvm::FunctionType::get(i64_type,
+                                    {i64_type, ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type},
+                                    false));
+                        call_result = builder->CreateCall(helper, {base_boxed, method_ptr, qc_ptr,
+                                variant_ptr, args_array, llvm::ConstantInt::get(i32_type, nargs),
+                                xsink_arg});
+                    }
+                }
+            } else if (aot_mode) {
                 QoreValue expr_val = direct_inst->expr;
                 uint64_t expr_bits;
                 std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
@@ -5396,7 +5463,74 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             }
 
             llvm::Value* call_result;
-            if (aot_mode) {
+
+            // Check for optimizable pseudo-methods (no arguments, known fast paths)
+            if (invoke_inst->pseudo && nargs == 0) {
+                const char* method_name = invoke_inst->method->getName();
+
+                if (!strcmp(method_name, "typeCode")) {
+                    // Fast: typeCode() returns NaN-boxed int
+                    auto helper = module.getOrInsertFunction("qore_rt_pseudo_typeCode",
+                            llvm::FunctionType::get(i64_type, {i64_type}, false));
+                    call_result = builder->CreateCall(helper, {base_boxed});
+                } else if (!strcmp(method_name, "size")) {
+                    // Fast: size() returns NaN-boxed int
+                    auto helper = module.getOrInsertFunction("qore_rt_pseudo_size",
+                            llvm::FunctionType::get(i64_type, {i64_type}, false));
+                    call_result = builder->CreateCall(helper, {base_boxed});
+                } else if (!strcmp(method_name, "strlen") || !strcmp(method_name, "length")) {
+                    // Fast: strlen/length returns NaN-boxed int
+                    auto helper = module.getOrInsertFunction("qore_rt_pseudo_size",
+                            llvm::FunctionType::get(i64_type, {i64_type}, false));
+                    call_result = builder->CreateCall(helper, {base_boxed});
+                } else if (!strcmp(method_name, "empty")) {
+                    // Fast: empty() returns NaN-boxed bool
+                    auto helper = module.getOrInsertFunction("qore_rt_pseudo_empty",
+                            llvm::FunctionType::get(i64_type, {i64_type}, false));
+                    call_result = builder->CreateCall(helper, {base_boxed});
+                } else if (!strcmp(method_name, "val")) {
+                    // Fast: val() returns NaN-boxed bool (opposite of empty)
+                    auto helper = module.getOrInsertFunction("qore_rt_pseudo_val",
+                            llvm::FunctionType::get(i64_type, {i64_type}, false));
+                    call_result = builder->CreateCall(helper, {base_boxed});
+                } else if (!strcmp(method_name, "type")) {
+                    // Fast: type() returns NaN-boxed string
+                    auto helper = module.getOrInsertFunction("qore_rt_pseudo_type",
+                            llvm::FunctionType::get(i64_type, {i64_type}, false));
+                    call_result = builder->CreateCall(helper, {base_boxed});
+                } else {
+                    // Unsupported pseudo-method, use generic dispatch
+                    if (aot_mode) {
+                        QoreValue expr_val = invoke_inst->expr;
+                        uint64_t expr_bits;
+                        std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
+                        int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
+                        auto helper = module.getOrInsertFunction("qore_rt_dot_eval_pseudo_method_direct_aot",
+                                llvm::FunctionType::get(i64_type,
+                                    {ptr_type, i32_type, i64_type, ptr_type, i32_type, ptr_type}, false));
+                        call_result = builder->CreateCall(helper, {aot_ctx_arg,
+                                llvm::ConstantInt::get(i32_type, slot), base_boxed, args_array,
+                                llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                    } else {
+                        llvm::Value* method_ptr = builder->CreateIntToPtr(
+                                llvm::ConstantInt::get(i64_type,
+                                    reinterpret_cast<uint64_t>(invoke_inst->method)), ptr_type);
+                        llvm::Value* qc_ptr = builder->CreateIntToPtr(
+                                llvm::ConstantInt::get(i64_type,
+                                    reinterpret_cast<uint64_t>(invoke_inst->qc)), ptr_type);
+                        llvm::Value* variant_ptr = builder->CreateIntToPtr(
+                                llvm::ConstantInt::get(i64_type,
+                                    reinterpret_cast<uint64_t>(invoke_inst->variant)), ptr_type);
+                        auto helper = module.getOrInsertFunction("qore_rt_dot_eval_pseudo_method_direct",
+                                llvm::FunctionType::get(i64_type,
+                                    {i64_type, ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type},
+                                    false));
+                        call_result = builder->CreateCall(helper, {base_boxed, method_ptr, qc_ptr,
+                                variant_ptr, args_array, llvm::ConstantInt::get(i32_type, nargs),
+                                xsink_arg});
+                    }
+                }
+            } else if (aot_mode) {
                 QoreValue expr_val = invoke_inst->expr;
                 uint64_t expr_bits;
                 std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
