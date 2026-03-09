@@ -48,7 +48,7 @@ QoreClosureParseNode::~QoreClosureParseNode() {
 }
 
 QoreClosureNode* QoreClosureParseNode::evalClosure() const {
-    return new QoreClosureNode(this);
+    return new QoreClosureNode(this, nullptr, runtime_get_class());
 }
 
 QoreObjectClosureNode* QoreClosureParseNode::evalObjectClosure() const {

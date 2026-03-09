@@ -3748,7 +3748,10 @@ BinaryNode* QoreSocket::readHttp2StreamDataBlock(int32_t stream_id, int timeout_
                 return nullptr;
             }
             if (!has_data) {
-                // Timeout
+                // Timeout — raise exception so callers can distinguish
+                // from normal stream completion (END_STREAM)
+                xsink->raiseException("HTTP2-STREAM-TIMEOUT",
+                    "timeout reading HTTP/2 stream %d data", stream_id);
                 return nullptr;
             }
         }
@@ -3776,6 +3779,20 @@ bool QoreSocket::isHttp2StreamComplete(int32_t stream_id) const {
     return priv->h2_session->isStreamComplete(stream_id);
 }
 
+bool QoreSocket::isHttp2StreamClosed(int32_t stream_id) const {
+    if (!priv->h2_session) {
+        return true;
+    }
+    return priv->h2_session->isStreamClosed(stream_id);
+}
+
+bool QoreSocket::isHttp2StreamRemoteClosed(int32_t stream_id) const {
+    if (!priv->h2_session) {
+        return true;
+    }
+    return priv->h2_session->isStreamRemoteClosed(stream_id);
+}
+
 int QoreSocket::flushHttp2(int timeout_ms, ExceptionSink* xsink) {
     if (!priv->h2_session) {
         return 0;
@@ -3787,6 +3804,30 @@ void QoreSocket::cleanupHttp2Stream(int32_t stream_id) {
     if (priv->h2_session) {
         priv->h2_session->cleanupStream(stream_id);
     }
+}
+
+int QoreSocket::resetHttp2Stream(int32_t stream_id, ExceptionSink* xsink) {
+    if (!priv->h2_session) {
+        return 0;
+    }
+    int rv = priv->h2_session->submitRstStream(stream_id, NGHTTP2_CANCEL, xsink);
+    if (rv != 0) {
+        // RST_STREAM submission failed (stream already closed, invalid state, etc.)
+        // Still clean up local state — the handler is done and keeping stale stream
+        // entries would leak resources.  The remote side will handle the stream via
+        // its own timeout or connection close.
+        printd(2, "resetHttp2Stream() submitRstStream failed for stream %d (rv=%d), "
+            "cleaning up local state anyway\n", stream_id, rv);
+    }
+    priv->h2_session->cleanupStream(stream_id);
+    return rv;
+}
+
+int QoreSocket::waitForHttp2StreamDrain(int32_t stream_id, int timeout_ms) {
+    if (!priv->h2_session) {
+        return -1;
+    }
+    return priv->h2_session->waitForStreamDrain(stream_id, timeout_ms);
 }
 
 long QoreSocket::verifyPeerCertificate() const {

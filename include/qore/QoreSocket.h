@@ -2068,6 +2068,23 @@ public:
     */
     DLLEXPORT bool isHttp2StreamComplete(int32_t stream_id) const;
 
+    //! Check if an HTTP/2 stream has been closed
+    /** @param stream_id the HTTP/2 stream ID
+        @return true if the stream state is Closed (via END_STREAM + response, RST_STREAM,
+        or GOAWAY), or if the stream is not found
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT bool isHttp2StreamClosed(int32_t stream_id) const;
+
+    //! Check if the remote peer has closed their side of an HTTP/2 stream
+    /** @param stream_id the HTTP/2 stream ID
+        @return true if the remote peer has sent END_STREAM on this stream, or stream not found
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT bool isHttp2StreamRemoteClosed(int32_t stream_id) const;
+
     //! Flush all pending HTTP/2 outgoing data (blocking)
     /** Calls sendPendingDataBlocking() to send all queued frames to the socket.
 
@@ -2085,6 +2102,31 @@ public:
         @since %Qore 2.3
     */
     DLLEXPORT void cleanupHttp2Stream(int32_t stream_id);
+
+    //! Send RST_STREAM to abort an HTTP/2 stream and clean up the stream state
+    /** Sends a CANCEL (0x8) RST_STREAM frame to the peer and removes the stream from the session.
+        Use this when a body streaming error is detected and remaining DATA frames must be discarded.
+
+        @param stream_id the HTTP/2 stream ID to reset
+        @param xsink if an error occurs, the Qore-language exception information will be added here
+
+        @return 0 for OK, -1 for error
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT int resetHttp2Stream(int32_t stream_id, ExceptionSink* xsink);
+
+    //! Wait for an HTTP/2 stream's send buffer to drain below the backpressure threshold
+    /** Blocks until the stream's pending body data drops below 1MB, the stream is closed,
+        or the timeout expires.
+
+        @param stream_id the HTTP/2 stream ID
+        @param timeout_ms maximum wait time in milliseconds (0 = no wait, -1 = infinite)
+        @return 0 if buffer drained, 1 if timed out, -1 if stream not found or closed
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT int waitForHttp2StreamDrain(int32_t stream_id, int timeout_ms);
 
     //! returns the peer certificate verification code if an SSL connection is in progress
     DLLEXPORT long verifyPeerCertificate() const;

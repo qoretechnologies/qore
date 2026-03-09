@@ -843,6 +843,16 @@ bool QoreSocketObject::isHttp2StreamComplete(int32_t stream_id) const {
     return priv->socket->isHttp2StreamComplete(stream_id);
 }
 
+bool QoreSocketObject::isHttp2StreamClosed(int32_t stream_id) const {
+    AutoLocker al(priv->m);
+    return priv->socket->isHttp2StreamClosed(stream_id);
+}
+
+bool QoreSocketObject::isHttp2StreamRemoteClosed(int32_t stream_id) const {
+    AutoLocker al(priv->m);
+    return priv->socket->isHttp2StreamRemoteClosed(stream_id);
+}
+
 int QoreSocketObject::flushHttp2(int timeout_ms, ExceptionSink* xsink) {
     AutoLocker al(priv->m);
     return priv->socket->flushHttp2(timeout_ms, xsink);
@@ -851,6 +861,26 @@ int QoreSocketObject::flushHttp2(int timeout_ms, ExceptionSink* xsink) {
 void QoreSocketObject::cleanupHttp2Stream(int32_t stream_id) {
     AutoLocker al(priv->m);
     priv->socket->cleanupHttp2Stream(stream_id);
+}
+
+int QoreSocketObject::resetHttp2Stream(int32_t stream_id, ExceptionSink* xsink) {
+    AutoLocker al(priv->m);
+    return priv->socket->resetHttp2Stream(stream_id, xsink);
+}
+
+int QoreSocketObject::waitForHttp2StreamDrain(int32_t stream_id, int timeout_ms) {
+    // Do NOT hold priv->m while waiting — the I/O thread needs priv->m to
+    // call sendPendingData().  The CV wait only uses Http2Session's internal
+    // drain_mtx_ which is independent of the socket lock.
+    Http2SessionPtr h2;
+    {
+        AutoLocker al(priv->m);
+        h2 = priv->socket->priv->h2_session;
+    }
+    if (!h2) {
+        return -1;
+    }
+    return h2->waitForStreamDrain(stream_id, timeout_ms);
 }
 
 long QoreSocketObject::verifyPeerCertificate() {
@@ -1538,6 +1568,19 @@ void QoreSocketObject::cleanupQuicStream(int64_t session_id, int64_t stream_id,
         return;
     }
     session->cleanupStream(stream_id);
+}
+
+int QoreSocketObject::resetQuicStream(int64_t session_id, int64_t stream_id,
+        ExceptionSink* xsink) {
+    AutoLocker al(priv->m);
+    qore_socket_private* sp = qore_socket_private::get(*priv->socket);
+    std::shared_ptr<QuicSession> session = sp->getQuicSession(session_id);
+    if (!session) {
+        xsink->raiseException("QUIC-ERROR", "no QUIC session with id %lld on this socket",
+            (long long)session_id);
+        return -1;
+    }
+    return session->resetStream(stream_id);
 }
 
 bool my_socket_priv::hasQuicSession() const {

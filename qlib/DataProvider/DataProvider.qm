@@ -103,8 +103,6 @@ module DataProvider {
                     },
                 }, {
                     "loc": "constructor",
-                    "supports_templates": False,
-                    "supports_custom_values": False,
                     "default_view": UiOptionView::Expression,
                 }
             ),
