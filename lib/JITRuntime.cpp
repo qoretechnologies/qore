@@ -1339,8 +1339,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow(
     QoreValue val = fromBits(value_bits);
     if (hv.getType() == NT_HASH) {
         QoreHashNode* h = hv.get<QoreHashNode>();
-        // COW threshold is > 2 because the caller holds +1 ref from LoadLocal's refSelf();
-        // with refcount=2 (variable + caller), no other reference exists, so COW is unnecessary
+        // Only COW if shared with other references (caller holds +1 from LoadLocal, variable holds +1 or more)
         if (h->reference_count() > 2) {
             QoreHashNode* new_h = h->copy();
             qore_rt_assign_local(var, toBits(QoreValue(new_h)), xsink);
@@ -1349,16 +1348,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow(
                 return toBits(QoreValue());
             }
             h = new_h;
-            // After COW, h is owned by LocalVar via qore_rt_assign_local, which called refSelf()
-            // releasing the extra reference added by that call
-            h->deref(nullptr);
-        } else if (h->reference_count() > 1) {
-            // Non-COW: temporarily drop caller's ref so setKeyValue sees refcount==1
-            h->deref(nullptr);
         }
         h->setKeyValue(key, val.refSelf(), xsink);
-        // Re-acquire caller's ref (h is alive via the local variable)
-        h->refSelf();
     } else if (hv.getType() == NT_OBJECT) {
         const_cast<QoreObject*>(hv.get<const QoreObject>())->setValue(key, val.refSelf(), xsink);
     }
@@ -1374,8 +1365,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow_aot(
     QoreValue val = fromBits(value_bits);
     if (hv.getType() == NT_HASH) {
         QoreHashNode* h = hv.get<QoreHashNode>();
-        // COW threshold is > 2 because the caller holds +1 ref from LoadLocal's refSelf();
-        // with refcount=2 (variable + caller), no other reference exists, so COW is unnecessary
+        // Only COW if shared with other references (caller holds +1 from LoadLocal, variable holds +1 or more)
         if (h->reference_count() > 2) {
             QoreHashNode* new_h = h->copy();
             qore_rt_assign_local_aot(ctx, local_slot, toBits(QoreValue(new_h)), xsink);
@@ -1384,16 +1374,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow_aot(
                 return toBits(QoreValue());
             }
             h = new_h;
-            // After COW, h is owned by the local slot via qore_rt_assign_local_aot, which called refSelf()
-            // releasing the extra reference added by that call
-            h->deref(nullptr);
-        } else if (h->reference_count() > 1) {
-            // Non-COW: temporarily drop caller's ref so setKeyValue sees refcount==1
-            h->deref(nullptr);
         }
         h->setKeyValue(key, val.refSelf(), xsink);
-        // Re-acquire caller's ref (h is alive via the local variable)
-        h->refSelf();
     } else if (hv.getType() == NT_OBJECT) {
         const_cast<QoreObject*>(hv.get<const QoreObject>())->setValue(key, val.refSelf(), xsink);
     }
@@ -1409,8 +1391,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow(
     QoreValue val = fromBits(val_bits);
     if (lv.getType() == NT_LIST) {
         QoreListNode* l = lv.get<QoreListNode>();
-        // COW threshold is > 2 because the caller holds +1 ref from LoadLocal's refSelf();
-        // with refcount=2 (variable + caller), no other reference exists, so COW is unnecessary
+        // Only COW if shared with other references (caller holds +1 from LoadLocal, variable holds +1 or more)
         if (l->reference_count() > 2) {
             QoreListNode* new_l = l->copy();
             qore_rt_assign_local(var, toBits(QoreValue(new_l)), xsink);
@@ -1419,17 +1400,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow(
                 return toBits(QoreValue());
             }
             l = new_l;
-            // After COW, l is owned by LocalVar via qore_rt_assign_local, which called refSelf()
-            // releasing the extra reference added by copy()
-            l->deref(nullptr);
-        } else if (l->reference_count() > 1) {
-            // Non-COW: temporarily drop caller's ref so setEntry sees refcount==1
-            l->deref(nullptr);
         }
         QoreValue entry = val.hasNode() ? val.refSelf() : val;
         l->setEntry(index, entry, xsink);
-        // Re-acquire caller's ref (l is alive via the local variable)
-        l->refSelf();
     }
     return val_bits;
 }
@@ -1444,8 +1417,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow_aot(
     QoreValue val = fromBits(val_bits);
     if (lv.getType() == NT_LIST) {
         QoreListNode* l = lv.get<QoreListNode>();
-        // COW threshold is > 2 because the caller holds +1 ref from LoadLocal's refSelf();
-        // with refcount=2 (variable + caller), no other reference exists, so COW is unnecessary
+        // Only COW if shared with other references (caller holds +1 from LoadLocal, variable holds +1 or more)
         if (l->reference_count() > 2) {
             QoreListNode* new_l = l->copy();
             qore_rt_assign_local_aot(ctx, local_slot, toBits(QoreValue(new_l)), xsink);
@@ -1454,17 +1426,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow_aot(
                 return toBits(QoreValue());
             }
             l = new_l;
-            // After COW, l is owned by the local slot via qore_rt_assign_local_aot, which called refSelf()
-            // releasing the extra reference added by copy()
-            l->deref(nullptr);
-        } else if (l->reference_count() > 1) {
-            // Non-COW: temporarily drop caller's ref so setEntry sees refcount==1
-            l->deref(nullptr);
         }
         QoreValue entry = val.hasNode() ? val.refSelf() : val;
         l->setEntry(index, entry, xsink);
-        // Re-acquire caller's ref (l is alive via the local variable)
-        l->refSelf();
     }
     return val_bits;
 }
