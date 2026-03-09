@@ -449,6 +449,16 @@ public:
     */
     DLLEXPORT bool isHttp2StreamComplete(int32_t stream_id) const;
 
+    //! Check if an HTTP/2 stream has been closed
+    /** @since %Qore 2.3
+    */
+    DLLEXPORT bool isHttp2StreamClosed(int32_t stream_id) const;
+
+    //! Check if the remote peer has closed their side of an HTTP/2 stream
+    /** @since %Qore 2.3
+    */
+    DLLEXPORT bool isHttp2StreamRemoteClosed(int32_t stream_id) const;
+
     //! Flush all pending HTTP/2 outgoing data (blocking)
     /** @param timeout_ms send timeout in milliseconds; -1 for infinite
         @since %Qore 2.3
@@ -459,6 +469,20 @@ public:
     /** @since %Qore 2.3
     */
     DLLEXPORT void cleanupHttp2Stream(int32_t stream_id);
+
+    //! Send RST_STREAM to abort an HTTP/2 stream and clean up the stream state
+    /** @since %Qore 2.3
+    */
+    DLLEXPORT int resetHttp2Stream(int32_t stream_id, ExceptionSink* xsink);
+
+    //! Wait for an HTTP/2 stream's send buffer to drain below the backpressure threshold
+    /** @param stream_id the HTTP/2 stream ID
+        @param timeout_ms maximum wait time in milliseconds (0 = no wait, -1 = infinite)
+        @return 0 if buffer drained, 1 if timed out, -1 if stream not found or closed
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT int waitForHttp2StreamDrain(int32_t stream_id, int timeout_ms);
 
     DLLEXPORT long verifyPeerCertificate();
     DLLEXPORT int getSocket();
@@ -738,6 +762,11 @@ public:
         @since %Qore 2.3
     */
     DLLEXPORT void cleanupQuicStream(int64_t session_id, int64_t stream_id, ExceptionSink* xsink);
+
+    //! Reset an HTTP/3 stream by shutting down the read side and cleaning up
+    /** @since %Qore 2.3
+    */
+    DLLEXPORT int resetQuicStream(int64_t session_id, int64_t stream_id, ExceptionSink* xsink);
 
 private:
     DLLLOCAL QoreSocketObject(QoreSocket* s, QoreSSLCertificate* cert = nullptr, QoreSSLPrivateKey* pk = nullptr);

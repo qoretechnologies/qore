@@ -1256,6 +1256,23 @@ bool Http2Session::isStreamComplete(int32_t stream_id) const {
     return it->second->body_complete;
 }
 
+bool Http2Session::isStreamClosed(int32_t stream_id) const {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    auto it = streams.find(stream_id);
+    if (it == streams.end()) {
+        return true;  // Stream not found, treat as closed
+    }
+    return it->second->state == Http2StreamState::Closed;
+}
+
+bool Http2Session::isStreamRemoteClosed(int32_t stream_id) const {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    if (!session) {
+        return true;
+    }
+    return nghttp2_session_get_stream_remote_close(session, stream_id) == 1;
+}
+
 void Http2Session::cleanupStream(int32_t stream_id) {
     std::lock_guard<std::recursive_mutex> lg(m);
     auto it = streams.find(stream_id);
@@ -1558,7 +1575,27 @@ int Http2Session::onDataChunkRecvCallback(nghttp2_session* session, uint8_t flag
         int32_t stream_id, const uint8_t* data, size_t len, void* user_data) {
     Http2Session* h2 = static_cast<Http2Session*>(user_data);
     printd(5, "onDataChunkRecvCallback stream_id=%d len=%zu isServer=%d\n", stream_id, len, h2->is_server);
-    Http2StreamInfo* stream = h2->getOrCreateStream(stream_id);
+    Http2StreamInfo* stream;
+    if (h2->is_server) {
+        // Server mode: use getStream() — if the stream was already cleaned up
+        // (e.g. handler finished or body streaming error), silently discard the
+        // data.  Do NOT send RST_STREAM here — the handler may have just queued
+        // an error response that hasn't been flushed yet, and RST_STREAM(CANCEL)
+        // can cancel that pending response.  The response's END_STREAM flag will
+        // close the server half; the client will stop sending after receiving it.
+        stream = h2->getStream(stream_id);
+        if (!stream) {
+            printd(5, "onDataChunkRecvCallback: server stream %d already cleaned up, "
+                "discarding %zu bytes\n", stream_id, len);
+            // Still need to update flow control window for the consumed data
+            if (len) {
+                h2->submitWindowUpdate(0, len, nullptr);
+            }
+            return 0;
+        }
+    } else {
+        stream = h2->getOrCreateStream(stream_id);
+    }
     if (stream) {
         stream->body.insert(stream->body.end(), data, data + len);
         printd(5, "onDataChunkRecvCallback stream body_size now=%zu\n", stream->body.size());
@@ -1608,6 +1645,8 @@ int Http2Session::onStreamCloseCallback(nghttp2_session* session, int32_t stream
     }
     h2->pending_body_data.erase(stream_id);
     h2->pending_data_providers.erase(stream_id);
+    // Wake any handler threads blocked in waitForStreamDrain() for this stream
+    h2->notifyStreamDrain();
     // If an InputStream is active for this stream, mark it EOF so
     // processStreamInputStreams() will not attempt to call sendStreamData()
     // after the stream is closed.  Without this, the next poll iteration
@@ -1742,6 +1781,11 @@ ssize_t Http2Session::dataProviderReadCallback(nghttp2_session* session, int32_t
                 h2->pending_data_providers.erase(stream_id);
             }
         }
+    }
+
+    // Notify waitForStreamDrain() that buffer space has been freed
+    if (to_copy > 0) {
+        h2->notifyStreamDrain();
     }
 
     printd(5, "dataProviderReadCallback() stream_id=%d requested=%zu sent=%zu remaining=%zu flags=%s%s\n",
@@ -1901,6 +1945,15 @@ int Http2Session::sendStreamData(int32_t stream_id, const void* data, size_t len
     Http2StreamInfo* stream = getStream(stream_id);
     if (!stream && pending_data_providers.find(stream_id) == pending_data_providers.end()) {
         xsink->raiseException("HTTP2-ERROR", "stream %d not found", stream_id);
+        return -1;
+    }
+
+    // Check if the stream was closed by RST_STREAM from the peer
+    if (stream && stream->state == Http2StreamState::Closed) {
+        printd(5, "sendStreamData() stream %d is closed (reset=%d error_code=%u)\n",
+            stream_id, stream->reset ? 1 : 0, stream->error_code);
+        xsink->raiseException("HTTP2-STREAM-RESET",
+            "stream %d was reset by peer (error code %u)", stream_id, stream->error_code);
         return -1;
     }
 
@@ -2167,6 +2220,73 @@ void Http2Session::setStreamInputStream(int32_t stream_id, InputStream* is, Exce
     printd(5, "Http2Session::setStreamInputStream() stream_id=%d pollable=%d fd=%d\n",
         stream_id, stream_input_streams_[stream_id].is_pollable,
         stream_input_streams_[stream_id].stream_fd);
+}
+
+int Http2Session::waitForStreamDrain(int32_t stream_id, int timeout_ms) {
+    constexpr size_t MAX_STREAM_BUFFER = 1024 * 1024;
+
+    // Phase 1: check predicate under m
+    {
+        std::lock_guard<std::recursive_mutex> lg(m);
+        auto it = pending_body_data.find(stream_id);
+        if (it == pending_body_data.end()) {
+            return -1;  // stream not found
+        }
+        size_t pending = it->second.data.size() - it->second.offset;
+        if (pending <= MAX_STREAM_BUFFER) {
+            return 0;  // buffer already below threshold
+        }
+    }
+
+    if (timeout_ms == 0) {
+        return 1;  // no wait requested, buffer is full
+    }
+
+    // Phase 2: wait on drain_cv_ with generation-based wakeup
+    unsigned gen = drain_gen_.load(std::memory_order_acquire);
+    auto deadline = (timeout_ms > 0)
+        ? std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms)
+        : std::chrono::steady_clock::time_point::max();
+
+    while (true) {
+        {
+            std::unique_lock<std::mutex> dlock(drain_mtx_);
+            auto gen_changed = [this, gen]() {
+                return drain_gen_.load(std::memory_order_acquire) != gen;
+            };
+            if (timeout_ms < 0) {
+                drain_cv_.wait(dlock, gen_changed);
+            } else {
+                if (!drain_cv_.wait_until(dlock, deadline, gen_changed)) {
+                    return 1;  // timed out
+                }
+            }
+        }
+
+        // Re-check predicate under m
+        {
+            std::lock_guard<std::recursive_mutex> lg(m);
+            auto it = pending_body_data.find(stream_id);
+            if (it == pending_body_data.end()) {
+                return -1;  // stream gone
+            }
+            size_t pending = it->second.data.size() - it->second.offset;
+            if (pending <= MAX_STREAM_BUFFER) {
+                return 0;  // drained
+            }
+        }
+
+        // Update generation for next wait iteration
+        gen = drain_gen_.load(std::memory_order_acquire);
+    }
+}
+
+void Http2Session::notifyStreamDrain() {
+    drain_gen_.fetch_add(1, std::memory_order_release);
+    {
+        std::lock_guard<std::mutex> dlock(drain_mtx_);
+    }
+    drain_cv_.notify_all();
 }
 
 void Http2Session::processStreamInputStreams(ExceptionSink* xsink) {

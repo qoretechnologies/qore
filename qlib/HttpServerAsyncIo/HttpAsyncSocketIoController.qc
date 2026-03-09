@@ -171,6 +171,17 @@ public class HttpAsyncSocketIoController {
         hash<string, int> accept_counts;
         int accept_seq = 0;
 
+        #! Queues for persistent HTTP/2/HTTP/3 connections keyed by socket unique hash
+        /** When a handler opts into persistence for a multiplexed connection, the handler
+            pool thread enters a dedicated loop and registers a Queue here. Subsequent
+            requests on the same connection are routed to the Queue instead of dispatching
+            to a new pool thread, ensuring thread affinity for thread-local resources
+            (e.g., database transactions).
+
+        */
+        Mutex persistent_queue_mutex();
+        #! Persistent queues keyed by connection unique hash
+        hash<string, hash<auto>> persistent_queues;
     }
 
     #! Creates the HTTP controller with an explicit I/O controller
@@ -285,6 +296,14 @@ public class HttpAsyncSocketIoController {
             connections = {};
             accept_counts = {};
         }
+        # Signal persistent queues to exit their dedicated loops
+        {
+            persistent_queue_mutex.lock();
+            on_exit persistent_queue_mutex.unlock();
+            foreach string key in (keys persistent_queues) {
+                persistent_queues{key}.queue.push({"type": "close"});
+            }
+        }
         # Accept operations are always on controllers[0]
         foreach string lhash in (listener_keys) {
             controllers[0].cancelByOwner(lhash);
@@ -351,6 +370,74 @@ public class HttpAsyncSocketIoController {
     waitStop() {
         foreach AsyncSocketIoController c in (controllers) {
             c.waitStop();
+        }
+    }
+
+    #! Registers a persistent queue for a multiplexed connection
+    /** Called by a handler pool thread when entering dedicated persistent mode.
+        Subsequent requests on the same connection will be routed to the Queue
+        instead of dispatching to a new pool thread.
+
+        @param key the socket unique hash identifying the connection
+        @param q the Queue to receive subsequent request hashes
+
+    */
+    registerPersistentQueue(string key, Queue q, *code<bool(hash<auto>)> filter) {
+        persistent_queue_mutex.lock();
+        on_exit persistent_queue_mutex.unlock();
+        persistent_queues{key} = {"queue": q, "filter": filter};
+    }
+
+    #! Deregisters a persistent queue for a multiplexed connection
+    /** Called when the dedicated handler pool thread exits its persistent loop.
+
+        @param key the socket unique hash identifying the connection
+
+    */
+    deregisterPersistentQueue(string key) {
+        persistent_queue_mutex.lock();
+        on_exit persistent_queue_mutex.unlock();
+        remove persistent_queues{key};
+    }
+
+    #! Returns the persistent queue for a multiplexed connection, or NOTHING if none
+    /** @param key the socket unique hash identifying the connection
+        @param hdr the request headers to test against the filter (if any)
+        @return the Queue if a dedicated thread is waiting and the filter passes, or NOTHING
+    */
+    *Queue getPersistentQueue(string key, *hash<auto> hdr) {
+        # Copy references under the lock, then release before invoking the filter
+        # to avoid holding the mutex during a user-provided callback
+        *code filter;
+        *Queue queue;
+        {
+            persistent_queue_mutex.lock();
+            on_exit persistent_queue_mutex.unlock();
+            if (!persistent_queues{key}) {
+                return;
+            }
+            filter = persistent_queues{key}.filter;
+            queue = persistent_queues{key}.queue;
+        }
+        # Invoke the filter outside the lock
+        if (filter && !filter(hdr)) {
+            return;
+        }
+        return queue;
+    }
+
+    #! Signals persistent queues for a closed connection to exit
+    /** Called when a multiplexed connection closes so that dedicated handler pool
+        threads blocked on Queue::get() are unblocked and can exit cleanly.
+
+        @param uh the connection unique hash
+    */
+    private signalPersistentQueuesForConnection(string uh) {
+        persistent_queue_mutex.lock();
+        on_exit persistent_queue_mutex.unlock();
+        if (persistent_queues{uh}) {
+            log(LoggerLevel::DEBUG, "signalling persistent queue for closed connection: %y", uh);
+            persistent_queues{uh}.queue.push({"type": "close"});
         }
     }
 
@@ -1002,7 +1089,11 @@ public class HttpAsyncSocketIoController {
         # their own cinfo copy (Qore hashes are value types), so the shared
         # entry only needs to reflect the h3op's current poll state.
         string base_uh = listener.uniqueHash();
-        string uh = sprintf("%s:quic", base_uh);
+        # Include session_id in the key so that each QUIC session (client
+        # connection) gets its own persistent queue.  The UDP listener socket
+        # is shared by all sessions; without the session_id, one client could
+        # steal another's persistent queue or tear it down on disconnect.
+        string uh = sprintf("%s:quic:%d", base_uh, session_id);
         # NOTE: cx here is intentionally minimal (just "peer" and "socket").
         # The onHttpRequest handler rebuilds the full context — including
         # "peer-info", "id", "ssl", "listener-id", etc. — via
@@ -1043,12 +1134,14 @@ public class HttpAsyncSocketIoController {
         }
         submitConnectionOp(uh, new_cinfo);
 
-        # Check for RFC 9220 WebSocket over HTTP/3 (CONNECT with :protocol=websocket)
-        bool is_websocket_connect = request.method == "CONNECT"
+        # Check for RFC 9220 extended CONNECT over HTTP/3 (CONNECT with :protocol)
+        bool is_extended_connect = request.method == "CONNECT"
+            && request.headers.":protocol".val();
+        bool is_websocket_connect = is_extended_connect
             && request.headers.":protocol" == "websocket";
-        if (is_websocket_connect) {
-            log(LoggerLevel::DEBUG, "HTTP/3 WebSocket CONNECT: session=%d stream=%d %s",
-                session_id, stream_id, request.path);
+        if (is_extended_connect) {
+            log(LoggerLevel::DEBUG, "HTTP/3 extended CONNECT (%s): session=%d stream=%d %s",
+                request.headers.":protocol", session_id, stream_id, request.path);
         }
 
         # Build header hash (same format as HTTP/2)
@@ -1070,6 +1163,41 @@ public class HttpAsyncSocketIoController {
         # Detect headers-only dispatch
         bool body_streaming = request.hdr && !request.headers_end_stream;
 
+        # For non-WebSocket extended CONNECT: create unlimited Queue for async data
+        # delivery.  WebSocket CONNECT handlers have their own framing mechanism
+        # and read connect_stream_data_ directly — registering a Queue would
+        # consume the data before the WebSocket handler sees it.
+        *Queue stream_data_queue;
+        if (is_extended_connect && !is_websocket_connect) {
+            stream_data_queue = new Queue();
+            h3op.registerStreamQueue(session_id, stream_id, stream_data_queue);
+        }
+
+        # Create send-and-wake wrapper for handler threads (HTTP/3 version).
+        # Same interface as the HTTP/2 wrapper — handlers use this uniformly
+        # regardless of protocol.  Uses CV-based waitForQuicStreamDrain()
+        # for efficient backpressure instead of polling.
+        code send_stream_data = sub (*binary data, bool end_stream = False) {
+            int retries = 0;
+            while (listener.submitQuicStreamData(
+                    session_id, stream_id, data, end_stream) == 1) {
+                if (++retries > 200) {
+                    throw "HTTP3-FLOW-CONTROL", sprintf("stream %d: buffer "
+                        "not draining after %d retries", stream_id, retries);
+                }
+                controllers[new_cinfo.controller_idx].wake();
+                # CV-based wait: wakes immediately when I/O thread drains
+                # the buffer, falls back to 50ms timeout otherwise
+                int drain_rv = listener.waitForQuicStreamDrain(
+                    session_id, stream_id, 50ms);
+                if (drain_rv == -1) {
+                    throw "HTTP3-STREAM-ERROR", sprintf("stream %d: stream "
+                        "removed while waiting for drain", stream_id);
+                }
+            }
+            controllers[new_cinfo.controller_idx].wake();
+        };
+
         # Convert to HttpConnectionInfo (same dispatch chain as HTTP/2)
         hash<HttpConnectionInfo> conn_info = <HttpConnectionInfo>{
             "sock": listener,
@@ -1078,17 +1206,58 @@ public class HttpAsyncSocketIoController {
                 "http3": True,
                 "session_id": session_id,
                 "stream_id": stream_id,
+                "is_extended_connect": is_extended_connect,
                 "is_websocket_connect": is_websocket_connect,
                 "accept-encoding": accept_encoding,
                 "body": body_streaming ? NOTHING : request.body,
                 "body_streaming": body_streaming,
                 "headers_end_stream": request.headers_end_stream ?? False,
+                "stream_data_queue": stream_data_queue,
+                "send_stream_data": send_stream_data,
+                "io_wake": sub () { controllers[new_cinfo.controller_idx].wake(); },
+                "register_persistent_queue": sub (string key, Queue q,
+                        *code<bool(hash<auto>)> filter) {
+                    self.registerPersistentQueue(key, q, filter);
+                },
+                "deregister_persistent_queue": sub (string key) {
+                    self.deregisterPersistentQueue(key);
+                },
+                "resume_body_streaming": body_streaming ? sub () {
+                    resumeMultiplexedReading(h3op, uh, new_cinfo.controller_idx,
+                        HttpConnectionState::Http3);
+                } : NOTHING,
             },
             "listener": linfo.http_listener,
             "cx": new_cinfo.cx,
             "keep_alive": True,
             "ssl": True,  # QUIC always uses TLS
         };
+
+        # Check for persistent queue — if a dedicated thread is waiting for this
+        # connection, route the request to it instead of the pool
+        *Queue pq = getPersistentQueue(uh, hdr);
+        if (pq) {
+            log(LoggerLevel::DEBUG, "HTTP/3 request routed to persistent queue: %y "
+                "session=%d stream=%d %s %s",
+                uh, session_id, stream_id, request.method, request.path);
+            # Build resume callback for body_streaming
+            *code resume_reading;
+            if (body_streaming) {
+                resume_reading = sub () {
+                    resumeMultiplexedReading(h3op, uh, new_cinfo.controller_idx,
+                        HttpConnectionState::Http3);
+                };
+            }
+            pq.push({
+                "type": "request",
+                "conn_info": conn_info,
+                "stream_id": stream_id,
+                "body_streaming": body_streaming,
+                "resume_reading": resume_reading,
+                "controller_idx": new_cinfo.controller_idx,
+            });
+            return;
+        }
 
         # Dispatch to handler thread pool
         try {
@@ -1155,15 +1324,21 @@ public class HttpAsyncSocketIoController {
     private handleHttp3MultiplexedResult(string uh, hash<HttpActiveConnectionInfo> cinfo,
             int session_id, int stream_id, hash<HttpRequestResultInfo> result) {
         if (result.close) {
-            log(LoggerLevel::DEBUG, "HTTP/3 handler requested close for session %d stream %d on %y",
-                session_id, stream_id, uh);
-            # Remove the h3op's socket-level entry — the h3op is still being polled
-            # but its next callback will find "connection gone" and stop.
-            # Do NOT close the shared UDP socket.
-            {
-                AutoWriteLock al(m);
-                remove connections{uh};
+            # For HTTP/3, don't close the entire connection — HTTP/3 is multiplexed,
+            # so closing the connection would kill all active streams.  Instead, send
+            # the error response on this stream and let the connection continue.
+            log(LoggerLevel::DEBUG, "HTTP/3 handler requested close for session %d stream %d on %y "
+                "(stream-only; connection stays open)", session_id, stream_id, uh);
+            if (result.code) {
+                try {
+                    cinfo.sock.submitQuicResponse(session_id, stream_id, result.code, result.hdr,
+                        result.body);
+                } catch (hash<ExceptionInfo> ex) {
+                    log(LoggerLevel::DEBUG, "HTTP/3 close response session=%d stream=%d failed: "
+                        "%s: %s", session_id, stream_id, ex.err, ex.desc);
+                }
             }
+            controllers[cinfo.controller_idx].wake();
             return;
         }
 
@@ -1256,13 +1431,15 @@ public class HttpAsyncSocketIoController {
             return;
         }
 
-        # No response code — send 500 as fallback
+        # No response code — the handler already managed the response lifecycle
+        # (e.g., persistent handler loop completed, WebSocket/SSE upgrade consumed the
+        # response).  Just wake the controller and return; do NOT send a spurious 500
+        # on the already-completed stream, which would corrupt the HTTP/3 session.
         if (!result.code) {
-            try {
-                cinfo.sock.submitQuicResponse(session_id, stream_id, 500,
-                    {"content-type": "text/plain"}, "Internal Server Error");
-                controllers[cinfo.controller_idx].wake();
-            } catch () {}
+            log(LoggerLevel::DEBUG, "HTTP/3 session %d stream %d on %y: handler already sent "
+                "response (no code in result)", session_id, stream_id, uh);
+            controllers[cinfo.controller_idx].wake();
+            return;
         }
     }
 
@@ -1415,6 +1592,42 @@ public class HttpAsyncSocketIoController {
                 remove connections{uh};
             }
             try { result.sock.close(); } catch () {}
+        }
+    }
+
+    #! Resumes multiplexed reading after a handler completes body_streaming
+    /** Calls continueReading() on the stream op, updates connection state, and resubmits
+        the connection for I/O polling.  Silently catches exceptions if the op was already
+        resumed (e.g. by resume_body_streaming).
+
+        @param stream_op the Http2PollOperation or Http3ServerPollOperation to resume
+        @param uh the unique connection handle
+        @param controller_idx the controller index for waking the I/O thread
+        @param state the connection state to set (HttpConnectionState::Http2 or Http3)
+    */
+    private resumeMultiplexedReading(AbstractPollOperation stream_op, string uh, int controller_idx,
+            string state) {
+        try {
+            call_object_method(stream_op, "continueReading");
+        } catch () {
+            # already resumed (HTTP2-STATE-ERROR / HTTP3-STATE-ERROR) — the other
+            # resume path already updated connection state, so nothing to do here
+            return;
+        }
+        hash<HttpActiveConnectionInfo> resumed_cinfo;
+        {
+            AutoWriteLock al(m);
+            if (connections.hasKey(uh)) {
+                hash<HttpActiveConnectionInfo> conn_info_upd =
+                    cast<hash<HttpActiveConnectionInfo>>(connections{uh});
+                conn_info_upd.stream_op = stream_op;
+                conn_info_upd.state = state;
+                resumed_cinfo = connections{uh} = conn_info_upd;
+            }
+        }
+        if (resumed_cinfo) {
+            submitConnectionOp(uh, resumed_cinfo);
+            controllers[controller_idx].wake();
         }
     }
 
@@ -2110,6 +2323,8 @@ public class HttpAsyncSocketIoController {
     private handleConnectionClosed(string uh, hash<HttpActiveConnectionInfo> cinfo) {
         log(LoggerLevel::INFO, "Connection closed: %y", uh);
 
+        signalPersistentQueuesForConnection(uh);
+
         {
             AutoWriteLock al(m);
             remove connections{uh};
@@ -2222,14 +2437,17 @@ public class HttpAsyncSocketIoController {
 
         int stream_id = request.stream_id;
 
-        # Check for RFC 8441 WebSocket over HTTP/2 (CONNECT with :protocol=websocket)
-        bool is_websocket_connect = request.method == "CONNECT" &&
+        # Check for RFC 8441 extended CONNECT over HTTP/2 (CONNECT with :protocol)
+        bool is_extended_connect = request.method == "CONNECT" &&
+            request.headers.":protocol".val();
+        bool is_websocket_connect = is_extended_connect &&
             request.headers.":protocol" == "websocket";
 
-        if (is_websocket_connect) {
-            log(LoggerLevel::DEBUG, "HTTP/2 WebSocket CONNECT: %y stream=%d %s",
-                uh, stream_id, request.path);
-            handleHttp2WebSocketConnect(uh, cinfo, h2op, request, stream_id);
+        if (is_extended_connect) {
+            log(LoggerLevel::DEBUG, "HTTP/2 extended CONNECT (%s): %y stream=%d %s",
+                request.headers.":protocol", uh, stream_id, request.path);
+            handleHttp2ExtendedConnect(uh, cinfo, h2op, request, stream_id,
+                is_websocket_connect);
             return;
         }
 
@@ -2299,66 +2517,75 @@ public class HttpAsyncSocketIoController {
                 "body_streaming": body_streaming,
                 "headers_end_stream": request.headers_end_stream ?? False,
                 "io_wake": sub () { controllers[cinfo.controller_idx].wake(); },
+                "register_persistent_queue": sub (string key, Queue q,
+                        *code<bool(hash<auto>)> filter) {
+                    self.registerPersistentQueue(key, q, filter);
+                },
+                "deregister_persistent_queue": sub (string key) {
+                    self.deregisterPersistentQueue(key);
+                },
+                "resume_body_streaming": body_streaming ? sub () {
+                    resumeMultiplexedReading(h2op, uh, cinfo.controller_idx,
+                        HttpConnectionState::Http2);
+                } : NOTHING,
             },
             "listener": cinfo.listener,
             "cx": cinfo.cx,
             "keep_alive": True,
             "ssl": cinfo.sock.isSecure(),
         };
+
+        # Check for persistent queue — if a dedicated thread is waiting for this
+        # connection and the request matches the session filter, route the request
+        # to the dedicated thread instead of the pool
+        *Queue pq = getPersistentQueue(uh, hdr);
+        if (pq) {
+            log(LoggerLevel::DEBUG, "HTTP/2 request routed to persistent queue: %y stream=%d %s %s",
+                uh, stream_id, request.method, request.path);
+            # Build resume callback for body_streaming
+            *code resume_reading;
+            if (body_streaming) {
+                resume_reading = sub () {
+                    resumeMultiplexedReading(h2op, uh, cinfo.controller_idx,
+                        HttpConnectionState::Http2);
+                };
+            }
+            pq.push({
+                "type": "request",
+                "conn_info": conn_info,
+                "stream_id": stream_id,
+                "body_streaming": body_streaming,
+                "resume_reading": resume_reading,
+                "controller_idx": cinfo.controller_idx,
+            });
+            return;
+        }
+
         # Dispatch to handler thread pool
         try {
             handler_pool.submit(sub () {
                 try {
                     hash<HttpRequestResultInfo> result = cinfo.target.onHttpRequest(conn_info);
                     if (body_streaming) {
-                        # Body streaming is complete; resume h2op for continued multiplexing.
-                        # The handler had exclusive socket access for body reading.
-                        h2op.continueReading();
-                        hash<HttpActiveConnectionInfo> resumed_cinfo;
-                        {
-                            AutoWriteLock al(m);
-                            if (connections.hasKey(uh)) {
-                                hash<HttpActiveConnectionInfo> conn_info_upd =
-                                    cast<hash<HttpActiveConnectionInfo>>(connections{uh});
-                                conn_info_upd.stream_op = h2op;
-                                conn_info_upd.state = HttpConnectionState::Http2;
-                                resumed_cinfo = connections{uh} = conn_info_upd;
-                            }
-                        }
-                        # Use freshly-updated cinfo (not the stale closure capture)
-                        if (resumed_cinfo) {
-                            submitConnectionOp(uh, resumed_cinfo);
-                        }
+                        resumeMultiplexedReading(h2op, uh, cinfo.controller_idx,
+                            HttpConnectionState::Http2);
                     }
                     handleHttp2MultiplexedResult(uh, cinfo, stream_id, result);
                 } catch (hash<ExceptionInfo> ex) {
                     log(LoggerLevel::ERROR, "Error handling HTTP/2 request stream=%d: %s: %s",
                         stream_id, ex.err, ex.desc);
                     if (body_streaming) {
-                        # Resume h2op even on error
-                        try {
-                            h2op.continueReading();
-                            hash<HttpActiveConnectionInfo> resumed_cinfo;
-                            {
-                                AutoWriteLock al(m);
-                                if (connections.hasKey(uh)) {
-                                    hash<HttpActiveConnectionInfo> conn_info_upd =
-                                        cast<hash<HttpActiveConnectionInfo>>(connections{uh});
-                                    conn_info_upd.stream_op = h2op;
-                                    conn_info_upd.state = HttpConnectionState::Http2;
-                                    resumed_cinfo = connections{uh} = conn_info_upd;
-                                }
-                            }
-                            if (resumed_cinfo) {
-                                submitConnectionOp(uh, resumed_cinfo);
-                            }
-                        } catch () {}
+                        resumeMultiplexedReading(h2op, uh, cinfo.controller_idx,
+                            HttpConnectionState::Http2);
                     }
                     try {
                         cinfo.sock.submitHttp2Response(stream_id, 500,
                             {"content-type": "text/plain"},
                             "Internal Server Error");
-                    } catch () {}
+                    } catch (hash<ExceptionInfo> ex2) {
+                        log(LoggerLevel::DEBUG, "submitHttp2Response 500 stream=%d failed: %s: %s",
+                            stream_id, ex2.err, ex2.desc);
+                    }
                     controllers[cinfo.controller_idx].wake();
                 }
             });
@@ -2382,6 +2609,7 @@ public class HttpAsyncSocketIoController {
                     }
                     if (resumed_cinfo) {
                         submitConnectionOp(uh, resumed_cinfo);
+                        controllers[cinfo.controller_idx].wake();
                     }
                 } catch () {}
             }
@@ -2395,18 +2623,35 @@ public class HttpAsyncSocketIoController {
         }
     }
 
-    #! Handles WebSocket CONNECT over HTTP/2 (RFC 8441) in multiplexed mode
-    /** h2op stays on the I/O thread; the WebSocket CONNECT request is dispatched
+    #! Handles extended CONNECT over HTTP/2 (RFC 8441) in multiplexed mode
+    /** h2op stays on the I/O thread; the extended CONNECT request is dispatched
         to the handler pool like any other request.  The handler returns a
-        \c dedicated result, and the WebSocket handler manages the stream directly
+        \c dedicated result, and the socket handler manages the stream directly
         via submitConnectResponse() and sendStreamData().
-    */
-    private handleHttp2WebSocketConnect(string uh, hash<HttpActiveConnectionInfo> cinfo,
-            Http2PollOperation h2op, hash<auto> request, int stream_id) {
-        log(LoggerLevel::DEBUG, "HTTP/2 WebSocket CONNECT (multiplexed): %y stream=%d %s",
-            uh, stream_id, request.path);
 
-        # Continue reading on h2op immediately — the WebSocket stream coexists
+        A Queue is created internally (unlimited size) and registered with h2op
+        so that the I/O controller drains per-stream DATA into the Queue after
+        each poll cycle.  The handler reads from the Queue instead of doing
+        direct socket I/O, keeping the async I/O path clean and non-blocking.
+    */
+    private handleHttp2ExtendedConnect(string uh, hash<HttpActiveConnectionInfo> cinfo,
+            Http2PollOperation h2op, hash<auto> request, int stream_id,
+            bool is_websocket_connect = True) {
+        log(LoggerLevel::DEBUG, "HTTP/2 extended CONNECT (%s, multiplexed): %y stream=%d %s",
+            request.headers.":protocol", uh, stream_id, request.path);
+
+        # Create unlimited Queue for async data delivery to the handler.
+        # WebSocket CONNECT handlers have their own framing mechanism and read
+        # connect_stream_data_ directly — registering a Queue would consume
+        # the data before the WebSocket handler sees it.
+        *Queue stream_data_queue;
+        if (!is_websocket_connect) {
+            stream_data_queue = new Queue();
+            # Register the Queue with h2op so the I/O controller drains data after each poll
+            h2op.registerStreamQueue(stream_id, stream_data_queue);
+        }
+
+        # Continue reading on h2op immediately — the CONNECT stream coexists
         # with other streams on the same connection
         h2op.continueReading();
         hash<HttpActiveConnectionInfo> new_cinfo;
@@ -2441,15 +2686,50 @@ public class HttpAsyncSocketIoController {
                 hdr."accept-encoding".split(",");
         }
 
+        # Create send-and-wake wrapper for handler threads.
+        # Queues data in nghttp2 with transparent backpressure handling,
+        # then wakes the I/O controller to flush.  Handlers use this
+        # instead of calling sendHttp2StreamData() + io_wake() separately.
+        code send_stream_data = sub (*binary data, bool end_stream = False) {
+            int retries = 0;
+            while (True) {
+                try {
+                    cinfo.sock.sendHttp2StreamData(stream_id, data, end_stream);
+                    break;
+                } catch (hash<ExceptionInfo> ex) {
+                    if (ex.err == "HTTP2-FLOW-CONTROL") {
+                        if (++retries > 200) {
+                            throw "HTTP2-FLOW-CONTROL", sprintf("stream %d: buffer "
+                                "not draining after %d retries", stream_id, retries);
+                        }
+                        # Buffer full — wake I/O thread to drain, then wait
+                        # deterministically for the CV signal
+                        controllers[cinfo.controller_idx].wake();
+                        if (cinfo.sock.waitForHttp2StreamDrain(stream_id, 10s)) {
+                            throw "HTTP2-STREAM-ERROR", sprintf("stream %d: drain "
+                                "timed out or stream removed", stream_id);
+                        }
+                        continue;
+                    }
+                    rethrow;
+                }
+            }
+            controllers[cinfo.controller_idx].wake();
+        };
+
         hash<HttpConnectionInfo> conn_info = <HttpConnectionInfo>{
             "sock": cinfo.sock,
             "hdr": hdr,
             "header_info": {
                 "http2": True,
                 "stream_id": stream_id,
-                "is_websocket_connect": True,
+                "is_extended_connect": True,
+                "is_websocket_connect": is_websocket_connect,
                 "accept-encoding": accept_encoding,
                 "body": request.body,
+                "stream_data_queue": stream_data_queue,
+                "send_stream_data": send_stream_data,
+                "io_wake": sub () { controllers[cinfo.controller_idx].wake(); },
             },
             "listener": cinfo.listener,
             "cx": cinfo.cx,
@@ -2464,7 +2744,7 @@ public class HttpAsyncSocketIoController {
                     hash<HttpRequestResultInfo> result = cinfo.target.onHttpRequest(conn_info);
                     handleHttp2MultiplexedResult(uh, cinfo, stream_id, result);
                 } catch (hash<ExceptionInfo> ex) {
-                    log(LoggerLevel::ERROR, "Error handling HTTP/2 WebSocket CONNECT stream=%d: "
+                    log(LoggerLevel::ERROR, "Error handling HTTP/2 extended CONNECT stream=%d: "
                         "%s: %s", stream_id, ex.err, ex.desc);
                     # NOTE: do NOT call cinfo.target.onError() here — that closes the shared
                     # connection socket which breaks all other streams.  In HTTP/2 multiplexed
@@ -2478,7 +2758,7 @@ public class HttpAsyncSocketIoController {
                 }
             });
         } catch (hash<ExceptionInfo> ex) {
-            log(LoggerLevel::ERROR, "Failed to submit HTTP/2 WebSocket handler for stream=%d "
+            log(LoggerLevel::ERROR, "Failed to submit HTTP/2 extended CONNECT handler for stream=%d "
                 "on %y: %s: %s", stream_id, uh, ex.err, ex.desc);
             # Send error for this stream only — other streams continue
             try {
@@ -2503,13 +2783,21 @@ public class HttpAsyncSocketIoController {
     private handleHttp2MultiplexedResult(string uh, hash<HttpActiveConnectionInfo> cinfo,
             int stream_id, hash<HttpRequestResultInfo> result) {
         if (result.close) {
-            log(LoggerLevel::DEBUG, "HTTP/2 handler requested close for stream %d on %y",
-                stream_id, uh);
-            {
-                AutoWriteLock al(m);
-                remove connections{uh};
+            # For HTTP/2, don't close the entire connection — HTTP/2 is multiplexed,
+            # so closing the connection would kill all active streams.  Instead, send
+            # the error response on this stream and let the connection continue.
+            log(LoggerLevel::DEBUG, "HTTP/2 handler requested close for stream %d on %y "
+                "(stream-only; connection stays open)", stream_id, uh);
+            if (result.code) {
+                try {
+                    cinfo.sock.submitHttp2Response(stream_id, result.code, result.hdr,
+                        result.body);
+                } catch (hash<ExceptionInfo> ex) {
+                    log(LoggerLevel::DEBUG, "HTTP/2 close response stream=%d failed: %s: %s",
+                        stream_id, ex.err, ex.desc);
+                }
             }
-            try { cinfo.sock.close(); } catch () {}
+            controllers[cinfo.controller_idx].wake();
             return;
         }
 
@@ -2563,17 +2851,20 @@ public class HttpAsyncSocketIoController {
                     result.input_stream.reassignThread();
                     on_exit result.input_stream.unassignThread();
                     while (*binary chunk = result.input_stream.read(65536)) {
-                        int retries = 0;
                         while (True) {
                             try {
                                 cinfo.sock.sendHttp2StreamData(stream_id, chunk);
                                 controllers[cinfo.controller_idx].wake();
                                 break;
                             } catch (hash<ExceptionInfo> ex) {
-                                if (ex.err == "HTTP2-FLOW-CONTROL" && ++retries <= 200) {
-                                    # Buffer full — wake I/O thread to drain, wait briefly
+                                if (ex.err == "HTTP2-FLOW-CONTROL") {
+                                    # Buffer full — wake I/O thread to drain, then wait
+                                    # deterministically for the CV signal
                                     controllers[cinfo.controller_idx].wake();
-                                    usleep(50ms);
+                                    if (cinfo.sock.waitForHttp2StreamDrain(stream_id, 10s)) {
+                                        # Timed out or stream gone — give up
+                                        rethrow;
+                                    }
                                     continue;
                                 }
                                 rethrow;
@@ -2616,17 +2907,14 @@ public class HttpAsyncSocketIoController {
             return;
         }
 
-        # No response code — send 500 Internal Server Error as fallback
+        # No response code — the handler already managed the response lifecycle
+        # (e.g., persistent handler loop completed, WebSocket/SSE upgrade consumed the
+        # response).  Just wake the controller and return; do NOT send a spurious 500
+        # on the already-completed stream, which would corrupt the HTTP/2 session.
         if (!result.code) {
-            try {
-                cinfo.sock.submitHttp2Response(stream_id, 500,
-                    {"content-type": "text/plain"}, "Internal Server Error");
-                controllers[cinfo.controller_idx].wake();
-            } catch (hash<ExceptionInfo> ex) {
-                log(LoggerLevel::ERROR,
-                    "Error submitting HTTP/2 fallback 500 for stream=%d on %y: %s: %s",
-                    stream_id, uh, ex.err, ex.desc);
-            }
+            log(LoggerLevel::DEBUG, "HTTP/2 stream %d on %y: handler already sent response "
+                "(no code in result)", stream_id, uh);
+            controllers[cinfo.controller_idx].wake();
             return;
         }
 
@@ -2658,6 +2946,8 @@ public class HttpAsyncSocketIoController {
         } else {
             log(LoggerLevel::DEBUG, "HTTP/2 connection closed: %y", uh);
         }
+
+        signalPersistentQueuesForConnection(uh);
 
         {
             AutoWriteLock al(m);

@@ -775,6 +775,19 @@ public class CookieHelper {
     }
 }
 
+#! Returns @ref True if the request is an HTTP/2 or HTTP/3 extended CONNECT (RFC 8441 / RFC 9220)
+/** @param cx the call context hash
+    @param hdr the header hash
+
+    @return @ref True if the request is an HTTP/2 or HTTP/3 extended CONNECT with any \c :protocol value
+
+    @since %HttpServerUtil 1.0.15
+*/
+public bool sub is_extended_connect(hash<auto> cx, hash<auto> hdr) {
+    return cx."header-info".is_extended_connect
+        || (hdr.method == "CONNECT" && hdr.":protocol".val());
+}
+
 #! Returns @ref True if the request is an HTTP/2 or HTTP/3 extended CONNECT for WebSocket
 /** @param cx the call context hash
     @param hdr the header hash
@@ -784,8 +797,9 @@ public class CookieHelper {
     @since %HttpServerUtil 1.0.14
 */
 public bool sub is_websocket_extended_connect(hash<auto> cx, hash<auto> hdr) {
-    return cx."header-info".is_websocket_connect
-        || (hdr.method == "CONNECT" && hdr.":protocol" == "websocket");
+    return is_extended_connect(cx, hdr)
+        && (cx."header-info".is_websocket_connect
+            || hdr.":protocol" == "websocket");
 }
 
 #! returns a complete URL from a bind address
@@ -1552,6 +1566,17 @@ public class AbstractStreamRequest {
         return True;
     }
 
+    #! Returns @ref True if a receive error occurred that should stop further body reading
+    /** Subclasses can override this to check handler-specific error state.
+
+        @return @ref True if recv processing detected an error, @ref False otherwise
+
+        @since HttpServerUtil 2.2
+    */
+    bool hasRecvError() {
+        return False;
+    }
+
     #! handles the request
     hash<HttpHandlerResponseInfo> handleRequest() {
         # handle message body
@@ -1560,19 +1585,70 @@ public class AbstractStreamRequest {
                 "data": body,
                 "chunked": False
             };
-            if (cx.deserialized)
+            if (cx.deserialized) {
                 dh.deserialized = True;
+            }
             recv(dh);
+            # signal end of data
+            recvImpl({"hdr": NOTHING});
+        } else if (cx."header-info".body_streaming) {
+            # HTTP/2 or HTTP/3 body streaming: read DATA frames incrementally and
+            # process via recv() callbacks so the handler can detect errors mid-stream
+            # (e.g. COLUMN-ERROR) without buffering the entire body in memory.
+            # This is analogous to HTTP/1.x readHTTPChunkedBodyWithCallback() below.
+            int sid = cx."header-info".stream_id;
+            if (cx."header-info".http3) {
+                int session_id = cx."header-info".session_id;
+                while (True) {
+                    *binary chunk = s.readQuicStreamDataBlock(session_id, sid, timeout_ms);
+                    if (!chunk) {
+                        break;
+                    }
+                    recv({"data": chunk});
+                    if (hasRecvError()) {
+                        # Reset this stream — remaining DATA frames must be discarded
+                        s.resetQuicStream(session_id, sid);
+                        break;
+                    }
+                }
+                # NOTE: cleanupQuicStream is called by the controller's on_exit handler
+            } else {
+                bool recv_error = False;
+                while (True) {
+                    *binary chunk = s.readHttp2StreamDataBlock(sid, timeout_ms);
+                    if (!chunk) {
+                        break;
+                    }
+                    recv({"data": chunk});
+                    if (hasRecvError()) {
+                        recv_error = True;
+                        break;
+                    }
+                }
+                if (!recv_error) {
+                    # Normal completion: clean up the stream
+                    s.cleanupHttp2Stream(sid);
+                }
+                # When recv_error is True, skip cleanupHttp2Stream — leaving
+                # the stream in the Http2Session streams map prevents
+                # onDataChunkRecvCallback from sending RST_STREAM for any
+                # remaining client DATA frames.  The error response will be
+                # submitted on this stream normally; after the client receives
+                # it, it will stop sending.
+            }
             # signal end of data
             recvImpl({"hdr": NOTHING});
         } else {
             if (hdr."transfer-encoding" == "chunked") {
-                if (hdr."content-encoding")
+                if (hdr."content-encoding") {
                     s.readHTTPChunkedBodyBinaryWithCallback(\recv(), timeout_ms);
-                else
+                } else {
                     s.readHTTPChunkedBodyWithCallback(\recv(), timeout_ms);
-            } else # signal end of data
+                }
+            } else {
+                # signal end of data
                 recvImpl({"hdr": NOTHING});
+            }
         }
 
         return sendResponse();
@@ -1927,6 +2003,21 @@ public class AbstractHttpRequestHandler {
 
         #! thread-local key string for the persistent flag
         const PersistenceThreadKey = "_AHRH_p";
+
+        #! thread-local key string for the handler reference (for cleanup)
+        const PersistenceHandlerKey = "_AHRH_ph";
+    }
+
+    private {
+        #! Thread-safe persistence tracking by thread ID
+        /** This map tracks which threads have persistence enabled on this handler,
+            bypassing the per-QoreProgram thread-local data issue where
+            \c save_thread_data() / \c get_thread_data() use \c getProgram()->getThreadData()
+            which can be different across program context boundaries (e.g., closures vs
+            method dispatch in async I/O mode).
+        */
+        Mutex _persistent_mutex();
+        hash<string, bool> _persistent_threads;
     }
 
     #! create the object optionally with the given AbstractAuthenticator
@@ -2052,7 +2143,48 @@ public class AbstractHttpRequestHandler {
         @return @ref True "True" if the current connection is in persistent mode
     */
     bool isPersistent() {
+        {
+            _persistent_mutex.lock();
+            on_exit _persistent_mutex.unlock();
+            if (_persistent_threads{string(gettid())}) {
+                return True;
+            }
+        }
         return boolean(get_thread_data(PersistenceThreadKey));
+    }
+
+    #! Removes the calling thread's entry from the per-thread persistence map
+    /** Called by staticPersistenceCleanup() when a thread resource is released
+        without a matching setPersistent(False) call.
+    */
+    clearPersistentThread() {
+        _persistent_mutex.lock();
+        on_exit _persistent_mutex.unlock();
+        remove _persistent_threads{string(gettid())};
+    }
+
+    #! Returns an optional filter callback for persistent queue request routing
+    /** In multiplexed (HTTP/2, HTTP/3) persistent mode, all requests on the same
+        connection are routed to the dedicated handler thread via a Queue.  When a
+        filter is provided, only requests for which the filter returns @ref True are
+        routed to the persistent queue; other requests are dispatched to the regular
+        handler pool.
+
+        The filter callback receives the request header hash and should return
+        @ref True if the request belongs to the persistent session.
+
+        The default implementation returns @ref nothing (no filter), meaning all
+        requests are routed to the persistent queue.  Subclasses should override
+        this method if the persistent session is identified by specific request
+        headers (e.g. a \c "Qorus-Connection" header).
+
+        @return a callback that takes a header hash and returns @ref True if the
+        request should be routed to the persistent queue, or @ref nothing for no
+        filtering
+
+        @since HttpServerUtil 1.x
+    */
+    *code<bool(hash<auto>)> getPersistentQueueFilter() {
     }
 
     #! Sets or clears persistent mode for the current connection
@@ -2071,11 +2203,27 @@ public class AbstractHttpRequestHandler {
         @param p if @ref True "True", enables persistent mode; if @ref False "False", disables it
     */
     setPersistent(bool p = True) {
+        string tid = string(gettid());
+        {
+            _persistent_mutex.lock();
+            on_exit _persistent_mutex.unlock();
+            if (p) {
+                _persistent_threads{tid} = True;
+            } else {
+                remove _persistent_threads{tid};
+            }
+        }
         if (p) {
-            save_thread_data((PersistenceThreadKey: True));
+            # remove any existing thread resource first to avoid the cleanup
+            # callback being triggered when re-registering on a reused pool thread
+            remove_thread_resource(\AbstractHttpRequestHandler::staticPersistenceCleanup());
+            save_thread_data((PersistenceThreadKey: True, PersistenceHandlerKey: self));
             set_thread_resource(\AbstractHttpRequestHandler::staticPersistenceCleanup());
-        } else
+        } else {
+            remove_thread_resource(\AbstractHttpRequestHandler::staticPersistenceCleanup());
             remove_thread_data(PersistenceThreadKey);
+            remove_thread_data(PersistenceHandlerKey);
+        }
     }
 
     #! calls the argument when the persistent connection is closed
@@ -2140,9 +2288,17 @@ public class AbstractHttpRequestHandler {
         remove_thread_data(NotificationThreadKey);
     }
 
-    #! removes the thread-local data key in case the object is destroyed in another thread
+    #! removes the thread-local data key and clears the per-thread persistence map entry
     static staticPersistenceCleanup() {
+        # clear _persistent_threads entry on the handler that set persistence for
+        # this thread; without this, a reused pool thread would still appear
+        # persistent on the handler after thread-resource cleanup
+        *object handler = get_thread_data(PersistenceHandlerKey);
+        if (handler instanceof AbstractHttpRequestHandler) {
+            cast<AbstractHttpRequestHandler>(handler).clearPersistentThread();
+        }
         remove_thread_data(PersistenceThreadKey);
+        remove_thread_data(PersistenceHandlerKey);
     }
 
     #! called externally when a persistent connection is closed

@@ -1,0 +1,447 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    HTTP/3 Bidirectional Streaming Tests — exercises the low-level HTTPClient
+    bidi APIs: sendHttp3Connect, sendHttp3StreamData, readHttp3StreamData.
+
+    Uses extended CONNECT (RFC 9220) with a generic :protocol value to trigger the
+    HttpServer's dedicated socket handler path for bidirectional communication.
+
+    Server-side handlers use the protocol-agnostic Queue + send_stream_data
+    interface — identical to the HTTP/2 bidi test handlers.
+*/
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/HttpServer.qm
+
+%exec-class Http3BidiStreamingTest
+
+#! Bidirectional echo handler using extended CONNECT (RFC 9220)
+/** Protocol-agnostic: reads from stream_data_queue, writes via send_stream_data.
+    Works identically over HTTP/2 and HTTP/3.
+*/
+class BidiEchoHandler inherits AbstractHttpSocketHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (is_extended_connect(cx, hdr)) {
+            return <HttpResponseInfo>{
+                "code": 200,
+                "streaming": True,
+            };
+        }
+        return makeResponse(400, "expected extended CONNECT");
+    }
+
+    private bool startImpl(softstring lid, hash<auto> cx, hash<auto> hdr, Socket s) {
+        Queue stream_data_queue = cx."header-info".stream_data_queue;
+        code send = cx."header-info".send_stream_data;
+
+        # Echo loop: read from Queue, write via send wrapper
+        while (True) {
+            auto chunk = stream_data_queue.get(10s);
+            if (!exists chunk) {
+                break;
+            }
+            send(chunk);
+        }
+
+        # Send END_STREAM
+        send(NOTHING, True);
+
+        return False;
+    }
+}
+
+#! Handler that accepts CONNECT, reads first block, then closes the stream
+class EarlyCloseHandler inherits AbstractHttpSocketHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (is_extended_connect(cx, hdr)) {
+            return <HttpResponseInfo>{
+                "code": 200,
+                "streaming": True,
+            };
+        }
+        return makeResponse(400, "expected extended CONNECT");
+    }
+
+    private bool startImpl(softstring lid, hash<auto> cx, hash<auto> hdr, Socket s) {
+        Queue stream_data_queue = cx."header-info".stream_data_queue;
+        code send = cx."header-info".send_stream_data;
+
+        # Read the first block only (discard)
+        stream_data_queue.get(5s);
+
+        # Send error data, then close the stream
+        send(binary("ERROR: rejected"), True);
+
+        return False;
+    }
+}
+
+#! Slow reader handler — reads with delays to create backpressure
+class SlowReaderHandler inherits AbstractHttpSocketHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (is_extended_connect(cx, hdr)) {
+            return <HttpResponseInfo>{
+                "code": 200,
+                "streaming": True,
+            };
+        }
+        return makeResponse(400, "expected extended CONNECT");
+    }
+
+    private bool startImpl(softstring lid, hash<auto> cx, hash<auto> hdr, Socket s) {
+        Queue stream_data_queue = cx."header-info".stream_data_queue;
+        code send = cx."header-info".send_stream_data;
+
+        # Read all data slowly (simulates backpressure)
+        int total_read = 0;
+        while (True) {
+            auto chunk = stream_data_queue.get(10s);
+            if (!exists chunk) {
+                break;
+            }
+            total_read += chunk.size();
+            usleep(1000);  # 1ms delay per chunk
+        }
+
+        # Send total bytes received as response
+        send(binary(sprintf("%d", total_read)), True);
+
+        return False;
+    }
+}
+
+class Http3BidiStreamingTest inherits QUnit::Test {
+    private {
+        HttpServer mServer;
+        int mH3Port;
+        Logger mLogger;
+
+        const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIUahuuRGDlubXWYmiPhjVeT66vtNYwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MDIyMjE5MjIwMVoXDTM2MDIy
+MDE5MjIwMVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEAjZNfLFUyyo02MjZjouaR11FybkZNwDWBG/bhkpTVyj/x
+QKlwKf20LbGSCmMIYHaFnODMg6u6E6sfRJVk+ofwVHBN/Ug+mvoL1zlNJanMdXLH
+7oUsUILY6bVUDPm1ACZmFJsAc9jfHfkluJ6vfYG+DOJbyB0nsMfO9/fvrwndQPUQ
+k9eMq2VfDohni4ijk5BWD/P9UmrciZUNOaNISay469Le5ZrtfGt9An1+Ye3TckJC
+tTF4q7+V+GC88w5QtLd1AMQGf/1ax5cwqQv9SSFvhnwj9o3V3Wkz1dq4XA/9rSA1
+ecPHh/tJeGuvbD11Hyr9LTYjQ+DIel0DV0ZDHdc5vwIDAQABo1MwUTAdBgNVHQ4E
+FgQUYBBsVylVinbbAzTbUt0jRM6mJvwwHwYDVR0jBBgwFoAUYBBsVylVinbbAzTb
+Ut0jRM6mJvwwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAfIAE
+EPvLO+gOnm366xJabLr2Sw3hfmvCq/zSTlPcrB9jdBlOLpMmKcdGiOOCNmzg9+BX
+YNX+I6+MNOGp0j3afWlVwEjiMD66ydSMPEQw0FTzvpIjFN3fHo/MJzFbingRLrk8
+LCo94GmjMBYG+50M8MCKE6EzqfmoYT9fiMJcyJwwdptOWf0URNYKKrG1wRlX4+o8
+uNjQ3VwynI95fAw9WcR/ZtP0pkmCor/hKaYgVRsSGjD78Fu0Uuhm/pCAOuObpEHj
+5eoTlaWC3pZzGA67piqlEDOWiRi9Mo2CzG0t5fmQ83KB51ImauKdYB21whxjkZ+5
+BjwMC4hqSD+bzO2B+A==
+-----END CERTIFICATE-----";
+
+        const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCNk18sVTLKjTYy
+NmOi5pHXUXJuRk3ANYEb9uGSlNXKP/FAqXAp/bQtsZIKYwhgdoWc4MyDq7oTqx9E
+lWT6h/BUcE39SD6a+gvXOU0lqcx1csfuhSxQgtjptVQM+bUAJmYUmwBz2N8d+SW4
+nq99gb4M4lvIHSewx8739++vCd1A9RCT14yrZV8OiGeLiKOTkFYP8/1SatyJlQ05
+o0hJrLjr0t7lmu18a30CfX5h7dNyQkK1MXirv5X4YLzzDlC0t3UAxAZ//VrHlzCp
+C/1JIW+GfCP2jdXdaTPV2rhcD/2tIDV5w8eH+0l4a69sPXUfKv0tNiND4Mh6XQNX
+RkMd1zm/AgMBAAECggEAATo1WYTgPK75DiS4PBR5UDS7DryvoN/LNOsGLUdQC9b+
+aEaacSrAvKKs9vJr2KuTtfahn0SbsjRKFZtL9aYRuHxZbhLfGWiF4MGflcOBQRq+
+eVFl6clwnaS+S/cq5rZD1/WODUhkisslqhI/cubvNwe2rvyduE510LgxYkLuIZ7a
++SCQz1XyPyhb8eVrWIZiprufjqXvDy01MC74l3ZYqaq1hr1oKi0ZDHI95Os7gtwQ
+4HQ3qdJsmYfbaf1223REp8gybnshsxkyjhKRU3nG7ZvgrRRMFkJvfHZ8VcS3cvsK
+ccKBJg7376+VDtc+RHUcBMyVZ881y4Rq2t6ssYVJVQKBgQDFq+N7ZGKOtQChSIXn
+ju/gP5WzSKJFaZhdkSggHi1K+PkuCZ1SXzKD3CPibreSUx9hzoZAAmTjzOfwhVZ7
+5HDqhrKfkWNeThAdXlglhNX5LVKhhmBsNGawANO8Pmq+pueWhK/76XgiGcOknyt6
+NH1ZE/QZpFeZB2binEhf6leYGwKBgQC3WgF2eaj2c4pugq13oZ9BHms5nsbYQgj8
+1H2C1wsgJNiz4tq6xFdvjiaw+r1OrCFrl9nz7npFc7uohtrRxXr7sq5nwMPO3QAP
+VxzyZ/TFP/FI70Avz6x+xX7HIlptpQ1mWacsdrvtoIG1c8veEJTyA4JgjoMhdDer
+JuPze+ZHLQKBgAzuLIhCzcul/W+Pberyx7A0mJdMtgiyWpwsRaKsNqxD0xD24gqk
+XYqQmOxT78Arnc7pEpEXVwArxDRQlJKwI87DluWnPgfKNXWmWT/DC7gsBc65Go+Z
+ceorc65JqvPjuRx4e4aQBCK+6rRXESICUvzDuGEBBhXljQ5fyMA1dRtnAoGAQSFH
+w74Ttvf0BK2G0SgoWglkLWOpXsiWSLlynDenTBPKppu+9vkn1gi41cU72eZrOL0I
+Pw5HgMRLtOGyeTGdLiuaqGBhLepzSv+22KT03dyI6U+TjWhH7gBZuIMLfEdVKzZN
+nA3RU+fgK4SmtotNXWrBtWrqScfuvm1iK+unMUECgYBrwc1rU/GI9tH4MWvBX99n
+pmFneeIUuXJajOsh7jUyTxcrHl+4kkgHDExuFMNPHfrIG8xCj43fjzxD/spz3xRS
++Ki3i3lYOFNhTUCREt5Xx23hkksK6j7SYlfY0IV2UruWt/UubpsfEqxC1Uk07NTo
+l50Xb2GWQesIt9k5jF5IOw==
+-----END PRIVATE KEY-----";
+    }
+
+    constructor() : Test("Http3BidiStreamingTest", "1.0") {
+        addTestCase("sendHttp3Connect + bidi echo", \testBidiEcho());
+        addTestCase("bidi echo large payload", \testBidiEchoLargePayload());
+        addTestCase("stream close during body send", \testStreamCloseDuringBodySend());
+        addTestCase("flow control backpressure", \testFlowControlBackpressure());
+        addTestCase("streaming throughput", \testStreamingThroughput());
+
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        mLogger = new Logger("h3-bidi-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            mLogger.addAppender(new StdoutAppender());
+        }
+
+        mServer = new HttpServer(<HttpServerOptionInfo>{
+            "logger": mLogger,
+            "debug": True,
+            "async_mode": True,
+        });
+
+        # Register handlers
+        mServer.setHandler("bidi", "/bidi", NOTHING, new BidiEchoHandler());
+        mServer.setHandler("early-close", "/early-close", NOTHING, new EarlyCloseHandler());
+        mServer.setHandler("slow", "/slow", NOTHING, new SlowReaderHandler());
+        mServer.waitForAsyncIo();
+
+        # Add HTTP/3 (QUIC) listener
+        hash<auto> h3info = mServer.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "enable_h3": True,
+        });
+        mH3Port = h3info.port;
+        mServer.waitForAsyncIo();
+
+        if (m_options.verbose > 1) {
+            printf("HTTP/3 test server on port %d\n", mH3Port);
+        }
+    }
+
+    globalTearDown() {
+        delete mServer;
+    }
+
+    private HTTPClient getClient(*hash<auto> extra_opts) {
+        hash<auto> opts = {
+            "url": sprintf("https://127.0.0.1:%d", mH3Port),
+            "http3_mode": "required",
+            "timeout": 30s,
+            "ssl_verify_cert": False,
+        } + (extra_opts ?? {});
+        HTTPClient client(opts);
+        # No connect() call — sendHttp3Connect establishes the QUIC connection
+        return client;
+    }
+
+    #! Read all available stream data until the stream is closed or timeout
+    private binary readAllStreamData(HTTPClient client, int stream_id, timeout max_wait = 10s) {
+        binary result = binary();
+        date deadline = now_us() + max_wait;
+        while (now_us() < deadline) {
+            *binary chunk = client.readHttp3StreamData(stream_id, 2000);
+            if (chunk) {
+                result += chunk;
+            }
+            if (client.isHttp3StreamClosed(stream_id)) {
+                break;
+            }
+        }
+        return result;
+    }
+
+    # ---- Basic bidi data exchange ----
+
+    testBidiEcho() {
+        HTTPClient client = getClient();
+
+        hash<auto> resp = client.sendHttp3Connect("/bidi", NOTHING, "bidi-stream");
+
+        assertEq(200, resp.status_code, "CONNECT should succeed");
+        int stream_id = resp.stream_id;
+        assertTrue(stream_id >= 0, "stream_id should be non-negative");
+
+        # Send 3 small payloads
+        list<binary> sent = ();
+        for (int i = 0; i < 3; i++) {
+            binary chunk = binary(sprintf("hello-%d", i));
+            sent += chunk;
+            client.sendHttp3StreamData(stream_id, chunk);
+        }
+        # Signal end of client data
+        client.sendHttp3StreamData(stream_id, NOTHING, True);
+
+        # Read echoed data
+        binary all_received = readAllStreamData(client, stream_id);
+
+        # Verify all sent data was echoed back
+        binary all_sent = binary();
+        map all_sent += $1, sent;
+        assertEq(all_sent, all_received, "echoed data matches");
+    }
+
+    testBidiEchoLargePayload() {
+        HTTPClient client = getClient();
+
+        hash<auto> resp = client.sendHttp3Connect("/bidi", NOTHING, "bidi-stream");
+
+        assertEq(200, resp.status_code);
+        int stream_id = resp.stream_id;
+
+        # Send 1MB payload in 16KB chunks
+        int total_size = 1024 * 1024;
+        int chunk_size = 16384;
+        binary all_sent = binary();
+
+        int offset = 0;
+        while (offset < total_size) {
+            int this_size = chunk_size;
+            if (offset + this_size > total_size) {
+                this_size = total_size - offset;
+            }
+            binary chunk = binary(strmul("X", this_size));
+            all_sent += chunk;
+            client.sendHttp3StreamData(stream_id, chunk);
+            offset += this_size;
+        }
+        client.sendHttp3StreamData(stream_id, NOTHING, True);
+
+        # Read all echoed data
+        binary all_received = readAllStreamData(client, stream_id, 30s);
+        assertEq(total_size, all_received.size(), "large payload: correct size echoed");
+        assertEq(all_sent, all_received, "large payload: data matches");
+    }
+
+    # ---- Stream close during body send ----
+
+    testStreamCloseDuringBodySend() {
+        HTTPClient client = getClient();
+
+        hash<auto> resp = client.sendHttp3Connect("/early-close", NOTHING, "bidi-stream");
+
+        assertEq(200, resp.status_code, "CONNECT should succeed");
+        int stream_id = resp.stream_id;
+
+        # Send multiple blocks — server reads first block then closes stream
+        bool got_stream_end = False;
+        bool send_completed = True;
+        for (int i = 0; i < 100; i++) {
+            try {
+                binary chunk = binary(strmul("Y", 4096));
+                client.sendHttp3StreamData(stream_id, chunk, False, 5000);
+            } catch (hash<ExceptionInfo> ex) {
+                if (inlist(ex.err, ("HTTP3-STREAM-RESET", "HTTP3-ERROR",
+                        "HTTP3-FLOW-CONTROL", "QUIC-STREAM-ERROR"))) {
+                    got_stream_end = True;
+                    send_completed = False;
+                    break;
+                }
+                rethrow;
+            }
+        }
+
+        if (send_completed) {
+            client.sendHttp3StreamData(stream_id, NOTHING, True);
+        }
+
+        # Read server response data
+        binary resp_data = readAllStreamData(client, stream_id, 10s);
+        assertTrue(got_stream_end || resp_data.size() > 0,
+            "client should detect stream end or receive server response");
+    }
+
+    # ---- Flow control under backpressure ----
+
+    testFlowControlBackpressure() {
+        HTTPClient client = getClient();
+
+        hash<auto> resp = client.sendHttp3Connect("/slow", NOTHING, "bidi-stream");
+
+        assertEq(200, resp.status_code);
+        int stream_id = resp.stream_id;
+
+        # Send data that will create backpressure
+        int total_sent = 0;
+        int target = 256 * 1024;  # 256KB
+        int chunk_size = 8192;
+
+        while (total_sent < target) {
+            int this_size = chunk_size;
+            if (total_sent + this_size > target) {
+                this_size = target - total_sent;
+            }
+            binary chunk = binary(strmul("Z", this_size));
+            client.sendHttp3StreamData(stream_id, chunk, False, 30000);
+            total_sent += this_size;
+        }
+        client.sendHttp3StreamData(stream_id, NOTHING, True);
+
+        # Read response — server sends total bytes received
+        binary resp_data = readAllStreamData(client, stream_id, 30s);
+        string resp_str = resp_data.toString("utf-8");
+        int total_received = int(resp_str);
+
+        assertEq(target, total_received,
+            "all data should be received despite backpressure");
+    }
+
+    # ---- Throughput benchmark ----
+
+    testStreamingThroughput() {
+        HTTPClient client = getClient();
+
+        hash<auto> resp = client.sendHttp3Connect("/bidi", NOTHING, "bidi-stream");
+
+        assertEq(200, resp.status_code);
+        int stream_id = resp.stream_id;
+
+        # Send 1000 small blocks, verify all data is echoed correctly
+        int num_blocks = 1000;
+        int block_size = 64;
+        binary all_sent = binary();
+
+        date start = now_us();
+        for (int i = 0; i < num_blocks; i++) {
+            binary chunk = binary(strmul(chr(65 + (i % 26)), block_size));
+            all_sent += chunk;
+            client.sendHttp3StreamData(stream_id, chunk);
+        }
+        client.sendHttp3StreamData(stream_id, NOTHING, True);
+
+        # Read all echoed data
+        binary all_received = readAllStreamData(client, stream_id, 30s);
+        date elapsed = now_us() - start;
+
+        assertEq(num_blocks * block_size, all_received.size(),
+            "throughput: all data echoed");
+        assertEq(all_sent, all_received, "throughput: data integrity");
+
+        if (m_options.verbose > 0) {
+            float elapsed_ms = get_duration_microseconds(elapsed) / 1000.0;
+            float throughput_mbps = (num_blocks * block_size * 2.0)
+                / (elapsed_ms / 1000.0) / (1024.0 * 1024.0);
+            printf("  Throughput: %d blocks x %d bytes in %.1f ms "
+                "(%.2f MB/s bidirectional)\n",
+                num_blocks, block_size, elapsed_ms, throughput_mbps);
+        }
+    }
+}
