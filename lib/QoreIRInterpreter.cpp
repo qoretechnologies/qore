@@ -6144,9 +6144,84 @@ load_local_done:
 
                 QoreValue res;
                 if (direct_inst->pseudo) {
-                    res = fromBits(qore_rt_dot_eval_pseudo_method_direct(
-                        toBits(base), direct_inst->method, direct_inst->qc, direct_inst->variant,
-                        nanboxed_args, nargs, xsink));
+                    // Fast-path optimizations for common pseudo-methods
+                    const char* method_name = direct_inst->method->getName();
+                    qore_type_t base_type = base.getType();
+
+                    if (!strcmp(method_name, "typeCode") && nargs == 0) {
+                        // Inline: return type code constant
+                        res = QoreValue(static_cast<int64_t>(base_type));
+                    } else if (!strcmp(method_name, "size") && nargs == 0) {
+                        // Inline: size() for lists and strings
+                        if (base_type == NT_LIST) {
+                            const QoreListNode* l = base.get<const QoreListNode>();
+                            res = QoreValue(static_cast<int64_t>(l->size()));
+                        } else if (base_type == NT_STRING) {
+                            const QoreStringNode* s = base.get<const QoreStringNode>();
+                            res = QoreValue(static_cast<int64_t>(s->strlen()));
+                        } else if (base_type == NT_HASH) {
+                            const QoreHashNode* h = base.get<const QoreHashNode>();
+                            res = QoreValue(static_cast<int64_t>(h->size()));
+                        } else {
+                            // Unsupported type, use runtime dispatch
+                            res = fromBits(qore_rt_dot_eval_pseudo_method_direct(
+                                toBits(base), direct_inst->method, direct_inst->qc, direct_inst->variant,
+                                nanboxed_args, nargs, xsink));
+                        }
+                    } else if ((!strcmp(method_name, "strlen") || !strcmp(method_name, "length")) && nargs == 0) {
+                        // Inline: strlen()/length() for strings
+                        if (base_type == NT_STRING) {
+                            const QoreStringNode* s = base.get<const QoreStringNode>();
+                            res = QoreValue(static_cast<int64_t>(s->strlen()));
+                        } else {
+                            // Unsupported type, use runtime dispatch
+                            res = fromBits(qore_rt_dot_eval_pseudo_method_direct(
+                                toBits(base), direct_inst->method, direct_inst->qc, direct_inst->variant,
+                                nanboxed_args, nargs, xsink));
+                        }
+                    } else if (!strcmp(method_name, "empty") && nargs == 0) {
+                        // Inline: empty() for lists and strings
+                        if (base_type == NT_LIST) {
+                            const QoreListNode* l = base.get<const QoreListNode>();
+                            res = QoreValue(l->empty() ? false : true);
+                        } else if (base_type == NT_STRING) {
+                            const QoreStringNode* s = base.get<const QoreStringNode>();
+                            res = QoreValue(s->strlen() == 0 ? true : false);
+                        } else if (base_type == NT_HASH) {
+                            const QoreHashNode* h = base.get<const QoreHashNode>();
+                            res = QoreValue(h->empty() ? false : true);
+                        } else {
+                            // Unsupported type, use runtime dispatch
+                            res = fromBits(qore_rt_dot_eval_pseudo_method_direct(
+                                toBits(base), direct_inst->method, direct_inst->qc, direct_inst->variant,
+                                nanboxed_args, nargs, xsink));
+                        }
+                    } else if (!strcmp(method_name, "val") && nargs == 0) {
+                        // Inline: val() for lists and strings (opposite of empty)
+                        if (base_type == NT_LIST) {
+                            const QoreListNode* l = base.get<const QoreListNode>();
+                            res = QoreValue(l->empty() ? false : true);
+                        } else if (base_type == NT_STRING) {
+                            const QoreStringNode* s = base.get<const QoreStringNode>();
+                            res = QoreValue(s->strlen() == 0 ? false : true);
+                        } else if (base_type == NT_HASH) {
+                            const QoreHashNode* h = base.get<const QoreHashNode>();
+                            res = QoreValue(h->empty() ? false : true);
+                        } else {
+                            // Unsupported type, use runtime dispatch
+                            res = fromBits(qore_rt_dot_eval_pseudo_method_direct(
+                                toBits(base), direct_inst->method, direct_inst->qc, direct_inst->variant,
+                                nanboxed_args, nargs, xsink));
+                        }
+                    } else if (!strcmp(method_name, "type") && nargs == 0) {
+                        // Inline: type() - return type name string
+                        res = QoreValue(new QoreStringNode(base.getTypeName()));
+                    } else {
+                        // Unsupported pseudo-method, use generic runtime dispatch
+                        res = fromBits(qore_rt_dot_eval_pseudo_method_direct(
+                            toBits(base), direct_inst->method, direct_inst->qc, direct_inst->variant,
+                            nanboxed_args, nargs, xsink));
+                    }
                 } else {
                     res = fromBits(qore_rt_dot_eval_method_direct(
                         toBits(base), direct_inst->method, direct_inst->qc, direct_inst->variant,
@@ -6186,9 +6261,84 @@ load_local_done:
 
                 QoreValue res;
                 if (de_invoke_inst->pseudo) {
-                    res = fromBits(qore_rt_dot_eval_pseudo_method_direct(
-                        toBits(base), de_invoke_inst->method, de_invoke_inst->qc, de_invoke_inst->variant,
-                        nanboxed_args, nargs, xsink));
+                    // Fast-path optimizations for common pseudo-methods
+                    const char* method_name = de_invoke_inst->method->getName();
+                    qore_type_t base_type = base.getType();
+
+                    if (!strcmp(method_name, "typeCode") && nargs == 0) {
+                        // Inline: return type code constant
+                        res = QoreValue(static_cast<int64_t>(base_type));
+                    } else if (!strcmp(method_name, "size") && nargs == 0) {
+                        // Inline: size() for lists and strings
+                        if (base_type == NT_LIST) {
+                            const QoreListNode* l = base.get<const QoreListNode>();
+                            res = QoreValue(static_cast<int64_t>(l->size()));
+                        } else if (base_type == NT_STRING) {
+                            const QoreStringNode* s = base.get<const QoreStringNode>();
+                            res = QoreValue(static_cast<int64_t>(s->strlen()));
+                        } else if (base_type == NT_HASH) {
+                            const QoreHashNode* h = base.get<const QoreHashNode>();
+                            res = QoreValue(static_cast<int64_t>(h->size()));
+                        } else {
+                            // Unsupported type, use runtime dispatch
+                            res = fromBits(qore_rt_dot_eval_pseudo_method_direct(
+                                toBits(base), de_invoke_inst->method, de_invoke_inst->qc, de_invoke_inst->variant,
+                                nanboxed_args, nargs, xsink));
+                        }
+                    } else if ((!strcmp(method_name, "strlen") || !strcmp(method_name, "length")) && nargs == 0) {
+                        // Inline: strlen()/length() for strings
+                        if (base_type == NT_STRING) {
+                            const QoreStringNode* s = base.get<const QoreStringNode>();
+                            res = QoreValue(static_cast<int64_t>(s->strlen()));
+                        } else {
+                            // Unsupported type, use runtime dispatch
+                            res = fromBits(qore_rt_dot_eval_pseudo_method_direct(
+                                toBits(base), de_invoke_inst->method, de_invoke_inst->qc, de_invoke_inst->variant,
+                                nanboxed_args, nargs, xsink));
+                        }
+                    } else if (!strcmp(method_name, "empty") && nargs == 0) {
+                        // Inline: empty() for lists and strings
+                        if (base_type == NT_LIST) {
+                            const QoreListNode* l = base.get<const QoreListNode>();
+                            res = QoreValue(l->empty() ? true : false);
+                        } else if (base_type == NT_STRING) {
+                            const QoreStringNode* s = base.get<const QoreStringNode>();
+                            res = QoreValue(s->strlen() == 0 ? true : false);
+                        } else if (base_type == NT_HASH) {
+                            const QoreHashNode* h = base.get<const QoreHashNode>();
+                            res = QoreValue(h->empty() ? true : false);
+                        } else {
+                            // Unsupported type, use runtime dispatch
+                            res = fromBits(qore_rt_dot_eval_pseudo_method_direct(
+                                toBits(base), de_invoke_inst->method, de_invoke_inst->qc, de_invoke_inst->variant,
+                                nanboxed_args, nargs, xsink));
+                        }
+                    } else if (!strcmp(method_name, "val") && nargs == 0) {
+                        // Inline: val() for lists and strings (opposite of empty)
+                        if (base_type == NT_LIST) {
+                            const QoreListNode* l = base.get<const QoreListNode>();
+                            res = QoreValue(l->empty() ? false : true);
+                        } else if (base_type == NT_STRING) {
+                            const QoreStringNode* s = base.get<const QoreStringNode>();
+                            res = QoreValue(s->strlen() == 0 ? false : true);
+                        } else if (base_type == NT_HASH) {
+                            const QoreHashNode* h = base.get<const QoreHashNode>();
+                            res = QoreValue(h->empty() ? false : true);
+                        } else {
+                            // Unsupported type, use runtime dispatch
+                            res = fromBits(qore_rt_dot_eval_pseudo_method_direct(
+                                toBits(base), de_invoke_inst->method, de_invoke_inst->qc, de_invoke_inst->variant,
+                                nanboxed_args, nargs, xsink));
+                        }
+                    } else if (!strcmp(method_name, "type") && nargs == 0) {
+                        // Inline: type() - return type name string
+                        res = QoreValue(new QoreStringNode(base.getTypeName()));
+                    } else {
+                        // Unsupported pseudo-method, use generic runtime dispatch
+                        res = fromBits(qore_rt_dot_eval_pseudo_method_direct(
+                            toBits(base), de_invoke_inst->method, de_invoke_inst->qc, de_invoke_inst->variant,
+                            nanboxed_args, nargs, xsink));
+                    }
                 } else {
                     res = fromBits(qore_rt_dot_eval_method_direct(
                         toBits(base), de_invoke_inst->method, de_invoke_inst->qc, de_invoke_inst->variant,
