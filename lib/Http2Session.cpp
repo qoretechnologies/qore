@@ -2287,9 +2287,9 @@ int Http2Session::waitForStreamDrain(int32_t stream_id, int timeout_ms) {
 }
 
 void Http2Session::notifyStreamDrain() {
-    drain_gen_.fetch_add(1, std::memory_order_release);
     {
         std::lock_guard<std::mutex> dlock(drain_mtx_);
+        drain_gen_.fetch_add(1, std::memory_order_release);
     }
     drain_cv_.notify_all();
 }
