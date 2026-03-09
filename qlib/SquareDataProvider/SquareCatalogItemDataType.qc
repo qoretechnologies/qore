@@ -27,7 +27,7 @@ public namespace SquareDataProvider {
 
 #! Square catalog object record type
 public class SquareCatalogItemDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for Square catalog objects
         const Fields = {
             "type": {

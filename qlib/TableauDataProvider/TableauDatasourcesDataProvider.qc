@@ -104,8 +104,8 @@ public class TableauDatasourcesDataProvider inherits TableauDataProviderBase {
     }
 
     #! Returns the record type
-    private *AbstractDataProviderType getRecordTypeImpl() {
-        return new TableauDatasourceDataType();
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return new TableauDatasourceDataType().getFields();
     }
 
     #! Returns an iterator for records matching the search criteria

@@ -27,13 +27,15 @@ public namespace BigCommerceDataProvider {
 
 #! Request type for getting a customer
 public class BigCommerceGetCustomerRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "customer_id": {
                 "display_name": "Customer ID",
+                "short_desc": "The customer to retrieve",
                 "type": IntType,
                 "desc": "The ID of the customer to retrieve",
                 "required": True,
+                "ref_data": "customers",
             },
         };
     }

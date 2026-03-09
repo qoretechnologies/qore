@@ -36,6 +36,7 @@ public class TableauDeleteProjectRequestDataType inherits HashDataType {
                 "desc": "The unique identifier of the project to delete",
                 "required": True,
                 "example_value": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+                "ref_data": "projects",
             },
         };
     }

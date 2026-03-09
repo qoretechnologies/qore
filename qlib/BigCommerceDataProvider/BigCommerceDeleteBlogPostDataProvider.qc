@@ -27,13 +27,15 @@ public namespace BigCommerceDataProvider {
 
 #! Request type for deleting a blog post
 public class BigCommerceDeleteBlogPostRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "blog_post_id": {
                 "display_name": "Blog Post ID",
+                "short_desc": "The blog post to delete",
                 "type": IntType,
                 "desc": "The ID of the blog post to delete",
                 "required": True,
+                "ref_data": "blog_posts",
             },
         };
     }

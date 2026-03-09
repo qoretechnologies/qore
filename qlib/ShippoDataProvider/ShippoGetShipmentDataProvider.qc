@@ -103,7 +103,7 @@ public class ShippoGetShipmentDataProvider inherits ShippoDataProviderBase {
 
 #! Request data type for getting a shipment
 public class ShippoGetShipmentRequestDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions
         const Fields = {
             "shipment_id": {

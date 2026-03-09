@@ -910,11 +910,16 @@ public class DeelDataProviderTest inherits QUnit::Test {
             hash<string, hash<DataProviderMessageInfo>> eventTypes = trigger.getEventTypes();
             assertTrue(eventTypes.hasKey(triggerName));
 
+            # Verify example event data is available and has expected fields
+            auto exampleData = trigger.getExampleEventData(triggerName);
+            assertTrue(exampleData.val());
+            assertEq(Type::Hash, exampleData.type());
+            assertTrue(exampleData.id.val());
+
             if (m_options.verbose) {
-                printf("Watch trigger '%s' OK - event type registered\n", triggerName);
+                printf("Watch trigger '%s' OK - event type registered, example data valid\n",
+                    triggerName);
             }
         }
-
-
     }
 }

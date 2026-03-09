@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore JotformDataProvider module definition
 
-/*  JotformFormSubmissionsDataProvider.qc Copyright 2025 Qore Technologies, s.r.o.
+/*  JotformFormSubmissionsDataProvider.qc Copyright 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -57,6 +57,12 @@ public class JotformFormSubmissionsDataProvider inherits JotformDataProviderBase
 
         #! Search options
         const SearchOptions = {
+            "submissionID": <DataProviderOptionInfo>{
+                "display_name": "Submission ID",
+                "short_desc": "Get a specific submission by ID",
+                "type": AbstractDataProviderType::get(StringOrNothingType),
+                "desc": "The unique ID of the submission to retrieve directly (bypasses formID requirement)",
+            },
             "formID": <DataProviderOptionInfo>{
                 "display_name": "Form",
                 "short_desc": "The form to get submissions from",
@@ -74,7 +80,7 @@ public class JotformFormSubmissionsDataProvider inherits JotformDataProviderBase
                 "display_name": "Order By",
                 "short_desc": "Sort order",
                 "type": AbstractDataProviderType::get(StringOrNothingType),
-                "desc": "Field to sort by (e.g., 'created_at', 'updated_at')",
+                "desc": "Field to sort by (e.g., `created_at`, `updated_at`)",
             },
             "limit": <DataProviderOptionInfo>{
                 "display_name": "Limit",
@@ -144,6 +150,17 @@ public class JotformFormSubmissionsDataProvider inherits JotformDataProviderBase
     #! Searches for submissions
     private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
+        # Handle single-record lookup by submission ID
+        if (search_options.submissionID) {
+            hash<auto> response = doGet(sprintf("/submission/%s", search_options.submissionID));
+            list<hash<auto>> records;
+            if (response.content) {
+                records = (response.content,);
+            }
+            return new DefaultRecordIterator(new ListHashIterator(records), where_cond, search_options,
+                recordType.getFields());
+        }
+
         # Check for formID in search options if not set
         string form_id = formID ?? search_options.formID;
         @assert(form_id.val(), "formID is required to search submissions");

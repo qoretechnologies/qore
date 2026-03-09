@@ -56,7 +56,7 @@ public class SquarespaceProductsDataProvider inherits SquarespaceDataProviderBas
                 "display_name": "Product Type",
                 "short_desc": "Filter by product type (PHYSICAL, SERVICE, GIFT_CARD, DIGITAL)",
                 "type": AbstractDataProviderType::get(SoftStringOrNothingType),
-                "desc": "Filter by product type (PHYSICAL, SERVICE, GIFT_CARD, DIGITAL)",
+                "desc": "Filter by product type (`PHYSICAL`, `SERVICE`, `GIFT_CARD`, `DIGITAL`)",
                 "allowed_values": (
                     <AllowedValueInfo>{"value": "PHYSICAL", "desc": "Physical product"},
                     <AllowedValueInfo>{"value": "SERVICE", "desc": "Service product"},
@@ -66,15 +66,15 @@ public class SquarespaceProductsDataProvider inherits SquarespaceDataProviderBas
             },
             "modified_after": <DataProviderOptionInfo>{
                 "display_name": "Modified After",
-                "short_desc": "Products modified after this ISO 8601 datetime",
-                "type": AbstractDataProviderType::get(SoftStringOrNothingType),
-                "desc": "Products modified after this ISO 8601 datetime",
+                "short_desc": "Products modified after this datetime",
+                "type": AbstractDataProviderType::get(SoftDateOrNothingType),
+                "desc": "Products modified after this datetime",
             },
             "modified_before": <DataProviderOptionInfo>{
                 "display_name": "Modified Before",
-                "short_desc": "Products modified before this ISO 8601 datetime",
-                "type": AbstractDataProviderType::get(SoftStringOrNothingType),
-                "desc": "Products modified before this ISO 8601 datetime",
+                "short_desc": "Products modified before this datetime",
+                "type": AbstractDataProviderType::get(SoftDateOrNothingType),
+                "desc": "Products modified before this datetime",
             },
             "limit": <DataProviderOptionInfo>{
                 "display_name": "Limit",
@@ -121,8 +121,8 @@ public class SquarespaceProductsDataProvider inherits SquarespaceDataProviderBas
     }
 
     #! Returns the record type
-    private *AbstractDataProviderType getRecordTypeImpl() {
-        return new SquarespaceProductDataType();
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return new SquarespaceProductDataType().getFields();
     }
 
     #! Returns an iterator for records matching the search criteria

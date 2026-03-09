@@ -27,7 +27,7 @@ public namespace SquareDataProvider {
 
 #! Request type for sending (publishing) an invoice
 public class SquareSendInvoiceRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "invoice_id": {
                 "type": StringType,

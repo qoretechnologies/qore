@@ -27,7 +27,7 @@ public namespace TableauDataProvider {
 
 #! Tableau extract refresh task record type
 public class TableauExtractRefreshTaskDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for Tableau extract refresh tasks
         const Fields = {
             "id": {

@@ -25,6 +25,45 @@
 #! Contains all public definitions in the SquarespaceDataProvider module
 public namespace SquarespaceDataProvider {
 
+#! Request type for custom API calls
+public class SquarespaceExecuteApiCallRequestDataType inherits HashDataType {
+    public {
+        #! Field definitions
+        const Fields = {
+            "method": {
+                "display_name": "HTTP Method",
+                "short_desc": "HTTP method to use",
+                "type": StringType,
+                "desc": "The HTTP method to use",
+                "required": True,
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "GET", "desc": "Retrieve resources"},
+                    <AllowedValueInfo>{"value": "POST", "desc": "Create resources"},
+                    <AllowedValueInfo>{"value": "PUT", "desc": "Update resources"},
+                    <AllowedValueInfo>{"value": "DELETE", "desc": "Delete resources"},
+                ),
+            },
+            "path": {
+                "display_name": "API Path",
+                "short_desc": "API endpoint path",
+                "type": StringType,
+                "desc": "API path (e.g. `/1.0/commerce/orders` or `/v2/commerce/products`)",
+                "required": True,
+            },
+            "body": {
+                "display_name": "Request Body",
+                "short_desc": "Request body for POST/PUT",
+                "type": AutoHashOrNothingType,
+                "desc": "Optional request body for `POST` and `PUT` requests",
+            },
+        };
+    }
+
+    constructor() {
+        addQoreFields(Fields);
+    }
+}
+
 #! Squarespace execute custom API call data provider
 public class SquarespaceExecuteApiCallDataProvider inherits SquarespaceDataProviderBase {
     public {
@@ -40,26 +79,8 @@ public class SquarespaceExecuteApiCallDataProvider inherits SquarespaceDataProvi
         #! Constructor options
         const ConstructorOptions = BaseConstructorOptions;
 
-        #! Request type for custom API calls
-        const RequestType = new HashDataType("SquarespaceExecuteApiCallRequest", {
-            "method": {
-                "display_name": "HTTP Method",
-                "type": StringType,
-                "desc": "The HTTP method to use (GET, POST, PUT, DELETE)",
-                "required": True,
-            },
-            "path": {
-                "display_name": "API Path",
-                "type": StringType,
-                "desc": "API path (e.g. '1.0/commerce/orders' or 'v2/commerce/products')",
-                "required": True,
-            },
-            "body": {
-                "display_name": "Request Body",
-                "type": AutoHashOrNothingType,
-                "desc": "Optional request body for POST and PUT requests",
-            },
-        });
+        #! Request type
+        static SquarespaceExecuteApiCallRequestDataType RequestType();
 
         #! Response type - auto hash since the response structure depends on the API call
         const ResponseType = AbstractDataProviderTypeMap."hash";

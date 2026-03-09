@@ -50,18 +50,25 @@ public class Cin7CoreFindSaleFulfilmentDataProvider inherits Cin7CoreDataProvide
                 "short_desc": "Filter by sale ID",
                 "type": AbstractDataProviderType::get(StringOrNothingType),
                 "desc": "Return fulfilments for a specific sale",
+                "preselected": True,
             },
             "TaskID": <DataProviderOptionInfo>{
                 "display_name": "Task ID",
                 "short_desc": "Filter by task ID",
                 "type": AbstractDataProviderType::get(StringOrNothingType),
                 "desc": "Return a specific fulfilment task",
+                "preselected": True,
             },
             "Status": <DataProviderOptionInfo>{
                 "display_name": "Status",
                 "short_desc": "Filter by status",
                 "type": AbstractDataProviderType::get(StringOrNothingType),
                 "desc": "Filter fulfilments by status",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "Draft", "desc": "Draft fulfilment"},
+                    <AllowedValueInfo>{"value": "Authorized", "desc": "Authorized fulfilment"},
+                    <AllowedValueInfo>{"value": "Void", "desc": "Voided fulfilment"},
+                ),
             },
             "ModifiedSince": <DataProviderOptionInfo>{
                 "display_name": "Modified Since",
@@ -162,7 +169,7 @@ public class Cin7CoreFindSaleFulfilmentDataProvider inherits Cin7CoreDataProvide
 
 #! Fulfilment data type
 public class Cin7CoreFulfilmentDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions
         const Fields = {
             "TaskID": {
@@ -202,7 +209,7 @@ public class Cin7CoreFulfilmentDataType inherits HashDataType {
                 "desc": "The warehouse location for this fulfilment",
             },
             "Lines": {
-                "type": AutoListOrNothingType,
+                "type": new ListDataType("Lines", new Cin7CoreSaleLineItemDataType(), True),
                 "display_name": "Lines",
                 "short_desc": "Fulfilment lines",
                 "desc": "The line items being fulfilled",

@@ -50,12 +50,14 @@ public class UnleashedCustomersDataProvider inherits UnleashedDataProviderBase {
                 "short_desc": "Filter by customer code",
                 "type": AbstractDataProviderType::get(StringOrNothingType),
                 "desc": "Filter customers by their unique code",
+                "preselected": True,
             },
             "customerName": <DataProviderOptionInfo>{
                 "display_name": "Customer Name",
                 "short_desc": "Filter by customer name",
                 "type": AbstractDataProviderType::get(StringOrNothingType),
                 "desc": "Filter customers by name (partial match from start)",
+                "preselected": True,
             },
             "contactEmail": <DataProviderOptionInfo>{
                 "display_name": "Contact Email",
@@ -90,7 +92,7 @@ public class UnleashedCustomersDataProvider inherits UnleashedDataProviderBase {
         };
     }
 
-    private {
+    public {
         #! Record type
         static UnleashedCustomerDataType recordType();
     }

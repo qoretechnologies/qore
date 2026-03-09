@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore LinearDataProvider module definition
 
-/*  LinearTeamsDataProvider.qc Copyright 2025 Qore Technologies, s.r.o.
+/*  LinearTeamsDataProvider.qc Copyright 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -43,6 +43,12 @@ public class LinearTeamsDataProvider inherits LinearDataProviderBase {
 
         #! Search options
         const SearchOptions = {
+            "id": <DataProviderOptionInfo>{
+                "display_name": "Team ID",
+                "short_desc": "Get a specific team by ID",
+                "type": AbstractDataProviderType::get(StringOrNothingType),
+                "desc": "The unique ID of the team to retrieve",
+            },
             "limit": <DataProviderOptionInfo>{
                 "display_name": "Limit",
                 "short_desc": "Maximum number of results",
@@ -99,6 +105,14 @@ public class LinearTeamsDataProvider inherits LinearDataProviderBase {
     #! Searches for teams
     private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
+        # Handle single-record lookup by ID
+        if (search_options.id) {
+            hash<auto> data = doGraphQL(GetTeamQuery, {"id": search_options.id});
+            return new DefaultRecordIterator(new ListHashIterator(data.team
+                ? (data.team,) : ()), where_cond, search_options,
+                recordType.getFields());
+        }
+
         @debug(log(LoggerLevel::DEBUG, "searchRecordsImpl: fetching teams"));
         int pageSize = search_options.limit ?? DefaultPageSize;
         return new LinearRecordIterator(rest, ListTeamsQuery, "teams", NOTHING, pageSize,

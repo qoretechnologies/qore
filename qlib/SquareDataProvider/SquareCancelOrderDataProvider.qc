@@ -27,7 +27,7 @@ public namespace SquareDataProvider {
 
 #! Request type for canceling an order
 public class SquareCancelOrderRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "order_id": {
                 "type": StringType,

@@ -27,7 +27,7 @@ public namespace ChargebeeDataProvider {
 
 #! Request type for updating a subscription
 public class ChargebeeUpdateSubscriptionRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "id": {
                 "type": StringType,

@@ -98,7 +98,7 @@ public class Cin7CoreDeleteSaleDataProvider inherits Cin7CoreDataProviderBase {
 
 #! Request data type for deleting a sale
 public class Cin7CoreDeleteSaleRequestDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions
         const Fields = {
             "ID": {

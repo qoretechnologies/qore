@@ -27,7 +27,7 @@ public namespace ShipStationDataProvider {
 
 #! Request type for voiding a label
 public class ShipStationVoidLabelRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "shipmentId": {
                 "type": IntType,
@@ -35,6 +35,7 @@ public class ShipStationVoidLabelRequestDataType inherits HashDataType {
                 "short_desc": "The shipment ID to void",
                 "desc": "The unique ShipStation shipment ID for the label to void",
                 "required": True,
+                "preselected": True,
             },
         };
     }
@@ -46,7 +47,7 @@ public class ShipStationVoidLabelRequestDataType inherits HashDataType {
 
 #! Response type for voiding a label
 public class ShipStationVoidLabelResponseDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "approved": {
                 "type": SoftBoolType,

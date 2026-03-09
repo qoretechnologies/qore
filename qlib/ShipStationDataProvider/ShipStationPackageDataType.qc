@@ -33,7 +33,7 @@ public class ShipStationPackageDataType inherits HashDataType {
             "display_name": "Carrier Code",
             "short_desc": "Carrier code",
             "type": SoftStringType,
-            "desc": "The carrier code (e.g., 'ups', 'fedex', 'stamps_com')",
+            "desc": "The carrier code (e.g., `ups`, `fedex`, `stamps_com`)",
         },
         "code": {
             "display_name": "Package Code",

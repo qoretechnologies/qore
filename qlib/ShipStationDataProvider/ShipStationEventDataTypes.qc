@@ -27,14 +27,14 @@ public namespace ShipStationDataProvider {
 
 #! Base event data type with common webhook fields
 public class ShipStationBaseEventDataType inherits HashDataType {
-    private {
+    public {
         #! Common field definitions for all ShipStation webhook events
         const CommonFields = {
             "event": {
                 "type": StringType,
                 "display_name": "Event Type",
                 "short_desc": "The type of event",
-                "desc": "The type of event that occurred (ORDER_NOTIFY, ITEM_ORDER_NOTIFY, SHIP_NOTIFY, ITEM_SHIP_NOTIFY)",
+                "desc": "The type of event that occurred (`ORDER_NOTIFY`, `ITEM_ORDER_NOTIFY`, `SHIP_NOTIFY`, `ITEM_SHIP_NOTIFY`)",
             },
             "resource_url": {
                 "type": StringOrNothingType,
@@ -59,7 +59,7 @@ public class ShipStationBaseEventDataType inherits HashDataType {
 
 #! Order notify event data type - includes full order data fetched from resource_url
 public class ShipStationOrderNotifyEventDataType inherits ShipStationBaseEventDataType {
-    private {
+    public {
         #! Additional fields for order notify events
         const OrderFields = {
             "orderId": {
@@ -99,13 +99,13 @@ public class ShipStationOrderNotifyEventDataType inherits ShipStationBaseEventDa
                 "desc": "The customer's email address",
             },
             "shipTo": {
-                "type": AutoHashOrNothingType,
+                "type": new ShipStationAddressDataType(AutoHashOrNothingType),
                 "display_name": "Ship To",
                 "short_desc": "Shipping address",
                 "desc": "The shipping address for the order",
             },
             "billTo": {
-                "type": AutoHashOrNothingType,
+                "type": new ShipStationAddressDataType(AutoHashOrNothingType),
                 "display_name": "Bill To",
                 "short_desc": "Billing address",
                 "desc": "The billing address for the order",
@@ -133,11 +133,11 @@ public class ShipStationOrderNotifyEventDataType inherits ShipStationBaseEventDa
 
 #! Item order notify event data type - includes order with item details
 public class ShipStationItemOrderNotifyEventDataType inherits ShipStationOrderNotifyEventDataType {
-    private {
+    public {
         #! Additional fields for item order notify events
         const ItemFields = {
             "items": {
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("OrderItems", new ShipStationOrderItemDataType(), True),
                 "display_name": "Order Items",
                 "short_desc": "Items in the order",
                 "desc": "The list of items in the order with full details",
@@ -153,7 +153,7 @@ public class ShipStationItemOrderNotifyEventDataType inherits ShipStationOrderNo
 
 #! Ship notify event data type - includes shipment data fetched from resource_url
 public class ShipStationShipNotifyEventDataType inherits ShipStationBaseEventDataType {
-    private {
+    public {
         #! Additional fields for ship notify events
         const ShipmentFields = {
             "shipmentId": {
@@ -223,19 +223,19 @@ public class ShipStationShipNotifyEventDataType inherits ShipStationBaseEventDat
                 "desc": "Whether the shipment label has been voided",
             },
             "shipTo": {
-                "type": AutoHashOrNothingType,
+                "type": new ShipStationAddressDataType(AutoHashOrNothingType),
                 "display_name": "Ship To",
                 "short_desc": "Shipping address",
                 "desc": "The shipping address for the shipment",
             },
             "weight": {
-                "type": AutoHashOrNothingType,
+                "type": new ShipStationWeightDataType(AutoHashOrNothingType),
                 "display_name": "Weight",
                 "short_desc": "Package weight",
                 "desc": "The weight of the package",
             },
             "dimensions": {
-                "type": AutoHashOrNothingType,
+                "type": new ShipStationDimensionsDataType(AutoHashOrNothingType),
                 "display_name": "Dimensions",
                 "short_desc": "Package dimensions",
                 "desc": "The dimensions of the package",
@@ -251,7 +251,7 @@ public class ShipStationShipNotifyEventDataType inherits ShipStationBaseEventDat
 
 #! Item ship notify event data type - includes shipment with item details
 public class ShipStationItemShipNotifyEventDataType inherits ShipStationShipNotifyEventDataType {
-    private {
+    public {
         #! Additional fields for item ship notify events
         const ItemFields = {
             "shipmentItems": {

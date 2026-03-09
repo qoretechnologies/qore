@@ -27,7 +27,7 @@ public namespace Cin7CoreDataProvider {
 
 #! Cin7Core customer data type
 public class Cin7CoreCustomerDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions
         const Fields = {
             "ID": {
@@ -113,13 +113,13 @@ public class Cin7CoreCustomerDataType inherits HashDataType {
                 "desc": "Whether the customer is on credit hold",
             },
             "Contacts": {
-                "type": SoftAutoListOrNothingType,
+                "type": new ListDataType("Contacts", new Cin7CoreContactDataType(), True),
                 "display_name": "Contacts",
                 "short_desc": "Contact list",
                 "desc": "List of contacts for this customer",
             },
             "Addresses": {
-                "type": SoftAutoListOrNothingType,
+                "type": new ListDataType("Addresses", new Cin7CoreAddressDataType(), True),
                 "display_name": "Addresses",
                 "short_desc": "Address list",
                 "desc": "List of addresses for this customer",
@@ -153,7 +153,7 @@ public class Cin7CoreCustomerDataType inherits HashDataType {
 
 #! Cin7Core create customer request data type
 public class Cin7CoreCreateCustomerRequestDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions
         const Fields = {
             "Name": {
@@ -229,13 +229,13 @@ public class Cin7CoreCreateCustomerRequestDataType inherits HashDataType {
                 "desc": "The customer's credit limit",
             },
             "Contacts": {
-                "type": SoftAutoListOrNothingType,
+                "type": new ListDataType("Contacts", new Cin7CoreContactDataType(), True),
                 "display_name": "Contacts",
                 "short_desc": "Contact list",
                 "desc": "List of contacts to create for this customer",
             },
             "Addresses": {
-                "type": SoftAutoListOrNothingType,
+                "type": new ListDataType("Addresses", new Cin7CoreAddressDataType(), True),
                 "display_name": "Addresses",
                 "short_desc": "Address list",
                 "desc": "List of addresses to create for this customer",

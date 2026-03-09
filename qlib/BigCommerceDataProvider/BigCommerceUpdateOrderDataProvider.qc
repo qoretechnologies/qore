@@ -27,18 +27,22 @@ public namespace BigCommerceDataProvider {
 
 #! Request type for updating an order
 public class BigCommerceUpdateOrderRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "order_id": {
                 "display_name": "Order ID",
+                "short_desc": "The order to update",
                 "type": IntType,
                 "desc": "The ID of the order to update",
                 "required": True,
+                "ref_data": "orders",
             },
             "status_id": {
                 "display_name": "Status ID",
+                "short_desc": "New order status ID",
                 "type": IntOrNothingType,
                 "desc": "The new order status ID",
+                "preselected": True,
                 "allowed_values": (
                     <AllowedValueInfo>{"value": 0, "desc": "Incomplete"},
                     <AllowedValueInfo>{"value": 1, "desc": "Pending"},
@@ -59,16 +63,19 @@ public class BigCommerceUpdateOrderRequestDataType inherits HashDataType {
             },
             "staff_notes": {
                 "display_name": "Staff Notes",
+                "short_desc": "Internal staff notes",
                 "type": StringOrNothingType,
                 "desc": "Internal staff notes for the order",
             },
             "customer_message": {
                 "display_name": "Customer Message",
+                "short_desc": "Customer message",
                 "type": StringOrNothingType,
                 "desc": "Message from the customer",
             },
             "billing_address": {
                 "display_name": "Billing Address",
+                "short_desc": "Billing address",
                 "type": AutoHashOrNothingType,
                 "desc": "Billing address object for the order",
             },

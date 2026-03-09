@@ -27,7 +27,7 @@ public namespace SquarespaceDataProvider {
 
 #! Request type for updating stock/inventory
 public class SquarespaceUpdateStockRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "variant_id": {
                 "type": StringType,

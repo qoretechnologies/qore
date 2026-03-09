@@ -27,7 +27,7 @@ public namespace SquareDataProvider {
 
 #! Square payment record type
 public class SquarePaymentDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for Square payments
         const Fields = {
             "id": {

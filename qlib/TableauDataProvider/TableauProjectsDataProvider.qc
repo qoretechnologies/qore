@@ -102,8 +102,8 @@ public class TableauProjectsDataProvider inherits TableauDataProviderBase {
     }
 
     #! Returns the record type
-    private *AbstractDataProviderType getRecordTypeImpl() {
-        return new TableauProjectDataType();
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return new TableauProjectDataType().getFields();
     }
 
     #! Returns an iterator for records matching the search criteria

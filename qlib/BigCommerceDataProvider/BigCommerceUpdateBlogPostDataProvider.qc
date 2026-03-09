@@ -27,61 +27,73 @@ public namespace BigCommerceDataProvider {
 
 #! Request type for updating a blog post
 public class BigCommerceUpdateBlogPostRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "blog_post_id": {
                 "display_name": "Blog Post ID",
+                "short_desc": "The blog post to update",
                 "type": IntType,
                 "desc": "The ID of the blog post to update",
                 "required": True,
+                "ref_data": "blog_posts",
             },
             "title": {
                 "display_name": "Title",
+                "short_desc": "Blog post title",
                 "type": StringOrNothingType,
                 "desc": "Title of the blog post",
             },
             "body": {
                 "display_name": "Body",
+                "short_desc": "Blog post content (HTML)",
                 "type": StringOrNothingType,
                 "desc": "Body content of the blog post (HTML)",
             },
             "url": {
                 "display_name": "URL",
+                "short_desc": "URL slug",
                 "type": StringOrNothingType,
                 "desc": "URL slug for the blog post",
             },
             "tags": {
                 "display_name": "Tags",
+                "short_desc": "Tags for categorization",
                 "type": AutoListOrNothingType,
                 "desc": "Array of tag strings for categorization",
             },
             "is_published": {
                 "display_name": "Is Published",
+                "short_desc": "Publish the post",
                 "type": SoftBoolOrNothingType,
                 "desc": "Whether the blog post is published and visible",
             },
             "published_date": {
                 "display_name": "Published Date",
+                "short_desc": "Publication date",
                 "type": SoftDateOrNothingType,
                 "desc": "Date/time the blog post was published",
             },
             "author": {
                 "display_name": "Author",
+                "short_desc": "Author name",
                 "type": StringOrNothingType,
                 "desc": "Author name of the blog post",
             },
             "thumbnail_path": {
                 "display_name": "Thumbnail Path",
+                "short_desc": "Thumbnail image path",
                 "type": StringOrNothingType,
                 "desc": "Path to the thumbnail image",
             },
             "meta_description": {
                 "display_name": "Meta Description",
+                "short_desc": "SEO description",
                 "type": StringOrNothingType,
                 "desc": "SEO meta description",
             },
             "meta_keywords": {
                 "display_name": "Meta Keywords",
+                "short_desc": "SEO keywords",
                 "type": StringOrNothingType,
                 "desc": "SEO meta keywords",
             },

@@ -27,7 +27,7 @@ public namespace Cin7CoreDataProvider {
 
 #! Cin7Core supplier data type
 public class Cin7CoreSupplierDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions
         const Fields = {
             "ID": {
@@ -95,13 +95,13 @@ public class Cin7CoreSupplierDataType inherits HashDataType {
                 "desc": "The supplier's tax identification number",
             },
             "Contacts": {
-                "type": SoftAutoListOrNothingType,
+                "type": new ListDataType("Contacts", new Cin7CoreContactDataType(), True),
                 "display_name": "Contacts",
                 "short_desc": "Contact list",
                 "desc": "List of contacts for this supplier",
             },
             "Addresses": {
-                "type": SoftAutoListOrNothingType,
+                "type": new ListDataType("Addresses", new Cin7CoreAddressDataType(), True),
                 "display_name": "Addresses",
                 "short_desc": "Address list",
                 "desc": "List of addresses for this supplier",
@@ -135,7 +135,7 @@ public class Cin7CoreSupplierDataType inherits HashDataType {
 
 #! Cin7Core create supplier request data type
 public class Cin7CoreCreateSupplierRequestDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions
         const Fields = {
             "Name": {
@@ -199,13 +199,13 @@ public class Cin7CoreCreateSupplierRequestDataType inherits HashDataType {
                 "desc": "The supplier's tax identification number",
             },
             "Contacts": {
-                "type": SoftAutoListOrNothingType,
+                "type": new ListDataType("Contacts", new Cin7CoreContactDataType(), True),
                 "display_name": "Contacts",
                 "short_desc": "Contact list",
                 "desc": "List of contacts to create for this supplier",
             },
             "Addresses": {
-                "type": SoftAutoListOrNothingType,
+                "type": new ListDataType("Addresses", new Cin7CoreAddressDataType(), True),
                 "display_name": "Addresses",
                 "short_desc": "Address list",
                 "desc": "List of addresses to create for this supplier",

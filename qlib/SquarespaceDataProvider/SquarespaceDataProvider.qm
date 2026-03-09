@@ -75,99 +75,8 @@ module SquarespaceDataProvider {
             "desc": "Create a new order in Squarespace",
             "action_code": DPAT_API,
             "data_provider_info": SquarespaceCreateOrderDataProvider::ProviderInfo,
-            "options": {
-                "channelName": <ActionOptionInfo>{
-                    "display_name": "Channel Name",
-                    "short_desc": "Third-party channel name (max 30 chars)",
-                    "type": AbstractDataProviderTypeMap."string",
-                    "required": True,
-                    "preselected": True,
-                    "desc": "Third-party channel name (max 30 chars)",
-                },
-                "externalOrderReference": <ActionOptionInfo>{
-                    "display_name": "External Order Reference",
-                    "short_desc": "Third-party order reference (max 200 chars)",
-                    "type": AbstractDataProviderTypeMap."string",
-                    "required": True,
-                    "preselected": True,
-                    "desc": "Third-party order reference (max 200 chars)",
-                },
-                "createdOn": <ActionOptionInfo>{
-                    "display_name": "Created On",
-                    "short_desc": "When order was placed (ISO 8601)",
-                    "type": AbstractDataProviderTypeMap."string",
-                    "required": True,
-                    "preselected": True,
-                    "desc": "When order was placed (ISO 8601)",
-                },
-                "priceTaxInterpretation": <ActionOptionInfo>{
-                    "display_name": "Price Tax Interpretation",
-                    "short_desc": "EXCLUSIVE or INCLUSIVE",
-                    "type": AbstractDataProviderTypeMap."string",
-                    "required": True,
-                    "preselected": True,
-                    "desc": "EXCLUSIVE or INCLUSIVE",
-                    "allowed_values": (
-                        <AllowedValueInfo>{"value": "EXCLUSIVE", "desc": "Prices exclude tax"},
-                        <AllowedValueInfo>{"value": "INCLUSIVE", "desc": "Prices include tax"},
-                    ),
-                },
-                "grandTotal": <ActionOptionInfo>{
-                    "display_name": "Grand Total",
-                    "short_desc": "Order grand total (Money object)",
-                    "type": AbstractDataProviderTypeMap."hash",
-                    "required": True,
-                    "preselected": True,
-                    "desc": "Order grand total (Money object with currency and value)",
-                },
-                "lineItems": <ActionOptionInfo>{
-                    "display_name": "Line Items",
-                    "short_desc": "Order line items",
-                    "type": AbstractDataProviderTypeMap."list",
-                    "required": True,
-                    "preselected": True,
-                    "desc": "Array of line item objects (lineItemType, quantity, unitPricePaid)",
-                },
-                "customerEmail": <ActionOptionInfo>{
-                    "display_name": "Customer Email",
-                    "short_desc": "Customer email",
-                    "type": AbstractDataProviderTypeMap."*string",
-                    "preselected": True,
-                    "desc": "Customer email address",
-                },
-                "billingAddress": <ActionOptionInfo>{
-                    "display_name": "Billing Address",
-                    "short_desc": "Billing address",
-                    "type": AbstractDataProviderTypeMap."*hash",
-                    "desc": "Billing address",
-                },
-                "shippingAddress": <ActionOptionInfo>{
-                    "display_name": "Shipping Address",
-                    "short_desc": "Shipping address",
-                    "type": AbstractDataProviderTypeMap."*hash",
-                    "desc": "Shipping address",
-                },
-                "fulfillmentStatus": <ActionOptionInfo>{
-                    "display_name": "Fulfillment Status",
-                    "short_desc": "PENDING or FULFILLED",
-                    "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "PENDING or FULFILLED",
-                    "allowed_values": (
-                        <AllowedValueInfo>{"value": "PENDING", "desc": "Order is pending fulfillment"},
-                        <AllowedValueInfo>{"value": "FULFILLED", "desc": "Order has been fulfilled"},
-                    ),
-                },
-                "inventoryBehavior": <ActionOptionInfo>{
-                    "display_name": "Inventory Behavior",
-                    "short_desc": "DEDUCT or SKIP (default: SKIP)",
-                    "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "DEDUCT or SKIP (default: SKIP)",
-                    "allowed_values": (
-                        <AllowedValueInfo>{"value": "DEDUCT", "desc": "Deduct from inventory"},
-                        <AllowedValueInfo>{"value": "SKIP", "desc": "Do not adjust inventory"},
-                    ),
-                },
-            },
+            "get_output_type": AbstractDataProviderType sub () { return new SquarespaceOrderDataType(); },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(SquarespaceCreateOrderRequestDataType::Fields),
         });
 
         # Fulfill an Order
@@ -181,33 +90,8 @@ module SquarespaceDataProvider {
             "desc": "Fulfill an order in Squarespace with shipment details",
             "action_code": DPAT_API,
             "data_provider_info": SquarespaceFulfillOrderDataProvider::ProviderInfo,
-            "options": {
-                "order_id": <ActionOptionInfo>{
-                    "display_name": "Order ID",
-                    "short_desc": "The order to fulfill",
-                    "type": AbstractDataProviderTypeMap."string",
-                    "required": True,
-                    "preselected": True,
-                    "ref_data": "orders",
-                },
-                "shouldSendNotification": <ActionOptionInfo>{
-                    "display_name": "Send Notification",
-                    "short_desc": "Send customer notification email",
-                    "type": AbstractDataProviderTypeMap."bool",
-                    "required": True,
-                    "preselected": True,
-                    "desc": "Send customer notification email",
-                },
-                "shipments": <ActionOptionInfo>{
-                    "display_name": "Shipments",
-                    "short_desc": "Array of shipment objects",
-                    "type": AbstractDataProviderTypeMap."list",
-                    "required": True,
-                    "preselected": True,
-                    "desc": "Array of shipment objects (shipDate, carrierName, service, "
-                        "trackingNumber, trackingUrl)",
-                },
-            },
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(SquarespaceFulfillOrderRequestDataType::Fields),
         });
 
         # List Orders
@@ -236,7 +120,7 @@ module SquarespaceDataProvider {
                     "short_desc": "Filter by status",
                     "type": AbstractDataProviderTypeMap."*string",
                     "preselected": True,
-                    "desc": "Filter by fulfillment status (PENDING, FULFILLED, CANCELED)",
+                    "desc": "Filter by fulfillment status (`PENDING`, `FULFILLED`, `CANCELED`)",
                     "allowed_values": (
                         <AllowedValueInfo>{"value": "PENDING", "desc": "Pending fulfillment"},
                         <AllowedValueInfo>{"value": "FULFILLED", "desc": "Fulfilled"},
@@ -246,14 +130,14 @@ module SquarespaceDataProvider {
                 "modified_after": <ActionOptionInfo>{
                     "display_name": "Modified After",
                     "short_desc": "Orders modified after this date",
-                    "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "Orders modified after this ISO 8601 datetime",
+                    "type": AbstractDataProviderTypeMap."*date",
+                    "desc": "Orders modified after this datetime",
                 },
                 "modified_before": <ActionOptionInfo>{
                     "display_name": "Modified Before",
                     "short_desc": "Orders modified before this date",
-                    "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "Orders modified before this ISO 8601 datetime",
+                    "type": AbstractDataProviderTypeMap."*date",
+                    "desc": "Orders modified before this datetime",
                 },
                 "limit": <ActionOptionInfo>{
                     "display_name": "Limit",
@@ -280,7 +164,6 @@ module SquarespaceDataProvider {
                     "short_desc": "The order ID",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
-                    "preselected": True,
                     "ref_data": "orders",
                 },
             },
@@ -299,6 +182,8 @@ module SquarespaceDataProvider {
             "desc": "Create a new product in Squarespace",
             "action_code": DPAT_API,
             "data_provider_info": SquarespaceCreateProductDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new SquarespaceProductDataType(); },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(SquarespaceCreateProductRequestDataType::Fields),
         });
 
         # Update a Product
@@ -312,6 +197,8 @@ module SquarespaceDataProvider {
             "desc": "Update an existing product in Squarespace",
             "action_code": DPAT_API,
             "data_provider_info": SquarespaceUpdateProductDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new SquarespaceProductDataType(); },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(SquarespaceUpdateProductRequestDataType::Fields),
         });
 
         # Delete a Product
@@ -325,6 +212,8 @@ module SquarespaceDataProvider {
             "desc": "Delete a product from Squarespace",
             "action_code": DPAT_API,
             "data_provider_info": SquarespaceDeleteProductDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(SquarespaceDeleteProductRequestDataType::Fields),
         });
 
         # List Products
@@ -348,7 +237,7 @@ module SquarespaceDataProvider {
                     "short_desc": "Filter by type",
                     "type": AbstractDataProviderTypeMap."*string",
                     "preselected": True,
-                    "desc": "Filter by product type (PHYSICAL, SERVICE, GIFT_CARD, DIGITAL)",
+                    "desc": "Filter by product type (`PHYSICAL`, `SERVICE`, `GIFT_CARD`, `DIGITAL`)",
                     "allowed_values": (
                         <AllowedValueInfo>{"value": "PHYSICAL", "desc": "Physical product"},
                         <AllowedValueInfo>{"value": "SERVICE", "desc": "Service product"},
@@ -359,12 +248,12 @@ module SquarespaceDataProvider {
                 "modified_after": <ActionOptionInfo>{
                     "display_name": "Modified After",
                     "short_desc": "Products modified after this date",
-                    "type": AbstractDataProviderTypeMap."*string",
+                    "type": AbstractDataProviderTypeMap."*date",
                 },
                 "modified_before": <ActionOptionInfo>{
                     "display_name": "Modified Before",
                     "short_desc": "Products modified before this date",
-                    "type": AbstractDataProviderTypeMap."*string",
+                    "type": AbstractDataProviderTypeMap."*date",
                 },
                 "limit": <ActionOptionInfo>{
                     "display_name": "Limit",
@@ -391,7 +280,6 @@ module SquarespaceDataProvider {
                     "short_desc": "The product ID",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
-                    "preselected": True,
                     "ref_data": "products",
                 },
             },
@@ -410,6 +298,8 @@ module SquarespaceDataProvider {
             "desc": "Create a new product variant in Squarespace",
             "action_code": DPAT_API,
             "data_provider_info": SquarespaceCreateProductVariantDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new SquarespaceProductVariantDataType(); },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(SquarespaceCreateProductVariantRequestDataType::Fields),
         });
 
         # Update a Product Variant
@@ -423,6 +313,8 @@ module SquarespaceDataProvider {
             "desc": "Update an existing product variant in Squarespace",
             "action_code": DPAT_API,
             "data_provider_info": SquarespaceUpdateProductVariantDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new SquarespaceProductVariantDataType(); },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(SquarespaceUpdateProductVariantRequestDataType::Fields),
         });
 
         # Delete a Product Variant
@@ -436,6 +328,8 @@ module SquarespaceDataProvider {
             "desc": "Delete a product variant from Squarespace",
             "action_code": DPAT_API,
             "data_provider_info": SquarespaceDeleteProductVariantDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(SquarespaceDeleteProductVariantRequestDataType::Fields),
         });
 
         # List Product Variants
@@ -483,6 +377,8 @@ module SquarespaceDataProvider {
             "desc": "Upload a product image in Squarespace",
             "action_code": DPAT_API,
             "data_provider_info": SquarespaceUploadProductImageDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(SquarespaceUploadProductImageRequestDataType::Fields),
         });
 
         # Assign a Product Image
@@ -496,6 +392,8 @@ module SquarespaceDataProvider {
             "desc": "Assign a product image to a variant in Squarespace",
             "action_code": DPAT_API,
             "data_provider_info": SquarespaceAssignProductImageDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(SquarespaceAssignProductImageRequestDataType::Fields),
         });
 
         # Update a Product Image
@@ -509,6 +407,8 @@ module SquarespaceDataProvider {
             "desc": "Update a product image alt text in Squarespace",
             "action_code": DPAT_API,
             "data_provider_info": SquarespaceUpdateProductImageDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(SquarespaceUpdateProductImageRequestDataType::Fields),
         });
 
         # Delete a Product Image
@@ -522,6 +422,8 @@ module SquarespaceDataProvider {
             "desc": "Delete a product image from Squarespace",
             "action_code": DPAT_API,
             "data_provider_info": SquarespaceDeleteProductImageDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(SquarespaceDeleteProductImageRequestDataType::Fields),
         });
 
         # ========== INVENTORY ACTIONS ==========
@@ -537,6 +439,8 @@ module SquarespaceDataProvider {
             "desc": "Adjust inventory stock for a product variant in Squarespace",
             "action_code": DPAT_API,
             "data_provider_info": SquarespaceUpdateStockDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(SquarespaceUpdateStockRequestDataType::Fields),
         });
 
         # List Inventory
@@ -559,12 +463,12 @@ module SquarespaceDataProvider {
                 "modified_after": <ActionOptionInfo>{
                     "display_name": "Modified After",
                     "short_desc": "Filter by modification date",
-                    "type": AbstractDataProviderTypeMap."*string",
+                    "type": AbstractDataProviderTypeMap."*date",
                 },
                 "modified_before": <ActionOptionInfo>{
                     "display_name": "Modified Before",
                     "short_desc": "Filter by modification date",
-                    "type": AbstractDataProviderTypeMap."*string",
+                    "type": AbstractDataProviderTypeMap."*date",
                 },
                 "limit": <ActionOptionInfo>{
                     "display_name": "Limit",
@@ -591,7 +495,6 @@ module SquarespaceDataProvider {
                     "short_desc": "The variant ID",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
-                    "preselected": True,
                 },
             },
         });
@@ -617,12 +520,13 @@ module SquarespaceDataProvider {
                 "modified_after": <ActionOptionInfo>{
                     "display_name": "Modified After",
                     "short_desc": "Filter by modification date",
-                    "type": AbstractDataProviderTypeMap."*string",
+                    "type": AbstractDataProviderTypeMap."*date",
+                    "preselected": True,
                 },
                 "modified_before": <ActionOptionInfo>{
                     "display_name": "Modified Before",
                     "short_desc": "Filter by modification date",
-                    "type": AbstractDataProviderTypeMap."*string",
+                    "type": AbstractDataProviderTypeMap."*date",
                 },
                 "limit": <ActionOptionInfo>{
                     "display_name": "Limit",
@@ -649,7 +553,6 @@ module SquarespaceDataProvider {
                     "short_desc": "The transaction ID",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
-                    "preselected": True,
                 },
             },
         });
@@ -667,6 +570,8 @@ module SquarespaceDataProvider {
             "desc": "Make a custom API call to the Squarespace API",
             "action_code": DPAT_API,
             "data_provider_info": SquarespaceExecuteApiCallDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(SquarespaceExecuteApiCallRequestDataType::Fields),
         });
 
         # ========== TRIGGERS ==========

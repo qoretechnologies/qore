@@ -27,7 +27,7 @@ public namespace SquareDataProvider {
 
 #! Request type for creating a booking (user-friendly flattened fields)
 public class SquareCreateBookingRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "location_id": {
                 "type": StringType,

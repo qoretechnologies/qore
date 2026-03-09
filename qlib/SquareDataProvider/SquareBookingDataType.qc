@@ -27,7 +27,7 @@ public namespace SquareDataProvider {
 
 #! Square booking record type
 public class SquareBookingDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for Square bookings
         const Fields = {
             "id": {

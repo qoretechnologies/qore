@@ -116,7 +116,7 @@ public class Cin7CoreUpdateSupplierDataProvider inherits Cin7CoreDataProviderBas
 
 #! Request data type for updating a supplier
 public class Cin7CoreUpdateSupplierRequestDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions
         const Fields = {
             "ID": {
@@ -182,13 +182,13 @@ public class Cin7CoreUpdateSupplierRequestDataType inherits HashDataType {
                 "desc": "The supplier's tax identification number",
             },
             "Contacts": {
-                "type": AutoListOrNothingType,
+                "type": new ListDataType("Contacts", new Cin7CoreContactDataType(), True),
                 "display_name": "Contacts",
                 "short_desc": "Contact list",
                 "desc": "List of contacts for this supplier",
             },
             "Addresses": {
-                "type": AutoListOrNothingType,
+                "type": new ListDataType("Addresses", new Cin7CoreAddressDataType(), True),
                 "display_name": "Addresses",
                 "short_desc": "Address list",
                 "desc": "List of addresses for this supplier",

@@ -27,7 +27,7 @@ public namespace SquareDataProvider {
 
 #! Request type for creating an invoice (user-friendly flattened fields)
 public class SquareCreateInvoiceRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "location_id": {
                 "type": StringType,

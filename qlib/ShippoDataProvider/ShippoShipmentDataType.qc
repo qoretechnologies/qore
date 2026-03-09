@@ -79,19 +79,19 @@ public class ShippoShipmentDataType inherits HashDataType {
                 "desc": "The destination/recipient address",
             },
             "address_return": {
-                "type": AutoHashOrNothingType,
+                "type": new ShippoAddressDataType(),
                 "display_name": "Return Address",
                 "short_desc": "Return address",
-                "desc": "The return address (if different from address_from)",
+                "desc": "The return address (if different from `address_from`)",
             },
             "parcels": {
-                "type": SoftAutoListOrNothingType,
+                "type": new ListDataType("parcels", new ShippoParcelDataType(), True),
                 "display_name": "Parcels",
                 "short_desc": "Package details",
                 "desc": "Array of parcel objects",
             },
             "rates": {
-                "type": SoftAutoListOrNothingType,
+                "type": new ListDataType("rates", new ShippoRateDataType(), True),
                 "display_name": "Rates",
                 "short_desc": "Available shipping rates",
                 "desc": "Array of rate objects for this shipment",
@@ -103,10 +103,11 @@ public class ShippoShipmentDataType inherits HashDataType {
                 "desc": "The date the shipment will be sent (ISO 8601 format)",
             },
             "extra": {
-                "type": AutoHashOrNothingType,
+                "type": new ShippoShipmentExtraDataType(AutoHashOrNothingType),
                 "display_name": "Extra",
                 "short_desc": "Extra options",
-                "desc": "Additional shipment options (insurance, signature, etc.)",
+                "desc": "Additional shipment options including insurance, signature confirmation, "
+                    "billing, COD, and more",
             },
             "customs_declaration": {
                 "type": SoftStringOrNothingType,
@@ -124,7 +125,7 @@ public class ShippoShipmentDataType inherits HashDataType {
                 "type": SoftAutoListOrNothingType,
                 "display_name": "Messages",
                 "short_desc": "Status messages",
-                "desc": "Array of messages related to the shipment status",
+                "desc": "Array of messages related to the shipment status (each with `source` and `text`)",
             },
         };
     }

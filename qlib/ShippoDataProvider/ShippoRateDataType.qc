@@ -97,10 +97,11 @@ public class ShippoRateDataType inherits HashDataType {
                 "desc": "URL to the carrier's 200x200 pixel logo",
             },
             "servicelevel": {
-                "type": AutoHashOrNothingType,
+                "type": new ShippoServiceLevelDataType(AutoHashOrNothingType),
                 "display_name": "Service Level",
                 "short_desc": "Service details",
-                "desc": "Object containing service level name, token, and terms",
+                "desc": "Service level details including `name`, `token`, `terms`, and "
+                    "`extended_token`",
             },
             "estimated_days": {
                 "type": SoftIntOrNothingType,

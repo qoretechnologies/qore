@@ -98,7 +98,7 @@ public class UnleashedGetCreditNoteDataProvider inherits UnleashedDataProviderBa
 
 #! Request data type for getting a credit note
 public class UnleashedGetCreditNoteRequestDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions
         const Fields = {
             "guid": {
@@ -107,6 +107,7 @@ public class UnleashedGetCreditNoteRequestDataType inherits HashDataType {
                 "short_desc": "The credit note GUID",
                 "desc": "The unique identifier (GUID) of the credit note to retrieve",
                 "required": True,
+                "ref_data": "creditnotes",
             },
         };
     }

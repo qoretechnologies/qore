@@ -27,7 +27,7 @@ public namespace ChargebeeDataProvider {
 
 #! Request type for creating an invoice
 public class ChargebeeCreateInvoiceRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "customer_id": {
                 "type": StringType,
@@ -40,7 +40,7 @@ public class ChargebeeCreateInvoiceRequestDataType inherits HashDataType {
                 "type": StringOrNothingType,
                 "display_name": "Currency Code",
                 "short_desc": "Invoice currency",
-                "desc": "The currency code for the invoice (e.g., 'USD', 'EUR')",
+                "desc": "The currency code for the invoice (e.g., `USD`, `EUR`)",
             },
             "invoice_note": {
                 "type": StringOrNothingType,

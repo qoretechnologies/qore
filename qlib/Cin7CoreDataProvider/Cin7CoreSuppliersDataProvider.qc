@@ -50,12 +50,14 @@ public class Cin7CoreSuppliersDataProvider inherits Cin7CoreDataProviderBase {
                 "short_desc": "Filter by supplier ID",
                 "type": AbstractDataProviderType::get(StringOrNothingType),
                 "desc": "Return a specific supplier by ID",
+                "preselected": True,
             },
             "Name": <DataProviderOptionInfo>{
                 "display_name": "Name",
                 "short_desc": "Filter by name",
                 "type": AbstractDataProviderType::get(StringOrNothingType),
                 "desc": "Filter suppliers by name (partial match)",
+                "preselected": True,
             },
             "ModifiedSince": <DataProviderOptionInfo>{
                 "display_name": "Modified Since",

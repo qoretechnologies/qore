@@ -102,7 +102,7 @@ public class UnleashedUpdateCreditNoteDataProvider inherits UnleashedDataProvide
 
 #! Request data type for updating a credit note
 public class UnleashedUpdateCreditNoteRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "guid": {
                 "type": StringType,
@@ -110,12 +110,14 @@ public class UnleashedUpdateCreditNoteRequestDataType inherits HashDataType {
                 "short_desc": "The credit note GUID",
                 "desc": "The unique identifier (GUID) of the credit note to update",
                 "required": True,
+                "ref_data": "creditnotes",
             },
             "CreditNoteLines": {
-                "type": SoftAutoListOrNothingType,
+                "type": new ListDataType("CreditNoteLines", new UnleashedCreditNoteLineDataType(), True),
                 "display_name": "Credit Note Lines",
                 "short_desc": "Credit note line items",
                 "desc": "List of line items for this credit note",
+                "preselected": True,
             },
             "Comments": {
                 "type": SoftStringOrNothingType,

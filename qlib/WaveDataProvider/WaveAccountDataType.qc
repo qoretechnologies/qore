@@ -79,7 +79,7 @@ public class WaveAccountDataType inherits HashDataType {
                 "type": BoolOrNothingType,
                 "display_name": "Is Archived",
                 "short_desc": "Whether the account is archived",
-                "desc": "If true, the account has been archived and is no longer active",
+                "desc": "If `True`, the account has been archived and is no longer active",
                 "example_value": False,
             },
             "sequence": {
@@ -122,9 +122,16 @@ public class WaveAccountCreateDataType inherits HashDataType {
                 "type": StringType,
                 "display_name": "Type",
                 "short_desc": "The account type (required)",
-                "desc": "The account type enum value (ASSET, LIABILITY, INCOME, EXPENSE, EQUITY)",
+                "desc": "The account type",
                 "example_value": "ASSET",
                 "required": True,
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "ASSET", "desc": "Asset account"},
+                    <AllowedValueInfo>{"value": "LIABILITY", "desc": "Liability account"},
+                    <AllowedValueInfo>{"value": "INCOME", "desc": "Income account"},
+                    <AllowedValueInfo>{"value": "EXPENSE", "desc": "Expense account"},
+                    <AllowedValueInfo>{"value": "EQUITY", "desc": "Equity account"},
+                ),
             },
             "subtype": {
                 "type": StringOrNothingType,

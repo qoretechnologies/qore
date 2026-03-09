@@ -27,7 +27,7 @@ public namespace SquareDataProvider {
 
 #! Square inventory count record type
 public class SquareInventoryCountDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for Square inventory counts
         const Fields = {
             "catalog_object_id": {

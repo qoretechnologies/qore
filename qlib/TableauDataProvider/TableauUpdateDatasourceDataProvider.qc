@@ -36,6 +36,7 @@ public class TableauUpdateDatasourceRequestDataType inherits HashDataType {
                 "desc": "The unique identifier of the datasource to update",
                 "required": True,
                 "example_value": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+                "ref_data": "datasources",
             },
             "name": {
                 "type": StringOrNothingType,
@@ -43,6 +44,7 @@ public class TableauUpdateDatasourceRequestDataType inherits HashDataType {
                 "short_desc": "The new datasource name",
                 "desc": "The new name of the datasource",
                 "example_value": "Sales Data 2026",
+                "preselected": True,
             },
             "project_id": {
                 "type": StringOrNothingType,
@@ -50,6 +52,7 @@ public class TableauUpdateDatasourceRequestDataType inherits HashDataType {
                 "short_desc": "The project to move the datasource to",
                 "desc": "The ID of the project to move the datasource to",
                 "example_value": "f1e2d3c4-b5a6-7890-abcd-ef1234567890",
+                "ref_data": "projects",
             },
             "is_certified": {
                 "type": SoftBoolOrNothingType,

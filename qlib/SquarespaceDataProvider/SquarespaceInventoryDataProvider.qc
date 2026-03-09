@@ -55,14 +55,14 @@ public class SquarespaceInventoryDataProvider inherits SquarespaceDataProviderBa
             "modified_after": <DataProviderOptionInfo>{
                 "display_name": "Modified After",
                 "short_desc": "Filter by modification date",
-                "type": AbstractDataProviderType::get(SoftStringOrNothingType),
-                "desc": "Filter inventory modified after this ISO 8601 datetime",
+                "type": AbstractDataProviderType::get(SoftDateOrNothingType),
+                "desc": "Filter inventory modified after this datetime",
             },
             "modified_before": <DataProviderOptionInfo>{
                 "display_name": "Modified Before",
                 "short_desc": "Filter by modification date",
-                "type": AbstractDataProviderType::get(SoftStringOrNothingType),
-                "desc": "Filter inventory modified before this ISO 8601 datetime",
+                "type": AbstractDataProviderType::get(SoftDateOrNothingType),
+                "desc": "Filter inventory modified before this datetime",
             },
             "limit": <DataProviderOptionInfo>{
                 "display_name": "Limit",
@@ -106,8 +106,8 @@ public class SquarespaceInventoryDataProvider inherits SquarespaceDataProviderBa
     }
 
     #! Returns the record type
-    private *AbstractDataProviderType getRecordTypeImpl() {
-        return new SquarespaceInventoryItemDataType();
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return new SquarespaceInventoryItemDataType().getFields();
     }
 
     #! Returns an iterator for records matching the search criteria

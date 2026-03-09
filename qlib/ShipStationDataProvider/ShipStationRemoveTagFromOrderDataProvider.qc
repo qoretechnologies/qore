@@ -27,7 +27,7 @@ public namespace ShipStationDataProvider {
 
 #! Request type for removing a tag from an order
 public class ShipStationRemoveTagFromOrderRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "orderId": {
                 "type": IntType,
@@ -35,6 +35,7 @@ public class ShipStationRemoveTagFromOrderRequestDataType inherits HashDataType 
                 "short_desc": "The order ID",
                 "desc": "The ShipStation order ID to remove the tag from",
                 "required": True,
+                "preselected": True,
             },
             "tagId": {
                 "type": IntType,
@@ -42,6 +43,7 @@ public class ShipStationRemoveTagFromOrderRequestDataType inherits HashDataType 
                 "short_desc": "The tag ID to remove",
                 "desc": "The ID of the tag to remove from the order",
                 "required": True,
+                "preselected": True,
             },
         };
     }
@@ -53,7 +55,7 @@ public class ShipStationRemoveTagFromOrderRequestDataType inherits HashDataType 
 
 #! Response type for remove tag operation
 public class ShipStationRemoveTagResponseDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "success": {
                 "type": SoftBoolType,

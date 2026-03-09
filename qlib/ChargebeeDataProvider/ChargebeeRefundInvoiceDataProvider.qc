@@ -27,7 +27,7 @@ public namespace ChargebeeDataProvider {
 
 #! Request type for refunding an invoice
 public class ChargebeeRefundInvoiceRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "id": {
                 "type": StringType,

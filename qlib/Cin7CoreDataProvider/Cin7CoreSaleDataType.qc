@@ -27,7 +27,7 @@ public namespace Cin7CoreDataProvider {
 
 #! Cin7Core sale data type
 public class Cin7CoreSaleDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions
         const Fields = {
             "ID": {
@@ -124,13 +124,13 @@ public class Cin7CoreSaleDataType inherits HashDataType {
                 "desc": "Customer email address",
             },
             "BillingAddress": {
-                "type": AutoHashOrNothingType,
+                "type": new Cin7CoreAddressDataType(AutoHashOrNothingType),
                 "display_name": "Billing Address",
                 "short_desc": "Billing address",
                 "desc": "The billing address for the sale",
             },
             "ShippingAddress": {
-                "type": AutoHashOrNothingType,
+                "type": new Cin7CoreAddressDataType(AutoHashOrNothingType),
                 "display_name": "Shipping Address",
                 "short_desc": "Shipping address",
                 "desc": "The shipping address for the sale",
@@ -220,25 +220,25 @@ public class Cin7CoreSaleDataType inherits HashDataType {
                 "desc": "Amount paid so far",
             },
             "Lines": {
-                "type": SoftAutoListOrNothingType,
+                "type": new ListDataType("Lines", new Cin7CoreSaleLineItemDataType(), True),
                 "display_name": "Line Items",
                 "short_desc": "Order lines",
                 "desc": "List of line items in the order",
             },
             "Fulfilments": {
-                "type": SoftAutoListOrNothingType,
+                "type": new ListDataType("Fulfilments", new Cin7CoreFulfilmentDataType(), True),
                 "display_name": "Fulfilments",
                 "short_desc": "Fulfilment records",
                 "desc": "List of fulfilment records",
             },
             "Invoices": {
-                "type": SoftAutoListOrNothingType,
+                "type": new ListDataType("Invoices", new Cin7CoreInvoiceDataType(), True),
                 "display_name": "Invoices",
                 "short_desc": "Invoice records",
                 "desc": "List of invoice records",
             },
             "CreditNotes": {
-                "type": SoftAutoListOrNothingType,
+                "type": new ListDataType("CreditNotes", new Cin7CoreCreditNoteDataType(), True),
                 "display_name": "Credit Notes",
                 "short_desc": "Credit note records",
                 "desc": "List of credit note records",
@@ -260,7 +260,7 @@ public class Cin7CoreSaleDataType inherits HashDataType {
 
 #! Cin7Core create sale request data type
 public class Cin7CoreCreateSaleRequestDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions
         const Fields = {
             "Customer": {
@@ -289,13 +289,13 @@ public class Cin7CoreCreateSaleRequestDataType inherits HashDataType {
                 "desc": "Customer email address",
             },
             "BillingAddress": {
-                "type": AutoHashOrNothingType,
+                "type": new Cin7CoreAddressDataType(AutoHashOrNothingType),
                 "display_name": "Billing Address",
                 "short_desc": "Billing address",
                 "desc": "The billing address for the sale",
             },
             "ShippingAddress": {
-                "type": AutoHashOrNothingType,
+                "type": new Cin7CoreAddressDataType(AutoHashOrNothingType),
                 "display_name": "Shipping Address",
                 "short_desc": "Shipping address",
                 "desc": "The shipping address for the sale",
@@ -355,7 +355,7 @@ public class Cin7CoreCreateSaleRequestDataType inherits HashDataType {
                 "desc": "The shipping carrier",
             },
             "Lines": {
-                "type": SoftAutoListOrNothingType,
+                "type": new ListDataType("Lines", new Cin7CoreSaleLineItemDataType(), True),
                 "display_name": "Line Items",
                 "short_desc": "Order lines",
                 "desc": "List of line items to add to the order",
@@ -371,7 +371,7 @@ public class Cin7CoreCreateSaleRequestDataType inherits HashDataType {
 
 #! Cin7Core sale line item data type
 public class Cin7CoreSaleLineItemDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions
         const Fields = {
             "ProductID": {

@@ -50,6 +50,7 @@ public class UnleashedSalesOrdersDataProvider inherits UnleashedDataProviderBase
                 "short_desc": "Filter by customer code",
                 "type": AbstractDataProviderType::get(StringOrNothingType),
                 "desc": "Filter sales orders by customer code",
+                "preselected": True,
             },
             "customerId": <DataProviderOptionInfo>{
                 "display_name": "Customer ID",
@@ -67,7 +68,8 @@ public class UnleashedSalesOrdersDataProvider inherits UnleashedDataProviderBase
                 "display_name": "Order Status",
                 "short_desc": "Filter by order status",
                 "type": AbstractDataProviderType::get(StringOrNothingType),
-                "desc": "Filter by order status (Open, Parked, Backordered, Placed, Completed, Deleted)",
+                "desc": "Filter by order status",
+                "preselected": True,
                 "allowed_values": (
                     <AllowedValueInfo>{"value": "Open", "desc": "Open orders"},
                     <AllowedValueInfo>{"value": "Parked", "desc": "Parked orders"},
@@ -110,7 +112,7 @@ public class UnleashedSalesOrdersDataProvider inherits UnleashedDataProviderBase
         };
     }
 
-    private {
+    public {
         #! Record type
         static UnleashedSalesOrderDataType recordType();
     }

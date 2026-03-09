@@ -27,7 +27,7 @@ public namespace ShipStationDataProvider {
 
 #! Request type for marking an order as shipped
 public class ShipStationMarkAsShippedRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "orderId": {
                 "type": IntType,
@@ -35,13 +35,15 @@ public class ShipStationMarkAsShippedRequestDataType inherits HashDataType {
                 "short_desc": "The order ID to mark as shipped",
                 "desc": "The ShipStation order ID to mark as shipped",
                 "required": True,
+                "preselected": True,
             },
             "carrierCode": {
                 "type": StringType,
                 "display_name": "Carrier Code",
                 "short_desc": "The shipping carrier code",
-                "desc": "The carrier code (e.g., 'ups', 'fedex', 'stamps_com')",
+                "desc": "The carrier code (e.g., `ups`, `fedex`, `stamps_com`)",
                 "required": True,
+                "preselected": True,
             },
             "shipDate": {
                 "type": DateOrNothingType,
@@ -77,7 +79,7 @@ public class ShipStationMarkAsShippedRequestDataType inherits HashDataType {
 
 #! Response type for mark as shipped
 public class ShipStationMarkAsShippedResponseDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "orderId": {
                 "type": IntType,

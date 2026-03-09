@@ -35,6 +35,8 @@ public class ZohoInventoryInvoicesDataProvider inherits ZohoInventoryDataProvide
             "type": "ZohoInventoryInvoicesDataProvider",
             "supports_read": True,
             "supports_native_search": True,
+            "has_record": True,
+            "constructor_options": BaseConstructorOptions,
             "search_options": SearchOptions,
         };
 
@@ -108,8 +110,8 @@ public class ZohoInventoryInvoicesDataProvider inherits ZohoInventoryDataProvide
     }
 
     #! Returns the record type
-    private *AbstractDataProviderType getRecordTypeImpl() {
-        return new ZohoInventoryInvoiceDataType();
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return new ZohoInventoryInvoiceDataType().getFields();
     }
 
     #! Searches for invoices

@@ -27,7 +27,7 @@ public namespace ChargebeeDataProvider {
 
 #! Request type for deleting an invoice
 public class ChargebeeDeleteInvoiceRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "id": {
                 "type": StringType,

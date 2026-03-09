@@ -32,6 +32,7 @@ public class DeelCreateAdjustmentRequestDataType inherits HashDataType {
             "contract_id": {
                 "type": StringType,
                 "display_name": "Contract ID",
+                "ref_data": "contracts",
                 "short_desc": "The associated contract ID",
                 "desc": "The unique identifier of the contract this adjustment belongs to",
                 "required": True,

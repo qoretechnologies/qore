@@ -58,7 +58,11 @@ public class ZohoInvoiceMarkProjectDataProvider inherits ZohoInvoiceDataProvider
             "status": {
                 "display_name": "Status",
                 "type": SoftStringType,
-                "desc": "The status to set (active, inactive)",
+                "desc": "The status to set",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "active", "desc": "Mark as active"},
+                    <AllowedValueInfo>{"value": "inactive", "desc": "Mark as inactive"},
+                ),
             },
         });
 

@@ -27,7 +27,7 @@ public namespace SquareDataProvider {
 
 #! Request type for creating an order
 public class SquareCreateOrderRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "location_id": {
                 "type": StringType,

@@ -27,7 +27,7 @@ public namespace ChargebeeDataProvider {
 
 #! Request type for getting an invoice PDF link
 public class ChargebeeGetInvoiceLinkRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "id": {
                 "type": StringType,
@@ -46,7 +46,7 @@ public class ChargebeeGetInvoiceLinkRequestDataType inherits HashDataType {
 
 #! Response type for getting an invoice PDF link
 public class ChargebeeGetInvoiceLinkResponseDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "download_url": {
                 "type": StringType,

@@ -27,7 +27,7 @@ public namespace ShipStationDataProvider {
 
 #! Request type for refreshing a store
 public class ShipStationRefreshStoreRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "storeId": {
                 "type": IntType,
@@ -35,6 +35,7 @@ public class ShipStationRefreshStoreRequestDataType inherits HashDataType {
                 "short_desc": "The store ID to refresh",
                 "desc": "The unique ShipStation store ID to trigger an order refresh for",
                 "required": True,
+                "preselected": True,
             },
             "refreshDate": {
                 "type": DateOrNothingType,
@@ -53,7 +54,7 @@ public class ShipStationRefreshStoreRequestDataType inherits HashDataType {
 
 #! Response type for refreshing a store
 public class ShipStationRefreshStoreResponseDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "success": {
                 "type": SoftBoolType,

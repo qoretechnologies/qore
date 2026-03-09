@@ -27,7 +27,7 @@ public namespace UnleashedDataProvider {
 
 #! Product data type for Unleashed
 public class UnleashedProductDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "Guid": {
                 "type": SoftStringOrNothingType,

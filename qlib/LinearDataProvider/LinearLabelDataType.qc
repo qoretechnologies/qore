@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore LinearDataProvider module definition
 
-/*  LinearLabelDataType.qc Copyright 2025 Qore Technologies, s.r.o.
+/*  LinearLabelDataType.qc Copyright 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -62,7 +62,7 @@ public class LinearLabelDataType inherits HashDataType {
                 "type": new LinearTeamRefDataType(),
                 "display_name": "Team",
                 "short_desc": "The team",
-                "desc": "The team the label belongs to (id, name, key) - null for workspace labels",
+                "desc": "The team the label belongs to (id, name, key) - `NOTHING` for workspace labels",
             },
             "createdAt": {
                 "type": DateOrNothingType,
@@ -115,7 +115,7 @@ public class LinearLabelCreateDataType inherits HashDataType {
                 "type": StringOrNothingType,
                 "display_name": "Team ID",
                 "short_desc": "The team ID",
-                "desc": "The ID of the team to create the label in (null for workspace labels)",
+                "desc": "The ID of the team to create the label in (`NOTHING` for workspace labels)",
                 "example_value": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
             },
         };

@@ -27,7 +27,7 @@ public namespace FreshBooksDataProvider {
 
 #! FreshBooks estimate record type
 public class FreshBooksEstimateDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for FreshBooks estimates
         const Fields = {
             "id": {
@@ -76,7 +76,7 @@ public class FreshBooksEstimateDataType inherits HashDataType {
                 "type": AutoHashType,
                 "display_name": "Amount",
                 "short_desc": "The total amount",
-                "desc": "The total amount of the estimate (hash with 'amount' and 'code' keys)",
+                "desc": "The total amount of the estimate (hash with `amount` and `code` keys)",
             },
             "notes": {
                 "type": StringOrNothingType,
@@ -100,7 +100,12 @@ public class FreshBooksEstimateDataType inherits HashDataType {
                 "type": IntOrNothingType,
                 "display_name": "Visibility State",
                 "short_desc": "The visibility state",
-                "desc": "The visibility state of the estimate (0=active, 1=deleted, 2=archived)",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": 0, "desc": "Active"},
+                    <AllowedValueInfo>{"value": 1, "desc": "Deleted"},
+                    <AllowedValueInfo>{"value": 2, "desc": "Archived"},
+                ),
+                "desc": "The visibility state of the estimate",
             },
         };
     }
@@ -113,7 +118,7 @@ public class FreshBooksEstimateDataType inherits HashDataType {
 
 #! FreshBooks estimate create request type
 public class FreshBooksEstimateCreateDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for creating estimates
         const Fields = FreshBooksDataProviderBase::AccountIdField + {
             "customerid": {
@@ -160,11 +165,10 @@ public class FreshBooksEstimateCreateDataType inherits HashDataType {
                 "desc": "The purchase order number to associate with the estimate",
             },
             "lines": {
-                "type": AutoListOrNothingType,
+                "type": new ListDataType("EstimateLineList", new FreshBooksInvoiceLineDataType(), True),
                 "display_name": "Line Items",
                 "short_desc": "Estimate line items",
-                "desc": "List of line items, each with fields: description, qty, unit_cost "
-                    "(hash with 'amount' and 'code'), name, taxName1, taxAmount1, taxName2, taxAmount2",
+                "desc": "List of estimate line items",
             },
         };
     }
@@ -177,7 +181,7 @@ public class FreshBooksEstimateCreateDataType inherits HashDataType {
 
 #! FreshBooks estimate update request type
 public class FreshBooksEstimateUpdateDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for updating estimates
         const Fields = FreshBooksDataProviderBase::AccountIdField + {
             "id": {
@@ -230,12 +234,10 @@ public class FreshBooksEstimateUpdateDataType inherits HashDataType {
                 "desc": "The purchase order number to associate with the estimate",
             },
             "lines": {
-                "type": AutoListOrNothingType,
+                "type": new ListDataType("EstimateLineList", new FreshBooksInvoiceLineDataType(), True),
                 "display_name": "Line Items",
                 "short_desc": "Estimate line items",
-                "desc": "List of line items (replaces existing lines - include ALL desired lines). "
-                    "Each with fields: description, qty, unit_cost (hash with 'amount' and 'code'), "
-                    "name, taxName1, taxAmount1, taxName2, taxAmount2",
+                "desc": "List of line items (replaces existing lines - include ALL desired lines)",
             },
         };
     }

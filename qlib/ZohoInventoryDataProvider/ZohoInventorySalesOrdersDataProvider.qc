@@ -35,6 +35,8 @@ public class ZohoInventorySalesOrdersDataProvider inherits ZohoInventoryDataProv
             "type": "ZohoInventorySalesOrdersDataProvider",
             "supports_read": True,
             "supports_native_search": True,
+            "has_record": True,
+            "constructor_options": BaseConstructorOptions,
             "search_options": SearchOptions,
         };
 
@@ -90,8 +92,8 @@ public class ZohoInventorySalesOrdersDataProvider inherits ZohoInventoryDataProv
     }
 
     #! Returns the record type
-    private *AbstractDataProviderType getRecordTypeImpl() {
-        return new ZohoInventorySalesOrderDataType();
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return new ZohoInventorySalesOrderDataType().getFields();
     }
 
     #! Searches for sales orders

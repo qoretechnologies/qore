@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore MailgunDataProvider module definition
 
-/*  MailgunDeliveredEventDataProvider.qc Copyright 2025 Qore Technologies, s.r.o.
+/*  MailgunDeliveredEventDataProvider.qc Copyright 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -74,6 +74,26 @@ public class MailgunDeliveredEventDataProvider inherits MailgunBaseEventDataProv
         return {
             "delivery-status": event_data."delivery-status",
             "envelope": event_data.envelope,
+        };
+    }
+
+    #! Returns example data for the given observable event
+    private auto getExampleEventDataImpl(string event_id) {
+        return MailgunBaseEventDataProvider::getExampleEventDataImpl(event_id) + {
+            "delivery-status": {
+                "code": 250,
+                "message": "OK",
+                "description": "",
+                "mx-host": "smtp-in.example.com",
+                "session-seconds": 0.123,
+                "attempt-no": 1,
+            },
+            "envelope": {
+                "sender": "sender@example.com",
+                "transport": "smtp",
+                "targets": "recipient@example.com",
+                "sending-ip": "198.51.100.1",
+            },
         };
     }
 

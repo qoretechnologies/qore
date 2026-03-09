@@ -29,7 +29,7 @@ public namespace ChargebeeDataProvider {
 /** Represents an invoice in Chargebee.
 */
 public class ChargebeeInvoiceDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for Chargebee invoices
         const Fields = {
             "id": {

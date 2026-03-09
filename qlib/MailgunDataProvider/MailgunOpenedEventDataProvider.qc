@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore MailgunDataProvider module definition
 
-/*  MailgunOpenedEventDataProvider.qc Copyright 2025 Qore Technologies, s.r.o.
+/*  MailgunOpenedEventDataProvider.qc Copyright 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -75,6 +75,25 @@ public class MailgunOpenedEventDataProvider inherits MailgunBaseEventDataProvide
             "ip": event_data.ip,
             "client-info": event_data."client-info",
             "geolocation": event_data.geolocation,
+        };
+    }
+
+    #! Returns example data for the given observable event
+    private auto getExampleEventDataImpl(string event_id) {
+        return MailgunBaseEventDataProvider::getExampleEventDataImpl(event_id) + {
+            "ip": "203.0.113.42",
+            "client-info": {
+                "client-type": "browser",
+                "client-name": "Firefox",
+                "client-os": "macOS",
+                "device-type": "desktop",
+                "user-agent": "Mozilla/5.0",
+            },
+            "geolocation": {
+                "country": "US",
+                "region": "NY",
+                "city": "New York",
+            },
         };
     }
 

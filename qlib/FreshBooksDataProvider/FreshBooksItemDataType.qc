@@ -27,7 +27,7 @@ public namespace FreshBooksDataProvider {
 
 #! FreshBooks item record type
 public class FreshBooksItemDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for FreshBooks items
         const Fields = {
             "id": {
@@ -65,7 +65,7 @@ public class FreshBooksItemDataType inherits HashDataType {
                 "type": AutoHashType,
                 "display_name": "Unit Cost",
                 "short_desc": "The unit cost",
-                "desc": "The unit cost of the item (hash with 'amount' and 'code' keys)",
+                "desc": "The unit cost of the item (hash with `amount` and `code` keys)",
             },
             "qty": {
                 "type": StringOrNothingType,
@@ -95,7 +95,12 @@ public class FreshBooksItemDataType inherits HashDataType {
                 "type": IntOrNothingType,
                 "display_name": "Visibility State",
                 "short_desc": "The visibility state",
-                "desc": "The visibility state of the item (0=active, 1=deleted, 2=archived)",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": 0, "desc": "Active"},
+                    <AllowedValueInfo>{"value": 1, "desc": "Deleted"},
+                    <AllowedValueInfo>{"value": 2, "desc": "Archived"},
+                ),
+                "desc": "The visibility state of the item",
             },
         };
     }
@@ -108,7 +113,7 @@ public class FreshBooksItemDataType inherits HashDataType {
 
 #! FreshBooks item create request type
 public class FreshBooksItemCreateDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for creating items
         const Fields = FreshBooksDataProviderBase::AccountIdField + {
             "name": {
@@ -135,7 +140,7 @@ public class FreshBooksItemCreateDataType inherits HashDataType {
                 "type": AutoHashOrNothingType,
                 "display_name": "Unit Cost",
                 "short_desc": "The unit cost",
-                "desc": "The unit cost of the item (hash with 'amount' and 'code' keys)",
+                "desc": "The unit cost of the item (hash with `amount` and `code` keys)",
             },
             "qty": {
                 "type": StringOrNothingType,
@@ -172,7 +177,7 @@ public class FreshBooksItemCreateDataType inherits HashDataType {
 
 #! FreshBooks item update request type
 public class FreshBooksItemUpdateDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for updating items
         const Fields = FreshBooksDataProviderBase::AccountIdField + {
             "id": {
@@ -205,7 +210,7 @@ public class FreshBooksItemUpdateDataType inherits HashDataType {
                 "type": AutoHashOrNothingType,
                 "display_name": "Unit Cost",
                 "short_desc": "The unit cost",
-                "desc": "The new unit cost of the item (hash with 'amount' and 'code' keys)",
+                "desc": "The new unit cost of the item (hash with `amount` and `code` keys)",
             },
             "qty": {
                 "type": StringOrNothingType,
@@ -235,7 +240,12 @@ public class FreshBooksItemUpdateDataType inherits HashDataType {
                 "type": IntOrNothingType,
                 "display_name": "Visibility State",
                 "short_desc": "The visibility state",
-                "desc": "The new visibility state of the item (0=active, 1=deleted, 2=archived)",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": 0, "desc": "Active"},
+                    <AllowedValueInfo>{"value": 1, "desc": "Deleted"},
+                    <AllowedValueInfo>{"value": 2, "desc": "Archived"},
+                ),
+                "desc": "The new visibility state of the item",
             },
         };
     }

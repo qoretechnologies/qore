@@ -27,7 +27,7 @@ public namespace ShipStationDataProvider {
 
 #! ShipStation carrier record type
 public class ShipStationCarrierDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "name": {
                 "type": StringType,

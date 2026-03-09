@@ -112,7 +112,7 @@ public class UnleashedCreateProductDataProvider inherits UnleashedDataProviderBa
 
 #! Request data type for creating a product
 public class UnleashedCreateProductRequestDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions
         const Fields = {
             "ProductCode": {

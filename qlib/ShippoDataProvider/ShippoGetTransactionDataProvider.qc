@@ -103,7 +103,7 @@ public class ShippoGetTransactionDataProvider inherits ShippoDataProviderBase {
 
 #! Request data type for getting a transaction
 public class ShippoGetTransactionRequestDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions
         const Fields = {
             "transaction_id": {

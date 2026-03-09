@@ -59,6 +59,13 @@ public class TableauCreateUserRequestDataType inherits HashDataType {
                 "short_desc": "The authentication setting",
                 "desc": "The authentication setting for the user",
                 "example_value": "ServerDefault",
+                "preselected": True,
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "ServerDefault", "desc": "Use server default authentication"},
+                    <AllowedValueInfo>{"value": "SAML", "desc": "SAML authentication"},
+                    <AllowedValueInfo>{"value": "OpenID", "desc": "OpenID Connect authentication"},
+                    <AllowedValueInfo>{"value": "TableauIDWithMFA", "desc": "Tableau ID with multi-factor authentication"},
+                ),
             },
         };
     }

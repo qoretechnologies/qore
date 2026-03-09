@@ -27,7 +27,7 @@ public namespace UnleashedDataProvider {
 
 #! Credit note data type for Unleashed
 public class UnleashedCreditNoteDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "Guid": {
                 "type": SoftStringOrNothingType,
@@ -100,7 +100,7 @@ public class UnleashedCreditNoteDataType inherits HashDataType {
                 "desc": "The total credit note amount including tax",
             },
             "CreditLines": {
-                "type": SoftAutoListOrNothingType,
+                "type": new ListDataType("CreditLines", new UnleashedCreditNoteLineDataType(), True),
                 "display_name": "Credit Lines",
                 "short_desc": "Credit note line items",
                 "desc": "The line items for this credit note",
@@ -152,7 +152,7 @@ public class UnleashedCreditNoteDataType inherits HashDataType {
 
 #! Credit note line data type
 public class UnleashedCreditNoteLineDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "Guid": {
                 "type": SoftStringOrNothingType,

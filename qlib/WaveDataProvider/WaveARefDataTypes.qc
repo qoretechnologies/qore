@@ -270,15 +270,26 @@ public class WaveAccountTypeRefDataType inherits HashDataType {
                 "type": StringOrNothingType,
                 "display_name": "Normal Balance Type",
                 "short_desc": "The normal balance type",
-                "desc": "The normal balance type of the account (DEBIT or CREDIT)",
+                "desc": "The normal balance type of the account",
                 "example_value": "DEBIT",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "DEBIT", "desc": "Debit balance"},
+                    <AllowedValueInfo>{"value": "CREDIT", "desc": "Credit balance"},
+                ),
             },
             "value": {
                 "type": StringType,
                 "display_name": "Value",
                 "short_desc": "The account type value",
-                "desc": "The enum value of the account type (ASSET, LIABILITY, INCOME, EXPENSE, EQUITY)",
+                "desc": "The enum value of the account type",
                 "example_value": "ASSET",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "ASSET", "desc": "Asset account"},
+                    <AllowedValueInfo>{"value": "LIABILITY", "desc": "Liability account"},
+                    <AllowedValueInfo>{"value": "INCOME", "desc": "Income account"},
+                    <AllowedValueInfo>{"value": "EXPENSE", "desc": "Expense account"},
+                    <AllowedValueInfo>{"value": "EQUITY", "desc": "Equity account"},
+                ),
             },
         };
     }

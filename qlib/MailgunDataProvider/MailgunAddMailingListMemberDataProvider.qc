@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore MailgunDataProvider module definition
 
-/*  MailgunAddMailingListMemberDataProvider.qc Copyright 2025 Qore Technologies, s.r.o.
+/*  MailgunAddMailingListMemberDataProvider.qc Copyright 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -27,7 +27,7 @@ public namespace MailgunDataProvider {
 
 #! Request type for adding a mailing list member
 public class MailgunAddMailingListMemberRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "list_address": {
                 "type": StringType,
@@ -62,14 +62,14 @@ public class MailgunAddMailingListMemberRequestDataType inherits HashDataType {
                 "type": BoolOrNothingType,
                 "display_name": "Subscribed",
                 "short_desc": "Subscription status",
-                "desc": "Whether the member is subscribed (default: true)",
+                "desc": "Whether the member is subscribed (default: `True`)",
                 "default_value": True,
             },
             "upsert": {
                 "type": BoolOrNothingType,
                 "display_name": "Upsert",
                 "short_desc": "Update if exists",
-                "desc": "If true, update the member if they already exist (default: false)",
+                "desc": "If `True`, update the member if they already exist (default: `False`)",
                 "default_value": False,
             },
         };
