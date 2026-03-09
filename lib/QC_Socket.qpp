@@ -5420,7 +5420,10 @@ AbstractPollOperation Socket::startPollQuicConnect(string host, int port, int fa
     - \c stream_id: the HTTP/3 stream ID
     - \c authority: the request authority (host)
     - \c scheme: the request scheme
-    - \c headers: request headers hash
+    - \c headers: request headers hash; multi-value headers are concatenated into a single
+      string per RFC standards: \c cookie values are joined with \c "; " (RFC 9114 section 4.2.1),
+      \c set-cookie values are kept as a list (RFC 7230 section 3.2.2), and all other multi-value
+      headers are joined with \c ", " (RFC 7230 section 3.2.6)
     - \c body: request body (binary), if present
     - \c session_id: the QUIC session ID
     - \c peer_address: the remote peer IP address

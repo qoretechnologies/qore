@@ -351,7 +351,11 @@ public class Http3ServerPollOperation inherits AbstractPollOperation {
         - \c method: the HTTP method (GET, POST, etc.)
         - \c path: the request path
         - \c stream_id: the HTTP/3 stream ID (needed for sending response)
-        - \c headers: hash of request headers
+        - \c headers: hash of request headers; multi-value headers are concatenated into single
+          strings for HTTP/1.1 compatibility: \c cookie values are joined with \c "; "
+          (RFC 9114 section 4.2.1), \c set-cookie values are kept as a list
+          (RFC 7230 section 3.2.2), and all other multi-value headers are joined with
+          \c ", " (RFC 7230 section 3.2.6)
         - \c body: binary request body (if present)
         - \c authority: the :authority pseudo-header value (if present)
         - \c scheme: the :scheme pseudo-header value (if present)

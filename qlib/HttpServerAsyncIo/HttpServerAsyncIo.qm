@@ -210,6 +210,12 @@ public namespace HttpServerAsyncIo {
         Socket sock;
 
         #! Parsed HTTP headers (for HTTP/2, includes method, path, :authority, :scheme)
+        /** For HTTP/3 requests, multi-value headers are concatenated into single strings
+            for HTTP/1.1 compatibility: \c cookie values are joined with \c "; "
+            (RFC 9114 section 4.2.1), \c set-cookie values are kept as a list
+            (RFC 7230 section 3.2.2), and all other multi-value headers are joined with
+            \c ", " (RFC 7230 section 3.2.6).
+        */
         hash<auto> hdr;
 
         #! Header parsing info (for HTTP/2, includes http2=True and stream_id)

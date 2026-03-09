@@ -1082,16 +1082,41 @@ QoreValue SocketQuicServerPollOperation::getOutput() const {
     }
 
     // Headers
+    // RFC 9114 section 4.2.1: multiple header values must be concatenated for
+    // compatibility with HTTP/1.1 processing code.  Cookie uses "; " (RFC 9114
+    // section 4.2.1), other headers use ", " (RFC 7230 section 3.2.6).
+    // set-cookie is an exception and must remain as a list (RFC 7230 section 3.2.2).
     ReferenceHolder<QoreHashNode> headers(new QoreHashNode(autoTypeInfo), nullptr);
     for (const auto& hdr : cached_stream_->stream->headers) {
         if (hdr.second.size() == 1) {
             headers->setKeyValue(hdr.first.c_str(), new QoreStringNode(hdr.second[0]), nullptr);
-        } else {
+        } else if (hdr.first == "cookie") {
+            // RFC 9114 section 4.2.1: concatenate cookie values with "; "
+            QoreStringNode* combined = new QoreStringNode;
+            for (size_t i = 0; i < hdr.second.size(); ++i) {
+                if (i > 0) {
+                    combined->concat("; ");
+                }
+                combined->concat(hdr.second[i]);
+            }
+            headers->setKeyValue("cookie", combined, nullptr);
+        } else if (hdr.first == "set-cookie") {
+            // set-cookie must not be combined (RFC 7230 section 3.2.2)
             ReferenceHolder<QoreListNode> values(new QoreListNode(autoTypeInfo), nullptr);
             for (const auto& v : hdr.second) {
                 values->push(new QoreStringNode(v), nullptr);
             }
-            headers->setKeyValue(hdr.first.c_str(), values.release(), nullptr);
+            headers->setKeyValue("set-cookie", values.release(), nullptr);
+        } else {
+            // RFC 7230 section 3.2.6: concatenate with ", "
+            QoreStringNode* combined = new QoreStringNode;
+            for (size_t i = 0; i < hdr.second.size(); ++i) {
+                if (i > 0) {
+                    combined->concat(", ");
+                }
+                combined->concat(hdr.second[i]);
+            }
+            headers->setKeyValue(hdr.first.c_str(), combined, nullptr);
         }
     }
     // RFC 9220: Add :protocol to headers hash (parallel to HTTP/2 for handler compatibility)
