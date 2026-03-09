@@ -82,6 +82,7 @@ constexpr int SPS_RECEIVING_BODY = 6;
 constexpr int SPS_CONNECTING_PROXY_SSL = 7;
 constexpr int SPS_RECEIVED = 8;
 constexpr int SPS_H2_ACTIVE = 9;  // HTTP/2 bidirectional send/receive
+constexpr int SPS_H3_ACTIVE = 10;  // HTTP/3 bidirectional send/receive via QUIC
 
 //! Poll state for HTTP/2 client operations
 /** Handles bidirectional send/receive for HTTP/2 using Http2Session.
@@ -257,8 +258,268 @@ private:
     int32_t stream_id = -1;
 };
 
+//! Poll state for HTTP/3 client operations
+/** Handles bidirectional send/receive for HTTP/3 using a QUIC session.
+    This state manages:
+    - Request submission via QuicSession::submitRequest()
+    - Non-blocking QUIC I/O (send/recv UDP datagrams)
+    - QUIC timer expiry handling
+    - Response completion detection via completed streams
+*/
+class Http3ClientPollState : public AbstractPollState {
+public:
+    //! Constructor - submits HTTP/3 request and starts QUIC I/O
+    DLLLOCAL Http3ClientPollState(ExceptionSink* xsink, std::shared_ptr<QuicSession> session,
+            int fd, const struct sockaddr_storage& local_addr, socklen_t local_addrlen,
+            const char* method, const char* path,
+            const strcase_str_map_t& headers,
+            const void* body, size_t body_len)
+            : quic_session(std::move(session)), quic_fd(fd) {
+        assert(quic_session);
+        assert(quic_fd >= 0);
+
+        // Save local address for ngtcp2 path construction
+        memcpy(&local_addr_, &local_addr, local_addrlen);
+        local_addrlen_ = local_addrlen;
+
+        // Set fd to non-blocking mode
+        int flags = fcntl(quic_fd, F_GETFL, 0);
+        if (flags >= 0 && !(flags & O_NONBLOCK)) {
+            if (fcntl(quic_fd, F_SETFL, flags | O_NONBLOCK) == 0) {
+                fd_was_blocking = true;
+            }
+        }
+
+        // Submit the request
+        stream_id = quic_session->submitRequest(method, path, headers, body, body_len, xsink);
+        if (*xsink || stream_id < 0) {
+            return;
+        }
+
+        // Initial send of pending packets (request frames)
+        ngtcp2_tstamp dummy_expiry;
+        sendPendingPackets(dummy_expiry, xsink);
+    }
+
+    DLLLOCAL virtual ~Http3ClientPollState() {
+        // Restore blocking mode on quic_fd if we changed it
+        if (fd_was_blocking && quic_fd >= 0) {
+            int flags = fcntl(quic_fd, F_GETFL, 0);
+            if (flags >= 0) {
+                fcntl(quic_fd, F_SETFL, flags & ~O_NONBLOCK);
+            }
+            fd_was_blocking = false;
+        }
+    }
+
+    //! Returns the HTTP status code from the completed stream
+    DLLLOCAL int getStatusCode() const {
+        return completed_stream ? completed_stream->status_code : -1;
+    }
+
+    //! Returns response headers as a QoreHashNode
+    DLLLOCAL QoreHashNode* getResponseHeaders() const {
+        if (!completed_stream || completed_stream->headers.empty()) {
+            return nullptr;
+        }
+        return httpMultiHeadersToQoreHash(completed_stream->headers);
+    }
+
+    //! Returns the response body as a BinaryNode
+    DLLLOCAL BinaryNode* getResponseBody() const {
+        if (!completed_stream || completed_stream->body.empty()) {
+            return nullptr;
+        }
+        return new BinaryNode(completed_stream->body.data(), completed_stream->body.size());
+    }
+
+    /** @return:
+        - SOCK_POLLIN = wait for read and call this again
+        - SOCK_POLLOUT = wait for write and call this again
+        - SOCK_POLLIN | SOCK_POLLOUT = wait for read or write
+        - 0 = done (response complete)
+        - < 0 = error (exception raised)
+    */
+    DLLLOCAL virtual int continuePoll(ExceptionSink* xsink) override {
+        if (!quic_session) {
+            xsink->raiseException("HTTP3-POLL-ERROR", "no QUIC session available");
+            return -1;
+        }
+
+        // Check for already-completed streams matching our stream_id
+        if (checkCompleted()) {
+            return 0;
+        }
+
+        // Drain all available packets from the socket buffer
+        while (true) {
+            int rv = recvAndProcessPacket(xsink);
+            if (*xsink) {
+                return -1;
+            }
+            if (rv == SOCK_POLLIN) {
+                break;  // EAGAIN — no more data
+            }
+            // Check for completed stream after each datagram
+            if (checkCompleted()) {
+                return 0;
+            }
+        }
+
+        // Check if connection closed
+        if (quic_session->isClosed()) {
+            if (!completed_stream) {
+                xsink->raiseException("HTTP3-ERROR", "QUIC connection closed before response was complete");
+                return -1;
+            }
+            return 0;
+        }
+
+        // Send pending packets (ACKs, etc.) — coalesced timer + write
+        ngtcp2_tstamp next_expiry;
+        int srv = sendPendingPackets(next_expiry, xsink);
+        if (*xsink) {
+            return -1;
+        }
+
+        // Check again for completed stream after sending
+        if (checkCompleted()) {
+            return 0;
+        }
+
+        // After sending, try one more non-blocking recv before yielding to poll().
+        // On low-latency paths, the server response may already be in the kernel buffer.
+        while (true) {
+            int rrv = recvAndProcessPacket(xsink);
+            if (*xsink) {
+                return -1;
+            }
+            if (rrv == SOCK_POLLIN) {
+                break;  // EAGAIN
+            }
+            if (checkCompleted()) {
+                return 0;
+            }
+        }
+
+        // Save expiry for QUIC-aware poll timeout
+        last_expiry_ = next_expiry;
+
+        // Return poll events: always POLLIN, add POLLOUT if pending writes
+        int events = SOCK_POLLIN;
+        if (srv == SOCK_POLLOUT || quic_session->hasPendingWrite()) {
+            events |= SOCK_POLLOUT;
+        }
+        return events;
+    }
+
+    //! Returns the last QUIC timer expiry for poll timeout calculation
+    DLLLOCAL ngtcp2_tstamp getLastExpiry() const { return last_expiry_; }
+
+private:
+    //! Check for and take a completed stream matching our stream_id
+    DLLLOCAL bool checkCompleted() {
+        if (quic_session->hasCompletedStreams()) {
+            // Drain completed streams until we find ours
+            while (quic_session->hasCompletedStreams()) {
+                auto stream = quic_session->takeCompletedStream();
+                if (stream && stream->stream_id == stream_id) {
+                    completed_stream = std::move(stream);
+                    return true;
+                }
+                // Discard streams that don't match (stale from previous requests)
+            }
+        }
+        return false;
+    }
+
+    //! Send pending QUIC packets (coalesced timer + write)
+    DLLLOCAL int sendPendingPackets(ngtcp2_tstamp& next_expiry, ExceptionSink* xsink) {
+        auto result = quic_session->processTimerAndWrite(pkt_batch_, xsink);
+        if (result.error) {
+            pkt_batch_.clear();
+            return -1;
+        }
+        next_expiry = result.next_expiry;
+
+        if (pkt_batch_.empty()) {
+            return 0;
+        }
+
+        int sent = sendQuicPacketsBatch(quic_fd, pkt_batch_, nullptr, 0);
+        if (sent < 0) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                return SOCK_POLLOUT;
+            }
+            pkt_batch_.clear();
+            xsink->raiseErrnoException("HTTP3-SEND-ERROR", errno, "sendto/sendmmsg() failed");
+            return -1;
+        }
+        if (sent > 0 && sent < pkt_batch_.size()) {
+            pkt_batch_.removeFront(sent);
+            return SOCK_POLLOUT;
+        }
+
+        pkt_batch_.clear();
+        return 0;
+    }
+
+    //! Receive and process one QUIC packet
+    DLLLOCAL int recvAndProcessPacket(ExceptionSink* xsink) {
+        static thread_local struct sockaddr_storage src_addr;
+        static thread_local uint8_t cmsg_buf[QUIC_CMSG_BUF_SIZE];
+        socklen_t src_addrlen = sizeof(src_addr);
+
+        size_t cmsg_len = sizeof(cmsg_buf);
+        ssize_t nread = recvQuicPacket(quic_fd, recv_buf_, sizeof(recv_buf_), 0,
+                                        reinterpret_cast<struct sockaddr*>(&src_addr), &src_addrlen,
+                                        cmsg_buf, &cmsg_len);
+        if (nread < 0) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                return SOCK_POLLIN;
+            }
+            if (errno == EMSGSIZE) {
+                return 0;  // truncated datagram discarded; continue
+            }
+            xsink->raiseErrnoException("HTTP3-RECV-ERROR", errno, "recvmsg() failed");
+            return -1;
+        }
+
+        if (nread == 0) {
+            return 0;
+        }
+
+        // Use cached getsockname() address — the client socket is connect()ed,
+        // so the local address is always local_addr_.
+        ngtcp2_path path;
+        path.local.addr = reinterpret_cast<ngtcp2_sockaddr*>(&local_addr_);
+        path.local.addrlen = local_addrlen_;
+        path.remote.addr = reinterpret_cast<ngtcp2_sockaddr*>(&src_addr);
+        path.remote.addrlen = src_addrlen;
+
+        quic_session->readPacket(recv_buf_, static_cast<size_t>(nread), path, xsink);
+        if (*xsink) {
+            return -1;
+        }
+
+        return 0;
+    }
+
+    std::shared_ptr<QuicSession> quic_session;
+    int quic_fd;
+    struct sockaddr_storage local_addr_{};
+    socklen_t local_addrlen_ = 0;
+    int64_t stream_id = -1;
+    std::unique_ptr<QuicStreamInfo> completed_stream;
+    QuicPacketBatch pkt_batch_;
+    uint8_t recv_buf_[QUIC_RECV_BUF_SIZE]{};
+    ngtcp2_tstamp last_expiry_ = UINT64_MAX;
+    bool fd_was_blocking = false;
+};
+
 // states: none [-> connecting [-> connecting-ssl]] -> sending -> receiving-header [-> receiving-body] [-> connecting-proxy-ssl] -> [received | connected]
 // HTTP/2 path: none -> connecting -> connecting-ssl -> h2-active -> received
+// HTTP/3 path: none -> [connecting ->] h3-active -> received
 /**
     state transitions:
     - none
@@ -348,6 +609,8 @@ private:
                 return "connected";
             case SPS_H2_ACTIVE:
                 return "h2-active";
+            case SPS_H3_ACTIVE:
+                return "h3-active";
             default:
                 assert(false);
         }
@@ -381,6 +644,7 @@ private:
     DLLLOCAL int redirect(ExceptionSink* xsink);
     DLLLOCAL int processReceivedBody(ExceptionSink* xsink);
     DLLLOCAL int processH2Response(ExceptionSink* xsink);
+    DLLLOCAL int processH3Response(ExceptionSink* xsink);
     DLLLOCAL int responseDone(ExceptionSink* xsink);
     DLLLOCAL void setFinal(int final_state);
 };
@@ -2743,6 +3007,7 @@ void HttpClientConnectSendRecvPollOperation::abort(ExceptionSink* xsink) {
     if (set_non_block) {
         set_non_block = false;
         AutoLocker al(client->priv->m);
+        poll_state.reset();  // cleanup poll state while fds still valid
         client->priv->clearNonBlock();
         client->http_priv->disconnect_unlocked();
         state = SPS_NONE;
@@ -2772,6 +3037,11 @@ QoreHashNode* HttpClientConnectSendRecvPollOperation::continuePoll(ExceptionSink
 
     if (state == SPS_NONE || state == SPS_RECEIVED) {
         // throw an exception and exit if the object is no longer valid
+        if (client->priv->checkValid(xsink)) {
+            return nullptr;
+        }
+    } else if (state == SPS_H3_ACTIVE) {
+        // HTTP/3: TCP socket is closed but QUIC session is alive; only check validity
         if (client->priv->checkValid(xsink)) {
             return nullptr;
         }
@@ -2891,6 +3161,40 @@ QoreHashNode* HttpClientConnectSendRecvPollOperation::continuePoll(ExceptionSink
                 break;
             }
             continue;
+        } else if (state == SPS_H3_ACTIVE) {
+            // HTTP/3 bidirectional send/receive via QUIC
+            int rc = checkContinuePoll(xsink, true);
+            if (rc != 0) {
+                ReferenceHolder<QoreHashNode> h3_rv(*xsink ? nullptr
+                    : getSocketPollInfoHash(xsink, rc), xsink);
+                // Set QUIC-aware poll timeout so retransmission timers fire
+                // even when no packets arrive
+                if (h3_rv) {
+                    Http3ClientPollState* h3_poll
+                        = static_cast<Http3ClientPollState*>(poll_state.get());
+                    ngtcp2_tstamp expiry = h3_poll->getLastExpiry();
+                    if (expiry != UINT64_MAX) {
+                        ngtcp2_tstamp now = QuicSession::timestamp();
+                        int64_t timeout_ms;
+                        if (expiry <= now) {
+                            timeout_ms = 1;
+                        } else {
+                            timeout_ms = static_cast<int64_t>((expiry - now) / 1000000);
+                            if (timeout_ms < 1) {
+                                timeout_ms = 1;
+                            }
+                        }
+                        h3_rv->setKeyValue("poll_timeout_ms", timeout_ms, xsink);
+                    }
+                }
+                rv = *xsink ? nullptr : h3_rv.release();
+                break;
+            }
+            // Poll completed - process HTTP/3 response
+            if (processH3Response(xsink)) {
+                break;
+            }
+            continue;
         } else if (state == SPS_RECEIVED || state == SPS_CONNECTED) {
             if (close_connection) {
                 client->http_priv->disconnect_unlocked();
@@ -2923,6 +3227,15 @@ int HttpClientConnectSendRecvPollOperation::connectOrSend(ExceptionSink* xsink) 
     //    connection.host.c_str(), connection.port);
 
     assert(client->http_priv->msock->m.trylock());
+
+    // HTTP/3: QUIC session is already established; TCP socket is closed but QUIC fd is live
+    if (client->http_priv->http3_active && client->http_priv->quic_session) {
+        if (connect_only) {
+            setFinal(SPS_CONNECTED);
+            return 0;
+        }
+        return startSend(xsink) ? -1 : 0;
+    }
 
     if (!client->http_priv->msock->socket->isOpen()) {
         poll_state.reset(client->http_priv->msock->socket->startConnect(xsink,
@@ -3232,6 +3545,118 @@ int HttpClientConnectSendRecvPollOperation::processH2Response(ExceptionSink* xsi
     return 0;
 }
 
+int HttpClientConnectSendRecvPollOperation::processH3Response(ExceptionSink* xsink) {
+    assert(client->http_priv->msock->m.trylock());
+    assert(poll_state);
+
+    Http3ClientPollState* h3_poll = static_cast<Http3ClientPollState*>(poll_state.get());
+
+    // Get HTTP status code
+    http_response_code = h3_poll->getStatusCode();
+    if (http_response_code < 0) {
+        xsink->raiseException("HTTP3-ERROR", "no status code in HTTP/3 response");
+        return -1;
+    }
+
+    // Get response headers
+    response_headers = h3_poll->getResponseHeaders();
+    if (!response_headers) {
+        response_headers = new QoreHashNode(autoTypeInfo);
+    }
+
+    ReferenceHolder<QoreHashNode> response_headers_raw(response_headers->copy(), xsink);
+    info->setKeyValue("response-headers-raw", response_headers_raw.release(), xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    // Set HTTP/3 response info (status_message, http_version, response-uri)
+    const char* status_msg = get_http_status_message(http_response_code);
+    response_headers->setKeyValue("status_code", http_response_code, xsink);
+    if (*xsink) {
+        return -1;
+    }
+    response_headers->setKeyValue("status_message", new QoreStringNode(status_msg), xsink);
+    if (*xsink) {
+        return -1;
+    }
+    response_headers->setKeyValue("http_version", new QoreStringNode("3"), xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    QoreStringNode* response_uri = new QoreStringNode();
+    response_uri->sprintf("HTTP/3 %d %s", http_response_code, status_msg);
+    info->setKeyValue("response-uri", response_uri, xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    if (client->http_priv->processContentType(xsink, **response_headers)) {
+        return -1;
+    }
+    set_body_content_type_info(xsink, **response_headers, **info);
+    if (*xsink) {
+        return -1;
+    }
+
+    info->setKeyValue("response-headers", response_headers->refSelf(), xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    // Get response body
+    recv_data_holder = h3_poll->getResponseBody();
+
+    // Process Content-Encoding (decompression) if present
+    if (recv_data_holder && response_headers) {
+        const char* content_encoding = get_string_header(xsink, **response_headers, "content-encoding");
+        if (*xsink) {
+            return -1;
+        }
+        if (content_encoding) {
+            // check for misuse of this header by including a character encoding value
+            if (!strncasecmp(content_encoding, "iso", 3) || !strncasecmp(content_encoding, "utf-", 4)) {
+                client->http_priv->msock->socket->setEncoding(QEM.findCreate(content_encoding));
+            } else {
+                qore_uncompress_to_binary_t dec = get_binary_decoder_for_content_encoding(
+                    content_encoding, xsink);
+                if (*xsink) {
+                    return -1;
+                }
+                if (dec) {
+                    int64 body_size = recv_data_holder->size();
+                    recv_data_holder = dec(*recv_data_holder, xsink);
+                    if (*xsink) {
+                        xsink->appendLastDescription(": while decompressing '%s' Content-Encoding with size " QLLD,
+                            content_encoding, body_size);
+                        return -1;
+                    }
+                }
+            }
+        }
+    }
+
+    if (recv_data_holder) {
+        info->setKeyValue("response-body", recv_data_holder->refSelf(), xsink);
+        if (*xsink) {
+            return -1;
+        }
+    }
+
+    // Clear the poll state (destructor restores fd blocking mode)
+    poll_state.reset();
+
+    // Handle redirects
+    if (!client->http_priv->redirect_passthru && http_response_code >= 300 && http_response_code < 400
+        && http_response_code != 304) {
+        return redirect(xsink);
+    }
+
+    setFinal(SPS_RECEIVED);
+    return 0;
+}
+
 int HttpClientConnectSendRecvPollOperation::responseDone(ExceptionSink* xsink) {
     assert(client->http_priv->msock->m.trylock());
 
@@ -3398,6 +3823,89 @@ int HttpClientConnectSendRecvPollOperation::connectDone(ExceptionSink* xsink) {
 
 int HttpClientConnectSendRecvPollOperation::startSend(ExceptionSink* xsink) {
     assert(client->http_priv->msock->m.trylock());
+
+    // Check if HTTP/3 is active (QUIC session already established)
+    if (client->http_priv->http3_active && client->http_priv->quic_session) {
+        // For connect-only mode, we're done
+        if (connect_only) {
+            setFinal(SPS_CONNECTED);
+            return 0;
+        }
+
+        // Convert QoreHashNode headers to strcase_str_map_t for HTTP/3
+        strcase_str_map_t h3_headers;
+
+        // Set host field automatically if not overridden
+        if (!host_override && request_headers) {
+            request_headers->setKeyValue("Host", client->http_priv->getHostHeaderValueUnlocked(connection),
+                xsink);
+            if (*xsink) {
+                return -1;
+            }
+        }
+
+        // Convert headers from QoreHashNode to map
+        if (request_headers) {
+            ConstHashIterator hi(*request_headers);
+            while (hi.next()) {
+                const char* key = hi.getKey();
+                QoreValue val = hi.get();
+                if (val.getType() == NT_STRING) {
+                    h3_headers[key] = val.get<const QoreStringNode>()->c_str();
+                } else if (val.getType() == NT_LIST) {
+                    const QoreListNode* l = val.get<const QoreListNode>();
+                    std::string joined;
+                    for (size_t i = 0; i < l->size(); ++i) {
+                        QoreValue elem = l->retrieveEntry(i);
+                        if (elem.getType() == NT_STRING) {
+                            if (!joined.empty()) {
+                                joined += ", ";
+                            }
+                            joined += elem.get<const QoreStringNode>()->c_str();
+                        }
+                    }
+                    if (!joined.empty()) {
+                        h3_headers[key] = std::move(joined);
+                    }
+                }
+            }
+        }
+
+        // Convert Host to :authority pseudo-header (RFC 9114 Section 4.3.1)
+        auto host_it = h3_headers.find("Host");
+        if (host_it != h3_headers.end()) {
+            h3_headers[":authority"] = host_it->second;
+            h3_headers.erase(host_it);
+        }
+
+        // Set Content-Length if body present
+        if (data && size > 0) {
+            auto cl_it = h3_headers.find("content-length");
+            if (cl_it == h3_headers.end()) {
+                h3_headers["content-length"] = std::to_string(size);
+            }
+        }
+
+        // Get the request path
+        qore_socket_private* spriv = client->http_priv->msock->socket->priv;
+        QoreString pathstr(spriv->enc);
+        client->http_priv->getMsgPath(xsink, connection, path.c_str(), pathstr, path_already_encoded);
+        if (*xsink) {
+            return -1;
+        }
+
+        // Create HTTP/3 poll state
+        poll_state.reset(new Http3ClientPollState(xsink, client->http_priv->quic_session,
+            client->http_priv->quic_fd, client->http_priv->quic_local_addr,
+            client->http_priv->quic_local_addrlen,
+            method.c_str(), pathstr.c_str(), h3_headers, data, size));
+        if (*xsink) {
+            return -1;
+        }
+
+        state = SPS_H3_ACTIVE;
+        return 0;
+    }
 
     // Check if HTTP/2 was negotiated via ALPN during the SSL connection
     // First check global mode - even if ALPN negotiated h2, respect the global setting
@@ -4123,6 +4631,13 @@ int QoreHttpClientObject::getHttp3Mode() const {
 
 bool QoreHttpClientObject::isHttp3Active() const {
     return http_priv->http3_active;
+}
+
+int QoreHttpClientObject::getPollableDescriptor() const {
+    if (http_priv->http3_active.load() && http_priv->quic_fd >= 0) {
+        return http_priv->quic_fd;
+    }
+    return QoreSocketObject::getPollableDescriptor();
 }
 
 bool QoreHttpClientObject::isHttp2Active() const {
