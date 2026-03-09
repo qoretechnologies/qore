@@ -2502,8 +2502,10 @@ void UserVariantBase::attemptIRLowering(const char* name) const {
             all_params_ir_only = false;
         }
     }
-    // Direct params eligible: all params ir_only AND all have slot IDs
-    func->direct_params_eligible = all_params_ir_only && all_params_have_slots;
+    // If function uses argv (variadic), inline direct path would always pass NOTHING for argv.
+    // Ineligible: must go through qore_rt_call_fast which builds argv from excess args.
+    // Direct params eligible: all params ir_only AND all have slot IDs AND not variadic
+    func->direct_params_eligible = all_params_ir_only && all_params_have_slots && !signature.argvid;
 
     cached_ir = func;
     current_tier.store(TIER_IR, std::memory_order_release);
