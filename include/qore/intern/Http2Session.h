@@ -41,6 +41,7 @@
 
 #include <cctype>
 #include <functional>
+#include <condition_variable>
 #include <map>
 #include <memory>
 #include <mutex>

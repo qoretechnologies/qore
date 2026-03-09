@@ -1943,15 +1943,18 @@ int Http2Session::sendStreamData(int32_t stream_id, const void* data, size_t len
     // is still being sent via the deferred data provider. Check both streams and
     // pending_data_providers.
     Http2StreamInfo* stream = getStream(stream_id);
-    if (!stream && pending_data_providers.find(stream_id) == pending_data_providers.end()) {
+    bool has_provider = pending_data_providers.find(stream_id) != pending_data_providers.end();
+    if (!stream && !has_provider) {
+        printd(2, "sendStreamData() stream %d NOT FOUND: stream=%p has_provider=%d end_stream=%d\n",
+            stream_id, stream, has_provider ? 1 : 0, end_stream ? 1 : 0);
         xsink->raiseException("HTTP2-ERROR", "stream %d not found", stream_id);
         return -1;
     }
 
     // Check if the stream was closed by RST_STREAM from the peer
     if (stream && stream->state == Http2StreamState::Closed) {
-        printd(5, "sendStreamData() stream %d is closed (reset=%d error_code=%u)\n",
-            stream_id, stream->reset ? 1 : 0, stream->error_code);
+        printd(2, "sendStreamData() stream %d CLOSED: reset=%d error_code=%u end_stream=%d\n",
+            stream_id, stream->reset ? 1 : 0, stream->error_code, end_stream ? 1 : 0);
         xsink->raiseException("HTTP2-STREAM-RESET",
             "stream %d was reset by peer (error code %u)", stream_id, stream->error_code);
         return -1;
@@ -1959,9 +1962,11 @@ int Http2Session::sendStreamData(int32_t stream_id, const void* data, size_t len
 
     // Check if there's already too much buffered data (flow control backpressure)
     // Limit to 1MB per stream to prevent unbounded memory growth
+    // Allow zero-length end_stream sends through — they just set the flag without
+    // adding data, so they must not be rejected by backpressure
     constexpr size_t MAX_STREAM_BUFFER = 1024 * 1024;
     auto it = pending_body_data.find(stream_id);
-    if (it != pending_body_data.end()) {
+    if (it != pending_body_data.end() && (len > 0 || !end_stream)) {
         size_t pending = it->second.data.size() - it->second.offset;
         if (pending > MAX_STREAM_BUFFER) {
             // Return 1 (buffer full, non-fatal) — caller decides how to handle
