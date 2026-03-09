@@ -454,6 +454,14 @@ public:
     */
     DLLLOCAL void cleanupStream(int64_t stream_id);
 
+    //! Reset an HTTP/3 stream by shutting down the read side and cleaning up
+    /** Sends STOP_SENDING to the peer and removes the stream from the session map.
+        Use this when a body streaming error is detected mid-stream.
+        @param stream_id the HTTP/3 stream ID
+        @return 0 for OK, -1 for error
+    */
+    DLLLOCAL int resetStream(int64_t stream_id);
+
     //! Get the per-stream notifier for a dispatched stream (if any)
     /** @param stream_id the HTTP/3 stream ID
         @return shared_ptr to the notifier, or nullptr if not found

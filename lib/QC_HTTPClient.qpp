@@ -893,6 +893,50 @@ bool HTTPClient::hasHttp2StreamData(int stream_id) [flags=CONSTANT] {
     return client->hasHttp2StreamData((int32_t)stream_id);
 }
 
+//! Checks if an HTTP/2 stream is fully closed (both sides sent END_STREAM)
+/** @param stream_id the stream ID to check
+
+    @return @ref True if the stream is closed or does not exist, @ref False otherwise
+
+    @par Example:
+    @code{.py}
+# Read all data from a bidi stream until it's closed
+while (!httpclient.isHttp2StreamClosed(stream_id)) {
+    *binary data = httpclient.readHttp2StreamData(stream_id, 2000);
+    if (data) {
+        process(data);
+    }
+}
+    @endcode
+
+    @since %Qore 2.3
+*/
+bool HTTPClient::isHttp2StreamClosed(int stream_id) [flags=CONSTANT] {
+    return client->isHttp2StreamClosed((int32_t)stream_id);
+}
+
+//! Checks if an HTTP/3 stream is complete (server sent END_STREAM / FIN)
+/** @param stream_id the stream ID to check
+
+    @return @ref True if the stream is complete or does not exist, @ref False otherwise
+
+    @par Example:
+    @code{.py}
+# Read all data from a bidi stream until it's closed
+while (!httpclient.isHttp3StreamClosed(stream_id)) {
+    *binary data = httpclient.readHttp3StreamData(stream_id, 2000);
+    if (data) {
+        process(data);
+    }
+}
+    @endcode
+
+    @since %Qore 2.3
+*/
+bool HTTPClient::isHttp3StreamClosed(int stream_id) [flags=CONSTANT] {
+    return client->isHttp3StreamClosed((int64_t)stream_id);
+}
+
 //! Checks if HTTP/2 stream data is available, polling the socket if needed
 /** @param stream_id the stream ID to check
     @param timeout_ms optional timeout in milliseconds for polling (default 0 for immediate check)

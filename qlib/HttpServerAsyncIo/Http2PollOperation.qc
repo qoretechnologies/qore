@@ -76,6 +76,17 @@ public class Http2PollOperation inherits AbstractPollOperation {
 
         #! Whether to use headers-only mode for request reading
         bool headers_only = False;
+
+        #! Mutex for thread safety between I/O thread (continuePoll) and handler
+        #! thread (continueReading, startSendResponse, etc.)
+        Mutex op_lock();
+
+        #! Queues for delivering data to CONNECT stream handlers (stream_id string → Queue)
+        /** Registered by the I/O controller when dispatching extended CONNECT handlers.
+            Data is drained from the per-stream buffer to these Queues after each poll cycle.
+            NOTHING is pushed as a sentinel when the stream closes.
+        */
+        hash<string, Queue> stream_queues;
     }
 
     #! Creates the poll operation
@@ -129,6 +140,7 @@ public class Http2PollOperation inherits AbstractPollOperation {
     /** @return poll info for the next poll() call, or NOTHING if complete
     */
     *hash<SocketPollInfo> continuePoll() {
+        AutoLock al(op_lock);
         while (True) {
             @debug {
                 if (getenv("QORE_H2OP_TRACE")) {
@@ -151,6 +163,10 @@ public class Http2PollOperation inherits AbstractPollOperation {
                     }
                     try {
                         auto poll_info = current_op.continuePoll();
+                        # Drain data for registered CONNECT streams after each poll cycle
+                        if (stream_queues) {
+                            drainStreamQueues();
+                        }
                         @debug {
                             if (getenv("QORE_H2OP_TRACE")) {
                                 printf("Http2PollOperation: current_op.continuePoll() returned poll_info=%y goal=%y\n",
@@ -296,6 +312,7 @@ h2op.startSendResponse(200, {"content-type": "text/html"}, html_body);
 
     */
     int pushResource(string path, *hash<auto> headers) {
+        AutoLock al(op_lock);
         if (state != STATE_REQUEST_READY && state != STATE_SENDING) {
             throw "HTTP2-STATE-ERROR", sprintf("cannot push resource in state: %y", state);
         }
@@ -354,6 +371,7 @@ if (push) {
 
     */
     *code getPushResourceCallback() {
+        AutoLock al(op_lock);
         if (state != STATE_REQUEST_READY && state != STATE_SENDING) {
             return NOTHING;
         }
@@ -370,6 +388,7 @@ if (push) {
         @note This must be called after the request is ready (goalReached() returns True)
     */
     startSendResponse(int status_code, *hash<auto> headers, *data body) {
+        AutoLock al(op_lock);
         if (state != STATE_REQUEST_READY && state != STATE_SENT) {
             throw "HTTP2-STATE-ERROR", sprintf("cannot send response in state: %y", state);
         }
@@ -394,6 +413,7 @@ if (push) {
 
     */
     startSendResponse(int status_code, *hash<auto> headers, InputStream body, *int chunk_size) {
+        AutoLock al(op_lock);
         if (state != STATE_REQUEST_READY && state != STATE_SENT) {
             throw "HTTP2-STATE-ERROR", sprintf("cannot send response in state: %y", state);
         }
@@ -412,6 +432,7 @@ if (push) {
         call this to wait for the next request on the persistent HTTP/2 connection.
     */
     startReadNextRequest() {
+        AutoLock al(op_lock);
         if (state != STATE_SENT && state != STATE_REQUEST_READY) {
             throw "HTTP2-STATE-ERROR", sprintf("cannot read next request in state: %y", state);
         }
@@ -426,6 +447,7 @@ if (push) {
         nghttp2 session state (including any already-received frames).
     */
     continueReading() {
+        AutoLock al(op_lock);
         if (state != STATE_REQUEST_READY) {
             throw "HTTP2-STATE-ERROR", sprintf("cannot continue reading in state: %y", state);
         }
@@ -436,6 +458,7 @@ if (push) {
 
     #! Aborts the operation
     abort() {
+        AutoLock al(op_lock);
         if (current_op) {
             current_op.abort();
         }
@@ -445,10 +468,72 @@ if (push) {
         } catch () {}
     }
 
+    #! Registers a Queue for delivering data to a CONNECT stream handler
+    /** Called by the I/O controller when dispatching an extended CONNECT handler.
+        The Queue must be unlimited (created with no max size) to ensure non-blocking pushes.
+
+        @param stream_id the HTTP/2 stream ID
+        @param queue the unlimited Queue for data delivery
+
+        @note Must be called on the I/O controller thread before the handler starts reading.
+    */
+    registerStreamQueue(int stream_id, Queue queue) {
+        AutoLock al(op_lock);
+        stream_queues{stream_id} = queue;
+    }
+
     #! Internal: starts the read request operation
     private startReadRequest(*bool headers_only) {
         current_op = sock.startPollReadHttp2Request(headers_only ? {"headers_only": True} : NOTHING);
         state = STATE_READING;
+    }
+
+    #! Internal: drains buffered data for registered CONNECT streams into their Queues
+    /** Called after each continuePoll() cycle on the I/O controller thread.
+        Reads all available data from each registered stream's per-stream buffer
+        and pushes it to the corresponding Queue. When a stream is closed
+        (RST_STREAM, END_STREAM, or GOAWAY), a NOTHING sentinel is pushed
+        and the Queue registration is removed.
+    */
+    private drainStreamQueues() {
+        list<string> completed;
+        foreach string sid in (keys stream_queues) {
+            int stream_id = int(sid);
+            Queue queue = stream_queues{sid};
+            # Drain all available data from the per-stream buffer
+            int drain_count = 0;
+            int drain_bytes = 0;
+            while (True) {
+                *binary data = sock.readHttp2StreamData(stream_id);
+                if (!data) {
+                    break;
+                }
+                drain_bytes += data.size();
+                ++drain_count;
+                queue.push(data);
+            }
+            @debug {
+                if (drain_count && getenv("QORE_BIDI_TRACE")) {
+                    printf("drainStreamQueues: stream=%d drained %d chunks (%d bytes) qsize=%d\n",
+                        stream_id, drain_count, drain_bytes, queue.size());
+                }
+            }
+            # Check if the remote peer has sent END_STREAM (client done sending)
+            # or if the stream is fully closed (RST_STREAM, GOAWAY)
+            if (sock.isHttp2StreamRemoteClosed(stream_id)
+                    || sock.isHttp2StreamClosed(stream_id)) {
+                @debug {
+                    if (getenv("QORE_BIDI_TRACE")) {
+                        printf("drainStreamQueues: stream=%d CLOSED, pushing sentinel\n",
+                            stream_id);
+                    }
+                }
+                queue.push(NOTHING);
+                completed += sid;
+            }
+        }
+        # Remove completed streams outside the iteration loop
+        map remove stream_queues{$1}, completed;
     }
 }
 

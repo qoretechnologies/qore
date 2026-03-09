@@ -363,6 +363,24 @@ public:
     */
     DLLEXPORT bool isHttp2DataAvailable(int32_t stream_id, int timeout_ms, ExceptionSink* xsink);
 
+    //! Check if an HTTP/2 stream is fully closed (both sides sent END_STREAM)
+    /** @param stream_id the stream to check
+
+        @return true if the stream is closed or does not exist
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT bool isHttp2StreamClosed(int32_t stream_id) const;
+
+    //! Check if an HTTP/3 stream is complete (END_STREAM / FIN received from server)
+    /** @param stream_id the stream to check
+
+        @return true if the stream is complete or does not exist
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT bool isHttp3StreamClosed(int64_t stream_id) const;
+
     //! Sends data on an HTTP/3 extended CONNECT stream (bidirectional tunnel)
     /** @param stream_id the stream ID (from sendHttp3Connect())
         @param data the data to send (or nullptr for end-of-stream only)

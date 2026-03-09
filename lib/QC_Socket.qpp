@@ -4914,6 +4914,45 @@ nothing Socket::sendHttp2StreamData(int stream_id, *binary data, softbool end_st
     return QoreValue();
 }
 
+//! Waits for an HTTP/2 stream's send buffer to drain below the backpressure threshold
+/** @par Example:
+    @code{.py}
+    while (True) {
+        try {
+            sock.sendHttp2StreamData(stream_id, chunk);
+            break;
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "HTTP2-FLOW-CONTROL") {
+                controllers[idx].wake();
+                sock.waitForHttp2StreamDrain(stream_id, 5s);
+                continue;
+            }
+            rethrow;
+        }
+    }
+    @endcode
+
+    Blocks the calling thread until the stream's internal buffer drops below the
+    backpressure threshold (1 MB), the stream is closed, or the timeout expires.
+
+    Unlike polling with usleep(), this method uses a condition variable signaled by
+    the I/O thread when buffer space is freed, providing deterministic wakeup with
+    no wasted CPU cycles.
+
+    @note This method does NOT acquire the socket lock, so it is safe to call from
+    a handler thread while the I/O thread is running.
+
+    @param stream_id the HTTP/2 stream ID
+    @param timeout_ms maximum wait time in milliseconds (0 = no wait, -1 = infinite)
+
+    @return 0 if buffer drained, 1 if timed out, -1 if stream not found or closed
+
+    @since %Qore 2.3
+*/
+int Socket::waitForHttp2StreamDrain(int stream_id, timeout timeout_ms = 5s) {
+    return s->waitForHttp2StreamDrain((int32_t)stream_id, (int)timeout_ms);
+}
+
 //! Reads available HTTP/2 stream data without blocking
 /** @param stream_id the HTTP/2 stream ID to read from
     @param max_bytes maximum bytes to return; 0 means all available
@@ -4995,6 +5034,37 @@ bool Socket::isHttp2StreamComplete(int stream_id) [flags=CONSTANT] {
     return s->isHttp2StreamComplete((int32_t)stream_id);
 }
 
+//! Check if an HTTP/2 stream has been closed
+/** @param stream_id the HTTP/2 stream ID
+    @return @ref True if the stream state is Closed (via END_STREAM + response, RST_STREAM,
+    or GOAWAY), or if the stream is not found.
+
+    Unlike @ref isHttp2StreamComplete() which checks if END_STREAM was received (which is set
+    early for CONNECT streams during initial dispatch), this method checks the actual stream
+    lifecycle state. Use this to detect when a CONNECT tunnel stream has been terminated.
+
+    @since %Qore 2.3
+*/
+bool Socket::isHttp2StreamClosed(int stream_id) [flags=CONSTANT] {
+    return s->isHttp2StreamClosed((int32_t)stream_id);
+}
+
+//! Check if the remote peer has closed their side of an HTTP/2 stream
+/** @param stream_id the HTTP/2 stream ID
+    @return @ref True if the remote peer has sent END_STREAM on this stream (via DATA or
+    HEADERS frame), or if the stream is not found.
+
+    This is the correct method to detect when the remote peer is done sending data on a
+    CONNECT tunnel stream. Unlike @ref isHttp2StreamComplete() (which is set early for
+    CONNECT during dispatch) and @ref isHttp2StreamClosed() (which requires both sides to
+    close), this method specifically checks the remote peer's END_STREAM state.
+
+    @since %Qore 2.3
+*/
+bool Socket::isHttp2StreamRemoteClosed(int stream_id) [flags=CONSTANT] {
+    return s->isHttp2StreamRemoteClosed((int32_t)stream_id);
+}
+
 //! Flush all pending HTTP/2 outgoing data (blocking)
 /** Calls sendPendingDataBlocking() to send all queued frames to the socket.
 
@@ -5036,6 +5106,24 @@ nothing Socket::flushHttp2(timeout timeout = 5s) {
 */
 nothing Socket::cleanupHttp2Stream(int stream_id) {
     s->cleanupHttp2Stream((int32_t)stream_id);
+    return QoreValue();
+}
+
+//! Send RST_STREAM to abort an HTTP/2 stream and clean up the stream state
+/** Sends a CANCEL (0x8) RST_STREAM frame to the peer, telling it to stop sending DATA
+    frames on this stream.  The stream is then removed from the HTTP/2 session.
+
+    Use this when a body streaming error is detected mid-stream and remaining DATA frames
+    must be discarded without corrupting subsequent requests on the same connection.
+
+    @param stream_id the HTTP/2 stream ID to reset
+
+    @throw HTTP2-ERROR if the RST_STREAM submission fails
+
+    @since %Qore 2.3
+*/
+nothing Socket::resetHttp2Stream(int stream_id) {
+    s->resetHttp2Stream((int32_t)stream_id, xsink);
     return QoreValue();
 }
 
@@ -6240,4 +6328,30 @@ nothing Socket::cleanupQuicStream(int session_id, int stream_id) {
         return QoreValue();
     }
     s->cleanupQuicStream(session_id, stream_id, xsink);
+}
+
+//! Reset an HTTP/3 stream by shutting down the read side and cleaning up
+/** Sends a STOP_SENDING signal to the peer for the given stream and removes the stream
+    from the QUIC session.
+
+    Use this when a body streaming error is detected mid-stream and remaining data must
+    be discarded without corrupting subsequent requests on the same session.
+
+    @param session_id the QUIC session ID
+    @param stream_id the HTTP/3 stream ID
+
+    @throw QUIC-ERROR if no QUIC session with the given ID is active
+
+    @since %Qore 2.3
+*/
+nothing Socket::resetQuicStream(int session_id, int stream_id) {
+    if (session_id <= 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
+        return QoreValue();
+    }
+    if (stream_id < 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid stream_id %lld: must be >= 0", (long long)stream_id);
+        return QoreValue();
+    }
+    s->resetQuicStream(session_id, stream_id, xsink);
 }

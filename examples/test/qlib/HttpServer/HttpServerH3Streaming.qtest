@@ -99,6 +99,11 @@ class StreamingBodyHandler inherits AbstractHttpRequestHandler {
         #! Received data stored for test verification
         Mutex data_lock();
         list<hash<auto>> received_requests();
+        int verbose;
+    }
+
+    constructor(int verbose = 0) {
+        self.verbose = verbose;
     }
 
     #! Opt in to body streaming so the framework doesn't buffer the body
@@ -113,7 +118,7 @@ class StreamingBodyHandler inherits AbstractHttpRequestHandler {
         bool headers_end_stream = cx."header-info".headers_end_stream ?? False;
         *Socket sock = cx."header-info".sock;
 
-        @debug {
+        if (verbose > 2) {
             printf("StreamingBodyHandler: session=%d stream=%d body_streaming=%y "
                 "headers_end_stream=%y sock=%y body_present=%y\n",
                 session_id, stream_id, body_streaming, headers_end_stream,
@@ -131,19 +136,19 @@ class StreamingBodyHandler inherits AbstractHttpRequestHandler {
 
         if (body_streaming && !headers_end_stream) {
             # Read body incrementally
-            @debug { printf("StreamingBodyHandler: entering streaming read loop\n"); }
+            if (verbose > 2) { printf("StreamingBodyHandler: entering streaming read loop\n"); }
             binary accumulated_body = binary();
             while (True) {
                 *binary chunk = sock.readQuicStreamDataBlock(session_id, stream_id, 10s);
-                @debug { printf("StreamingBodyHandler: read chunk size=%y\n", chunk.size()); }
+                if (verbose > 2) { printf("StreamingBodyHandler: read chunk size=%y\n", chunk.size()); }
                 if (!exists chunk) {
-                    @debug { printf("StreamingBodyHandler: no more data, exiting loop\n"); }
+                    if (verbose > 2) { printf("StreamingBodyHandler: no more data, exiting loop\n"); }
                     # Stream complete (END_STREAM received)
                     break;
                 }
                 accumulated_body += chunk;
             }
-            @debug { printf("StreamingBodyHandler: total accumulated=%d\n", accumulated_body.size()); }
+            if (verbose > 2) { printf("StreamingBodyHandler: total accumulated=%d\n", accumulated_body.size()); }
             result.body_size = accumulated_body.size();
             result.body = accumulated_body;
         } else if (body) {
@@ -416,7 +421,7 @@ l50Xb2GWQesIt9k5jF5IOw==
             "max_request_body_size": opts.max_request_body_size ?? 0,
         });
 
-        StreamingBodyHandler streaming_handler();
+        StreamingBodyHandler streaming_handler(m_options.verbose);
         server.setHandler("echo", "/echo", NOTHING, new EchoHandler());
         server.setHandler("stream-response", "/stream-response", NOTHING,
             new StreamResponseHandler(mPayload));

@@ -416,12 +416,7 @@ public class ProviderIndexUtil {
         # get the AbstractDataProviderTypeMap value
         hash<auto> type_map = Constant::forName("DataProvider::AbstractDataProviderTypeMap").getValue();
         # get the UiOptionViewMap for enum deserialization
-        *hash<auto> ui_view_map;
-        try {
-            ui_view_map = Constant::forName("DataProvider::UiOptionViewMap").getValue();
-        } catch () {
-            # backwards compatibility: older DataProvider versions may not have this constant
-        }
+        *hash<auto> ui_view_map = Constant::forName("DataProvider::UiOptionViewMap").getValue();
 
         *hash<DataProviderIndexInfo> rv;
         try {

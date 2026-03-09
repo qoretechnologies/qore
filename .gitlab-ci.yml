@@ -371,6 +371,11 @@ test-perf:
     - k8s
     - amd64
   services: []
+  # Don't download build artifacts — test-perf rebuilds from scratch with
+  # Release optimization.  Without this, artifacts from all 4 build jobs
+  # (different architectures/platforms) are extracted into build/, corrupting
+  # the cmake cache and causing module-loading failures.
+  dependencies: []
   allow_failure: true
   variables:
     QORE_PERF_TESTS_ONLY: "1"

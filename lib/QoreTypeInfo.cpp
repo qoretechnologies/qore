@@ -2021,8 +2021,11 @@ bool QoreTypeSpec::acceptInput(ExceptionSink* xsink, const QoreTypeInfo& typeInf
         }
         case QTS_TYPE: {
             qore_type_t t = n.getType();
-            // Unwrap TAG_ENUM to base type for typed (non-auto) targets
-            if (n.isEnum() && u.t != NT_ALL) {
+            // Unwrap TAG_ENUM to base type only for direct lvalue/parameter assignments
+            // (e.g. "string s = EnumVal"), NOT for hash key or member assignments where
+            // the TAG_ENUM must be preserved through containers for later typed retrieval
+            if (n.isEnum() && u.t != NT_ALL
+                && strcmp(arg_type, "key") && strcmp(arg_type, "member")) {
                 QoreValue base_val = n.getEnumMember()->getValue();
                 base_val.ref();
                 n = base_val;

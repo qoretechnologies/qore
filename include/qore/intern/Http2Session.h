@@ -41,6 +41,7 @@
 
 #include <cctype>
 #include <functional>
+#include <condition_variable>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -453,6 +454,25 @@ public:
     */
     DLLLOCAL bool isStreamComplete(int32_t stream_id) const;
 
+    //! Check if stream has been closed (stream state is Closed)
+    /** @param stream_id the stream to check
+        @return True if the stream state is Closed (via END_STREAM + response, RST_STREAM,
+        or GOAWAY), or if the stream is not found
+        @since %Qore 2.3
+    */
+    DLLLOCAL bool isStreamClosed(int32_t stream_id) const;
+
+    //! Check if the remote peer has closed their side of the stream (sent END_STREAM)
+    /** Uses nghttp2_session_get_stream_remote_close() to check if the remote peer
+        has sent END_STREAM on the stream. This is distinct from isStreamComplete() which
+        is set early for CONNECT streams during initial dispatch.
+
+        @param stream_id the stream to check
+        @return True if the remote peer has sent END_STREAM, or if the stream is not found
+        @since %Qore 2.3
+    */
+    DLLLOCAL bool isStreamRemoteClosed(int32_t stream_id) const;
+
     //! Remove stream from map (cleanup after handler finishes)
     /** @param stream_id the stream to remove
         @since %Qore 2.3
@@ -718,6 +738,28 @@ private:
     //! Atomic flag for lock-free hasActiveStreamInputStreams() checks in the I/O hot path
     std::atomic<bool> has_active_input_streams_{false};
 
+    //! Condition variable for flow-control drain notifications
+    /** Signaled by dataProviderReadCallback when it consumes data from a streaming
+        buffer, and by onStreamCloseCallback when a stream is closed.
+
+        Uses a separate non-recursive drain_mtx_ + drain_cv_ pair with an atomic
+        generation counter to avoid POSIX UB with recursive mutexes and
+        std::condition_variable.
+
+        The generation counter prevents lost wakeups: signal sites increment
+        drain_gen_ and briefly lock drain_mtx_ before notify; the waiter checks
+        drain_gen_ under drain_mtx_ then re-checks the actual predicate under m.
+
+        Lock ordering: signal sites hold m then briefly acquire drain_mtx_;
+        the waiter holds drain_mtx_ (for CV wait) then separately acquires m
+        (never simultaneously), so no deadlock is possible.
+
+        @since %Qore 2.3
+    */
+    std::mutex drain_mtx_;
+    std::condition_variable drain_cv_;
+    std::atomic<unsigned> drain_gen_{0};
+
 #if defined(__linux__) && defined(HAVE_IO_URING)
     //! Non-owning pointer to io_uring instance (owned by QoreEventLoop)
     QoreIoUring* io_uring = nullptr;
@@ -745,6 +787,26 @@ public:
     /** @since %Qore 2.3
     */
     DLLLOCAL void getExtraFds(std::vector<std::pair<int, int>>& extra_fds) const;
+
+    //! Wait for a stream's send buffer to drain below the backpressure threshold
+    /** Blocks the calling thread until the stream's pending_body_data drops below
+        MAX_STREAM_BUFFER, the stream is closed, or the timeout expires.
+
+        @param stream_id the HTTP/2 stream ID
+        @param timeout_ms maximum wait time in milliseconds (0 = no wait, -1 = infinite)
+        @return 0 if buffer drained, 1 if timed out, -1 if stream not found or closed
+
+        @since %Qore 2.3
+    */
+    DLLLOCAL int waitForStreamDrain(int32_t stream_id, int timeout_ms);
+
+    //! Signal drain_cv_ that buffer space has been freed
+    /** Called by dataProviderReadCallback and onStreamCloseCallback.
+        Must be called while holding the session mutex m.
+
+        @since %Qore 2.3
+    */
+    DLLLOCAL void notifyStreamDrain();
 
 #if defined(__linux__) && defined(HAVE_IO_URING)
     //! Set the io_uring instance for async file reads

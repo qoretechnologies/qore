@@ -586,11 +586,13 @@ public namespace RestHandler {
               as, for example, socket character encoding)
         */
         nothing recv(hash<auto> v) {
+            if (ex) {
+                return;
+            }
             try {
                 recvImpl(v);
             } catch (hash<ExceptionInfo> n_ex) {
                 ex = n_ex;
-                rethrow;
             }
         }
 
@@ -644,8 +646,18 @@ public namespace RestHandler {
 
         #! registers stream errors in the send operation with the stream handler if no error is already present
         streamError(hash<auto> ex) {
-            if (!self.ex)
+            if (!self.ex) {
                 self.ex = ex;
+            }
+        }
+
+        #! Returns @ref True if a receive error has been detected
+        /** @return @ref True if a receive error occurred (an exception was caught during recv processing)
+
+            @since RestHandler 1.8
+        */
+        bool hasError() {
+            return exists ex;
         }
 
         #! this method should return the response message description hash
@@ -731,6 +743,19 @@ public namespace RestHandler {
         */
         bool needsContentEncoding() {
             return stream.needsContentEncoding();
+        }
+
+        #! Returns @ref True if the stream handler has detected a receive error
+        /** This allows the HTTP/2 and HTTP/3 body streaming loop in
+            @ref AbstractStreamRequest::handleRequest() to stop reading DATA frames
+            after the handler detects an error mid-stream.
+
+            @return @ref True if a receive error has been detected
+
+            @since RestHandler 1.8
+        */
+        bool hasRecvError() {
+            return stream.hasError();
         }
 
         # callback method for the response header; this calls @ref RestHandler::AbstractRestStreamRequestHandler::getResponseHeaderMessage() and returns the result
@@ -920,7 +945,14 @@ public namespace RestHandler {
                 # For HTTP/2/3 with Connect protocol, the body was pre-read and saved
                 # in cx."stream-body" (bypassing REST parseRequest deserialization).
                 # For HTTP/1.x, the body is only available if content-length was set.
-                *data sb = cx."stream-body" ?? (cx.hdr."content-length" ? cx.body : NOTHING);
+                # For HTTP/2/3 raw streams (e.g. sendRawStream with application/octet-stream),
+                # the body was pre-buffered by HttpServer and stored in cx."orig-request-body".
+                *data sb = cx."stream-body"
+                    ?? (cx.hdr."content-length" ? cx.body : NOTHING);
+                if (!sb && cx."orig-request-body"
+                        && cx.hdr."_qore_orig_content_type" == MimeTypeOctetStream) {
+                    sb = cx."orig-request-body";
+                }
                 RestStreamRequest req(rsh, listener, rh, s, cx, cx.hdr, sb);
                 return req.handleRequest();
             } catch (hash<ExceptionInfo> ex) {
@@ -1128,6 +1160,35 @@ public namespace RestHandler {
                 : HttpServer::AbstractHttpRequestHandler(auth, True), LoggerWrapper(logger) {
             self.validator = validator;
             validator.setLogger(logger);
+        }
+
+        #! Returns @ref True for HTTP/2 and HTTP/3 body streaming with Connect or DataStream protocols
+        /** For Connect protocol (DataStream 2.0) and DataStream v1 over HTTP/2 or HTTP/3,
+            this allows the framework to skip pre-buffering the entire request body and instead
+            pass DATA frames incrementally to the stream handler via
+            @ref AbstractStreamRequest::handleRequest(). This enables mid-stream error detection
+            (e.g. COLUMN-ERROR during an upsert) without buffering the entire body in memory.
+
+            @param cx the connection context
+            @param hdr the HTTP headers
+
+            @return @ref True for HTTP/2/3 body streaming with Connect or DataStream content types
+
+            @since RestHandler 1.8
+        */
+        bool wantsBodyStreaming(hash<auto> cx, hash<auto> hdr) {
+            if (!(cx."header-info".body_streaming ?? False)) {
+                return False;
+            }
+            # For Connect or DataStream content types, read body data incrementally
+            *string ct = hdr."content-type";
+            if (ct =~ /^application\/connect\+/) {
+                return True;
+            }
+            if (hdr."datastream-content-type".val()) {
+                return True;
+            }
+            return False;
         }
 
         #! returns the name of the root REST class

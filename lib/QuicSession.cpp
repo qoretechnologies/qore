@@ -2257,6 +2257,39 @@ void QuicSession::cleanupStream(int64_t stream_id) {
     stream_notifiers_.erase(stream_id);
 }
 
+int QuicSession::resetStream(int64_t stream_id) {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    printd(5, "QuicSession::resetStream() stream_id=" QLLD "\n", stream_id);
+    int result = 0;
+    if (h3_conn_) {
+        nghttp3_conn_shutdown_stream_read(h3_conn_, stream_id);
+    }
+    if (conn_) {
+        int rv = ngtcp2_conn_shutdown_stream_read(conn_, 0, stream_id,
+            NGHTTP3_H3_REQUEST_CANCELLED);
+        if (rv != 0 && rv != NGTCP2_ERR_STREAM_NOT_FOUND) {
+            // Transport-level reset failed, but nghttp3 shutdown already ran
+            // above.  Always clean up local state to avoid resource leaks —
+            // the handler is done and stale entries would never be reclaimed.
+            printd(1, "QuicSession::resetStream() ngtcp2_conn_shutdown_stream_read "
+                "failed: %s (cleaning up local state anyway)\n", ngtcp2_strerror(rv));
+            result = -1;
+        }
+    }
+    // Always clean up local stream state regardless of transport-level errors
+    auto it = streams_.find(stream_id);
+    if (it != streams_.end()) {
+        streams_.erase(it);
+    }
+    stream_notifiers_.erase(stream_id);
+    // Clean up any buffered extended-CONNECT tunnel data for this stream
+    {
+        std::lock_guard<std::mutex> cg(connect_data_mutex_);
+        connect_stream_data_.erase(stream_id);
+    }
+    return result;
+}
+
 std::shared_ptr<StreamNotifier> QuicSession::getStreamNotifier(int64_t stream_id) const {
     std::lock_guard<std::recursive_mutex> lock(mtx_);
     auto it = stream_notifiers_.find(stream_id);
@@ -2621,10 +2654,19 @@ int QuicSession::streamCloseCallback(ngtcp2_conn* /* conn */, uint32_t flags,
         session->body_data_.erase(stream_id);
         session->streaming_body_data_.erase(stream_id);
 
-        // Clean up extended CONNECT tunnel data
+        // Clean up extended CONNECT tunnel data — only erase if the buffer
+        // is already empty.  readConnectStreamData() drains with swap(), so
+        // once the caller reads the last chunk the entry is empty.  If data
+        // is still buffered (e.g. stream closed before the caller has read
+        // it all), preserve the buffer so the caller can still retrieve it.
+        // The entry with an empty vector has negligible overhead and is
+        // cleaned up when the QuicSession is destroyed.
         {
             std::lock_guard<std::mutex> lg(session->connect_data_mutex_);
-            session->connect_stream_data_.erase(stream_id);
+            auto cit = session->connect_stream_data_.find(stream_id);
+            if (cit != session->connect_stream_data_.end() && cit->second.empty()) {
+                session->connect_stream_data_.erase(cit);
+            }
         }
 
         // Wake any handler threads blocked in waitForStreamDrain() for this stream
@@ -2639,7 +2681,16 @@ int QuicSession::streamCloseCallback(ngtcp2_conn* /* conn */, uint32_t flags,
         // in streams_ forever and callers waiting for it would hang.
         // NOTE: safe for uni-directional streams (control, QPACK) — markStreamComplete()
         // checks streams_.find() first, so unknown stream IDs are harmlessly skipped.
-        session->markStreamComplete(stream_id);
+        {
+            auto sit = session->streams_.find(stream_id);
+            if (sit != session->streams_.end() && sit->second->is_connect) {
+                // For CONNECT tunnel streams, set body_complete directly without
+                // re-dispatching via markStreamComplete()
+                sit->second->body_complete = true;
+            } else {
+                session->markStreamComplete(stream_id);
+            }
+        }
 
         // Extend max remote bidi streams so the peer can open new ones
         if (session->is_server_) {
@@ -3149,11 +3200,17 @@ int QuicSession::h3EndHeadersCallback(nghttp3_conn* /* conn */, int64_t stream_i
         }
 
         // RFC 9220: Extended CONNECT streams stay open for bidirectional tunnel
-        // (e.g., WebSocket framing) — do NOT mark complete even if fin is set
+        // (e.g., WebSocket framing) — do NOT mark complete even if fin is set.
+        // Push to completed_streams_ for handler dispatch WITHOUT calling
+        // markStreamComplete(), which would set body_complete=true and cause
+        // isStreamComplete() to return true immediately — preventing the
+        // Queue-based drain from buffering tunnel data before the sentinel.
         if (stream->is_connect && !stream->connect_protocol.empty()) {
-            // Mark headers complete so the stream is dispatched to the handler,
-            // but leave the stream open for data exchange
-            session->markStreamComplete(stream_id);
+            stream->headers_complete = true;
+            session->completed_streams_.push(stream_id);
+            session->has_completed_streams_.store(true, std::memory_order_release);
+            printd(5, "QuicSession::h3EndHeadersCallback() stream_id=" QLLD
+                " CONNECT dispatched (body_complete=false, tunnel open)\n", stream_id);
             return 0;
         }
 
@@ -3294,6 +3351,20 @@ int QuicSession::h3EndStreamCallback(nghttp3_conn* /* conn */, int64_t stream_id
                                       void* conn_user_data, void* /* stream_user_data */) {
     auto* session = static_cast<QuicSession*>(conn_user_data);
     printd(5, "QuicSession::h3EndStreamCallback() stream_id=" QLLD " - marking complete\n", stream_id);
+
+    // For CONNECT tunnel streams, set body_complete directly without calling
+    // markStreamComplete() — the stream was already dispatched via h3EndHeaders
+    // and we must NOT push it to completed_streams_ again (which would cause a
+    // spurious second dispatch).  Setting body_complete lets isStreamComplete()
+    // return true so drainStreamQueues() pushes the NOTHING sentinel.
+    auto it = session->streams_.find(stream_id);
+    if (it != session->streams_.end() && it->second->is_connect) {
+        it->second->body_complete = true;
+        printd(5, "QuicSession::h3EndStreamCallback() stream_id=" QLLD
+            " CONNECT tunnel END_STREAM\n", stream_id);
+        return 0;
+    }
+
     session->markStreamComplete(stream_id);
     return 0;
 }
