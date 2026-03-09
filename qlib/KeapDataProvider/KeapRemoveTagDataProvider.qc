@@ -85,8 +85,9 @@ public class KeapRemoveTagDataProvider inherits KeapDataProviderBase {
     }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        doDelete("contacts/" + req.contact_id + "/tags/" + req.tag_id);
-        return {};
+        # v2 API: POST /tags/{tag_id}/contacts:removeTags with {"contact_ids": [...]}
+        return doPost("tags/" + req.tag_id + "/contacts:removeTags",
+            {"contact_ids": (req.contact_id.toInt(),)});
     }
 
     private hash<DataProviderInfo> getStaticInfoImpl() {

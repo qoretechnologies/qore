@@ -161,15 +161,21 @@ public class KeapDataProviderBase inherits DataProvider::AbstractDataProvider {
         @param limit optional maximum number of results to return
         @return a list of all result records
     */
-    list<hash<auto>> fetchAllPages(string path, string result_key, *hash<auto> params, *int limit) {
+    list<hash<auto>> fetchAllPages(string path, string result_key, *hash<auto> params,
+            *int limit, *string extra_qs) {
         list<hash<auto>> results = ();
         int offset = 0;
         int page_size = limit ?? DefaultPageSize;
         while (True) {
-            hash<auto> qparams = params ?? {};
+            hash qparams = cast<hash>(params ?? {});
             qparams.offset = offset;
             qparams.limit = page_size;
-            hash<auto> response = doGet(path, qparams);
+            string url = path;
+            url += "?" + buildQueryString(qparams);
+            if (extra_qs) {
+                url += "&" + extra_qs;
+            }
+            hash<auto> response = doRestRequest("GET", url);
             if (response{result_key}) {
                 results += response{result_key};
             }
@@ -314,6 +320,8 @@ public class KeapDataProviderBase inherits DataProvider::AbstractDataProvider {
             "companies": True,
             "tags": True,
             "opportunities": True,
+            "users": True,
+            "stages": True,
         };
     }
 
@@ -324,6 +332,8 @@ public class KeapDataProviderBase inherits DataProvider::AbstractDataProvider {
             case "companies": return getReferenceCompanies();
             case "tags": return getReferenceTags();
             case "opportunities": return getReferenceOpportunities();
+            case "users": return getReferenceUsers();
+            case "stages": return getReferenceStages();
         }
     }
 
@@ -344,7 +354,7 @@ public class KeapDataProviderBase inherits DataProvider::AbstractDataProvider {
                         "display_name": display_name,
                         "short_desc": contact.email_addresses[0].email ?? "",
                         "desc": sprintf("%s (ID: %d)", display_name, contact.id),
-                        "value": contact.id,
+                        "value": string(contact.id),
                     };
                 }
             }
@@ -367,7 +377,7 @@ public class KeapDataProviderBase inherits DataProvider::AbstractDataProvider {
                         "display_name": display_name,
                         "short_desc": "",
                         "desc": sprintf("%s (ID: %d)", display_name, company.id),
-                        "value": company.id,
+                        "value": string(company.id),
                     };
                 }
             }
@@ -389,7 +399,7 @@ public class KeapDataProviderBase inherits DataProvider::AbstractDataProvider {
                         "display_name": display_name,
                         "short_desc": tag.category.name ?? "",
                         "desc": sprintf("%s (ID: %d)", display_name, tag.id),
-                        "value": tag.id,
+                        "value": string(tag.id),
                     };
                 }
             }
@@ -412,7 +422,7 @@ public class KeapDataProviderBase inherits DataProvider::AbstractDataProvider {
                         "display_name": display_name,
                         "short_desc": opp.stage.name ?? "",
                         "desc": sprintf("%s (ID: %d)", display_name, opp.id),
-                        "value": opp.id,
+                        "value": string(opp.id),
                     };
                 }
             }
@@ -420,6 +430,74 @@ public class KeapDataProviderBase inherits DataProvider::AbstractDataProvider {
             # Silently ignore errors when fetching reference data
         }
         return rv;
+    }
+
+    #! Returns available users for reference data
+    private *list<hash<AllowedValueInfo>> getReferenceUsers() {
+        list<hash<AllowedValueInfo>> rv = ();
+        try {
+            hash<auto> response = doGet("users", {"limit": DefaultPageSize});
+            if (response.users) {
+                foreach hash<auto> user in (response.users) {
+                    string display_name = trim(sprintf("%s %s",
+                        user.given_name ?? "", user.family_name ?? ""));
+                    if (!display_name.val()) {
+                        display_name = user.email_address
+                            ?? sprintf("User %d", user.id);
+                    }
+                    rv += <AllowedValueInfo>{
+                        "display_name": display_name,
+                        "short_desc": user.email_address ?? "",
+                        "desc": sprintf("%s (ID: %d)", display_name, user.id),
+                        "value": string(user.id),
+                    };
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # Silently ignore errors when fetching reference data
+        }
+        return rv;
+    }
+
+    #! Returns available pipeline stages for reference data
+    private *list<hash<AllowedValueInfo>> getReferenceStages() {
+        list<hash<AllowedValueInfo>> rv = ();
+        try {
+            hash<auto> response = doGet("setting/pipeline");
+            if (response.stages) {
+                foreach hash<auto> stage in (response.stages) {
+                    string display_name = stage.name ?? sprintf("Stage %d", stage.id);
+                    rv += <AllowedValueInfo>{
+                        "display_name": display_name,
+                        "short_desc": "",
+                        "desc": sprintf("%s (ID: %d)", display_name, stage.id),
+                        "value": string(stage.id),
+                    };
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # Silently ignore errors when fetching reference data
+        }
+        return rv;
+    }
+
+    #! Transforms a contact response from API format to user-friendly format
+    /** Extracts primary email from `email_addresses` array into `email` field,
+        and primary phone from `phone_numbers` array into `phone1` field
+    */
+    static hash<auto> transformContactResponse(hash<auto> contact) {
+        hash<auto> result = contact;
+        # Extract primary email from email_addresses array
+        if (contact.email_addresses.size()) {
+            result.email = contact.email_addresses[0].email;
+        }
+        remove result.email_addresses;
+        # Extract primary phone from phone_numbers array
+        if (contact.phone_numbers.size()) {
+            result.phone1 = contact.phone_numbers[0].number;
+        }
+        remove result.phone_numbers;
+        return result;
     }
 
     #! Formats a date for Keap API parameters (ISO 8601)

@@ -27,14 +27,21 @@ public namespace KeapDataProvider {
 
 #! Request type for creating a task
 public class KeapCreateTaskRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
-            "title": {
+            "assigned_to_user_id": {
                 "type": StringType,
+                "display_name": "Assigned User ID",
+                "short_desc": "The assigned user",
+                "desc": "The ID of the user assigned to the task",
+                "required": True,
+            },
+            "title": {
+                "type": StringOrNothingType,
                 "display_name": "Title",
                 "short_desc": "The task title",
                 "desc": "The title of the task",
-                "required": True,
+                "example_value": "Follow up with lead",
             },
             "contact_id": {
                 "type": StringOrNothingType,
@@ -42,11 +49,11 @@ public class KeapCreateTaskRequestDataType inherits HashDataType {
                 "short_desc": "The associated contact",
                 "desc": "The unique identifier of the contact associated with the task",
             },
-            "due_date": {
+            "due_time": {
                 "type": DateOrNothingType,
-                "display_name": "Due Date",
-                "short_desc": "The task due date",
-                "desc": "The due date of the task",
+                "display_name": "Due Time",
+                "short_desc": "The task due date/time",
+                "desc": "The due date/time of the task",
             },
             "description": {
                 "type": StringOrNothingType,
@@ -55,10 +62,15 @@ public class KeapCreateTaskRequestDataType inherits HashDataType {
                 "desc": "A description of the task",
             },
             "priority": {
-                "type": IntOrNothingType,
+                "type": StringOrNothingType,
                 "display_name": "Priority",
                 "short_desc": "The task priority",
                 "desc": "The priority level of the task",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "CRITICAL", "desc": "Critical priority"},
+                    <AllowedValueInfo>{"value": "ESSENTIAL", "desc": "Essential priority"},
+                    <AllowedValueInfo>{"value": "NONESSENTIAL", "desc": "Non-essential priority"},
+                ),
             },
             "type": {
                 "type": StringOrNothingType,
@@ -72,11 +84,29 @@ public class KeapCreateTaskRequestDataType inherits HashDataType {
                 "short_desc": "Whether the task is completed",
                 "desc": "Whether the task is marked as completed",
             },
-            "user_id": {
+            "completion_time": {
+                "type": DateOrNothingType,
+                "display_name": "Completion Time",
+                "short_desc": "When the task was completed",
+                "desc": "The date/time when the task was completed",
+            },
+            "remind_time_mins": {
                 "type": IntOrNothingType,
-                "display_name": "User ID",
-                "short_desc": "The assigned user",
-                "desc": "The ID of the user assigned to the task",
+                "display_name": "Reminder Minutes",
+                "short_desc": "Minutes before reminder",
+                "desc": "Number of minutes before the start time to send a reminder",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": 5},
+                    <AllowedValueInfo>{"value": 10},
+                    <AllowedValueInfo>{"value": 15},
+                    <AllowedValueInfo>{"value": 30},
+                    <AllowedValueInfo>{"value": 60},
+                    <AllowedValueInfo>{"value": 120},
+                    <AllowedValueInfo>{"value": 240},
+                    <AllowedValueInfo>{"value": 480},
+                    <AllowedValueInfo>{"value": 1440},
+                    <AllowedValueInfo>{"value": 2880},
+                ),
             },
         };
     }
@@ -98,6 +128,9 @@ public class KeapCreateTaskDataProvider inherits KeapDataProviderBase {
         };
 
         const ConstructorOptions = BaseConstructorOptions;
+
+        static *AbstractDataProviderType ResponseType = new KeapTaskDataType();
+        static *AbstractDataProviderType RequestType = new KeapCreateTaskRequestDataType();
     }
 
     constructor(KeapRestClient::KeapRestClient rest) : KeapDataProviderBase(rest) {

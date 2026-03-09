@@ -44,18 +44,16 @@ public class KeapOpportunityDataType inherits HashDataType {
                 "example_value": "New Enterprise Deal",
             },
             "contact": {
-                "type": AutoHashOrNothingType,
+                "type": new KeapContactRefDataType(AutoHashOrNothingType),
                 "display_name": "Contact",
                 "short_desc": "The associated contact",
-                "desc": "The contact associated with this opportunity (hash with id, first_name, "
-                    "last_name, email, etc.)",
+                "desc": "The contact associated with this opportunity",
             },
             "stage": {
-                "type": AutoHashOrNothingType,
+                "type": new KeapStageDataType(AutoHashOrNothingType),
                 "display_name": "Stage",
                 "short_desc": "The opportunity stage",
-                "desc": "The current stage of the opportunity in the sales pipeline (hash with id, "
-                    "name, details)",
+                "desc": "The current stage of the opportunity in the sales pipeline",
             },
             "estimated_close_date": {
                 "type": DateOrNothingType,

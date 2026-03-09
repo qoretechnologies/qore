@@ -27,7 +27,7 @@ public namespace KeapDataProvider {
 
 #! Request type for creating an opportunity
 public class KeapCreateOpportunityRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "opportunity_title": {
                 "type": StringType,
@@ -36,25 +36,35 @@ public class KeapCreateOpportunityRequestDataType inherits HashDataType {
                 "desc": "The title of the opportunity",
                 "required": True,
             },
-            "contact": {
-                "type": AutoHashOrNothingType,
-                "display_name": "Contact",
+            "contact_id": {
+                "type": StringOrNothingType,
+                "display_name": "Contact ID",
                 "short_desc": "The associated contact",
-                "desc": "The contact to associate with this opportunity. Must be a hash with "
-                    "an `id` field containing the contact's integer ID",
+                "desc": "The ID of the contact to associate with this opportunity",
             },
-            "stage": {
-                "type": AutoHashOrNothingType,
-                "display_name": "Stage",
-                "short_desc": "The opportunity stage",
-                "desc": "The pipeline stage for this opportunity. Must be a hash with an `id` "
-                    "field containing the stage's integer ID",
+            "stage_id": {
+                "type": StringOrNothingType,
+                "display_name": "Stage ID",
+                "short_desc": "The pipeline stage",
+                "desc": "The ID of the pipeline stage for this opportunity",
             },
-            "estimated_close_date": {
+            "user_id": {
+                "type": StringOrNothingType,
+                "display_name": "User ID",
+                "short_desc": "The assigned user",
+                "desc": "The ID of the user assigned to this opportunity",
+            },
+            "affiliate_id": {
+                "type": StringOrNothingType,
+                "display_name": "Affiliate ID",
+                "short_desc": "The affiliate",
+                "desc": "The ID of the affiliate associated with this opportunity",
+            },
+            "estimated_close_time": {
                 "type": DateOrNothingType,
-                "display_name": "Estimated Close Date",
+                "display_name": "Estimated Close Time",
                 "short_desc": "The estimated close date",
-                "desc": "The estimated close date of the opportunity",
+                "desc": "The estimated close date/time of the opportunity",
             },
             "projected_revenue_high": {
                 "type": FloatOrNothingType,
@@ -73,6 +83,24 @@ public class KeapCreateOpportunityRequestDataType inherits HashDataType {
                 "display_name": "Notes",
                 "short_desc": "Notes about the opportunity",
                 "desc": "Notes about the opportunity",
+            },
+            "next_action_notes": {
+                "type": StringOrNothingType,
+                "display_name": "Next Action Notes",
+                "short_desc": "Notes for the next action",
+                "desc": "Notes about the next action to take for this opportunity",
+            },
+            "next_action_time": {
+                "type": DateOrNothingType,
+                "display_name": "Next Action Time",
+                "short_desc": "When to take the next action",
+                "desc": "The date/time when the next action should be taken",
+            },
+            "include_in_forecast": {
+                "type": SoftBoolOrNothingType,
+                "display_name": "Include in Forecast",
+                "short_desc": "Include in revenue forecast",
+                "desc": "Whether to include this opportunity in the revenue forecast",
             },
         };
     }
@@ -94,6 +122,9 @@ public class KeapCreateOpportunityDataProvider inherits KeapDataProviderBase {
         };
 
         const ConstructorOptions = BaseConstructorOptions;
+
+        static *AbstractDataProviderType ResponseType = new KeapOpportunityDataType();
+        static *AbstractDataProviderType RequestType = new KeapCreateOpportunityRequestDataType();
     }
 
     constructor(KeapRestClient::KeapRestClient rest) : KeapDataProviderBase(rest) {

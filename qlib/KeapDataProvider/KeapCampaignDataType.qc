@@ -44,7 +44,7 @@ public class KeapCampaignDataType inherits HashDataType {
                 "example_value": "Spring Promotion 2026",
             },
             "goals": {
-                "type": AutoListOrNothingType,
+                "type": new ListDataType(new KeapGoalDataType(AutoHashOrNothingType), True),
                 "display_name": "Goals",
                 "short_desc": "The campaign goals",
                 "desc": "A list of goals defined for this campaign",

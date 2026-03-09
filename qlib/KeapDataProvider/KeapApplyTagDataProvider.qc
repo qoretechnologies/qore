@@ -85,8 +85,15 @@ public class KeapApplyTagDataProvider inherits KeapDataProviderBase {
     }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        string cid = req.contact_id;
-        return doPost("contacts/" + cid + "/tags", {"tagIds": req.tag_ids});
+        # v2 API: POST /tags/{tag_id}/contacts:applyTags with {"contact_ids": [...]}
+        # Apply each tag to the contact
+        list<int> contact_ids = (req.contact_id.toInt(),);
+        hash<auto> result;
+        foreach auto tag_id in (req.tag_ids) {
+            result = doPost("tags/" + string(tag_id) + "/contacts:applyTags",
+                {"contact_ids": contact_ids});
+        }
+        return result ?? {};
     }
 
     private hash<DataProviderInfo> getStaticInfoImpl() {

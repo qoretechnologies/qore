@@ -27,7 +27,7 @@ public namespace KeapDataProvider {
 
 #! Request type for creating a company
 public class KeapCreateCompanyRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "company_name": {
                 "type": StringType,
@@ -38,18 +38,18 @@ public class KeapCreateCompanyRequestDataType inherits HashDataType {
                 "example_value": "Acme Corp",
             },
             "email_address": {
-                "type": StringOrNothingType,
-                "display_name": "Email",
+                "type": new KeapCompanyEmailDataType(AutoHashOrNothingType),
+                "display_name": "Email Address",
                 "short_desc": "The company's email address",
-                "desc": "The email address of the company",
-                "example_value": "info@acme.com",
+                "desc": "The email address of the company as an object with `email` "
+                    "and optionally `field` (`EMAIL1`, `EMAIL2`, `EMAIL3`)",
             },
             "phone_number": {
-                "type": StringOrNothingType,
+                "type": new KeapPhoneNumberDataType(AutoHashOrNothingType),
                 "display_name": "Phone Number",
                 "short_desc": "The company's phone number",
-                "desc": "The phone number of the company",
-                "example_value": "+1-555-987-6543",
+                "desc": "The phone number of the company as an object with `number` "
+                    "and optionally `field` and `type`",
             },
             "website": {
                 "type": StringOrNothingType,
@@ -59,11 +59,16 @@ public class KeapCreateCompanyRequestDataType inherits HashDataType {
                 "example_value": "https://www.acme.com",
             },
             "address": {
-                "type": AutoHashOrNothingType,
+                "type": new KeapAddressDataType(AutoHashOrNothingType),
                 "display_name": "Address",
                 "short_desc": "The company's address",
-                "desc": "The physical address of the company (hash with line1, line2, "
-                    "locality, region, zip_code, country_code)",
+                "desc": "The physical address of the company",
+            },
+            "notes": {
+                "type": StringOrNothingType,
+                "display_name": "Notes",
+                "short_desc": "Notes about the company",
+                "desc": "Notes about the company",
             },
         };
     }
@@ -85,6 +90,9 @@ public class KeapCreateCompanyDataProvider inherits KeapDataProviderBase {
         };
 
         const ConstructorOptions = BaseConstructorOptions;
+
+        static *AbstractDataProviderType ResponseType = new KeapCompanyDataType();
+        static *AbstractDataProviderType RequestType = new KeapCreateCompanyRequestDataType();
     }
 
     constructor(KeapRestClient::KeapRestClient rest) : KeapDataProviderBase(rest) {

@@ -141,12 +141,31 @@ public class KeapContactsDataProvider inherits KeapDataProviderBase {
         return new KeapContactDataType();
     }
 
+    public {
+        #! Optional contact properties to request from the API
+        /** These fields are not returned by default and must be explicitly requested
+            via the `optional_properties` query parameter
+        */
+        const OptionalContactProperties = (
+            "email_addresses", "phone_numbers",
+            "job_title", "website", "spouse_name", "preferred_name",
+            "preferred_locale", "source_type",
+            "owner_id", "middle_name", "prefix", "suffix", "time_zone",
+        );
+    }
+
     #! Returns an iterator for records matching the search criteria
     private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
+        # Build optional_properties query string fragment
+        string opt_props_qs = (map sprintf("optional_properties=%s", $1),
+            OptionalContactProperties).join("&");
+
         # If contact_id provided, get single record
         if (search_options.contact_id) {
-            hash<auto> result = doGet("contacts/" + search_options.contact_id);
+            hash<auto> result = doRestRequest("GET",
+                "contacts/" + search_options.contact_id + "?" + opt_props_qs);
+            result = transformContactResponse(result);
             return new DefaultRecordIterator(new ListHashIterator((result,)),
                 where_cond, search_options);
         }
@@ -170,8 +189,10 @@ public class KeapContactsDataProvider inherits KeapDataProviderBase {
         }
 
         list<hash<auto>> all_records = fetchAllPages("contacts", "contacts", params,
-            search_options.limit);
-        return new DefaultRecordIterator(new ListHashIterator(all_records), where_cond,
+            search_options.limit, opt_props_qs);
+        # Transform each record to extract email and phone
+        list<hash<auto>> transformed = map transformContactResponse($1), all_records;
+        return new DefaultRecordIterator(new ListHashIterator(transformed), where_cond,
             search_options);
     }
 

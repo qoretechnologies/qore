@@ -27,7 +27,7 @@ public namespace KeapDataProvider {
 
 #! Request type for updating a contact
 public class KeapUpdateContactRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "contact_id": {
                 "type": StringType,
@@ -52,25 +52,89 @@ public class KeapUpdateContactRequestDataType inherits HashDataType {
                 "type": StringOrNothingType,
                 "display_name": "Email",
                 "short_desc": "The contact's email address",
-                "desc": "The new email address of the contact",
+                "desc": "The contact's email address. Converted to the API's `email_addresses` "
+                    "array format automatically",
             },
-            "phone1": {
+            "phone_number": {
                 "type": StringOrNothingType,
                 "display_name": "Phone Number",
                 "short_desc": "The contact's phone number",
-                "desc": "The new primary phone number of the contact",
+                "desc": "The contact's phone number. Converted to the API's `phone_numbers` "
+                    "array format automatically",
             },
-            "company_id": {
-                "type": IntOrNothingType,
-                "display_name": "Company ID",
-                "short_desc": "The company to associate",
-                "desc": "The new company ID to associate with the contact",
+            "middle_name": {
+                "type": StringOrNothingType,
+                "display_name": "Middle Name",
+                "short_desc": "The contact's middle name",
+                "desc": "The new middle name of the contact",
+            },
+            "company": {
+                "type": AutoHashOrNothingType,
+                "display_name": "Company",
+                "short_desc": "The associated company",
+                "desc": "The company to associate with the contact. Provide an object with "
+                    "either `id` (existing company ID) or `company_name` (company name)",
             },
             "job_title": {
                 "type": StringOrNothingType,
                 "display_name": "Job Title",
                 "short_desc": "The contact's job title",
                 "desc": "The new job title of the contact",
+            },
+            "owner_id": {
+                "type": StringOrNothingType,
+                "display_name": "Owner ID",
+                "short_desc": "The owner user ID",
+                "desc": "The new owner user ID for the contact",
+            },
+            "website": {
+                "type": StringOrNothingType,
+                "display_name": "Website",
+                "short_desc": "The contact's website",
+                "desc": "The new website URL of the contact",
+            },
+            "preferred_name": {
+                "type": StringOrNothingType,
+                "display_name": "Preferred Name",
+                "short_desc": "The contact's preferred name",
+                "desc": "The new preferred display name of the contact",
+            },
+            "prefix": {
+                "type": StringOrNothingType,
+                "display_name": "Prefix",
+                "short_desc": "Name prefix (e.g., Mr., Dr.)",
+                "desc": "The new name prefix of the contact (e.g., `Mr.`, `Mrs.`, `Dr.`)",
+            },
+            "suffix": {
+                "type": StringOrNothingType,
+                "display_name": "Suffix",
+                "short_desc": "Name suffix (e.g., Jr., III)",
+                "desc": "The new name suffix of the contact (e.g., `Jr.`, `Sr.`, `III`)",
+            },
+            "birth_date": {
+                "type": DateOrNothingType,
+                "display_name": "Birthday",
+                "short_desc": "The contact's birthday",
+                "desc": "The new birth date of the contact",
+            },
+            "spouse_name": {
+                "type": StringOrNothingType,
+                "display_name": "Spouse Name",
+                "short_desc": "The contact's spouse name",
+                "desc": "The new name of the contact's spouse",
+            },
+            "time_zone": {
+                "type": StringOrNothingType,
+                "display_name": "Time Zone",
+                "short_desc": "The contact's time zone",
+                "desc": "The new time zone of the contact (e.g., `US/Eastern`)",
+            },
+            "addresses": {
+                "type": new ListDataType(new KeapAddressDataType(AutoHashOrNothingType), True),
+                "display_name": "Addresses",
+                "short_desc": "The contact's addresses",
+                "desc": "A list of address objects. **Warning**: On update, any array field "
+                    "not listed will have existing values removed",
             },
         };
     }
@@ -92,6 +156,9 @@ public class KeapUpdateContactDataProvider inherits KeapDataProviderBase {
         };
 
         const ConstructorOptions = BaseConstructorOptions;
+
+        static *AbstractDataProviderType ResponseType = new KeapContactDataType();
+        static *AbstractDataProviderType RequestType = new KeapUpdateContactRequestDataType();
     }
 
     constructor(KeapRestClient::KeapRestClient rest) : KeapDataProviderBase(rest) {
@@ -115,7 +182,26 @@ public class KeapUpdateContactDataProvider inherits KeapDataProviderBase {
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         string id = remove req.contact_id;
-        return doPatch("contacts/" + id, req);
+        hash<auto> body = {} + req;
+        # Transform simple email → email_addresses array
+        if (body.email) {
+            body.email_addresses = ({"email": remove body.email, "field": "EMAIL1"},);
+        } else {
+            remove body.email;
+        }
+        # Transform simple phone_number → phone_numbers array
+        if (body.phone_number) {
+            body.phone_numbers = ({"number": remove body.phone_number, "field": "PHONE1"},);
+        } else {
+            remove body.phone_number;
+        }
+        doPatch("contacts/" + id, body);
+        # Update response is minimal; fetch full contact with optional properties
+        string opt_props_qs = (map sprintf("optional_properties=%s", $1),
+            KeapContactsDataProvider::OptionalContactProperties).join("&");
+        hash<auto> full = doRestRequest("GET",
+            "contacts/" + id + "?" + opt_props_qs);
+        return transformContactResponse(full);
     }
 
     private hash<DataProviderInfo> getStaticInfoImpl() {

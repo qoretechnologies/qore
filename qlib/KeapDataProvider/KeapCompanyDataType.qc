@@ -64,11 +64,10 @@ public class KeapCompanyDataType inherits HashDataType {
                 "example_value": "https://www.acme.com",
             },
             "address": {
-                "type": AutoHashOrNothingType,
+                "type": new KeapAddressDataType(AutoHashOrNothingType),
                 "display_name": "Address",
                 "short_desc": "The company address",
-                "desc": "The physical address of the company (hash with line1, line2, locality, "
-                    "region, zip_code, country_code)",
+                "desc": "The physical address of the company",
             },
             "date_created": {
                 "type": DateOrNothingType,

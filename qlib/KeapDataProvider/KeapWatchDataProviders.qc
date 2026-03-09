@@ -71,7 +71,7 @@ public class KeapWatchContactsAddedDataProvider inherits KeapWatchDataProviderBa
         return KeapWatchDataProviderBase::getFakeExampleData() + {
             "given_name": "John",
             "family_name": "Smith",
-            "email_addresses": ({"email": "john.smith@example.com", "field": "EMAIL1"},),
+            "email": "john.smith@example.com",
         };
     }
 }
@@ -131,7 +131,7 @@ public class KeapWatchContactsUpdatedDataProvider inherits KeapWatchDataProvider
         return KeapWatchDataProviderBase::getFakeExampleData() + {
             "given_name": "John",
             "family_name": "Smith",
-            "email_addresses": ({"email": "john.smith@example.com", "field": "EMAIL1"},),
+            "email": "john.smith@example.com",
         };
     }
 }
@@ -199,7 +199,7 @@ public class KeapWatchTagAppliedDataProvider inherits KeapWatchDataProviderBase 
         return KeapWatchDataProviderBase::getFakeExampleData() + {
             "given_name": "John",
             "family_name": "Smith",
-            "email_addresses": ({"email": "john.smith@example.com", "field": "EMAIL1"},),
+            "email": "john.smith@example.com",
             "tag_ids": (1, 2, 3),
         };
     }

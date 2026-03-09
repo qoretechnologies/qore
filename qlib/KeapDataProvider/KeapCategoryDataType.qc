@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore KeapDataProvider module definition
 
-/*  KeapTagDataType.qc Copyright 2026 Qore Technologies, s.r.o.
+/*  KeapCategoryDataType.qc Copyright 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -25,53 +25,40 @@
 #! Contains all public definitions in the KeapDataProvider module
 public namespace KeapDataProvider {
 
-#! Keap tag record type
-public class KeapTagDataType inherits HashDataType {
-    private {
-        #! Field definitions for Keap tags
+#! Keap tag category data type
+public class KeapCategoryDataType inherits HashDataType {
+    public {
+        #! Field definitions for tag categories
         const Fields = {
             "id": {
-                "type": StringType,
-                "display_name": "ID",
-                "short_desc": "The tag ID",
-                "desc": "The unique identifier of the tag",
+                "type": IntOrNothingType,
+                "display_name": "Category ID",
+                "short_desc": "The category ID",
+                "desc": "The unique identifier of the tag category",
             },
             "name": {
                 "type": StringOrNothingType,
-                "display_name": "Name",
-                "short_desc": "The tag name",
-                "desc": "The name of the tag",
-                "example_value": "VIP Customer",
+                "display_name": "Category Name",
+                "short_desc": "The category name",
+                "desc": "The name of the tag category",
+                "example_value": "Lead Status",
             },
             "description": {
                 "type": StringOrNothingType,
                 "display_name": "Description",
-                "short_desc": "The tag description",
-                "desc": "A description of the tag and its purpose",
-            },
-            "category": {
-                "type": new KeapCategoryDataType(AutoHashOrNothingType),
-                "display_name": "Category",
-                "short_desc": "The tag category",
-                "desc": "The category the tag belongs to",
-            },
-            "date_created": {
-                "type": DateOrNothingType,
-                "display_name": "Date Created",
-                "short_desc": "When the tag was created",
-                "desc": "The timestamp when the tag was created",
-            },
-            "last_updated": {
-                "type": DateOrNothingType,
-                "display_name": "Last Updated",
-                "short_desc": "When the tag was last updated",
-                "desc": "The timestamp when the tag was last updated",
+                "short_desc": "The category description",
+                "desc": "A description of the tag category",
             },
         };
     }
 
     #! Creates the type
-    constructor() {
+    constructor() : HashDataType("KeapCategoryDataType") {
+        addQoreFields(Fields);
+    }
+
+    #! Creates the type with a base type (for optional fields)
+    constructor(Type base_type) : HashDataType(base_type, "KeapCategoryDataType") {
         addQoreFields(Fields);
     }
 }

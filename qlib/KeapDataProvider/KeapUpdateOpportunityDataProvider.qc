@@ -27,7 +27,7 @@ public namespace KeapDataProvider {
 
 #! Request type for updating an opportunity
 public class KeapUpdateOpportunityRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "opportunity_id": {
                 "type": StringType,
@@ -42,36 +42,65 @@ public class KeapUpdateOpportunityRequestDataType inherits HashDataType {
                 "short_desc": "The opportunity title",
                 "desc": "The new title of the opportunity",
             },
-            "stage": {
-                "type": AutoHashOrNothingType,
-                "display_name": "Stage",
-                "short_desc": "The opportunity stage",
-                "desc": "The new pipeline stage for this opportunity. Must be a hash with an "
-                    "`id` field containing the stage's integer ID",
+            "contact_id": {
+                "type": StringOrNothingType,
+                "display_name": "Contact ID",
+                "short_desc": "The associated contact",
+                "desc": "The new contact ID for this opportunity",
             },
-            "estimated_close_date": {
+            "stage_id": {
+                "type": StringOrNothingType,
+                "display_name": "Stage ID",
+                "short_desc": "The pipeline stage",
+                "desc": "The new pipeline stage ID for this opportunity",
+            },
+            "user_id": {
+                "type": StringOrNothingType,
+                "display_name": "User ID",
+                "short_desc": "The assigned user",
+                "desc": "The new assigned user ID",
+            },
+            "estimated_close_time": {
                 "type": DateOrNothingType,
-                "display_name": "Estimated Close Date",
+                "display_name": "Estimated Close Time",
                 "short_desc": "The estimated close date",
-                "desc": "The new estimated close date of the opportunity",
+                "desc": "The new estimated close date/time of the opportunity",
             },
             "projected_revenue_high": {
                 "type": FloatOrNothingType,
                 "display_name": "Projected Revenue High",
                 "short_desc": "High revenue estimate",
-                "desc": "The new high estimate of projected revenue for the opportunity",
+                "desc": "The new high estimate of projected revenue",
             },
             "projected_revenue_low": {
                 "type": FloatOrNothingType,
                 "display_name": "Projected Revenue Low",
                 "short_desc": "Low revenue estimate",
-                "desc": "The new low estimate of projected revenue for the opportunity",
+                "desc": "The new low estimate of projected revenue",
             },
             "opportunity_notes": {
                 "type": StringOrNothingType,
                 "display_name": "Notes",
                 "short_desc": "Notes about the opportunity",
                 "desc": "The new notes about the opportunity",
+            },
+            "next_action_notes": {
+                "type": StringOrNothingType,
+                "display_name": "Next Action Notes",
+                "short_desc": "Notes for the next action",
+                "desc": "The new notes about the next action",
+            },
+            "next_action_time": {
+                "type": DateOrNothingType,
+                "display_name": "Next Action Time",
+                "short_desc": "When to take the next action",
+                "desc": "The new date/time when the next action should be taken",
+            },
+            "include_in_forecast": {
+                "type": SoftBoolOrNothingType,
+                "display_name": "Include in Forecast",
+                "short_desc": "Include in revenue forecast",
+                "desc": "Whether to include this opportunity in the revenue forecast",
             },
         };
     }
@@ -93,6 +122,9 @@ public class KeapUpdateOpportunityDataProvider inherits KeapDataProviderBase {
         };
 
         const ConstructorOptions = BaseConstructorOptions;
+
+        static *AbstractDataProviderType ResponseType = new KeapOpportunityDataType();
+        static *AbstractDataProviderType RequestType = new KeapUpdateOpportunityRequestDataType();
     }
 
     constructor(KeapRestClient::KeapRestClient rest) : KeapDataProviderBase(rest) {

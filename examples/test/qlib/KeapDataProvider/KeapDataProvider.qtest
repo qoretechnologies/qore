@@ -167,7 +167,7 @@ public class KeapDataProviderTest inherits QUnit::Test {
         assertEq("keaprest", app.scheme);
 
         # Verify some actions are registered
-        list<hash<auto>> actions = DataProviderActionCatalog::getAppActions("Keap");
+        list<hash<auto>> actions = DataProviderActionCatalog::getActions("Keap");
         assertEq(True, actions.size() > 40, "at least 40 actions registered");
 
         # Verify specific action
@@ -272,16 +272,15 @@ public class KeapDataProviderTest inherits QUnit::Test {
 
     #! Negative tests
     negativeTests() {
-        # Test invalid factory name
-        assertThrows("FACTORY-ERROR", sub () {
-            DataProvider::getFactory("nonexistent_keap");
-        });
+        # Test invalid factory name returns NOTHING
+        assertEq(NOTHING, DataProvider::getFactory("nonexistent_keap"),
+            "nonexistent factory returns NOTHING");
     }
 
     #! Connection tests
     connectionTests() {
         # Verify connection scheme is registered
-        assertEq(True, ConnectionSchemeCache::hasScheme("keaprest"),
+        assertEq(True, exists ConnectionSchemeCache::getScheme("keaprest"),
             "keaprest scheme registered");
 
         # Verify connection scheme info
@@ -308,12 +307,14 @@ public class KeapDataProviderTest inherits QUnit::Test {
 
         # Test create contact
         AbstractDataProvider create_dp = contacts_dp.getChildProvider("create");
+        string test_email = "test_keapdp_" + now_us().getEpochSeconds() + "@example.com";
         hash<auto> new_contact = create_dp.doRequest({
             "given_name": "Test",
             "family_name": "KeapDP_" + now_us().toString(),
-            "email": "test_keapdp_" + now_us().epochSeconds() + "@example.com",
+            "email": test_email,
         });
         assertEq(True, new_contact.id.val(), "contact created with ID");
+        assertEq(test_email, new_contact.email, "create response includes email");
         testContactId = string(new_contact.id);
 
         on_exit {
@@ -330,12 +331,13 @@ public class KeapDataProviderTest inherits QUnit::Test {
             }
         }
 
-        # Test get contact by ID
+        # Test get contact by ID — verify email is returned
         AbstractDataProviderRecordIterator get_iter = contacts_dp.searchRecords(NOTHING,
             {"contact_id": testContactId});
         assertEq(True, get_iter.next(), "found created contact");
         hash<auto> found = get_iter.getValue();
         assertEq("Test", found.given_name);
+        assertEq(test_email, found.email, "get contact returns email");
 
         # Test update contact
         AbstractDataProvider update_dp = contacts_dp.getChildProvider("update");
@@ -344,6 +346,8 @@ public class KeapDataProviderTest inherits QUnit::Test {
             "job_title": "QA Tester",
         });
         assertEq(True, updated.val(), "contact updated");
+        assertEq("QA Tester", updated.job_title, "update response includes job_title");
+        assertEq(test_email, updated.email, "update response includes email");
 
         # Verify persistence - re-fetch and check
         AbstractDataProviderRecordIterator verify_iter = contacts_dp.searchRecords(NOTHING,
@@ -364,7 +368,7 @@ public class KeapDataProviderTest inherits QUnit::Test {
         # Test create tag
         AbstractDataProvider create_tag_dp = tags_dp.getChildProvider("create");
         hash<auto> new_tag = create_tag_dp.doRequest({
-            "name": "Test_KeapDP_" + now_us().epochSeconds(),
+            "name": "Test_KeapDP_" + now_us().getEpochSeconds(),
             "description": "Test tag for KeapDataProvider integration test",
         });
         assertEq(True, new_tag.id.val(), "tag created with ID");

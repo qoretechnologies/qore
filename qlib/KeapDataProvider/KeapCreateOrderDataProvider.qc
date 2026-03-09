@@ -27,7 +27,7 @@ public namespace KeapDataProvider {
 
 #! Request type for creating an order
 public class KeapCreateOrderRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "contact_id": {
                 "type": StringType,
@@ -45,23 +45,63 @@ public class KeapCreateOrderRequestDataType inherits HashDataType {
                 "example_value": "New Order",
             },
             "order_items": {
-                "type": AutoListType,
+                "type": new ListDataType(new KeapOrderItemDataType(AutoHashOrNothingType), True),
                 "display_name": "Order Items",
                 "short_desc": "The order items",
-                "desc": "List of order item hashes",
-                "required": True,
+                "desc": "List of order items to include in the order. Each item requires "
+                    "`product_id` and `quantity`",
             },
-            "order_date": {
+            "order_time": {
                 "type": DateOrNothingType,
-                "display_name": "Order Date",
-                "short_desc": "The order date",
-                "desc": "The date of the order",
+                "display_name": "Order Time",
+                "short_desc": "The order date/time",
+                "desc": "The date/time of the order in ISO-8601 format",
+            },
+            "order_type": {
+                "type": StringOrNothingType,
+                "display_name": "Order Type",
+                "short_desc": "The order type",
+                "desc": "The type of the order",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "OFFLINE", "desc": "Offline order"},
+                    <AllowedValueInfo>{"value": "ONLINE", "desc": "Online order"},
+                ),
+            },
+            "shipping_address": {
+                "type": new KeapShippingInfoDataType(AutoHashOrNothingType),
+                "display_name": "Shipping Address",
+                "short_desc": "The shipping address",
+                "desc": "The shipping address for the order",
+            },
+            "notes": {
+                "type": StringOrNothingType,
+                "display_name": "Notes",
+                "short_desc": "Order notes",
+                "desc": "Notes about the order",
+            },
+            "terms": {
+                "type": StringOrNothingType,
+                "display_name": "Terms",
+                "short_desc": "Order terms",
+                "desc": "The terms for the order",
             },
             "promo_codes": {
                 "type": AutoListOrNothingType,
                 "display_name": "Promo Codes",
                 "short_desc": "Promotional codes",
                 "desc": "List of promotional codes to apply to the order",
+            },
+            "lead_affiliate_id": {
+                "type": StringOrNothingType,
+                "display_name": "Lead Affiliate ID",
+                "short_desc": "The lead affiliate",
+                "desc": "The ID of the lead affiliate for the order",
+            },
+            "sales_affiliate_id": {
+                "type": StringOrNothingType,
+                "display_name": "Sales Affiliate ID",
+                "short_desc": "The sales affiliate",
+                "desc": "The ID of the sales affiliate for the order",
             },
         };
     }
@@ -83,6 +123,9 @@ public class KeapCreateOrderDataProvider inherits KeapDataProviderBase {
         };
 
         const ConstructorOptions = BaseConstructorOptions;
+
+        static *AbstractDataProviderType ResponseType = new KeapOrderDataType();
+        static *AbstractDataProviderType RequestType = new KeapCreateOrderRequestDataType();
     }
 
     constructor(KeapRestClient::KeapRestClient rest) : KeapDataProviderBase(rest) {

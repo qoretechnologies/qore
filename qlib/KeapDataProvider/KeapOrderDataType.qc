@@ -44,11 +44,10 @@ public class KeapOrderDataType inherits HashDataType {
                 "example_value": "Order #1001",
             },
             "contact": {
-                "type": AutoHashOrNothingType,
+                "type": new KeapContactRefDataType(AutoHashOrNothingType),
                 "display_name": "Contact",
                 "short_desc": "The associated contact",
-                "desc": "The contact associated with this order (hash with id, first_name, "
-                    "last_name, email, etc.)",
+                "desc": "The contact associated with this order",
             },
             "order_date": {
                 "type": DateOrNothingType,
@@ -75,17 +74,16 @@ public class KeapOrderDataType inherits HashDataType {
                 "example_value": 99.99,
             },
             "order_items": {
-                "type": AutoListOrNothingType,
+                "type": new ListDataType(new KeapOrderItemDataType(AutoHashOrNothingType), True),
                 "display_name": "Order Items",
                 "short_desc": "The items in the order",
                 "desc": "A list of line items included in the order",
             },
             "shipping_information": {
-                "type": AutoHashOrNothingType,
+                "type": new KeapShippingInfoDataType(AutoHashOrNothingType),
                 "display_name": "Shipping Information",
                 "short_desc": "Shipping details",
-                "desc": "The shipping information for the order (hash with address, city, state, "
-                    "zip, country, etc.)",
+                "desc": "The shipping information for the order",
             },
             "creation_date": {
                 "type": DateOrNothingType,

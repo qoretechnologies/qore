@@ -50,11 +50,10 @@ public class KeapTaskDataType inherits HashDataType {
                 "desc": "A detailed description of the task",
             },
             "contact": {
-                "type": AutoHashOrNothingType,
+                "type": new KeapContactRefDataType(AutoHashOrNothingType),
                 "display_name": "Contact",
                 "short_desc": "The associated contact",
-                "desc": "The contact associated with this task (hash with id, first_name, "
-                    "last_name, email, etc.)",
+                "desc": "The contact associated with this task",
             },
             "due_date": {
                 "type": DateOrNothingType,

@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore KeapDataProvider module definition
 
-/*  KeapTagDataType.qc Copyright 2026 Qore Technologies, s.r.o.
+/*  KeapGoalDataType.qc Copyright 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -25,53 +25,46 @@
 #! Contains all public definitions in the KeapDataProvider module
 public namespace KeapDataProvider {
 
-#! Keap tag record type
-public class KeapTagDataType inherits HashDataType {
-    private {
-        #! Field definitions for Keap tags
+#! Keap campaign goal data type
+public class KeapGoalDataType inherits HashDataType {
+    public {
+        #! Field definitions for campaign goals
         const Fields = {
             "id": {
-                "type": StringType,
-                "display_name": "ID",
-                "short_desc": "The tag ID",
-                "desc": "The unique identifier of the tag",
+                "type": IntOrNothingType,
+                "display_name": "Goal ID",
+                "short_desc": "The goal ID",
+                "desc": "The unique identifier of the campaign goal",
             },
             "name": {
                 "type": StringOrNothingType,
-                "display_name": "Name",
-                "short_desc": "The tag name",
-                "desc": "The name of the tag",
-                "example_value": "VIP Customer",
+                "display_name": "Goal Name",
+                "short_desc": "The goal name",
+                "desc": "The name of the campaign goal",
+                "example_value": "Newsletter Signup",
             },
-            "description": {
+            "type": {
                 "type": StringOrNothingType,
-                "display_name": "Description",
-                "short_desc": "The tag description",
-                "desc": "A description of the tag and its purpose",
+                "display_name": "Goal Type",
+                "short_desc": "The type of goal",
+                "desc": "The type of the campaign goal",
             },
-            "category": {
-                "type": new KeapCategoryDataType(AutoHashOrNothingType),
-                "display_name": "Category",
-                "short_desc": "The tag category",
-                "desc": "The category the tag belongs to",
-            },
-            "date_created": {
-                "type": DateOrNothingType,
-                "display_name": "Date Created",
-                "short_desc": "When the tag was created",
-                "desc": "The timestamp when the tag was created",
-            },
-            "last_updated": {
-                "type": DateOrNothingType,
-                "display_name": "Last Updated",
-                "short_desc": "When the tag was last updated",
-                "desc": "The timestamp when the tag was last updated",
+            "historical_contact_counts": {
+                "type": AutoHashOrNothingType,
+                "display_name": "Historical Counts",
+                "short_desc": "Historical contact counts",
+                "desc": "Historical contact count data for this goal",
             },
         };
     }
 
     #! Creates the type
-    constructor() {
+    constructor() : HashDataType("KeapGoalDataType") {
+        addQoreFields(Fields);
+    }
+
+    #! Creates the type with a base type (for optional fields)
+    constructor(Type base_type) : HashDataType(base_type, "KeapGoalDataType") {
         addQoreFields(Fields);
     }
 }

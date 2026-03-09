@@ -27,7 +27,7 @@ public namespace KeapDataProvider {
 
 #! Request type for updating a company
 public class KeapUpdateCompanyRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "company_id": {
                 "type": StringType,
@@ -43,16 +43,18 @@ public class KeapUpdateCompanyRequestDataType inherits HashDataType {
                 "desc": "The new name of the company",
             },
             "email_address": {
-                "type": StringOrNothingType,
-                "display_name": "Email",
+                "type": new KeapCompanyEmailDataType(AutoHashOrNothingType),
+                "display_name": "Email Address",
                 "short_desc": "The company's email address",
-                "desc": "The new email address of the company",
+                "desc": "The new email address of the company as an object with `email` "
+                    "and optionally `field`",
             },
             "phone_number": {
-                "type": StringOrNothingType,
+                "type": new KeapPhoneNumberDataType(AutoHashOrNothingType),
                 "display_name": "Phone Number",
                 "short_desc": "The company's phone number",
-                "desc": "The new phone number of the company",
+                "desc": "The new phone number of the company as an object with `number` "
+                    "and optionally `field` and `type`",
             },
             "website": {
                 "type": StringOrNothingType,
@@ -61,11 +63,16 @@ public class KeapUpdateCompanyRequestDataType inherits HashDataType {
                 "desc": "The new website URL of the company",
             },
             "address": {
-                "type": AutoHashOrNothingType,
+                "type": new KeapAddressDataType(AutoHashOrNothingType),
                 "display_name": "Address",
                 "short_desc": "The company's address",
-                "desc": "The new physical address of the company (hash with line1, line2, "
-                    "locality, region, zip_code, country_code)",
+                "desc": "The new physical address of the company",
+            },
+            "notes": {
+                "type": StringOrNothingType,
+                "display_name": "Notes",
+                "short_desc": "Notes about the company",
+                "desc": "The new notes about the company",
             },
         };
     }
@@ -87,6 +94,9 @@ public class KeapUpdateCompanyDataProvider inherits KeapDataProviderBase {
         };
 
         const ConstructorOptions = BaseConstructorOptions;
+
+        static *AbstractDataProviderType ResponseType = new KeapCompanyDataType();
+        static *AbstractDataProviderType RequestType = new KeapUpdateCompanyRequestDataType();
     }
 
     constructor(KeapRestClient::KeapRestClient rest) : KeapDataProviderBase(rest) {
