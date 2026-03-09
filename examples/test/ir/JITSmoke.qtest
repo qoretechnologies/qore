@@ -4639,13 +4639,51 @@ try {
     must_fail(5);
     printf(\"FAIL\\n\");
 } catch (hash<ExceptionInfo> ex) {
-    printf(\"%s\\n\", ex.err);
+    printf(\"%s:%s\\n\", ex.err, ex.desc);
 }
 ";
         foreach string mode in ("ast", "ir", "jit") {
             string result = trim(runScript(code, mode));
-            assertEq("ASSERTION-ERROR", result,
-                    sprintf("assert failing %s", mode));
+            assertEq("ASSERTION-ERROR:value too small: 5", result,
+                    sprintf("assert failing with sprintf format %s", mode));
+        }
+
+        # Test assertion failure with simple message
+        code = "%modern
+int sub must_fail2(int x) {
+    @assert(x > 100, \"too small\");
+    return x;
+}
+try {
+    must_fail2(5);
+    printf(\"FAIL\\n\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"%s:%s\\n\", ex.err, ex.desc);
+}
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("ASSERTION-ERROR:too small", result,
+                    sprintf("assert failing with simple message %s", mode));
+        }
+
+        # Test assertion failure with no message
+        code = "%modern
+int sub must_fail3(int x) {
+    @assert(x > 100);
+    return x;
+}
+try {
+    must_fail3(5);
+    printf(\"FAIL\\n\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"%s:%s\\n\", ex.err, ex.desc);
+}
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("ASSERTION-ERROR:assertion failed", result,
+                    sprintf("assert failing with default message %s", mode));
         }
 
         # Test assert in loop with IR-only body locals

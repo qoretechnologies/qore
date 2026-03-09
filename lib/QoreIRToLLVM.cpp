@@ -37,7 +37,7 @@
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 346,
+static_assert(QORE_IR_MAX_OPCODE == 347,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 #include "qore/intern/QoreLibIntern.h"
@@ -1486,7 +1486,14 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     } func_cleanup{llvm_func, &di_sp};
 
     // Name parameters and find xsink_arg
-    if (aot_mode) {
+    if (aot_mode && is_fast_entry) {
+        // AOT fast entry: (i64 p1, ..., ptr ctx, ptr xsink)
+        unsigned num_args = llvm_func->arg_size();
+        aot_ctx_arg = llvm_func->getArg(num_args - 2);
+        aot_ctx_arg->setName("ctx");
+        xsink_arg = llvm_func->getArg(num_args - 1);
+        xsink_arg->setName("xsink");
+    } else if (aot_mode) {
         aot_ctx_arg = llvm_func->getArg(0);
         aot_ctx_arg->setName("ctx");
         xsink_arg = llvm_func->getArg(1);
@@ -1664,6 +1671,28 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         auto obe_count_fn = module.getOrInsertFunction("qore_rt_get_on_block_exit_count",
                 llvm::FunctionType::get(i64_type, {}, false));
         obe_saved_count = builder->CreateCall(obe_count_fn, {});
+    }
+
+    // AOT fast entry: emit check_stack at function start and redirect first block
+    // to a body continuation block (the runtime helper doesn't do this for fast entry)
+    if (aot_mode && is_fast_entry && !func.blocks.empty()) {
+        auto check_fn = module.getOrInsertFunction("qore_rt_check_stack",
+                llvm::FunctionType::get(i32_type, {ptr_type}, false));
+        llvm::Value* err = builder->CreateCall(check_fn, {xsink_arg});
+        llvm::Value* ok = builder->CreateICmpEQ(err, llvm::ConstantInt::get(i32_type, 0));
+
+        llvm::BasicBlock* body_bb = llvm::BasicBlock::Create(ctx, "body", llvm_func);
+        llvm::BasicBlock* overflow_bb = llvm::BasicBlock::Create(ctx, "stack_overflow",
+                llvm_func);
+        builder->CreateCondBr(ok, body_bb, overflow_bb);
+
+        // Stack overflow: return NOTHING (nanboxed)
+        builder->SetInsertPoint(overflow_bb);
+        builder->CreateRet(llvm::ConstantInt::get(i64_type, 0));
+
+        // Remap first IR block to body continuation so block-lowering loop uses it
+        block_map[func.blocks.front().get()] = body_bb;
+        builder->SetInsertPoint(body_bb);
     }
 
     // Lower each block
@@ -2451,6 +2480,20 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
+            return true;
+        }
+        case QoreIROpcode::Sprintf: {
+            auto* val = getVal(inst->operands[0].id, error);
+            if (!val) { return false; }
+            llvm::Value* val_boxed = boxValue(val, inst->operands[0].id);
+            auto helper = module.getOrInsertFunction("qore_rt_sprintf",
+                    llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
+            llvm::Value* result = builder->CreateCall(helper, {val_boxed, xsink_arg});
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            // Check for exception
+            emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
 
@@ -4075,14 +4118,49 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                 args_array, llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
                     }
                 } else if (aot_mode && inv->invoke_opcode == QoreIROpcode::CallDirect) {
-                    // AOT CallDirect: use fast direct call to resolve and dispatch
-                    int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
-                    auto helper = module.getOrInsertFunction("qore_rt_call_direct_aot",
-                            llvm::FunctionType::get(i64_type,
-                                {ptr_type, i32_type, ptr_type, i32_type, ptr_type}, false));
-                    result = builder->CreateCall(helper, {aot_ctx_arg,
-                            llvm::ConstantInt::get(i32_type, slot), args_array,
-                            llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                    // AOT CallDirect: check for self-recursive fast entry first
+                    bool is_self_rec = false;
+                    if (!aot_self_recursive_fast_entry.empty()) {
+                        const auto* call = dynamic_cast<const FunctionCallNode*>(
+                                inv->expr.getInternalNode());
+                        if (call && call->getFunction()
+                                && current_ir_func
+                                && std::string(call->getFunction()->getName())
+                                    == current_ir_func->name) {
+                            is_self_rec = true;
+                        }
+                    }
+                    if (is_self_rec) {
+                        // AOT Approach B self-recursive: direct LLVM call to fast entry
+                        llvm::Function* fast_fn = module.getFunction(
+                                aot_self_recursive_fast_entry);
+                        assert(fast_fn
+                                && "AOT self-recursive fast entry must be in module");
+                        unsigned fast_num_params = fast_fn->arg_size() - 2;
+                        std::vector<llvm::Value*> call_args;
+                        for (unsigned i = 0; i < fast_num_params; ++i) {
+                            if (i < boxed_args.size()) {
+                                call_args.push_back(boxed_args[i]);
+                            } else {
+                                call_args.push_back(llvm::ConstantInt::get(
+                                        i64_type, VAL_NOTHING));
+                            }
+                        }
+                        call_args.push_back(aot_ctx_arg);
+                        call_args.push_back(xsink_arg);
+                        result = builder->CreateCall(fast_fn, call_args);
+                    } else {
+                        // Generic AOT CallDirect: use fast direct call helper
+                        int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(
+                                expr_bits);
+                        auto helper = module.getOrInsertFunction("qore_rt_call_direct_aot",
+                                llvm::FunctionType::get(i64_type,
+                                    {ptr_type, i32_type, ptr_type, i32_type, ptr_type},
+                                    false));
+                        result = builder->CreateCall(helper, {aot_ctx_arg,
+                                llvm::ConstantInt::get(i32_type, slot), args_array,
+                                llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                    }
                 } else if (inv->invoke_opcode == QoreIROpcode::CallIndirect && !aot_mode) {
                     // CallIndirect invoke: use fast path — pass pre-evaluated call reference
                     // directly to qore_rt_call_ref_fast() instead of AST expression
@@ -4881,18 +4959,55 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             }
 
             llvm::Value* call_result;
-            if (aot_mode) {
-                // AOT: use fast direct call helper to resolve function from expression slot
+            if (aot_mode && direct_inst->is_self_recursive
+                    && !aot_self_recursive_fast_entry.empty()) {
+                // AOT Approach B self-recursive: direct LLVM call to fast entry
+                // Completely bypasses the runtime helper — no TLS param instantiation,
+                // no ThreadFrameBoundaryHelper, no execJITWithDeopt overhead.
+                // check_stack is at the fast entry's function prologue.
+                llvm::Function* fast_fn = module.getFunction(
+                        aot_self_recursive_fast_entry);
+                assert(fast_fn && "AOT self-recursive fast entry must be in module");
+
+                unsigned fast_num_params = fast_fn->arg_size() - 2;  // minus ctx and xsink
+                std::vector<llvm::Value*> call_args;
+                for (unsigned i = 0; i < fast_num_params; ++i) {
+                    if (i < boxed_args.size()) {
+                        call_args.push_back(boxed_args[i]);
+                    } else {
+                        call_args.push_back(
+                                llvm::ConstantInt::get(i64_type, VAL_NOTHING));
+                    }
+                }
+                call_args.push_back(aot_ctx_arg);
+                call_args.push_back(xsink_arg);
+                call_result = builder->CreateCall(fast_fn, call_args);
+            } else if (aot_mode) {
+                // AOT: resolve expression slot for this call
                 QoreValue expr_val = direct_inst->expr;
                 uint64_t expr_bits;
                 std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
                 int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
-                auto helper = module.getOrInsertFunction("qore_rt_call_direct_aot",
-                        llvm::FunctionType::get(i64_type,
-                            {ptr_type, i32_type, ptr_type, i32_type, ptr_type}, false));
-                call_result = builder->CreateCall(helper, {aot_ctx_arg,
-                        llvm::ConstantInt::get(i32_type, slot), args_array,
-                        llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+
+                if (direct_inst->is_self_recursive) {
+                    // Self-recursive AOT (no fast entry available): lightweight helper
+                    auto helper = module.getOrInsertFunction(
+                            "qore_rt_call_self_recursive_aot",
+                            llvm::FunctionType::get(i64_type,
+                                {ptr_type, ptr_type, i32_type, ptr_type, i32_type, ptr_type},
+                                false));
+                    call_result = builder->CreateCall(helper, {llvm_func, aot_ctx_arg,
+                            llvm::ConstantInt::get(i32_type, slot), args_array,
+                            llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                } else {
+                    // Generic AOT call path
+                    auto helper = module.getOrInsertFunction("qore_rt_call_direct_aot",
+                            llvm::FunctionType::get(i64_type,
+                                {ptr_type, i32_type, ptr_type, i32_type, ptr_type}, false));
+                    call_result = builder->CreateCall(helper, {aot_ctx_arg,
+                            llvm::ConstantInt::get(i32_type, slot), args_array,
+                            llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                }
             } else if (batch_callees && direct_inst->variant
                     && batch_callees->count(direct_inst->variant)) {
                 const auto& callee_info = batch_callees->at(direct_inst->variant);
@@ -6237,8 +6352,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     "hash_key_int");
             auto helper = module.getOrInsertFunction("qore_rt_hash_key_access_int",
                     llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
-            values[inst->result.id] = builder->CreateCall(helper, {base_boxed, key_const});
-            // Result is native int64, NOT nanboxed — no trackResultForCleanup needed
+            llvm::Value* result = builder->CreateCall(helper, {base_boxed, key_const});
+            values[inst->result.id] = result;
+            // Result is now nanboxed (may be NOTHING for missing keys)
+            nanboxed_values.insert(inst->result.id);
             return true;
         }
         case QoreIROpcode::ListIndexAccess: {
@@ -6527,13 +6644,23 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type}, false));
                 result = builder->CreateCall(helper, {aot_ctx_arg,
                         llvm::ConstantInt::get(i32_type, slot), xsink_arg});
-            } else {
+            } else if (lcinst->node) {
                 llvm::Value* node_ptr = llvm::ConstantInt::get(i64_type,
                         reinterpret_cast<uint64_t>(lcinst->node));
                 llvm::Value* node_as_ptr = builder->CreateIntToPtr(node_ptr, ptr_type);
                 auto helper = module.getOrInsertFunction("qore_rt_load_constant",
                         llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
                 result = builder->CreateCall(helper, {node_as_ptr, xsink_arg});
+            } else {
+                // No RuntimeConstantRefNode — expr holds the value directly (e.g., number,
+                // binary, object, or container constants). Return expr.refSelf().
+                QoreValue expr_val = lcinst->expr;
+                uint64_t expr_bits;
+                std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
+                auto helper = module.getOrInsertFunction("qore_rt_load_constant_value",
+                        llvm::FunctionType::get(i64_type, {i64_type}, false));
+                result = builder->CreateCall(helper,
+                        {llvm::ConstantInt::get(i64_type, expr_bits)});
             }
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
@@ -8004,6 +8131,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             return true;
         }
         // Fused map+foldl operations (single pass, no intermediate list)
+        // All return nanboxed uint64_t (may be NOTHING for empty lists)
         case QoreIROpcode::FusedMapFoldlSumScaleInt: {
             // foldl $1 + $2, (map $1 * c, list) -> sum(list[i] * c)
             auto* list = getVal(inst->operands[0].id, error);
@@ -8015,7 +8143,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     llvm::FunctionType::get(i64_type, {i64_type, i64_type}, false));
             llvm::Value* result = builder->CreateCall(helper, {list_boxed, scale_int});
             values[inst->result.id] = result;
-            // Result is unboxed int, mark not nanboxed
+            nanboxed_values.insert(inst->result.id);
             return true;
         }
         case QoreIROpcode::FusedMapFoldlSumScaleFloat: {
@@ -8025,10 +8153,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
             llvm::Value* scale_float = ensureFloatType(scale, inst->operands[1].id, module);
             auto helper = module.getOrInsertFunction("qore_rt_fused_map_foldl_sum_scale_float",
-                    llvm::FunctionType::get(double_type, {i64_type, double_type}, false));
+                    llvm::FunctionType::get(i64_type, {i64_type, double_type}, false));
             llvm::Value* result = builder->CreateCall(helper, {list_boxed, scale_float});
             values[inst->result.id] = result;
-            // Result is unboxed float, mark not nanboxed
+            nanboxed_values.insert(inst->result.id);
             return true;
         }
         case QoreIROpcode::FusedMapFoldlSumSquareInt: {
@@ -8040,7 +8168,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     llvm::FunctionType::get(i64_type, {i64_type}, false));
             llvm::Value* result = builder->CreateCall(helper, {list_boxed});
             values[inst->result.id] = result;
-            // Result is unboxed int
+            nanboxed_values.insert(inst->result.id);
             return true;
         }
         case QoreIROpcode::FusedMapFoldlSumSquareFloat: {
@@ -8048,10 +8176,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (!list) { return false; }
             llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
             auto helper = module.getOrInsertFunction("qore_rt_fused_map_foldl_sum_square_float",
-                    llvm::FunctionType::get(double_type, {i64_type}, false));
+                    llvm::FunctionType::get(i64_type, {i64_type}, false));
             llvm::Value* result = builder->CreateCall(helper, {list_boxed});
             values[inst->result.id] = result;
-            // Result is unboxed float
+            nanboxed_values.insert(inst->result.id);
             return true;
         }
         case QoreIROpcode::FusedMapFoldlProdScaleInt: {
@@ -8065,7 +8193,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     llvm::FunctionType::get(i64_type, {i64_type, i64_type}, false));
             llvm::Value* result = builder->CreateCall(helper, {list_boxed, scale_int});
             values[inst->result.id] = result;
-            // Result is unboxed int
+            nanboxed_values.insert(inst->result.id);
             return true;
         }
         case QoreIROpcode::FusedMapFoldlProdScaleFloat: {
@@ -8075,10 +8203,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
             llvm::Value* scale_float = ensureFloatType(scale, inst->operands[1].id, module);
             auto helper = module.getOrInsertFunction("qore_rt_fused_map_foldl_prod_scale_float",
-                    llvm::FunctionType::get(double_type, {i64_type, double_type}, false));
+                    llvm::FunctionType::get(i64_type, {i64_type, double_type}, false));
             llvm::Value* result = builder->CreateCall(helper, {list_boxed, scale_float});
             values[inst->result.id] = result;
-            // Result is unboxed float
+            nanboxed_values.insert(inst->result.id);
             return true;
         }
 
@@ -8547,39 +8675,6 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         }
 
         // === Statement operations ===
-        case QoreIROpcode::Foreach: {
-            const auto* sinst = static_cast<const QoreIRForeachInstruction*>(inst);
-            if (aot_mode) {
-                // AOT mode: use slot index via qore_rt_exec_foreach_aot()
-                int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getStmtSlot(
-                        reinterpret_cast<const void*>(sinst->stmt));
-                auto helper = module.getOrInsertFunction("qore_rt_exec_foreach_aot",
-                        llvm::FunctionType::get(i64_type,
-                            {ptr_type, i32_type, ptr_type}, false));
-                llvm::Value* result = builder->CreateCall(helper, {aot_ctx_arg,
-                        llvm::ConstantInt::get(i32_type, slot), xsink_arg});
-                values[inst->result.id] = result;
-            } else {
-                // JIT mode: embed raw ForEachStatement* pointer
-                llvm::Value* opcode_val = llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx),
-                        static_cast<int>(inst->opcode));
-                llvm::Value* stmt_ptr = llvm::ConstantInt::get(i64_type,
-                        reinterpret_cast<uint64_t>(sinst->stmt));
-                llvm::Value* stmt_as_ptr = builder->CreateIntToPtr(stmt_ptr, ptr_type);
-                auto helper = module.getOrInsertFunction("qore_rt_exec_statement",
-                        llvm::FunctionType::get(i64_type,
-                            {llvm::Type::getInt32Ty(ctx), ptr_type, ptr_type}, false));
-                llvm::Value* result = builder->CreateCall(helper,
-                        {opcode_val, stmt_as_ptr, xsink_arg});
-                values[inst->result.id] = result;
-            }
-            nanboxed_values.insert(inst->result.id);
-            // Foreach-reference executes through the AST path and can modify
-            // any local variable; reload all local allocas after execution.
-            reloadAllLocalsFromRuntime(module, llvm_func);
-            emitExceptionCheck(module, llvm_func, inst);
-            return true;
-        }
         case QoreIROpcode::OnBlockExit: {
             const auto* sinst = static_cast<const QoreIROnBlockExitInstruction*>(inst);
             // Register the on_block_exit handler for deferred execution at function exit.
@@ -8698,42 +8793,6 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             // Summarize executes through the AST path and can modify locals
-            reloadAllLocalsFromRuntime(module, llvm_func);
-            emitExceptionCheck(module, llvm_func, inst);
-            return true;
-        }
-        case QoreIROpcode::Debug: {
-            const auto* sinst = static_cast<const QoreIRDebugInstruction*>(inst);
-            llvm::Value* opcode_val = llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx),
-                    static_cast<int>(inst->opcode));
-            llvm::Value* stmt_ptr = llvm::ConstantInt::get(i64_type,
-                    reinterpret_cast<uint64_t>(sinst->stmt));
-            llvm::Value* stmt_as_ptr = builder->CreateIntToPtr(stmt_ptr, ptr_type);
-            auto helper = module.getOrInsertFunction("qore_rt_exec_statement",
-                    llvm::FunctionType::get(i64_type,
-                        {llvm::Type::getInt32Ty(ctx), ptr_type, ptr_type}, false));
-            llvm::Value* result = builder->CreateCall(helper,
-                    {opcode_val, stmt_as_ptr, xsink_arg});
-            values[inst->result.id] = result;
-            nanboxed_values.insert(inst->result.id);
-            reloadAllLocalsFromRuntime(module, llvm_func);
-            emitExceptionCheck(module, llvm_func, inst);
-            return true;
-        }
-        case QoreIROpcode::Assert: {
-            const auto* sinst = static_cast<const QoreIRAssertInstruction*>(inst);
-            llvm::Value* opcode_val = llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx),
-                    static_cast<int>(inst->opcode));
-            llvm::Value* stmt_ptr = llvm::ConstantInt::get(i64_type,
-                    reinterpret_cast<uint64_t>(sinst->stmt));
-            llvm::Value* stmt_as_ptr = builder->CreateIntToPtr(stmt_ptr, ptr_type);
-            auto helper = module.getOrInsertFunction("qore_rt_exec_statement",
-                    llvm::FunctionType::get(i64_type,
-                        {llvm::Type::getInt32Ty(ctx), ptr_type, ptr_type}, false));
-            llvm::Value* result = builder->CreateCall(helper,
-                    {opcode_val, stmt_as_ptr, xsink_arg});
-            values[inst->result.id] = result;
-            nanboxed_values.insert(inst->result.id);
             reloadAllLocalsFromRuntime(module, llvm_func);
             emitExceptionCheck(module, llvm_func, inst);
             return true;
@@ -10032,15 +10091,25 @@ bool QoreIRToLLVM::emitFoldLoop(const QoreIRInstruction* inst, llvm::Module& mod
 
     if (identity_val) {
         // Identity-init opcodes (Sum, Prod): iterate from 0, identity as initial accumulator
+        // Empty list returns NOTHING (matching Qore foldl semantics)
         std::string loop_name = std::string(label) + "_loop";
         std::string exit_name = std::string(label) + "_exit";
+        std::string empty_name = std::string(label) + "_empty";
+        std::string box_name = std::string(label) + "_box";
 
         llvm::BasicBlock* preheader = builder->GetInsertBlock();
+        llvm::BasicBlock* empty_bb = llvm::BasicBlock::Create(ctx, empty_name, llvm_func);
         llvm::BasicBlock* loop_bb = llvm::BasicBlock::Create(ctx, loop_name, llvm_func);
+        llvm::BasicBlock* box_bb = llvm::BasicBlock::Create(ctx, box_name, llvm_func);
         llvm::BasicBlock* exit_bb = llvm::BasicBlock::Create(ctx, exit_name, llvm_func);
 
         llvm::Value* is_empty = builder->CreateICmpEQ(size, zero_i);
-        builder->CreateCondBr(is_empty, exit_bb, loop_bb);
+        builder->CreateCondBr(is_empty, empty_bb, loop_bb);
+
+        // Empty list: return NOTHING (nanboxed)
+        builder->SetInsertPoint(empty_bb);
+        llvm::Value* nothing_val = llvm::ConstantInt::get(i64_type, 0);  // VAL_NOTHING
+        builder->CreateBr(exit_bb);
 
         // Loop body
         builder->SetInsertPoint(loop_bb);
@@ -10052,21 +10121,34 @@ bool QoreIRToLLVM::emitFoldLoop(const QoreIRInstruction* inst, llvm::Module& mod
 
         llvm::Value* next_idx = builder->CreateAdd(idx_phi, one);
         llvm::Value* done = builder->CreateICmpEQ(next_idx, size);
-        builder->CreateCondBr(done, exit_bb, loop_bb);
+        builder->CreateCondBr(done, box_bb, loop_bb);
 
         idx_phi->addIncoming(zero_i, preheader);
         idx_phi->addIncoming(next_idx, loop_bb);
         acc_phi->addIncoming(identity_val, preheader);
         acc_phi->addIncoming(new_acc, loop_bb);
 
-        // Exit block
+        // Box the result to nanboxed format
+        builder->SetInsertPoint(box_bb);
+        llvm::Value* boxed_result;
+        if (is_float) {
+            boxed_result = boxFloat(new_acc);
+        } else {
+            boxed_result = boxIntInline(new_acc);
+        }
+        // boxFloat/boxIntInline may create blocks — use the current insert block
+        llvm::BasicBlock* box_exit = builder->GetInsertBlock();
+        builder->CreateBr(exit_bb);
+
+        // Exit block: merge NOTHING (empty) and boxed result (non-empty)
         builder->SetInsertPoint(exit_bb);
-        llvm::PHINode* result_phi = builder->CreatePHI(elem_type, 2,
+        llvm::PHINode* result_phi = builder->CreatePHI(i64_type, 2,
                 std::string(label) + "_result");
-        result_phi->addIncoming(identity_val, preheader);
-        result_phi->addIncoming(new_acc, loop_bb);
+        result_phi->addIncoming(nothing_val, empty_bb);
+        result_phi->addIncoming(boxed_result, box_exit);
 
         values[inst->result.id] = result_phi;
+        nanboxed_values.insert(inst->result.id);
         return true;
     }
 

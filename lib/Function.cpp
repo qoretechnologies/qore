@@ -2484,6 +2484,27 @@ void UserVariantBase::attemptIRLowering(const char* name) const {
     }
     func->cached_pre_instantiated = cached_pre_inst;
 
+    // Build param_slot_ids: maps param index → slot_id for direct param passing.
+    // This allows IR-to-IR calls to bypass TLS entirely by pre-populating
+    // the slot cache from caller-provided values.
+    bool all_params_ir_only = true;
+    bool all_params_have_slots = true;
+    for (unsigned i = 0; i < signature.numParams(); ++i) {
+        auto it = func->local_var_slots.find(signature.lv[i]);
+        if (it != func->local_var_slots.end()) {
+            func->param_slot_ids[static_cast<int>(i)] = it->second;
+        } else {
+            // Param only used in fused instructions — no slot_id, can't pre-populate cache
+            all_params_have_slots = false;
+        }
+        const void* key = reinterpret_cast<const void*>(signature.lv[i]);
+        if (!func->ir_only_locals.count(key)) {
+            all_params_ir_only = false;
+        }
+    }
+    // Direct params eligible: all params ir_only AND all have slot IDs
+    func->direct_params_eligible = all_params_ir_only && all_params_have_slots;
+
     cached_ir = func;
     current_tier.store(TIER_IR, std::memory_order_release);
     printd(3, "UserVariantBase::attemptIRLowering() '%s' promoted to IR tier (%d guards)\n",

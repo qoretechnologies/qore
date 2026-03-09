@@ -20,11 +20,8 @@
 #include <qore/DateTimeNode.h>
 #include <qore/intern/AbstractStatement.h>
 #include <qore/intern/qore_program_private.h>
-#include <qore/intern/DebugStatement.h>
-#include <qore/intern/AssertStatement.h>
 #include <qore/intern/ContextStatement.h>
 #include <qore/intern/SummarizeStatement.h>
-#include <qore/intern/ForEachStatement.h>
 #include <qore/intern/FunctionalOperatorInterface.h>
 #include <qore/intern/FunctionCallNode.h>
 #include <qore/intern/CallReferenceCallNode.h>
@@ -65,7 +62,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 346,
+static_assert(QORE_IR_MAX_OPCODE == 347,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -529,22 +526,6 @@ bool QoreIRInterpreter::simulateInvoke(QoreIROpcode op, const QoreValue& expr, E
 int QoreIRInterpreter::execStatement(QoreIROpcode op, const AbstractStatement* stmt, QoreValue& return_value,
         ExceptionSink* xsink) {
     switch (op) {
-        case QoreIROpcode::Debug:
-            if (!stmt) {
-                if (xsink) {
-                    xsink->raiseException("IR-INTERPRETER-ERROR", "debug statement requires a statement");
-                }
-                return -1;
-            }
-            return const_cast<AbstractStatement*>(stmt)->exec(return_value, xsink);
-        case QoreIROpcode::Assert:
-            if (!stmt) {
-                if (xsink) {
-                    xsink->raiseException("IR-INTERPRETER-ERROR", "assert statement requires a statement");
-                }
-                return -1;
-            }
-            return const_cast<AbstractStatement*>(stmt)->exec(return_value, xsink);
         case QoreIROpcode::Context:
             if (!stmt) {
                 if (xsink) {
@@ -561,14 +542,6 @@ int QoreIRInterpreter::execStatement(QoreIROpcode op, const AbstractStatement* s
                 return -1;
             }
             return const_cast<AbstractStatement*>(stmt)->exec(return_value, xsink);
-        case QoreIROpcode::Foreach:
-            if (!stmt) {
-                if (xsink) {
-                    xsink->raiseException("IR-INTERPRETER-ERROR", "foreach statement requires a statement");
-                }
-                return -1;
-            }
-            return const_cast<AbstractStatement*>(stmt)->exec(return_value, xsink);
         default:
             break;
     }
@@ -579,6 +552,13 @@ int QoreIRInterpreter::execStatement(QoreIROpcode op, const AbstractStatement* s
 }
 
 // Thread-local call frame pool — eliminates per-call heap allocation by
+// on_block_exit handler record (defined here so IRCallFrame can pool it)
+struct IROnBlockExitHandler {
+    obe_type_e type;
+    StatementBlock* code;
+    const QoreIRFunction* handler_ir = nullptr;  //!< compiled handler (nullptr = AST fallback)
+};
+
 // recycling all per-call data structures across function calls.
 // After warm-up (first visit to each recursion depth), subsequent calls at
 // that depth reuse the same vectors/sets with retained capacity → zero malloc.
@@ -600,6 +580,14 @@ struct IRCallFrame {
     // results that must be discarded at statement boundaries to prevent long-running
     // threads from holding references that block object destruction.
     std::vector<uint32_t> ephemeral_weak_ref_slots;
+
+    // Per-call containers pooled here to avoid per-call heap allocation.
+    // After warm-up, clear() retains bucket arrays / capacity.
+    std::unordered_map<const void*, QoreValue> globals;
+    std::unordered_map<const void*, QoreValue> threadlocals;
+    std::unordered_map<const void*, QoreValue> closures;
+    std::unordered_set<FunctionalOperatorInterface*> active_iterators;
+    std::vector<IROnBlockExitHandler> on_block_exit_handlers;
 
     // Reset all fields for reuse.  clear() retains capacity, so no heap
     // allocation after the first call at each recursion depth.
@@ -628,6 +616,11 @@ struct IRCallFrame {
         instantiated_locals.clear();
         locally_uninstantiated.clear();
         ephemeral_weak_ref_slots.clear();
+        globals.clear();
+        threadlocals.clear();
+        closures.clear();
+        active_iterators.clear();
+        on_block_exit_handlers.clear();
     }
 };
 
@@ -941,11 +934,11 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                 case NT_STRING:
                     return QoreValue(val.get<const QoreStringNode>()->stringRefSelf());
                 case NT_INT:
-                    return QoreValue(new QoreStringNode(val.getAsBigInt()));
+                    return QoreValue(new QoreStringNodeMaker(QLLD, val.getAsBigInt()));
                 case NT_FLOAT:
                     return QoreValue(q_fix_decimal(new QoreStringNodeMaker("%.9g", val.getAsFloat()), 0));
                 case NT_BOOLEAN:
-                    return QoreValue(new QoreStringNode(val.getAsBigInt()));
+                    return QoreValue(new QoreStringNodeMaker(QLLD, val.getAsBigInt()));
                 case NT_NOTHING:
                 case NT_NULL:
                     return QoreValue(new QoreStringNode());
@@ -1362,39 +1355,29 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
         case QoreIROpcode::CallClosureDirect: {
             if (!inv->operands.empty()) {
                 QoreValue ref_val = getIRValue(values, inv->operands[0]);
-                if (!ref_val.hasNode()) {
-                    if (xsink) {
-                        xsink->raiseException("CALL-REFERENCE-ERROR",
-                            "cannot call a NOTHING value as a closure/call reference");
-                    }
-                    return QoreValue();
-                }
-                ResolvedCallReferenceNode* callref = dynamic_cast<ResolvedCallReferenceNode*>(
-                    const_cast<AbstractQoreNode*>(ref_val.getInternalNode()));
-                if (!callref) {
-                    if (xsink) {
-                        xsink->raiseException("CALL-REFERENCE-ERROR",
-                            "value is not a call reference or closure");
-                    }
-                    return QoreValue();
-                }
                 int nargs = static_cast<int>(inv->operands.size()) - 1;
-                QoreListNode* arg_list = nargs > 0 ? new QoreListNode(autoTypeInfo) : nullptr;
-                if (arg_list) {
-                    for (int i = 0; i < nargs; ++i) {
-                        QoreValue val = getIRValue(values, inv->operands[i + 1]);
-                        if (val.hasNode()) {
-                            val.refSelf();
-                        }
-                        arg_list->push(val, xsink);
-                    }
+                // Fast path: call through qore_rt_call_closure_* which uses
+                // static_cast + execClosureDirect (no dynamic_cast, no QoreListNode)
+                uint64_t ref_bits = toBits(ref_val);
+                if (nargs == 0) {
+                    return fromBits(qore_rt_call_closure_0(ref_bits, xsink));
                 }
-                // execValue borrows args (const QoreListNode*) — does NOT take ownership
-                QoreValue result = callref->execValue(arg_list, xsink);
-                if (arg_list) {
-                    arg_list->deref(xsink);
+                if (nargs == 1) {
+                    uint64_t arg0 = toBits(getIRValue(values, inv->operands[1]));
+                    return fromBits(qore_rt_call_closure_1(ref_bits, arg0, xsink));
                 }
-                return result;
+                // N-arg path: use stack buffer for small arg counts
+                constexpr int SMALL_BUF = 8;
+                uint64_t small_buf[SMALL_BUF];
+                uint64_t* args = nargs <= SMALL_BUF ? small_buf : new uint64_t[nargs];
+                for (int i = 0; i < nargs; ++i) {
+                    args[i] = toBits(getIRValue(values, inv->operands[i + 1]));
+                }
+                uint64_t result_bits = qore_rt_call_closure_fast(ref_bits, args, nargs, xsink);
+                if (nargs > SMALL_BUF) {
+                    delete[] args;
+                }
+                return fromBits(result_bits);
             }
             return evalAndRef(inv->expr, xsink);
         }
@@ -1558,13 +1541,6 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
     }
 }
 
-// IR on_block_exit handler entry: records the type and code block for deferred execution
-struct IROnBlockExitHandler {
-    obe_type_e type;
-    StatementBlock* code;
-    const QoreIRFunction* handler_ir = nullptr;  //!< compiled handler (nullptr = AST fallback)
-};
-
 // Execute a single on_block_exit handler body, using compiled IR if available, otherwise AST.
 // Returns true if execution encountered an error.
 static void executeHandlerBody(const IROnBlockExitHandler& handler, ExceptionSink* obe_xsink) {
@@ -1656,7 +1632,8 @@ class QoreIRStackLocation {
 bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_value, ExceptionSink* xsink,
         std::vector<std::string>* cleanup_log, const std::vector<QoreValue>* args,
         const std::vector<QoreValue>* closure, const std::unordered_set<const LocalVar*>* pre_instantiated,
-        const LocalVar* excluded_selfid, const StatementBlock* statements, QoreProgram* pgm, bool suppress_guard_deopt) {
+        const LocalVar* excluded_selfid, const StatementBlock* statements, QoreProgram* pgm, bool suppress_guard_deopt,
+        const IRDirectParams* direct_params) {
 #ifdef QORE_MANAGE_STACK
     if (check_stack(xsink)) {
         return false;
@@ -1701,15 +1678,32 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             }
         }
     }
-    std::unordered_map<const void*, QoreValue> globals;
-    std::unordered_map<const void*, QoreValue> threadlocals;
-    std::unordered_map<const void*, QoreValue> closures;
-    // Track active iterators (from IteratorCreate/IteratorCreateReverse) for cleanup
-    // on non-normal exit paths. IteratorCreate stores the iterator pointer as int64_t
-    // in the values map; cleanupValues() treats int64_t as a plain number (no delete).
-    std::unordered_set<FunctionalOperatorInterface*> active_iterators;
-    // on_block_exit handlers collected during IR execution
-    std::vector<IROnBlockExitHandler> on_block_exit_handlers;
+    // Direct params: pre-populate slot cache from caller-provided values,
+    // bypassing TLS instantiate/eval/uninstantiate round-trip entirely.
+    if (direct_params && direct_params->nargs > 0) {
+        for (int i = 0; i < direct_params->nargs; ++i) {
+            // Find the slot_id for this param's LocalVar
+            auto it = func.param_slot_ids.find(i);
+            if (it != func.param_slot_ids.end()) {
+                uint32_t sid = it->second;
+                if (sid < local_slot_count) {
+                    QoreValue val = fromBits(direct_params->args[i]);
+                    if (val.hasNode()) {
+                        val.refSelf();
+                    }
+                    locals_slot_cache[sid] = val;
+                    locals_instantiated[sid] = true;
+                }
+            }
+        }
+    }
+
+    // Use pooled containers from the frame (already cleared in reset())
+    auto& globals = frame.globals;
+    auto& threadlocals = frame.threadlocals;
+    auto& closures = frame.closures;
+    auto& active_iterators = frame.active_iterators;
+    auto& on_block_exit_handlers = frame.on_block_exit_handlers;
     // Catch exception stack for rethrow support
     struct CatchEntry {
         QoreException* caught;  // the caught exception
@@ -2475,46 +2469,28 @@ next_instruction:
             }
             case QoreIROpcode::CallClosureDirect: {
                 // operands[0] = closure/callref value, operands[1..n] = args
+                // Fast path: call through qore_rt_call_closure_* which uses
+                // static_cast + execClosureDirect (no dynamic_cast, no QoreListNode)
                 QoreValue ref_val = getIRValue(values, inst->operands[0]);
-                if (!ref_val.hasNode()) {
-                    xsink->raiseException("CALL-REFERENCE-ERROR",
-                        "cannot call a NOTHING value as a closure/call reference");
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupLocalCaches();
-                    return false;
-                }
-
-                ResolvedCallReferenceNode* callref = dynamic_cast<ResolvedCallReferenceNode*>(
-                    const_cast<AbstractQoreNode*>(ref_val.getInternalNode()));
-                if (!callref) {
-                    xsink->raiseException("CALL-REFERENCE-ERROR",
-                        "value is not a call reference or closure");
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupLocalCaches();
-                    return false;
-                }
-
-                // Build args list from operands[1..]
                 int nargs = static_cast<int>(inst->operands.size()) - 1;
-                QoreListNode* arg_list =
-                    nargs > 0 ? new QoreListNode(autoTypeInfo) : nullptr;
-                if (arg_list) {
+                uint64_t ref_bits = toBits(ref_val);
+                QoreValue result;
+                if (nargs == 0) {
+                    result = fromBits(qore_rt_call_closure_0(ref_bits, xsink));
+                } else if (nargs == 1) {
+                    uint64_t arg0 = toBits(getIRValue(values, inst->operands[1]));
+                    result = fromBits(qore_rt_call_closure_1(ref_bits, arg0, xsink));
+                } else {
+                    constexpr int SMALL_BUF = 8;
+                    uint64_t small_buf[SMALL_BUF];
+                    uint64_t* args = nargs <= SMALL_BUF ? small_buf : new uint64_t[nargs];
                     for (int i = 0; i < nargs; ++i) {
-                        QoreValue val = getIRValue(values, inst->operands[i + 1]);
-                        if (val.hasNode()) {
-                            val.refSelf();
-                        }
-                        arg_list->push(val, xsink);
+                        args[i] = toBits(getIRValue(values, inst->operands[i + 1]));
                     }
-                }
-
-                // execValue borrows args (const QoreListNode*) — it does NOT take
-                // ownership.  We must deref the arg list after the call to avoid
-                // leaking the refSelf'd entries.
-                QoreValue result = callref->execValue(arg_list, xsink);
-                // Deref the arg list now — entries were refSelf'd for the call
-                if (arg_list) {
-                    arg_list->deref(xsink);
+                    result = fromBits(qore_rt_call_closure_fast(ref_bits, args, nargs, xsink));
+                    if (nargs > SMALL_BUF) {
+                        delete[] args;
+                    }
                 }
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
@@ -3129,10 +3105,15 @@ load_local_done:
             case QoreIROpcode::HashKeyAccessInt: {
                 auto* hka_inst = static_cast<QoreIRHashKeyAccessInstruction*>(inst);
                 QoreValue base = getIRValue(values, hka_inst->operands[0]);
-                int64 out = 0;
+                QoreValue out;
                 if (base.getType() == NT_HASH) {
                     const QoreHashNode* h = base.get<const QoreHashNode>();
-                    out = h->getKeyValue(hka_inst->key_name.c_str()).getAsBigInt();
+                    bool exists = false;
+                    QoreValue v = h->getKeyValueExistence(hka_inst->key_name.c_str(), exists);
+                    if (exists) {
+                        out = v.getAsBigInt();
+                    }
+                    // else: key missing → NOTHING
                 }
                 setValueSlot(values, hka_inst->result.id, out, xsink);
                 ++ip;
@@ -3144,9 +3125,12 @@ load_local_done:
                 QoreValue val      = getIRValue(values, hks_inst->operands[1]);
                 if (hash_val.getType() == NT_HASH) {
                     QoreHashNode* h = hash_val.get<QoreHashNode>();
-                    // The hash was loaded with auto_ref=false for lvalue operations,
-                    // so is_unique() accurately reflects whether COW is needed
-                    if (!h->is_unique()) {
+                    // COW check: the hash was loaded via LoadLocal with auto_ref=false,
+                    // which adds a +1 ref tracked in cleanup/local_load_slots.
+                    // So refcount=2 (variable + LoadLocal ref) means the hash is
+                    // effectively unique to our execution context.  Only COW when
+                    // refcount > 2, indicating genuinely shared data.
+                    if (h->reference_count() > 2) {
                         // COW: create unique copy and update the local variable
                         QoreHashNode* new_h = h->copy();
                         LocalVar* lv = const_cast<LocalVar*>(
@@ -3171,21 +3155,17 @@ load_local_done:
                         // variable stack holds a reference (refcount >= 1).
                         new_h->deref(xsink);
                         h = new_h;
-                        // CRITICAL FIX: Update IR values[] array with new COW copy.
-                        // Without this, subsequent IR instructions reading operands[0]
-                        // will use the stale hash and lose modifications.
-                        // The hash was originally loaded with auto_ref=false (for lvalue),
-                        // so values[] contains a borrowed reference. We update it to point
-                        // to new_h (still borrowed), without taking an extra reference.
-                        // The LocalVar owns the reference to new_h.
-                        values[hks_inst->operands[0].id] = QoreValue(new_h);
-                        if (xsink && *xsink) {
-                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                            cleanupLocalCaches();
-                            return false;
-                        }
                     }
+                    // Temporarily release the values[] +1 ref so setKeyValue sees
+                    // reference_count()==1 (only the local variable holds a ref).
+                    // For the COW path this also discards the old (pre-COW) hash's ref.
+                    // The deref from refcount 2→1 is a safe atomic decrement (no deletion).
+                    values[hks_inst->operands[0].id].discard(xsink);
+                    values[hks_inst->operands[0].id] = QoreValue();
                     h->setKeyValue(hks_inst->key_name.c_str(), val.refSelf(), xsink);
+                    // Re-acquire values[] ref for proper cleanup/local_load_slots tracking.
+                    // h is alive via the local variable (refcount >= 1).
+                    values[hks_inst->operands[0].id] = QoreValue(h->refSelf());
                 } else if (hash_val.getType() == NT_OBJECT) {
                     const_cast<QoreObject*>(hash_val.get<const QoreObject>())->setValue(
                         hks_inst->key_name.c_str(), val.refSelf(), xsink);
@@ -3227,9 +3207,12 @@ load_local_done:
                 int64_t index = idx_val.getAsBigInt();
                 if (list_val.getType() == NT_LIST) {
                     QoreListNode* l = list_val.get<QoreListNode>();
-                    // The list was loaded with auto_ref=false for lvalue operations,
-                    // so is_unique() accurately reflects whether COW is needed
-                    if (!l->is_unique()) {
+                    // COW check: the list was loaded via LoadLocal with auto_ref=false,
+                    // which adds a +1 ref tracked in cleanup/local_load_slots.
+                    // So refcount=2 (variable + LoadLocal ref) means the list is
+                    // effectively unique to our execution context.  Only COW when
+                    // refcount > 2, indicating genuinely shared data.
+                    if (l->reference_count() > 2) {
                         // COW: create unique copy and update the local variable
                         QoreListNode* new_l = l->copy();
                         LocalVar* lv = const_cast<LocalVar*>(
@@ -3254,18 +3237,15 @@ load_local_done:
                         // variable stack holds a reference (refcount >= 1).
                         new_l->deref(xsink);
                         l = new_l;
-                        // CRITICAL FIX: Update IR values[] array with new COW copy.
-                        // Use direct assignment (not setValueSlot) to avoid discarding
-                        // the un-ref'd old slot.
-                        values[lis_inst->operands[0].id] = QoreValue(new_l->refSelf());
-                        cleanup.push_back(lis_inst->operands[0].id);
-                        if (xsink && *xsink) {
-                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                            cleanupLocalCaches();
-                            return false;
-                        }
                     }
+                    // Temporarily release the values[] +1 ref so setEntry sees
+                    // reference_count()==1 (only the local variable holds a ref).
+                    // For the COW path this also discards the old (pre-COW) list's ref.
+                    values[lis_inst->operands[0].id].discard(xsink);
+                    values[lis_inst->operands[0].id] = QoreValue();
                     l->setEntry(index, val.refSelf(), xsink);
+                    // Re-acquire values[] ref for proper cleanup/local_load_slots tracking.
+                    values[lis_inst->operands[0].id] = QoreValue(l->refSelf());
                 }
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
@@ -4561,46 +4541,6 @@ load_local_done:
                 ++ip;
                 break;
             }
-            case QoreIROpcode::Debug: {
-                auto* debug_inst = static_cast<QoreIRDebugInstruction*>(inst);
-                QoreValue stmt_return;
-                int rc = QoreIRInterpreter::execStatement(QoreIROpcode::Debug, debug_inst->stmt,
-                    stmt_return, xsink);
-                if (rc || (xsink && *xsink)) {
-                    if (inst->exception_target && xsink && *xsink) {
-                        prev_block = block;
-                        block = inst->exception_target;
-                        ip = 0;
-                        break;
-                    }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupLocalCaches();
-                    return false;
-                }
-                cleanupLocalCaches();
-                ++ip;
-                break;
-            }
-            case QoreIROpcode::Assert: {
-                auto* assert_inst = static_cast<QoreIRAssertInstruction*>(inst);
-                QoreValue stmt_return;
-                int rc = QoreIRInterpreter::execStatement(QoreIROpcode::Assert, assert_inst->stmt,
-                    stmt_return, xsink);
-                if (rc || (xsink && *xsink)) {
-                    if (inst->exception_target && xsink && *xsink) {
-                        prev_block = block;
-                        block = inst->exception_target;
-                        ip = 0;
-                        break;
-                    }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupLocalCaches();
-                    return false;
-                }
-                cleanupLocalCaches();
-                ++ip;
-                break;
-            }
             case QoreIROpcode::Context: {
                 auto* context_inst = static_cast<QoreIRContextInstruction*>(inst);
                 QoreValue stmt_return;
@@ -4626,33 +4566,6 @@ load_local_done:
                 QoreValue stmt_return;
                 int rc = QoreIRInterpreter::execStatement(QoreIROpcode::Summarize, summarize_inst->stmt,
                     stmt_return, xsink);
-                if (rc || (xsink && *xsink)) {
-                    if (inst->exception_target && xsink && *xsink) {
-                        prev_block = block;
-                        block = inst->exception_target;
-                        ip = 0;
-                        break;
-                    }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupLocalCaches();
-                    return false;
-                }
-                cleanupLocalCaches();
-                ++ip;
-                break;
-            }
-            case QoreIROpcode::Foreach: {
-                auto* foreach_inst = static_cast<QoreIRForeachInstruction*>(inst);
-                if (!foreach_inst->stmt) {
-                    if (xsink) {
-                        xsink->raiseException("IR-EXEC-ERROR", "foreach requires a statement");
-                    }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupLocalCaches();
-                    return false;
-                }
-                QoreValue stmt_return;
-                int rc = const_cast<ForEachStatement*>(foreach_inst->stmt)->exec(stmt_return, xsink);
                 if (rc || (xsink && *xsink)) {
                     if (inst->exception_target && xsink && *xsink) {
                         prev_block = block;
@@ -5008,13 +4921,13 @@ load_local_done:
                         str = val.get<const QoreStringNode>()->stringRefSelf();
                         break;
                     case NT_INT:
-                        str = new QoreStringNode(val.getAsBigInt());
+                        str = new QoreStringNodeMaker(QLLD, val.getAsBigInt());
                         break;
                     case NT_FLOAT:
                         str = q_fix_decimal(new QoreStringNodeMaker("%.9g", val.getAsFloat()), 0);
                         break;
                     case NT_BOOLEAN:
-                        str = new QoreStringNode(val.getAsBigInt());
+                        str = new QoreStringNodeMaker(QLLD, val.getAsBigInt());
                         break;
                     case NT_NOTHING:
                     case NT_NULL:
@@ -5026,6 +4939,36 @@ load_local_done:
                         str = new QoreStringNode(*sv);
                         break;
                     }
+                }
+                setValueSlot(values, inst->result.id, QoreValue(str), xsink);
+                cleanup.push_back(inst->result.id);
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::Sprintf: {
+                QoreValue val = getIRValue(values, inst->operands[0]);
+                QoreStringNode* str;
+                if (val.getType() == NT_LIST) {
+                    str = q_sprintf(val.get<const QoreListNode>(), 0, 0, xsink);
+                    if (*xsink) {
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        if (inst->exception_target) {
+                            prev_block = block;
+                            block = inst->exception_target;
+                            ip = 0;
+                            break;
+                        }
+                        if (debug_active) {
+                            tlpd->dbgFunctionExit(statements, return_value, xsink);
+                        }
+                        fireScopeExits();
+                        cleanupLocalCaches();
+                        return false;
+                    }
+                } else {
+                    // Single value: convert to string
+                    QoreStringValueHelper sv(val);
+                    str = new QoreStringNode(*sv);
                 }
                 setValueSlot(values, inst->result.id, QoreValue(str), xsink);
                 cleanup.push_back(inst->result.id);
@@ -5679,13 +5622,93 @@ load_local_done:
                 if (direct_inst->variant) {
                     int nargs = static_cast<int>(direct_inst->operands.size());
                     // Build NaN-boxed args array from operands
-                    std::vector<uint64_t> nanboxed_args(nargs > 0 ? nargs : 0);
+                    constexpr int SMALL_BUF = 8;
+                    uint64_t nb_buf[SMALL_BUF];
+                    uint64_t* nanboxed_args = nargs <= SMALL_BUF ? nb_buf : new uint64_t[nargs];
                     for (int i = 0; i < nargs; ++i) {
                         nanboxed_args[i] = toBits(getIRValue(values, direct_inst->operands[i]));
                     }
-                    QoreValue res = fromBits(qore_rt_call_fast(
-                        direct_inst->func, direct_inst->variant, direct_inst->pgm,
-                        nanboxed_args.data(), nargs, xsink));
+
+                    // Inline IR-to-IR call: skip qore_rt_call_fast overhead entirely
+                    // when the callee has direct_params_eligible IR.
+                    // Eliminates: check_stack, ThreadFrameBoundaryHelper, ArgvContextHelper,
+                    // param TLS push/pop, execJITWithDeopt wrapper, name string construction.
+                    int8_t state = direct_inst->inline_ir_state.load(std::memory_order_acquire);
+                    if (state == 0) {
+                        // First call: check eligibility and cache result
+                        const UserVariantBase* uvb = direct_inst->variant->getUserVariantBase();
+                        if (uvb) {
+                            const QoreIRFunction* callee_ir = uvb->getCachedIR();
+                            const UserSignature* sig = uvb->getUserSignature();
+                            if (callee_ir && callee_ir->direct_params_eligible
+                                    && !uvb->hasCachedFunction()
+                                    && !direct_inst->has_ref_args
+                                    && callee_ir->ast_visible_body_locals.empty()
+                                    && nargs >= static_cast<int>(sig->numParams())) {
+                                direct_inst->cached_callee_ir = callee_ir;
+                                direct_inst->cached_uvb = uvb;
+                                direct_inst->cached_return_type = sig->getReturnTypeInfo();
+                                direct_inst->inline_ir_state.store(1, std::memory_order_release);
+                                state = 1;
+                            } else {
+                                direct_inst->inline_ir_state.store(-1, std::memory_order_release);
+                                state = -1;
+                            }
+                        } else {
+                            direct_inst->inline_ir_state.store(-1, std::memory_order_release);
+                            state = -1;
+                        }
+                    }
+
+                    QoreValue res;
+                    if (state == 1) {
+                        // Ultra-fast inline IR-to-IR call path
+                        const QoreIRFunction* callee_ir = direct_inst->cached_callee_ir;
+                        const UserVariantBase* uvb = direct_inst->cached_uvb;
+                        // Re-check: callee may have been promoted to JIT since caching
+                        if (uvb->hasCachedFunction()) {
+                            // JIT promotion: invalidate cache and use standard path
+                            direct_inst->inline_ir_state.store(-1, std::memory_order_release);
+                            res = fromBits(qore_rt_call_fast(
+                                direct_inst->func, direct_inst->variant, direct_inst->pgm,
+                                nanboxed_args, nargs, xsink));
+                        } else {
+                            // Instantiate argvid (always NOTHING for exact-arity calls)
+                            const UserSignature* sig = uvb->getUserSignature();
+                            if (sig->argvid) {
+                                sig->argvid->instantiate(QoreValue());
+                            }
+                            IRDirectParams dp{nanboxed_args, nargs};
+                            QoreValue ir_return_value;
+                            bool ok = QoreIRInterpreter::execute(*callee_ir, ir_return_value, xsink,
+                                nullptr, nullptr, nullptr, callee_ir->cached_pre_instantiated,
+                                nullptr, uvb->getStatementBlock(), uvb->pgm, false, &dp);
+                            if (sig->argvid) {
+                                sig->argvid->uninstantiate(xsink);
+                            }
+                            if (!ok && !(xsink && *xsink)) {
+                                // IR deopt: fall through to standard path
+                                direct_inst->inline_ir_state.store(-1, std::memory_order_release);
+                                res = fromBits(qore_rt_call_fast(
+                                    direct_inst->func, direct_inst->variant, direct_inst->pgm,
+                                    nanboxed_args, nargs, xsink));
+                            } else {
+                                // Apply return type coercion
+                                if (!(xsink && *xsink) && direct_inst->cached_return_type) {
+                                    QoreTypeInfo::acceptAssignment(direct_inst->cached_return_type,
+                                        "<return statement>", ir_return_value, xsink);
+                                }
+                                res = ir_return_value;
+                            }
+                        }
+                    } else {
+                        // Standard path through qore_rt_call_fast
+                        res = fromBits(qore_rt_call_fast(
+                            direct_inst->func, direct_inst->variant, direct_inst->pgm,
+                            nanboxed_args, nargs, xsink));
+                    }
+
+                    if (nargs > SMALL_BUF) { delete[] nanboxed_args; }
                     if (xsink && *xsink) {
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
                         cleanupLocalCaches();
@@ -5712,13 +5735,16 @@ load_local_done:
                 auto* static_inst = static_cast<QoreIRCallStaticDirectInstruction*>(inst);
                 if (static_inst->variant) {
                     int nargs = static_cast<int>(static_inst->operands.size());
-                    std::vector<uint64_t> nanboxed_args(nargs > 0 ? nargs : 0);
+                    constexpr int SMALL_BUF = 8;
+                    uint64_t nb_buf[SMALL_BUF];
+                    uint64_t* nanboxed_args = nargs <= SMALL_BUF ? nb_buf : new uint64_t[nargs];
                     for (int i = 0; i < nargs; ++i) {
                         nanboxed_args[i] = toBits(getIRValue(values, static_inst->operands[i]));
                     }
                     QoreValue res = fromBits(qore_rt_call_static_method_direct(
                         static_inst->method, static_inst->variant,
-                        nanboxed_args.data(), nargs, xsink));
+                        nanboxed_args, nargs, xsink));
+                    if (nargs > SMALL_BUF) { delete[] nanboxed_args; }
                     if (xsink && *xsink) {
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
                         cleanupLocalCaches();
@@ -5912,13 +5938,16 @@ load_local_done:
                 // Fast path: bypass QoreListNode when variant is resolved
                 if (direct_inst->variant) {
                     int nargs = static_cast<int>(direct_inst->operands.size());
-                    std::vector<uint64_t> nanboxed_args(nargs > 0 ? nargs : 0);
+                    constexpr int SMALL_BUF = 8;
+                    uint64_t nb_buf[SMALL_BUF];
+                    uint64_t* nanboxed_args = nargs <= SMALL_BUF ? nb_buf : new uint64_t[nargs];
                     for (int i = 0; i < nargs; ++i) {
                         nanboxed_args[i] = toBits(getIRValue(values, direct_inst->operands[i]));
                     }
                     QoreValue res = fromBits(qore_rt_call_method_fast(
                         direct_inst->method, direct_inst->variant,
-                        nanboxed_args.data(), nargs, xsink));
+                        nanboxed_args, nargs, xsink));
+                    if (nargs > SMALL_BUF) { delete[] nanboxed_args; }
                     if (xsink && *xsink) {
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
                         cleanupLocalCaches();
@@ -5988,13 +6017,16 @@ load_local_done:
                 // Fast path: bypass QoreListNode when variant is resolved
                 if (invoke_inst->variant) {
                     int nargs = static_cast<int>(invoke_inst->operands.size());
-                    std::vector<uint64_t> nanboxed_args(nargs > 0 ? nargs : 0);
+                    constexpr int SMALL_BUF = 8;
+                    uint64_t nb_buf[SMALL_BUF];
+                    uint64_t* nanboxed_args = nargs <= SMALL_BUF ? nb_buf : new uint64_t[nargs];
                     for (int i = 0; i < nargs; ++i) {
                         nanboxed_args[i] = toBits(getIRValue(values, invoke_inst->operands[i]));
                     }
                     QoreValue res = fromBits(qore_rt_call_method_fast(
                         invoke_inst->method, invoke_inst->variant,
-                        nanboxed_args.data(), nargs, xsink));
+                        nanboxed_args, nargs, xsink));
+                    if (nargs > SMALL_BUF) { delete[] nanboxed_args; }
                     if (invoke_inst->has_ref_args) {
                         cleanupLocalCaches();
                     } else {
@@ -6079,7 +6111,9 @@ load_local_done:
 
                 // Build NaN-boxed args array from operands[1..n-1]
                 int nargs = static_cast<int>(direct_inst->operands.size()) - 1;
-                std::vector<uint64_t> nanboxed_args(nargs > 0 ? nargs : 0);
+                constexpr int SMALL_BUF = 8;
+                uint64_t nb_buf[SMALL_BUF];
+                uint64_t* nanboxed_args = nargs <= SMALL_BUF ? nb_buf : new uint64_t[nargs];
                 for (int i = 0; i < nargs; ++i) {
                     nanboxed_args[i] = toBits(getIRValue(values, direct_inst->operands[i + 1]));
                 }
@@ -6088,12 +6122,13 @@ load_local_done:
                 if (direct_inst->pseudo) {
                     res = fromBits(qore_rt_dot_eval_pseudo_method_direct(
                         toBits(base), direct_inst->method, direct_inst->qc, direct_inst->variant,
-                        nanboxed_args.data(), nargs, xsink));
+                        nanboxed_args, nargs, xsink));
                 } else {
                     res = fromBits(qore_rt_dot_eval_method_direct(
                         toBits(base), direct_inst->method, direct_inst->qc, direct_inst->variant,
-                        nanboxed_args.data(), nargs, xsink));
+                        nanboxed_args, nargs, xsink));
                 }
+                if (nargs > SMALL_BUF) { delete[] nanboxed_args; }
 
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
@@ -6118,7 +6153,9 @@ load_local_done:
 
                 // Build NaN-boxed args array from operands[1..n-1]
                 int nargs = static_cast<int>(de_invoke_inst->operands.size()) - 1;
-                std::vector<uint64_t> nanboxed_args(nargs > 0 ? nargs : 0);
+                constexpr int SMALL_BUF = 8;
+                uint64_t nb_buf[SMALL_BUF];
+                uint64_t* nanboxed_args = nargs <= SMALL_BUF ? nb_buf : new uint64_t[nargs];
                 for (int i = 0; i < nargs; ++i) {
                     nanboxed_args[i] = toBits(getIRValue(values, de_invoke_inst->operands[i + 1]));
                 }
@@ -6127,12 +6164,13 @@ load_local_done:
                 if (de_invoke_inst->pseudo) {
                     res = fromBits(qore_rt_dot_eval_pseudo_method_direct(
                         toBits(base), de_invoke_inst->method, de_invoke_inst->qc, de_invoke_inst->variant,
-                        nanboxed_args.data(), nargs, xsink));
+                        nanboxed_args, nargs, xsink));
                 } else {
                     res = fromBits(qore_rt_dot_eval_method_direct(
                         toBits(base), de_invoke_inst->method, de_invoke_inst->qc, de_invoke_inst->variant,
-                        nanboxed_args.data(), nargs, xsink));
+                        nanboxed_args, nargs, xsink));
                 }
+                if (nargs > SMALL_BUF) { delete[] nanboxed_args; }
 
                 // Method call runs in its own frame and cannot modify caller's locals
                 invalidateExternalCaches();
@@ -6999,7 +7037,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         case QoreIROpcode::FoldlSumInt: {
             // left = list, right = initial value (NOTHING means use first element)
             if (left.getType() != NT_LIST) {
-                return right.isNothing() ? QoreValue(0ll) : QoreValue(right.getAsBigInt());
+                return right.isNothing() ? QoreValue() : QoreValue(right.getAsBigInt());
             }
             const QoreListNode* l = left.get<const QoreListNode>();
             size_t sz = l->size();
@@ -7007,7 +7045,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             int64_t result;
             if (right.isNothing()) {
                 if (sz == 0) {
-                    return QoreValue(0ll);
+                    return QoreValue();
                 }
                 result = l->retrieveEntry(0).getAsBigInt();
                 start_idx = 1;
@@ -7022,7 +7060,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         case QoreIROpcode::FoldlSumFloat: {
             // left = list, right = initial value (NOTHING means use first element)
             if (left.getType() != NT_LIST) {
-                return right.isNothing() ? QoreValue(0.0) : QoreValue(right.getAsFloat());
+                return right.isNothing() ? QoreValue() : QoreValue(right.getAsFloat());
             }
             const QoreListNode* l = left.get<const QoreListNode>();
             size_t sz = l->size();
@@ -7030,7 +7068,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             double result;
             if (right.isNothing()) {
                 if (sz == 0) {
-                    return QoreValue(0.0);
+                    return QoreValue();
                 }
                 result = l->retrieveEntry(0).getAsFloat();
                 start_idx = 1;
@@ -7045,7 +7083,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         case QoreIROpcode::FoldlProdInt: {
             // left = list, right = initial value (NOTHING means use first element)
             if (left.getType() != NT_LIST) {
-                return right.isNothing() ? QoreValue(1ll) : QoreValue(right.getAsBigInt());
+                return right.isNothing() ? QoreValue() : QoreValue(right.getAsBigInt());
             }
             const QoreListNode* l = left.get<const QoreListNode>();
             size_t sz = l->size();
@@ -7053,7 +7091,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             int64_t result;
             if (right.isNothing()) {
                 if (sz == 0) {
-                    return QoreValue(1ll);
+                    return QoreValue();
                 }
                 result = l->retrieveEntry(0).getAsBigInt();
                 start_idx = 1;
@@ -7068,7 +7106,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         case QoreIROpcode::FoldlProdFloat: {
             // left = list, right = initial value (NOTHING means use first element)
             if (left.getType() != NT_LIST) {
-                return right.isNothing() ? QoreValue(1.0) : QoreValue(right.getAsFloat());
+                return right.isNothing() ? QoreValue() : QoreValue(right.getAsFloat());
             }
             const QoreListNode* l = left.get<const QoreListNode>();
             size_t sz = l->size();
@@ -7076,7 +7114,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             double result;
             if (right.isNothing()) {
                 if (sz == 0) {
-                    return QoreValue(1.0);
+                    return QoreValue();
                 }
                 result = l->retrieveEntry(0).getAsFloat();
                 start_idx = 1;
@@ -7091,7 +7129,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         case QoreIROpcode::FoldlDiffInt: {
             // left = list, right = initial value (NOTHING means use first element)
             if (left.getType() != NT_LIST) {
-                return right.isNothing() ? QoreValue(0ll) : QoreValue(right.getAsBigInt());
+                return right.isNothing() ? QoreValue() : QoreValue(right.getAsBigInt());
             }
             const QoreListNode* l = left.get<const QoreListNode>();
             size_t sz = l->size();
@@ -7099,7 +7137,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             int64_t result;
             if (right.isNothing()) {
                 if (sz == 0) {
-                    return QoreValue(0ll);
+                    return QoreValue();
                 }
                 result = l->retrieveEntry(0).getAsBigInt();
                 start_idx = 1;
@@ -7114,7 +7152,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         case QoreIROpcode::FoldlDiffFloat: {
             // left = list, right = initial value (NOTHING means use first element)
             if (left.getType() != NT_LIST) {
-                return right.isNothing() ? QoreValue(0.0) : QoreValue(right.getAsFloat());
+                return right.isNothing() ? QoreValue() : QoreValue(right.getAsFloat());
             }
             const QoreListNode* l = left.get<const QoreListNode>();
             size_t sz = l->size();
@@ -7122,7 +7160,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             double result;
             if (right.isNothing()) {
                 if (sz == 0) {
-                    return QoreValue(0.0);
+                    return QoreValue();
                 }
                 result = l->retrieveEntry(0).getAsFloat();
                 start_idx = 1;
@@ -7242,12 +7280,12 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         // diff uses reverse iteration: list[n-1] - list[n-2] - ... - list[0]
         case QoreIROpcode::FoldrSumInt: {
             if (left.getType() != NT_LIST) {
-                return right.isNothing() ? QoreValue(0ll) : QoreValue(right.getAsBigInt());
+                return right.isNothing() ? QoreValue() : QoreValue(right.getAsBigInt());
             }
             const QoreListNode* l = left.get<const QoreListNode>();
             size_t sz = l->size();
             if (sz == 0) {
-                return right.isNothing() ? QoreValue(0ll) : QoreValue(right.getAsBigInt());
+                return right.isNothing() ? QoreValue() : QoreValue(right.getAsBigInt());
             }
             int64_t result = right.isNothing() ? 0ll : right.getAsBigInt();
             for (size_t i = 0; i < sz; ++i) {
@@ -7257,12 +7295,12 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         }
         case QoreIROpcode::FoldrSumFloat: {
             if (left.getType() != NT_LIST) {
-                return right.isNothing() ? QoreValue(0.0) : QoreValue(right.getAsFloat());
+                return right.isNothing() ? QoreValue() : QoreValue(right.getAsFloat());
             }
             const QoreListNode* l = left.get<const QoreListNode>();
             size_t sz = l->size();
             if (sz == 0) {
-                return right.isNothing() ? QoreValue(0.0) : QoreValue(right.getAsFloat());
+                return right.isNothing() ? QoreValue() : QoreValue(right.getAsFloat());
             }
             double result = right.isNothing() ? 0.0 : right.getAsFloat();
             for (size_t i = 0; i < sz; ++i) {
@@ -7272,12 +7310,12 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         }
         case QoreIROpcode::FoldrProdInt: {
             if (left.getType() != NT_LIST) {
-                return right.isNothing() ? QoreValue(1ll) : QoreValue(right.getAsBigInt());
+                return right.isNothing() ? QoreValue() : QoreValue(right.getAsBigInt());
             }
             const QoreListNode* l = left.get<const QoreListNode>();
             size_t sz = l->size();
             if (sz == 0) {
-                return right.isNothing() ? QoreValue(1ll) : QoreValue(right.getAsBigInt());
+                return right.isNothing() ? QoreValue() : QoreValue(right.getAsBigInt());
             }
             int64_t result = right.isNothing() ? 1ll : right.getAsBigInt();
             for (size_t i = 0; i < sz; ++i) {
@@ -7287,12 +7325,12 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         }
         case QoreIROpcode::FoldrProdFloat: {
             if (left.getType() != NT_LIST) {
-                return right.isNothing() ? QoreValue(1.0) : QoreValue(right.getAsFloat());
+                return right.isNothing() ? QoreValue() : QoreValue(right.getAsFloat());
             }
             const QoreListNode* l = left.get<const QoreListNode>();
             size_t sz = l->size();
             if (sz == 0) {
-                return right.isNothing() ? QoreValue(1.0) : QoreValue(right.getAsFloat());
+                return right.isNothing() ? QoreValue() : QoreValue(right.getAsFloat());
             }
             double result = right.isNothing() ? 1.0 : right.getAsFloat();
             for (size_t i = 0; i < sz; ++i) {
@@ -7303,12 +7341,12 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         case QoreIROpcode::FoldrDiffInt: {
             // foldr $1 - $2: list[n-1] - list[n-2] - ... - list[0]
             if (left.getType() != NT_LIST) {
-                return right.isNothing() ? QoreValue(0ll) : QoreValue(right.getAsBigInt());
+                return right.isNothing() ? QoreValue() : QoreValue(right.getAsBigInt());
             }
             const QoreListNode* l = left.get<const QoreListNode>();
             size_t sz = l->size();
             if (sz == 0) {
-                return right.isNothing() ? QoreValue(0ll) : QoreValue(right.getAsBigInt());
+                return right.isNothing() ? QoreValue() : QoreValue(right.getAsBigInt());
             }
             // Start from last element and subtract backwards
             int64_t result = l->retrieveEntry(sz - 1).getAsBigInt();
@@ -7320,12 +7358,12 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         case QoreIROpcode::FoldrDiffFloat: {
             // foldr $1 - $2: list[n-1] - list[n-2] - ... - list[0]
             if (left.getType() != NT_LIST) {
-                return right.isNothing() ? QoreValue(0.0) : QoreValue(right.getAsFloat());
+                return right.isNothing() ? QoreValue() : QoreValue(right.getAsFloat());
             }
             const QoreListNode* l = left.get<const QoreListNode>();
             size_t sz = l->size();
             if (sz == 0) {
-                return right.isNothing() ? QoreValue(0.0) : QoreValue(right.getAsFloat());
+                return right.isNothing() ? QoreValue() : QoreValue(right.getAsFloat());
             }
             // Start from last element and subtract backwards
             double result = l->retrieveEntry(sz - 1).getAsFloat();
@@ -7678,12 +7716,12 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             // left = list, right = scale factor
             // Sum of (list[i] * scale)
             if (left.getType() != NT_LIST) {
-                return QoreValue((int64_t)0);
+                return QoreValue();
             }
             const QoreListNode* l = left.get<const QoreListNode>();
             size_t sz = l->size();
             if (sz == 0) {
-                return QoreValue((int64_t)0);
+                return QoreValue();
             }
             int64_t scale = right.getAsBigInt();
             int64_t result = 0;
@@ -7694,12 +7732,12 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         }
         case QoreIROpcode::FusedMapFoldlSumScaleFloat: {
             if (left.getType() != NT_LIST) {
-                return QoreValue(0.0);
+                return QoreValue();
             }
             const QoreListNode* l = left.get<const QoreListNode>();
             size_t sz = l->size();
             if (sz == 0) {
-                return QoreValue(0.0);
+                return QoreValue();
             }
             double scale = right.getAsFloat();
             double result = 0.0;
@@ -7712,12 +7750,12 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             // left = list, right = unused
             // Sum of (list[i]^2)
             if (left.getType() != NT_LIST) {
-                return QoreValue((int64_t)0);
+                return QoreValue();
             }
             const QoreListNode* l = left.get<const QoreListNode>();
             size_t sz = l->size();
             if (sz == 0) {
-                return QoreValue((int64_t)0);
+                return QoreValue();
             }
             int64_t result = 0;
             for (size_t i = 0; i < sz; ++i) {
@@ -7728,12 +7766,12 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         }
         case QoreIROpcode::FusedMapFoldlSumSquareFloat: {
             if (left.getType() != NT_LIST) {
-                return QoreValue(0.0);
+                return QoreValue();
             }
             const QoreListNode* l = left.get<const QoreListNode>();
             size_t sz = l->size();
             if (sz == 0) {
-                return QoreValue(0.0);
+                return QoreValue();
             }
             double result = 0.0;
             for (size_t i = 0; i < sz; ++i) {
@@ -7746,12 +7784,12 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             // left = list, right = scale factor
             // Product of (list[i] * scale)
             if (left.getType() != NT_LIST) {
-                return QoreValue((int64_t)1);  // Identity for product
+                return QoreValue();
             }
             const QoreListNode* l = left.get<const QoreListNode>();
             size_t sz = l->size();
             if (sz == 0) {
-                return QoreValue((int64_t)1);  // Identity for product
+                return QoreValue();
             }
             int64_t scale = right.getAsBigInt();
             int64_t result = 1;
@@ -7762,12 +7800,12 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         }
         case QoreIROpcode::FusedMapFoldlProdScaleFloat: {
             if (left.getType() != NT_LIST) {
-                return QoreValue(1.0);  // Identity for product
+                return QoreValue();
             }
             const QoreListNode* l = left.get<const QoreListNode>();
             size_t sz = l->size();
             if (sz == 0) {
-                return QoreValue(1.0);  // Identity for product
+                return QoreValue();
             }
             double scale = right.getAsFloat();
             double result = 1.0;

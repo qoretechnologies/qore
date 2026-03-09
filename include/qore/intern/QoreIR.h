@@ -33,6 +33,7 @@
 #define _QORE_INTERN_QOREIR_H
 
 #include <algorithm>
+#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -46,10 +47,7 @@
 class QoreProgramLocation;
 class LocalVar;
 class Var;
-class ForEachStatement;
 class OnBlockExitStatement;
-class DebugStatement;
-class AssertStatement;
 class ContextStatement;
 class SummarizeStatement;
 class CaseNode;
@@ -232,15 +230,15 @@ enum class QoreIROpcode : uint16_t {
     MapSelectList       = 131,
     HashMap             = 132,
     HashMapSelect       = 133,
-    Foreach             = 134,
+    // Foreach = 134,     // REMOVED: fully lowered to iterators
     IteratorCreate      = 135,  // Create iterator from list/iterable
     IteratorNext        = 136,  // Advance iterator, branch if done, store value
     OnBlockExit         = 137,
     ScopeEnter          = 138,
     ScopeExit           = 139,
     ThreadExit          = 140,
-    Debug               = 141,
-    Assert              = 142,
+    // Debug = 141,       // REMOVED: fully lowered inline
+    // Assert = 142,      // REMOVED: fully lowered inline
     Context             = 143,
     Summarize           = 144,
 
@@ -533,7 +531,10 @@ enum class QoreIROpcode : uint16_t {
     //! Convert any value to string (replaces builtin string() function call)
     ToString            = 346,
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (347, 348, ...)
+    //! Format a list as sprintf(fmt, args...) — used by assert failure messages
+    Sprintf             = 347,
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (348, 349, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -541,8 +542,8 @@ enum class QoreIROpcode : uint16_t {
 //! NOTE: Both QoreIRInterpreter.cpp and QoreIRToLLVM.cpp have matching
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
-constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::ToString);
-static_assert(QORE_IR_MAX_OPCODE == 346, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::Sprintf);
+static_assert(QORE_IR_MAX_OPCODE == 347, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! Returns true if the opcode is a unary computation op (used by Invoke dispatch)
@@ -1381,6 +1382,12 @@ public:
     bool has_ref_args = false;              //!< True if any operand is a reference type (may be modified by callee)
     bool is_self_recursive = false;         //!< True if this is a self-recursive call (same function name)
     //!< operands[0..n-1] are the function arguments
+
+    // Cached inline IR call state (computed on first execution, avoids repeated lookups)
+    mutable std::atomic<int8_t> inline_ir_state{0};  //!< 0=unchecked, 1=eligible, -1=ineligible
+    mutable const QoreIRFunction* cached_callee_ir = nullptr;
+    mutable const UserVariantBase* cached_uvb = nullptr;
+    mutable const QoreTypeInfo* cached_return_type = nullptr;
 };
 
 //! Direct method call instruction - bypasses virtual dispatch for final classes/methods
@@ -1522,15 +1529,6 @@ public:
     //!< operands[0] is the base expression, operands[1..n-1] are arguments
 };
 
-class QoreIRForeachInstruction : public QoreIRInstruction {
-public:
-    explicit QoreIRForeachInstruction(const ForEachStatement* n_stmt)
-            : QoreIRInstruction(QoreIROpcode::Foreach), stmt(n_stmt) {
-    }
-
-    const ForEachStatement* stmt = nullptr;
-};
-
 //! Creates a FunctionalOperatorInterface from a list or iterable expression
 //! result contains a pointer to the iterator (as int64_t)
 class QoreIRIteratorCreateInstruction : public QoreIRInstruction {
@@ -1603,24 +1601,6 @@ public:
 
     uint32_t scope_id = 0;  //!< scope ID from matching ScopeEnter
     bool is_error = false;  //!< true if exiting due to an exception
-};
-
-class QoreIRDebugInstruction : public QoreIRInstruction {
-public:
-    explicit QoreIRDebugInstruction(const DebugStatement* n_stmt)
-            : QoreIRInstruction(QoreIROpcode::Debug), stmt(n_stmt) {
-    }
-
-    const DebugStatement* stmt = nullptr;
-};
-
-class QoreIRAssertInstruction : public QoreIRInstruction {
-public:
-    explicit QoreIRAssertInstruction(const AssertStatement* n_stmt)
-            : QoreIRInstruction(QoreIROpcode::Assert), stmt(n_stmt) {
-    }
-
-    const AssertStatement* stmt = nullptr;
 };
 
 class QoreIRContextInstruction : public QoreIRInstruction {
@@ -1808,6 +1788,16 @@ public:
     // Mapping of LocalVar* pointers to their slot IDs (computed during IR analysis)
     // Used by the IR interpreter to convert unordered_map lookups to direct array access
     std::unordered_map<const LocalVar*, uint32_t> local_var_slots;
+
+    // Mapping of param index → slot_id (built during IR lowering).
+    // Used by IRDirectParams to pre-populate the slot cache from caller-provided
+    // values, bypassing TLS instantiate/eval/uninstantiate round-trip.
+    std::unordered_map<int, uint32_t> param_slot_ids;
+
+    //! True when all params are IR-only (not accessed by AST expression trees,
+    //! not closure-captured, not reference-typed) AND no argvid is needed.
+    //! When true, callers can use IRDirectParams to skip TLS entirely.
+    bool direct_params_eligible = false;
 
     // Set of LocalVar* pointers that are already instantiated by the caller
     // (tiered compilation: params from setupCall(), argvid/selfid from evalTiered(),

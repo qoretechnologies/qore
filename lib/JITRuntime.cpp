@@ -64,9 +64,17 @@
 #include <qore/intern/qore_list_private.h>
 #include <qore/intern/QoreHashNodeIntern.h>
 #include <qore/intern/ParseReferenceNode.h>
-#include <qore/intern/ForEachStatement.h>
 #include <qore/intern/VarRefNode.h>
 #include <qore/intern/QoreCastOperatorNode.h>
+
+// --- Exported check_stack wrapper for LLVM-generated code ---
+extern "C" DLLEXPORT int qore_rt_check_stack(ExceptionSink* xsink) {
+#ifdef QORE_MANAGE_STACK
+    return check_stack(xsink);
+#else
+    return 0;
+#endif
+}
 
 // --- Forward declarations for Phase 5 fast-call builtins ---
 extern "C" DLLEXPORT uint64_t qore_fast_strlen(uint64_t arg_bits, ExceptionSink* xsink);
@@ -728,6 +736,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_load_constant(const RuntimeConstantRefNode
     return toBits(result);
 }
 
+extern "C" DLLEXPORT uint64_t qore_rt_load_constant_value(uint64_t val_bits) {
+    QoreValue val = fromBits(val_bits);
+    return toBits(val.refSelf());
+}
+
 // --- Closure creation helper ---
 
 extern "C" DLLEXPORT uint64_t qore_rt_create_closure(const QoreClosureParseNode* cn, ExceptionSink* xsink) {
@@ -1142,13 +1155,13 @@ extern "C" DLLEXPORT uint64_t qore_rt_to_string(uint64_t val_bits) {
             str = val.get<const QoreStringNode>()->stringRefSelf();
             break;
         case NT_INT:
-            str = new QoreStringNode(val.getAsBigInt());
+            str = new QoreStringNodeMaker(QLLD, val.getAsBigInt());
             break;
         case NT_FLOAT:
             str = q_fix_decimal(new QoreStringNodeMaker("%.9g", val.getAsFloat()), 0);
             break;
         case NT_BOOLEAN:
-            str = new QoreStringNode(val.getAsBigInt());
+            str = new QoreStringNodeMaker(QLLD, val.getAsBigInt());
             break;
         case NT_NOTHING:
         case NT_NULL:
@@ -1159,6 +1172,22 @@ extern "C" DLLEXPORT uint64_t qore_rt_to_string(uint64_t val_bits) {
             str = new QoreStringNode(*sv);
             break;
         }
+    }
+    return toBits(QoreValue(str));
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_sprintf(uint64_t val_bits, ExceptionSink* xsink) {
+    QoreValue val = fromBits(val_bits);
+    QoreStringNode* str;
+    if (val.getType() == NT_LIST) {
+        str = q_sprintf(val.get<const QoreListNode>(), 0, 0, xsink);
+        if (*xsink) {
+            return toBits(QoreValue());
+        }
+    } else {
+        // Single value: convert to string
+        QoreStringValueHelper sv(val);
+        str = new QoreStringNode(*sv);
     }
     return toBits(QoreValue(str));
 }
@@ -1288,12 +1317,17 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_access(uint64_t hash_val, const c
     return toBits(QoreValue());
 }
 
-extern "C" DLLEXPORT int64_t qore_rt_hash_key_access_int(uint64_t hash_val, const char* key) {
+extern "C" DLLEXPORT uint64_t qore_rt_hash_key_access_int(uint64_t hash_val, const char* key) {
     QoreValue v = fromBits(hash_val);
     if (v.getType() == NT_HASH) {
-        return v.get<const QoreHashNode>()->getKeyValue(key).getAsBigInt();
+        const QoreHashNode* h = v.get<const QoreHashNode>();
+        bool exists = false;
+        QoreValue val = h->getKeyValueExistence(key, exists);
+        if (exists) {
+            return toBits(val.getAsBigInt());
+        }
     }
-    return 0;
+    return toBits(QoreValue());
 }
 
 // JIT path: write hash{key} = value with copy-on-write support.
@@ -1305,7 +1339,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow(
     QoreValue val = fromBits(value_bits);
     if (hv.getType() == NT_HASH) {
         QoreHashNode* h = hv.get<QoreHashNode>();
-        if (!h->is_unique()) {
+        // COW threshold is > 2 because the caller holds +1 ref from LoadLocal's refSelf();
+        // with refcount=2 (variable + caller), no other reference exists, so COW is unnecessary
+        if (h->reference_count() > 2) {
             QoreHashNode* new_h = h->copy();
             qore_rt_assign_local(var, toBits(QoreValue(new_h)), xsink);
             if (*xsink) {
@@ -1316,8 +1352,13 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow(
             // After COW, h is owned by LocalVar via qore_rt_assign_local, which called refSelf()
             // releasing the extra reference added by that call
             h->deref(nullptr);
+        } else if (h->reference_count() > 1) {
+            // Non-COW: temporarily drop caller's ref so setKeyValue sees refcount==1
+            h->deref(nullptr);
         }
         h->setKeyValue(key, val.refSelf(), xsink);
+        // Re-acquire caller's ref (h is alive via the local variable)
+        h->refSelf();
     } else if (hv.getType() == NT_OBJECT) {
         const_cast<QoreObject*>(hv.get<const QoreObject>())->setValue(key, val.refSelf(), xsink);
     }
@@ -1333,7 +1374,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow_aot(
     QoreValue val = fromBits(value_bits);
     if (hv.getType() == NT_HASH) {
         QoreHashNode* h = hv.get<QoreHashNode>();
-        if (!h->is_unique()) {
+        // COW threshold is > 2 because the caller holds +1 ref from LoadLocal's refSelf();
+        // with refcount=2 (variable + caller), no other reference exists, so COW is unnecessary
+        if (h->reference_count() > 2) {
             QoreHashNode* new_h = h->copy();
             qore_rt_assign_local_aot(ctx, local_slot, toBits(QoreValue(new_h)), xsink);
             if (*xsink) {
@@ -1344,8 +1387,13 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow_aot(
             // After COW, h is owned by the local slot via qore_rt_assign_local_aot, which called refSelf()
             // releasing the extra reference added by that call
             h->deref(nullptr);
+        } else if (h->reference_count() > 1) {
+            // Non-COW: temporarily drop caller's ref so setKeyValue sees refcount==1
+            h->deref(nullptr);
         }
         h->setKeyValue(key, val.refSelf(), xsink);
+        // Re-acquire caller's ref (h is alive via the local variable)
+        h->refSelf();
     } else if (hv.getType() == NT_OBJECT) {
         const_cast<QoreObject*>(hv.get<const QoreObject>())->setValue(key, val.refSelf(), xsink);
     }
@@ -1361,7 +1409,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow(
     QoreValue val = fromBits(val_bits);
     if (lv.getType() == NT_LIST) {
         QoreListNode* l = lv.get<QoreListNode>();
-        if (!l->is_unique()) {
+        // COW threshold is > 2 because the caller holds +1 ref from LoadLocal's refSelf();
+        // with refcount=2 (variable + caller), no other reference exists, so COW is unnecessary
+        if (l->reference_count() > 2) {
             QoreListNode* new_l = l->copy();
             qore_rt_assign_local(var, toBits(QoreValue(new_l)), xsink);
             if (*xsink) {
@@ -1369,9 +1419,17 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow(
                 return toBits(QoreValue());
             }
             l = new_l;
+            // After COW, l is owned by LocalVar via qore_rt_assign_local, which called refSelf()
+            // releasing the extra reference added by copy()
+            l->deref(nullptr);
+        } else if (l->reference_count() > 1) {
+            // Non-COW: temporarily drop caller's ref so setEntry sees refcount==1
+            l->deref(nullptr);
         }
         QoreValue entry = val.hasNode() ? val.refSelf() : val;
         l->setEntry(index, entry, xsink);
+        // Re-acquire caller's ref (l is alive via the local variable)
+        l->refSelf();
     }
     return val_bits;
 }
@@ -1386,7 +1444,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow_aot(
     QoreValue val = fromBits(val_bits);
     if (lv.getType() == NT_LIST) {
         QoreListNode* l = lv.get<QoreListNode>();
-        if (!l->is_unique()) {
+        // COW threshold is > 2 because the caller holds +1 ref from LoadLocal's refSelf();
+        // with refcount=2 (variable + caller), no other reference exists, so COW is unnecessary
+        if (l->reference_count() > 2) {
             QoreListNode* new_l = l->copy();
             qore_rt_assign_local_aot(ctx, local_slot, toBits(QoreValue(new_l)), xsink);
             if (*xsink) {
@@ -1394,9 +1454,17 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow_aot(
                 return toBits(QoreValue());
             }
             l = new_l;
+            // After COW, l is owned by the local slot via qore_rt_assign_local_aot, which called refSelf()
+            // releasing the extra reference added by copy()
+            l->deref(nullptr);
+        } else if (l->reference_count() > 1) {
+            // Non-COW: temporarily drop caller's ref so setEntry sees refcount==1
+            l->deref(nullptr);
         }
         QoreValue entry = val.hasNode() ? val.refSelf() : val;
         l->setEntry(index, entry, xsink);
+        // Re-acquire caller's ref (l is alive via the local variable)
+        l->refSelf();
     }
     return val_bits;
 }
@@ -2052,110 +2120,110 @@ extern "C" DLLEXPORT uint64_t qore_rt_fused_map_select_square_positive_float(uin
 
 // Fused map+foldl operations - map and reduce in single pass, no intermediate list
 // Pattern: foldl $1 + $2, (map $1 * c, list) -> sum(list[i] * c)
-extern "C" DLLEXPORT int64_t qore_rt_fused_map_foldl_sum_scale_int(uint64_t list_val, int64_t scale) {
+extern "C" DLLEXPORT uint64_t qore_rt_fused_map_foldl_sum_scale_int(uint64_t list_val, int64_t scale) {
     QoreValue v = fromBits(list_val);
     if (v.getType() != NT_LIST) {
-        return 0;
+        return toBits(QoreValue());
     }
     const QoreListNode* l = v.get<const QoreListNode>();
     size_t sz = l->size();
     if (sz == 0) {
-        return 0;
+        return toBits(QoreValue());
     }
     int64_t result = 0;
     for (size_t i = 0; i < sz; ++i) {
         result += l->retrieveEntry(i).getAsBigInt() * scale;
     }
-    return result;
+    return toBits(result);
 }
 
-extern "C" DLLEXPORT double qore_rt_fused_map_foldl_sum_scale_float(uint64_t list_val, double scale) {
+extern "C" DLLEXPORT uint64_t qore_rt_fused_map_foldl_sum_scale_float(uint64_t list_val, double scale) {
     QoreValue v = fromBits(list_val);
     if (v.getType() != NT_LIST) {
-        return 0.0;
+        return toBits(QoreValue());
     }
     const QoreListNode* l = v.get<const QoreListNode>();
     size_t sz = l->size();
     if (sz == 0) {
-        return 0.0;
+        return toBits(QoreValue());
     }
     double result = 0.0;
     for (size_t i = 0; i < sz; ++i) {
         result += l->retrieveEntry(i).getAsFloat() * scale;
     }
-    return result;
+    return toBits(result);
 }
 
 // Pattern: foldl $1 + $2, (map $1 * $1, list) -> sum(list[i]^2)
-extern "C" DLLEXPORT int64_t qore_rt_fused_map_foldl_sum_square_int(uint64_t list_val) {
+extern "C" DLLEXPORT uint64_t qore_rt_fused_map_foldl_sum_square_int(uint64_t list_val) {
     QoreValue v = fromBits(list_val);
     if (v.getType() != NT_LIST) {
-        return 0;
+        return toBits(QoreValue());
     }
     const QoreListNode* l = v.get<const QoreListNode>();
     size_t sz = l->size();
     if (sz == 0) {
-        return 0;
+        return toBits(QoreValue());
     }
     int64_t result = 0;
     for (size_t i = 0; i < sz; ++i) {
         int64_t val = l->retrieveEntry(i).getAsBigInt();
         result += val * val;
     }
-    return result;
+    return toBits(result);
 }
 
-extern "C" DLLEXPORT double qore_rt_fused_map_foldl_sum_square_float(uint64_t list_val) {
+extern "C" DLLEXPORT uint64_t qore_rt_fused_map_foldl_sum_square_float(uint64_t list_val) {
     QoreValue v = fromBits(list_val);
     if (v.getType() != NT_LIST) {
-        return 0.0;
+        return toBits(QoreValue());
     }
     const QoreListNode* l = v.get<const QoreListNode>();
     size_t sz = l->size();
     if (sz == 0) {
-        return 0.0;
+        return toBits(QoreValue());
     }
     double result = 0.0;
     for (size_t i = 0; i < sz; ++i) {
         double val = l->retrieveEntry(i).getAsFloat();
         result += val * val;
     }
-    return result;
+    return toBits(result);
 }
 
 // Pattern: foldl $1 * $2, (map $1 * c, list) -> prod(list[i] * c)
-extern "C" DLLEXPORT int64_t qore_rt_fused_map_foldl_prod_scale_int(uint64_t list_val, int64_t scale) {
+extern "C" DLLEXPORT uint64_t qore_rt_fused_map_foldl_prod_scale_int(uint64_t list_val, int64_t scale) {
     QoreValue v = fromBits(list_val);
     if (v.getType() != NT_LIST) {
-        return 1;  // Identity for product
+        return toBits(QoreValue());
     }
     const QoreListNode* l = v.get<const QoreListNode>();
     size_t sz = l->size();
     if (sz == 0) {
-        return 1;  // Identity for product
+        return toBits(QoreValue());
     }
     int64_t result = 1;
     for (size_t i = 0; i < sz; ++i) {
         result *= l->retrieveEntry(i).getAsBigInt() * scale;
     }
-    return result;
+    return toBits(result);
 }
 
-extern "C" DLLEXPORT double qore_rt_fused_map_foldl_prod_scale_float(uint64_t list_val, double scale) {
+extern "C" DLLEXPORT uint64_t qore_rt_fused_map_foldl_prod_scale_float(uint64_t list_val, double scale) {
     QoreValue v = fromBits(list_val);
     if (v.getType() != NT_LIST) {
-        return 1.0;  // Identity for product
+        return toBits(QoreValue());
     }
     const QoreListNode* l = v.get<const QoreListNode>();
     size_t sz = l->size();
     if (sz == 0) {
-        return 1.0;  // Identity for product
+        return toBits(QoreValue());
     }
     double result = 1.0;
     for (size_t i = 0; i < sz; ++i) {
         result *= l->retrieveEntry(i).getAsFloat() * scale;
     }
-    return result;
+    return toBits(result);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_string_concat(uint64_t left, uint64_t right, ExceptionSink* xsink) {
@@ -2908,7 +2976,6 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_function_direct(const QoreFunction* f
         const AbstractQoreFunctionVariant* variant, QoreProgram* pgm,
         uint64_t* args, int nargs, ExceptionSink* xsink) {
     assert(func);
-
     // Build QoreListNode from the NaN-boxed args array
     // Use pushIntern() to bypass checkVal/stripVal which strips complex types
     // (e.g., hash<string, bool> -> hash<auto>) from arguments in untyped lists,
@@ -2937,6 +3004,39 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_function_direct(const QoreFunction* f
 
     // Call the function directly — skips dynamic_cast chain and AST node copy
     QoreValue result = func->evalFunctionTmpArgs(variant, *arg_list, call_pgm, rc, xsink);
+
+    return toBits(result);
+}
+
+//! Call a function with dynamic variant resolution (no pre-resolved variant)
+/** Used when the variant could not be determined at AOT compile/load time
+    (e.g., overloaded builtins like int() where the FunctionCallNode was
+    reconstructed without args). Builds the arg list and uses evalDynamic()
+    to resolve the correct variant at runtime.
+*/
+static uint64_t qore_rt_call_function_dynamic(const QoreFunction* func,
+        QoreProgram* pgm, uint64_t* args, int nargs, ExceptionSink* xsink) {
+    assert(func);
+
+    // Build QoreListNode from the NaN-boxed args array
+    ReferenceHolder<QoreListNode> arg_list(nargs > 0 ? new QoreListNode(autoTypeInfo) : nullptr, xsink);
+    if (nargs > 0) {
+        qore_list_private* priv = qore_list_private::get(**arg_list);
+        priv->reserve(nargs);
+        for (int i = 0; i < nargs; ++i) {
+            QoreValue val = fromBits(args[i]);
+            if (val.hasNode()) {
+                val.refSelf();
+            }
+            priv->pushIntern(val);
+        }
+    }
+
+    // Get runtime config
+    RuntimeConfig& rc = rc_get_current_ref();
+
+    // Use evalDynamic which resolves the variant based on arg types
+    QoreValue result = func->evalDynamic(*arg_list, rc, xsink);
 
     return toBits(result);
 }
@@ -3143,10 +3243,18 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast(const QoreFunction* func,
     // via UserVariantExecHelper::ThreadFrameBoundaryHelper in the AST path).
     ThreadFrameBoundaryHelper tfbh(true);
 
-    // Instantiate parameter locals directly from NaN-boxed args
-    if (instantiateFastCallParams(sig, num_params, nargs, args, xsink) < 0) {
-        return toBits(QoreValue());
+    // Check if callee IR supports direct param passing (bypass TLS entirely)
+    const QoreIRFunction* ir = uvb->getCachedIR();
+    bool use_direct_params = ir && ir->direct_params_eligible
+        && !uvb->hasCachedFunction() && nargs >= (int)num_params;
+
+    if (!use_direct_params) {
+        // Standard path: push params to TLS
+        if (instantiateFastCallParams(sig, num_params, nargs, args, xsink) < 0) {
+            return toBits(QoreValue());
+        }
     }
+    // else: direct_params path — params pre-populated in IR slot cache
 
     // Build argv for excess arguments (varargs)
     // Use pushIntern() to preserve complex types (e.g., hash<string, bool>)
@@ -3170,7 +3278,6 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast(const QoreFunction* func,
     }
 
     // Use cached IR name when available (zero allocation); fall back to building the name
-    const QoreIRFunction* ir = uvb->getCachedIR();
     std::string call_name_buf;
     if (!ir) {
         const char* class_name = func->className();
@@ -3185,15 +3292,27 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast(const QoreFunction* func,
     QoreValue val{};
     {
         ArgvContextHelper argv_helper(argv.release(), xsink);
-        if (uvb->hasCachedFunction()) {
+        if (use_direct_params) {
+            // Direct params path: pass args straight to IR slot cache, no TLS
+            IRDirectParams dp{args, nargs};
+            execJITWithDeopt(uvb, call_name, [ir, uvb, &dp](ExceptionSink* xs, bool& inv) -> uint64_t {
+                QoreValue ir_return_value;
+                bool ok = QoreIRInterpreter::execute(*ir, ir_return_value, xs, nullptr,
+                    nullptr, nullptr, ir->cached_pre_instantiated, nullptr,
+                    uvb->getStatementBlock(), uvb->pgm, false, &dp);
+                if (!ok && !*xs) {
+                    inv = true;
+                    return 0;
+                }
+                return toBits(ir_return_value);
+            }, val, xsink);
+        } else if (uvb->hasCachedFunction()) {
             // JIT/AOT fast path
             execJITWithDeopt(uvb, call_name, [uvb](ExceptionSink* xs, bool& inv) {
                 return uvb->execCachedFunction(xs, inv);
             }, val, xsink);
         } else {
-            // IR fast path: execute IR directly without QoreListNode construction.
-            // Parameters are already instantiated on the thread-local variable stack
-            // from instantiateFastCallParams() above.
+            // IR fast path (standard TLS): execute IR directly without QoreListNode.
             const QoreIRFunction* callee_ir = uvb->getCachedIR();
             execJITWithDeopt(uvb, call_name, [callee_ir, uvb](ExceptionSink* xs, bool& inv) -> uint64_t {
                 QoreValue ir_return_value;
@@ -3213,9 +3332,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast(const QoreFunction* func,
         sig->argvid->uninstantiate(xsink);
     }
 
-    // Uninstantiate parameter locals in reverse order
-    for (int i = (int)num_params - 1; i >= 0; --i) {
-        sig->lv[i]->uninstantiate(xsink);
+    if (!use_direct_params) {
+        // Standard path: uninstantiate params from TLS
+        for (int i = (int)num_params - 1; i >= 0; --i) {
+            sig->lv[i]->uninstantiate(xsink);
+        }
     }
 
     // Apply return type coercion (e.g. softlist wrapping) to match
@@ -3267,17 +3388,29 @@ static uint64_t execClosureDirect(const QoreClosureBase* cb, const UserVariantBa
 
     // Handle self for object closures (closures defined inside methods)
     QoreObject* self = const_cast<QoreObject*>(cb->getObject());
-    if (self && sig->selfid) {
-        sig->selfid->instantiateSelf(self);
-    }
 
-    // Instantiate params from NaN-boxed args
-    if (instantiateFastCallParams(sig, num_params, nargs, args, xsink) < 0) {
+    // Check if callee IR supports direct param passing (bypass TLS entirely)
+    // Note: closures with self need selfid TLS push because there's no ObjectSubstitutionHelper
+    // here (unlike method calls); LoadSelfMember uses runtime_get_stack_object()
+    const QoreIRFunction* ir = uvb->getCachedIR();
+    bool use_direct_params = ir && ir->direct_params_eligible
+        && !uvb->hasCachedFunction() && nargs >= (int)num_params
+        && !(self && sig->selfid);
+
+    if (!use_direct_params) {
+        // Standard path: push selfid + params to TLS
         if (self && sig->selfid) {
-            sig->selfid->uninstantiateSelf();
+            sig->selfid->instantiateSelf(self);
         }
-        return toBits(QoreValue());
+        if (instantiateFastCallParams(sig, num_params, nargs, args, xsink) < 0) {
+            if (self && sig->selfid) {
+                sig->selfid->uninstantiateSelf();
+            }
+            return toBits(QoreValue());
+        }
     }
+    // else: direct_params path — selfid not needed (LoadSelfMember uses
+    // ObjectSubstitutionHelper from caller), params pre-populated in IR slot cache
 
     // Build argv for excess arguments (varargs)
     ReferenceHolder<QoreListNode> argv(xsink);
@@ -3300,20 +3433,33 @@ static uint64_t execClosureDirect(const QoreClosureBase* cb, const UserVariantBa
     }
 
     // Get call name from cached IR if available, otherwise use static name
-    const QoreIRFunction* ir = uvb->getCachedIR();
     static const std::string closure_name("<anonymous closure>");
     const std::string& call_name = ir ? ir->name : closure_name;
 
     QoreValue val{};
     {
         ArgvContextHelper argv_helper(argv.release(), xsink);
-        if (uvb->hasCachedFunction()) {
+        if (use_direct_params) {
+            // Direct params path: pass args straight to IR slot cache, no TLS
+            IRDirectParams dp{args, nargs};
+            execJITWithDeopt(uvb, call_name, [ir, uvb, &dp](ExceptionSink* xs, bool& inv) -> uint64_t {
+                QoreValue ir_return_value;
+                bool ok = QoreIRInterpreter::execute(*ir, ir_return_value, xs, nullptr,
+                    nullptr, nullptr, ir->cached_pre_instantiated, nullptr,
+                    uvb->getStatementBlock(), uvb->pgm, false, &dp);
+                if (!ok && !*xs) {
+                    inv = true;
+                    return 0;
+                }
+                return toBits(ir_return_value);
+            }, val, xsink);
+        } else if (uvb->hasCachedFunction()) {
             // JIT/AOT fast path
             execJITWithDeopt(uvb, call_name, [uvb](ExceptionSink* xs, bool& inv) {
                 return uvb->execCachedFunction(xs, inv);
             }, val, xsink);
         } else {
-            // IR fast path
+            // IR fast path (standard TLS)
             const QoreIRFunction* callee_ir = uvb->getCachedIR();
             execJITWithDeopt(uvb, call_name, [callee_ir, uvb](ExceptionSink* xs, bool& inv) -> uint64_t {
                 QoreValue ir_return_value;
@@ -3333,11 +3479,14 @@ static uint64_t execClosureDirect(const QoreClosureBase* cb, const UserVariantBa
     if (sig->argvid) {
         sig->argvid->uninstantiate(xsink);
     }
-    for (int i = (int)num_params - 1; i >= 0; --i) {
-        sig->lv[i]->uninstantiate(xsink);
-    }
-    if (self && sig->selfid) {
-        sig->selfid->uninstantiateSelf();
+    if (!use_direct_params) {
+        // Standard path: uninstantiate params + selfid from TLS
+        for (int i = (int)num_params - 1; i >= 0; --i) {
+            sig->lv[i]->uninstantiate(xsink);
+        }
+        if (self && sig->selfid) {
+            sig->selfid->uninstantiateSelf();
+        }
     }
 
     // Apply return type coercion
@@ -3612,21 +3761,28 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_method_fast(const QoreMethod* method,
     // determine call-stack depth for debugger introspection.
     ThreadFrameBoundaryHelper tfbh(true);
 
-    // Push self object onto the method call stack
+    // Push self object onto the method call stack (for runtime_get_stack_object())
     ObjectSubstitutionHelper osh(self, qore_class_private::get(*method->getClass()));
 
-    // Instantiate self on the thread-local variable stack (compiled code loads self via LoadLocal)
-    if (sig->selfid) {
-        sig->selfid->instantiateSelf(self);
-    }
+    // Check if callee IR supports direct param passing (bypass TLS entirely)
+    const QoreIRFunction* ir = uvb->getCachedIR();
+    bool use_direct_params = ir && ir->direct_params_eligible
+        && !uvb->hasCachedFunction() && nargs >= (int)num_params;
 
-    // Instantiate parameter locals directly from NaN-boxed args
-    if (instantiateFastCallParams(sig, num_params, nargs, args, xsink) < 0) {
+    if (!use_direct_params) {
+        // Standard path: push selfid + params to TLS
         if (sig->selfid) {
-            sig->selfid->uninstantiate(xsink);
+            sig->selfid->instantiateSelf(self);
         }
-        return toBits(QoreValue());
+        if (instantiateFastCallParams(sig, num_params, nargs, args, xsink) < 0) {
+            if (sig->selfid) {
+                sig->selfid->uninstantiate(xsink);
+            }
+            return toBits(QoreValue());
+        }
     }
+    // else: direct_params path — selfid not needed (LoadSelfMember uses
+    // ObjectSubstitutionHelper), params pre-populated in IR slot cache
 
     // Build argv for excess arguments (varargs)
     // Use pushIntern() to preserve complex types (e.g., hash<string, bool>)
@@ -3650,7 +3806,6 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_method_fast(const QoreMethod* method,
     }
 
     // Use cached IR name when available (zero allocation); fall back to building the name
-    const QoreIRFunction* ir = uvb->getCachedIR();
     std::string call_name_buf;
     if (!ir) {
         const char* cls = method->getClass() ? method->getClass()->getName() : nullptr;
@@ -3665,13 +3820,27 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_method_fast(const QoreMethod* method,
     QoreValue val{};
     {
         ArgvContextHelper argv_helper(argv.release(), xsink);
-        if (uvb->hasCachedFunction()) {
+        if (use_direct_params) {
+            // Direct params path: pass args straight to IR slot cache, no TLS
+            IRDirectParams dp{args, nargs};
+            execJITWithDeopt(uvb, call_name, [ir, uvb, &dp](ExceptionSink* xs, bool& inv) -> uint64_t {
+                QoreValue ir_return_value;
+                bool ok = QoreIRInterpreter::execute(*ir, ir_return_value, xs, nullptr,
+                    nullptr, nullptr, ir->cached_pre_instantiated, nullptr,
+                    uvb->getStatementBlock(), uvb->pgm, false, &dp);
+                if (!ok && !*xs) {
+                    inv = true;
+                    return 0;
+                }
+                return toBits(ir_return_value);
+            }, val, xsink);
+        } else if (uvb->hasCachedFunction()) {
             // JIT/AOT fast path
             execJITWithDeopt(uvb, call_name, [uvb](ExceptionSink* xs, bool& inv) {
                 return uvb->execCachedFunction(xs, inv);
             }, val, xsink);
         } else {
-            // IR fast path: execute IR directly without QoreListNode construction.
+            // IR fast path (standard TLS): execute IR directly without QoreListNode.
             const QoreIRFunction* callee_ir = uvb->getCachedIR();
             execJITWithDeopt(uvb, call_name, [callee_ir, uvb](ExceptionSink* xs, bool& inv) -> uint64_t {
                 QoreValue ir_return_value;
@@ -3679,7 +3848,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_method_fast(const QoreMethod* method,
                     nullptr, nullptr, callee_ir->cached_pre_instantiated, nullptr,
                     uvb->getStatementBlock(), uvb->pgm);
                 if (!ok && !*xs) {
-                    inv = true;  // Request deopt to AST
+                    inv = true;
                     return 0;
                 }
                 return toBits(ir_return_value);
@@ -3691,14 +3860,14 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_method_fast(const QoreMethod* method,
         sig->argvid->uninstantiate(xsink);
     }
 
-    // Uninstantiate parameter locals in reverse order
-    for (int i = (int)num_params - 1; i >= 0; --i) {
-        sig->lv[i]->uninstantiate(xsink);
-    }
-
-    // Uninstantiate self
-    if (sig->selfid) {
-        sig->selfid->uninstantiateSelf();
+    if (!use_direct_params) {
+        // Standard path: uninstantiate params + selfid from TLS
+        for (int i = (int)num_params - 1; i >= 0; --i) {
+            sig->lv[i]->uninstantiate(xsink);
+        }
+        if (sig->selfid) {
+            sig->selfid->uninstantiateSelf();
+        }
     }
 
     // Apply return type coercion (e.g. softlist wrapping) to match
@@ -3872,14 +4041,6 @@ extern "C" DLLEXPORT void qore_rt_push_on_block_exit_aot(QoreAOTContext* ctx, in
         qore_rt_push_on_block_exit(type, const_cast<StatementBlock*>(
             static_cast<const StatementBlock*>(ctx->stmts[idx])));
     }
-}
-
-extern "C" DLLEXPORT uint64_t qore_rt_exec_foreach_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
-    assert(ctx && idx >= 0 && idx < ctx->num_stmts);
-    const ForEachStatement* stmt = static_cast<const ForEachStatement*>(ctx->stmts[idx]);
-    QoreValue return_value;
-    QoreIRInterpreter::execStatement(QoreIROpcode::Foreach, stmt, return_value, xsink);
-    return toBits(return_value);
 }
 
 extern "C" DLLEXPORT CaseNodeRegex* qore_rt_get_regex_case_aot(QoreAOTContext* ctx, int32_t slot) {
@@ -4116,11 +4277,95 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_direct_aot(QoreAOTContext* ctx, int32
 
     // Medium path: pre-resolved function but no user variant (builtin)
     if (target.func) {
-        return qore_rt_call_fast(target.func, target.variant, target.pgm, args, nargs, xsink);
+        if (target.variant) {
+            return qore_rt_call_fast(target.func, target.variant, target.pgm, args, nargs, xsink);
+        }
+        // No variant resolved — use dynamic dispatch for proper overload resolution
+        return qore_rt_call_function_dynamic(target.func, target.pgm, args, nargs, xsink);
     }
 
     // Fallback for slots without pre-resolved targets (shouldn't happen for CallDirect)
     return qore_rt_call_with_args(ctx->exprs[slot], args, nargs, xsink);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_call_self_recursive_aot(AotFunctionPtr self_fn, QoreAOTContext* ctx,
+        int32_t slot, uint64_t* args, int nargs, ExceptionSink* xsink) {
+    // Lightweight self-recursive call for AOT: eliminates ThreadFrameBoundaryHelper,
+    // ProgramThreadCountContextHelper, QoreJITStackLocation, execJITWithDeopt wrapper,
+    // acceptAssignment, and execCachedFunction indirection.  Calls the AOT function
+    // directly via function pointer.
+    if (check_stack(xsink)) {
+        return toBits(QoreValue());
+    }
+
+    assert(ctx && slot >= 0 && slot < ctx->num_exprs);
+    const QoreAOTCallTarget& target = ctx->call_targets[slot];
+    const UserVariantBase* uvb = target.uvb;
+    if (!uvb) {
+        // Defensive fallback (should not happen for self-recursive)
+        return qore_rt_call_direct_aot(ctx, slot, args, nargs, xsink);
+    }
+
+    const UserSignature* sig = uvb->getUserSignature();
+    unsigned num_params = sig->numParams();
+
+    // Instantiate params on thread-local stack
+    if (instantiateFastCallParams(sig, num_params, nargs, args, xsink) < 0) {
+        return toBits(QoreValue());
+    }
+
+    // Argv for excess args (rare for self-recursive)
+    ReferenceHolder<QoreListNode> argv(xsink);
+    if (nargs > (int)num_params) {
+        argv = new QoreListNode(autoTypeInfo);
+        qore_list_private* argv_priv = qore_list_private::get(**argv);
+        argv_priv->reserve(nargs - num_params);
+        for (int i = num_params; i < nargs; ++i) {
+            QoreValue val = fromBits(args[i]);
+            if (val.hasNode()) {
+                val.refSelf();
+            }
+            argv_priv->pushIntern(val);
+        }
+    }
+    if (sig->argvid) {
+        sig->argvid->instantiate(argv ? argv->refSelf() : nullptr);
+    }
+
+    // Body locals — use getBodyLocals() for AOT (same as execJITWithDeopt)
+    bool skip_body_locals = uvb->areAllBodyLocalsIROnly();
+    const std::vector<LocalVar*>& body_locals = uvb->getBodyLocals();
+    if (!skip_body_locals) {
+        const QoreParseOptions& po = uvb->pgm->getParseOptions();
+        for (LocalVar* lv : body_locals) {
+            lv->instantiate(po);
+        }
+    }
+
+    // Call AOT function directly — no deopt, no frame boundary, no stack location
+    uint64_t result_bits;
+    {
+        ArgvContextHelper argv_helper(argv.release(), xsink);
+        result_bits = self_fn(ctx, xsink);
+    }
+
+    // Uninstantiate body locals
+    if (!skip_body_locals) {
+        for (int i = (int)body_locals.size() - 1; i >= 0; --i) {
+            body_locals[i]->uninstantiate(xsink);
+        }
+    }
+
+    // Uninstantiate argv + params (LIFO order)
+    if (sig->argvid) {
+        sig->argvid->uninstantiate(xsink);
+    }
+    for (int i = (int)num_params - 1; i >= 0; --i) {
+        sig->lv[i]->uninstantiate(xsink);
+    }
+
+    // No return type coercion — self-recursive, same return type
+    return result_bits;
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_with_base_aot(QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,
@@ -4477,22 +4722,29 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
         return true;
     }
 
-    // Push self object onto the method call stack
+    // Push self object onto the method call stack (for runtime_get_stack_object())
     ObjectSubstitutionHelper osh(o, qore_class_private::get(*method->getClass()));
 
-    // Instantiate self on the thread-local variable stack (compiled code loads self via LoadLocal)
-    if (sig->selfid) {
-        sig->selfid->instantiateSelf(o);
-    }
+    // Check if callee IR supports direct param passing (bypass TLS entirely)
+    const QoreIRFunction* ir = uvb->getCachedIR();
+    bool use_direct_params = ir && ir->direct_params_eligible
+        && !uvb->hasCachedFunction() && nargs >= (int)num_params;
 
-    // Instantiate parameter locals directly from NaN-boxed args
-    if (instantiateFastCallParams(sig, num_params, nargs, args, xsink) < 0) {
+    if (!use_direct_params) {
+        // Standard path: push selfid + params to TLS
         if (sig->selfid) {
-            sig->selfid->uninstantiate(xsink);
+            sig->selfid->instantiateSelf(o);
         }
-        result = toBits(QoreValue());
-        return true;
+        if (instantiateFastCallParams(sig, num_params, nargs, args, xsink) < 0) {
+            if (sig->selfid) {
+                sig->selfid->uninstantiate(xsink);
+            }
+            result = toBits(QoreValue());
+            return true;
+        }
     }
+    // else: direct_params path — selfid not needed (LoadSelfMember uses
+    // ObjectSubstitutionHelper), params pre-populated in IR slot cache
 
     // Build argv for excess arguments (varargs)
     // Use pushIntern() to preserve complex types (e.g., hash<string, bool>)
@@ -4516,7 +4768,6 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
     }
 
     // Use cached IR name when available (zero allocation); fall back to building the name
-    const QoreIRFunction* ir = uvb->getCachedIR();
     std::string call_name_buf;
     if (!ir) {
         call_name_buf = std::string(method->getClass()->getName()) + "::" + method->getName();
@@ -4526,15 +4777,27 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
     QoreValue val{};
     {
         ArgvContextHelper argv_helper(argv.release(), xsink);
-        if (uvb->hasCachedFunction()) {
+        if (use_direct_params) {
+            // Direct params path: pass args straight to IR slot cache, no TLS
+            IRDirectParams dp{args, nargs};
+            execJITWithDeopt(uvb, call_name, [ir, uvb, &dp](ExceptionSink* xs, bool& inv) -> uint64_t {
+                QoreValue ir_return_value;
+                bool ok = QoreIRInterpreter::execute(*ir, ir_return_value, xs, nullptr,
+                    nullptr, nullptr, ir->cached_pre_instantiated, nullptr,
+                    uvb->getStatementBlock(), uvb->pgm, false, &dp);
+                if (!ok && !*xs) {
+                    inv = true;
+                    return 0;
+                }
+                return toBits(ir_return_value);
+            }, val, xsink);
+        } else if (uvb->hasCachedFunction()) {
             // JIT/AOT fast path
             execJITWithDeopt(uvb, call_name, [uvb](ExceptionSink* xs, bool& inv) {
                 return uvb->execCachedFunction(xs, inv);
             }, val, xsink);
         } else {
-            // IR fast path: execute IR directly without QoreListNode construction.
-            // Parameters are already instantiated on the thread-local variable stack
-            // from instantiateFastCallParams() above.
+            // IR fast path (standard TLS): execute IR directly without QoreListNode.
             execJITWithDeopt(uvb, call_name, [ir, uvb](ExceptionSink* xs, bool& inv) -> uint64_t {
                 QoreValue ir_return_value;
                 bool ok = QoreIRInterpreter::execute(*ir, ir_return_value, xs, nullptr,
@@ -4553,14 +4816,14 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
         sig->argvid->uninstantiate(xsink);
     }
 
-    // Uninstantiate parameter locals in reverse order
-    for (int i = (int)num_params - 1; i >= 0; --i) {
-        sig->lv[i]->uninstantiate(xsink);
-    }
-
-    // Uninstantiate self
-    if (sig->selfid) {
-        sig->selfid->uninstantiateSelf();
+    if (!use_direct_params) {
+        // Standard path: uninstantiate params + selfid from TLS
+        for (int i = (int)num_params - 1; i >= 0; --i) {
+            sig->lv[i]->uninstantiate(xsink);
+        }
+        if (sig->selfid) {
+            sig->selfid->uninstantiateSelf();
+        }
     }
 
     // Apply return type coercion (e.g. softlist wrapping) to match

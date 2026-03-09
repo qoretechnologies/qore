@@ -100,6 +100,13 @@ public:
         fast_entry_args = args;
     }
 
+    //! Set the name of an AOT self-recursive fast entry function.
+    //! When set, self-recursive CallDirect instructions in AOT mode emit direct
+    //! LLVM calls to this function instead of going through qore_rt_call_direct_aot.
+    void setAOTSelfRecursiveFastEntry(const std::string& name) {
+        aot_self_recursive_fast_entry = name;
+    }
+
     //! Set shared debug info for multi-function module compilation (AOT/batch).
     //! When set, the lowerer uses the shared DIBuilder/DICompileUnit instead of
     //! creating and finalizing its own per-function.  The caller is responsible
@@ -142,6 +149,10 @@ private:
     // and initializes params from fast_entry_args instead of qore_rt_load_local().
     std::string fast_entry_name;
     const std::unordered_map<const void*, llvm::Value*>* fast_entry_args = nullptr;
+
+    // AOT self-recursive fast entry: when set, self-recursive CallDirect in AOT mode
+    // emits direct LLVM calls to this function instead of qore_rt_call_direct_aot.
+    std::string aot_self_recursive_fast_entry;
 
     // IR builder
     std::unique_ptr<llvm::IRBuilder<>> builder;

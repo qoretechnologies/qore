@@ -631,6 +631,13 @@ static void skipOneExpr(const QoreAOTBinaryReader& rdr, const uint8_t*& p, const
         }
         return;
     }
+    if (ek == AOTExprKind::LIST_LITERAL) {
+        uint8_t n = QoreAOTBinaryReader::readU8(p);
+        for (uint8_t i = 0; i < n; ++i) {
+            skipOneExpr(rdr, p, e);  // each element (recursive)
+        }
+        return;
+    }
     if (ek == AOTExprKind::NEW_OBJECT || ek == AOTExprKind::SCOPED_NEW_OBJECT) {
         rdr.readStringRef(p);  // class path
         uint8_t na = QoreAOTBinaryReader::readU8(p);
@@ -735,6 +742,25 @@ static QoreValue readOneExpr(
             phn->add(new QoreStringNode(key_str ? key_str : ""), val, &loc_builtin);
         }
         return QoreValue(phn);
+    }
+
+    // LIST_LITERAL: count(u8) + [value(readOneExpr)] * N
+    if (ek == AOTExprKind::LIST_LITERAL) {
+        uint8_t count = QoreAOTBinaryReader::readU8(p);
+        QoreParseListNode* pln = new QoreParseListNode(&loc_builtin);
+        for (uint8_t j = 0; j < count; ++j) {
+            std::string val_err;
+            QoreValue val = readOneExpr(rdr, p, e, val_err, pgm,
+                locals, num_locals, globals, num_globals);
+            if (!val_err.empty()) {
+                err = val_err;
+                val.discard(nullptr);
+                pln->deref();
+                return QoreValue();
+            }
+            pln->add(val, &loc_builtin);
+        }
+        return QoreValue(pln);
     }
 
     // NEW_OBJECT / SCOPED_NEW_OBJECT: class_path + num_args + N×readOneExpr()
@@ -2559,6 +2585,34 @@ static QoreAOTContext* buildContextFromSlotMap(
                 }
                 continue;
             }
+            case AOTExprKind::LIST_LITERAL: {
+                // count(u8) + [value(readOneExpr)] * N
+                uint8_t count = QoreAOTBinaryReader::readU8(ptr);
+                QoreParseListNode* pln = new QoreParseListNode(&loc_builtin);
+                bool list_ok = true;
+                for (uint8_t j = 0; j < count; ++j) {
+                    std::string val_err;
+                    QoreValue val = readOneExpr(reader, ptr, end, val_err, pgm,
+                        ctx->locals, num_locals, ctx->globals, num_globals);
+                    if (!list_ok) {
+                        val.discard(nullptr);
+                    } else if (!val_err.empty()) {
+                        printd(2, "AOT v2: LIST_LITERAL value error for expr slot %d of '%s': %s\n",
+                            i, name, val_err.c_str());
+                        val.discard(nullptr);
+                        list_ok = false;
+                    } else {
+                        pln->add(val, &loc_builtin);
+                    }
+                }
+                if (list_ok) {
+                    ctx->exprs[i] = toBitsNB(QoreValue(pln));
+                } else {
+                    pln->deref();
+                    has_unsupported = true;
+                }
+                continue;
+            }
             case AOTExprKind::PARSE_REF: {
                 // \var lvalue reference: inner lvalue expression (AOTExprKind-encoded)
                 std::string inner_err;
@@ -3018,12 +3072,12 @@ static QoreAOTContext* buildContextFromSlotMap(
         if (fcn && fcn->getFunction()) {
             ctx->call_targets[i].func = fcn->getFunction();
             ctx->call_targets[i].pgm = fcn->getProgram();
-            // Variant may not be resolved on AOT-created FunctionCallNode (no args).
-            // Fall back to finding the first variant from the function.
+            // Only use variant if it was resolved at parse time (requires args for overload
+            // resolution). Do NOT fall back to first() — for overloaded builtins like int(),
+            // picking the wrong variant causes CodeEvaluationHelper to discard args during
+            // re-dispatch, resulting in "got no value" errors. Leave variant=nullptr so the
+            // call path uses dynamic dispatch (evalDynamic) which resolves correctly.
             const AbstractQoreFunctionVariant* v = fcn->getVariant();
-            if (!v && fcn->getFunction()->numVariants() > 0) {
-                v = fcn->getFunction()->first();
-            }
             if (v) {
                 ctx->call_targets[i].variant = v;
                 ctx->call_targets[i].uvb = v->getUserVariantBase();
@@ -4141,9 +4195,9 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
         }
 
         // These groups hold AST pointers; encountering them is a serialization error
-        case QoreIRInstGroup::Foreach:
-        case QoreIRInstGroup::Debug:
-        case QoreIRInstGroup::Assert:
+        case static_cast<QoreIRInstGroup>(44):  // Foreach (removed)
+        case static_cast<QoreIRInstGroup>(50):  // Debug (removed)
+        case static_cast<QoreIRInstGroup>(51):  // Assert (removed)
         case QoreIRInstGroup::Context:
         case QoreIRInstGroup::Summarize:
             error = "unsupported AST-delegation instruction group " + std::to_string(group_byte);
@@ -4458,6 +4512,14 @@ static void skipSlotMapEntry(const QoreAOTBinaryReader& reader, const uint8_t*& 
                 for (uint8_t sp = 0; sp < skip_npairs; ++sp) {
                     reader.readStringRef(ptr);  // key
                     skipOneExpr(reader, ptr, end ? end : ptr + 65536);  // value
+                }
+                break;
+            }
+            case AOTExprKind::LIST_LITERAL: {
+                // count(u8) + [value(AOTExprKind)] * N
+                uint8_t skip_count = QoreAOTBinaryReader::readU8(ptr);
+                for (uint8_t sp = 0; sp < skip_count; ++sp) {
+                    skipOneExpr(reader, ptr, end ? end : ptr + 65536);
                 }
                 break;
             }

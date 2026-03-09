@@ -45,6 +45,7 @@
 #include "qore/intern/QC_Breakpoint.h"
 #include "qore/intern/ModuleInfo.h"
 #include "qore/intern/QoreSerializable.h"
+#include "qore/intern/QoreJIT.h"
 
 #include <string>
 #include <set>
@@ -1328,6 +1329,10 @@ void qore_program_private::del(ExceptionSink* xsink) {
         ns_const = true;
         //printd(5, "qore_program_private::del() this: %p cleared constants\n", this);
     }
+
+    // drain any pending background JIT compilations before deleting namespace data;
+    // the bg thread holds raw pointers to QoreIRFunction objects owned by this program
+    QoreJIT::instance().waitForBgCompileQueue();
 
     // delete the namespace and all data
     qore_root_ns_private::get(*RootNS)->deleteData(!ns_vars, xsink);

@@ -45,6 +45,14 @@ class QoreValue;
 class AbstractStatement;
 class StatementBlock;
 
+//! Direct params for IR-to-IR calls — bypasses TLS variable stack entirely.
+//! Param values are placed directly into the IR slot cache, eliminating
+//! the TLS push/pop round-trip (instantiate → eval → uninstantiate).
+struct IRDirectParams {
+    const uint64_t* args;   //!< NaN-boxed param values
+    int nargs;              //!< number of params
+};
+
 class QoreIRInterpreter {
 public:
     static QoreValue evalComparison(QoreIROpcode op, const QoreValue& left, const QoreValue& right,
@@ -74,7 +82,8 @@ public:
             const std::unordered_set<const LocalVar*>* pre_instantiated = nullptr,
             const LocalVar* excluded_selfid = nullptr,
             const StatementBlock* statements = nullptr, QoreProgram* pgm = nullptr,
-            bool suppress_guard_deopt = false);
+            bool suppress_guard_deopt = false,
+            const IRDirectParams* direct_params = nullptr);
 };
 
 #endif

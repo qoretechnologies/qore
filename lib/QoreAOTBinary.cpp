@@ -1791,7 +1791,8 @@ static QoreIRFunction* lowerClosureForSerialization(const UserClosureVariant* va
 */
 static bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         const std::vector<AOTLocalSlotId>& parent_locals,
-        const std::vector<AOTGlobalSlotId>& parent_globals) {
+        const std::vector<AOTGlobalSlotId>& parent_globals,
+        const AOTConstantReverseMap* const_reverse_map = nullptr) {
     if (!expr.hasNode()) {
         if (expr.isEnum()) {
             const QoreEnumMember* member = expr.getEnumMember();
@@ -1882,7 +1883,7 @@ static bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& e
                 writer.writeU8(static_cast<uint8_t>(args->size()));
                 for (size_t j = 0; j < args->size(); ++j) {
                     classifyAndWriteExpr(writer, args->retrieveEntry(j),
-                        parent_locals, parent_globals);
+                        parent_locals, parent_globals, const_reverse_map);
                 }
             } else {
                 writer.writeU8(0);
@@ -1954,7 +1955,7 @@ static bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& e
             uint8_t num_args = args && args->size() <= 255 ? static_cast<uint8_t>(args->size()) : 0;
             writer.writeU8(num_args);
             for (uint8_t j = 0; j < num_args; ++j) {
-                classifyAndWriteExpr(writer, args->retrieveEntry(j), parent_locals, parent_globals);
+                classifyAndWriteExpr(writer, args->retrieveEntry(j), parent_locals, parent_globals, const_reverse_map);
             }
             return true;
         }
@@ -2004,7 +2005,19 @@ static bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& e
             ConstHashIterator it(qhn);
             while (it.next()) {
                 writer.writeStringRef(it.getKey());
-                classifyAndWriteExpr(writer, it.get(), parent_locals, parent_globals);
+                classifyAndWriteExpr(writer, it.get(), parent_locals, parent_globals, const_reverse_map);
+            }
+            return true;
+        }
+    }
+
+    // QoreListNode: already-evaluated list constant — serialize as LIST_LITERAL
+    if (auto* qln = dynamic_cast<const QoreListNode*>(node)) {
+        if (qln->size() <= 255) {
+            writer.writeU8(static_cast<uint8_t>(AOTExprKind::LIST_LITERAL));
+            writer.writeU8(static_cast<uint8_t>(qln->size()));
+            for (size_t i = 0; i < qln->size(); ++i) {
+                classifyAndWriteExpr(writer, qln->retrieveEntry(i), parent_locals, parent_globals, const_reverse_map);
             }
             return true;
         }
@@ -2022,7 +2035,7 @@ static bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& e
                 // Keys are typically string constants
                 QoreStringValueHelper key(keys[i]);
                 writer.writeStringRef(key->c_str());
-                classifyAndWriteExpr(writer, vals[i], parent_locals, parent_globals);
+                classifyAndWriteExpr(writer, vals[i], parent_locals, parent_globals, const_reverse_map);
             }
             return true;
         }
@@ -2033,15 +2046,15 @@ static bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& e
     // (e.g., oh.paths."/create".post — left=base, right=key, both recursively classified)
     if (auto* hd = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::HASH_DEREF));
-        classifyAndWriteExpr(writer, hd->getLeft(), parent_locals, parent_globals);
-        classifyAndWriteExpr(writer, hd->getRight(), parent_locals, parent_globals);
+        classifyAndWriteExpr(writer, hd->getLeft(), parent_locals, parent_globals, const_reverse_map);
+        classifyAndWriteExpr(writer, hd->getRight(), parent_locals, parent_globals, const_reverse_map);
         return true;
     }
 
     // ParseReferenceNode: \var lvalue reference — serialize inner lvalue expression
     if (auto* prn = dynamic_cast<const ParseReferenceNode*>(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::PARSE_REF));
-        classifyAndWriteExpr(writer, prn->getLVExp(), parent_locals, parent_globals);
+        classifyAndWriteExpr(writer, prn->getLVExp(), parent_locals, parent_globals, const_reverse_map);
         return true;
     }
 
@@ -2118,6 +2131,16 @@ static bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& e
         return true;
     }
 
+    // Try reverse constant lookup for unsupported node types (e.g., QoreObject)
+    if (const_reverse_map) {
+        auto it = const_reverse_map->find(node);
+        if (it != const_reverse_map->end()) {
+            writer.writeU8(static_cast<uint8_t>(AOTExprKind::RUNTIME_CONST_REF));
+            writer.writeStringRef(it->second.c_str());
+            return true;
+        }
+    }
+
     // Unsupported — write GENERIC_EVAL placeholder
     printd(3, "AOT: handler IR unsupported expr type '%s' for serialization\n",
         node->getTypeName());
@@ -2127,7 +2150,8 @@ static bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& e
 
 } // anonymous namespace
 
-void serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompiledFuncWithSlots>& funcs) {
+void serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompiledFuncWithSlots>& funcs,
+        const AOTConstantReverseMap* const_reverse_map) {
     uint32_t sec_idx = writer.beginSection(QoreAOTSectionType::SLOT_MAPS);
 
     // Number of function entries
@@ -2175,7 +2199,7 @@ void serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
                         writer.writeU8(static_cast<uint8_t>(expr.constructor_args->size()));
                         for (size_t j = 0; j < expr.constructor_args->size(); ++j) {
                             classifyAndWriteExpr(writer, expr.constructor_args->retrieveEntry(j),
-                                func.slot_ids.locals, func.slot_ids.globals);
+                                func.slot_ids.locals, func.slot_ids.globals, const_reverse_map);
                         }
                     } else {
                         writer.writeU8(0);
@@ -2271,9 +2295,10 @@ void serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
 
                         const auto& parent_locals = func.slot_ids.locals;
                         const auto& parent_globals = func.slot_ids.globals;
-                        auto writeExpr = [&parent_locals, &parent_globals](QoreAOTBinaryWriter& w,
-                                const QoreValue& e) -> bool {
-                            return classifyAndWriteExpr(w, e, parent_locals, parent_globals);
+                        auto writeExpr = [&parent_locals, &parent_globals, const_reverse_map](
+                                QoreAOTBinaryWriter& w, const QoreValue& e) -> bool {
+                            return classifyAndWriteExpr(w, e, parent_locals, parent_globals,
+                                const_reverse_map);
                         };
 
                         serializeIRFunction(writer, *closure_ir, writeExpr);
@@ -2334,9 +2359,10 @@ void serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
                 // using the parent function's slot info for variable resolution
                 const auto& parent_locals = func.slot_ids.locals;
                 const auto& parent_globals = func.slot_ids.globals;
-                auto writeExpr = [&parent_locals, &parent_globals](QoreAOTBinaryWriter& w,
-                        const QoreValue& expr) -> bool {
-                    return classifyAndWriteExpr(w, expr, parent_locals, parent_globals);
+                auto writeExpr = [&parent_locals, &parent_globals, const_reverse_map](
+                        QoreAOTBinaryWriter& w, const QoreValue& expr) -> bool {
+                    return classifyAndWriteExpr(w, expr, parent_locals, parent_globals,
+                        const_reverse_map);
                 };
                 if (!serializeIRFunction(writer, *handler_ir, writeExpr)) {
                     // Handler IR serialization failed — mark as unavailable
@@ -2660,9 +2686,6 @@ static QoreIRInstGroup classifyInstruction(const QoreIRInstruction* inst) {
     if (dynamic_cast<const QoreIRInvokeInstruction*>(inst)) {
         return QoreIRInstGroup::Invoke;
     }
-    if (dynamic_cast<const QoreIRForeachInstruction*>(inst)) {
-        return QoreIRInstGroup::Foreach;
-    }
     if (dynamic_cast<const QoreIRIteratorCreateInstruction*>(inst)) {
         return QoreIRInstGroup::IteratorCreate;
     }
@@ -2677,12 +2700,6 @@ static QoreIRInstGroup classifyInstruction(const QoreIRInstruction* inst) {
     }
     if (dynamic_cast<const QoreIRScopeExitInstruction*>(inst)) {
         return QoreIRInstGroup::ScopeExit;
-    }
-    if (dynamic_cast<const QoreIRDebugInstruction*>(inst)) {
-        return QoreIRInstGroup::Debug;
-    }
-    if (dynamic_cast<const QoreIRAssertInstruction*>(inst)) {
-        return QoreIRInstGroup::Assert;
     }
     if (dynamic_cast<const QoreIRLandingPadInstruction*>(inst)) {
         return QoreIRInstGroup::LandingPad;
@@ -3286,9 +3303,9 @@ static bool serializeIRInstruction(QoreAOTBinaryWriter& writer, const QoreIRInst
 
         // These instruction groups hold AST statement pointers that cannot be serialized.
         // They are rare in handler/closure bodies and mark the function as non-serializable.
-        case QoreIRInstGroup::Foreach:
-        case QoreIRInstGroup::Debug:
-        case QoreIRInstGroup::Assert:
+        case static_cast<QoreIRInstGroup>(44):  // Foreach (removed)
+        case static_cast<QoreIRInstGroup>(50):  // Debug (removed)
+        case static_cast<QoreIRInstGroup>(51):  // Assert (removed)
         case QoreIRInstGroup::Context:
         case QoreIRInstGroup::Summarize:
         case QoreIRInstGroup::Unsupported:

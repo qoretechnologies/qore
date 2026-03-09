@@ -230,6 +230,7 @@ static bool requiresResult(QoreIROpcode op) {
         case QoreIROpcode::MakeHash:
         case QoreIROpcode::MakeHashConstKeys:
         case QoreIROpcode::ToString:
+        case QoreIROpcode::Sprintf:
         case QoreIROpcode::CreateEmptyList:
         case QoreIROpcode::CreateSizedList:
         case QoreIROpcode::ListSize:
@@ -365,13 +366,10 @@ static bool requiresResult(QoreIROpcode op) {
 
 static int expectedOperands(QoreIROpcode op) {
     switch (op) {
-        case QoreIROpcode::Foreach:
         case QoreIROpcode::IteratorCreate:
         case QoreIROpcode::IteratorNext:
         case QoreIROpcode::OnBlockExit:
         case QoreIROpcode::ThreadExit:
-        case QoreIROpcode::Debug:
-        case QoreIROpcode::Assert:
         case QoreIROpcode::Context:
         case QoreIROpcode::Summarize:
         case QoreIROpcode::TrimAny:
@@ -683,6 +681,8 @@ static int expectedOperands(QoreIROpcode op) {
         case QoreIROpcode::MakeHash:
         case QoreIROpcode::MakeHashConstKeys:
         case QoreIROpcode::StringConcat:
+        case QoreIROpcode::ToString:
+        case QoreIROpcode::Sprintf:
             return -1;
         case QoreIROpcode::Call:
         case QoreIROpcode::CallDirect:
@@ -1110,10 +1110,6 @@ bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
 //! StatementBlock::exec() and could access any local on the thread-local variable stack.
 static bool isDelegateToASTStatement(QoreIROpcode op) {
     switch (op) {
-        case QoreIROpcode::Foreach:       // Reference foreach delegates to AST
-        // OnBlockExit: handler body locals are now analyzed via collectLocalsFromStatementBlock()
-        // Debug: now lowered inline (expression or block form)
-        // Assert: condition is now lowered inline; Assert opcode only on failure path
         case QoreIROpcode::Context:       // Context statement delegates to AST
         case QoreIROpcode::Summarize:     // Summarize statement delegates to AST
         case QoreIROpcode::MapSelectAny:  // Delegate-to-AST functional operator
@@ -1747,14 +1743,27 @@ void QoreIRFunction::computeSlotIdsAndEmbed() {
                 }
             }
 
-            // Track LocalVar* pointers in LoadLocal/StoreLocal/UninstantiateLocal instructions
+            // Track LocalVar* pointers — assign slot IDs to all locals referenced
+            // by any instruction type (LoadLocal, StoreLocal, fused ops, etc.)
+            auto assign_slot = [&](const LocalVar* lv) {
+                if (lv && slot_map.find(lv) == slot_map.end()) {
+                    slot_map[lv] = next_local_slot++;
+                }
+            };
             if (inst->opcode == QoreIROpcode::LoadLocal ||
                 inst->opcode == QoreIROpcode::StoreLocal ||
                 inst->opcode == QoreIROpcode::UninstantiateLocal) {
-                auto* local_inst = static_cast<QoreIRLocalInstruction*>(inst.get());
-                if (local_inst->local && slot_map.find(local_inst->local) == slot_map.end()) {
-                    slot_map[local_inst->local] = next_local_slot++;
-                }
+                assign_slot(static_cast<QoreIRLocalInstruction*>(inst.get())->local);
+            } else if (inst->opcode == QoreIROpcode::AddAssignLocalInt) {
+                auto* f = static_cast<QoreIRAddAssignLocalIntInstruction*>(inst.get());
+                assign_slot(f->target);
+                assign_slot(f->source);
+            } else if (inst->opcode == QoreIROpcode::IncrementLocalInt) {
+                assign_slot(static_cast<QoreIRIncrementLocalIntInstruction*>(inst.get())->local);
+            } else if (inst->opcode == QoreIROpcode::BranchIfLtLocalInt) {
+                auto* f = static_cast<QoreIRBranchIfLtLocalIntInstruction*>(inst.get());
+                assign_slot(f->lhs);
+                assign_slot(f->rhs);
             }
         }
     }

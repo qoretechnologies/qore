@@ -42,12 +42,16 @@
 #include <unordered_set>
 #include <vector>
 
+class AbstractQoreNode;
 class QoreValue;
 class QoreProgram;
 class QoreTypeInfo;
 class qore_ns_private;
 class QoreIRFunction;
 class LocalVar;
+
+//! Reverse map from constant value node pointer to fully-qualified constant name
+typedef std::unordered_map<const AbstractQoreNode*, std::string> AOTConstantReverseMap;
 
 //! Magic number: "QORD" in little-endian (0x44524F51)
 constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
@@ -627,6 +631,7 @@ enum class AOTExprKind : uint8_t {
     CONST_FLOAT        = 30,  //!< Float constant: f64 value (8 bytes LE, IEEE 754)
     CONST_BOOL         = 31,  //!< Boolean constant: u8 value (0 or 1)
     CONST_NOTHING      = 32,  //!< Nothing constant: no data
+    LIST_LITERAL       = 33,  //!< List literal: count(u8) + [value(AOTExprKind)] * N
     EXPR_TREE          = 0xFE, //!< Recursive expression tree: binary blob (inline bytes)
     GENERIC_EVAL       = 0xFF //!< Unsupported expression — function needs source fallback
 };
@@ -877,8 +882,10 @@ struct AOTCompiledInitFunc {
 //! Serialize slot maps for compiled functions into the SLOT_MAPS binary section
 /** @param writer the binary writer to write to
     @param funcs vector of compiled function descriptors with slot identities
+    @param const_reverse_map optional reverse map for constant node → FQN resolution
 */
-void serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompiledFuncWithSlots>& funcs);
+void serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompiledFuncWithSlots>& funcs,
+    const AOTConstantReverseMap* const_reverse_map = nullptr);
 
 //! Serialize per-function source fallback into the FUNC_SOURCES binary section
 /** Functions with unsupported expression types need the full source text
@@ -1143,14 +1150,14 @@ enum class QoreIRInstGroup : uint8_t {
     FusedIncLocal = 41,     //!< QoreIRIncrementLocalIntInstruction
     FusedBrLtLocal = 42,    //!< QoreIRBranchIfLtLocalIntInstruction
     MapHashKey = 43,        //!< QoreIRMapHashKeyInstruction
-    Foreach = 44,           //!< QoreIRForeachInstruction
+    // Foreach = 44,        // REMOVED: fully lowered to iterators
     OnBlockExit = 45,       //!< QoreIROnBlockExitInstruction
     IteratorCreate = 46,    //!< QoreIRIteratorCreateInstruction
     IteratorNext = 47,      //!< QoreIRIteratorNextInstruction
     SwitchRegexMatch = 48,  //!< QoreIRSwitchRegexMatchInstruction
     RefForeachInit = 49,    //!< QoreIRRefForeachInitInstruction
-    Debug = 50,             //!< QoreIRDebugInstruction
-    Assert = 51,            //!< QoreIRAssertInstruction
+    // Debug = 50,          // REMOVED: fully lowered inline
+    // Assert = 51,         // REMOVED: fully lowered inline
     MakeHashConstKeys = 52, //!< QoreIRMakeHashConstKeysInstruction
     SwitchCaseMatch = 53,   //!< QoreIRSwitchCaseMatchInstruction
     Context = 54,           //!< QoreIRContextInstruction

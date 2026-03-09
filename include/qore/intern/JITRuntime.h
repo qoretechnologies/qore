@@ -306,9 +306,6 @@ struct QoreAOTContext;
 //! Register an on_block_exit handler via AOT context slot
 void qore_rt_push_on_block_exit_aot(QoreAOTContext* ctx, int32_t idx, int type);
 
-//! Execute a reference foreach statement via AOT context stmt slot
-uint64_t qore_rt_exec_foreach_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
-
 // --- Guard type helper ---
 
 //! Check if value matches the given type; returns 1 if match, 0 otherwise
@@ -456,9 +453,13 @@ uint64_t qore_rt_refself(uint64_t bits);
 //! Get runtime class pointer from an object value; returns 0 if not an object.
 uint64_t qore_rt_get_object_class(uint64_t obj_bits);
 
-//! Fast closure/callref call — takes the pre-evaluated call reference value and
-//! pre-evaluated args (both NaN-boxed). Calls execValue() directly on the call reference.
-//! Bypasses AST node copy and dynamic_cast chain.
+//! Fast closure/callref call with 0 arguments — bypasses QoreListNode + dynamic_cast
+uint64_t qore_rt_call_closure_0(uint64_t ref_bits, ExceptionSink* xsink);
+
+//! Fast closure/callref call with 1 argument — bypasses QoreListNode + dynamic_cast
+uint64_t qore_rt_call_closure_1(uint64_t ref_bits, uint64_t arg0_bits, ExceptionSink* xsink);
+
+//! Fast closure/callref call with N arguments — bypasses QoreListNode + dynamic_cast
 uint64_t qore_rt_call_closure_fast(uint64_t ref_bits, uint64_t* args, int nargs, ExceptionSink* xsink);
 
 // --- AOT context-based helpers (Phase 7b) ---

@@ -157,6 +157,77 @@
 // Defined in Function.cpp - collects all local variables from a StatementBlock and nested blocks
 extern void collectAllStatementLocals(const StatementBlock* block, std::vector<LocalVar*>& locals);
 
+//! Check if an AOT function is eligible for self-recursive Approach B fast entry.
+//! Criteria: has self-recursive calls, all params IR-only, no closures/references/varargs.
+static bool isAOTSelfRecursiveEligible(const QoreIRFunction* ir_func,
+        const UserVariantBase* uvb) {
+    // Check for self-recursive CallDirect instructions
+    bool has_self_recursive = false;
+    for (const auto& block : ir_func->blocks) {
+        for (const auto& inst : block->instructions) {
+            if (inst->opcode == QoreIROpcode::CallDirect) {
+                auto* ci = static_cast<const QoreIRCallDirectInstruction*>(inst.get());
+                if (ci->is_self_recursive) {
+                    has_self_recursive = true;
+                    break;
+                }
+            }
+            // Check Invoke-wrapped CallDirect via function name match
+            if (inst->opcode == QoreIROpcode::Invoke) {
+                auto* inv = static_cast<const QoreIRInvokeInstruction*>(inst.get());
+                if (inv->invoke_opcode == QoreIROpcode::CallDirect) {
+                    auto* call = dynamic_cast<const FunctionCallNode*>(
+                            inv->expr.getInternalNode());
+                    if (call && call->getFunction()
+                            && std::string(call->getFunction()->getName())
+                                == ir_func->name) {
+                        has_self_recursive = true;
+                        break;
+                    }
+                }
+            }
+        }
+        if (has_self_recursive) {
+            break;
+        }
+    }
+    if (!has_self_recursive) {
+        return false;
+    }
+
+    // All body locals must be IR-only (or empty)
+    if (!ir_func->all_body_locals.empty() && !ir_func->areAllBodyLocalsIROnly()) {
+        return false;
+    }
+
+    const UserSignature* sig = uvb->getUserSignature();
+
+    // No varargs referenced in IR
+    if (sig->argvid) {
+        const void* argv_key = reinterpret_cast<const void*>(sig->argvid);
+        if (ir_func->ir_only_locals.count(argv_key)) {
+            return false;
+        }
+    }
+
+    // All params must be IR-only, no closures, no references
+    unsigned num_params = sig->numParams();
+    for (unsigned i = 0; i < num_params; ++i) {
+        const LocalVar* lv = sig->lv[i];
+        const void* key = reinterpret_cast<const void*>(lv);
+        if (!ir_func->ir_only_locals.count(key)) {
+            return false;
+        }
+        if (lv->closureUse()) {
+            return false;
+        }
+        if (QoreTypeInfo::isReference(lv->getTypeInfo())) {
+            return false;
+        }
+    }
+    return true;
+}
+
 // Forward declaration
 static std::vector<std::string> extractAllDependencies(const char* source, int source_len,
     std::vector<std::string>* reexport_deps = nullptr,
@@ -506,8 +577,7 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
     return 0;
 }
 
-// Reverse map from constant value node pointer to fully-qualified constant name
-typedef std::unordered_map<const AbstractQoreNode*, std::string> AOTConstantReverseMap;
+// AOTConstantReverseMap typedef is in QoreAOTBinary.h
 
 // Forward declarations for slot identity extraction (defined after buildAOTContext)
 static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
@@ -725,10 +795,37 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 AOTSlotMap slots;
                 buildAOTSlotMap(*ir_func, slots);
 
+                // Check for self-recursive Approach B eligibility
+                std::string fast_entry_name;
+                bool self_rec_eligible = isAOTSelfRecursiveEligible(ir_func, uvb);
+                if (self_rec_eligible) {
+                    fast_entry_name = ir_func->name + "_fast";
+                    const UserSignature* sig = uvb->getUserSignature();
+                    unsigned num_params = sig->numParams();
+
+                    // Forward-declare fast entry: (i64 p1, ..., ptr ctx, ptr xsink) -> i64
+                    auto* i64_ty = llvm::Type::getInt64Ty(ctx);
+                    auto* ptr_ty = llvm::PointerType::get(ctx, 0);
+                    std::vector<llvm::Type*> fast_params(num_params, i64_ty);
+                    fast_params.push_back(ptr_ty);  // ctx
+                    fast_params.push_back(ptr_ty);  // xsink
+                    auto* fast_fn_type = llvm::FunctionType::get(i64_ty, fast_params, false);
+                    llvm::Function* fast_fn = llvm::Function::Create(fast_fn_type,
+                            llvm::Function::InternalLinkage, fast_entry_name, module);
+                    fast_fn->addFnAttr(llvm::Attribute::InlineHint);
+                    if (getenv("QORE_AOT_DEBUG")) {
+                        fprintf(stderr, "AOT: self-recursive fast entry '%s' (%u params)\n",
+                            fast_entry_name.c_str(), num_params);
+                    }
+                }
+
                 // Lower to LLVM with AOT mode
                 QoreIRToLLVM lowerer(ctx);
                 lowerer.setAOTMode(&slots);
                 lowerer.setSharedDebugInfo(&di_builder, di_cu);
+                if (!fast_entry_name.empty()) {
+                    lowerer.setAOTSelfRecursiveFastEntry(fast_entry_name);
+                }
                 std::string llvm_error;
                 // Debug: dump IR before LLVM lowering if requested
                 if (getenv("QORE_AOT_DUMP_IR")) {
@@ -752,7 +849,42 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         "function into smaller functions\n",
                         variant_key.c_str(), total_ir_insts);
                 }
-                if (lowerer.lowerFunction(*ir_func, module, llvm_error)) {
+                bool std_entry_ok = lowerer.lowerFunction(*ir_func, module, llvm_error);
+
+                // Compile fast entry for self-recursive Approach B
+                if (std_entry_ok && self_rec_eligible) {
+                    const UserSignature* sig = uvb->getUserSignature();
+                    unsigned num_params = sig->numParams();
+                    llvm::Function* fast_fn = module.getFunction(fast_entry_name);
+                    assert(fast_fn);
+
+                    // Build param mapping: LocalVar* → LLVM function arg value
+                    std::unordered_map<const void*, llvm::Value*> param_map;
+                    for (unsigned i = 0; i < num_params; ++i) {
+                        const void* key = reinterpret_cast<const void*>(sig->lv[i]);
+                        param_map[key] = fast_fn->getArg(i);
+                        fast_fn->getArg(i)->setName(
+                                std::string("arg") + std::to_string(i));
+                    }
+
+                    QoreIRToLLVM fast_lowerer(ctx);
+                    fast_lowerer.setAOTMode(&slots);
+                    fast_lowerer.setSharedDebugInfo(&di_builder, di_cu);
+                    fast_lowerer.setFastEntryMode(fast_entry_name, &param_map);
+                    fast_lowerer.setAOTSelfRecursiveFastEntry(fast_entry_name);
+                    std::string fast_error;
+                    if (!fast_lowerer.lowerFunction(*ir_func, module, fast_error)) {
+                        // Fast entry failure is non-fatal — standard entry still works
+                        printd(2, "AOT: fast entry '%s' lowering failed: %s\n",
+                            fast_entry_name.c_str(), fast_error.c_str());
+                        if (getenv("QORE_AOT_DEBUG")) {
+                            fprintf(stderr, "AOT: fast entry '%s' lowering failed: %s\n",
+                                fast_entry_name.c_str(), fast_error.c_str());
+                        }
+                    }
+                }
+
+                if (std_entry_ok) {
                     AOTCompiledFunc cf;
                     cf.name = variant_key;  // Use variant key instead of plain name
                     cf.llvm_symbol = ir_func->name;
@@ -1753,7 +1885,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
             fws.slot_ids = cif.slot_ids;
             func_slots.push_back(std::move(fws));
         }
-        serializeSlotMaps(writer, func_slots);
+        serializeSlotMaps(writer, func_slots, &const_reverse_map);
 
         // Serialize INIT_FUNCS section: maps init function names to their targets
         if (!compiled_init_funcs.empty()) {
@@ -2847,7 +2979,7 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
             fws.slot_ids = cif.slot_ids;
             func_slots.push_back(std::move(fws));
         }
-        serializeSlotMaps(writer, func_slots);
+        serializeSlotMaps(writer, func_slots, &const_reverse_map);
         if (!compiled_init_funcs.empty()) {
             serializeInitFuncs(writer, compiled_init_funcs);
         }
@@ -3218,7 +3350,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
                 fws.slot_ids = cif.slot_ids;
                 func_slots.push_back(std::move(fws));
             }
-            serializeSlotMaps(writer, func_slots);
+            serializeSlotMaps(writer, func_slots, &const_reverse_map);
             if (!compiled_init_funcs.empty()) {
                 serializeInitFuncs(writer, compiled_init_funcs);
             }
@@ -3609,11 +3741,6 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                     slots.getStmtSlot(reinterpret_cast<const void*>(code));
                     break;
                 }
-                case QoreIROpcode::Foreach: {
-                    auto* fi = static_cast<QoreIRForeachInstruction*>(inst.get());
-                    slots.getStmtSlot(reinterpret_cast<const void*>(fi->stmt));
-                    break;
-                }
                 case QoreIROpcode::SwitchRegexMatch: {
                     auto* ri = static_cast<QoreIRSwitchRegexMatchInstruction*>(inst.get());
                     if (ri->regex_case) {
@@ -3991,14 +4118,6 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                     auto* obei = static_cast<QoreIROnBlockExitInstruction*>(inst.get());
                     StatementBlock* code = obei->stmt->getCode();
                     const void* key = reinterpret_cast<const void*>(code);
-                    if (seen_stmts.insert(key).second) {
-                        ++stmt_count;
-                    }
-                    break;
-                }
-                case QoreIROpcode::Foreach: {
-                    auto* fi = static_cast<QoreIRForeachInstruction*>(inst.get());
-                    const void* key = reinterpret_cast<const void*>(fi->stmt);
                     if (seen_stmts.insert(key).second) {
                         ++stmt_count;
                     }
@@ -4462,14 +4581,6 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                     const void* key = reinterpret_cast<const void*>(code);
                     if (seen_stmts.insert(key).second) {
                         ctx->stmts[stmt_idx++] = code;
-                    }
-                    break;
-                }
-                case QoreIROpcode::Foreach: {
-                    auto* fi = static_cast<QoreIRForeachInstruction*>(inst.get());
-                    const void* key = reinterpret_cast<const void*>(fi->stmt);
-                    if (seen_stmts.insert(key).second) {
-                        ctx->stmts[stmt_idx++] = fi->stmt;
                     }
                     break;
                 }

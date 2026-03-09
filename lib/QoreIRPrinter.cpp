@@ -181,13 +181,10 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::MapSelectList: return "map.select.list";
         case QoreIROpcode::HashMap: return "hash.map";
         case QoreIROpcode::HashMapSelect: return "hash.map.select";
-        case QoreIROpcode::Foreach: return "foreach";
         case QoreIROpcode::IteratorCreate: return "iterator.create";
         case QoreIROpcode::IteratorNext: return "iterator.next";
         case QoreIROpcode::OnBlockExit: return "on.block.exit";
         case QoreIROpcode::ThreadExit: return "thread.exit";
-        case QoreIROpcode::Debug: return "debug";
-        case QoreIROpcode::Assert: return "assert";
         case QoreIROpcode::Context: return "context";
         case QoreIROpcode::Summarize: return "summarize";
         case QoreIROpcode::EqInt: return "eq.int";
@@ -389,6 +386,7 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::IsCollectionType: return "is.collection.type";
         case QoreIROpcode::MakeHashConstKeys: return "make.hash.const.keys";
         case QoreIROpcode::ToString: return "to.string";
+        case QoreIROpcode::Sprintf: return "sprintf";
     }
     return "unknown";
 }

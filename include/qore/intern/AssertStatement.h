@@ -51,6 +51,9 @@ public:
     //! Returns the condition expression for IR lowering
     DLLLOCAL QoreValue getCondition() const { return condition; }
 
+    //! Returns the message expression (or NOTHING) for IR lowering
+    DLLLOCAL QoreValue getMessage() const { return message; }
+
 private:
     QoreValue condition{};  //!< The condition to assert
     QoreValue message{};    //!< Optional message/format args on failure (can be list for sprintf)

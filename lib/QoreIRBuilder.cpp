@@ -953,12 +953,6 @@ QoreIRGuardInstruction* QoreIRBuilder::createGuardNotNothing(QoreIRValue value, 
     return inst;
 }
 
-QoreIRForeachInstruction* QoreIRBuilder::createForeach(const ForEachStatement* stmt, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRForeachInstruction>(stmt);
-    inst->loc = loc;
-    return inst;
-}
-
 QoreIRIteratorCreateInstruction* QoreIRBuilder::createIteratorCreate(QoreIRValue iterable,
         FunctionalOperator* iterator_func, const QoreProgramLocation* loc) {
     auto inst = block->appendInstruction<QoreIRIteratorCreateInstruction>(iterable, iterator_func);
@@ -1042,18 +1036,6 @@ QoreIRScopeEnterInstruction* QoreIRBuilder::createScopeEnter(uint32_t scope_id, 
 QoreIRScopeExitInstruction* QoreIRBuilder::createScopeExit(uint32_t scope_id, bool is_error,
         const QoreProgramLocation* loc) {
     auto inst = block->appendInstruction<QoreIRScopeExitInstruction>(scope_id, is_error);
-    inst->loc = loc;
-    return inst;
-}
-
-QoreIRDebugInstruction* QoreIRBuilder::createDebug(const DebugStatement* stmt, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRDebugInstruction>(stmt);
-    inst->loc = loc;
-    return inst;
-}
-
-QoreIRAssertInstruction* QoreIRBuilder::createAssert(const AssertStatement* stmt, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRAssertInstruction>(stmt);
     inst->loc = loc;
     return inst;
 }

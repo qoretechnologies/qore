@@ -120,7 +120,6 @@
 #include <qore/intern/IfStatement.h>
 #include <qore/intern/DoWhileStatement.h>
 #include <qore/intern/WhileStatement.h>
-#include <qore/intern/AssertStatement.h>
 #include <qore/intern/ContextStatement.h>
 #include <qore/intern/SummarizeStatement.h>
 #include <qore/intern/ForStatement.h>
@@ -128,7 +127,6 @@
 #include <qore/intern/ReturnStatement.h>
 #include <qore/intern/BreakStatement.h>
 #include <qore/intern/ContinueStatement.h>
-#include <qore/intern/ForEachStatement.h>
 #include <qore/intern/SwitchStatement.h>
 #include <qore/intern/CaseNodeWithOperator.h>
 #include <qore/intern/CaseNodeRegex.h>
@@ -137,7 +135,6 @@
 #include <qore/intern/RethrowStatement.h>
 #include <qore/intern/ThreadExitStatement.h>
 #include <qore/intern/OnBlockExitStatement.h>
-#include <qore/intern/DebugStatement.h>
 #include <qore/QoreHashNode.h>
 #include <qore/QoreClass.h>
 #include <qore/QoreStringNode.h>
@@ -3120,62 +3117,6 @@ static bool runIRExecutorStatementSmoke() {
         }
         const QoreProgramLocation* stmt_loc = get_runtime_location();
         {
-            QoreIRFunction func("ir_exec_debug_stmt");
-            QoreIRBuilder builder(&func);
-            auto* entry = func.createBlock("entry");
-            builder.setBlock(entry);
-            DebugStatement* debug_stmt = new DebugStatement(1, 1,
-                QoreValue(new QorePlusOperatorNode(nullptr, QoreValue(2), QoreValue(3))));
-            builder.createDebug(debug_stmt);
-            builder.createReturnNothing();
-
-            QoreValue return_value;
-            if (!QoreIRInterpreter::execute(func, return_value, &xsink, nullptr) || xsink) {
-                std::cerr << "IR executor statement checks failed (debug execute)\n";
-                delete debug_stmt;
-                return false;
-            }
-            if (!return_value.isNothing()) {
-                std::cerr << "IR executor statement checks failed (debug return)\n";
-                delete debug_stmt;
-                return false;
-            }
-            delete debug_stmt;
-        }
-        {
-            LocalVar foreach_var("foreach_var_exec", bigIntTypeInfo);
-            LocalVarInstantiator foreach_guard(foreach_var, program->getParseOptions(), &xsink);
-            QoreListNode* foreach_list = new QoreListNode(bigIntTypeInfo);
-            foreach_list->push(QoreValue(1), nullptr);
-            StatementBlock* body = new StatementBlock(1, 1);
-            body->addStatement(new ExpressionStatement(stmt_loc,
-                QoreValue(new QorePlusOperatorNode(nullptr, QoreValue(9), QoreValue(10)))));
-            ForEachStatement* foreach_stmt = new ForEachStatement(1, 1,
-                QoreValue(new VarRefNode(stmt_loc, strdup("foreach_var_exec"), &foreach_var, false)),
-                QoreValue(foreach_list),
-                body);
-
-            QoreIRFunction func("ir_exec_foreach_stmt");
-            QoreIRBuilder builder(&func);
-            auto* entry = func.createBlock("entry");
-            builder.setBlock(entry);
-            builder.createForeach(foreach_stmt);
-            builder.createReturnNothing();
-
-            QoreValue return_value;
-            if (!QoreIRInterpreter::execute(func, return_value, &xsink, nullptr) || xsink) {
-                std::cerr << "IR executor statement checks failed (foreach execute)\n";
-                delete foreach_stmt;
-                return false;
-            }
-            if (!return_value.isNothing()) {
-                std::cerr << "IR executor statement checks failed (foreach return)\n";
-                delete foreach_stmt;
-                return false;
-            }
-            delete foreach_stmt;
-        }
-        {
             StatementBlockTestHelper root(1, 1);
             StatementBlock* exit_body = new StatementBlock(1, 1);
             exit_body->addStatement(new ExpressionStatement(stmt_loc,
@@ -3836,25 +3777,6 @@ int main() {
             }
         }
         {
-            LocalVar foreach_var("foreach_var", bigIntTypeInfo);
-            QoreListNode* foreach_list = new QoreListNode(bigIntTypeInfo);
-            foreach_list->push(QoreValue(1), nullptr);
-            StatementBlock* body = new StatementBlock(1, 1);
-            body->addStatement(new ExpressionStatement(stmt_loc,
-                QoreValue(new QorePlusOperatorNode(nullptr, QoreValue(9), QoreValue(10)))));
-            StatementBlock* root = new StatementBlock(1, 1);
-            root->addStatement(new ForEachStatement(1, 1,
-                QoreValue(new VarRefNode(stmt_loc, strdup("foreach_var"), &foreach_var, false)),
-                QoreValue(foreach_list),
-                body));
-            bool ok = lowerStatementBlockAndExpectOpcodes("ir_stmt_foreach", root,
-                {QoreIROpcode::Foreach});
-            delete root;
-            if (!ok) {
-                return 1;
-            }
-        }
-        {
             StatementBlock* exit_body = new StatementBlock(1, 1);
             exit_body->addStatement(new ExpressionStatement(stmt_loc,
                 QoreValue(new QorePlusOperatorNode(nullptr, QoreValue(11), QoreValue(12)))));
@@ -3862,40 +3784,6 @@ int main() {
             root->addStatement(new OnBlockExitStatement(1, 1, exit_body, OBE_Unconditional));
             bool ok = lowerStatementBlockAndExpectOpcodes("ir_stmt_on_block_exit", root,
                 {QoreIROpcode::OnBlockExit});
-            delete root;
-            if (!ok) {
-                return 1;
-            }
-        }
-        {
-            StatementBlock* root = new StatementBlock(1, 1);
-            root->addStatement(new DebugStatement(1, 1,
-                QoreValue(new QorePlusOperatorNode(nullptr, QoreValue(13), QoreValue(14)))));
-            bool ok = lowerStatementBlockAndExpectOpcodes("ir_stmt_debug", root,
-                {QoreIROpcode::Debug});
-            delete root;
-            if (!ok) {
-                return 1;
-            }
-        }
-        {
-            StatementBlock* debug_body = new StatementBlock(1, 1);
-            debug_body->addStatement(new ExpressionStatement(stmt_loc,
-                QoreValue(new QorePlusOperatorNode(nullptr, QoreValue(15), QoreValue(16)))));
-            StatementBlock* root = new StatementBlock(1, 1);
-            root->addStatement(new DebugStatement(1, 1, debug_body));
-            bool ok = lowerStatementBlockAndExpectOpcodes("ir_stmt_debug_block", root,
-                {QoreIROpcode::Debug});
-            delete root;
-            if (!ok) {
-                return 1;
-            }
-        }
-        {
-            StatementBlock* root = new StatementBlock(1, 1);
-            root->addStatement(new AssertStatement(1, 1, QoreValue(true)));
-            bool ok = lowerStatementBlockAndExpectOpcodes("ir_stmt_assert", root,
-                {QoreIROpcode::Assert});
             delete root;
             if (!ok) {
                 return 1;
@@ -3923,17 +3811,6 @@ int main() {
                 {QoreIROpcode::Summarize});
             delete root;
             if (!ok) {
-                return 1;
-            }
-        }
-        {
-            ExceptionSink exec_xsink;
-            QoreValue return_value;
-            DebugStatement* debug_stmt = new DebugStatement(1, 1, QoreValue(1));
-            int rc = QoreIRInterpreter::execStatement(QoreIROpcode::Debug, debug_stmt, return_value, &exec_xsink);
-            delete debug_stmt;
-            if (rc != 0 || exec_xsink) {
-                std::cerr << "IR debug statement execution failed\n";
                 return 1;
             }
         }

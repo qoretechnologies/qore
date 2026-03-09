@@ -1111,45 +1111,67 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         return true;
     }
     if (auto* assert_stmt = dynamic_cast<const AssertStatement*>(stmt)) {
-        // Lower the condition expression inline so locals referenced in the condition
-        // can be classified as IR-only (not delegate-to-AST).  The Assert opcode is
-        // only emitted on the failure path where it re-evaluates via AST and raises
-        // ASSERTION-ERROR.
+        // Fully lower assert: inline the condition check and emit a throw on the
+        // failure path.  No AST delegation — the entire assert is compiled to IR.
         QoreValue cond = assert_stmt->getCondition();
-        if (cond) {
-            QoreIRValue cond_val = lowerConditionValue(cond, error);
-            if (!cond_val.isValid()) {
-                return false;
-            }
-            QoreIRBasicBlock* fail_block = createBlock("assert.fail");
-            QoreIRBasicBlock* merge_block = createBlock("assert.merge");
-            if (!fail_block || !merge_block) {
-                error = "IR builder failed to create blocks for assert";
-                return false;
-            }
-            builder.createBranchIf(cond_val, merge_block, fail_block);
-
-            // Failure path: delegate to AST for message evaluation and exception
-            builder.setBlock(fail_block);
-            auto* inst = builder.createAssert(assert_stmt, stmt->loc);
-            if (!exception_stack.empty()) {
-                inst->exception_target = exception_stack.back();
-            }
-            // Assert always raises an exception on this path, but the IR still needs
-            // a terminator.  The LLVM lowering's emitExceptionCheck handles the jump
-            // to the exception handler.  Add a branch to merge for IR well-formedness.
-            if (!blockHasTerminator(builder.getBlock())) {
-                builder.createBranch(merge_block);
-            }
-
-            builder.setBlock(merge_block);
-        } else {
-            // No condition — fall back to delegate-to-AST
-            auto* inst = builder.createAssert(assert_stmt, stmt->loc);
-            if (!exception_stack.empty()) {
-                inst->exception_target = exception_stack.back();
-            }
+        if (!cond) {
+            // No condition — unconditional assert failure (rare, but handle it)
+            QoreIRValue err = builder.createConstString("ASSERTION-ERROR", stmt->loc)->result;
+            QoreIRValue msg = builder.createConstString("assertion failed", stmt->loc)->result;
+            QoreIRValue throw_list = builder.createMakeList({err, msg}, stmt->loc)->result;
+            QoreIRBasicBlock* handler = exception_stack.empty() ? nullptr : exception_stack.back();
+            builder.createThrow(throw_list, handler, stmt->loc);
+            return true;
         }
+        QoreIRValue cond_val = lowerConditionValue(cond, error);
+        if (!cond_val.isValid()) {
+            return false;
+        }
+        QoreIRBasicBlock* fail_block = createBlock("assert.fail");
+        QoreIRBasicBlock* merge_block = createBlock("assert.merge");
+        if (!fail_block || !merge_block) {
+            error = "IR builder failed to create blocks for assert";
+            return false;
+        }
+        builder.createBranchIf(cond_val, merge_block, fail_block);
+
+        // Failure path: construct and throw ASSERTION-ERROR
+        builder.setBlock(fail_block);
+        QoreIRValue err = builder.createConstString("ASSERTION-ERROR", stmt->loc)->result;
+        QoreValue message = assert_stmt->getMessage();
+        QoreIRValue msg;
+        if (message && !message.isNothing()) {
+            if (message.getType() == NT_PARSE_LIST || message.getType() == NT_LIST) {
+                // sprintf format case: @assert(cond, "fmt %d", x)
+                // May be NT_PARSE_LIST (runtime args) or NT_LIST (constant-folded at parse time)
+                QoreIRValue list_val = lowerExpression(message, error);
+                if (!list_val.isValid()) {
+                    return false;
+                }
+                msg = builder.createExprOp(QoreIROpcode::Sprintf, message, {list_val},
+                    stmt->loc)->result;
+            } else {
+                // Single message expression
+                msg = lowerExpression(message, error);
+                if (!msg.isValid()) {
+                    return false;
+                }
+            }
+        } else {
+            msg = builder.createConstString("assertion failed", stmt->loc)->result;
+        }
+        QoreIRValue throw_list = builder.createMakeList({err, msg}, stmt->loc)->result;
+        // Emit CatchCleanup for all active catch scopes before throwing
+        for (int i = 0; i < catch_cleanup_depth; ++i) {
+            builder.createCatchCleanup(stmt->loc);
+        }
+        QoreIRBasicBlock* handler = exception_stack.empty() ? nullptr : exception_stack.back();
+        builder.createThrow(throw_list, handler, stmt->loc);
+        if (!blockHasTerminator(builder.getBlock())) {
+            builder.createBranch(merge_block);
+        }
+
+        builder.setBlock(merge_block);
         return true;
     }
     if (auto* summarize_stmt = dynamic_cast<const SummarizeStatement*>(stmt)) {
@@ -2748,21 +2770,11 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
         return builder.createNewObject(scoped_obj->oc, scoped_obj->getVariant(),
                 scoped_obj->getArgs(), expr, scoped_obj->loc)->result;
     }
-    // QoreObject values (e.g., Type constants like AutoListOrNothingType)
-    // These are already evaluated to objects at parse time, delegate to AST evaluation
-    if (dynamic_cast<const QoreObject*>(node)) {
-        std::vector<QoreIRValue> operands;
-        return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, nullptr, error);
-    }
-    // QoreNumberNode arbitrary-precision number values
-    if (dynamic_cast<const QoreNumberNode*>(node)) {
-        std::vector<QoreIRValue> operands;
-        return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, nullptr, error);
-    }
-    // BinaryNode literals (e.g., <abcd>)
-    if (dynamic_cast<const BinaryNode*>(node)) {
-        std::vector<QoreIRValue> operands;
-        return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, nullptr, error);
+    // Parse-time constant values: use LoadConstant (returns expr.refSelf() at runtime)
+    if (dynamic_cast<const QoreObject*>(node)
+            || dynamic_cast<const QoreNumberNode*>(node)
+            || dynamic_cast<const BinaryNode*>(node)) {
+        return builder.createLoadConstant(nullptr, expr, nullptr)->result;
     }
     // Object method references (e.g., \methodName())
     if (auto* mref = dynamic_cast<const AbstractParseObjectMethodReferenceNode*>(node)) {
@@ -2780,10 +2792,9 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
         }
         return builder.createCreateMethodRef(expr, mref->loc)->result;
     }
-    // Non-value hash/list nodes (e.g., const hashes containing runtime objects)
+    // Pre-evaluated hash/list constants (e.g., const hashes/lists containing runtime objects)
     if (dynamic_cast<const QoreHashNode*>(node) || dynamic_cast<const QoreListNode*>(node)) {
-        std::vector<QoreIRValue> operands;
-        return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, nullptr, error);
+        return builder.createLoadConstant(nullptr, expr, nullptr)->result;
     }
     error = std::string("unsupported expression node for IR lowering: ")
         + (node ? node->getTypeName() : expr.getTypeName());
