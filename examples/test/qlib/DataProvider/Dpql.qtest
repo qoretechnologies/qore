@@ -1285,7 +1285,7 @@ public class DpqlTest inherits QUnit::Test {
             assertTrue(inlist("encode-url", fn_names), "typing 'e' shows encode-url");
         }
 
-        # Infix operators with render_template starting with $arg are NOT included as functions
+        # All identifier-style operators are offered as function completions (including infix)
         {
             hash<string, hash<DataProviderExpressionInfo>> expmap = DataProviderGenericExpressions + {
                 "between": <DataProviderExpressionInfo>{
@@ -1303,8 +1303,39 @@ public class DpqlTest inherits QUnit::Test {
             list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('b', 1, fields, expmap);
             list<hash<DpqlCompletionItem>> fn_items = select items, $1.kind == "function";
             list<string> fn_names = map $1.label, fn_items;
-            assertFalse(inlist("between", fn_names),
-                "infix operator 'between' not offered as function completion");
+            assertTrue(inlist("between", fn_names),
+                "identifier-style operator 'between' offered as function completion");
+        }
+
+        # DET_Function items are offered as function completions
+        {
+            hash<string, hash<DataProviderExpressionInfo>> expmap = DataProviderGenericExpressions + {
+                "encode_url": <DataProviderExpressionInfo>{
+                    "type": DET_Function,
+                    "name": "encode_url",
+                    "display_name": "Encode URL",
+                    "short_desc": "URL-encodes a string",
+                    "desc": "URL-encodes a string",
+                    "symbol": "encode_url()",
+                    "return_type": AbstractDataProviderType::get(StringType),
+                },
+            };
+
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('e', 1, fields, expmap);
+            list<hash<DpqlCompletionItem>> fn_items = select items, $1.kind == "function";
+            list<string> fn_names = map $1.label, fn_items;
+            assertTrue(inlist("encode_url", fn_names),
+                "DET_Function 'encode_url' offered as function completion");
+        }
+
+        # Symbolic operators are NOT offered as function completions
+        {
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('', 0, fields);
+            list<hash<DpqlCompletionItem>> fn_items = select items, $1.kind == "function";
+            list<string> fn_names = map $1.label, fn_items;
+            assertFalse(inlist("==", fn_names), "symbolic operator == not offered as function");
+            assertFalse(inlist("&&", fn_names), "symbolic operator && not offered as function");
+            assertFalse(inlist("!", fn_names), "symbolic operator ! not offered as function");
         }
     }
 

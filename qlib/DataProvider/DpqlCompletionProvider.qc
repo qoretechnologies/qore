@@ -593,11 +593,14 @@ public class DpqlCompletionProvider {
         return items;
     }
 
-    #! Gets function completions
-    /** Includes both \c DET_Function expressions and \c DET_Operator expressions that use
-        function-call syntax (identifier-style names like \c ends-with, \c contains).
-        Infix operators with symbolic names (\c ==, \c &&) are excluded as they are
-        handled separately by \c getOperatorCompletions().
+    #! Gets function completions for DPQL
+    /** Includes all expressions that use function-call syntax in DPQL:
+        - All \c DET_Function expressions (e.g. \c substr, \c encode_url, \c encrypt)
+        - \c DET_Operator expressions with identifier-style names (e.g. \c ends-with, \c contains,
+          \c between) — these are operators invoked as \c name(args...) in DPQL text
+
+        Excludes operators with symbolic names (\c ==, \c &&, \c !) which are handled
+        separately by \c getOperatorCompletions().
     */
     private list<hash<DpqlCompletionItem>> getFunctionCompletions(string prefix) {
         list<hash<DpqlCompletionItem>> items = ();
@@ -610,13 +613,9 @@ public class DpqlCompletionProvider {
 
         foreach string name in (keys expressions) {
             hash<DataProviderExpressionInfo> info = expressions{name};
-            # Include functions and operators with function-call syntax
-            # Operators with infix/prefix render templates (starting with $arg or !)
-            # are handled separately by getOperatorCompletions()
+            # Include all functions and operators with identifier-style names
             if (info.type == DET_Function
-                    || (info.type == DET_Operator && name =~ /^[a-zA-Z]/
-                        && (!info.render_template
-                            || !info.render_template.regex("^(\\$arg|!)")))) {
+                    || (info.type == DET_Operator && name =~ /^[a-zA-Z]/)) {
                 if (!prefix || index(name.lwr(), lwr_prefix) == 0) {
                     items += <DpqlCompletionItem>{
                         "label": name,
