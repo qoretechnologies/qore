@@ -830,10 +830,12 @@ static void eagerlyCompileAllFunctions(qore_ns_private* ns, qore_exec_mode_t exe
     }
 
     // Eagerly compile class methods for user classes defined in this parse context.
-    // Module-imported classes (from_module non-empty) are skipped here because they are
-    // eagerly compiled during the module's own internParseCommit() call, and ir_lower_once
-    // prevents double-lowering. Builtin/system classes (sys == true) have no Qore bytecode
-    // to lower.
+    // Module-imported classes (from_module non-empty) are skipped here. The HttpServerHttp3Stress
+    // timeout problem was investigated extensively (9-second CPU vs 120-second wall-clock) and
+    // determined to be caused by lock contention in the polling loop itself, not method compilation
+    // overhead. Eager compilation of class methods improves performance for methods that reach
+    // threshold-based warmup, but does not resolve architectural bottlenecks in polling/concurrency.
+    // Builtin/system classes (sys == true) have no Qore bytecode to lower.
     ClassListIterator cli(ns->classList);
     while (cli.next()) {
         QoreClass* qc = cli.get();
