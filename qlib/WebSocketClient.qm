@@ -645,10 +645,17 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
         #! Buffer for HTTP/3 WebSocket frames spanning multiple QUIC stream data
         *binary h3_frame_buf;
 
-        #! True if async I/O mode is enabled
-        /** @since WebSocketClient 2.9
+        #! True if async I/O mode is enabled for the current connection
+        /** May be temporarily set to False for HTTP/2/HTTP/3 connections.
+            Reset from \c async_io_requested on each new connection.
+            @since WebSocketClient 2.9
         */
         bool async_io = True;
+
+        #! Original user preference for async I/O mode
+        /** @since WebSocketClient 2.9
+        */
+        bool async_io_requested = True;
 
         #! The poll operation for async I/O mode
         /** @since WebSocketClient 2.9
@@ -1046,9 +1053,7 @@ ws.connect();
         if (async_io) {
             startAsyncIo();
         }
-
         if (async_io) {
-            # ThreadPool handles delivery; use sentinel TID for lifecycle management
             updateTid(-1);
             logDebug("WS async I/O started (no delivery thread, async connect)");
         } else {
@@ -1210,6 +1215,10 @@ ws.connect();
             disconnectUnlocked();
         }
 
+        # Reset async_io from user preference; startAsyncIo() may set it to False
+        # for non-HTTP/1.1 transports, but subsequent reconnects should re-evaluate
+        async_io = async_io_requested;
+
         hash<auto> h = connectUnlocked(opts.hdr, \info, reconnect);
         on_error {
             clearTid();
@@ -1218,9 +1227,7 @@ ws.connect();
         if (async_io) {
             startAsyncIo();
         }
-
         if (async_io) {
-            # ThreadPool handles delivery; use sentinel TID for lifecycle management
             updateTid(-1);
             logDebug("WS async I/O started (no delivery thread)");
         } else {
@@ -1694,6 +1701,7 @@ ws.setEventQueue();
         # process async I/O option
         if (http_opts.hasKey("async_io")) {
             async_io = remove http_opts.async_io ? True : False;
+            async_io_requested = async_io;
         }
 
         hc = new HTTPClient(http_opts);
@@ -1982,7 +1990,8 @@ ws.setEventQueue();
 
         # Async I/O with the controller only works reliably for HTTP/1.1;
         # HTTP/2 and HTTP/3 multiplex streams over a shared connection, so
-        # socket-level poll events don't map to WebSocket stream readiness
+        # socket-level poll events don't map to WebSocket stream readiness.
+        # async_io is reset from async_io_requested on each new connection in connectIntern().
         if (transport != "http1") {
             logDebug("async I/O not supported for %s transport; falling back to sync mode", transport);
             async_io = False;
@@ -1991,7 +2000,7 @@ ws.setEventQueue();
 
         AsyncSocketIo::AsyncSocketIoController controller = AsyncSocketIo::getGlobalAsyncIoController();
 
-        # Create poll_op with on_poll_complete callback for ThreadPool-based delivery
+        # Create poll_op with on_poll_complete callback for background-thread delivery
         # This callback fires on the I/O thread after each continuePoll() cycle
         poll_op = new WebSocketClientPollOperation(hc, transport, stream_id,
             active_extensions, timeout_ms, logger, raw_callback,
