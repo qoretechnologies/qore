@@ -202,6 +202,8 @@ public class ConnectionSchemeCache {
 
             "keaprest": "KeapRestClient",
 
+            "apollorest": "ApolloRestClient",
+
             "squareres": "SquareRestClient",
             "squarespaceres": "SquarespaceRestClient",
 

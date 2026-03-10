@@ -954,6 +954,21 @@ cargo install tree-sitter-cli@0.26.5
       - polling-based event triggers for customers, orders, products, carts, shipments, and addresses
       - action catalog integration with 13 actions and 11 triggers
       - connection support with \c bigcommerceres:// URL scheme
+    - @ref apollorestclientintro "ApolloRestClient" module
+      - new module providing a REST client for Apollo's B2B sales intelligence API
+      - supports OAuth2 authentication and API key authentication via x-api-key header
+      - provides ApolloRestConnection for connection management with \c apollorest:// URL scheme
+    - @ref apollodataproviderintro "ApolloDataProvider" module
+      - new module providing a data provider API for Apollo B2B sales intelligence
+      - contact management (create, update, delete, search, get by ID)
+      - account management (create, update, search, get by ID)
+      - deal management (create, update, list, get by ID)
+      - task management (create, search)
+      - people and organization enrichment (single and bulk)
+      - people and organization search across Apollo's global database
+      - polling-based event triggers for contacts, accounts, and deals
+      - action catalog integration with 20+ actions and 4 triggers
+      - connection support with \c apollorest:// URL scheme
     - @ref keaprestclientintro "KeapRestClient" module
       - new module providing a REST client for Keap's CRM and marketing automation API
       - supports OAuth2 authentication with bearer tokens

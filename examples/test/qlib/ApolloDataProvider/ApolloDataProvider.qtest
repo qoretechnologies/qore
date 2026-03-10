@@ -1,0 +1,380 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  ApolloDataProvider.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/RestClient.qm
+
+%try-module json
+%define NoJson
+%endtry
+
+%requires ../../../../qlib/ApolloRestClient.qm
+%requires ../../../../qlib/ApolloDataProvider
+
+%exec-class ApolloDataProviderTest
+
+public class ApolloDataProviderTest inherits QUnit::Test {
+    private {
+        #! Apollo REST client for integration tests
+        *ApolloRestClient::ApolloRestClient client;
+
+        #! Logger for verbose output
+        Logger logger;
+
+        #! Custom command-line options
+        const MyOpts = Opts + {
+            "apikey": "k,apikey=s",
+            "token": "t,token=s",
+            "conn": "c,connection=s",
+        };
+
+        #! Test contact ID (created during test)
+        *string testContactId;
+
+        #! Test account ID (created during test)
+        *string testAccountId;
+    }
+
+    constructor() : Test("ApolloDataProvider Test", "1.0", \ARGV, MyOpts) {
+        logger = new Logger("test", LoggerLevel::getLevelInfo());
+
+        # Unit tests (always run, no credentials needed)
+        addTestCase("sanity tests", \sanityTests());
+        addTestCase("factory tests", \factoryTests());
+        addTestCase("metadata tests", \metadataTests());
+        addTestCase("data type tests", \dataTypeTests());
+        addTestCase("connection tests", \connectionTests());
+
+        # Integration tests (require Apollo credentials)
+        addTestCase("child provider tests", \childProviderTests());
+        addTestCase("trigger example data tests", \triggerExampleDataTests());
+        addTestCase("integration tests", \integrationTests());
+
+        # Try to set up connection for integration tests
+        try {
+            setupConnection();
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("Connection setup failed: %s: %s\n", ex.err, ex.desc);
+            }
+        }
+
+        set_return_value(main());
+    }
+
+    #! Sets up the Apollo client for integration tests
+    private setupConnection() {
+        # Try to use a connection from Qorus if specified
+        *string conn_name = m_options.conn ?? ENV.APOLLO_CONNECTION;
+        if (conn_name) {
+            AbstractConnection conn = get_connection(conn_name);
+            if (conn instanceof ApolloRestClient::ApolloRestConnection) {
+                client = (cast<ApolloRestClient::ApolloRestConnection>(conn)).get(True);
+            }
+            return;
+        }
+
+        # Try environment variables
+        *string token = m_options.token ?? ENV.APOLLO_TOKEN;
+        *string apikey = m_options.apikey ?? ENV.APOLLO_API_KEY;
+
+        if (token) {
+            client = new ApolloRestClient::ApolloRestClient({"token": token});
+        } else if (apikey) {
+            client = new ApolloRestClient::ApolloRestClient({"apikey": apikey});
+        }
+    }
+
+    #! Basic sanity tests
+    sanityTests() {
+        # Verify constants
+        assertEq("Apollo", ApolloDataProvider::AppName);
+        assertEq(100, ApolloDataProvider::DefaultPageSize);
+        assertEq(60, ApolloDataProvider::DefaultPollInterval);
+        assertEq(30, ApolloDataProvider::MinPollInterval);
+        assertEq(10000, ApolloDataProvider::MaxSeenIds);
+        assertEq(3, ApolloDataProvider::MaxRetries);
+
+        # Verify event constants
+        assertEq("contact-created", ApolloDataProvider::EVENT_CONTACT_CREATED);
+        assertEq("contact-updated", ApolloDataProvider::EVENT_CONTACT_UPDATED);
+        assertEq("account-created", ApolloDataProvider::EVENT_ACCOUNT_CREATED);
+        assertEq("deal-created", ApolloDataProvider::EVENT_DEAL_CREATED);
+    }
+
+    #! Factory tests
+    factoryTests() {
+        # Verify factory exists
+        AbstractDataProviderFactory factory = DataProvider::getFactory("apollo");
+        assertEq(True, factory instanceof ApolloDataProvider::ApolloDataProviderFactory);
+
+        # Verify factory info
+        hash<DataProviderFactoryInfo> info = factory.getInfo();
+        assertEq("apollo", info.name);
+        assertEq(True, info.children_can_support_apis);
+        assertEq(True, info.children_can_support_records);
+        assertEq(True, info.children_can_support_observers);
+    }
+
+    #! Metadata tests
+    metadataTests() {
+        # Verify action catalog app registration
+        *hash<auto> app = DataProviderActionCatalog::getApp("Apollo");
+        assertEq(True, app.val(), "Apollo app registered in action catalog");
+        assertEq("Apollo", app.display_name);
+        assertEq("apollorest", app.scheme);
+
+        # Verify some actions are registered
+        list<hash<auto>> actions = DataProviderActionCatalog::getActions("Apollo");
+        assertEq(True, actions.size() >= 18, "at least 18 actions registered");
+
+        # Verify specific actions
+        bool found_create_contact = False;
+        bool found_search_contacts = False;
+        bool found_enrich_person = False;
+        bool found_contact_created_event = False;
+        foreach hash<auto> action in (actions) {
+            if (action.action == "create-contact") {
+                found_create_contact = True;
+                assertEq(DPAT_API, action.action_code);
+            }
+            if (action.action == "search-contacts") {
+                found_search_contacts = True;
+                assertEq(DPAT_FIND, action.action_code);
+            }
+            if (action.action == "enrich-person") {
+                found_enrich_person = True;
+                assertEq(DPAT_API, action.action_code);
+            }
+            if (action.action == "contact-created") {
+                found_contact_created_event = True;
+                assertEq(DPAT_EVENT, action.action_code);
+            }
+        }
+        assertEq(True, found_create_contact, "create-contact action registered");
+        assertEq(True, found_search_contacts, "search-contacts action registered");
+        assertEq(True, found_enrich_person, "enrich-person action registered");
+        assertEq(True, found_contact_created_event, "contact-created event registered");
+    }
+
+    #! Data type tests
+    dataTypeTests() {
+        # Test contact data type
+        ApolloDataProvider::ApolloContactDataType contact_type();
+        hash<auto> fields = contact_type.getFields();
+        assertEq(True, fields.hasKey("id"), "contact type has id field");
+        assertEq(True, fields.hasKey("email"), "contact type has email field");
+        assertEq(True, fields.hasKey("first_name"), "contact type has first_name field");
+        assertEq(True, fields.hasKey("last_name"), "contact type has last_name field");
+
+        # Test account data type
+        ApolloDataProvider::ApolloAccountDataType account_type();
+        hash<auto> afields = account_type.getFields();
+        assertEq(True, afields.hasKey("id"), "account type has id field");
+        assertEq(True, afields.hasKey("name"), "account type has name field");
+
+        # Test deal data type
+        ApolloDataProvider::ApolloDealDataType deal_type();
+        hash<auto> dfields = deal_type.getFields();
+        assertEq(True, dfields.hasKey("id"), "deal type has id field");
+        assertEq(True, dfields.hasKey("name"), "deal type has name field");
+        assertEq(True, dfields.hasKey("amount"), "deal type has amount field");
+
+        # Test task data type
+        ApolloDataProvider::ApolloTaskDataType task_type();
+        hash<auto> tfields = task_type.getFields();
+        assertEq(True, tfields.hasKey("id"), "task type has id field");
+
+        # Test enrichment data types
+        ApolloDataProvider::ApolloPersonEnrichmentDataType person_type();
+        hash<auto> pfields = person_type.getFields();
+        assertEq(True, pfields.hasKey("id"), "person enrichment type has id field");
+        assertEq(True, pfields.hasKey("email"), "person enrichment type has email field");
+
+        ApolloDataProvider::ApolloOrganizationEnrichmentDataType org_type();
+        hash<auto> ofields = org_type.getFields();
+        assertEq(True, ofields.hasKey("id"), "org enrichment type has id field");
+        assertEq(True, ofields.hasKey("name"), "org enrichment type has name field");
+    }
+
+    #! Connection tests
+    connectionTests() {
+        # Verify connection scheme is registered
+        assertEq(True, exists ConnectionSchemeCache::getScheme("apollorest"),
+            "apollorest scheme registered");
+
+        # Verify connection scheme info
+        hash<auto> scheme = ConnectionSchemeCache::getScheme("apollorest");
+        assertEq("Apollo REST Connection", scheme.display_name);
+    }
+
+    #! Child provider tests
+    childProviderTests() {
+        if (!client) {
+            testSkip("no Apollo credentials available");
+        }
+
+        ApolloDataProvider::ApolloDataProvider provider(client);
+
+        # Verify child names
+        *list<string> children = provider.getChildProviderNames();
+        assertEq(True, children.size() >= 7, "at least 7 child providers");
+        assertEq(True, inlist("contacts", children), "contacts child exists");
+        assertEq(True, inlist("accounts", children), "accounts child exists");
+        assertEq(True, inlist("deals", children), "deals child exists");
+        assertEq(True, inlist("tasks", children), "tasks child exists");
+        assertEq(True, inlist("enrichment", children), "enrichment child exists");
+        assertEq(True, inlist("search", children), "search child exists");
+        assertEq(True, inlist("events", children), "events child exists");
+
+        # Verify child providers can be created
+        AbstractDataProvider contacts = provider.getChildProvider("contacts");
+        assertEq(True, contacts instanceof ApolloDataProvider::ApolloContactsDataProvider);
+
+        AbstractDataProvider events = provider.getChildProvider("events");
+        assertEq(True, events instanceof ApolloDataProvider::ApolloEventsDataProvider);
+
+        AbstractDataProvider enrichment = provider.getChildProvider("enrichment");
+        assertEq(True, enrichment instanceof ApolloDataProvider::ApolloEnrichmentDataProvider);
+    }
+
+    #! Trigger example data tests
+    triggerExampleDataTests() {
+        if (!client) {
+            testSkip("no Apollo credentials available");
+        }
+
+        ApolloDataProvider::ApolloDataProvider provider(client);
+        AbstractDataProvider events = provider.getChildProvider("events");
+
+        # Verify all event children exist
+        *list<string> event_children = events.getChildProviderNames();
+        assertEq(True, event_children.size() >= 4, "at least 4 event providers");
+
+        # Verify each trigger can provide example data
+        foreach string event_name in (event_children) {
+            AbstractDataProvider trigger = events.getChildProvider(event_name);
+            hash<string, hash<DataProviderMessageInfo>> event_types = trigger.getEventTypes();
+            assertEq(True, event_types.size() > 0,
+                sprintf("trigger %s has event types", event_name));
+
+            foreach string event_type in (keys event_types) {
+                auto example = trigger.getExampleEventData(event_type);
+                assertEq(True, example instanceof hash,
+                    sprintf("trigger %s returns hash example data for %s", event_name, event_type));
+            }
+        }
+    }
+
+    #! Integration tests (require Apollo credentials)
+    integrationTests() {
+        if (!client) {
+            testSkip("no Apollo credentials available");
+        }
+
+        ApolloDataProvider::ApolloDataProvider provider(client);
+
+        # Test search contacts
+        AbstractDataProvider contacts_dp = provider.getChildProvider("contacts");
+        AbstractDataProviderRecordIterator iter = contacts_dp.searchRecords(NOTHING, {"limit": 5});
+        list<hash<auto>> contacts = ();
+        while (iter.next()) {
+            contacts += iter.getValue();
+        }
+        assertEq(True, contacts.size() >= 0, "contacts search returned a list");
+        if (contacts.size() > 0) {
+            assertEq(True, contacts[0].hasKey("id"), "contact record has id field");
+        }
+
+        # Test create contact
+        AbstractDataProvider create_dp = contacts_dp.getChildProvider("create");
+        string test_email = "test_apollodp_" + now_us().getEpochSeconds() + "@example.com";
+        hash<auto> new_contact = create_dp.doRequest({
+            "first_name": "Test",
+            "last_name": "ApolloDP_" + now_us().toString(),
+            "email": test_email,
+        });
+        assertEq(True, new_contact.id.val(), "contact created with ID");
+        testContactId = string(new_contact.id);
+
+        on_exit {
+            # Cleanup: delete test contact
+            if (testContactId) {
+                try {
+                    AbstractDataProvider del_dp = contacts_dp.getChildProvider("delete");
+                    del_dp.doRequest({"contact_id": testContactId});
+                } catch (hash<ExceptionInfo> ex) {
+                    if (m_options.verbose) {
+                        printf("Cleanup failed (contact): %s: %s\n", ex.err, ex.desc);
+                    }
+                }
+            }
+        }
+
+        # Test get contact by ID
+        AbstractDataProviderRecordIterator get_iter = contacts_dp.searchRecords(NOTHING,
+            {"contact_id": testContactId});
+        assertEq(True, get_iter.next(), "found created contact");
+        hash<auto> found = get_iter.getValue();
+        assertEq("Test", found.first_name);
+
+        # Test update contact
+        AbstractDataProvider update_dp = contacts_dp.getChildProvider("update");
+        hash<auto> updated = update_dp.doRequest({
+            "contact_id": testContactId,
+            "title": "QA Tester",
+        });
+        assertEq(True, updated.val(), "contact update returned data");
+
+        # Verify the update persisted by re-fetching
+        AbstractDataProviderRecordIterator verify_iter = contacts_dp.searchRecords(NOTHING,
+            {"contact_id": testContactId});
+        assertEq(True, verify_iter.next(), "re-fetched updated contact");
+        hash<auto> verified = verify_iter.getValue();
+        assertEq("QA Tester", verified.title, "title was updated to QA Tester");
+
+        # Test create and cleanup account
+        AbstractDataProvider accounts_dp = provider.getChildProvider("accounts");
+        AbstractDataProvider create_acct_dp = accounts_dp.getChildProvider("create");
+        hash<auto> new_acct = create_acct_dp.doRequest({
+            "name": "Test ApolloDP Account " + now_us().toString(),
+            "domain": "test-apollodp-" + now_us().getEpochSeconds() + ".example.com",
+        });
+        assertEq(True, new_acct.id.val(), "account created with ID");
+        testAccountId = string(new_acct.id);
+
+        # Test search accounts
+        AbstractDataProviderRecordIterator acct_iter = accounts_dp.searchRecords(NOTHING,
+            {"account_id": testAccountId});
+        assertEq(True, acct_iter.next(), "found created account");
+        hash<auto> found_acct = acct_iter.getValue();
+        assertEq(True, found_acct.name.val(), "account has name field");
+    }
+}
