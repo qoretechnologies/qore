@@ -6189,13 +6189,13 @@ load_local_done:
                         // Inline: empty() for lists and strings
                         if (base_type == NT_LIST) {
                             const QoreListNode* l = base.get<const QoreListNode>();
-                            res = QoreValue(l->empty() ? false : true);
+                            res = QoreValue(l->empty() ? true : false);
                         } else if (base_type == NT_STRING) {
                             const QoreStringNode* s = base.get<const QoreStringNode>();
                             res = QoreValue(s->strlen() == 0 ? true : false);
                         } else if (base_type == NT_HASH) {
                             const QoreHashNode* h = base.get<const QoreHashNode>();
-                            res = QoreValue(h->empty() ? false : true);
+                            res = QoreValue(h->empty() ? true : false);
                         } else {
                             // Unsupported type, use runtime dispatch
                             res = fromBits(qore_rt_dot_eval_pseudo_method_direct(
