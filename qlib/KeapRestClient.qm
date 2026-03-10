@@ -1,0 +1,396 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file KeapRestClient.qm Qore user module for calling Keap REST API services
+
+/*  KeapRestClient.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+
+# assume local scope for variables, do not use "$" signs
+%modern
+
+%requires(reexport) Mime >= 1.3
+%requires(reexport) RestClient >= 1.3.1
+%requires(reexport) ConnectionProvider >= 1.4
+
+module KeapRestClient {
+    version = "1.0";
+    desc = "User module for calling Keap REST API services";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        ConnectionSchemeCache::registerScheme("keaprest", KeapRestConnection::ConnectionScheme);
+    };
+}
+
+/** @mainpage KeapRestClient Module
+
+    @tableofcontents
+
+    @section keaprestclientintro KeapRestClient Introduction
+
+    The %KeapRestClient module provides an API for calling Keap REST API services.
+
+    To use this module, use \c "%requires KeapRestClient" in your code.
+
+    All the public symbols in the module are defined in the KeapRestClient namespace.
+
+    The main classes are:
+    - @ref KeapRestClient::KeapRestClient "KeapRestClient":
+      this class provides the REST client API for communication with the Keap API;
+      it handles OAuth2 authentication
+    - @ref KeapRestClient::KeapRestConnection "KeapRestConnection":
+      provides a connection object to Keap services (based on the
+      @ref connectionproviderintro "ConnectionProvider" module)
+
+    @par Example:
+    @code{.py}
+#!/usr/bin/env qore
+
+%requires KeapRestClient
+
+KeapRestClient keap({
+    "oauth2_client_id": ENV.KEAP_CLIENT_ID,
+    "oauth2_client_secret": ENV.KEAP_CLIENT_SECRET,
+    "oauth2_refresh_token": ENV.KEAP_REFRESH_TOKEN,
+});
+hash<auto> result = keap.get("contacts?limit=10");
+printf("Contacts: %y\n", result.body.contacts);
+    @endcode
+
+    @section keaprestclientrelnotes Release Notes
+
+    @subsection keaprestclientv1_0 KeapRestClient v1.0
+    - the initial version of the %KeapRestClient module
+*/
+
+#! the KeapRestClient namespace contains all the objects in the KeapRestClient module
+public namespace KeapRestClient {
+
+#! This class provides the REST client API for communication with Keap servers
+/** Keap uses a REST API at https://api.infusionsoft.com/crm/rest/v2 with OAuth2 authentication.
+
+    @par Authentication:
+    - OAuth2 with Bearer tokens (authorization code grant)
+    - Access tokens expire and are refreshed automatically
+    - Scope: full
+
+    @par API Structure:
+    All endpoints are under /crm/rest/v2 (included in the base URL)
+*/
+public class KeapRestClient inherits RestClient::RestClient {
+    public {
+        #! Default Keap API URL
+        const DefaultUrl = "https://api.infusionsoft.com/crm/rest/v2";
+
+        #! Default authorization request URL
+        const DefaultAuthUrl = "https://accounts.infusionsoft.com/app/oauth/authorize";
+
+        #! Default OAuth2 grant type
+        const DefaultGrantType = "authorization_code";
+
+        #! Default token request URL
+        const DefaultTokenUrl = "https://api.infusionsoft.com/token";
+
+        #! Default "data" option value
+        const DefaultData = "json";
+
+        #! Default ping method
+        const DefaultPingMethod = "GET";
+
+        #! Default ping path (relative - no leading slash since base URL has /crm/rest/v2)
+        const DefaultPingPath = "contacts?limit=1";
+
+        #! Default ping headers
+        const DefaultPingHeaders = {
+            "Accept": MimeTypeJson,
+        };
+
+        #! Default headers for all requests
+        const DefaultHeaders = {
+            "Accept": MimeTypeJson,
+        };
+
+        #! Default OAuth2 scopes
+        const DefaultScopes = (
+            "full",
+        );
+
+        #! Default OAuth2 auth args to request offline access (refresh tokens)
+        const DefaultAuthArgs = {
+            "access_type": "offline",
+            "prompt": "consent",
+        };
+
+        #! Default constructor options
+        const DefaultOptions = {
+            "data": DefaultData,
+            "headers": DefaultHeaders,
+            "oauth2_auth_args": DefaultAuthArgs,
+            "ping_headers": DefaultPingHeaders,
+            "ping_method": DefaultPingMethod,
+            "ping_path": DefaultPingPath,
+            "url": DefaultUrl,
+        };
+
+        #! OAuth2 options (added when OAuth2 credentials are provided)
+        const OAuth2Options = {
+            "oauth2_auth_url": DefaultAuthUrl,
+            "oauth2_grant_type": DefaultGrantType,
+            "oauth2_token_url": DefaultTokenUrl,
+            "oauth2_scopes": DefaultScopes,
+        };
+    }
+
+    #! creates the object with the given options
+    /**
+        @par Example:
+        @code{.py}
+KeapRestClient keap({
+    "oauth2_client_id": "your-client-id",
+    "oauth2_client_secret": "your-client-secret",
+    "oauth2_refresh_token": "your-refresh-token",
+});
+        @endcode
+
+        @param opts valid options are all the options for the @ref RestClient::RestClient "RestClient" class
+
+        @param do_not_connect if \c False (the default), then a connection will be immediately established to the
+        remote server
+
+        @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data serialization, etc
+    */
+    constructor(hash<auto> opts, *softbool do_not_connect)
+            : RestClient(KeapRestClient::getOptions(opts), do_not_connect) {
+        setAssumedEncoding("UTF-8");
+    }
+
+    #! returns options for @ref KeapRestClient::KeapRestClient::constructor()
+    static hash<auto> getOptions(hash<auto> opts) {
+        hash<auto> rv = DefaultOptions + opts;
+
+        # Check if token-only mode (token provided without OAuth2 credentials)
+        bool token_only = opts.token && !opts.oauth2_client_id && !opts.oauth2_client_secret
+            && !opts.oauth2_refresh_token;
+
+        if (!token_only && opts.oauth2_client_id) {
+            rv += OAuth2Options;
+        } else if (opts.token) {
+            # Bearer token mode
+            rv.headers.Authorization = "Bearer " + opts.token;
+            # Remove token from opts so RestClient doesn't add another "Bearer" prefix
+            remove rv.token;
+        }
+
+        return rv;
+    }
+}
+
+#! Class for Keap REST connections; returns @ref KeapRestClient objects
+/** This class implements all options of @ref RestClient::RestConnection "RestClientConnection"
+
+    @see @ref KeapRestClient::KeapRestClient::constructor() for more information on the above options
+*/
+public class KeapRestConnection inherits RestClient::RestConnection {
+    public {
+        #! Default connection URL
+        const DefaultConnectionUrl = "keaprest://api.infusionsoft.com/crm/rest/v2";
+
+        #! Connection entry info
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "Keap REST Connection",
+            "short_desc": "A connection to the Keap REST API",
+            "desc": "A connection to the Keap REST API for CRM, contacts, companies, "
+                "opportunities, orders, tags, tasks, and marketing automation",
+            "cls": Class::forName("KeapRestConnection"),
+            "auto_url": True,
+            "schemes": {
+                "keaprest": True,
+            },
+            "base_scheme_map": {
+                "https": "keaprest",
+            },
+            "options": RestConnection::ConnectionScheme.options + {
+                "data": RestConnection::ConnectionScheme.options."data"
+                + <ConnectionOptionInfo>{
+                    "default_value": KeapRestClient::DefaultData,
+                },
+                "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
+                + <ConnectionOptionInfo>{
+                    "default_value": KeapRestClient::DefaultPingHeaders,
+                },
+                "ping_method": RestConnection::ConnectionScheme.options."ping_method"
+                + <ConnectionOptionInfo>{
+                    "default_value": KeapRestClient::DefaultPingMethod,
+                },
+                "ping_path": RestConnection::ConnectionScheme.options."ping_path"
+                + <ConnectionOptionInfo>{
+                    "default_value": KeapRestClient::DefaultPingPath,
+                },
+                "oauth2_auth_args": RestConnection::ConnectionScheme.options.oauth2_auth_args
+                + <ConnectionOptionInfo>{
+                    "default_value": KeapRestClient::DefaultAuthArgs,
+                },
+                "oauth2_auth_url": RestConnection::ConnectionScheme.options.oauth2_auth_url
+                + <ConnectionOptionInfo>{
+                    "default_value": KeapRestClient::DefaultAuthUrl,
+                },
+                "oauth2_grant_type": RestConnection::ConnectionScheme.options.oauth2_grant_type
+                + <ConnectionOptionInfo>{
+                    "default_value": KeapRestClient::DefaultGrantType,
+                },
+                "oauth2_scopes": RestConnection::ConnectionScheme.options.oauth2_scopes
+                + <ConnectionOptionInfo>{
+                    "default_value": KeapRestClient::DefaultScopes,
+                },
+                "oauth2_token_url": RestConnection::ConnectionScheme.options.oauth2_token_url
+                + <ConnectionOptionInfo>{
+                    "default_value": KeapRestClient::DefaultTokenUrl,
+                },
+            },
+            "required_options": "oauth2_client_id,oauth2_client_secret",
+        };
+    }
+
+    #! creates the KeapRestConnection object
+    /** @param name the name of the connection
+        @param description connection description
+        @param url connection URL (potentially with password info)
+        @param attributes various attributes. See below
+        @param options connection options
+
+        See @ref ConnectionProvider::AbstractConnection::constructor() for \c attributes and \c options reference.
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option
+    */
+    constructor(string name, string description, string url = KeapRestClient::DefaultUrl,
+            hash<auto> attributes = {}, hash<auto> options = {})
+            : RestConnection(name, description, url, attributes, options) {
+    }
+
+    #! creates the KeapRestConnection object
+    /** @param config with the following keys:
+        - name (required string): the connection name
+        - display_name (optional string): the display name
+        - short_desc (optional string): a short description in plain text
+        - desc (optional string): a long description with markdown formatting
+        - url (required string): the connection URL
+        - opts (optional hash): connection options
+        - logger (optional LoggerInterface object): logger for the connection
+        @param attr optional connection attributes
+        - monitor (optional bool): should the connection be monitored? Default: True
+        - enabled (optional bool): is the connection enabled? Default: True
+        - locked (optional bool): is the connection locked? Default: False
+        - debug_data (optional bool): debug data? Default: False
+        - tags (optional hash): tags for the connection; no default value
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option or attribute
+    */
+    constructor(hash<auto> config, *hash<auto> attr) : RestConnection(config, attr) {
+    }
+
+    #! returns \c "keaprest"
+    string getType() {
+        return "keaprest";
+    }
+
+    #! Returns connection options
+    *hash<auto> getConnectionOptions(*hash<auto> rtopts) {
+        hash<auto> rv = RestConnection::getConnectionOptions(rtopts);
+        # Always set OAuth2 URLs
+        rv.oauth2_auth_url = KeapRestClient::DefaultAuthUrl;
+        rv.oauth2_token_url = KeapRestClient::DefaultTokenUrl;
+        if (!rv.oauth2_grant_type) {
+            rv.oauth2_grant_type = KeapRestClient::DefaultGrantType;
+        }
+        if (!rv.oauth2_scopes) {
+            rv.oauth2_scopes = KeapRestClient::DefaultScopes;
+        }
+        if (!rv.oauth2_auth_args) {
+            rv.oauth2_auth_args = KeapRestClient::DefaultAuthArgs;
+        }
+        return rv;
+    }
+
+    #! returns @ref True as this connection returns a data provider with the @ref getDataProvider() method
+    bool hasDataProvider() {
+        return True;
+    }
+
+    #! Returns the data provider application name this connection serves, if any
+    *string getAppName() {
+        return "Keap";
+    }
+
+    #! returns a data provider object for this connection
+    /** @param constructor_options any additional constructor options for the data provider
+
+        @return a data provider object for this connection
+    */
+    DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        # to avoid circular dependencies, this object loads the KeapDataProvider and creates the data provider
+        # object dynamically
+        load_module("KeapDataProvider");
+        return create_object("KeapDataProvider", self);
+    }
+
+    #! Sets child data provider capabilities
+    private setChildCapabilities() {
+        children_can_support_records = True;
+        children_can_support_apis = True;
+        children_can_support_observers = True;
+    }
+
+    #! Sets the update options code for the connection
+    setUpdateOptionsCode(*code update_options) {
+        UpdateOptionsInterface::setUpdateOptionsCode(update_options);
+        if (update_options) {
+            hash<auto> update;
+            if (url != DefaultConnectionUrl) {
+                update.url = DefaultConnectionUrl;
+            }
+            if (opts.ping_path =~ /^\//) {
+                update.ping_path = opts.ping_path.substr(1);
+            }
+            if (update) {
+                doUpdateOptions(self, update);
+            }
+        }
+    }
+
+    #! returns a @ref KeapRestClient object
+    /** @param connect if @ref True "True", then the connection is returned already connected
+        @param rtopts this connection type does not accept any runtime options, so this parameter is ignored
+
+        @return a @ref KeapRestClient object
+    */
+    private KeapRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
+        return new KeapRestClient(getConnectionOptions(rtopts), !connect);
+    }
+
+    #! Returns the ConnectionSchemeInfo hash for this object
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+}
+}

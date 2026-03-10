@@ -160,6 +160,7 @@ public class DataProvider {
             "servicenowrest": "ServiceNowRestDataProvider",
             "shippo": "ShippoDataProvider",
             "shipstation": "ShipStationDataProvider",
+            "keap": "KeapDataProvider",
             "square": "SquareDataProvider",
             "squarespace": "SquarespaceDataProvider",
             "tableau": "TableauDataProvider",
