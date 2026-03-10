@@ -129,7 +129,7 @@ public class CloseOpportunityDataType inherits HashDataType {
                 "type": StringOrNothingType,
                 "display_name": "Value Currency",
                 "short_desc": "The value currency code",
-                "desc": "The ISO 4217 currency code for the opportunity value (e.g., USD)",
+                "desc": "The ISO 4217 currency code for the opportunity value (e.g., `USD`)",
             },
             "confidence": {
                 "type": IntOrNothingType,

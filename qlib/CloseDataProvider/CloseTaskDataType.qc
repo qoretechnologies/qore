@@ -88,13 +88,13 @@ public class CloseTaskDataType inherits HashDataType {
                 "type": StringOrNothingType,
                 "display_name": "Object ID",
                 "short_desc": "The related object ID",
-                "desc": "The unique identifier of the related object (e.g., lead, contact)",
+                "desc": "The unique identifier of the related object (e.g., `lead`, `contact`)",
             },
             "object_type": {
                 "type": StringOrNothingType,
                 "display_name": "Object Type",
                 "short_desc": "The related object type",
-                "desc": "The type of the related object (e.g., lead, contact)",
+                "desc": "The type of the related object (e.g., `lead`, `contact`)",
             },
             "organization_id": {
                 "type": StringOrNothingType,

@@ -43,6 +43,20 @@ public class CloseCreateCallRequestDataType inherits HashDataType {
                 "short_desc": "Call direction",
                 "desc": "Call direction (`inbound` or `outbound`)",
                 "preselected": True,
+                "allowed_values": (
+                    <AllowedValueInfo>{
+                        "display_name": "Inbound",
+                        "short_desc": "Incoming call",
+                        "desc": "Call received from an external party",
+                        "value": "inbound",
+                    },
+                    <AllowedValueInfo>{
+                        "display_name": "Outbound",
+                        "short_desc": "Outgoing call",
+                        "desc": "Call made to an external party",
+                        "value": "outbound",
+                    },
+                ),
             },
             "duration": {
                 "type": IntOrNothingType,

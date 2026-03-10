@@ -104,14 +104,14 @@ module CloseDataProvider {
                 "contacts": <ActionOptionInfo>{
                     "display_name": "Contacts",
                     "short_desc": "Nested contacts to create",
-                    "type": AbstractDataProviderTypeMap."*list",
+                    "type": new SoftListDataType("Contacts", new CloseContactEntryDataType(), True),
                     "desc": "A list of contact objects to create and associate with this lead. "
-                        "Each contact can include name, title, emails, and phones fields",
+                        "Each contact can include `name`, `title`, `emails`, and `phones` fields",
                 },
                 "addresses": <ActionOptionInfo>{
                     "display_name": "Addresses",
                     "short_desc": "Lead addresses",
-                    "type": AbstractDataProviderTypeMap."*list",
+                    "type": new SoftListDataType("Addresses", new CloseAddressEntryDataType(), True),
                     "desc": "List of address objects for the lead",
                 },
             },
@@ -290,19 +290,19 @@ module CloseDataProvider {
                 "emails": <ActionOptionInfo>{
                     "display_name": "Email Addresses",
                     "short_desc": "The contact email addresses",
-                    "type": AbstractDataProviderTypeMap."*list",
-                    "desc": "A list of email address objects, each with type and email fields",
+                    "type": new SoftListDataType("Emails", new CloseEmailEntryDataType(), True),
+                    "desc": "A list of email address objects, each with `type` and `email` fields",
                 },
                 "phones": <ActionOptionInfo>{
                     "display_name": "Phone Numbers",
                     "short_desc": "The contact phone numbers",
-                    "type": AbstractDataProviderTypeMap."*list",
-                    "desc": "A list of phone number objects, each with type and phone fields",
+                    "type": new SoftListDataType("Phones", new ClosePhoneEntryDataType(), True),
+                    "desc": "A list of phone number objects, each with `type` and `phone` fields",
                 },
                 "urls": <ActionOptionInfo>{
                     "display_name": "URLs",
                     "short_desc": "Contact URLs",
-                    "type": AbstractDataProviderTypeMap."*list",
+                    "type": new SoftListDataType("URLs", new CloseUrlEntryDataType(), True),
                     "desc": "List of URL objects for the contact",
                 },
             },
@@ -344,13 +344,13 @@ module CloseDataProvider {
                 "emails": <ActionOptionInfo>{
                     "display_name": "Email Addresses",
                     "short_desc": "The contact email addresses",
-                    "type": AbstractDataProviderTypeMap."*list",
+                    "type": new SoftListDataType("Emails", new CloseEmailEntryDataType(), True),
                     "desc": "The new list of email address objects",
                 },
                 "phones": <ActionOptionInfo>{
                     "display_name": "Phone Numbers",
                     "short_desc": "The contact phone numbers",
-                    "type": AbstractDataProviderTypeMap."*list",
+                    "type": new SoftListDataType("Phones", new ClosePhoneEntryDataType(), True),
                     "desc": "The new list of phone number objects",
                 },
             },
@@ -1574,7 +1574,7 @@ module CloseDataProvider {
                 "attendees": <ActionOptionInfo>{
                     "display_name": "Attendees",
                     "short_desc": "Meeting attendees",
-                    "type": AbstractDataProviderTypeMap."*list",
+                    "type": new SoftListDataType("Attendees", new CloseAttendeeDataType(), True),
                     "desc": "A list of attendee objects for this meeting",
                 },
                 "location": <ActionOptionInfo>{
@@ -2104,4 +2104,34 @@ module CloseDataProvider {
             },
         });
     };
+}
+
+/** @mainpage CloseDataProvider Module
+
+    @tableofcontents
+
+    @section closedataproviderintro CloseDataProvider Introduction
+
+    The %CloseDataProvider module provides a data provider API for the Close CRM platform,
+    a CRM built for sales teams offering lead management, contact tracking, opportunities,
+    tasks, and activity logging (calls, emails, notes, meetings, SMS).
+
+    To use this module, use \c "%requires CloseDataProvider" in your code.
+
+    All the public symbols in the module are defined in the CloseDataProvider namespace.
+
+    The main classes are:
+    - @ref CloseDataProvider::CloseDataProvider "CloseDataProvider":
+      the root data provider for Close CRM
+    - @ref CloseDataProvider::CloseDataProviderFactory "CloseDataProviderFactory":
+      the data provider factory for Close CRM
+
+    @section closedataproviderrelnotes Release Notes
+
+    @subsection closedataproviderv1_0 CloseDataProvider v1.0
+    - the initial version of the %CloseDataProvider module
+*/
+
+#! Contains all public definitions in the CloseDataProvider module
+public namespace CloseDataProvider {
 }

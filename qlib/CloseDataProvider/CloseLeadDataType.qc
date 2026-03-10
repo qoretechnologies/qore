@@ -52,8 +52,8 @@ public class CloseLeadDataType inherits HashDataType {
                 "type": StringOrNothingType,
                 "display_name": "Status Label",
                 "short_desc": "The lead status label",
-                "desc": "The human-readable label of the lead's current status (e.g., Potential, "
-                    "Qualified, Customer)",
+                "desc": "The human-readable label of the lead's current status (e.g., `Potential`, "
+                    "`Qualified`, `Customer`)",
             },
             "description": {
                 "type": StringOrNothingType,

@@ -59,6 +59,20 @@ public class CloseCallDataType inherits HashDataType {
                 "display_name": "Direction",
                 "short_desc": "Call direction",
                 "desc": "Call direction (`inbound` or `outbound`)",
+                "allowed_values": (
+                    <AllowedValueInfo>{
+                        "display_name": "Inbound",
+                        "short_desc": "Incoming call",
+                        "desc": "Call received from an external party",
+                        "value": "inbound",
+                    },
+                    <AllowedValueInfo>{
+                        "display_name": "Outbound",
+                        "short_desc": "Outgoing call",
+                        "desc": "Call made to an external party",
+                        "value": "outbound",
+                    },
+                ),
             },
             "duration": {
                 "type": IntOrNothingType,
@@ -118,7 +132,7 @@ public class CloseCallDataType inherits HashDataType {
                 "type": StringOrNothingType,
                 "display_name": "Call Method",
                 "short_desc": "Call method",
-                "desc": "The method used for the call (e.g., regular, power dialer)",
+                "desc": "The method used for the call (e.g., `regular`, `power dialer`)",
             },
             "date_created": {
                 "type": StringOrNothingType,

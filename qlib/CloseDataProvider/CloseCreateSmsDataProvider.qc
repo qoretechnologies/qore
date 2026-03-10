@@ -61,8 +61,28 @@ public class CloseCreateSmsRequestDataType inherits HashDataType {
                 "type": StringType,
                 "display_name": "Status",
                 "short_desc": "SMS status",
-                "desc": "SMS status (e.g., `draft`, `sending`, `sent`)",
+                "desc": "SMS status: `draft`, `sending`, or `sent`",
                 "required": True,
+                "allowed_values": (
+                    <AllowedValueInfo>{
+                        "display_name": "Draft",
+                        "short_desc": "Draft SMS",
+                        "desc": "Save the SMS as a draft",
+                        "value": "draft",
+                    },
+                    <AllowedValueInfo>{
+                        "display_name": "Sending",
+                        "short_desc": "Sending SMS",
+                        "desc": "Queue the SMS for sending",
+                        "value": "sending",
+                    },
+                    <AllowedValueInfo>{
+                        "display_name": "Sent",
+                        "short_desc": "Already sent",
+                        "desc": "Mark the SMS as already sent",
+                        "value": "sent",
+                    },
+                ),
             },
         };
     }

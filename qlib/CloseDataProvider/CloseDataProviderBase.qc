@@ -324,7 +324,7 @@ public class CloseDataProviderBase inherits DataProvider::AbstractDataProvider {
                         "display_name": display_name,
                         "short_desc": lead.status_label ?? "",
                         "desc": sprintf("%s (ID: %s)", display_name, lead.id),
-                        "value": lead.id,
+                        "value": string(lead.id),
                     };
                 }
             }
@@ -345,7 +345,7 @@ public class CloseDataProviderBase inherits DataProvider::AbstractDataProvider {
                         "display_name": display_name,
                         "short_desc": contact.title ?? "",
                         "desc": sprintf("%s (ID: %s)", display_name, contact.id),
-                        "value": contact.id,
+                        "value": string(contact.id),
                     };
                 }
             }
@@ -368,7 +368,7 @@ public class CloseDataProviderBase inherits DataProvider::AbstractDataProvider {
                         "short_desc": opp.status_label ?? "",
                         "desc": sprintf("%s - %s (ID: %s)", display_name,
                             opp.status_label ?? "", opp.id),
-                        "value": opp.id,
+                        "value": string(opp.id),
                     };
                 }
             }
@@ -393,7 +393,7 @@ public class CloseDataProviderBase inherits DataProvider::AbstractDataProvider {
                         "display_name": display_name,
                         "short_desc": user.email ?? "",
                         "desc": sprintf("%s (ID: %s)", display_name, user.id),
-                        "value": user.id,
+                        "value": string(user.id),
                     };
                 }
             }

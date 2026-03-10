@@ -71,6 +71,20 @@ public class CloseSmsDataType inherits HashDataType {
                 "display_name": "Direction",
                 "short_desc": "SMS direction",
                 "desc": "The direction of the SMS (`inbound` or `outbound`)",
+                "allowed_values": (
+                    <AllowedValueInfo>{
+                        "display_name": "Inbound",
+                        "short_desc": "Received SMS",
+                        "desc": "SMS received from an external party",
+                        "value": "inbound",
+                    },
+                    <AllowedValueInfo>{
+                        "display_name": "Outbound",
+                        "short_desc": "Sent SMS",
+                        "desc": "SMS sent to an external party",
+                        "value": "outbound",
+                    },
+                ),
             },
             "text": {
                 "type": StringOrNothingType,
