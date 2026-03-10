@@ -1829,6 +1829,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // accessed through the TLS variable stack.  IR-only locals are safe since they
     // exist only in the slot cache and cannot be reached by callees.
     auto invalidateExternalCaches = [&]() {
+        // Fast path: if no external values were cached, nothing to invalidate
+        if (globals.empty() && threadlocals.empty() && closures.empty() && !has_non_ir_only_locals) {
+            return;
+        }
         cleanupStoredValues(globals, xsink);
         cleanupStoredValues(threadlocals, xsink);
         cleanupStoredValues(closures, xsink);
@@ -2659,6 +2663,7 @@ next_instruction:
                 // modified globals, thread-locals, or closure variables. The locals
                 // slot cache remains valid: called code runs in its own frame and
                 // cannot modify the current function's local variables.
+                // Fast path: skip if no external values were cached (checked in lambda)
                 invalidateExternalCaches();
                 if (xsink && *xsink) {
                     if (debug_active) {
@@ -5991,7 +5996,10 @@ load_local_done:
                     if (direct_inst->has_ref_args) {
                         cleanupLocalCaches();
                     } else {
-                        invalidateExternalCaches();
+                        // Skip invalidation for built-in methods without reference arguments
+                        if (!direct_inst->method->isBuiltin()) {
+                            invalidateExternalCaches();
+                        }
                     }
                     setValueSlot(values, direct_inst->result.id, res, xsink);
                     if (res.hasNode()) {
@@ -6037,7 +6045,10 @@ load_local_done:
                     cleanupLocalCaches();
                     return false;
                 }
-                invalidateExternalCaches();
+                // Skip invalidation for built-in methods without reference arguments
+                if (!method->isBuiltin() || direct_inst->has_ref_args) {
+                    invalidateExternalCaches();
+                }
                 setValueSlot(values, direct_inst->result.id, res, xsink);
                 if (res.hasNode()) {
                     cleanup.push_back(direct_inst->result.id);
@@ -6065,7 +6076,15 @@ load_local_done:
                     if (invoke_inst->has_ref_args) {
                         cleanupLocalCaches();
                     } else {
-                        invalidateExternalCaches();
+                        // For built-in methods without reference arguments that are known to not
+                        // access Qore global state (like Future::isDone(), Counter::dec(), etc.),
+                        // skip invalidation to avoid expensive hash map operations on hot paths
+                        if (invoke_inst->method->isBuiltin()) {
+                            // Built-in methods are pure C++ and don't access Qore globals
+                            // No invalidation needed
+                        } else {
+                            invalidateExternalCaches();
+                        }
                     }
                     if (xsink && *xsink) {
                         // On exception, branch to exception target
@@ -6117,7 +6136,11 @@ load_local_done:
                 QoreValue res = qore_method_private::eval(*method, xsink, rc, self, *arg_list);
 
                 // Method call runs in its own frame and cannot modify caller's locals
-                invalidateExternalCaches();
+                // Skip invalidation for built-in methods without reference arguments
+                // (built-in methods are pure C++ and don't access Qore global state)
+                if (!method->isBuiltin() || invoke_inst->has_ref_args) {
+                    invalidateExternalCaches();
+                }
 
                 if (xsink && *xsink) {
                     // On exception, branch to exception target
@@ -6154,6 +6177,7 @@ load_local_done:
                 }
 
                 QoreValue res;
+                bool called_external = false;  // Track if we called external code
                 if (direct_inst->pseudo) {
                     // Fast-path optimizations for common pseudo-methods
                     const char* method_name = direct_inst->method->getName();
@@ -6175,6 +6199,7 @@ load_local_done:
                             res = QoreValue(static_cast<int64_t>(h->size()));
                         } else {
                             // Unsupported type, use runtime dispatch
+                            called_external = true;
                             res = fromBits(qore_rt_dot_eval_pseudo_method_direct(
                                 toBits(base), direct_inst->method, direct_inst->qc, direct_inst->variant,
                                 nanboxed_args, nargs, xsink));
@@ -6186,6 +6211,7 @@ load_local_done:
                             res = QoreValue(static_cast<int64_t>(s->strlen()));
                         } else {
                             // Unsupported type, use runtime dispatch
+                            called_external = true;
                             res = fromBits(qore_rt_dot_eval_pseudo_method_direct(
                                 toBits(base), direct_inst->method, direct_inst->qc, direct_inst->variant,
                                 nanboxed_args, nargs, xsink));
@@ -6203,6 +6229,7 @@ load_local_done:
                             res = QoreValue(h->empty() ? true : false);
                         } else {
                             // Unsupported type, use runtime dispatch
+                            called_external = true;
                             res = fromBits(qore_rt_dot_eval_pseudo_method_direct(
                                 toBits(base), direct_inst->method, direct_inst->qc, direct_inst->variant,
                                 nanboxed_args, nargs, xsink));
@@ -6220,6 +6247,7 @@ load_local_done:
                             res = QoreValue(h->empty() ? false : true);
                         } else {
                             // Unsupported type, use runtime dispatch
+                            called_external = true;
                             res = fromBits(qore_rt_dot_eval_pseudo_method_direct(
                                 toBits(base), direct_inst->method, direct_inst->qc, direct_inst->variant,
                                 nanboxed_args, nargs, xsink));
@@ -6229,11 +6257,13 @@ load_local_done:
                         res = QoreValue(new QoreStringNode(base.getTypeName()));
                     } else {
                         // Unsupported pseudo-method, use generic runtime dispatch
+                        called_external = true;
                         res = fromBits(qore_rt_dot_eval_pseudo_method_direct(
                             toBits(base), direct_inst->method, direct_inst->qc, direct_inst->variant,
                             nanboxed_args, nargs, xsink));
                     }
                 } else {
+                    called_external = true;
                     res = fromBits(qore_rt_dot_eval_method_direct(
                         toBits(base), direct_inst->method, direct_inst->qc, direct_inst->variant,
                         nanboxed_args, nargs, xsink));
@@ -6246,7 +6276,10 @@ load_local_done:
                     return false;
                 }
                 // Method call runs in its own frame and cannot modify caller's locals
-                invalidateExternalCaches();
+                // Only invalidate if we actually called external code
+                if (called_external) {
+                    invalidateExternalCaches();
+                }
                 setValueSlot(values, direct_inst->result.id, res, xsink);
                 if (res.hasNode()) {
                     cleanup.push_back(direct_inst->result.id);
@@ -6271,6 +6304,7 @@ load_local_done:
                 }
 
                 QoreValue res;
+                bool called_external = false;  // Track if we called external code
                 if (de_invoke_inst->pseudo) {
                     // Fast-path optimizations for common pseudo-methods
                     const char* method_name = de_invoke_inst->method->getName();
@@ -6292,6 +6326,7 @@ load_local_done:
                             res = QoreValue(static_cast<int64_t>(h->size()));
                         } else {
                             // Unsupported type, use runtime dispatch
+                            called_external = true;
                             res = fromBits(qore_rt_dot_eval_pseudo_method_direct(
                                 toBits(base), de_invoke_inst->method, de_invoke_inst->qc, de_invoke_inst->variant,
                                 nanboxed_args, nargs, xsink));
@@ -6303,6 +6338,7 @@ load_local_done:
                             res = QoreValue(static_cast<int64_t>(s->strlen()));
                         } else {
                             // Unsupported type, use runtime dispatch
+                            called_external = true;
                             res = fromBits(qore_rt_dot_eval_pseudo_method_direct(
                                 toBits(base), de_invoke_inst->method, de_invoke_inst->qc, de_invoke_inst->variant,
                                 nanboxed_args, nargs, xsink));
@@ -6320,6 +6356,7 @@ load_local_done:
                             res = QoreValue(h->empty() ? true : false);
                         } else {
                             // Unsupported type, use runtime dispatch
+                            called_external = true;
                             res = fromBits(qore_rt_dot_eval_pseudo_method_direct(
                                 toBits(base), de_invoke_inst->method, de_invoke_inst->qc, de_invoke_inst->variant,
                                 nanboxed_args, nargs, xsink));
@@ -6337,6 +6374,7 @@ load_local_done:
                             res = QoreValue(h->empty() ? false : true);
                         } else {
                             // Unsupported type, use runtime dispatch
+                            called_external = true;
                             res = fromBits(qore_rt_dot_eval_pseudo_method_direct(
                                 toBits(base), de_invoke_inst->method, de_invoke_inst->qc, de_invoke_inst->variant,
                                 nanboxed_args, nargs, xsink));
@@ -6346,11 +6384,13 @@ load_local_done:
                         res = QoreValue(new QoreStringNode(base.getTypeName()));
                     } else {
                         // Unsupported pseudo-method, use generic runtime dispatch
+                        called_external = true;
                         res = fromBits(qore_rt_dot_eval_pseudo_method_direct(
                             toBits(base), de_invoke_inst->method, de_invoke_inst->qc, de_invoke_inst->variant,
                             nanboxed_args, nargs, xsink));
                     }
                 } else {
+                    called_external = true;
                     res = fromBits(qore_rt_dot_eval_method_direct(
                         toBits(base), de_invoke_inst->method, de_invoke_inst->qc, de_invoke_inst->variant,
                         nanboxed_args, nargs, xsink));
@@ -6358,7 +6398,10 @@ load_local_done:
                 if (nargs > SMALL_BUF) { delete[] nanboxed_args; }
 
                 // Method call runs in its own frame and cannot modify caller's locals
-                invalidateExternalCaches();
+                // Only invalidate if we actually called external code
+                if (called_external) {
+                    invalidateExternalCaches();
+                }
 
                 if (xsink && *xsink) {
                     // On exception, branch to exception target

@@ -1,0 +1,110 @@
+#!/usr/bin/env qore
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/AsyncSocketIo
+%requires ../../../../qlib/HttpServerAsyncIo
+%requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/HttpClientIo
+
+class SimpleHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, "OK");
+    }
+}
+
+printf("=== Minimal HTTP/3 Polling Performance Test ===\n");
+string exec_mode = ENV."QORE_EXEC_MODE" ?? "unknown";
+printf("Execution mode: %s\n\n", exec_mode);
+
+# Create server
+HttpServer server = new HttpServer(<HttpServerOptionInfo>{
+    "debug": False,
+});
+server.setHandler("test", "/test", NOTHING, new SimpleHandler());
+
+string url = sprintf("http://127.0.0.1:%d", server.getSocketInfo().port);
+
+# Create client
+HttpClientConnectionManager mgr = new HttpClientConnectionManager();
+
+# Warm up - let the system stabilize
+printf("Warm-up (5 requests)...\n");
+for (int i = 0; i < 5; i++) {
+    try {
+        mgr.request(url, "GET", "/test");
+    } catch (hash<ExceptionInfo> ex) {
+        printf("  Warmup error: %s\n", ex.desc);
+    }
+}
+
+# Test 1: Sequential requests (stress the polling loop)
+printf("\nTest 1: 20 sequential requests\n");
+date start1 = now_us();
+int success1 = 0;
+int error1 = 0;
+
+for (int i = 0; i < 20; i++) {
+    try {
+        hash<auto> resp = mgr.request(url, "GET", "/test");
+        if (resp.status_code == 200) {
+            success1++;
+        } else {
+            error1++;
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        error1++;
+    }
+}
+
+date elapsed1 = now_us() - start1;
+float seconds1 = elapsed1.toFloat() / 1000000.0;
+printf("  Completed: %d success, %d errors in %.3f seconds (%.1f req/sec)\n",
+       success1, error1, seconds1, 20.0 / seconds1);
+
+# Test 2: Concurrent requests (multiple threads polling simultaneously)
+printf("\nTest 2: 10 concurrent requests\n");
+date start2 = now_us();
+Counter done(10);
+int success2 = 0;
+int error2 = 0;
+Mutex result_lock();
+
+for (int i = 0; i < 10; i++) {
+    code thread_code = sub() {
+        on_exit done.dec();
+        try {
+            hash<auto> resp = mgr.request(url, "GET", "/test");
+            AutoLock al(result_lock);
+            if (resp.status_code == 200) {
+                success2++;
+            } else {
+                error2++;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            AutoLock al(result_lock);
+            error2++;
+        }
+    };
+    background thread_code();
+}
+
+done.wait();
+date elapsed2 = now_us() - start2;
+float seconds2 = elapsed2.toFloat() / 1000000.0;
+printf("  Completed: %d success, %d errors in %.3f seconds\n",
+       success2, error2, seconds2);
+
+# Summary
+printf("\n=== Summary ===\n");
+printf("Sequential requests (20): %.3f seconds\n", seconds1);
+printf("Concurrent requests (10): %.3f seconds\n", seconds2);
+printf("Total time: %.3f seconds\n", (elapsed1 + elapsed2).toFloat() / 1000000.0);
+
+# Cleanup
+mgr.closeAll();
+server.stop();
+
+printf("\nDone.\n");
