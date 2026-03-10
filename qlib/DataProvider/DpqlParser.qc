@@ -165,10 +165,13 @@ public class DpqlParser {
         # Prepend tokenizer errors (they should come first)
         errors = tokenizer_errors + errors;
 
+        # Determine success: warnings don't count as failures
+        bool has_errors = (select errors, $1.severity == "error") ? True : False;
+
         return <DpqlParseResult>{
             "expression": exp,
             "diagnostics": errors,
-            "success": !parse_failed && !errors,
+            "success": !parse_failed && !has_errors,
             "tokens": tokens,
         };
     }
@@ -252,6 +255,19 @@ public class DpqlParser {
     private addError(string message, string code, hash<DpqlTokenInfo> tok) {
         errors += <DpqlDiagnostic>{
             "severity": "error",
+            "message": message,
+            "code": code,
+            "line": tok.line,
+            "column": tok.column,
+            "end_line": tok.end_line,
+            "end_column": tok.end_column,
+        };
+    }
+
+    #! Adds a warning diagnostic from a token
+    private addWarning(string message, string code, hash<DpqlTokenInfo> tok) {
+        errors += <DpqlDiagnostic>{
+            "severity": "warning",
             "message": message,
             "code": code,
             "line": tok.line,
@@ -623,7 +639,7 @@ public class DpqlParser {
                 skipWhitespace();
                 # Check for function call
                 if (!atEnd() && peek().type == DPQL_TOK_LPAREN) {
-                    return parseFunctionCall(id_tok.value);
+                    return parseFunctionCall(id_tok);
                 }
                 # Check for keywords that can be values
                 string lwr = id_tok.value.lwr();
@@ -1127,7 +1143,8 @@ public class DpqlParser {
     }
 
     #! Parses a function call
-    private hash<DataProviderExpression> parseFunctionCall(string name) {
+    private hash<DataProviderExpression> parseFunctionCall(hash<DpqlTokenInfo> name_tok) {
+        string name = name_tok.value;
         expect(DPQL_TOK_LPAREN, "'('");
         skipWhitespace();
 
@@ -1138,6 +1155,29 @@ public class DpqlParser {
 
         skipWhitespace();
         expect(DPQL_TOK_RPAREN, "')'");
+
+        # Validate function name against expression map
+        if (expressions && !expressions{name}) {
+            addWarning(sprintf("Unknown function '%s'", name), "DPQL-W001", name_tok);
+        } else if (expressions{name}) {
+            hash<DataProviderExpressionInfo> info = expressions{name};
+            int expected = info.args.size();
+            int actual = args.size();
+            if (info.varargs) {
+                int min = info.min_args ?? (expected > 0 ? expected : 0);
+                if (actual < min) {
+                    addWarning(
+                        sprintf("Function '%s' expects at least %d argument%s, got %d",
+                            name, min, min == 1 ? "" : "s", actual),
+                        "DPQL-W002", name_tok);
+                }
+            } else if (expected > 0 && actual != expected) {
+                addWarning(
+                    sprintf("Function '%s' expects %d argument%s, got %d",
+                        name, expected, expected == 1 ? "" : "s", actual),
+                    "DPQL-W002", name_tok);
+            }
+        }
 
         return <DataProviderExpression>{
             "exp": name,

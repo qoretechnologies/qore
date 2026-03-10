@@ -100,6 +100,7 @@ public class DpqlTest inherits QUnit::Test {
         addTestCase("schema-aware key completion tests", \schemaAwareKeyCompletionTests());
         addTestCase("static API tests", \staticApiTests());
         addTestCase("validation tests", \validationTests());
+        addTestCase("function validation tests", \functionValidationTests());
         addTestCase("field dot edge case tests", \fieldDotEdgeCaseTests());
         addTestCase("DPQL string search API tests", \dpqlStringSearchTests());
         addTestCase("stress tests", \stressTests());
@@ -1776,6 +1777,97 @@ public class DpqlTest inherits QUnit::Test {
             list<hash<DpqlDiagnostic>> errors = DataProvider::validateDpqlExpression(
                 '(@name == "John" && @age > 18) || @status == "admin"', fields);
             assertEq(0, errors.size());
+        }
+    }
+
+    functionValidationTests() {
+        # Unknown function produces warning diagnostic
+        {
+            hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo(
+                'unknown_func(@name, 1)');
+            # Parsing should succeed (warnings don't cause failure)
+            assertTrue(result.success, "unknown function is a warning, not an error");
+            # Should have a warning diagnostic
+            list<hash<DpqlDiagnostic>> warnings = select result.diagnostics,
+                $1.severity == "warning";
+            assertTrue(warnings.size() > 0, "should have warning for unknown function");
+            assertEq("DPQL-W001", warnings[0].code);
+            assertTrue(warnings[0].message.find("unknown_func") >= 0,
+                "warning should mention function name");
+        }
+
+        # Known function produces no warning
+        {
+            hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo(
+                'index(@items, 0)');
+            list<hash<DpqlDiagnostic>> warnings = select result.diagnostics,
+                $1.severity == "warning";
+            assertEq(0, warnings.size(), "known function should have no warnings");
+        }
+
+        # Known function with wrong argument count produces warning
+        {
+            # index() expects 2 args (list, index)
+            hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo(
+                'index(@items)');
+            assertTrue(result.success, "wrong arg count is a warning, not an error");
+            list<hash<DpqlDiagnostic>> warnings = select result.diagnostics,
+                $1.severity == "warning";
+            assertTrue(warnings.size() > 0, "should have warning for wrong arg count");
+            assertEq("DPQL-W002", warnings[0].code);
+        }
+
+        # Known function with correct argument count — no warning
+        {
+            hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo(
+                'key(@data, "name")');
+            list<hash<DpqlDiagnostic>> warnings = select result.diagnostics,
+                $1.severity == "warning";
+            assertEq(0, warnings.size(), "correct arg count should have no warnings");
+        }
+
+        # Varargs function with sufficient args — no warning
+        {
+            # slice() is varargs with 2 args in signature (list, index/range...)
+            hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo(
+                'slice(@items, 0, 1, 2)');
+            list<hash<DpqlDiagnostic>> warnings = select result.diagnostics,
+                $1.severity == "warning";
+            assertEq(0, warnings.size(), "varargs function with enough args should have no warnings");
+        }
+
+        # Custom expression map — known hyphenated function produces no warning
+        {
+            hash<string, hash<DataProviderExpressionInfo>> expmap = DataProviderGenericExpressions + {
+                "ends-with": <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": "ends-with",
+                    "display_name": "Ends With",
+                    "short_desc": "True if a string ends with a given substring",
+                    "desc": "True if a string ends with a given substring",
+                    "symbol": "ends-with",
+                    "return_type": AbstractDataProviderType::get(BoolType),
+                },
+            };
+            hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo(
+                'ends-with(@name, "lo")', expmap);
+            assertTrue(result.success, "known hyphenated function should parse successfully");
+            list<hash<DpqlDiagnostic>> warnings = select result.diagnostics,
+                $1.severity == "warning";
+            assertEq(0, warnings.size(),
+                "known hyphenated function should have no warnings");
+        }
+
+        # Default expression map — unknown function gets warning
+        {
+            hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo(
+                'anything_goes(@x, 1)');
+            assertTrue(result.success, "unknown function is warning, not error");
+            list<hash<DpqlDiagnostic>> warnings = select result.diagnostics,
+                $1.severity == "warning";
+            assertEq(1, warnings.size(),
+                "unknown function with default expressions gets warning");
+            assertEq("DPQL-W001", warnings[0].code);
         }
     }
 
