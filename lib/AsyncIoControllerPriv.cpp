@@ -849,6 +849,13 @@ void AsyncIoControllerPriv::startIntern(ExceptionSink* xsink) {
         io_waiting = false;
     }
 
+    // Another thread may have already restarted the I/O thread while we were waiting
+    // in the while(io_exiting) loop above (both threads released the lock via io_cond.wait,
+    // and the first one to re-acquire it after the broadcast restarted the thread).
+    if (tid) {
+        return;
+    }
+
     // Validate EventLoop and EventNotifier
     if (!loop || !loop->isValid()) {
         xsink->raiseException("ASYNC-IO-ERROR", "event loop is not valid");
