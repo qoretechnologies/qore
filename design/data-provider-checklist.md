@@ -109,6 +109,26 @@ The goal: actions should expose enough API functionality to be genuinely useful,
 
 ---
 
+## 4b. API Field Verification (CRITICAL)
+
+**Every request type field MUST be verified against the actual API documentation before implementation.** Never guess or assume field names, types, or structures. Incorrect field names cause 400 errors at runtime (e.g., sending `email` when the API expects `email_addresses`).
+
+### Mandatory Steps
+- [ ] **Look up the API's OpenAPI spec or endpoint documentation** for each create/update action
+- [ ] **Verify every field name matches exactly** — e.g., `estimated_close_time` not `estimated_close_date`, `email_addresses` not `email`, `assigned_to_user_id` not `user_id`
+- [ ] **Verify field types match the API** — e.g., if the API expects `owner_id` as string, don't use `IntOrNothingType`
+- [ ] **Verify required fields match** — e.g., if the API requires `assigned_to_user_id` on task creation, mark it required
+- [ ] **Verify nested structures match** — e.g., if the API expects `email_addresses` as an array of `{email, field, opt_in_reason}` objects, don't flatten it to a simple string field
+- [ ] **Document evidence** — note which API docs or OpenAPI spec were consulted for each endpoint
+
+### Common Pitfalls
+- Singular vs plural field names (`email_address` on companies vs `email_addresses` on contacts)
+- Object vs scalar fields (`company: {id, company_name}` vs `company_id: int`)
+- Field name variations (`due_time` vs `due_date`, `order_time` vs `order_date`)
+- ID field types (many APIs use string IDs even for numeric-looking values)
+
+---
+
 ## 5. Action Options and Output Types (CRITICAL)
 
 **Action `options` and `output_type` are the primary user interface** — they determine what users see in the action form and what output fields are available for mapping. An action without `options` appears in the catalog but shows an empty, unusable form. An action without `output_type` gives users no visibility into the response.
@@ -171,6 +191,7 @@ The goal: actions should expose enough API functionality to be genuinely useful,
 - [ ] Options ending in `_id`, `Id`, or `ID` have `ref_data` attribute (exception: `organization_id` which comes from connection)
 - [ ] `getSupportedReferenceData()` returns all `ref_data` types used in actions
 - [ ] `getReferenceDataImpl()` handles each type and returns `list<hash<AllowedValueInfo>>`
+- [ ] **ref_data `value` type matches the option type**: The `"value"` in each `AllowedValueInfo` returned by `getReferenceDataImpl()` MUST match the type of the action option it populates. If the option is `*int` (e.g., `owner_id`), the value must be `int(id)`. If the option is `string` or `*string` (e.g., `contact_id`), the value must be `string(id)`. API responses often return IDs as integers from JSON — always cast explicitly. A type mismatch causes the UI to send the wrong type, leading to silent data corruption or API errors.
 
 ---
 
@@ -289,6 +310,21 @@ The UI uses `preselected: True` on action options to determine which fields to s
 - [ ] Tests call `getExampleEventData()` for each trigger and verify expected fields
 - [ ] `%modern` directive used (not individual parse directives)
 - [ ] Test file has executable permission (`chmod +x`)
+
+### Field Value Assertions (CRITICAL)
+
+**Never write `assertEq(True, True, "X succeeded")`** — this only proves no exception was thrown, not that data is correct. The API may return 200 OK with missing or wrong data.
+
+For every action, assert **specific field values** in the response:
+
+- **Create**: Assert the response contains the fields you sent (e.g., `assertEq(test_email, result.email)`) plus an ID
+- **Get/List**: Assert key fields are present and have expected values, especially fields that require special API handling (e.g., optional properties, nested arrays flattened to simple fields)
+- **Update**: Assert the response reflects the updated values, then re-fetch and verify persistence
+- **Delete**: Assert re-fetch returns no results
+
+**Test the full round-trip**: Create → Get (verify all fields) → Update → Get (verify updated fields) → Delete → Get (verify gone).
+
+**Test API response completeness**: If your data type declares fields like `email` or `phone`, verify the API actually returns them. APIs often have "optional properties" or fields that require explicit request parameters — discover this during testing, not in production.
 
 ---
 

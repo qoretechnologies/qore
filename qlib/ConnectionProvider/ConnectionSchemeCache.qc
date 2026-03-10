@@ -198,6 +198,8 @@ public class ConnectionSchemeCache {
 
             "shipstation": "ShipStationRestClient",
 
+            "keaprest": "KeapRestClient",
+
             "squareres": "SquareRestClient",
             "squarespaceres": "SquarespaceRestClient",
 
