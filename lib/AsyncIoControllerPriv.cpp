@@ -849,6 +849,13 @@ void AsyncIoControllerPriv::startIntern(ExceptionSink* xsink) {
         io_waiting = false;
     }
 
+    // Another thread may have already restarted the I/O thread while we were waiting
+    // in the while(io_exiting) loop above (both threads released the lock via io_cond.wait,
+    // and the first one to re-acquire it after the broadcast restarted the thread).
+    if (tid) {
+        return;
+    }
+
     // Validate EventLoop and EventNotifier
     if (!loop || !loop->isValid()) {
         xsink->raiseException("ASYNC-IO-ERROR", "event loop is not valid");
@@ -895,6 +902,17 @@ void AsyncIoControllerPriv::startIntern(ExceptionSink* xsink) {
         // ROdereference() will never be the last ref, so we can safely
         // just undo the ref() above without triggering destruction.
         ROdereference();
+        // Remove the notifier from the event loop to undo the loop->add() above.
+        // If we don't clean up here, the next startIntern() call will attempt to
+        // re-register the same fd and fail with EEXIST.
+        ExceptionSink cleanup_xsink;
+#ifdef DARWIN
+        loop->removeUserEvent(notifier->getUserIdent(), &cleanup_xsink);
+        notifier->unbindFromKqueue();
+#else
+        loop->remove(notifier->fd(), &cleanup_xsink);
+#endif
+        cleanup_xsink.clear();
         return;
     }
     // NOTE: do not call log() here — caller holds the lock.
