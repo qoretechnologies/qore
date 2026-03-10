@@ -153,6 +153,8 @@ printf("%N\n", ans.body);
     @subsection restclientv2_4 RestClient v2.4
     - added CBOR serialization support (\c "cbor" data option) when the \c json module
       version 1.12+ is available (RFC 8949)
+    - added the official \c "application/yaml" MIME type (RFC 9512) to the accepted content types
+      for inbound responses
 
     @subsection restclientv2_3_3 RestClient v2.3.3
     - fixed non-blocking polling with connections that use basic auth
@@ -402,7 +404,7 @@ public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, Connec
         #! Accept header list
         const AcceptList = (
 %ifndef NoYaml
-            MimeTypeYaml, MimeTypeYamlRpc,
+            MimeTypeYamlApp, MimeTypeYaml, MimeTypeYamlRpc,
 %endif
 %ifndef NoXml
             MimeTypeXml, MimeTypeXmlApp,
