@@ -1,0 +1,158 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file KeapCreateOpportunityDataProvider.qc Keap create opportunity action data provider
+
+/*  KeapCreateOpportunityDataProvider.qc Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+#! Contains all public definitions in the KeapDataProvider module
+public namespace KeapDataProvider {
+
+#! Request type for creating an opportunity
+public class KeapCreateOpportunityRequestDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "opportunity_title": {
+                "type": StringType,
+                "display_name": "Title",
+                "short_desc": "The opportunity title",
+                "desc": "The title of the opportunity",
+                "required": True,
+            },
+            "contact_id": {
+                "type": StringOrNothingType,
+                "display_name": "Contact ID",
+                "short_desc": "The associated contact",
+                "desc": "The ID of the contact to associate with this opportunity",
+            },
+            "stage_id": {
+                "type": StringOrNothingType,
+                "display_name": "Stage ID",
+                "short_desc": "The pipeline stage",
+                "desc": "The ID of the pipeline stage for this opportunity",
+            },
+            "user_id": {
+                "type": StringOrNothingType,
+                "display_name": "User ID",
+                "short_desc": "The assigned user",
+                "desc": "The ID of the user assigned to this opportunity",
+            },
+            "affiliate_id": {
+                "type": StringOrNothingType,
+                "display_name": "Affiliate ID",
+                "short_desc": "The affiliate",
+                "desc": "The ID of the affiliate associated with this opportunity",
+            },
+            "estimated_close_time": {
+                "type": DateOrNothingType,
+                "display_name": "Estimated Close Time",
+                "short_desc": "The estimated close date",
+                "desc": "The estimated close date/time of the opportunity",
+            },
+            "projected_revenue_high": {
+                "type": FloatOrNothingType,
+                "display_name": "Projected Revenue High",
+                "short_desc": "High revenue estimate",
+                "desc": "The high estimate of projected revenue for the opportunity",
+            },
+            "projected_revenue_low": {
+                "type": FloatOrNothingType,
+                "display_name": "Projected Revenue Low",
+                "short_desc": "Low revenue estimate",
+                "desc": "The low estimate of projected revenue for the opportunity",
+            },
+            "opportunity_notes": {
+                "type": StringOrNothingType,
+                "display_name": "Notes",
+                "short_desc": "Notes about the opportunity",
+                "desc": "Notes about the opportunity",
+            },
+            "next_action_notes": {
+                "type": StringOrNothingType,
+                "display_name": "Next Action Notes",
+                "short_desc": "Notes for the next action",
+                "desc": "Notes about the next action to take for this opportunity",
+            },
+            "next_action_time": {
+                "type": DateOrNothingType,
+                "display_name": "Next Action Time",
+                "short_desc": "When to take the next action",
+                "desc": "The date/time when the next action should be taken",
+            },
+            "include_in_forecast": {
+                "type": SoftBoolOrNothingType,
+                "display_name": "Include in Forecast",
+                "short_desc": "Include in revenue forecast",
+                "desc": "Whether to include this opportunity in the revenue forecast",
+            },
+        };
+    }
+
+    constructor() {
+        addQoreFields(Fields);
+    }
+}
+
+#! Keap create opportunity action data provider
+public class KeapCreateOpportunityDataProvider inherits KeapDataProviderBase {
+    public {
+        const ProviderInfo = <DataProviderInfo>{
+            "name": "create",
+            "desc": "Create a new opportunity in Keap",
+            "type": "KeapCreateOpportunityDataProvider",
+            "supports_request": True,
+            "constructor_options": ConstructorOptions,
+        };
+
+        const ConstructorOptions = BaseConstructorOptions;
+
+        static *AbstractDataProviderType ResponseType = new KeapOpportunityDataType();
+        static *AbstractDataProviderType RequestType = new KeapCreateOpportunityRequestDataType();
+    }
+
+    constructor(KeapRestClient::KeapRestClient rest) : KeapDataProviderBase(rest) {
+    }
+
+    string getName() {
+        return "create";
+    }
+
+    *string getDesc() {
+        return "Create a new opportunity in Keap";
+    }
+
+    private *AbstractDataProviderType getRequestTypeImpl() {
+        return new KeapCreateOpportunityRequestDataType();
+    }
+
+    private *AbstractDataProviderType getResponseTypeImpl() {
+        return new KeapOpportunityDataType();
+    }
+
+    private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        return doPost("opportunities", req);
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return ProviderInfo;
+    }
+}
+
+} # namespace KeapDataProvider

@@ -39,7 +39,7 @@ public namespace AsyncSocketIo {
     read HTTP/2 frames and populate the stream buffer. The context only reads from the buffer
     via @ref Qore::Socket::readHttp2StreamData() "Socket::readHttp2StreamData()".
 
-    @since AsyncSocketIo 3.0
+    @since AsyncSocketIo 1.0
 */
 public class Http2StreamContext inherits AbstractStreamContext {
     private {

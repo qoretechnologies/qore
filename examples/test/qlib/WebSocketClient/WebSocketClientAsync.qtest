@@ -16,6 +16,7 @@
 %requires ../../../../qlib/WebSocketUtil.qm
 %requires ../../../../qlib/WebSocketHandler.qm
 %requires ../../../../qlib/WebSocketClient.qm
+%requires ../../../../qlib/AsyncSocketIo/AsyncSocketIo.qm
 
 %exec-class WebSocketClientAsyncTest
 
@@ -74,6 +75,9 @@ public class WebSocketClientAsyncTest inherits QUnit::Test {
         set_return_value(main());
 
         m_server.stop();
+        # Stop the global async I/O controller's ThreadPool to allow clean exit
+        AsyncSocketIo::AsyncSocketIoController ctrl = AsyncSocketIo::getGlobalAsyncIoController();
+        ctrl.stopClear();
     }
 
     #! Helper to drive a poll operation to completion with a deadline

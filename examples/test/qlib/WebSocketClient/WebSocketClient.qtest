@@ -14,6 +14,7 @@
 %requires ../../../../qlib/WebSocketUtil.qm
 %requires ../../../../qlib/WebSocketHandler.qm
 %requires ../../../../qlib/WebSocketClient.qm
+%requires ../../../../qlib/AsyncSocketIo/AsyncSocketIo.qm
 
 %exec-class WebSocketClientTest
 
@@ -232,6 +233,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         set_return_value(main());
 
         mServer.stop();
+        # Stop the global async I/O controller's ThreadPool to allow clean exit
+        AsyncSocketIo::AsyncSocketIoController ctrl = AsyncSocketIo::getGlobalAsyncIoController();
+        ctrl.stopClear();
     }
 
     private bool waitForReadyMessage(string log_path, int port, int retries = 50) {
