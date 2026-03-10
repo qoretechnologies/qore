@@ -1728,21 +1728,41 @@ ws.setEventQueue();
             stop = cmd;
             # wake up any sleeping threads
             sleep_cond.broadcast();
-            if (async_io && poll_op) {
-                # Send close frame directly — the I/O thread will send it in the next
-                # continuePoll() cycle and the close handshake will proceed naturally
-                if (!async_close_sent && !poll_op.goalReached()) {
-                    async_close_sent = True;
-                    poll_op.sendClose(cmd);
+            if (async_io && tid == -1) {
+                # Async mode: handle cleanup atomically. We cannot rely on the delivery
+                # pipeline to call handleAsyncShutdown() → clearTid() because the I/O
+                # controller may have already been stopped (e.g., by server shutdown),
+                # which means no I/O events will fire, no callbacks will be invoked,
+                # and clearTid() would never be called — causing waitTidCleared() to
+                # hang forever.
+                stopAsyncIo();
+                if (hc.isOpen()) {
+                    hc.shutdown();
+                    hc.close();
                 }
-                # wake the async I/O controller to process the close
-                wakeAsyncIo();
+                {
+                    AutoLock al(delivery_mutex);
+                    delivery_active = False;
+                }
+                clearTid();
+                cid = -1;
+                # Call closingConnection() outside the lock; tid is cleared so
+                # re-entrant disconnect() calls are no-ops
+                m.unlock();
+                try {
+                    closingConnection();
+                } catch (hash<ExceptionInfo> ex) {
+                    try {
+                        logError("Exception in closing WebSocketClient callback: %s",
+                            get_exception_string(ex));
+                    } catch () {
+                        # ignore
+                    }
+                }
+                m.lock();
+                return;
             }
-            # Wait for the event thread/async shutdown to terminate.
-            # For async I/O (tid == -1), handleAsyncShutdown() will call clearTid() from the
-            # ThreadPool thread after the delivery task completes. waitTidCleared() is safe here
-            # because it releases mutex m (via tid_cond.wait(m)), allowing handleAsyncShutdown()
-            # to acquire m and call clearTid().
+            # Non-async mode: wait for the event thread to terminate
             waitTidCleared(tid);
             cid = -1;
         }
@@ -2194,12 +2214,22 @@ ws.setEventQueue();
             hc.close();
         }
 
-        # Set the shutdown TID before calling closingConnection() so that if the callback
-        # drops the last user reference and triggers the destructor on THIS thread,
-        # disconnectUnlocked() can detect the self-deadlock and skip waitTidCleared()
+        # Check if disconnectUnlocked() already handled the cleanup (cleared tid).
+        # If so, skip closingConnection() and clearTid() to avoid double cleanup.
         {
             m.lock();
             on_exit m.unlock();
+            if (tid != -1) {
+                # tid was already cleared by disconnectUnlocked(); skip cleanup
+                {
+                    AutoLock al(delivery_mutex);
+                    delivery_active = False;
+                }
+                return;
+            }
+            # Set the shutdown TID before calling closingConnection() so that if the callback
+            # drops the last user reference and triggers the destructor on THIS thread,
+            # disconnectUnlocked() can detect the self-deadlock and skip waitTidCleared()
             async_shutdown_tid = gettid();
         }
 
@@ -2226,6 +2256,16 @@ ws.setEventQueue();
         {
             m.lock();
             on_exit m.unlock();
+
+            # Check again: disconnectUnlocked() may have cleared tid while we were
+            # in closingConnection()
+            if (tid != -1) {
+                {
+                    AutoLock al(delivery_mutex);
+                    delivery_active = False;
+                }
+                return;
+            }
 
             if (reconnect && !stop) {
                 should_reconnect = True;
