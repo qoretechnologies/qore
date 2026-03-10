@@ -207,6 +207,13 @@ public class HttpClientStreamHandle {
                 throw "HTTPCLIENT-REQUEST-ERROR", sprintf("%s: %s", ex.err, ex.desc);
             }
         } else {
+            # Non-controller mode: poll-driven I/O
+            # Optimization: use larger poll interval for high concurrency to reduce lock
+            # acquisitions (isDone() and drivePoll() both acquire the stream lock and
+            # connection lock; with many concurrent requests, lock contention is a
+            # major bottleneck especially in IR mode where per-call overhead is ~2x)
+            timeout poll_interval = conn.getActiveStreamCount() > 1 ? 500ms : 1s;
+
             while (!f.isDone()) {
                 date remaining = end_time - now_us();
                 if (remaining <= 0us) {
@@ -214,8 +221,7 @@ public class HttpClientStreamHandle {
                     throw "HTTPCLIENT-TIMEOUT",
                         sprintf("request timed out after %d ms", wait_timeout);
                 }
-                conn.drivePoll(min(remaining,
-                    conn.getActiveStreamCount() > 1 ? 100ms : 1s));
+                conn.drivePoll(min(remaining, poll_interval));
             }
             try {
                 return f.get() ?? {};
