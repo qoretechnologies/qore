@@ -1,0 +1,430 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/HttpServerAsyncIo
+%requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/WebSocketUtil.qm
+%requires ../../../../qlib/WebSocketHandler.qm
+%requires ../../../../qlib/WebSocketClient.qm
+%requires ../../../../qlib/AsyncSocketIo
+
+%exec-class WebSocketClientPollOperationTest
+
+#! WebSocket connection that echoes messages back
+class EchoWsConnection inherits WebSocketConnection {
+    constructor(WebSocketHandler handler) : WebSocketConnection(handler) {
+    }
+
+    gotMessage(string msg) {
+        send("ECHO:" + msg);
+    }
+
+    gotMessage(binary msg) {
+        send(msg);
+    }
+}
+
+class EchoWsHandler inherits WebSocketHandler {
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new EchoWsConnection(self);
+    }
+}
+
+public class WebSocketClientPollOperationTest inherits QUnit::Test {
+    private {
+        HttpServer m_server;
+        EchoWsHandler ws_handler();
+        hash<auto> linfo;
+        Logger logger;
+    }
+
+    constructor() : Test("WebSocketClientPollOperationTest", "1.0") {
+        addTestCase("basic text send/receive", \basicTextTest());
+        addTestCase("binary send/receive", \binaryTest());
+        addTestCase("ping/pong", \pingPongTest());
+        addTestCase("close handshake", \closeHandshakeTest());
+        addTestCase("poll state machine", \pollStateMachineTest());
+        addTestCase("multiple messages", \multipleMessagesTest());
+        addTestCase("controller integration", \controllerIntegrationTest());
+        addTestCase("concurrent send via channel", \concurrentSendTest());
+        addTestCase("abort test", \abortTest());
+        addTestCase("goal and state accessors", \accessorsTest());
+
+        logger = new Logger("test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        };
+        m_server = new HttpServer(http_opts);
+        m_server.setHandler("ws-handler", "", NOTHING, ws_handler);
+        m_server.setDefaultHandler("ws-handler", ws_handler);
+        linfo = m_server.addListener(<HttpListenerOptionInfo>{"service": 0});
+
+        set_return_value(main());
+
+        m_server.stop();
+    }
+
+    #! Helper: perform WebSocket upgrade handshake and return the HTTPClient
+    private HTTPClient wsHandshake() {
+        HTTPClient hc({"url": "http://localhost:" + linfo.port});
+        hc.connect();
+        string key = get_random_string(16).toBase64();
+        hash<auto> rh = hc.send(NOTHING, "GET", NOTHING, {
+            "Upgrade": "websocket",
+            "Connection": "Upgrade",
+            "Sec-WebSocket-Key": key,
+            "Sec-WebSocket-Version": "13",
+        });
+        if (rh.status_code != 101) {
+            throw "WEBSOCKET-ERROR", sprintf("expected 101, got %d", rh.status_code);
+        }
+        return hc;
+    }
+
+    #! Helper to drive a poll operation manually until a message arrives or timeout
+    private *hash<auto> drivePollUntilMessage(WebSocketClientPollOperation poll_op, timeout deadline = 10s) {
+        date end = now_us() + deadline;
+        while (now_us() < end) {
+            *hash<SocketPollInfo> pi = poll_op.continuePoll();
+            if (poll_op.goalReached()) {
+                break;
+            }
+            *hash<auto> msg = poll_op.getReceivedMessage();
+            if (msg) {
+                return msg;
+            }
+            if (!pi) {
+                break;
+            }
+            Qore::usleep(1000);
+        }
+        # Check one more time
+        return poll_op.getReceivedMessage();
+    }
+
+    #! Helper to drive poll until goal is reached
+    private drivePollUntilGoal(WebSocketClientPollOperation poll_op, timeout deadline = 10s) {
+        date end = now_us() + deadline;
+        while (now_us() < end && !poll_op.goalReached()) {
+            poll_op.continuePoll();
+            Qore::usleep(1000);
+        }
+    }
+
+    #! Test basic text message send/receive via poll operation
+    basicTextTest() {
+        HTTPClient hc = wsHandshake();
+        WebSocketClientPollOperation poll_op(hc, "http1", 0, NOTHING, 15s, logger);
+
+        assertEq("ws-client-io", poll_op.getGoal());
+        assertEq("connected", poll_op.getState());
+        assertFalse(poll_op.goalReached());
+
+        # Send a text message
+        poll_op.sendText("hello");
+
+        # Drive poll to send the message and receive the echo
+        *hash<auto> msg = drivePollUntilMessage(poll_op);
+        assertEq("text", msg.type, "received text message");
+        assertEq("ECHO:hello", msg.data, "echo content matches");
+
+        # Clean close
+        poll_op.sendClose();
+        drivePollUntilGoal(poll_op);
+    }
+
+    #! Test binary message send/receive
+    binaryTest() {
+        HTTPClient hc = wsHandshake();
+        WebSocketClientPollOperation poll_op(hc, "http1", 0, NOTHING, 15s, logger);
+
+        binary test_data = <deadbeef01020304>;
+        poll_op.sendBinary(test_data);
+
+        *hash<auto> msg = drivePollUntilMessage(poll_op);
+        assertEq("binary", msg.type, "received binary message");
+        assertEq(test_data, msg.data, "binary data matches");
+
+        poll_op.sendClose();
+        drivePollUntilGoal(poll_op);
+    }
+
+    #! Test ping/pong handling
+    pingPongTest() {
+        HTTPClient hc = wsHandshake();
+        WebSocketClientPollOperation poll_op(hc, "http1", 0, NOTHING, 15s, logger);
+
+        # Send a ping
+        poll_op.sendPing(<01020304>);
+
+        # We should get a pong back from the server
+        date end = now_us() + 10s;
+        *hash<auto> pong_msg;
+        while (now_us() < end) {
+            poll_op.continuePoll();
+            *hash<auto> msg = poll_op.getReceivedMessage();
+            if (msg && msg.type == "pong") {
+                pong_msg = msg;
+                break;
+            }
+            if (poll_op.goalReached()) {
+                break;
+            }
+            Qore::usleep(1000);
+        }
+        # The server should echo pings back as pongs
+        if (pong_msg) {
+            assertEq("pong", pong_msg.type, "received pong");
+        }
+
+        poll_op.sendClose();
+        drivePollUntilGoal(poll_op);
+        assertTrue(poll_op.goalReached(), "close completed after ping/pong");
+    }
+
+    #! Test close handshake
+    closeHandshakeTest() {
+        HTTPClient hc = wsHandshake();
+        WebSocketClientPollOperation poll_op(hc, "http1", 0, NOTHING, 15s, logger);
+        assertEq("connected", poll_op.getState());
+
+        # Initiate close
+        poll_op.sendClose(WSCC_NormalClosure, "test close");
+
+        # Drive until goal reached (close handshake completes)
+        drivePollUntilGoal(poll_op);
+
+        assertTrue(poll_op.goalReached(), "goal reached after close");
+        # State should be closing or closed
+        assertTrue(poll_op.getState() == "closing" || poll_op.getState() == "closed",
+            "state is closing or closed");
+        assertEq(WSCC_NormalClosure, poll_op.getCloseCode(), "close code");
+        assertEq("test close", poll_op.getCloseReason(), "close reason");
+    }
+
+    #! Test poll state machine transitions
+    pollStateMachineTest() {
+        HTTPClient hc = wsHandshake();
+        WebSocketClientPollOperation poll_op(hc, "http1", 0, NOTHING, 15s, logger);
+
+        # Initially connected
+        assertEq("connected", poll_op.getState());
+        assertFalse(poll_op.goalReached());
+
+        # continuePoll should return poll info with at least POLLIN
+        *hash<SocketPollInfo> pi = poll_op.continuePoll();
+        assertTrue(exists pi, "continuePoll returns poll info");
+        assertTrue((pi.events & SOCK_POLLIN) != 0, "POLLIN is set");
+
+        # After sendClose, should transition to closing
+        poll_op.sendClose();
+        assertTrue(poll_op.getState() == "closing", "state is closing after sendClose");
+
+        drivePollUntilGoal(poll_op);
+        assertTrue(poll_op.goalReached(), "goal reached");
+    }
+
+    #! Test multiple messages in sequence
+    multipleMessagesTest() {
+        HTTPClient hc = wsHandshake();
+        WebSocketClientPollOperation poll_op(hc, "http1", 0, NOTHING, 15s, logger);
+
+        # Send multiple messages
+        int count = 5;
+        for (int i = 0; i < count; ++i) {
+            poll_op.sendText("msg" + string(i));
+        }
+
+        # Collect all echoed messages
+        list<string> received = ();
+        date end = now_us() + 15s;
+        while (received.size() < count && now_us() < end) {
+            poll_op.continuePoll();
+            while (True) {
+                *hash<auto> msg = poll_op.getReceivedMessage();
+                if (!msg) {
+                    break;
+                }
+                if (msg.type == "text") {
+                    received += msg.data;
+                }
+            }
+            if (poll_op.goalReached()) {
+                break;
+            }
+            Qore::usleep(1000);
+        }
+
+        assertEq(count, received.size(), "received all messages");
+        for (int i = 0; i < count; ++i) {
+            assertEq("ECHO:msg" + string(i), received[i], sprintf("message %d content", i));
+        }
+
+        poll_op.sendClose();
+        drivePollUntilGoal(poll_op);
+    }
+
+    #! Test integration with AsyncSocketIoController
+    controllerIntegrationTest() {
+        HTTPClient hc = wsHandshake();
+        WebSocketClientPollOperation poll_op(hc, "http1", 0, NOTHING, 15s, logger);
+
+        # Create a controller for this test
+        AsyncSocketIo::AsyncSocketIoController controller(logger);
+        string owner = "test-" + get_random_string(8);
+
+        # Use callback mode: the controller will drive continuePoll() automatically
+        # We use a self-resubmitting callback pattern
+        code make_callback;
+        make_callback = sub (hash<SocketPollResultInfo> result) {
+            # Re-submit if not done
+            if (!poll_op.goalReached()) {
+                try {
+                    controller.submit(<SocketPollOperationInfo>{
+                        "sock": hc,
+                        "spop": poll_op,
+                        "owner": owner,
+                        "to": -1s,
+                        "callback": make_callback,
+                    }, True);
+                } catch (hash<ExceptionInfo> ex) {
+                    # Controller may be stopping
+                }
+            }
+        };
+
+        controller.submit(<SocketPollOperationInfo>{
+            "sock": hc,
+            "spop": poll_op,
+            "owner": owner,
+            "to": -1s,
+            "callback": make_callback,
+        });
+
+        controller.waitForProcessing(5s);
+
+        # Send a message — the controller should drive the I/O
+        poll_op.sendText("controller-test");
+        controller.wake();
+
+        # Wait for the echo
+        *hash<auto> msg;
+        date end = now_us() + 10s;
+        while (now_us() < end) {
+            msg = poll_op.getReceivedMessage(100ms);
+            if (msg && msg.type == "text") {
+                break;
+            }
+        }
+
+        assertEq("text", msg.type, "received text via controller");
+        assertEq("ECHO:controller-test", msg.data, "echo via controller");
+
+        # Close
+        poll_op.sendClose();
+        controller.wake();
+
+        # Wait for close to complete
+        end = now_us() + 10s;
+        while (now_us() < end && !poll_op.goalReached()) {
+            Qore::usleep(10000);
+        }
+
+        controller.cancelByOwner(owner);
+        controller.stop();
+        assertTrue(poll_op.goalReached(), "poll operation closed after controller test");
+    }
+
+    #! Test concurrent sends via the Channel-based queue
+    concurrentSendTest() {
+        HTTPClient hc = wsHandshake();
+        WebSocketClientPollOperation poll_op(hc, "http1", 0, NOTHING, 15s, logger);
+
+        # Send messages from multiple threads
+        int threads = 3;
+        int msgs_per_thread = 3;
+        Counter cnt(threads);
+
+        for (int t = 0; t < threads; ++t) {
+            int thread_id = t;
+            background sub () {
+                on_exit cnt.dec();
+                for (int i = 0; i < msgs_per_thread; ++i) {
+                    poll_op.sendText(sprintf("t%d-m%d", thread_id, i));
+                }
+            }();
+        }
+        cnt.waitForZero();
+
+        # Collect echoes
+        int total_expected = threads * msgs_per_thread;
+        list<string> received = ();
+        date end = now_us() + 15s;
+        while (received.size() < total_expected && now_us() < end) {
+            poll_op.continuePoll();
+            while (True) {
+                *hash<auto> msg = poll_op.getReceivedMessage();
+                if (!msg) {
+                    break;
+                }
+                if (msg.type == "text") {
+                    received += msg.data;
+                }
+            }
+            Qore::usleep(1000);
+        }
+
+        assertEq(total_expected, received.size(), "received all concurrent messages");
+
+        poll_op.sendClose();
+        drivePollUntilGoal(poll_op);
+    }
+
+    #! Test abort
+    abortTest() {
+        HTTPClient hc = wsHandshake();
+        WebSocketClientPollOperation poll_op(hc, "http1", 0, NOTHING, 15s, logger);
+
+        poll_op.abort();
+        assertTrue(poll_op.goalReached(), "goal reached after abort");
+        assertEq("closed", poll_op.getState(), "state is closed after abort");
+
+        # Check the abort notification was queued
+        *hash<auto> msg = poll_op.getReceivedMessage();
+        assertTrue(exists msg, "abort notification received");
+        assertEq("closed", msg.type, "abort type is closed");
+    }
+
+    #! Test getGoal, getState, getOutput, getCloseCode, getCloseReason
+    accessorsTest() {
+        HTTPClient hc = wsHandshake();
+        WebSocketClientPollOperation poll_op(hc, "http1", 0, NOTHING, 15s, logger);
+
+        assertEq("ws-client-io", poll_op.getGoal());
+        assertEq("connected", poll_op.getState());
+        assertFalse(poll_op.goalReached());
+        assertEq(WSCC_NormalClosure, poll_op.getCloseCode());
+        assertEq("", poll_op.getCloseReason());
+        assertFalse(poll_op.hasReceivedMessages());
+
+        hash<auto> output = poll_op.getOutput();
+        assertEq("connected", output.state);
+
+        poll_op.sendClose();
+        drivePollUntilGoal(poll_op);
+    }
+}

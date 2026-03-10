@@ -49,6 +49,11 @@ class SewioWebSocketClientTest inherits QUnit::Test {
     }
 
     constructor() : Test("SewioWebSocketClientTest", "1.0") {
+        @debug {
+            set_signal_handler(SIGUSR1, sub (int sig) {
+                printf("=== SIGUSR1 Thread Stacks ===\n%Y\n", get_all_thread_call_stacks());
+            });
+        }
         addTestCase("SewioWebSocketClient tests", \sewioWebSocketClientTests());
         addTestCase("SewioWebSocketConnection tests", \sewioWebSocketConnectionTests());
 
