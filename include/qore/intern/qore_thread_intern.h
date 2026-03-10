@@ -60,6 +60,7 @@ class CallNode;
 class CallStack;
 class LocalVar;
 class LocalVarValue;
+class LVarSet;
 class ClosureParseEnvironment;
 class QoreClosureBase;
 struct ClosureVarValue;
@@ -601,6 +602,7 @@ DLLLOCAL const QoreClosureBase* thread_set_runtime_closure_env(const QoreClosure
 
 typedef std::vector<ClosureVarValue*> cvv_vec_t;
 DLLLOCAL cvv_vec_t* thread_get_all_closure_vars();
+DLLLOCAL cvv_vec_t* thread_get_closure_vars_for_vlist(const LVarSet* vlist);
 
 DLLLOCAL void thread_push_frame_boundary();
 DLLLOCAL void thread_pop_frame_boundary();

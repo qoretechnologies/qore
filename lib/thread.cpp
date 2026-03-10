@@ -1226,6 +1226,23 @@ cvv_vec_t* thread_get_all_closure_vars() {
     return thread_data.get()->tlpd->cvstack.getAll();
 }
 
+cvv_vec_t* thread_get_closure_vars_for_vlist(const LVarSet* vlist) {
+    if (!vlist || vlist->empty()) {
+        return nullptr;
+    }
+    cvv_vec_t* cv = nullptr;
+    for (const LocalVar* lv : *vlist) {
+        ClosureVarValue* cvv = thread_find_closure_var(lv->getName());
+        if (cvv) {
+            if (!cv) {
+                cv = new cvv_vec_t;
+            }
+            cv->push_back(cvv->refSelf());
+        }
+    }
+    return cv;
+}
+
 const QoreTypeInfo* parse_set_implicit_arg_type_info(const QoreTypeInfo* ti) {
     ThreadData* td = thread_data.get();
     const QoreTypeInfo* rv = td->implicit_arg_type_info;

@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -133,7 +133,11 @@ QoreValue QoreClosureParseNode::exec(const QoreClosureBase& closure_base, QorePr
 }
 
 QoreClosureBase* QoreClosureParseNode::evalBackground(ExceptionSink* xsink) const {
-    cvv_vec_t* cvv = thread_get_all_closure_vars();
+    // Use vlist-filtered capture instead of thread_get_all_closure_vars():
+    // In IR mode, ensureLocalInstantiated() accumulates ALL touched closure-use locals
+    // onto the cvstack simultaneously (no LIFO scoping), so getAll() would capture
+    // many spurious CVVs. We only need the variables the closure actually declares.
+    cvv_vec_t* cvv = thread_get_closure_vars_for_vlist(getVList());
 
     if (in_method) {
         QoreObject* o;
