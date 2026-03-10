@@ -2195,9 +2195,15 @@ public namespace RestSchemaValidator {
 
             if (exists http_body) {
                 *hash<auto> dh = DataDeserializationSupport{ct};
-                if (!dh)
+                if (!dh) {
                     throw "DESERIALIZATION-ERROR", sprintf("cannot deserialize request body; content-type is: %y; "
                         "types supported: %y; response body: %y", ct, keys DataDeserializationSupport, http_body);
+                }
+
+                # Convert body to binary for non-text content types (e.g. CBOR)
+                if (!is_mime_text(ct) && http_body.typeCode() == NT_STRING) {
+                    http_body = binary(http_body);
+                }
 
                 string ds_code = dh.code;
                 try {
@@ -2341,7 +2347,12 @@ public namespace RestSchemaValidator {
                         keys DataDeserializationSupport, response_body);
                 }
 
-                if (response_body.typeCode() != NT_STRING) {
+                # Convert body to binary for non-text content types (e.g. CBOR)
+                # HTTPClient::send() returns all bodies as strings; binary formats
+                # need the raw bytes
+                if (!is_mime_text(ct) && response_body.typeCode() == NT_STRING) {
+                    response_body = binary(response_body);
+                } else if (response_body.typeCode() != NT_STRING) {
                     throw "DESERIALIZATION-ERROR", sprintf("cannot deserialize response body; content-type is: %y but "
                         "body type is %y", ct, response_body.type());
                 }
@@ -2349,6 +2360,7 @@ public namespace RestSchemaValidator {
                 # for encoding if necessary for JSON and YAML for HTTP servers that do not set the character encoding
                 # (ex: the Discord API server)
                 if ((ct == MimeTypeJson || ct == MimeTypeYaml)
+                    && response_body.typeCode() == NT_STRING
                     && response_body.encoding() == "ISO-8859-1") {
                     response_body = force_encoding(response_body, "UTF-8");
                 }
