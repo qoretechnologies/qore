@@ -594,6 +594,11 @@ public class DpqlCompletionProvider {
     }
 
     #! Gets function completions
+    /** Includes both \c DET_Function expressions and \c DET_Operator expressions that use
+        function-call syntax (identifier-style names like \c ends-with, \c contains).
+        Infix operators with symbolic names (\c ==, \c &&) are excluded as they are
+        handled separately by \c getOperatorCompletions().
+    */
     private list<hash<DpqlCompletionItem>> getFunctionCompletions(string prefix) {
         list<hash<DpqlCompletionItem>> items = ();
 
@@ -605,8 +610,13 @@ public class DpqlCompletionProvider {
 
         foreach string name in (keys expressions) {
             hash<DataProviderExpressionInfo> info = expressions{name};
-            # Only include function-type expressions
-            if (info.type == DET_Function) {
+            # Include functions and operators with function-call syntax
+            # Operators with infix/prefix render templates (starting with $arg or !)
+            # are handled separately by getOperatorCompletions()
+            if (info.type == DET_Function
+                    || (info.type == DET_Operator && name =~ /^[a-zA-Z]/
+                        && (!info.render_template
+                            || !info.render_template.regex("^(\\$arg|!)")))) {
                 if (!prefix || index(name.lwr(), lwr_prefix) == 0) {
                     items += <DpqlCompletionItem>{
                         "label": name,

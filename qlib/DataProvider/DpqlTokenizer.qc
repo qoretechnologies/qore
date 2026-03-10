@@ -937,14 +937,27 @@ public class DpqlTokenizer {
     }
 
     #! Scans an identifier (keyword or function name)
+    /** Supports hyphenated identifiers (e.g. \c ends-with, \c starts-with, \c list-contains)
+        by treating \c - followed by a letter as part of the identifier.  A \c - followed by
+        a digit or whitespace is left for the caller to handle as a minus operator.
+    */
     private:internal hash<DpqlTokenInfo> scanIdentifier() {
         int start_line = line;
         int start_column = column;
         string value = "";
 
-        while (pos < len && currentChar() =~ /[a-zA-Z0-9_]/) {
-            value += currentChar();
-            advance();
+        while (pos < len) {
+            string c = currentChar();
+            if (c =~ /[a-zA-Z0-9_]/) {
+                value += c;
+                advance();
+            } else if (c == "-" && pos + 1 < len && input[pos + 1] =~ /[a-zA-Z]/) {
+                # Hyphenated identifier: treat '-' followed by a letter as part of the name
+                value += c;
+                advance();
+            } else {
+                break;
+            }
         }
 
         # Check for keywords
