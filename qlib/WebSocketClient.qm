@@ -2140,13 +2140,9 @@ ws.setEventQueue();
                         # submit a new task that would race with object destruction.
                         # handleAsyncShutdown() calls stopAsyncIo() which cancels the I/O
                         # operation, preventing any further callbacks.
+                        # handleAsyncShutdown() clears delivery_active BEFORE calling clearTid()
+                        # so the flag is cleared while the object is still alive.
                         handleAsyncShutdown();
-                        # Object may have been deleted during handleAsyncShutdown() if
-                        # closingConnection() dropped the last user reference
-                        if (self) {
-                            AutoLock al(delivery_mutex);
-                            delivery_active = False;
-                        }
                         return;
                     }
                 } catch (hash<ExceptionInfo> ex) {
@@ -2158,11 +2154,9 @@ ws.setEventQueue();
                         }
                         rethrow;
                     }
+                    # handleAsyncShutdown() clears delivery_active BEFORE calling clearTid()
+                    # so the flag is cleared while the object is still alive.
                     handleAsyncShutdown();
-                    if (self) {
-                        AutoLock al(delivery_mutex);
-                        delivery_active = False;
-                    }
                     return;
                 }
             }
@@ -2241,6 +2235,15 @@ ws.setEventQueue();
                 } else {
                     logInfo("Disconnected websocket connection; reconnect flag not set (async)");
                 }
+            }
+            # Clear delivery_active flag BEFORE clearTid() to prevent a use-after-free:
+            # clearTid() wakes waitTidCleared() which may allow the main thread to return from
+            # disconnect() and destroy the object (including delivery_mutex). We must not touch
+            # delivery_mutex after clearTid() returns, so we clear it here while we still hold
+            # lock m and the object is guaranteed to be alive.
+            {
+                AutoLock al(delivery_mutex);
+                delivery_active = False;
             }
             clearTid();
         }
