@@ -218,6 +218,16 @@ int QoreEventLoop::modify(int fd, int events, ExceptionSink* xsink) {
     ev.data.fd = fd;
 
     if (epoll_ctl(event_fd, EPOLL_CTL_MOD, fd, &ev) < 0) {
+        if (errno == ENOENT) {
+            // fd was auto-removed by epoll (e.g., socket closed and reopened with same fd number);
+            // re-add it to the epoll set
+            if (epoll_ctl(event_fd, EPOLL_CTL_ADD, fd, &ev) < 0) {
+                xsink->raiseErrnoException("EVENT-LOOP-ERROR", errno,
+                    "epoll_ctl(ADD after MOD ENOENT) failed for fd %d", fd);
+                return -1;
+            }
+            return 0;
+        }
         xsink->raiseErrnoException("EVENT-LOOP-ERROR", errno, "epoll_ctl(MOD) failed for fd %d", fd);
         return -1;
     }
