@@ -46,6 +46,7 @@ class DpqlActionSessionTest inherits QUnit::Test {
         addTestCase("base expressions via constructor", \testBaseExpressionsConstructor());
         addTestCase("base expressions via setter", \testBaseExpressionsSetter());
         addTestCase("base expressions merged with context", \testBaseExpressionsMergedWithContext());
+        addTestCase("signature help action", \testSignatureHelp());
 
         set_return_value(main());
     }
@@ -309,6 +310,27 @@ class DpqlActionSessionTest inherits QUnit::Test {
         *hash<string, hash<DataProviderExpressionInfo>> exprs = session.getExpressions();
         assertTrue(exprs.hasKey("custom-func"), "base expression available after setter");
         assertTrue(exprs.hasKey("custom-op"), "base operator available after setter");
+    }
+
+    testSignatureHelp() {
+        hash<string, hash<DataProviderExpressionInfo>> custom = getCustomExpressions();
+        DataProvider::DpqlActionSession session({"base_expressions": custom});
+
+        # Signature help for base expression function
+        hash<auto> result = session.handleAction("dpql-get-signature-help", {
+            "text": "custom-func(",
+            "position": 12,
+        });
+        assertTrue(exists result.signature, "should return signature for base expression");
+        assertTrue(result.signature.label.find("custom-func(") == 0,
+            "signature label should show function name");
+
+        # Signature help outside function call
+        result = session.handleAction("dpql-get-signature-help", {
+            "text": "@name == 1",
+            "position": 5,
+        });
+        assertNothing(result.signature, "no signature help outside function call");
     }
 
     testBaseExpressionsMergedWithContext() {

@@ -101,6 +101,7 @@ public class DpqlTest inherits QUnit::Test {
         addTestCase("static API tests", \staticApiTests());
         addTestCase("validation tests", \validationTests());
         addTestCase("function validation tests", \functionValidationTests());
+        addTestCase("signature help tests", \signatureHelpTests());
         addTestCase("field dot edge case tests", \fieldDotEdgeCaseTests());
         addTestCase("DPQL string search API tests", \dpqlStringSearchTests());
         addTestCase("stress tests", \stressTests());
@@ -1868,6 +1869,95 @@ public class DpqlTest inherits QUnit::Test {
             assertEq(1, warnings.size(),
                 "unknown function with default expressions gets warning");
             assertEq("DPQL-W001", warnings[0].code);
+        }
+    }
+
+    signatureHelpTests() {
+        # Test signature help for known function at first arg
+        {
+            # index(@items, |) - cursor after open paren, before first arg
+            *hash<DpqlSignatureHelp> help = DataProvider::getDpqlSignatureHelp(
+                'index(@items, ', 14);
+            assertTrue(exists help, "should return signature help for index()");
+            assertTrue(help.label.find("index(") == 0, "label should start with function name");
+            assertEq(2, help.parameters.size(), "index() has 2 parameters");
+            assertEq(1, help.active_parameter, "after comma, active param should be 1");
+        }
+
+        # Test signature help at first argument (no commas)
+        {
+            *hash<DpqlSignatureHelp> help = DataProvider::getDpqlSignatureHelp(
+                'index(', 6);
+            assertTrue(exists help, "should return signature help right after open paren");
+            assertEq(0, help.active_parameter, "no commas, active param should be 0");
+        }
+
+        # Test signature help for unknown function
+        {
+            *hash<DpqlSignatureHelp> help = DataProvider::getDpqlSignatureHelp(
+                'unknown_func(@x, ', 18);
+            assertNothing(help, "unknown function should return no signature help");
+        }
+
+        # Test signature help outside function call
+        {
+            *hash<DpqlSignatureHelp> help = DataProvider::getDpqlSignatureHelp(
+                '@name == "hello"', 10);
+            assertNothing(help, "no function call, no signature help");
+        }
+
+        # Test signature help with nested function call
+        {
+            # key(index(@items, 0), |) - cursor in outer function second arg
+            *hash<DpqlSignatureHelp> help = DataProvider::getDpqlSignatureHelp(
+                'key(index(@items, 0), ', 22);
+            assertTrue(exists help, "should return signature help for outer function");
+            assertTrue(help.label.find("key(") == 0, "should show key() signature");
+            assertEq(1, help.active_parameter, "after first comma in key(), active param 1");
+        }
+
+        # Test signature help with custom expression map including hyphenated name
+        {
+            hash<string, hash<DataProviderExpressionInfo>> expmap = DataProviderGenericExpressions + {
+                "ends-with": <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": "ends-with",
+                    "display_name": "Ends With",
+                    "short_desc": "True if string ends with a given substring",
+                    "desc": "True if string ends with a given substring",
+                    "symbol": "ends-with",
+                    "arg_info": (
+                        <DataProviderArgInfo>{
+                            "display_name": "String",
+                            "short_desc": "The string to check",
+                            "desc": "The string to check",
+                        },
+                        <DataProviderArgInfo>{
+                            "display_name": "Suffix",
+                            "short_desc": "The suffix to match",
+                            "desc": "The suffix to match",
+                        },
+                    ),
+                    "return_type": AbstractDataProviderType::get(BoolType),
+                },
+            };
+            *hash<DpqlSignatureHelp> help = DataProvider::getDpqlSignatureHelp(
+                'ends-with(@name, ', 18, expmap);
+            assertTrue(exists help, "should return signature help for ends-with");
+            assertTrue(help.label.find("ends-with(") == 0, "label should show ends-with");
+            assertEq(2, help.parameters.size(), "ends-with has 2 parameters");
+            assertEq("String", help.parameters[0].label, "first param label");
+            assertEq("Suffix", help.parameters[1].label, "second param label");
+            assertEq(1, help.active_parameter, "after comma, active param 1");
+            assertTrue(help.documentation.find("ends with") >= 0, "should have documentation");
+        }
+
+        # Test return type in signature label
+        {
+            *hash<DpqlSignatureHelp> help = DataProvider::getDpqlSignatureHelp(
+                'index(', 6);
+            assertTrue(exists help, "should return signature help");
+            assertTrue(help.label.find("→") >= 0, "label should contain return type arrow");
         }
     }
 

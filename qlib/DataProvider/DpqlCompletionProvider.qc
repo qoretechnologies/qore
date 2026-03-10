@@ -41,6 +41,30 @@ public hashdecl DpqlCompletionItem {
     int sort_priority = 100;
 }
 
+#! DPQL signature help parameter info
+/** @since DataProvider 3.4
+*/
+public hashdecl DpqlParameterInfo {
+    #! Parameter label (e.g. "String Value")
+    string label;
+    #! Parameter documentation
+    *string documentation;
+}
+
+#! DPQL signature help result
+/** @since DataProvider 3.4
+*/
+public hashdecl DpqlSignatureHelp {
+    #! Function/operator label (e.g. "ends-with(String, Suffix, Ignore Case?)")
+    string label;
+    #! Function/operator documentation
+    *string documentation;
+    #! Parameter information
+    list<hash<DpqlParameterInfo>> parameters;
+    #! Active parameter index (0-based)
+    int active_parameter;
+}
+
 #! DPQL Completion context structure
 /** Contains context information for generating completions.
 */
@@ -1091,6 +1115,125 @@ public class DpqlCompletionProvider {
             }
         }
         return result;
+    }
+
+    #! Returns signature help for the function call at the given position
+    /** Analyzes the text up to the cursor position to find the enclosing function call,
+        then looks up the function in the expression map to provide parameter info.
+
+        @param text the DPQL expression text
+        @param position cursor position (0-based character offset)
+
+        @return signature help info, or @ref nothing if the cursor is not inside a function call
+
+        @since DataProvider 3.4
+    */
+    *hash<DpqlSignatureHelp> getSignatureHelp(string text, int position) {
+        if (!expressions) {
+            return NOTHING;
+        }
+
+        # Get the text up to the cursor
+        string prefix = position >= text.length() ? text : text.substr(0, position);
+
+        # Scan backwards from cursor to find the enclosing function call
+        int depth = 0;
+        int comma_count = 0;
+        int paren_pos = -1;
+
+        for (int i = prefix.length() - 1; i >= 0; --i) {
+            string c = prefix[i];
+            if (c == ")") {
+                ++depth;
+            } else if (c == "(") {
+                if (depth > 0) {
+                    --depth;
+                } else {
+                    # Found the matching open paren at the top level
+                    paren_pos = i;
+                    break;
+                }
+            } else if (c == "," && depth == 0) {
+                ++comma_count;
+            }
+        }
+
+        if (paren_pos < 0) {
+            return NOTHING;
+        }
+
+        # Extract function name: scan backwards from paren_pos to find identifier
+        int name_end = paren_pos;
+        int name_start = paren_pos - 1;
+        # Skip whitespace before the paren
+        while (name_start >= 0 && prefix[name_start] =~ /\s/) {
+            --name_start;
+        }
+        if (name_start < 0) {
+            return NOTHING;
+        }
+        # Scan the identifier (including hyphens for hyphenated names)
+        int id_end = name_start + 1;
+        while (name_start >= 0 && prefix[name_start] =~ /[a-zA-Z0-9_\-]/) {
+            --name_start;
+        }
+        ++name_start;
+        if (name_start >= id_end) {
+            return NOTHING;
+        }
+
+        string func_name = prefix.substr(name_start, id_end - name_start);
+
+        # Look up in expressions
+        *hash<DataProviderExpressionInfo> info = expressions{func_name};
+        if (!info) {
+            return NOTHING;
+        }
+
+        # Build parameter info list
+        list<hash<DpqlParameterInfo>> params = ();
+        list<string> param_labels = ();
+        if (info.arg_info) {
+            foreach hash<DataProviderArgInfo> ai in (info.arg_info) {
+                string plabel = ai.display_name;
+                params += <DpqlParameterInfo>{
+                    "label": plabel,
+                    "documentation": ai.short_desc ?? ai.desc,
+                };
+                param_labels += plabel;
+            }
+        } else if (info.args) {
+            for (int i = 0; i < info.args.size(); ++i) {
+                string plabel = sprintf("arg%d", i + 1);
+                params += <DpqlParameterInfo>{
+                    "label": plabel,
+                };
+                param_labels += plabel;
+            }
+        }
+
+        # Build the signature label
+        string sig_label = func_name + "(" + (foldl $1 + ", " + $2, param_labels) + ")";
+        if (info.return_type) {
+            sig_label += " → " + info.return_type.getName();
+        }
+
+        # Clamp active parameter to valid range
+        int active = comma_count;
+        if (params.size() > 0 && active >= params.size()) {
+            if (info.varargs) {
+                active = params.size() - 1;
+            } else {
+                active = params.size() - 1;
+            }
+        }
+
+        return <DpqlSignatureHelp>{
+            "label": sig_label,
+            "documentation": info.short_desc ?? info.desc,
+            "parameters": params,
+            "active_parameter": active,
+        };
     }
 }
 

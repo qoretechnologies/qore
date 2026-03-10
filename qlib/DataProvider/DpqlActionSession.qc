@@ -157,6 +157,9 @@ public class DpqlActionSession {
 
             case "dpql-serialize":
                 return handleSerialize(args);
+
+            case "dpql-get-signature-help":
+                return handleSignatureHelp(args);
         }
 
         throw "INVALID-ACTION", sprintf("Unsupported action %y", action);
@@ -340,6 +343,21 @@ public class DpqlActionSession {
         string dpql = DataProvider::serializeDpqlExpression(dp_exp, expressions);
         return {
             "dpql": dpql,
+        };
+    }
+
+    private hash<auto> handleSignatureHelp(*hash<auto> args) {
+        string text = getRequiredStringArg(args, "text");
+        int position = getRequiredIntArg(args, "position");
+        *hash<DpqlSignatureHelp> help = DataProvider::getDpqlSignatureHelp(text, position,
+            expressions);
+        if (!help) {
+            return {
+                "signature": NOTHING,
+            };
+        }
+        return {
+            "signature": help,
         };
     }
 
