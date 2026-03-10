@@ -32,7 +32,7 @@
 %requires(reexport) HttpServerUtil
 
 module AsyncSocketIo {
-    version = "3.1";
+    version = "1.0";
     desc    = "API for async socket I/O";
     author  = "David Nichols <david@qore.org>";
     url     = "http://qore.org";
@@ -40,6 +40,14 @@ module AsyncSocketIo {
     init = sub () {
         # Pre-initialize the global controller singleton
         AsyncSocketIo::globalController = new AsyncSocketIo::AsyncSocketIoController(True);
+    };
+    del = sub () {
+        # Stop the global controller and its ThreadPool during module unload
+        # to prevent idle ThreadPool threads from blocking program exit
+        if (AsyncSocketIo::globalController) {
+            AsyncSocketIo::globalController.stopClear();
+            delete AsyncSocketIo::globalController;
+        }
     };
 }
 
@@ -57,28 +65,25 @@ module AsyncSocketIo {
 
     @section asyncsocketiorelnotes Release Notes
 
-    @subsection asyncsocketio_3_1 AsyncSocketIo 3.1
-    - added @ref AsyncSocketIo::AbstractStreamContext "AbstractStreamContext" abstract base class providing a
-      protocol-agnostic stream I/O interface for WebSocket over HTTP/2 (RFC 8441) and HTTP/3 (RFC 9220)
-    - @ref AsyncSocketIo::Http2StreamContext "Http2StreamContext" and
-      @ref AsyncSocketIo::Http3StreamContext "Http3StreamContext" now inherit
-      @ref AsyncSocketIo::AbstractStreamContext "AbstractStreamContext"
-
-    @subsection asyncsocketio_3_0 AsyncSocketIo 3.0
-    - added @ref AsyncSocketIo::Http2StreamContext "Http2StreamContext" stream-scoped send/receive helper
-      for HTTP/2 sockets with direct I/O mode for handler-thread-driven frame reading
-    - added @ref AsyncSocketIo::Http3StreamContext "Http3StreamContext" stream-scoped send/receive helper
-      for HTTP/3 QUIC streams with backpressure handling and I/O controller wake integration
-    - migrated to thin wrapper around Qore::AsyncIoController (C++ implementation in libqore)
-    - SocketPollOperationInfo and SocketPollResultInfo hashdecls moved to Qore:: namespace
-    - requires Qore 2.3+
-
-    @subsection asyncsocketio_2_0 AsyncSocketIo 2.0
-    - added cancelByKey() for operations with custom keys
-    - added custom key support in SocketPollOperationInfo
-
     @subsection asyncsocketio_1_0 AsyncSocketIo 1.0
     - the initial version of the AsyncSocketIo module
+    - thin wrapper around the native C++ @ref Qore::AsyncIoController class for high-performance
+      async socket I/O using epoll (Linux) / kqueue (macOS/BSD)
+    - @ref AsyncSocketIo::AsyncSocketIoController "AsyncSocketIoController" with submit(), exec(),
+      cancel(), cancelByKey(), cancelByOwner(), wake() operations
+    - custom key support in @ref SocketPollOperationInfo
+    - @ref AsyncSocketIo::Http2StreamContext "Http2StreamContext" stream-scoped send/receive helper
+      for HTTP/2 sockets with direct I/O mode for handler-thread-driven frame reading
+    - @ref AsyncSocketIo::Http3StreamContext "Http3StreamContext" stream-scoped send/receive helper
+      for HTTP/3 QUIC streams with backpressure handling and I/O controller wake integration
+    - @ref AsyncSocketIo::AbstractStreamContext "AbstractStreamContext" abstract base class providing a
+      protocol-agnostic stream I/O interface for WebSocket over HTTP/2 (RFC 8441) and HTTP/3 (RFC 9220)
+    - @ref AsyncSocketIo::AsyncSocketIoController::getThreadPool() "getThreadPool()" for lazy
+      access to a shared @ref Qore::Thread::ThreadPool "ThreadPool" for dispatching callbacks off
+      the I/O thread
+    - @ref AsyncSocketIo::AsyncSocketIoController::submitTask() "submitTask()" convenience
+      method for submitting work to the thread pool
+    - global singleton via @ref AsyncSocketIo::getGlobalAsyncIoController() "getGlobalAsyncIoController()"
 
     @section asyncsocketiointernals Internal Design
 

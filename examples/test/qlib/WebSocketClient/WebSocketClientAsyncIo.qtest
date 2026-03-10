@@ -1,0 +1,575 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/HttpServerAsyncIo
+%requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/WebSocketUtil.qm
+%requires ../../../../qlib/WebSocketHandler.qm
+%requires ../../../../qlib/WebSocketClient.qm
+%requires ../../../../qlib/AsyncSocketIo
+
+%exec-class WebSocketClientAsyncIoTest
+
+#! WebSocket connection that echoes messages back
+class EchoWsConnection inherits WebSocketConnection {
+    constructor(WebSocketHandler handler) : WebSocketConnection(handler) {
+    }
+
+    gotMessage(string msg) {
+        send("ECHO:" + msg);
+    }
+
+    gotMessage(binary msg) {
+        send(msg);
+    }
+}
+
+class EchoWsHandler inherits WebSocketHandler {
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new EchoWsConnection(self);
+    }
+}
+
+class TestObserver inherits Observer {
+    private {
+        Queue q;
+    }
+
+    constructor(Queue q) {
+        self.q = q;
+    }
+
+    update(string event_id, hash<auto> data_) {
+        if (event_id == EVENT_WS_DATA) {
+            q.push({"event": event_id, "data": data_.data});
+        } else if (event_id == EVENT_WS_PING || event_id == EVENT_WS_PONG) {
+            q.push({"event": event_id, "data": data_.data});
+        }
+    }
+}
+
+public class WebSocketClientAsyncIoTest inherits QUnit::Test {
+    private {
+        HttpServer m_server;
+        EchoWsHandler ws_handler();
+        hash<auto> linfo;
+        Logger logger;
+    }
+
+    static sigusr1Handler(int sig) {
+        printf("=== SIGUSR1 Thread Stacks ===\n%Y\n=== End Thread Stacks ===\n",
+            get_all_thread_call_stacks());
+    }
+
+    constructor() : Test("WebSocketClientAsyncIoTest", "1.0") {
+%ifndef PO_NO_PROCESS_CONTROL
+        set_signal_handler(SIGUSR1, \sigusr1Handler());
+%endif
+        addTestCase("basic async_io text send/receive", \basicTextTest());
+        addTestCase("async_io binary send/receive", \binaryTest());
+        addTestCase("async_io multiple messages", \multipleMessagesTest());
+        addTestCase("async_io ping", \pingTest());
+        addTestCase("async_io disconnect", \disconnectTest());
+        addTestCase("async_io isAsyncIo accessor", \accessorTest());
+        addTestCase("async_io reconnect", \reconnectTest());
+        addTestCase("async_io startEventLoop", \startEventLoopTest());
+        addTestCase("async_io connectAsync", \connectAsyncTest());
+        addTestCase("async_io connectAsync error", \connectAsyncErrorTest());
+        addTestCase("async_io multiple clients", \multipleClientsTest());
+        addTestCase("async_io multiple connectAsync", \multipleConnectAsyncTest());
+        addTestCase("async_io with serialization", \serializationTest());
+        addTestCase("async_io ping/pong observer events", \pingPongObserverTest());
+
+        logger = new Logger("test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        };
+        m_server = new HttpServer(http_opts);
+        m_server.setHandler("ws-handler", "", NOTHING, ws_handler);
+        m_server.setDefaultHandler("ws-handler", ws_handler);
+        linfo = m_server.addListener(<HttpListenerOptionInfo>{"service": 0});
+
+        set_return_value(main());
+
+        m_server.stop();
+        # Stop the global async I/O controller to release ThreadPool threads
+        # before program exit (prevents hang waiting for threads to finish)
+        AsyncSocketIo::AsyncSocketIoController ctrl = AsyncSocketIo::getGlobalAsyncIoController();
+        ctrl.stopClear();
+    }
+
+    #! Test basic text send/receive with async_io mode
+    basicTextTest() {
+        Queue response_queue();
+
+        WebSocketClient wsc(sub (auto msg) {
+            if (exists msg) {
+                response_queue.push(msg);
+            }
+        }, {
+            "url": "ws://127.0.0.1:" + linfo.port,
+            "async_io": True,
+            "logger": logger,
+        });
+        wsc.connect();
+        on_exit {
+            wsc.disconnect();
+        }
+
+        assertTrue(wsc.isAsyncIo(), "async_io is enabled");
+        assertTrue(wsc.isOpen(), "connection is open");
+
+        # Send a text message
+        wsc.send("hello async io");
+
+        # Wait for the echo response
+        auto resp = response_queue.get(30s);
+        assertEq("ECHO:hello async io", resp, "echo matches");
+    }
+
+    #! Test binary send/receive with async_io mode
+    binaryTest() {
+        Queue response_queue();
+
+        WebSocketClient wsc(sub (auto msg) {
+            if (exists msg) {
+                response_queue.push(msg);
+            }
+        }, {
+            "url": "ws://127.0.0.1:" + linfo.port,
+            "async_io": True,
+            "logger": logger,
+        });
+        wsc.connect();
+        on_exit {
+            wsc.disconnect();
+        }
+
+        binary test_data = <deadbeef01020304>;
+        wsc.send(test_data);
+
+        auto resp = response_queue.get(30s);
+        assertEq(test_data, resp, "binary data matches");
+    }
+
+    #! Test multiple messages with async_io mode
+    multipleMessagesTest() {
+        Queue response_queue();
+
+        WebSocketClient wsc(sub (auto msg) {
+            if (exists msg) {
+                response_queue.push(msg);
+            }
+        }, {
+            "url": "ws://127.0.0.1:" + linfo.port,
+            "async_io": True,
+            "logger": logger,
+        });
+        wsc.connect();
+        on_exit {
+            wsc.disconnect();
+        }
+
+        int count = 5;
+        for (int i = 0; i < count; ++i) {
+            wsc.send("msg" + string(i));
+        }
+
+        list<string> received = ();
+        for (int i = 0; i < count; ++i) {
+            auto resp = response_queue.get(30s);
+            received += resp;
+        }
+
+        assertEq(count, received.size(), "received all messages");
+        for (int i = 0; i < count; ++i) {
+            assertEq("ECHO:msg" + string(i), received[i], sprintf("message %d content", i));
+        }
+    }
+
+    #! Test ping with async_io mode
+    pingTest() {
+        Queue response_queue();
+
+        WebSocketClient wsc(sub (auto msg) {
+            if (exists msg) {
+                response_queue.push(msg);
+            }
+        }, {
+            "url": "ws://127.0.0.1:" + linfo.port,
+            "async_io": True,
+            "logger": logger,
+        });
+        wsc.connect();
+        on_exit {
+            wsc.disconnect();
+        }
+
+        # Send a ping - the async I/O should handle the pong response
+        wsc.ping(<01020304>);
+
+        # Send a text message after ping to verify the connection is still working
+        wsc.send("after ping");
+        auto resp = response_queue.get(30s);
+        assertEq("ECHO:after ping", resp, "connection works after ping");
+    }
+
+    #! Test disconnect with async_io mode
+    disconnectTest() {
+        Queue response_queue();
+        bool closed = False;
+
+        WebSocketClient wsc(sub (auto msg) {
+            if (!exists msg) {
+                closed = True;
+            } else {
+                response_queue.push(msg);
+            }
+        }, {
+            "url": "ws://127.0.0.1:" + linfo.port,
+            "async_io": True,
+            "logger": logger,
+        });
+        wsc.connect();
+
+        # Verify connection works
+        wsc.send("before disconnect");
+        auto resp = response_queue.get(30s);
+        assertEq("ECHO:before disconnect", resp, "message before disconnect");
+
+        # Disconnect
+        wsc.disconnect();
+
+        # After disconnect, connection should be closed
+        assertFalse(wsc.isOpen(), "connection is closed after disconnect");
+    }
+
+    #! Test isAsyncIo accessor
+    accessorTest() {
+        # Default mode (async_io enabled by default)
+        WebSocketClient wsc_default(sub (auto msg) {}, {
+            "url": "ws://127.0.0.1:" + linfo.port,
+        });
+        assertTrue(wsc_default.isAsyncIo(), "default mode reports True (async_io enabled by default)");
+
+        # Explicit non-async mode
+        WebSocketClient wsc_sync(sub (auto msg) {}, {
+            "url": "ws://127.0.0.1:" + linfo.port,
+            "async_io": False,
+        });
+        assertFalse(wsc_sync.isAsyncIo(), "sync mode reports False");
+
+        # Explicit async mode
+        WebSocketClient wsc_async(sub (auto msg) {}, {
+            "url": "ws://127.0.0.1:" + linfo.port,
+            "async_io": True,
+        });
+        assertTrue(wsc_async.isAsyncIo(), "async mode reports True");
+    }
+
+    #! Test reconnect with async_io mode
+    reconnectTest() {
+        Queue response_queue();
+
+        WebSocketClient wsc(sub (auto msg) {
+            if (exists msg) {
+                response_queue.push(msg);
+            }
+        }, {
+            "url": "ws://127.0.0.1:" + linfo.port,
+            "async_io": True,
+            "reconnect": True,
+            "logger": logger,
+        });
+        wsc.connect();
+        on_exit {
+            wsc.disconnect();
+        }
+
+        # Verify initial connection works
+        wsc.send("before reconnect");
+        auto resp = response_queue.get(30s);
+        assertEq("ECHO:before reconnect", resp, "message before reconnect");
+
+        # Initiate reconnect
+        assertTrue(wsc.reconnect(), "reconnect initiated");
+
+        # Wait for reconnect to complete
+        date end = now_us() + 30s;
+        while (now_us() < end) {
+            if (wsc.isOpen()) {
+                break;
+            }
+            Qore::usleep(100000);
+        }
+        assertTrue(wsc.isOpen(), "reconnected successfully");
+
+        # Verify connection works after reconnect
+        wsc.send("after reconnect");
+        resp = response_queue.get(30s);
+        assertEq("ECHO:after reconnect", resp, "message after reconnect");
+    }
+
+    #! Test startEventLoop with async_io mode
+    startEventLoopTest() {
+        Queue response_queue();
+
+        WebSocketClient wsc(sub (auto msg) {
+            if (exists msg) {
+                response_queue.push(msg);
+            }
+        }, {
+            "url": "ws://127.0.0.1:" + linfo.port,
+            "async_io": True,
+            "logger": logger,
+        });
+        on_exit {
+            wsc.disconnect();
+        }
+
+        # Use async connect + startEventLoop
+        WebSocketConnectPollOperation poller = wsc.startPollConnect();
+
+        # Drive poll to completion
+        date start = now_us();
+        while (!poller.goalReached()) {
+            timeout elapsed = now_us() - start;
+            if (elapsed >= 60s) {
+                throw "TIMEOUT", "poll operation exceeded 60s deadline";
+            }
+            *hash<SocketPollInfo> info = poller.continuePoll();
+            if (info) {
+                timeout remaining = 60s - elapsed;
+                Socket::poll((info,), min(remaining, 1s));
+            }
+        }
+
+        hash<auto> result = poller.getOutput();
+        assertEq(101, result.status_code, "handshake succeeded");
+
+        wsc.startEventLoop(result);
+        assertTrue(wsc.isOpen(), "connection open after startEventLoop");
+
+        # Verify connection works
+        wsc.send("event loop test");
+        auto resp = response_queue.get(30s);
+        assertEq("ECHO:event loop test", resp, "echo after startEventLoop");
+    }
+
+    #! Test multiple concurrent async_io clients sharing the same controller
+    multipleClientsTest() {
+        int num_clients = 3;
+        list<Queue> queues = ();
+        list<WebSocketClient> clients = ();
+
+        for (int i = 0; i < num_clients; ++i) {
+            Queue q();
+            queues += q;
+            WebSocketClient wsc(sub (auto msg) {
+                if (exists msg) {
+                    q.push(msg);
+                }
+            }, {
+                "url": "ws://127.0.0.1:" + linfo.port,
+                "async_io": True,
+                "logger": logger,
+            });
+            wsc.connect();
+            clients += wsc;
+        }
+
+        on_exit {
+            foreach WebSocketClient wsc in (clients) {
+                wsc.disconnect();
+            }
+        }
+
+        # Send a message from each client
+        for (int i = 0; i < num_clients; ++i) {
+            clients[i].send("client-" + string(i));
+        }
+
+        # Verify each client gets its echo
+        for (int i = 0; i < num_clients; ++i) {
+            auto resp = queues[i].get(30s);
+            assertEq("ECHO:client-" + string(i), resp, sprintf("client %d echo", i));
+        }
+    }
+
+    #! Test fully async connect using connectAsync()
+    connectAsyncTest() {
+        Queue response_queue();
+        Queue ready_queue();
+
+        WebSocketClient wsc(sub (auto msg) {
+            if (exists msg) {
+                response_queue.push(msg);
+            }
+        }, {
+            "url": "ws://127.0.0.1:" + linfo.port,
+            "async_io": True,
+            "logger": logger,
+        });
+        on_exit {
+            wsc.disconnect();
+        }
+
+        # Connect asynchronously - returns immediately
+        wsc.connectAsync(NOTHING, ready_queue);
+
+        # Wait for the connection to be ready
+        auto result = ready_queue.get(30s);
+        assertFalse(result.hasKey("error"), "connect succeeded without error");
+        assertEq(101, result.status_code, "handshake status code");
+        assertTrue(wsc.isOpen(), "connection is open after connectAsync");
+
+        # Verify the connection works
+        wsc.send("connectAsync test");
+        auto resp = response_queue.get(30s);
+        assertEq("ECHO:connectAsync test", resp, "echo after connectAsync");
+    }
+
+    #! Test connectAsync error handling
+    connectAsyncErrorTest() {
+        Queue ready_queue();
+
+        WebSocketClient wsc(sub (auto msg) {}, {
+            "url": "ws://127.0.0.1:1",
+            "async_io": True,
+            "logger": logger,
+        });
+
+        wsc.connectAsync(NOTHING, ready_queue);
+
+        # Wait for the error result
+        auto result = ready_queue.get(30s);
+        assertTrue(result.hasKey("error"), "connect error received");
+    }
+
+    #! Test multiple connectAsync clients starting concurrently
+    multipleConnectAsyncTest() {
+        int num_clients = 3;
+        list<Queue> response_queues = ();
+        list<Queue> ready_queues = ();
+        list<WebSocketClient> clients = ();
+
+        for (int i = 0; i < num_clients; ++i) {
+            Queue rq();
+            Queue ready();
+            response_queues += rq;
+            ready_queues += ready;
+            WebSocketClient wsc(sub (auto msg) {
+                if (exists msg) {
+                    rq.push(msg);
+                }
+            }, {
+                "url": "ws://127.0.0.1:" + linfo.port,
+                "async_io": True,
+                "logger": logger,
+            });
+            clients += wsc;
+        }
+
+        on_exit {
+            foreach WebSocketClient wsc in (clients) {
+                wsc.disconnect();
+            }
+        }
+
+        # Start all connections concurrently
+        for (int i = 0; i < num_clients; ++i) {
+            clients[i].connectAsync(NOTHING, ready_queues[i]);
+        }
+
+        # Wait for all connections to be ready
+        for (int i = 0; i < num_clients; ++i) {
+            auto result = ready_queues[i].get(30s);
+            assertFalse(result.hasKey("error"), sprintf("client %d connect succeeded", i));
+        }
+
+        # Send a message from each client
+        for (int i = 0; i < num_clients; ++i) {
+            clients[i].send("async-client-" + string(i));
+        }
+
+        # Verify each client gets its echo
+        for (int i = 0; i < num_clients; ++i) {
+            auto resp = response_queues[i].get(30s);
+            assertEq("ECHO:async-client-" + string(i), resp, sprintf("client %d echo", i));
+        }
+    }
+
+    #! Test WebSocketClientWithSerialization with async_io mode
+    serializationTest() {
+        Queue response_queue();
+
+        WebSocketClientWithSerialization wsc({
+            "url": "ws://127.0.0.1:" + linfo.port,
+            "async_io": True,
+            "data": "none",
+            "logger": logger,
+        });
+        # Use observer to get messages since WithSerialization uses the observer pattern
+        wsc.registerObserver(new TestObserver(response_queue));
+        wsc.observersReady();
+        on_exit {
+            wsc.disconnect();
+        }
+
+        assertTrue(wsc.isAsyncIo(), "serialization client uses async_io");
+
+        # Send a message
+        wsc.send("serialization test");
+
+        # Wait for the echo response
+        auto resp = response_queue.get(30s);
+        assertEq(EVENT_WS_DATA, resp.event, "serialization event type");
+        assertEq("ECHO:serialization test", resp.data, "serialization echo matches");
+    }
+
+    #! Test ping/pong observer events with async_io mode
+    pingPongObserverTest() {
+        Queue event_queue();
+
+        WebSocketClientWithSerialization wsc({
+            "url": "ws://127.0.0.1:" + linfo.port,
+            "async_io": True,
+            "data": "none",
+            "raise_ping_events": True,
+            "logger": logger,
+        });
+        wsc.registerObserver(new TestObserver(event_queue));
+        wsc.observersReady();
+        on_exit {
+            wsc.disconnect();
+        }
+
+        assertTrue(wsc.isAsyncIo(), "ping test uses async_io");
+
+        # Send a ping and wait for the pong event
+        wsc.ping("test-ping");
+
+        auto resp = event_queue.get(30s);
+        assertEq(EVENT_WS_PONG, resp.event, "received pong observer event");
+
+        # Verify the connection still works after ping/pong
+        wsc.send("after-ping");
+        resp = event_queue.get(30s);
+        assertEq(EVENT_WS_DATA, resp.event, "data event after ping");
+        assertEq("ECHO:after-ping", resp.data, "echo after ping");
+    }
+}

@@ -258,6 +258,9 @@ class WebSocketHandlerTest inherits QUnit::Test {
         set_return_value(main());
 
         mServer.stop();
+        # Stop the global async I/O controller's ThreadPool to allow clean exit
+        AsyncSocketIo::AsyncSocketIoController ctrl = AsyncSocketIo::getGlobalAsyncIoController();
+        ctrl.stopClear();
     }
 
     disconnectTest() {

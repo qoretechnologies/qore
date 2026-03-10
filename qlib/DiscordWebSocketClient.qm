@@ -43,7 +43,7 @@
 %endtry
 
 module DiscordWebSocketClient {
-    version = "1.0.1";
+    version = "1.1";
     desc = "User module for communicating with the Discord WebSocket API gateway";
     author = "David Nichols <david@qore.org>";
     url = "https://qore.org";
@@ -74,6 +74,10 @@ module DiscordWebSocketClient {
       @ref connectionproviderintro "ConnectionProvider" module)
 
     @section discordwebsocketclientrelnotes Release Notes
+
+    @subsection discordwebsocketclientv1_1 DiscordWebSocketClient v1.1
+    - added \c disconnect() override to stop the heartbeat thread before disconnecting, preventing
+      service shutdown hangs when the heartbeat thread is started via \c start_thread
 
     @subsection discordwebsocketclientv1_0_1 DiscordWebSocketClient v1.0.1
     - fixed a bug handling \c HELLO messages
@@ -357,6 +361,19 @@ DiscordWebSocketClient ws();
         stopHeartbeatThread();
     }
 
+    #! Disconnects from the gateway and stops the heartbeat thread
+    /** Stops the heartbeat thread before calling the parent disconnect to prevent the heartbeat
+        thread from blocking service shutdown when it was started via \c start_thread.
+
+        @param cmd the WebSocket close code to send
+
+        @since DiscordWebSocketClient 1.1
+    */
+    disconnect(int cmd = WSCC_GoingAway) {
+        stopHeartbeatThread();
+        WebSocketClientWithSerialization::disconnect(cmd);
+    }
+
     #! Returns performance statistics for the socket
     /** @par Example:
         @code{.py}
@@ -523,13 +540,14 @@ hash<auto> h = ws.getInfo();
         }
         {
             AutoLock al(heartbeat_lock);
-            if (hbi != heartbeat_interval) {
+            bool interval_changed = (hbi != heartbeat_interval);
+            if (interval_changed) {
                 heartbeat_interval = hbi;
             }
             # the heartbeat thread will not be running on a new connection
             if (!hb_tid) {
                 startHeartbeatThreadIntern();
-            } else if (hbi != heartbeat_interval) {
+            } else if (interval_changed) {
                 # in case we get a HELLO message while the connection is still up (should not happen)
                 heartbeat_cond.signal();
             }
@@ -614,16 +632,24 @@ hash<auto> h = ws.getInfo();
 
         bool running;
         while (!hb_stop) {
-            int sleep = heartbeat_interval;
-            # calculate the first sleep with the heartbeat interval * jitter
-            if (!running) {
-                sleep = (float("0." + rand()) * heartbeat_interval).toInt();
-                running = True;
-            }
-
+            int sleep;
             {
                 AutoLock al(heartbeat_lock);
-                heartbeat_cond.wait(heartbeat_lock, sleep);
+                sleep = heartbeat_interval;
+                # calculate the first sleep with the heartbeat interval * jitter
+                if (!running) {
+                    sleep = (float("0." + rand()) * sleep).toInt();
+                    running = True;
+                }
+                # use a predicate loop to handle spurious wakeups and interval changes
+                date target = now_us() + milliseconds(sleep);
+                while (!hb_stop) {
+                    date remaining = target - now_us();
+                    if (remaining <= 0s) {
+                        break;
+                    }
+                    heartbeat_cond.wait(heartbeat_lock, remaining);
+                }
             }
             if (hb_stop) {
                 break;

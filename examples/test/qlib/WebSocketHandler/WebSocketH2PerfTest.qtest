@@ -15,6 +15,7 @@
 %requires ../../../../qlib/WebSocketUtil.qm
 %requires ../../../../qlib/WebSocketHandler.qm
 %requires ../../../../qlib/WebSocketClient.qm
+%requires ../../../../qlib/AsyncSocketIo/AsyncSocketIo.qm
 
 %exec-class WebSocketH2PerfTest
 
@@ -212,6 +213,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         set_return_value(main());
 
         mServer.stop();
+        # Stop the global async I/O controller's ThreadPool to allow clean exit
+        AsyncSocketIo::AsyncSocketIoController ctrl = AsyncSocketIo::getGlobalAsyncIoController();
+        ctrl.stopClear();
     }
 
     #! Create an HTTP/2 WebSocket client with standard options

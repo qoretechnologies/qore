@@ -1797,6 +1797,16 @@ int SocketQuicSendResponsePollOperation::sendPendingPackets(
         return 0;
     }
 
+    // Re-check migration after packet generation: writePacketsLocked() detects
+    // new paths from ngtcp2 output (e.g. server-side passive migration) and sets
+    // path_migrated_.  Without this second check, the first post-migration batch
+    // (including PATH_RESPONSE) would be sent to the old client address.
+    if (quic_session->hasPathMigrated()) {
+        quic_session->getRemoteAddrCopy(peer_addr_, peer_addrlen_);
+        quic_session->getLocalAddrCopy(send_local_addr_, send_local_addrlen_);
+        quic_session->clearPathMigrated();
+    }
+
     int fd = sock->priv->socket->getSocket();
 
     int sent = sendQuicPacketsBatch(fd, pkt_batch_,
@@ -2068,6 +2078,16 @@ int SocketQuicSendStreamingResponsePollOperation::sendPendingPackets(
 
     if (pkt_batch_.empty()) {
         return 0;
+    }
+
+    // Re-check migration after packet generation: writePacketsLocked() detects
+    // new paths from ngtcp2 output (e.g. server-side passive migration) and sets
+    // path_migrated_.  Without this second check, the first post-migration batch
+    // (including PATH_RESPONSE) would be sent to the old client address.
+    if (quic_session->hasPathMigrated()) {
+        quic_session->getRemoteAddrCopy(peer_addr_, peer_addrlen_);
+        quic_session->getLocalAddrCopy(send_local_addr_, send_local_addrlen_);
+        quic_session->clearPathMigrated();
     }
 
     int fd = sock->priv->socket->getSocket();
