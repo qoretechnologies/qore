@@ -39,6 +39,8 @@
 #include "qore/intern/QoreLibIntern.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreNamespaceIntern.h"
+#include "qore/intern/QoreClassIntern.h"
+#include "qore/intern/QoreClassList.h"
 #include "qore/intern/ConstantList.h"
 #include "qore/intern/QoreTypeInfo.h"
 #include "qore/intern/QoreHashNodeIntern.h"
@@ -827,11 +829,56 @@ static void eagerlyCompileAllFunctions(qore_ns_private* ns, qore_exec_mode_t exe
         }
     }
 
-    // NOTE: Class method eager compilation is deferred — eagerly compiling module class
-    // methods causes RUNTIME-OVERLOAD-ERROR when module classes are merged into the main
-    // program's namespace (getProgram() returns main_pgm for both). Class methods are
-    // still compiled lazily via the threshold mechanism during execution.
-    // TODO: Add class method eager compilation with proper module/user class discrimination.
+    // Eagerly compile class methods for user classes defined in this parse context.
+    // Module-imported classes (from_module non-empty) are skipped here because they are
+    // eagerly compiled during the module's own internParseCommit() call, and ir_lower_once
+    // prevents double-lowering. Builtin/system classes (sys == true) have no Qore bytecode
+    // to lower.
+    ClassListIterator cli(ns->classList);
+    while (cli.next()) {
+        QoreClass* qc = cli.get();
+        if (!qc) {
+            continue;
+        }
+        qore_class_private* qcp = qore_class_private::get(*qc);
+        if (qcp->sys || !qcp->from_module.empty()) {
+            continue;
+        }
+
+        // Non-static methods
+        for (auto& kv : qcp->hm) {
+            QoreMethod* m = kv.second;
+            qore_method_private* mp = qore_method_private::get(*m);
+            MethodFunctionBase* mfb = mp->getFunction();
+            QoreFunctionIterator vit(*mfb);
+            while (vit.next()) {
+                const AbstractQoreFunctionVariant* av = vit.getVariant();
+                UserVariantBase* uvb =
+                    const_cast<AbstractQoreFunctionVariant*>(av)->getUserVariantBase();
+                if (!uvb || !uvb->hasBody()) {
+                    continue;
+                }
+                uvb->eagerlyCompileForExecMode(m->getName(), exec_mode);
+            }
+        }
+
+        // Static methods
+        for (auto& kv : qcp->shm) {
+            QoreMethod* m = kv.second;
+            qore_method_private* mp = qore_method_private::get(*m);
+            MethodFunctionBase* mfb = mp->getFunction();
+            QoreFunctionIterator vit(*mfb);
+            while (vit.next()) {
+                const AbstractQoreFunctionVariant* av = vit.getVariant();
+                UserVariantBase* uvb =
+                    const_cast<AbstractQoreFunctionVariant*>(av)->getUserVariantBase();
+                if (!uvb || !uvb->hasBody()) {
+                    continue;
+                }
+                uvb->eagerlyCompileForExecMode(m->getName(), exec_mode);
+            }
+        }
+    }
 
     // Recursively compile functions in child namespaces
     for (auto ni = ns->nsl.nsmap.begin(), ne = ns->nsl.nsmap.end(); ni != ne; ++ni) {
