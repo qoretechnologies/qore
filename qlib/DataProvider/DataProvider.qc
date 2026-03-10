@@ -89,6 +89,7 @@ public class DataProvider {
             "cdsrest": "CdsRestDataProvider",
             "chargebee": "ChargebeeDataProvider",
             "cin7core": "Cin7CoreDataProvider",
+            "close": "CloseDataProvider",
             "csvread": "CsvUtil",
             "csvwrite": "CsvUtil",
             "db": "DbDataProvider",

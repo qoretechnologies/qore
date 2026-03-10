@@ -1,0 +1,2107 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore CloseDataProvider module definition
+
+/*  CloseDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%modern
+# require type definitions everywhere
+# strict argument handling
+# enable all warnings
+
+%requires(reexport) DataProvider
+%requires(reexport) CloseRestClient
+
+module CloseDataProvider {
+    version = "1.0";
+    desc = "User module providing a data provider API for Close CRM";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # Register the data provider factory
+        DataProvider::registerFactory(new CloseDataProviderFactory());
+
+        # Register the application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": CloseDataProvider::AppName,
+            "display_name": "Close",
+            "short_desc": "Close CRM for sales teams",
+            "desc": "Close is a CRM platform built for sales teams, offering lead management, "
+                "contact tracking, opportunities, tasks, and activity logging (calls, emails, "
+                "notes, meetings, SMS).\n\n"
+                "This integration supports leads, contacts, opportunities, tasks, calls, emails, "
+                "notes, meetings, SMS, and event triggers.",
+            "scheme": "closerest",
+            "logo": CloseLogo,
+            "logo_file_name": "close-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::CrmSales,),
+        });
+
+        # ========== LEAD ACTIONS ==========
+
+        # Create a Lead
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CloseDataProvider::AppName,
+            "path": "/leads/create",
+            "action": "create-lead",
+            "groups": "Leads",
+            "display_name": "Create a Lead",
+            "short_desc": "Create a new lead",
+            "desc": "Create a new lead in Close CRM",
+            "action_code": DPAT_API,
+            "options": {
+                "name": <ActionOptionInfo>{
+                    "display_name": "Name",
+                    "short_desc": "The lead name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The name of the lead (typically the company or organization name)",
+                    "example_value": "Acme Corporation",
+                    "preselected": True,
+                },
+                "status_id": <ActionOptionInfo>{
+                    "display_name": "Status ID",
+                    "short_desc": "The lead status ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The unique identifier of the lead status to assign",
+                },
+                "description": <ActionOptionInfo>{
+                    "display_name": "Description",
+                    "short_desc": "The lead description",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "A text description of the lead with additional context or notes",
+                    "example_value": "Enterprise prospect from trade show",
+                },
+                "url": <ActionOptionInfo>{
+                    "display_name": "URL",
+                    "short_desc": "The lead URL",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The website URL associated with the lead",
+                    "example_value": "https://www.example.com",
+                },
+                "contacts": <ActionOptionInfo>{
+                    "display_name": "Contacts",
+                    "short_desc": "Nested contacts to create",
+                    "type": AbstractDataProviderTypeMap."*list",
+                    "desc": "A list of contact objects to create and associate with this lead. "
+                        "Each contact can include name, title, emails, and phones fields",
+                },
+                "addresses": <ActionOptionInfo>{
+                    "display_name": "Addresses",
+                    "short_desc": "Lead addresses",
+                    "type": AbstractDataProviderTypeMap."*list",
+                    "desc": "List of address objects for the lead",
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return new CloseLeadDataType(); },
+        });
+
+        # Update a Lead
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CloseDataProvider::AppName,
+            "path": "/leads/update",
+            "action": "update-lead",
+            "groups": "Leads",
+            "display_name": "Update a Lead",
+            "short_desc": "Update an existing lead",
+            "desc": "Update an existing lead in Close CRM",
+            "action_code": DPAT_API,
+            "options": {
+                "lead_id": <ActionOptionInfo>{
+                    "display_name": "Lead ID",
+                    "short_desc": "The lead to update",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "leads",
+                },
+                "name": <ActionOptionInfo>{
+                    "display_name": "Name",
+                    "short_desc": "The lead name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The new name of the lead",
+                    "example_value": "Acme Corporation",
+                    "preselected": True,
+                },
+                "status_id": <ActionOptionInfo>{
+                    "display_name": "Status ID",
+                    "short_desc": "The lead status ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The new status ID to assign to the lead",
+                    "preselected": True,
+                },
+                "description": <ActionOptionInfo>{
+                    "display_name": "Description",
+                    "short_desc": "The lead description",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The new text description of the lead",
+                },
+                "url": <ActionOptionInfo>{
+                    "display_name": "URL",
+                    "short_desc": "The lead URL",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The new website URL associated with the lead",
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return new CloseLeadDataType(); },
+        });
+
+        # Delete a Lead
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CloseDataProvider::AppName,
+            "path": "/leads/delete",
+            "action": "delete-lead",
+            "groups": "Leads",
+            "display_name": "Delete a Lead",
+            "short_desc": "Delete a lead",
+            "desc": "Delete a lead from Close CRM",
+            "action_code": DPAT_API,
+            "options": {
+                "lead_id": <ActionOptionInfo>{
+                    "display_name": "Lead ID",
+                    "short_desc": "The lead to delete",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "leads",
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
+        });
+
+        # List Leads
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CloseDataProvider::AppName,
+            "path": "/leads",
+            "action": "find-leads",
+            "groups": "Leads",
+            "display_name": "List Leads",
+            "short_desc": "List and search leads",
+            "desc": "List leads in Close CRM with optional filtering",
+            "action_code": DPAT_FIND,
+            "options": {
+                "lead_id": <ActionOptionInfo>{
+                    "display_name": "Lead ID",
+                    "short_desc": "Filter by lead ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "query": <ActionOptionInfo>{
+                    "display_name": "Query",
+                    "short_desc": "Search query text",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Search query text to filter leads by name, email, phone, or other "
+                        "fields",
+                    "preselected": True,
+                },
+                "status_id": <ActionOptionInfo>{
+                    "display_name": "Status ID",
+                    "short_desc": "Filter by lead status",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter leads by status ID",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "Maximum number of results to return",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Get a Lead
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CloseDataProvider::AppName,
+            "path": "/leads",
+            "action": "get-lead",
+            "groups": "Leads",
+            "display_name": "Get a Lead",
+            "short_desc": "Get a single lead by ID",
+            "desc": "Retrieve a single lead by ID from Close CRM",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "lead_id": <ActionOptionInfo>{
+                    "display_name": "Lead ID",
+                    "short_desc": "The lead ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "leads",
+                },
+            },
+        });
+
+        # ========== CONTACT ACTIONS ==========
+
+        # Create a Contact
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CloseDataProvider::AppName,
+            "path": "/contacts/create",
+            "action": "create-contact",
+            "groups": "Contacts",
+            "display_name": "Create a Contact",
+            "short_desc": "Create a new contact",
+            "desc": "Create a new contact in Close CRM",
+            "action_code": DPAT_API,
+            "options": {
+                "lead_id": <ActionOptionInfo>{
+                    "display_name": "Lead ID",
+                    "short_desc": "The lead to associate the contact with",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "leads",
+                },
+                "name": <ActionOptionInfo>{
+                    "display_name": "Name",
+                    "short_desc": "The contact name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The full name of the contact",
+                    "example_value": "Jane Smith",
+                    "preselected": True,
+                },
+                "title": <ActionOptionInfo>{
+                    "display_name": "Title",
+                    "short_desc": "The contact title",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The job title of the contact",
+                    "example_value": "VP of Sales",
+                },
+                "emails": <ActionOptionInfo>{
+                    "display_name": "Email Addresses",
+                    "short_desc": "The contact email addresses",
+                    "type": AbstractDataProviderTypeMap."*list",
+                    "desc": "A list of email address objects, each with type and email fields",
+                },
+                "phones": <ActionOptionInfo>{
+                    "display_name": "Phone Numbers",
+                    "short_desc": "The contact phone numbers",
+                    "type": AbstractDataProviderTypeMap."*list",
+                    "desc": "A list of phone number objects, each with type and phone fields",
+                },
+                "urls": <ActionOptionInfo>{
+                    "display_name": "URLs",
+                    "short_desc": "Contact URLs",
+                    "type": AbstractDataProviderTypeMap."*list",
+                    "desc": "List of URL objects for the contact",
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return new CloseContactDataType(); },
+        });
+
+        # Update a Contact
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CloseDataProvider::AppName,
+            "path": "/contacts/update",
+            "action": "update-contact",
+            "groups": "Contacts",
+            "display_name": "Update a Contact",
+            "short_desc": "Update an existing contact",
+            "desc": "Update an existing contact in Close CRM",
+            "action_code": DPAT_API,
+            "options": {
+                "contact_id": <ActionOptionInfo>{
+                    "display_name": "Contact ID",
+                    "short_desc": "The contact to update",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "contacts",
+                },
+                "name": <ActionOptionInfo>{
+                    "display_name": "Name",
+                    "short_desc": "The contact name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The new full name of the contact",
+                    "preselected": True,
+                },
+                "title": <ActionOptionInfo>{
+                    "display_name": "Title",
+                    "short_desc": "The contact title",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The new job title of the contact",
+                    "preselected": True,
+                },
+                "emails": <ActionOptionInfo>{
+                    "display_name": "Email Addresses",
+                    "short_desc": "The contact email addresses",
+                    "type": AbstractDataProviderTypeMap."*list",
+                    "desc": "The new list of email address objects",
+                },
+                "phones": <ActionOptionInfo>{
+                    "display_name": "Phone Numbers",
+                    "short_desc": "The contact phone numbers",
+                    "type": AbstractDataProviderTypeMap."*list",
+                    "desc": "The new list of phone number objects",
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return new CloseContactDataType(); },
+        });
+
+        # Delete a Contact
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CloseDataProvider::AppName,
+            "path": "/contacts/delete",
+            "action": "delete-contact",
+            "groups": "Contacts",
+            "display_name": "Delete a Contact",
+            "short_desc": "Delete a contact",
+            "desc": "Delete a contact from Close CRM",
+            "action_code": DPAT_API,
+            "options": {
+                "contact_id": <ActionOptionInfo>{
+                    "display_name": "Contact ID",
+                    "short_desc": "The contact to delete",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "contacts",
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
+        });
+
+        # List Contacts
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CloseDataProvider::AppName,
+            "path": "/contacts",
+            "action": "find-contacts",
+            "groups": "Contacts",
+            "display_name": "List Contacts",
+            "short_desc": "List and search contacts",
+            "desc": "List contacts in Close CRM with optional filtering",
+            "action_code": DPAT_FIND,
+            "options": {
+                "contact_id": <ActionOptionInfo>{
+                    "display_name": "Contact ID",
+                    "short_desc": "Filter by contact ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "lead_id": <ActionOptionInfo>{
+                    "display_name": "Lead ID",
+                    "short_desc": "Filter by lead ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter contacts by the lead they belong to",
+                    "preselected": True,
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "Maximum number of results to return",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Get a Contact
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CloseDataProvider::AppName,
+            "path": "/contacts",
+            "action": "get-contact",
+            "groups": "Contacts",
+            "display_name": "Get a Contact",
+            "short_desc": "Get a single contact by ID",
+            "desc": "Retrieve a single contact by ID from Close CRM",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "contact_id": <ActionOptionInfo>{
+                    "display_name": "Contact ID",
+                    "short_desc": "The contact ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "contacts",
+                },
+            },
+        });
+
+        # ========== OPPORTUNITY ACTIONS ==========
+
+        # Create an Opportunity
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CloseDataProvider::AppName,
+            "path": "/opportunities/create",
+            "action": "create-opportunity",
+            "groups": "Opportunities",
+            "display_name": "Create an Opportunity",
+            "short_desc": "Create a new opportunity",
+            "desc": "Create a new opportunity in Close CRM",
+            "action_code": DPAT_API,
+            "options": {
+                "lead_id": <ActionOptionInfo>{
+                    "display_name": "Lead ID",
+                    "short_desc": "The lead to associate the opportunity with",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "leads",
+                },
+                "status_id": <ActionOptionInfo>{
+                    "display_name": "Status ID",
+                    "short_desc": "The opportunity status ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The unique identifier of the opportunity status to assign",
+                },
+                "value": <ActionOptionInfo>{
+                    "display_name": "Value",
+                    "short_desc": "The opportunity value in cents",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "The monetary value of the opportunity in cents (e.g., 10000 = $100.00)",
+                    "preselected": True,
+                },
+                "value_period": <ActionOptionInfo>{
+                    "display_name": "Value Period",
+                    "short_desc": "The value period",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The billing period for the opportunity value",
+                    "allowed_values": (
+                        <AllowedValueInfo>{
+                            "value": "one_time",
+                            "desc": "One-time payment",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "monthly",
+                            "desc": "Monthly recurring",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "annual",
+                            "desc": "Annual recurring",
+                        },
+                    ),
+                },
+                "confidence": <ActionOptionInfo>{
+                    "display_name": "Confidence",
+                    "short_desc": "The confidence percentage",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "The confidence percentage of winning, from 0 to 100",
+                    "preselected": True,
+                },
+                "note": <ActionOptionInfo>{
+                    "display_name": "Note",
+                    "short_desc": "Notes about the opportunity",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "A text note with additional context about the opportunity",
+                },
+                "contact_id": <ActionOptionInfo>{
+                    "display_name": "Contact ID",
+                    "short_desc": "The associated contact",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The primary contact for this opportunity",
+                    "ref_data": "contacts",
+                },
+                "value_currency": <ActionOptionInfo>{
+                    "display_name": "Value Currency",
+                    "short_desc": "The currency code",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "ISO 4217 currency code (e.g., `USD`, `EUR`, `GBP`)",
+                    "example_value": "USD",
+                },
+                "user_id": <ActionOptionInfo>{
+                    "display_name": "User ID",
+                    "short_desc": "The assigned user",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The user to assign this opportunity to",
+                    "ref_data": "users",
+                },
+                "date_won": <ActionOptionInfo>{
+                    "display_name": "Date Won",
+                    "short_desc": "Date the opportunity was won",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The date won in YYYY-MM-DD format",
+                },
+                "date_lost": <ActionOptionInfo>{
+                    "display_name": "Date Lost",
+                    "short_desc": "Date the opportunity was lost",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The date lost in YYYY-MM-DD format",
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () {
+                return new CloseOpportunityDataType();
+            },
+        });
+
+        # Update an Opportunity
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CloseDataProvider::AppName,
+            "path": "/opportunities/update",
+            "action": "update-opportunity",
+            "groups": "Opportunities",
+            "display_name": "Update an Opportunity",
+            "short_desc": "Update an existing opportunity",
+            "desc": "Update an existing opportunity in Close CRM",
+            "action_code": DPAT_API,
+            "options": {
+                "opportunity_id": <ActionOptionInfo>{
+                    "display_name": "Opportunity ID",
+                    "short_desc": "The opportunity to update",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "opportunities",
+                },
+                "status_id": <ActionOptionInfo>{
+                    "display_name": "Status ID",
+                    "short_desc": "The opportunity status ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The new status ID to assign",
+                    "preselected": True,
+                },
+                "value": <ActionOptionInfo>{
+                    "display_name": "Value",
+                    "short_desc": "The opportunity value in cents",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "The new monetary value in cents",
+                    "preselected": True,
+                },
+                "value_period": <ActionOptionInfo>{
+                    "display_name": "Value Period",
+                    "short_desc": "The value period",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The new billing period",
+                    "allowed_values": (
+                        <AllowedValueInfo>{
+                            "value": "one_time",
+                            "desc": "One-time payment",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "monthly",
+                            "desc": "Monthly recurring",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "annual",
+                            "desc": "Annual recurring",
+                        },
+                    ),
+                },
+                "confidence": <ActionOptionInfo>{
+                    "display_name": "Confidence",
+                    "short_desc": "The confidence percentage",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "The new confidence percentage, from 0 to 100",
+                },
+                "note": <ActionOptionInfo>{
+                    "display_name": "Note",
+                    "short_desc": "Notes about the opportunity",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The new text note for the opportunity",
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () {
+                return new CloseOpportunityDataType();
+            },
+        });
+
+        # Delete an Opportunity
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CloseDataProvider::AppName,
+            "path": "/opportunities/delete",
+            "action": "delete-opportunity",
+            "groups": "Opportunities",
+            "display_name": "Delete an Opportunity",
+            "short_desc": "Delete an opportunity",
+            "desc": "Delete an opportunity from Close CRM",
+            "action_code": DPAT_API,
+            "options": {
+                "opportunity_id": <ActionOptionInfo>{
+                    "display_name": "Opportunity ID",
+                    "short_desc": "The opportunity to delete",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "opportunities",
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
+        });
+
+        # List Opportunities
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CloseDataProvider::AppName,
+            "path": "/opportunities",
+            "action": "find-opportunities",
+            "groups": "Opportunities",
+            "display_name": "List Opportunities",
+            "short_desc": "List and search opportunities",
+            "desc": "List opportunities in Close CRM with optional filtering",
+            "action_code": DPAT_FIND,
+            "options": {
+                "opportunity_id": <ActionOptionInfo>{
+                    "display_name": "Opportunity ID",
+                    "short_desc": "Filter by opportunity ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "lead_id": <ActionOptionInfo>{
+                    "display_name": "Lead ID",
+                    "short_desc": "Filter by lead ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter opportunities by the lead they belong to",
+                    "preselected": True,
+                },
+                "status_type": <ActionOptionInfo>{
+                    "display_name": "Status Type",
+                    "short_desc": "Filter by status type",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter opportunities by status type",
+                    "allowed_values": (
+                        <AllowedValueInfo>{
+                            "value": "active",
+                            "desc": "Active opportunities",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "won",
+                            "desc": "Won opportunities",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "lost",
+                            "desc": "Lost opportunities",
+                        },
+                    ),
+                },
+                "user_id": <ActionOptionInfo>{
+                    "display_name": "User ID",
+                    "short_desc": "Filter by assigned user",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter by assigned user ID",
+                    "ref_data": "users",
+                },
+                "status_id": <ActionOptionInfo>{
+                    "display_name": "Status ID",
+                    "short_desc": "Filter by status ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter by status ID",
+                },
+                "query": <ActionOptionInfo>{
+                    "display_name": "Query",
+                    "short_desc": "Search query",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Text search query",
+                    "preselected": True,
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "Maximum number of results to return",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Get an Opportunity
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CloseDataProvider::AppName,
+            "path": "/opportunities",
+            "action": "get-opportunity",
+            "groups": "Opportunities",
+            "display_name": "Get an Opportunity",
+            "short_desc": "Get a single opportunity by ID",
+            "desc": "Retrieve a single opportunity by ID from Close CRM",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "opportunity_id": <ActionOptionInfo>{
+                    "display_name": "Opportunity ID",
+                    "short_desc": "The opportunity ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "opportunities",
+                },
+            },
+        });
+
+        # ========== TASK ACTIONS ==========
+
+        # Create a Task
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CloseDataProvider::AppName,
+            "path": "/tasks/create",
+            "action": "create-task",
+            "groups": "Tasks",
+            "display_name": "Create a Task",
+            "short_desc": "Create a new task",
+            "desc": "Create a new task in Close CRM",
+            "action_code": DPAT_API,
+            "options": {
+                "lead_id": <ActionOptionInfo>{
+                    "display_name": "Lead ID",
+                    "short_desc": "The lead to associate the task with",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "leads",
+                },
+                "_type": <ActionOptionInfo>{
+                    "display_name": "Task Type",
+                    "short_desc": "The task type",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The type of the task to create",
+                    "allowed_values": (
+                        <AllowedValueInfo>{
+                            "value": "lead",
+                            "desc": "Lead task",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "outgoing_call",
+                            "desc": "Outgoing call task",
+                        },
+                    ),
+                },
+                "text": <ActionOptionInfo>{
+                    "display_name": "Text",
+                    "short_desc": "The task text",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The text description or body of the task",
+                    "example_value": "Follow up with client about proposal",
+                    "preselected": True,
+                },
+                "date": <ActionOptionInfo>{
+                    "display_name": "Date",
+                    "short_desc": "The task due date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The due date of the task in YYYY-MM-DD format",
+                    "example_value": "2026-03-15",
+                },
+                "assigned_to": <ActionOptionInfo>{
+                    "display_name": "Assigned To",
+                    "short_desc": "The user to assign the task to",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The user ID to assign this task to",
+                    "ref_data": "users",
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return new CloseTaskDataType(); },
+        });
+
+        # Update a Task
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CloseDataProvider::AppName,
+            "path": "/tasks/update",
+            "action": "update-task",
+            "groups": "Tasks",
+            "display_name": "Update a Task",
+            "short_desc": "Update an existing task",
+            "desc": "Update an existing task in Close CRM",
+            "action_code": DPAT_API,
+            "options": {
+                "task_id": <ActionOptionInfo>{
+                    "display_name": "Task ID",
+                    "short_desc": "The task to update",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                },
+                "assigned_to": <ActionOptionInfo>{
+                    "display_name": "Assigned To",
+                    "short_desc": "The user to assign the task to",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The new user ID to assign this task to",
+                    "ref_data": "users",
+                    "preselected": True,
+                },
+                "date": <ActionOptionInfo>{
+                    "display_name": "Date",
+                    "short_desc": "The task due date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The new due date in YYYY-MM-DD format",
+                },
+                "is_complete": <ActionOptionInfo>{
+                    "display_name": "Is Complete",
+                    "short_desc": "Whether the task is complete",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                    "desc": "Set to `True` to mark the task as complete, or `False` for incomplete",
+                    "preselected": True,
+                },
+                "text": <ActionOptionInfo>{
+                    "display_name": "Text",
+                    "short_desc": "The task text",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The new text description or body of the task",
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return new CloseTaskDataType(); },
+        });
+
+        # Delete a Task
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CloseDataProvider::AppName,
+            "path": "/tasks/delete",
+            "action": "delete-task",
+            "groups": "Tasks",
+            "display_name": "Delete a Task",
+            "short_desc": "Delete a task",
+            "desc": "Delete a task from Close CRM",
+            "action_code": DPAT_API,
+            "options": {
+                "task_id": <ActionOptionInfo>{
+                    "display_name": "Task ID",
+                    "short_desc": "The task to delete",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
+        });
+
+        # List Tasks
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CloseDataProvider::AppName,
+            "path": "/tasks",
+            "action": "find-tasks",
+            "groups": "Tasks",
+            "display_name": "List Tasks",
+            "short_desc": "List and search tasks",
+            "desc": "List tasks in Close CRM with optional filtering",
+            "action_code": DPAT_FIND,
+            "options": {
+                "task_id": <ActionOptionInfo>{
+                    "display_name": "Task ID",
+                    "short_desc": "Filter by task ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "lead_id": <ActionOptionInfo>{
+                    "display_name": "Lead ID",
+                    "short_desc": "Filter by lead ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter tasks by the lead they are associated with",
+                    "preselected": True,
+                },
+                "_type": <ActionOptionInfo>{
+                    "display_name": "Task Type",
+                    "short_desc": "Task type filter",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter tasks by type",
+                    "allowed_values": (
+                        <AllowedValueInfo>{
+                            "value": "lead",
+                            "desc": "Lead task",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "outgoing_call",
+                            "desc": "Outgoing call task",
+                        },
+                    ),
+                },
+                "is_complete": <ActionOptionInfo>{
+                    "display_name": "Is Complete",
+                    "short_desc": "Filter by completion status",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                    "desc": "Filter tasks by completion status",
+                },
+                "assigned_to": <ActionOptionInfo>{
+                    "display_name": "Assigned To",
+                    "short_desc": "Filter by assigned user",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter tasks by the user they are assigned to",
+                    "ref_data": "users",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "Maximum number of results to return",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Get a Task
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CloseDataProvider::AppName,
+            "path": "/tasks",
+            "action": "get-task",
+            "groups": "Tasks",
+            "display_name": "Get a Task",
+            "short_desc": "Get a single task by ID",
+            "desc": "Retrieve a single task by ID from Close CRM",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "task_id": <ActionOptionInfo>{
+                    "display_name": "Task ID",
+                    "short_desc": "The task ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                },
+            },
+        });
+
+        # ========== CALL ACTIONS ==========
+
+        # Create a Call
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CloseDataProvider::AppName,
+            "path": "/calls/create",
+            "action": "create-call",
+            "groups": "Calls",
+            "display_name": "Create a Call",
+            "short_desc": "Log a new call",
+            "desc": "Log a new call activity in Close CRM",
+            "action_code": DPAT_API,
+            "options": {
+                "lead_id": <ActionOptionInfo>{
+                    "display_name": "Lead ID",
+                    "short_desc": "The lead to associate the call with",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "leads",
+                },
+                "direction": <ActionOptionInfo>{
+                    "display_name": "Direction",
+                    "short_desc": "Call direction",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Call direction",
+                    "preselected": True,
+                    "allowed_values": (
+                        <AllowedValueInfo>{
+                            "value": "inbound",
+                            "desc": "Inbound call",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "outbound",
+                            "desc": "Outbound call",
+                        },
+                    ),
+                },
+                "duration": <ActionOptionInfo>{
+                    "display_name": "Duration",
+                    "short_desc": "Call duration in seconds",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "Call duration in seconds",
+                },
+                "phone": <ActionOptionInfo>{
+                    "display_name": "Phone Number",
+                    "short_desc": "The phone number",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The phone number associated with this call",
+                },
+                "disposition": <ActionOptionInfo>{
+                    "display_name": "Disposition",
+                    "short_desc": "Call disposition",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The disposition or outcome of the call",
+                },
+                "note": <ActionOptionInfo>{
+                    "display_name": "Note",
+                    "short_desc": "Call note",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "A text note to associate with this call",
+                },
+                "status": <ActionOptionInfo>{
+                    "display_name": "Status",
+                    "short_desc": "Call status",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The status of the call",
+                    "allowed_values": (
+                        <AllowedValueInfo>{
+                            "value": "created",
+                            "desc": "Call was created/logged",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "completed",
+                            "desc": "Call was completed",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "cancelled",
+                            "desc": "Call was cancelled",
+                        },
+                    ),
+                },
+                "contact_id": <ActionOptionInfo>{
+                    "display_name": "Contact ID",
+                    "short_desc": "The associated contact",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The contact associated with this call",
+                    "ref_data": "contacts",
+                },
+                "user_id": <ActionOptionInfo>{
+                    "display_name": "User ID",
+                    "short_desc": "The user who made the call",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The user who made or received this call",
+                    "ref_data": "users",
+                },
+                "note_html": <ActionOptionInfo>{
+                    "display_name": "Note HTML",
+                    "short_desc": "HTML note for the call",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "An HTML-formatted note for this call",
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return new CloseCallDataType(); },
+        });
+
+        # Update a Call
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CloseDataProvider::AppName,
+            "path": "/calls/update",
+            "action": "update-call",
+            "groups": "Calls",
+            "display_name": "Update a Call",
+            "short_desc": "Update an existing call",
+            "desc": "Update an existing call activity in Close CRM",
+            "action_code": DPAT_API,
+            "options": {
+                "call_id": <ActionOptionInfo>{
+                    "display_name": "Call ID",
+                    "short_desc": "The call to update",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                },
+                "note": <ActionOptionInfo>{
+                    "display_name": "Note",
+                    "short_desc": "Call note",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The new text note for this call",
+                    "preselected": True,
+                },
+                "disposition": <ActionOptionInfo>{
+                    "display_name": "Disposition",
+                    "short_desc": "Call disposition",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The new disposition or outcome of the call",
+                    "preselected": True,
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return new CloseCallDataType(); },
+        });
+
+        # Delete a Call
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CloseDataProvider::AppName,
+            "path": "/calls/delete",
+            "action": "delete-call",
+            "groups": "Calls",
+            "display_name": "Delete a Call",
+            "short_desc": "Delete a call",
+            "desc": "Delete a call activity from Close CRM",
+            "action_code": DPAT_API,
+            "options": {
+                "call_id": <ActionOptionInfo>{
+                    "display_name": "Call ID",
+                    "short_desc": "The call to delete",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
+        });
+
+        # List Calls
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CloseDataProvider::AppName,
+            "path": "/calls",
+            "action": "find-calls",
+            "groups": "Calls",
+            "display_name": "List Calls",
+            "short_desc": "List and search calls",
+            "desc": "List call activities in Close CRM with optional filtering",
+            "action_code": DPAT_FIND,
+            "options": {
+                "call_id": <ActionOptionInfo>{
+                    "display_name": "Call ID",
+                    "short_desc": "Filter by call ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "lead_id": <ActionOptionInfo>{
+                    "display_name": "Lead ID",
+                    "short_desc": "Filter by lead ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter calls by lead ID",
+                    "preselected": True,
+                },
+                "user_id": <ActionOptionInfo>{
+                    "display_name": "User ID",
+                    "short_desc": "Filter by user ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter calls by user ID",
+                    "ref_data": "users",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "Maximum number of results to return",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Get a Call
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CloseDataProvider::AppName,
+            "path": "/calls",
+            "action": "get-call",
+            "groups": "Calls",
+            "display_name": "Get a Call",
+            "short_desc": "Get a single call by ID",
+            "desc": "Retrieve a single call activity by ID from Close CRM",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "call_id": <ActionOptionInfo>{
+                    "display_name": "Call ID",
+                    "short_desc": "The call ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                },
+            },
+        });
+
+        # ========== EMAIL ACTIONS ==========
+
+        # Create an Email
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CloseDataProvider::AppName,
+            "path": "/emails/create",
+            "action": "create-email",
+            "groups": "Emails",
+            "display_name": "Create an Email",
+            "short_desc": "Log a new email",
+            "desc": "Log a new email activity in Close CRM",
+            "action_code": DPAT_API,
+            "options": {
+                "lead_id": <ActionOptionInfo>{
+                    "display_name": "Lead ID",
+                    "short_desc": "The lead to associate the email with",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "leads",
+                },
+                "status": <ActionOptionInfo>{
+                    "display_name": "Status",
+                    "short_desc": "Email status",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "Email status",
+                    "allowed_values": (
+                        <AllowedValueInfo>{
+                            "value": "draft",
+                            "desc": "Draft email",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "outbox",
+                            "desc": "Email in outbox",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "sent",
+                            "desc": "Sent email",
+                        },
+                    ),
+                },
+                "subject": <ActionOptionInfo>{
+                    "display_name": "Subject",
+                    "short_desc": "Email subject",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The subject line of the email",
+                    "preselected": True,
+                },
+                "body_text": <ActionOptionInfo>{
+                    "display_name": "Body Text",
+                    "short_desc": "Email body as plain text",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The plain text body of the email",
+                },
+                "body_html": <ActionOptionInfo>{
+                    "display_name": "Body HTML",
+                    "short_desc": "Email body as HTML",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The HTML body of the email",
+                },
+                "sender": <ActionOptionInfo>{
+                    "display_name": "Sender",
+                    "short_desc": "Sender email address",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The sender email address",
+                },
+                "to": <ActionOptionInfo>{
+                    "display_name": "To",
+                    "short_desc": "To recipients",
+                    "type": AbstractDataProviderTypeMap."*list",
+                    "desc": "A list of recipient email addresses",
+                    "preselected": True,
+                },
+                "contact_id": <ActionOptionInfo>{
+                    "display_name": "Contact ID",
+                    "short_desc": "The associated contact",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The contact to associate with this email",
+                    "ref_data": "contacts",
+                },
+                "cc": <ActionOptionInfo>{
+                    "display_name": "CC",
+                    "short_desc": "CC recipients",
+                    "type": AbstractDataProviderTypeMap."*list",
+                    "desc": "List of CC recipient email addresses",
+                },
+                "bcc": <ActionOptionInfo>{
+                    "display_name": "BCC",
+                    "short_desc": "BCC recipients",
+                    "type": AbstractDataProviderTypeMap."*list",
+                    "desc": "List of BCC recipient email addresses",
+                },
+                "direction": <ActionOptionInfo>{
+                    "display_name": "Direction",
+                    "short_desc": "Email direction",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The direction: `incoming` or `outgoing`",
+                    "allowed_values": (
+                        <AllowedValueInfo>{
+                            "value": "incoming",
+                            "desc": "Incoming email",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "outgoing",
+                            "desc": "Outgoing email",
+                        },
+                    ),
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return new CloseEmailDataType(); },
+        });
+
+        # Delete an Email
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CloseDataProvider::AppName,
+            "path": "/emails/delete",
+            "action": "delete-email",
+            "groups": "Emails",
+            "display_name": "Delete an Email",
+            "short_desc": "Delete an email",
+            "desc": "Delete an email activity from Close CRM",
+            "action_code": DPAT_API,
+            "options": {
+                "email_id": <ActionOptionInfo>{
+                    "display_name": "Email ID",
+                    "short_desc": "The email to delete",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
+        });
+
+        # List Emails
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CloseDataProvider::AppName,
+            "path": "/emails",
+            "action": "find-emails",
+            "groups": "Emails",
+            "display_name": "List Emails",
+            "short_desc": "List and search emails",
+            "desc": "List email activities in Close CRM with optional filtering",
+            "action_code": DPAT_FIND,
+            "options": {
+                "email_id": <ActionOptionInfo>{
+                    "display_name": "Email ID",
+                    "short_desc": "Filter by email ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "lead_id": <ActionOptionInfo>{
+                    "display_name": "Lead ID",
+                    "short_desc": "Filter by lead ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter emails by lead ID",
+                    "preselected": True,
+                },
+                "user_id": <ActionOptionInfo>{
+                    "display_name": "User ID",
+                    "short_desc": "Filter by user ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter emails by user ID",
+                    "ref_data": "users",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "Maximum number of results to return",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Get an Email
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CloseDataProvider::AppName,
+            "path": "/emails",
+            "action": "get-email",
+            "groups": "Emails",
+            "display_name": "Get an Email",
+            "short_desc": "Get a single email by ID",
+            "desc": "Retrieve a single email activity by ID from Close CRM",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "email_id": <ActionOptionInfo>{
+                    "display_name": "Email ID",
+                    "short_desc": "The email ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                },
+            },
+        });
+
+        # ========== NOTE ACTIONS ==========
+
+        # Create a Note
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CloseDataProvider::AppName,
+            "path": "/notes/create",
+            "action": "create-note",
+            "groups": "Notes",
+            "display_name": "Create a Note",
+            "short_desc": "Create a new note",
+            "desc": "Create a new note activity in Close CRM",
+            "action_code": DPAT_API,
+            "options": {
+                "lead_id": <ActionOptionInfo>{
+                    "display_name": "Lead ID",
+                    "short_desc": "The lead to associate the note with",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "leads",
+                },
+                "note": <ActionOptionInfo>{
+                    "display_name": "Note",
+                    "short_desc": "Note text content",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The plain text content of the note",
+                    "preselected": True,
+                },
+                "note_html": <ActionOptionInfo>{
+                    "display_name": "Note HTML",
+                    "short_desc": "Note HTML content",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The HTML content of the note",
+                },
+                "contact_id": <ActionOptionInfo>{
+                    "display_name": "Contact ID",
+                    "short_desc": "The associated contact",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The contact to associate with this note",
+                    "ref_data": "contacts",
+                },
+                "pinned": <ActionOptionInfo>{
+                    "display_name": "Pinned",
+                    "short_desc": "Pin the note",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                    "desc": "Set to `True` to pin this note to the top",
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return new CloseNoteDataType(); },
+        });
+
+        # Update a Note
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CloseDataProvider::AppName,
+            "path": "/notes/update",
+            "action": "update-note",
+            "groups": "Notes",
+            "display_name": "Update a Note",
+            "short_desc": "Update an existing note",
+            "desc": "Update an existing note activity in Close CRM",
+            "action_code": DPAT_API,
+            "options": {
+                "note_id": <ActionOptionInfo>{
+                    "display_name": "Note ID",
+                    "short_desc": "The note to update",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                },
+                "note": <ActionOptionInfo>{
+                    "display_name": "Note",
+                    "short_desc": "Note text content",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The new plain text content of the note",
+                    "preselected": True,
+                },
+                "note_html": <ActionOptionInfo>{
+                    "display_name": "Note HTML",
+                    "short_desc": "Note HTML content",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The new HTML content of the note",
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return new CloseNoteDataType(); },
+        });
+
+        # Delete a Note
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CloseDataProvider::AppName,
+            "path": "/notes/delete",
+            "action": "delete-note",
+            "groups": "Notes",
+            "display_name": "Delete a Note",
+            "short_desc": "Delete a note",
+            "desc": "Delete a note activity from Close CRM",
+            "action_code": DPAT_API,
+            "options": {
+                "note_id": <ActionOptionInfo>{
+                    "display_name": "Note ID",
+                    "short_desc": "The note to delete",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
+        });
+
+        # List Notes
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CloseDataProvider::AppName,
+            "path": "/notes",
+            "action": "find-notes",
+            "groups": "Notes",
+            "display_name": "List Notes",
+            "short_desc": "List and search notes",
+            "desc": "List note activities in Close CRM with optional filtering",
+            "action_code": DPAT_FIND,
+            "options": {
+                "note_id": <ActionOptionInfo>{
+                    "display_name": "Note ID",
+                    "short_desc": "Filter by note ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "lead_id": <ActionOptionInfo>{
+                    "display_name": "Lead ID",
+                    "short_desc": "Filter by lead ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter notes by lead ID",
+                    "preselected": True,
+                },
+                "user_id": <ActionOptionInfo>{
+                    "display_name": "User ID",
+                    "short_desc": "Filter by user ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter notes by user ID",
+                    "ref_data": "users",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "Maximum number of results to return",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Get a Note
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CloseDataProvider::AppName,
+            "path": "/notes",
+            "action": "get-note",
+            "groups": "Notes",
+            "display_name": "Get a Note",
+            "short_desc": "Get a single note by ID",
+            "desc": "Retrieve a single note activity by ID from Close CRM",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "note_id": <ActionOptionInfo>{
+                    "display_name": "Note ID",
+                    "short_desc": "The note ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                },
+            },
+        });
+
+        # ========== MEETING ACTIONS ==========
+
+        # Create a Meeting
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CloseDataProvider::AppName,
+            "path": "/meetings/create",
+            "action": "create-meeting",
+            "groups": "Meetings",
+            "display_name": "Create a Meeting",
+            "short_desc": "Create a new meeting",
+            "desc": "Create a new meeting activity in Close CRM",
+            "action_code": DPAT_API,
+            "options": {
+                "lead_id": <ActionOptionInfo>{
+                    "display_name": "Lead ID",
+                    "short_desc": "The lead to associate the meeting with",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "leads",
+                },
+                "title": <ActionOptionInfo>{
+                    "display_name": "Title",
+                    "short_desc": "Meeting title",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The title of the meeting",
+                    "preselected": True,
+                },
+                "starts_at": <ActionOptionInfo>{
+                    "display_name": "Starts At",
+                    "short_desc": "Meeting start time",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The start time of the meeting (ISO 8601 format)",
+                    "preselected": True,
+                },
+                "ends_at": <ActionOptionInfo>{
+                    "display_name": "Ends At",
+                    "short_desc": "Meeting end time",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The end time of the meeting (ISO 8601 format)",
+                    "preselected": True,
+                },
+                "attendees": <ActionOptionInfo>{
+                    "display_name": "Attendees",
+                    "short_desc": "Meeting attendees",
+                    "type": AbstractDataProviderTypeMap."*list",
+                    "desc": "A list of attendee objects for this meeting",
+                },
+                "location": <ActionOptionInfo>{
+                    "display_name": "Location",
+                    "short_desc": "Meeting location",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The location of the meeting",
+                },
+                "user_note_html": <ActionOptionInfo>{
+                    "display_name": "Note HTML",
+                    "short_desc": "Meeting note in HTML",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "An HTML note to associate with the meeting",
+                },
+                "contact_id": <ActionOptionInfo>{
+                    "display_name": "Contact ID",
+                    "short_desc": "The associated contact",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The contact associated with this meeting",
+                    "ref_data": "contacts",
+                },
+                "user_id": <ActionOptionInfo>{
+                    "display_name": "User ID",
+                    "short_desc": "The meeting organizer",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The user who organized this meeting",
+                    "ref_data": "users",
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () {
+                return new CloseMeetingDataType();
+            },
+        });
+
+        # Update a Meeting
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CloseDataProvider::AppName,
+            "path": "/meetings/update",
+            "action": "update-meeting",
+            "groups": "Meetings",
+            "display_name": "Update a Meeting",
+            "short_desc": "Update an existing meeting",
+            "desc": "Update an existing meeting activity in Close CRM",
+            "action_code": DPAT_API,
+            "options": {
+                "meeting_id": <ActionOptionInfo>{
+                    "display_name": "Meeting ID",
+                    "short_desc": "The meeting to update",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                },
+                "title": <ActionOptionInfo>{
+                    "display_name": "Title",
+                    "short_desc": "Meeting title",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The new title of the meeting",
+                    "preselected": True,
+                },
+                "starts_at": <ActionOptionInfo>{
+                    "display_name": "Starts At",
+                    "short_desc": "Meeting start time",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The new start time (ISO 8601 format)",
+                    "preselected": True,
+                },
+                "ends_at": <ActionOptionInfo>{
+                    "display_name": "Ends At",
+                    "short_desc": "Meeting end time",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The new end time (ISO 8601 format)",
+                },
+                "location": <ActionOptionInfo>{
+                    "display_name": "Location",
+                    "short_desc": "Meeting location",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The new location of the meeting",
+                },
+                "user_note_html": <ActionOptionInfo>{
+                    "display_name": "Note HTML",
+                    "short_desc": "Meeting note in HTML",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The new HTML note for the meeting",
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () {
+                return new CloseMeetingDataType();
+            },
+        });
+
+        # Delete a Meeting
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CloseDataProvider::AppName,
+            "path": "/meetings/delete",
+            "action": "delete-meeting",
+            "groups": "Meetings",
+            "display_name": "Delete a Meeting",
+            "short_desc": "Delete a meeting",
+            "desc": "Delete a meeting activity from Close CRM",
+            "action_code": DPAT_API,
+            "options": {
+                "meeting_id": <ActionOptionInfo>{
+                    "display_name": "Meeting ID",
+                    "short_desc": "The meeting to delete",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
+        });
+
+        # List Meetings
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CloseDataProvider::AppName,
+            "path": "/meetings",
+            "action": "find-meetings",
+            "groups": "Meetings",
+            "display_name": "List Meetings",
+            "short_desc": "List and search meetings",
+            "desc": "List meeting activities in Close CRM with optional filtering",
+            "action_code": DPAT_FIND,
+            "options": {
+                "meeting_id": <ActionOptionInfo>{
+                    "display_name": "Meeting ID",
+                    "short_desc": "Filter by meeting ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "lead_id": <ActionOptionInfo>{
+                    "display_name": "Lead ID",
+                    "short_desc": "Filter by lead ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter meetings by lead ID",
+                    "preselected": True,
+                },
+                "user_id": <ActionOptionInfo>{
+                    "display_name": "User ID",
+                    "short_desc": "Filter by user ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter meetings by user ID",
+                    "ref_data": "users",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "Maximum number of results to return",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Get a Meeting
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CloseDataProvider::AppName,
+            "path": "/meetings",
+            "action": "get-meeting",
+            "groups": "Meetings",
+            "display_name": "Get a Meeting",
+            "short_desc": "Get a single meeting by ID",
+            "desc": "Retrieve a single meeting activity by ID from Close CRM",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "meeting_id": <ActionOptionInfo>{
+                    "display_name": "Meeting ID",
+                    "short_desc": "The meeting ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                },
+            },
+        });
+
+        # ========== SMS ACTIONS ==========
+
+        # Create an SMS
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CloseDataProvider::AppName,
+            "path": "/sms/create",
+            "action": "create-sms",
+            "groups": "SMS",
+            "display_name": "Create an SMS",
+            "short_desc": "Send a new SMS",
+            "desc": "Send a new SMS activity in Close CRM",
+            "action_code": DPAT_API,
+            "options": {
+                "lead_id": <ActionOptionInfo>{
+                    "display_name": "Lead ID",
+                    "short_desc": "The lead to associate the SMS with",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "leads",
+                },
+                "local_phone": <ActionOptionInfo>{
+                    "display_name": "Local Phone",
+                    "short_desc": "Local phone number",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The local phone number to send the SMS from",
+                },
+                "remote_phone": <ActionOptionInfo>{
+                    "display_name": "Remote Phone",
+                    "short_desc": "Remote phone number",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The remote phone number to send the SMS to",
+                },
+                "text": <ActionOptionInfo>{
+                    "display_name": "Text",
+                    "short_desc": "SMS message text",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The text content of the SMS message",
+                },
+                "status": <ActionOptionInfo>{
+                    "display_name": "Status",
+                    "short_desc": "SMS status",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "SMS status",
+                    "allowed_values": (
+                        <AllowedValueInfo>{
+                            "value": "draft",
+                            "desc": "Draft SMS",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "sending",
+                            "desc": "Sending SMS",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "sent",
+                            "desc": "Sent SMS",
+                        },
+                    ),
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return new CloseSmsDataType(); },
+        });
+
+        # Delete an SMS
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CloseDataProvider::AppName,
+            "path": "/sms/delete",
+            "action": "delete-sms",
+            "groups": "SMS",
+            "display_name": "Delete an SMS",
+            "short_desc": "Delete an SMS",
+            "desc": "Delete an SMS activity from Close CRM",
+            "action_code": DPAT_API,
+            "options": {
+                "sms_id": <ActionOptionInfo>{
+                    "display_name": "SMS ID",
+                    "short_desc": "The SMS to delete",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
+        });
+
+        # List SMS
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CloseDataProvider::AppName,
+            "path": "/sms",
+            "action": "find-sms",
+            "groups": "SMS",
+            "display_name": "List SMS",
+            "short_desc": "List and search SMS messages",
+            "desc": "List SMS activities in Close CRM with optional filtering",
+            "action_code": DPAT_FIND,
+            "options": {
+                "sms_id": <ActionOptionInfo>{
+                    "display_name": "SMS ID",
+                    "short_desc": "Filter by SMS ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "lead_id": <ActionOptionInfo>{
+                    "display_name": "Lead ID",
+                    "short_desc": "Filter by lead ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter SMS activities by lead ID",
+                    "preselected": True,
+                },
+                "user_id": <ActionOptionInfo>{
+                    "display_name": "User ID",
+                    "short_desc": "Filter by user ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter SMS activities by user ID",
+                    "ref_data": "users",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "Maximum number of results to return",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Get an SMS
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CloseDataProvider::AppName,
+            "path": "/sms",
+            "action": "get-sms",
+            "groups": "SMS",
+            "display_name": "Get an SMS",
+            "short_desc": "Get a single SMS by ID",
+            "desc": "Retrieve a single SMS activity by ID from Close CRM",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "sms_id": <ActionOptionInfo>{
+                    "display_name": "SMS ID",
+                    "short_desc": "The SMS ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                },
+            },
+        });
+
+        # ========== EVENT TRIGGERS ==========
+
+        # Lead Created
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CloseDataProvider::AppName,
+            "path": "/events/lead-created",
+            "action": "lead-created",
+            "groups": "Events",
+            "display_name": "Lead Created",
+            "short_desc": "Fires when a lead is created",
+            "desc": "Fires when a new lead is created in Close CRM. "
+                "Uses polling of the Event Log API to detect new records.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_LEAD_CREATED,
+            "options": {
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "Polling interval in seconds",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "How often to check for new records (minimum 30 seconds)",
+                    "default_value": DefaultPollInterval,
+                },
+            },
+        });
+
+        # Lead Updated
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CloseDataProvider::AppName,
+            "path": "/events/lead-updated",
+            "action": "lead-updated",
+            "groups": "Events",
+            "display_name": "Lead Updated",
+            "short_desc": "Fires when a lead is updated",
+            "desc": "Fires when a lead is updated in Close CRM. "
+                "Uses polling of the Event Log API to detect changes.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_LEAD_UPDATED,
+            "options": {
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "Polling interval in seconds",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "How often to check for new records (minimum 30 seconds)",
+                    "default_value": DefaultPollInterval,
+                },
+            },
+        });
+
+        # Lead Deleted
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CloseDataProvider::AppName,
+            "path": "/events/lead-deleted",
+            "action": "lead-deleted",
+            "groups": "Events",
+            "display_name": "Lead Deleted",
+            "short_desc": "Fires when a lead is deleted",
+            "desc": "Fires when a lead is deleted in Close CRM. "
+                "Uses polling of the Event Log API to detect deletions.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_LEAD_DELETED,
+            "options": {
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "Polling interval in seconds",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "How often to check for new records (minimum 30 seconds)",
+                    "default_value": DefaultPollInterval,
+                },
+            },
+        });
+
+        # Contact Created
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CloseDataProvider::AppName,
+            "path": "/events/contact-created",
+            "action": "contact-created",
+            "groups": "Events",
+            "display_name": "Contact Created",
+            "short_desc": "Fires when a contact is created",
+            "desc": "Fires when a new contact is created in Close CRM. "
+                "Uses polling of the Event Log API to detect new records.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_CONTACT_CREATED,
+            "options": {
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "Polling interval in seconds",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "How often to check for new records (minimum 30 seconds)",
+                    "default_value": DefaultPollInterval,
+                },
+            },
+        });
+
+        # Contact Updated
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CloseDataProvider::AppName,
+            "path": "/events/contact-updated",
+            "action": "contact-updated",
+            "groups": "Events",
+            "display_name": "Contact Updated",
+            "short_desc": "Fires when a contact is updated",
+            "desc": "Fires when a contact is updated in Close CRM. "
+                "Uses polling of the Event Log API to detect changes.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_CONTACT_UPDATED,
+            "options": {
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "Polling interval in seconds",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "How often to check for new records (minimum 30 seconds)",
+                    "default_value": DefaultPollInterval,
+                },
+            },
+        });
+
+        # Contact Deleted
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CloseDataProvider::AppName,
+            "path": "/events/contact-deleted",
+            "action": "contact-deleted",
+            "groups": "Events",
+            "display_name": "Contact Deleted",
+            "short_desc": "Fires when a contact is deleted",
+            "desc": "Fires when a contact is deleted in Close CRM. "
+                "Uses polling of the Event Log API to detect deletions.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_CONTACT_DELETED,
+            "options": {
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "Polling interval in seconds",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "How often to check for new records (minimum 30 seconds)",
+                    "default_value": DefaultPollInterval,
+                },
+            },
+        });
+
+        # Opportunity Created
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CloseDataProvider::AppName,
+            "path": "/events/opportunity-created",
+            "action": "opportunity-created",
+            "groups": "Events",
+            "display_name": "Opportunity Created",
+            "short_desc": "Fires when an opportunity is created",
+            "desc": "Fires when a new opportunity is created in Close CRM. "
+                "Uses polling of the Event Log API to detect new records.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_OPPORTUNITY_CREATED,
+            "options": {
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "Polling interval in seconds",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "How often to check for new records (minimum 30 seconds)",
+                    "default_value": DefaultPollInterval,
+                },
+            },
+        });
+
+        # Opportunity Updated
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CloseDataProvider::AppName,
+            "path": "/events/opportunity-updated",
+            "action": "opportunity-updated",
+            "groups": "Events",
+            "display_name": "Opportunity Updated",
+            "short_desc": "Fires when an opportunity is updated",
+            "desc": "Fires when an opportunity is updated in Close CRM. "
+                "Uses polling of the Event Log API to detect changes.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_OPPORTUNITY_UPDATED,
+            "options": {
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "Polling interval in seconds",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "How often to check for new records (minimum 30 seconds)",
+                    "default_value": DefaultPollInterval,
+                },
+            },
+        });
+
+        # Opportunity Deleted
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CloseDataProvider::AppName,
+            "path": "/events/opportunity-deleted",
+            "action": "opportunity-deleted",
+            "groups": "Events",
+            "display_name": "Opportunity Deleted",
+            "short_desc": "Fires when an opportunity is deleted",
+            "desc": "Fires when an opportunity is deleted in Close CRM. "
+                "Uses polling of the Event Log API to detect deletions.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_OPPORTUNITY_DELETED,
+            "options": {
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "Polling interval in seconds",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "How often to check for new records (minimum 30 seconds)",
+                    "default_value": DefaultPollInterval,
+                },
+            },
+        });
+    };
+}
