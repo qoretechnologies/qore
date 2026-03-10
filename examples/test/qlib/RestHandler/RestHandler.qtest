@@ -28,6 +28,10 @@
 %define NoJson
 %endtry
 
+%try-module json >= 1.12
+%define NoCbor
+%endtry
+
 %try-module yaml
 %define NoYaml
 %endtry
@@ -248,6 +252,9 @@ public class RestHandlerTest inherits QUnit::Test {
 %ifndef NoJson
             "json": AllValues,
 %endif
+%ifndef NoCbor
+            "cbor": AllValues,
+%endif
 %ifndef NoXml
             "rawxml": SimpleHashValue,
 %endif
@@ -382,6 +389,7 @@ public class RestHandlerTest inherits QUnit::Test {
         addTestCase("Test external serialization", \serializationTest());
         addTestCase("Raw response test", \rawResponseTest());
         addTestCase("Test xml", \xmlTest());
+        addTestCase("Test cbor", \cborTest());
         addTestCase("Test swagger", \swaggerTest());
         addTestCase("issue 2398", \issue2398());
         addTestCase("issue 2543", \issue2543());
@@ -666,6 +674,41 @@ public class RestHandlerTest inherits QUnit::Test {
             h = mClient.put("test?action=echo", ListValue, \info);
             assertEq(("list": ("element": ListValue)), h.body);
         }
+    }
+
+    cborTest() {
+%ifdef NoCbor
+        testSkip("no CBOR support (json module >= 1.12 required)");
+%else
+        mClient.setSerialization("cbor");
+
+        {
+            hash<auto> info;
+            on_error printf("info: %N\n", info);
+
+            # test hash round-trip
+            hash<auto> h = mClient.get("test?action=echo", LargerHashValue, \info);
+            assertEq(LargerHashValue, h.body, "GET cbor hash");
+            h = mClient.put("test?action=echo", LargerHashValue, \info);
+            assertEq(LargerHashValue, h.body, "PUT cbor hash");
+
+            # test string round-trip
+            h = mClient.put("test?action=echo", "1", \info);
+            assertEq("1", h.body, "PUT cbor string");
+
+            # test list round-trip
+            h = mClient.put("test?action=echo", ListValue, \info);
+            assertEq(ListValue, h.body, "PUT cbor list");
+
+            # test binary round-trip
+            h = mClient.put("test?action=echo", <bead>, \info);
+            assertEq(<bead>, h.body, "PUT cbor binary");
+
+            # test nested hash
+            h = mClient.get("test?action=echo", HashValue, \info);
+            assertEq(HashValue, h.body, "GET cbor nested hash");
+        }
+%endif
     }
 
     swaggerTest() {

@@ -34,7 +34,7 @@
 
 %allow-weak-references
 
-%requires Mime >= 1.3
+%requires Mime >= 1.7
 %requires(reexport) ConnectionProvider >= 1.10
 %requires(reexport) RestSchemaValidator >= 1.0
 %requires Swagger >= 2.0
@@ -51,6 +51,10 @@
 
 %try-module json >= 1.5
 %define NoJson
+%endtry
+
+%try-module json >= 1.12
+%define NoCbor
 %endtry
 
 module RestClient {
@@ -145,6 +149,10 @@ printf("%N\n", ans.body);
       \c DataSerializationOptions for possible values when used with the null REST schema validator
 
     @section restclientrelnotes Release Notes
+
+    @subsection restclientv2_4 RestClient v2.4
+    - added CBOR serialization support (\c "cbor" data option) when the \c json module
+      version 1.12+ is available (RFC 8949)
 
     @subsection restclientv2_3_3 RestClient v2.3.3
     - fixed non-blocking polling with connections that use basic auth
@@ -350,6 +358,9 @@ public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, Connec
 %ifndef NoJson
             "json": MimeTypeJson,
 %endif
+%ifndef NoCbor
+            "cbor": MimeTypeCbor,
+%endif
 %ifndef NoYaml
             "yaml": MimeTypeYaml,
 %endif
@@ -399,6 +410,9 @@ public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, Connec
 %ifndef NoJson
             MimeTypeJsonRpc,
 %endif
+%ifndef NoCbor
+            MimeTypeCbor,
+%endif
             MimeTypeFormUrlEncoded,
             MimeTypeText,
             MimeTypeOctetStream,
@@ -432,8 +446,9 @@ public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, Connec
 
         #! Data serialization options; this is a hash to simulate a set of strings
         /** Data serialization options are as follows:
-            - \c "auto": prefers in this order: json, yaml, rawxml, xml, url, and text
+            - \c "auto": prefers in this order: json, cbor, yaml, rawxml, xml, url, and text
             - \c "bin": for binary message bodies without data serialization
+            - \c "cbor": use only CBOR serialization (requires \c json module >= 1.12)
             - \c "json": use only JSON serialization
             - \c "rawxml": use raw XML serialization
             - \c "text": use only plain text. No serialization is used.
@@ -445,6 +460,9 @@ public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, Connec
             "auto": True,
 %ifndef NoJson
             "json": True,
+%endif
+%ifndef NoCbor
+            "cbor": True,
 %endif
 %ifndef NoYaml
             "yaml": True,

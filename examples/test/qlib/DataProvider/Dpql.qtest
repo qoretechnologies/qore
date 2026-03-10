@@ -253,6 +253,35 @@ public class DpqlTest inherits QUnit::Test {
             assertEq("@user.email", tokens[0].value);
         }
 
+        # Test hyphenated identifier (function-call operator like ends-with)
+        {
+            DpqlTokenizer tok('ends-with(@name, "lo")');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_IDENTIFIER, tokens[0].type);
+            assertEq("ends-with", tokens[0].value);
+            assertEq(DPQL_TOK_LPAREN, tokens[1].type);
+            assertEq(DPQL_TOK_FIELD, tokens[2].type);
+            assertEq("@name", tokens[2].value);
+        }
+
+        # Test multiple hyphenated identifiers
+        {
+            DpqlTokenizer tok('list-contains(@items, "x")');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_IDENTIFIER, tokens[0].type);
+            assertEq("list-contains", tokens[0].value);
+        }
+
+        # Test hyphen followed by digit is NOT part of identifier (minus operator)
+        {
+            DpqlTokenizer tok('foo-3');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_IDENTIFIER, tokens[0].type);
+            assertEq("foo", tokens[0].value);
+            assertEq(DPQL_TOK_NUMBER, tokens[1].type);
+            assertEq("-3", tokens[1].value);
+        }
+
         # Test keywords and boolean/null
         {
             DpqlTokenizer tok("true false null between and in");
@@ -739,6 +768,51 @@ public class DpqlTest inherits QUnit::Test {
             assertEq(DP_FUNC_INDEX, idx.exp);
             assertEq("users", idx.args[0].field);
         }
+
+        # Test hyphenated function name parsing
+        {
+            # Create expression map with a hyphenated function-call operator
+            hash<string, hash<DataProviderExpressionInfo>> expmap = DataProviderGenericExpressions + {
+                "ends-with": <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": "ends-with",
+                    "display_name": "Ends With",
+                    "short_desc": "True if a string ends with a given substring",
+                    "desc": "True if a string ends with a given substring",
+                    "symbol": "ends-with",
+                    "return_type": AbstractDataProviderType::get(BoolType),
+                },
+            };
+
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+                'ends-with(@name, "lo")', expmap);
+            assertEq("ends-with", exp.exp);
+            assertEq(2, exp.args.size());
+            assertEq("name", exp.args[0].field);
+            assertEq("lo", exp.args[1]);
+        }
+
+        # Test hyphenated function in complex expression
+        {
+            hash<string, hash<DataProviderExpressionInfo>> expmap = DataProviderGenericExpressions + {
+                "starts-with": <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": "starts-with",
+                    "display_name": "Starts With",
+                    "short_desc": "True if a string starts with a given prefix",
+                    "desc": "True if a string starts with a given prefix",
+                    "symbol": "starts-with",
+                    "return_type": AbstractDataProviderType::get(BoolType),
+                },
+            };
+
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+                'starts-with(@email, "admin") && @active == true', expmap);
+            assertEq(DP_OP_AND, exp.exp);
+            assertEq("starts-with", exp.args[0].exp);
+            assertEq("email", exp.args[0].args[0].field);
+            assertEq("admin", exp.args[0].args[1]);
+        }
     }
 
     parserErrorTests() {
@@ -1147,6 +1221,90 @@ public class DpqlTest inherits QUnit::Test {
             assertTrue(inlist(DP_FUNC_INDEX, fn_names), "index() offered when in expression map");
             assertFalse(inlist(DP_FUNC_SLICE, fn_names), "slice() not offered when not in expression map");
             assertFalse(inlist(DP_FUNC_KEY, fn_names), "key() not offered when not in expression map");
+        }
+
+        # === Function-call operator completions ===
+
+        # Operators with identifier-style names should appear as function completions
+        {
+            hash<string, hash<DataProviderExpressionInfo>> expmap = DataProviderGenericExpressions + {
+                "ends-with": <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": "ends-with",
+                    "display_name": "Ends With",
+                    "short_desc": "True if a string ends with a given substring",
+                    "desc": "True if a string ends with a given substring",
+                    "symbol": "ends-with",
+                    "return_type": AbstractDataProviderType::get(BoolType),
+                },
+                "contains": <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": "contains",
+                    "display_name": "Contains",
+                    "short_desc": "True if a string contains a given substring",
+                    "desc": "True if a string contains a given substring",
+                    "symbol": "contains",
+                    "return_type": AbstractDataProviderType::get(BoolType),
+                },
+            };
+
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('', 0, fields, expmap);
+            list<hash<DpqlCompletionItem>> fn_items = select items, $1.kind == "function";
+            list<string> fn_names = map $1.label, fn_items;
+            assertTrue(inlist("ends-with", fn_names), "ends-with offered as function completion");
+            assertTrue(inlist("contains", fn_names), "contains offered as function completion");
+        }
+
+        # Prefix filtering works for hyphenated operator names
+        {
+            hash<string, hash<DataProviderExpressionInfo>> expmap = DataProviderGenericExpressions + {
+                "ends-with": <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": "ends-with",
+                    "display_name": "Ends With",
+                    "short_desc": "True if a string ends with a given substring",
+                    "desc": "True if a string ends with a given substring",
+                    "symbol": "ends-with",
+                    "return_type": AbstractDataProviderType::get(BoolType),
+                },
+                "encode-url": <DataProviderExpressionInfo>{
+                    "type": DET_Function,
+                    "name": "encode-url",
+                    "display_name": "Encode URL",
+                    "short_desc": "URL-encodes a string",
+                    "desc": "URL-encodes a string",
+                    "symbol": "encode-url",
+                    "return_type": AbstractDataProviderType::get(StringType),
+                },
+            };
+
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('e', 1, fields, expmap);
+            list<hash<DpqlCompletionItem>> fn_items = select items, $1.kind == "function";
+            list<string> fn_names = map $1.label, fn_items;
+            assertTrue(inlist("ends-with", fn_names), "typing 'e' shows ends-with");
+            assertTrue(inlist("encode-url", fn_names), "typing 'e' shows encode-url");
+        }
+
+        # Infix operators with render_template starting with $arg are NOT included as functions
+        {
+            hash<string, hash<DataProviderExpressionInfo>> expmap = DataProviderGenericExpressions + {
+                "between": <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": "between",
+                    "display_name": "Between",
+                    "short_desc": "True if a value is between two values",
+                    "desc": "True if a value is between two values",
+                    "symbol": "between",
+                    "render_template": "$arg[0] between $arg[1] and $arg[2]",
+                    "return_type": AbstractDataProviderType::get(BoolType),
+                },
+            };
+
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('b', 1, fields, expmap);
+            list<hash<DpqlCompletionItem>> fn_items = select items, $1.kind == "function";
+            list<string> fn_names = map $1.label, fn_items;
+            assertFalse(inlist("between", fn_names),
+                "infix operator 'between' not offered as function completion");
         }
     }
 
