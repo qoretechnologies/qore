@@ -3746,6 +3746,19 @@ load_local_done:
                 bool needs_deref = true;
                 QoreValue out;
                 if (cc_inst->closure_node) {
+                    // Ensure all closure-captured local variables are instantiated on the
+                    // thread-local stack before eval() tries to create the closure.
+                    // The QoreClosureParseNode::eval() method creates a
+                    // ThreadSafeLocalVarRuntimeEnvironment which calls thread_find_closure_var()
+                    // for each captured variable — if they're not on the cvstack yet, the lookup
+                    // returns nullptr and we get a crash.
+                    const LVarSet* vlist = cc_inst->closure_node->getVList();
+                    if (vlist) {
+                        for (LocalVar* var : *vlist) {
+                            ensureLocalInstantiated(var, instantiated_locals, pre_instantiated,
+                                function_own_locals, &locally_uninstantiated);
+                        }
+                    }
                     out = const_cast<QoreClosureParseNode*>(cc_inst->closure_node)->eval(
                             needs_deref, xsink);
                     if (!needs_deref && out.hasNode()) {
@@ -3754,7 +3767,18 @@ load_local_done:
                 } else if (cc_inst->expr.hasNode()) {
                     // AOT mode: closure_node is null; expr holds the resolved QoreClosureParseNode
                     // (set by buildContextFromSlotMap/buildContextForVariant for CLOSURE_CREATE)
-                    out = cc_inst->expr.getInternalNode()->eval(needs_deref, xsink);
+                    QoreClosureParseNode* closure_node =
+                        static_cast<QoreClosureParseNode*>(cc_inst->expr.getInternalNode());
+                    // Ensure all closure-captured local variables are instantiated on the
+                    // thread-local stack before eval() tries to create the closure.
+                    const LVarSet* vlist = closure_node->getVList();
+                    if (vlist) {
+                        for (LocalVar* var : *vlist) {
+                            ensureLocalInstantiated(var, instantiated_locals, pre_instantiated,
+                                function_own_locals, &locally_uninstantiated);
+                        }
+                    }
+                    out = closure_node->eval(needs_deref, xsink);
                     if (!needs_deref && out.hasNode()) {
                         out = out.refSelf();
                     }
