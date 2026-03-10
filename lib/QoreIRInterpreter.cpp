@@ -1990,42 +1990,45 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             cleanupLocalCaches();
             return false;
         }
-        while (ip < block->instructions.size() && block->instructions[ip]->opcode == QoreIROpcode::Phi) {
-            // Opcode check above guarantees this is a Phi instruction; static_cast avoids RTTI
-            auto* phi = static_cast<QoreIRPhiInstruction*>(block->instructions[ip].get());
-            assert(phi);
-            if (!prev_block) {
-                if (xsink) {
-                    xsink->raiseException("IR-EXEC-ERROR", "phi has no predecessor");
+        // Fast path: skip phi loop entirely if block has no phi nodes
+        if (block->has_phi_nodes) {
+            while (ip < block->instructions.size() && block->instructions[ip]->opcode == QoreIROpcode::Phi) {
+                // Opcode check above guarantees this is a Phi instruction; static_cast avoids RTTI
+                auto* phi = static_cast<QoreIRPhiInstruction*>(block->instructions[ip].get());
+                assert(phi);
+                if (!prev_block) {
+                    if (xsink) {
+                        xsink->raiseException("IR-EXEC-ERROR", "phi has no predecessor");
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
                 }
-                cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                cleanupLocalCaches();
-                return false;
-            }
-            QoreIRValue incoming_value;
-            bool found = false;
-            for (const auto& inc : phi->incoming) {
-                if (inc.block == prev_block) {
-                    incoming_value = inc.value;
-                    found = true;
-                    break;
+                QoreIRValue incoming_value;
+                bool found = false;
+                for (const auto& inc : phi->incoming) {
+                    if (inc.block == prev_block) {
+                        incoming_value = inc.value;
+                        found = true;
+                        break;
+                    }
                 }
-            }
-            if (!found) {
-                if (xsink) {
-                    xsink->raiseException("IR-EXEC-ERROR", "phi missing predecessor incoming");
+                if (!found) {
+                    if (xsink) {
+                        xsink->raiseException("IR-EXEC-ERROR", "phi missing predecessor incoming");
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
                 }
-                cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                cleanupLocalCaches();
-                return false;
+                QoreValue val = getIRValue(values, incoming_value);
+                QoreValue stored = val.hasNode() ? val.refSelf() : val;
+                setValueSlot(values, phi->result.id, stored, xsink);
+                if (stored.hasNode()) {
+                    cleanup.push_back(phi->result.id);
+                }
+                ++ip;
             }
-            QoreValue val = getIRValue(values, incoming_value);
-            QoreValue stored = val.hasNode() ? val.refSelf() : val;
-            setValueSlot(values, phi->result.id, stored, xsink);
-            if (stored.hasNode()) {
-                cleanup.push_back(phi->result.id);
-            }
-            ++ip;
         }
         if (ip >= block->instructions.size()) {
             if (xsink) {
@@ -2047,7 +2050,9 @@ next_instruction:
         // the runtime_loc was set on line entry and remains valid (same line number).
         // Uses cached ThreadData pointers (rl_cache) to avoid repeated TLS lookups
         // (pthread_getspecific + std::map::find per call).
-        if (inst->loc && inst->loc->start_line != last_ephemeral_line) {
+        // Uses cached_start_line (-1 = no loc, >=0 = loc->start_line) to avoid
+        // pointer dereferences on the hot path.
+        if (inst->cached_start_line >= 0 && inst->cached_start_line != last_ephemeral_line) {
             // Update runtime_loc for exception/callstack reporting via cached pointers
             *rl_cache.stmt_ptr = nullptr;
             *rl_cache.loc_ptr = inst->loc;
@@ -2061,7 +2066,7 @@ next_instruction:
                 }
                 ephemeral_weak_ref_slots.clear();
             }
-            last_ephemeral_line = inst->loc->start_line;
+            last_ephemeral_line = inst->cached_start_line;
             // Debug: check for debugger attach/detach and fire dbgStep on line changes
             if (can_debug) {
                 bool runtime_check = tlpd->runtimeCheck();
@@ -2072,10 +2077,10 @@ next_instruction:
                     debug_active = false;
                 }
             }
-            if (debug_active && inst->loc->start_line != last_debug_line) {
-                last_debug_line = inst->loc->start_line;
+            if (debug_active && inst->cached_start_line != last_debug_line) {
+                last_debug_line = inst->cached_start_line;
                 AbstractStatement* dbg_stmt = qore_program_private::get(*pgm)->getStatementFromIndex(
-                    inst->loc->getFile(), inst->loc->start_line + inst->loc->offset);
+                    inst->loc->getFile(), inst->cached_start_line + inst->loc->offset);
                 if (dbg_stmt) {
                     int dbg_rc = tlpd->dbgStep(statements, dbg_stmt, xsink);
                     if (dbg_rc || *xsink) {
@@ -2127,7 +2132,7 @@ next_instruction:
             case QoreIROpcode::ConstString: {
                 auto* cinst = static_cast<QoreIRConstInstruction*>(inst);
                 QoreStringNode* str = new QoreStringNode(cinst->constant.string_value);
-                setValueSlot(values, cinst->result.id, QoreValue(str), xsink);
+                setValueSlotDirect(values, cinst->result.id, QoreValue(str));
                 cleanup.push_back(cinst->result.id);
                 ++ip;
                 break;
@@ -2147,7 +2152,7 @@ next_instruction:
                     int us = static_cast<int>(cinst->constant.date_microseconds % 1000000);
                     dt = DateTimeNode::makeAbsolute(currentTZ(), epoch_seconds, us);
                 }
-                setValueSlot(values, cinst->result.id, QoreValue(dt), xsink);
+                setValueSlotDirect(values, cinst->result.id, QoreValue(dt));
                 cleanup.push_back(cinst->result.id);
                 ++ip;
                 break;
@@ -2185,7 +2190,7 @@ next_instruction:
                 }
                 qore_list_private::get(*list)->complexTypeInfo = qore_get_complex_list_type(vtype);
                 QoreListNode* raw_list = list.release();
-                setValueSlot(values, inst->result.id, QoreValue(raw_list), xsink);
+                setValueSlotDirect(values, inst->result.id, QoreValue(raw_list));
                 cleanup.push_back(inst->result.id);
                 ++ip;
                 break;
@@ -2225,7 +2230,7 @@ next_instruction:
                     vtype = autoTypeInfo;
                 }
                 qore_hash_private::get(*hash)->complexTypeInfo = qore_get_complex_hash_type(vtype);
-                setValueSlot(values, inst->result.id, QoreValue(hash.release()), xsink);
+                setValueSlotDirect(values, inst->result.id, QoreValue(hash.release()));
                 cleanup.push_back(inst->result.id);
                 ++ip;
                 break;
@@ -2261,14 +2266,14 @@ next_instruction:
                     vtype = autoTypeInfo;
                 }
                 hp->complexTypeInfo = qore_get_complex_hash_type(vtype);
-                setValueSlot(values, inst->result.id, QoreValue(hash.release()), xsink);
+                setValueSlotDirect(values, inst->result.id, QoreValue(hash.release()));
                 cleanup.push_back(inst->result.id);
                 ++ip;
                 break;
             }
             case QoreIROpcode::CreateEmptyList: {
                 QoreListNode* list = new QoreListNode(autoTypeInfo);
-                setValueSlot(values, inst->result.id, QoreValue(list), xsink);
+                setValueSlotDirect(values, inst->result.id, QoreValue(list));
                 cleanup.push_back(inst->result.id);
                 ++ip;
                 break;
@@ -2324,7 +2329,7 @@ next_instruction:
                 if (capacity > 0) {
                     qore_list_private::get(*list)->reserve(static_cast<size_t>(capacity));
                 }
-                setValueSlot(values, inst->result.id, QoreValue(list), xsink);
+                setValueSlotDirect(values, inst->result.id, QoreValue(list));
                 cleanup.push_back(inst->result.id);
                 ++ip;
                 break;
@@ -2335,7 +2340,7 @@ next_instruction:
                 if (list_val.getType() == NT_LIST) {
                     size = static_cast<int64_t>(list_val.get<const QoreListNode>()->size());
                 }
-                setValueSlot(values, inst->result.id, QoreValue(size), xsink);
+                setValueSlotDirect(values, inst->result.id, QoreValue(size));
                 ++ip;
                 break;
             }
@@ -2350,7 +2355,7 @@ next_instruction:
                         result = l->retrieveEntry(index).getAsBigInt();
                     }
                 }
-                setValueSlot(values, inst->result.id, QoreValue(result), xsink);
+                setValueSlotDirect(values, inst->result.id, QoreValue(result));
                 ++ip;
                 break;
             }
@@ -2365,7 +2370,7 @@ next_instruction:
                         result = l->retrieveEntry(index).getAsFloat();
                     }
                 }
-                setValueSlot(values, inst->result.id, QoreValue(result), xsink);
+                setValueSlotDirect(values, inst->result.id, QoreValue(result));
                 ++ip;
                 break;
             }
@@ -2463,7 +2468,7 @@ next_instruction:
                 if (obj_val.getType() == NT_OBJECT) {
                     class_ptr = reinterpret_cast<int64_t>(obj_val.get<const QoreObject>()->getClass());
                 }
-                setValueSlot(values, inst->result.id, QoreValue(class_ptr), xsink);
+                setValueSlotDirect(values, inst->result.id, QoreValue(class_ptr));
                 ++ip;
                 break;
             }
@@ -2510,7 +2515,7 @@ next_instruction:
             case QoreIROpcode::StringConcat: {
                 // Multi-string concatenation - a + b + c + d in single pass
                 if (inst->operands.empty()) {
-                    setValueSlot(values, inst->result.id, QoreValue(new QoreStringNode()), xsink);
+                    setValueSlotDirect(values, inst->result.id, QoreValue(new QoreStringNode()));
                     cleanup.push_back(inst->result.id);
                     ++ip;
                     break;
@@ -2537,7 +2542,7 @@ next_instruction:
                     }
                     // NOTHING values are skipped (treated as empty string)
                 }
-                setValueSlot(values, inst->result.id, QoreValue(result), xsink);
+                setValueSlotDirect(values, inst->result.id, QoreValue(result));
                 cleanup.push_back(inst->result.id);
                 ++ip;
                 break;
@@ -4498,7 +4503,7 @@ load_local_done:
             }
             case QoreIROpcode::LoadImplicitElement: {
                 int64 element = get_implicit_element();
-                setValueSlot(values, inst->result.id, element, xsink);
+                setValueSlotDirect(values, inst->result.id, element);
                 ++ip;
                 break;
             }
@@ -4561,7 +4566,7 @@ load_local_done:
             case QoreIROpcode::PushImplicitElement: {
                 QoreValue idx = getIRValue(values, inst->operands[0]);
                 int64 old_element = save_implicit_element(static_cast<int>(idx.getAsBigInt()));
-                setValueSlot(values, inst->result.id, old_element, xsink);
+                setValueSlotDirect(values, inst->result.id, old_element);
                 ++ip;
                 break;
             }
@@ -4694,8 +4699,8 @@ load_local_done:
                     cleanupLocalCaches();
                     return false;
                 }
-                setValueSlot(values, inst->result.id,
-                    QoreValue(static_cast<int64_t>(state)), xsink);
+                setValueSlotDirect(values, inst->result.id,
+                    QoreValue(static_cast<int64_t>(state)));
                 ++ip;
                 break;
             }
@@ -4703,7 +4708,7 @@ load_local_done:
                 QoreValue state_val = getIRValue(values, inst->operands[0]);
                 int64_t size = qore_rt_ref_foreach_size(
                     static_cast<uint64_t>(state_val.getAsBigInt()));
-                setValueSlot(values, inst->result.id, QoreValue(size), xsink);
+                setValueSlotDirect(values, inst->result.id, QoreValue(size));
                 ++ip;
                 break;
             }

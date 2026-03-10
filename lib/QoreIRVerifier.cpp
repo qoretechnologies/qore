@@ -1771,6 +1771,25 @@ void QoreIRFunction::computeSlotIdsAndEmbed() {
     local_var_slots = slot_map;
     max_local_slot_id = next_local_slot > 0 ? next_local_slot - 1 : 0;
 
+    // Pass 1.5: Set metadata flags on blocks and cache line numbers in instructions
+    // This allows the interpreter to skip the phi loop when there are no phis,
+    // and avoid repeated pointer dereferences when checking for line changes
+    for (const auto& block : blocks) {
+        block->has_phi_nodes = false;
+        for (const auto& inst : block->instructions) {
+            // Cache line number: -1 if no location, otherwise store start_line
+            // This avoids two pointer dereferences per instruction in the line-change gate
+            inst->cached_start_line = inst->loc ? static_cast<int16_t>(inst->loc->start_line) : -1;
+
+            if (inst->opcode == QoreIROpcode::Phi) {
+                block->has_phi_nodes = true;
+                // Don't break here; continue to set cached_start_line for all instructions
+            }
+            // Note: Phi instructions are always at the beginning of blocks, so we can
+            // check has_phi_nodes efficiently later by just looking at the first instruction
+        }
+    }
+
     // Pass 2: embed pre-computed slot_id and is_closure in instructions
     // to eliminate hash map lookups on the hot path in the interpreter
     for (const auto& block : blocks) {

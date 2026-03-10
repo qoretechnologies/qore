@@ -773,12 +773,13 @@ struct QoreIRPhiIncoming;
 
 class QoreIRInstruction {
 public:
-    explicit QoreIRInstruction(QoreIROpcode op) : opcode(op) {
+    explicit QoreIRInstruction(QoreIROpcode op) : opcode(op), cached_start_line(-1) {
     }
 
     virtual ~QoreIRInstruction() = default;
 
     QoreIROpcode opcode;
+    int16_t cached_start_line;  // -1 = no loc, >=0 = loc->start_line (fills padding after opcode)
     const QoreProgramLocation* loc = nullptr;
     QoreIRValue result{};
     std::vector<QoreIRValue> operands;
@@ -1740,6 +1741,10 @@ public:
     //! True if this block is a loop header (condition block for while/for/do-while).
     //! Used by the IR interpreter for loop-aware JIT promotion (OSR).
     bool is_loop_header = false;
+
+    //! True if this block contains phi nodes at the beginning.
+    //! Set during computeSlotIdsAndEmbed() to optimize phi loop skipping.
+    bool has_phi_nodes = false;
 };
 
 class QoreIRFunction {
