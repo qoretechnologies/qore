@@ -31,7 +31,7 @@
 %requires(reexport) HttpServerUtil >= 0.3.12
 
 # need mime definitions
-%requires(reexport) Mime >= 1.4
+%requires(reexport) Mime >= 1.7
 
 # supports using the DataProvider module to describe input and output records
 %requires(reexport) DataProvider
@@ -55,6 +55,10 @@
 
 %try-module json >= 1.5
 %define NoJson
+%endtry
+
+%try-module json >= 1.12
+%define NoCbor
 %endtry
 
 module RestSchemaValidator {
@@ -87,6 +91,10 @@ module RestSchemaValidator {
       - @ref RestSchemaValidator::AbstractRestSchemaObject "AbstractRestSchemaObject": shared REST schema object methods
     - fixed Swagger min/max error messages that incorrectly reported maximum instead of minimum values
     - added abstract \c check() method to @ref RestSchemaValidator::AbstractSchemaObject "AbstractSchemaObject"
+    - added CBOR serialization/deserialization support (\c "application/cbor") when the \c json module
+      version 1.12+ is available (RFC 8949)
+    - added official YAML MIME type \c "application/yaml" (RFC 9512) to serialization/deserialization
+      support (alongside existing \c "text/x-yaml" and \c "application/x-yaml")
 
     @subsection restschemavalidator_2_4 RestSchemaValidator v2.4
     - added @ref RestSchemaValidator::RestSchemaLoader "RestSchemaLoader" class for auto-detecting and loading
@@ -1981,10 +1989,14 @@ public namespace RestSchemaValidator {
                 # JSON-compatible MIME types from centralized list - use foldl to merge into single hash
                 (foldl $1 + $2, (map {$1: \make_json()}, keys MimeTypesJson)) +
 %endif
+%ifndef NoCbor
+                {MimeTypeCbor: \make_cbor()} +
+%endif
             {
 %ifndef NoYaml
                 MimeTypeYamlRpc: \make_yaml(),
                 MimeTypeYaml: \make_yaml(),
+                MimeTypeYamlApp: \make_yaml(),
 %endif
 %ifndef NoXml
                 MimeTypeXml: \make_xmlrpc_value(),
@@ -2071,10 +2083,14 @@ public namespace RestSchemaValidator {
                 # JSON-compatible MIME types from centralized list - use foldl to merge into single hash
                 (foldl $1 + $2, (map {$1: {"code": "json", "in": \parse_json()}}, keys MimeTypesJson)) +
 %endif
+%ifndef NoCbor
+                {MimeTypeCbor: {"code": "cbor", "in": \parse_cbor()}} +
+%endif
             {
 %ifndef NoYaml
                 MimeTypeYamlRpc: DeserializeYaml,
                 MimeTypeYaml: DeserializeYaml,
+                MimeTypeYamlApp: DeserializeYaml,
 %endif
 %ifndef NoXml
                 MimeTypeXml: DeserializeXml,

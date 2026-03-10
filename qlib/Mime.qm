@@ -114,6 +114,10 @@ printf("%y: header word b: %y\n", mime_decode_header(mime_encode_header_word_b(s
       - @ref Mime::MultiPartEncryptedMessage "MultiPartEncryptedMessage": for S/MIME and PGP/MIME encrypted messages (RFC 1847)
       - @ref Mime::MultiPartMessageMessage "MultiPartMessageMessage": for encapsulating RFC 822 messages
     - added new MIME type constants:
+      - @ref Mime::MimeTypeYamlApp "MimeTypeYamlApp": official IANA MIME type for YAML
+        (\c "application/yaml", RFC 9512)
+      - @ref Mime::MimeTypeCbor "MimeTypeCbor": MIME type for CBOR binary serialization
+        (\c "application/cbor", RFC 8949)
       - @ref Mime::MimeTypeMultipartAlternative "MimeTypeMultipartAlternative"
       - @ref Mime::MimeTypeMultipartDigest "MimeTypeMultipartDigest"
       - @ref Mime::MimeTypeMultipartSigned "MimeTypeMultipartSigned"
@@ -125,8 +129,9 @@ printf("%y: header word b: %y\n", mime_decode_header(mime_encode_header_word_b(s
     - added additional JSON-compatible MIME types to @ref Mime::MimeTypesJson "MimeTypesJson":
       \c "application/hal+json", \c "application/problem+json", \c "application/merge-patch+json",
       \c "application/json-patch+json", \c "application/geo+json", \c "application/manifest+json"
-    - added new file extensions to @ref Mime::MimeTypes "MimeTypes": \c gql, \c graphql, \c heic, \c heif,
-      \c jsx, \c md, \c markdown, \c rst, \c sql, \c toml, \c ts, \c tsx, \c wasm
+    - added new file extensions to @ref Mime::MimeTypes "MimeTypes": \c cbor, \c gql, \c graphql, \c heic,
+      \c heif, \c jsx, \c md, \c markdown, \c rst, \c sql, \c toml, \c ts, \c tsx, \c wasm, \c yml
+    - updated \c yaml file extension mapping to official \c "application/yaml" (RFC 9512)
     - fixed incorrect MIME types for \c weba (now \c "audio/webm") and \c webm (now \c "video/webm")
     - fixed a bug in @ref Mime::mime_decode_transfer_data() "mime_decode_transfer_data()" where the transfer
       encoding was incorrectly used as a character encoding when decoding base64 and quoted-printable data
@@ -299,6 +304,16 @@ public namespace Mime {
     #! Mime type for YAML-RPC
     public const MimeTypeYamlRpc = "application/x-yaml";
 
+    #! Official IANA MIME type for YAML (RFC 9512)
+    /** @since Mime 1.7
+    */
+    public const MimeTypeYamlApp = "application/yaml";
+
+    #! MIME type for CBOR (RFC 8949)
+    /** @since Mime 1.7
+    */
+    public const MimeTypeCbor = "application/cbor";
+
     #! Mime type for Javascript
     public const MimeTypeJavascript = "application/javascript";
 
@@ -457,6 +472,7 @@ public namespace Mime {
         "c11amz": "application/vnd.cluetrust.cartomobile-config-pkg",
         "c4g": "application/vnd.clonk.c4group",
         "cab": "application/vnd.ms-cab-compressed",
+        "cbor": MimeTypeCbor,
         "car": "application/vnd.curl.car",
         "cat": "application/vnd.ms-pki.seccat",
         "cc": MimeTypeText,
@@ -889,7 +905,8 @@ public namespace Mime {
         "xul": "application/vnd.mozilla.xul+xml",
         "xwd": "image/x-xwindowdump",
         "xyz": "chemical/x-xyz",
-        "yaml": MimeTypeYaml,
+        "yaml": MimeTypeYamlApp,
+        "yml": MimeTypeYamlApp,
         "zip": "application/zip",
     };
 
