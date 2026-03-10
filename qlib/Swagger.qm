@@ -3669,8 +3669,9 @@ public class ResponsesObject inherits ObjectBase, RestSchemaValidator::AbstractR
         if (optional_field(objType, oh, "default", NT_HASH, \defaultObj))
             defaultResp = ResponseObject::newResponse("default", defaultObj, swagger);
 
-        *hash r = map {$1.key: $1.value}, oh.pairIterator(), $1.key =~ /^[0-9]+$/;
-        foreach hash resp in (r.pairIterator()) {
+        # Filter numeric status codes from responses; convert keys to strings (YAML may parse as integers)
+        hash<auto> r = map {string($1.key): $1.value}, oh.pairIterator(), string($1.key) =~ /^[0-9]+$/;
+        foreach hash<auto> resp in (r.pairIterator()) {
             if (resp.value.typeCode() != NT_HASH)
                 throw "INVALID-FIELD-TYPE", sprintf("%s %s: Responses Object: response has invalid type %y", method,
                     path, resp.value.type());
