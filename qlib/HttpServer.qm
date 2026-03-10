@@ -2867,6 +2867,19 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             cx.close = True;
             remove cx.persistent;
 
+            # Clean up leaked persistent state when the handler became persistent
+            # during a failed request.  handler.setPersistent() is called in
+            # RestStreamRequest::constructor() BEFORE stream data is read, so if
+            # stream I/O fails (e.g., HTTP2-STREAM-TIMEOUT), the handler is
+            # persistent but phi.handler was never set (phi.assign() at line 2806
+            # is after handler.handleRequest()).  Without this cleanup, the
+            # SqlUtilPersistentDataHelper and its DB transaction leak in
+            # thread-local data and are never rolled back.
+            if (handler && handler.isPersistent() && !phi.handler) {
+                phi.assign(dhh, handler);
+                phi.clear();
+            }
+
             # if there is a pending chunked body that has not yet been read on exit, then read it and discard before sending any response
             on_exit if (s.pendingHttpChunkedBody())
                 s.readHTTPChunkedBodyBinary(HttpServer::ReadTimeout);
@@ -4803,7 +4816,8 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 sendMultiplexedResponse(s, header_info, async_response);
             }
             # Enter dedicated persistent loop
-            handleMultiplexedPersistentSync(request_helper, pq, s, \cx, phi, info);
+            handleMultiplexedPersistentSync(request_helper, pq, s, \cx, phi, info,
+                deregister_fn, sock_key);
             return <HttpServerAsyncIo::HttpRequestResultInfo>{};
         } else if (!is_multiplexed && phi.handler && phi.handler.isPersistent()
                 && !request_helper.isDedicated()) {
@@ -5140,6 +5154,18 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 cx."response-encoding" = header_info."accept-charset";
                 cx.close = header_info.close;
 
+                # Check for end-persistent signal — client is explicitly ending
+                # the persistent session.  Send a 200 OK response and exit;
+                # the on_exit block will call phi.clear() → persistentClosed()
+                # → rollback any open transaction.
+                if (hdr."qorus-connection" =~ /^end-persistent$/i) {
+                    log("cid %d: received end-persistent signal, terminating "
+                        "persistent session", cx.id);
+                    s.sendHTTPResponse(200, "OK", "1.1", {"Content-Type": "text/plain"},
+                        "OK");
+                    return;
+                }
+
                 # Log the request
                 {
                     string http_ver = hdr.http_version =~ /^HTTP\// ? hdr.http_version : "HTTP/" + hdr.http_version;
@@ -5331,9 +5357,12 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         @param cx the connection context (reference, modified per request)
         @param phi the persistent handler info
         @param info peer info for logging
+        @param deregister_fn callback to deregister the persistent queue
+        @param sock_key the socket unique hash identifying the connection
     */
     private handleMultiplexedPersistentSync(RequestHelper request_helper, Queue pq, Socket s,
-            reference<hash<auto>> cx, HttpPersistentHandlerInfo phi, hash<auto> info) {
+            reference<hash<auto>> cx, HttpPersistentHandlerInfo phi, hash<auto> info,
+            code<nothing(string)> deregister_fn, string sock_key) {
         @assert(phi.handler, "phi.handler must be set when entering multiplexed persistent mode");
         @assert(phi.handler.isPersistent(), "handler must be persistent when entering "
             "multiplexed persistent mode");
@@ -5359,11 +5388,19 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 } catch (hash<ExceptionInfo> ex) {
                     if (ex.err == "QUEUE-TIMEOUT") {
                         if (!phi.handler || !phi.handler.isPersistent()) {
-                            log("cid %d: multiplexed persistent idle timeout, exiting "
-                                "dedicated mode", cx.id);
+                            # Non-persistent handler timed out; exit the loop.
+                            # For persistent handlers, the client must
+                            # explicitly end the session via the
+                            # End-Persistent header, or TCP connection close
+                            # triggers cleanup via
+                            # signalPersistentQueuesForConnection().
+                            log("cid %d: multiplexed persistent idle timeout, "
+                                "exiting dedicated mode", cx.id);
+                            deregister_fn(sock_key);
+                            drainOrphanedPersistentRequests(request_helper, pq,
+                                s, \cx, cx_listener, phi, info);
                             return;
                         }
-                        # Still persistent — keep waiting
                         continue;
                     }
                     rethrow;
@@ -5378,6 +5415,34 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 # Extract request data from queue entry
                 hash<auto> conn_info = entry.conn_info;
                 hash<auto> req_hdr = conn_info.hdr;
+
+                # Check for end-persistent signal — the client is explicitly
+                # ending the persistent session (e.g., before clearing its
+                # client-side persistent flag).  Send a 200 OK response and
+                # exit the loop; the on_exit block will call phi.clear() →
+                # persistentClosed() → rollback any open transaction.
+                if (req_hdr."qorus-connection" =~ /^end-persistent$/i) {
+                    log("cid %d: received end-persistent signal, terminating "
+                        "persistent session", cx.id);
+                    sendMultiplexedResponse(s, conn_info.header_info,
+                        <HttpAsyncResponseInfo>{
+                            "code": 200,
+                            "hdr": {"content-type": "text/plain"},
+                            "body": "OK",
+                            "cx": cx,
+                        });
+                    if (entry.resume_reading) {
+                        try {
+                            entry.resume_reading();
+                        } catch () {
+                            # already resumed — ignore
+                        }
+                    }
+                    deregister_fn(sock_key);
+                    drainOrphanedPersistentRequests(request_helper, pq, s,
+                        \cx, cx_listener, phi, info);
+                    return;
+                }
 
                 # Reset context for new request
                 cx = cx_listener;
@@ -5490,6 +5555,16 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                         || !uctx.persistent_data) {
                     log("cid %d: persistence cleared after request, exiting "
                         "dedicated mode", cx.id);
+                    # Deregister the persistent queue BEFORE returning to prevent
+                    # a race condition: the I/O thread could receive and dispatch
+                    # a new request to this queue between our return and the
+                    # caller's on_exit deregistration.  After deregistration, any
+                    # new requests go through the normal handler pool.
+                    deregister_fn(sock_key);
+                    # Process any requests that were pushed to the queue during the
+                    # brief window between the last pq.get() and the deregistration
+                    drainOrphanedPersistentRequests(request_helper, pq, s, \cx,
+                        cx_listener, phi, info);
                     return;
                 }
             }
@@ -5498,6 +5573,144 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 ? sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc)
                 : get_exception_string(ex);
             logError("cid %d: multiplexed persistent handler error: %s", cx.id, etxt);
+        }
+    }
+
+    #! Drains and processes any orphaned requests from a persistent queue
+    /** Called after the persistent queue has been deregistered to handle requests
+        that were pushed during the brief race window between the persistent loop's
+        last \c pq.get() and the deregistration.  After deregistration, no new items
+        can be added, so this loop is bounded.
+
+        Orphaned requests are processed as non-persistent requests since persistence
+        has already been cleared.
+
+        @param request_helper the request lifecycle helper
+        @param pq the persistent queue to drain
+        @param s the socket
+        @param cx the connection context (reference, modified per request)
+        @param cx_listener the listener context template
+        @param phi the persistent handler info (persistence already cleared)
+        @param info peer info for logging
+    */
+    private drainOrphanedPersistentRequests(RequestHelper request_helper, Queue pq,
+            Socket s, reference<hash<auto>> cx, hash<auto> cx_listener,
+            HttpPersistentHandlerInfo phi, hash<auto> info) {
+        while (True) {
+            *hash<auto> entry;
+            try {
+                entry = pq.get(-1);
+            } catch () {
+                # QUEUE-TIMEOUT — queue is empty
+                break;
+            }
+            if (!entry || entry.type == "close") {
+                break;
+            }
+
+            log("cid %d: processing orphaned request from persistent queue race window",
+                cx.id);
+
+            # Context setup — mirrors the persistent loop processing
+            hash<auto> conn_info = entry.conn_info;
+            hash<auto> req_hdr = conn_info.hdr;
+
+            cx = cx_listener;
+            cx.raw_path = req_hdr.path;
+            req_hdr.path = decode_url(req_hdr.path);
+            cx += {
+                "orig_path": req_hdr.path,
+                "masked_path": serv.maskData(req_hdr.path),
+            };
+            if (req_hdr.path =~ /^\//) {
+                splice req_hdr.path, 0, 1;
+            }
+            if (req_hdr.authorization) {
+                cx.auth = req_hdr.authorization;
+            }
+            if (req_hdr."content-type") {
+                req_hdr."_qore_orig_content_type" = req_hdr."content-type";
+            }
+            if (conn_info.header_info."body-content-type".val()) {
+                req_hdr."content-type" = conn_info.header_info."body-content-type";
+                if (req_hdr."content-type".typeCode() == NT_LIST) {
+                    req_hdr."content-type" = req_hdr."content-type"[0];
+                }
+            }
+            cx.hdr = req_hdr;
+            cx.char_encoding = s.getEncoding();
+            cx."response-encoding" = conn_info.header_info."accept-charset";
+            cx.close = conn_info.header_info.close;
+
+            # Log the request
+            {
+                string http_ver = req_hdr.http_version =~ /^HTTP\//
+                    ? req_hdr.http_version : "HTTP/" + req_hdr.http_version;
+                string lstr = sprintf("cid %d src %y: %s %s %s (agent: %y",
+                    cx.id, cx."peer-info".address_desc, req_hdr.method,
+                    cx.masked_path, http_ver, req_hdr."user-agent");
+                if (req_hdr."_qore_orig_content_type") {
+                    lstr += sprintf(" Content-Type: %y",
+                        req_hdr."_qore_orig_content_type");
+                }
+                if (ssl) {
+                    lstr += sprintf(" %s %s", s.getSSLCipherName(),
+                        s.getSSLCipherVersion());
+                }
+                lstr += " [orphaned-persistent-drain]";
+                lstr += ")";
+                log("%s", lstr);
+            }
+
+            cx.uctx = get_thread_data("uctx");
+            if (conn_info.header_info.body_streaming) {
+                conn_info.header_info.sock = s;
+            }
+            cx."header-info" = conn_info.header_info;
+
+            if (get_remote_certs) {
+                if (conn_info.header_info.http3) {
+                    cx."client-cert" = s.getQuicPeerCertificate(
+                        conn_info.header_info.session_id);
+                } else {
+                    cx."client-cert" = s.getRemoteCertificate();
+                }
+            }
+
+            # Process request
+            hash<HttpAsyncResponseInfo> async_response = <HttpAsyncResponseInfo>{};
+            on_exit {
+                if (entry.resume_reading) {
+                    try {
+                        entry.resume_reading();
+                    } catch () {
+                        # already resumed — ignore
+                    }
+                }
+            }
+
+            try {
+                handleRequest(request_helper, self, s, \cx, req_hdr,
+                    req_hdr.method == "HEAD", phi, info, \async_response);
+
+                if (request_helper.isDedicated()) {
+                    return;
+                }
+
+                if (async_response && async_response.code) {
+                    sendMultiplexedResponse(s, conn_info.header_info, async_response);
+                }
+
+                if (conn_info.header_info.body_streaming) {
+                    conn_info.header_info.io_wake();
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                string etxt = serv.getDebug()
+                    ? sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc)
+                    : get_exception_string(ex);
+                logError("cid %d: error processing orphaned request: %s", cx.id,
+                    etxt);
+            }
         }
     }
 }
