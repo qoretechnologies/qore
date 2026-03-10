@@ -209,9 +209,7 @@ public class WebSocketClientPollOperationTest inherits QUnit::Test {
         drivePollUntilGoal(poll_op);
 
         assertTrue(poll_op.goalReached(), "goal reached after close");
-        # State should be closing or closed
-        assertTrue(poll_op.getState() == "closing" || poll_op.getState() == "closed",
-            "state is closing or closed");
+        assertEq("closed", poll_op.getState(), "state is closed after close handshake");
         assertEq(WSCC_NormalClosure, poll_op.getCloseCode(), "close code");
         assertEq("test close", poll_op.getCloseReason(), "close reason");
     }
