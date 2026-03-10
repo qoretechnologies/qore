@@ -87,6 +87,10 @@ public class KeapApplyTagDataProvider inherits KeapDataProviderBase {
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         # v2 API: POST /tags/{tag_id}/contacts:applyTags with {"contact_ids": [...]}
         # Apply each tag to the contact
+        if (!req.contact_id.val() || !regex(req.contact_id, "^[0-9]+$")) {
+            throw "KEAP-ERROR", sprintf("contact_id must be a numeric value; got: %y",
+                req.contact_id);
+        }
         list<int> contact_ids = (req.contact_id.toInt(),);
         hash<auto> result;
         foreach auto tag_id in (req.tag_ids) {

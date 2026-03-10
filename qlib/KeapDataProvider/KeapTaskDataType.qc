@@ -55,17 +55,22 @@ public class KeapTaskDataType inherits HashDataType {
                 "short_desc": "The associated contact",
                 "desc": "The contact associated with this task",
             },
-            "due_date": {
+            "due_time": {
                 "type": DateOrNothingType,
-                "display_name": "Due Date",
-                "short_desc": "The task due date",
-                "desc": "The date when the task is due",
+                "display_name": "Due Time",
+                "short_desc": "The task due time",
+                "desc": "The date and time when the task is due",
             },
             "priority": {
-                "type": IntOrNothingType,
+                "type": StringOrNothingType,
                 "display_name": "Priority",
                 "short_desc": "The task priority",
-                "desc": "The priority level of the task (integer value)",
+                "desc": "The priority level of the task",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "CRITICAL", "desc": "Critical priority"},
+                    <AllowedValueInfo>{"value": "ESSENTIAL", "desc": "Essential priority"},
+                    <AllowedValueInfo>{"value": "NONESSENTIAL", "desc": "Non-essential priority"},
+                ),
             },
             "type": {
                 "type": StringOrNothingType,

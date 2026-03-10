@@ -86,6 +86,10 @@ public class KeapRemoveTagDataProvider inherits KeapDataProviderBase {
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         # v2 API: POST /tags/{tag_id}/contacts:removeTags with {"contact_ids": [...]}
+        if (!req.contact_id.val() || !regex(req.contact_id, "^[0-9]+$")) {
+            throw "KEAP-ERROR", sprintf("contact_id must be a numeric value; got: %y",
+                req.contact_id);
+        }
         return doPost("tags/" + req.tag_id + "/contacts:removeTags",
             {"contact_ids": (req.contact_id.toInt(),)});
     }

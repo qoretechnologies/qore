@@ -55,11 +55,11 @@ public class KeapOpportunityDataType inherits HashDataType {
                 "short_desc": "The opportunity stage",
                 "desc": "The current stage of the opportunity in the sales pipeline",
             },
-            "estimated_close_date": {
+            "estimated_close_time": {
                 "type": DateOrNothingType,
-                "display_name": "Estimated Close Date",
-                "short_desc": "The estimated close date",
-                "desc": "The estimated date when the opportunity will close",
+                "display_name": "Estimated Close Time",
+                "short_desc": "The estimated close time",
+                "desc": "The estimated date and time when the opportunity will close",
             },
             "projected_revenue_high": {
                 "type": FloatOrNothingType,
