@@ -215,7 +215,7 @@ public class HttpClientStreamHandle {
                         sprintf("request timed out after %d ms", wait_timeout);
                 }
                 conn.drivePoll(min(remaining,
-                    conn.getActiveStreamCount() > 1 ? 100ms : 10ms));
+                    conn.getActiveStreamCount() > 1 ? 100ms : 1s));
             }
             try {
                 return f.get() ?? {};
