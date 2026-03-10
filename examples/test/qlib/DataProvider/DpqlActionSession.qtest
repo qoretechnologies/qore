@@ -43,6 +43,9 @@ class DpqlActionSessionTest inherits QUnit::Test {
         addTestCase("dpql-format invalid", \testFormatInvalid());
         addTestCase("dpql-serialize", \testSerialize());
         addTestCase("schema-aware key completions", \testSchemaAwareKeyCompletions());
+        addTestCase("base expressions via constructor", \testBaseExpressionsConstructor());
+        addTestCase("base expressions via setter", \testBaseExpressionsSetter());
+        addTestCase("base expressions merged with context", \testBaseExpressionsMergedWithContext());
 
         set_return_value(main());
     }
@@ -253,5 +256,73 @@ class DpqlActionSessionTest inherits QUnit::Test {
             "fields": simple_fields,
         });
         assertEq(0, result.completions.size(), "String field should have no key completions");
+    }
+
+    private hash<string, hash<DataProviderExpressionInfo>> getCustomExpressions() {
+        return {
+            "custom-func": <DataProviderExpressionInfo>{
+                "type": DET_Function,
+                "name": "custom-func",
+                "display_name": "Custom Function",
+                "short_desc": "A custom test function",
+                "desc": "A custom test function",
+                "symbol": "custom-func()",
+                "return_type": AbstractDataProviderType::get(StringType),
+            },
+            "custom-op": <DataProviderExpressionInfo>{
+                "type": DET_Operator,
+                "name": "custom-op",
+                "display_name": "Custom Operator",
+                "short_desc": "A custom test operator",
+                "desc": "A custom test operator",
+                "symbol": "custom-op",
+                "return_type": AbstractDataProviderType::get(BoolType),
+            },
+        };
+    }
+
+    testBaseExpressionsConstructor() {
+        hash<string, hash<DataProviderExpressionInfo>> custom = getCustomExpressions();
+        DataProvider::DpqlActionSession session({"base_expressions": custom});
+
+        # Base expressions should be available immediately
+        *hash<string, hash<DataProviderExpressionInfo>> exprs = session.getExpressions();
+        assertTrue(exprs.hasKey("custom-func"), "base expression available before setContext");
+        assertTrue(exprs.hasKey("custom-op"), "base operator available before setContext");
+
+        # getBaseExpressions should return the base set
+        *hash<string, hash<DataProviderExpressionInfo>> base = session.getBaseExpressions();
+        assertTrue(base.hasKey("custom-func"), "getBaseExpressions returns custom-func");
+    }
+
+    testBaseExpressionsSetter() {
+        DataProvider::DpqlActionSession session();
+
+        # Initially no expressions
+        assertNothing(session.getExpressions(), "no expressions initially");
+        assertNothing(session.getBaseExpressions(), "no base expressions initially");
+
+        hash<string, hash<DataProviderExpressionInfo>> custom = getCustomExpressions();
+        session.setBaseExpressions(custom);
+
+        # Now base expressions should be available
+        *hash<string, hash<DataProviderExpressionInfo>> exprs = session.getExpressions();
+        assertTrue(exprs.hasKey("custom-func"), "base expression available after setter");
+        assertTrue(exprs.hasKey("custom-op"), "base operator available after setter");
+    }
+
+    testBaseExpressionsMergedWithContext() {
+        hash<string, hash<DataProviderExpressionInfo>> custom = getCustomExpressions();
+        DataProvider::DpqlActionSession session({"base_expressions": custom});
+
+        # Set context with a provider (null provider has no custom expressions)
+        session.handleAction("dpql-set-context", {"provider": "null{}"});
+
+        # Base expressions should still be available after setContext
+        *hash<string, hash<DataProviderExpressionInfo>> exprs = session.getExpressions();
+        assertTrue(exprs.hasKey("custom-func"),
+            "base expression still available after setContext");
+        assertTrue(exprs.hasKey("custom-op"),
+            "base operator still available after setContext");
     }
 }

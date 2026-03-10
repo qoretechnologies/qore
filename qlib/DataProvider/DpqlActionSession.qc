@@ -60,8 +60,18 @@ public class DpqlActionSession {
         #! Current record type fields
         *hash<string, AbstractDataField> fields;
 
-        #! Current expression map
+        #! Current expression map (merged: base + provider-specific)
         *hash<string, hash<DataProviderExpressionInfo>> expressions;
+
+        #! Base expressions always available regardless of provider context
+        /** Set via the constructor \c base_expressions option or @ref setBaseExpressions().
+            These are merged with provider-specific expressions when context is set;
+            provider expressions take priority over base expressions for the same key.
+
+            When no provider context is set, these expressions are still available for
+            completions and parsing.
+        */
+        *hash<string, hash<DataProviderExpressionInfo>> base_expressions;
 
         #! Current record type label
         string record_type = "record";
@@ -84,6 +94,11 @@ public class DpqlActionSession {
         - \c token_format: "token-span" or "dpql"
         - \c field_format: "map" or "list"
         - \c logger: optional LoggerInterface
+        - \c base_expressions: optional expression map always available regardless of provider context;
+          when a provider context is set, provider expressions are merged on top of these (provider
+          takes priority for duplicate keys)
+
+        @since DataProvider 3.4
     */
     constructor(*hash<auto> opts) {
         if (opts) {
@@ -101,6 +116,12 @@ public class DpqlActionSession {
             }
             if (opts.logger) {
                 logger = opts.logger;
+            }
+            if (opts.base_expressions) {
+                base_expressions = cast<hash<string, hash<DataProviderExpressionInfo>>>(
+                    opts.base_expressions);
+                # Initialize expressions with base so they're available before setContext
+                expressions = base_expressions;
             }
         }
     }
@@ -156,6 +177,30 @@ public class DpqlActionSession {
         return expressions;
     }
 
+    #! Returns base expressions
+    /** @since DataProvider 3.4
+    */
+    *hash<string, hash<DataProviderExpressionInfo>> getBaseExpressions() {
+        return base_expressions;
+    }
+
+    #! Sets base expressions that are always available regardless of provider context
+    /** @param exprs the base expression map; these are merged with provider-specific expressions
+        when context is set (provider takes priority for duplicate keys)
+
+        @since DataProvider 3.4
+    */
+    setBaseExpressions(*hash<string, hash<DataProviderExpressionInfo>> exprs) {
+        base_expressions = exprs;
+        # If no provider context is set, update expressions immediately
+        if (!provider) {
+            expressions = base_expressions;
+        } else {
+            # Re-merge with current provider expressions
+            expressions = base_expressions + expressions;
+        }
+    }
+
     #! Returns current provider
     *AbstractDataProvider getProvider() {
         return provider;
@@ -189,7 +234,8 @@ public class DpqlActionSession {
         delete provider;
         provider = next_provider;
         fields = next_fields;
-        expressions = next_expressions;
+        # Merge base expressions with provider expressions; provider takes priority
+        expressions = base_expressions + next_expressions;
         record_type = rtype;
         provider_spec = args.provider;
 
