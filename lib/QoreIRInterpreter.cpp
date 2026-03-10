@@ -6678,7 +6678,26 @@ load_local_done:
                 break;
             }
         // Non-modifying AST opcodes: direct eval — no cache invalidation needed
-        case QoreIROpcode::BackgroundInt:
+        case QoreIROpcode::BackgroundInt: {
+                auto* expr_inst = static_cast<QoreIRExprInstruction*>(inst);
+                // BackgroundInt spawns a background thread that will access closure-captured
+                // variables, so invalidate external caches (for closure variable access) after
+                // spawning the thread
+                QoreValue res = evalAndRef(expr_inst->expr, xsink);
+                if (xsink && *xsink) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    return false;
+                }
+                // Invalidate external caches after spawning background thread
+                // The closure may access closure-captured variables cached in CVV
+                invalidateExternalCaches();
+                setValueSlot(values, inst->result.id, res, xsink);
+                if (res.hasNode()) {
+                    cleanup.push_back(inst->result.id);
+                }
+                ++ip;
+                break;
+            }
         case QoreIROpcode::ElementsAny:
         case QoreIROpcode::ElementsInt: {
                 auto* expr_inst = static_cast<QoreIRExprInstruction*>(inst);
