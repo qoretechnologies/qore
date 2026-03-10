@@ -265,17 +265,6 @@ is_perf_test() {
     esac
 }
 
-# Helper: check if a test is incompatible with IR/JIT modes
-is_ir_jit_incompatible() {
-    local basename="$(basename "$1")"
-    # HttpServerHttp3Stress has lock contention issues in IR/JIT modes (15x slowdown)
-    # due to concurrent polling with high lock contention. See feature/5164_jit for details.
-    case "$basename" in
-        HttpServerHttp3Stress.qtest) return 0 ;;
-        *) return 1 ;;
-    esac
-}
-
 # Filter perf tests if requested
 if [ $PERF_EXCLUDE -eq 1 ]; then
     FILTERED=""
@@ -289,18 +278,6 @@ elif [ $PERF_ONLY -eq 1 ]; then
     FILTERED=""
     for test in $TESTS; do
         if is_perf_test "$test"; then
-            FILTERED="$FILTERED $test"
-        fi
-    done
-    TESTS="$FILTERED"
-fi
-
-# Exclude tests incompatible with IR/JIT modes
-# Check if we're running in IR or JIT mode by looking at QORE_TEST_OPTS
-if echo "$QORE_TEST_OPTS" | grep -q '\(--exec-mode=ir\|--exec-mode=jit\)'; then
-    FILTERED=""
-    for test in $TESTS; do
-        if ! is_ir_jit_incompatible "$test"; then
             FILTERED="$FILTERED $test"
         fi
     done
