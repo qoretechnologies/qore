@@ -3408,13 +3408,21 @@ static uint64_t execClosureDirect(const QoreClosureBase* cb, const UserVariantBa
     // Handle self for object closures (closures defined inside methods)
     QoreObject* self = const_cast<QoreObject*>(cb->getObject());
 
+    // For object closures, establish the captured self in both TLS stores so that
+    // implicit method calls (SelfFunctionCallNode) and LoadSelfMember resolve
+    // against the closure's captured self, not the caller's context.
+    // ObjectSubstitutionHelper updates BOTH td->current_obj AND tl_runtime_config.obj.
+    // RuntimeConfigObjectHelper alone is insufficient because rc_get_current_ref()
+    // reads td->current_obj to repopulate tl_runtime_config.obj on every call.
+    std::optional<ObjectSubstitutionHelper> osh;
+    if (self) {
+        osh.emplace(self, cb->getClassCtx());
+    }
+
     // Check if callee IR supports direct param passing (bypass TLS entirely)
-    // Note: closures with self need selfid TLS push because there's no ObjectSubstitutionHelper
-    // here (unlike method calls); LoadSelfMember uses runtime_get_stack_object()
     const QoreIRFunction* ir = uvb->getCachedIR();
     bool use_direct_params = ir && ir->direct_params_eligible
-        && !uvb->hasCachedFunction() && nargs >= (int)num_params
-        && !(self && sig->selfid);
+        && !uvb->hasCachedFunction() && nargs >= (int)num_params;
 
     if (!use_direct_params) {
         // Standard path: push selfid + params to TLS
@@ -3428,8 +3436,8 @@ static uint64_t execClosureDirect(const QoreClosureBase* cb, const UserVariantBa
             return toBits(QoreValue());
         }
     }
-    // else: direct_params path — selfid not needed (LoadSelfMember uses
-    // ObjectSubstitutionHelper from caller), params pre-populated in IR slot cache
+    // else: direct_params path — selfid not instantiated (ObjectSubstitutionHelper
+    // above handles implicit self resolution), params pre-populated in IR slot cache
 
     // Build argv for excess arguments (varargs)
     ReferenceHolder<QoreListNode> argv(xsink);
