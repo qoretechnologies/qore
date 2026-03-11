@@ -1718,6 +1718,8 @@ ws.setEventQueue();
             if (tid == -1 && async_shutdown_tid == gettid()) {
                 # We're on the async shutdown thread — handleAsyncShutdown() will call clearTid()
                 # after closingConnection() returns. Don't wait; just clean up what we can.
+                # Send WebSocket close frame before closing to avoid server SOCKET-CLOSED errors
+                try { sendClose(cmd); } catch () {}
                 stopAsyncIo();
                 if (hc.isOpen()) {
                     hc.shutdown();
@@ -1735,6 +1737,8 @@ ws.setEventQueue();
                 # which means no I/O events will fire, no callbacks will be invoked,
                 # and clearTid() would never be called — causing waitTidCleared() to
                 # hang forever.
+                # Send WebSocket close frame before closing to avoid server SOCKET-CLOSED errors
+                try { sendClose(cmd); } catch () {}
                 stopAsyncIo();
                 if (hc.isOpen()) {
                     hc.shutdown();

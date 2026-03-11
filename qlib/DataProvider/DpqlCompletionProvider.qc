@@ -1220,10 +1220,18 @@ public class DpqlCompletionProvider {
         if (name_start < 0) {
             return NOTHING;
         }
-        # Scan the identifier
+        # Scan the identifier (supports hyphenated names like "custom-func")
         int id_end = name_start + 1;
-        while (name_start >= 0 && prefix[name_start] =~ /[a-zA-Z0-9_]/) {
-            --name_start;
+        while (name_start >= 0) {
+            string sc = prefix[name_start];
+            if (sc =~ /[a-zA-Z0-9_]/) {
+                --name_start;
+            } else if (sc == "-" && name_start + 1 < id_end && prefix[name_start + 1] =~ /[a-zA-Z]/) {
+                # hyphenated identifier: '-' followed by a letter (looking right)
+                --name_start;
+            } else {
+                break;
+            }
         }
         ++name_start;
         if (name_start >= id_end) {
