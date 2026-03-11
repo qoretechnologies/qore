@@ -685,6 +685,24 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
         */
         int delivery_pending = 0;
 
+        #! Counter tracking active delivery threads for deterministic shutdown
+        /** Incremented when a delivery thread is launched, decremented when it exits.
+            The destructor waits for this to reach zero to ensure the delivery thread
+            has fully exited before member objects are destroyed.
+
+            @since WebSocketClient 2.10
+        */
+        Counter delivery_thread_counter();
+
+        #! TID of the currently running delivery thread (0 if none)
+        /** Protected by @ref delivery_mutex. Used by the destructor to detect the
+            self-deadlock case where the destructor is triggered from a user callback
+            on the delivery thread itself.
+
+            @since WebSocketClient 2.10
+        */
+        int delivery_thread_id = 0;
+
         #! True if a close frame has been sent in async mode (prevents duplicate sends)
         /** @since WebSocketClient 2.9
         */
@@ -764,6 +782,19 @@ WebSocketClient ws(\event(), {
             reconnect = False;
         }
         disconnectIntern(WSCC_GoingAway, True);
+        # Wait for the delivery thread to fully exit before members are destroyed.
+        # Skip the wait if we ARE the delivery thread (self-deadlock case: a user callback
+        # on the delivery thread dropped the last reference and triggered this destructor).
+        # In that case, the delivery thread handles cleanup via !self checks after the
+        # destructor returns, and its on_exit cnt.dec() uses a local Counter reference.
+        bool wait_for_delivery;
+        {
+            AutoLock al(delivery_mutex);
+            wait_for_delivery = (delivery_thread_id != 0 && delivery_thread_id != gettid());
+        }
+        if (wait_for_delivery) {
+            delivery_thread_counter.waitForZero();
+        }
     }
 
     #! returns the URL given in the constructor
@@ -1252,6 +1283,14 @@ ws.connect();
         if (hc.isOpen() || (http3_websocket && tid)) {
             disconnectUnlocked(cmd);
         } else if (destroy && tid && tid != gettid()) {
+            # Check for self-deadlock in async mode: the destructor may be called from a
+            # user callback on the delivery thread (via handleAsyncShutdown() ->
+            # closingConnection()) when the connection is already closed (hc.isOpen() = False).
+            # In this case tid == -1 and the thread that will call clearTid() is THIS thread,
+            # so waitTidCleared() would deadlock.
+            if (tid == -1 && async_shutdown_tid == gettid()) {
+                return;
+            }
             # wait for reconnect thread to stop if deleting when disconnected and reconnecting
             stop = cmd;
             # wake up any sleeping threads
@@ -2120,8 +2159,10 @@ ws.setEventQueue();
         # NOTE: the method reference must be evaluated here (not in the background thread)
         # because \deliverPendingMessages() needs 'self' which may be invalid by the time
         # the background thread starts
+        delivery_thread_counter.inc();
         code<nothing()> deliver = \deliverPendingMessages();
-        background WebSocketClientWithSerialization::deliverInBackground(deliver);
+        background WebSocketClientWithSerialization::deliverInBackground(deliver,
+            delivery_thread_counter);
     }
 
     #! Background thread entry point for message delivery
@@ -2130,13 +2171,18 @@ ws.setEventQueue();
         the \c background statement and the thread start.
 
         @param deliver code reference to the \c deliverPendingMessages() method
+        @param cnt the delivery thread counter to decrement when the thread exits
 
         @since WebSocketClient 2.9
     */
-    private static deliverInBackground(code<nothing()> deliver) {
+    private static deliverInBackground(code<nothing()> deliver, Counter cnt) {
+        on_exit cnt.dec();
         try {
             deliver();
         } catch (hash<ExceptionInfo> ex) {
+            # OBJECT-ALREADY-DELETED: object destroyed between background statement and thread
+            # start, or during execution when the weak self reference becomes invalid.
+            # This is expected during object destruction and safe to ignore.
             if (ex.err == "OBJECT-ALREADY-DELETED") {
                 return;
             }
@@ -2151,8 +2197,31 @@ ws.setEventQueue();
         @since WebSocketClient 2.9
     */
     private deliverPendingMessages() {
+        # Track this thread's TID so the destructor can detect the self-deadlock case
+        # (destructor called from a user callback on this thread)
+        {
+            AutoLock al(delivery_mutex);
+            delivery_thread_id = gettid();
+        }
+        on_exit {
+            # Clear delivery_thread_id; check !self for the self-deadlock case where
+            # the destructor has already completed and members are destroyed
+            if (self) {
+                AutoLock al(delivery_mutex);
+                delivery_thread_id = 0;
+            }
+        }
+
         while (True) {
-            if (!self || !poll_op) {
+            # Check if the object is being destroyed; closures capture self with
+            # a weak reference, so the destructor can run while this thread is active.
+            # When !self, member objects (delivery_mutex etc.) may already be destroyed.
+            # This check is needed for the self-deadlock case where the destructor ran
+            # on THIS thread (from a user callback) and could not wait for thread exit.
+            if (!self) {
+                return;
+            }
+            if (!poll_op) {
                 {
                     AutoLock al(delivery_mutex);
                     delivery_active = False;
@@ -2170,6 +2239,9 @@ ws.setEventQueue();
             # Drain all available messages
             while (True) {
                 # poll_op can be cleared by another thread between the outer check and here
+                if (!self) {
+                    return;
+                }
                 *WebSocketClientPollOperation op = poll_op;
                 if (!op) {
                     AutoLock al(delivery_mutex);
@@ -2211,6 +2283,9 @@ ws.setEventQueue();
             }
 
             # Check if new I/O callbacks fired while we were draining
+            if (!self) {
+                return;
+            }
             {
                 AutoLock al(delivery_mutex);
                 if (delivery_pending == last_seen) {

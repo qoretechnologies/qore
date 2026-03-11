@@ -333,9 +333,9 @@ test-tiered-ubuntu-amd64:
 
 test-macos:
   stage: test
+  needs: []
   tags:
     - macos
-    - shell
   services: []
   variables:
     QORE_TEST_OPTS: '-penable-debug'

@@ -870,6 +870,8 @@ module.exports = grammar({
       $.new_expression,
       // Conditional declarations can appear in expression context: exists (*string x = expr)
       $.conditional_declaration,
+      // Shell command execution: `command`
+      $.backquote_expression,
     ),
 
     // Call expression: function(args) — supports identifiers, scoped names,
@@ -1276,6 +1278,14 @@ module.exports = grammar({
     // regex_pattern, regex_replacement, regex_flags are inlined into
     // the regex token() rules above to prevent extras (comments) from
     // being inserted between the / delimiters.
+
+    // Backquote (shell command) expression: `command`
+    // Returns the stdout of the command as a string
+    backquote_expression: $ => token(seq(
+      '`',
+      /[^`]*/,
+      '`',
+    )),
 
     // ==================== Types ====================
     type: $ => prec.right(seq(

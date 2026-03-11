@@ -4077,6 +4077,10 @@
       "required": false,
       "types": [
         {
+          "type": "backquote_expression",
+          "named": true
+        },
+        {
           "type": "call_expression",
           "named": true
         },
@@ -6714,12 +6718,16 @@
     "named": false
   },
   {
-    "type": "binary",
-    "named": false
+    "type": "backquote_expression",
+    "named": true
   },
   {
     "type": "binary",
     "named": true
+  },
+  {
+    "type": "binary",
+    "named": false
   },
   {
     "type": "bool",
@@ -6847,11 +6855,11 @@
   },
   {
     "type": "float",
-    "named": false
+    "named": true
   },
   {
     "type": "float",
-    "named": true
+    "named": false
   },
   {
     "type": "foldl",
@@ -6963,11 +6971,11 @@
   },
   {
     "type": "number",
-    "named": true
+    "named": false
   },
   {
     "type": "number",
-    "named": false
+    "named": true
   },
   {
     "type": "object",

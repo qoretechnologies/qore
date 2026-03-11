@@ -343,6 +343,9 @@ class WebSocketHandlerTest inherits QUnit::Test {
             assertTrue(wsc.isOpen());
             wsc.send("STOP");
             wg.wait();
+            # Disconnect before block exit to ensure the delivery thread has finished
+            # accessing captured local variables (wg) from the callback closure
+            wsc.disconnect();
         }
 
         # check fragmented messaging and flushing I/O
