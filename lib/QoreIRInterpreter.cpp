@@ -3181,13 +3181,7 @@ load_local_done:
                         QoreHashNode* new_h = h->copy();
                         LocalVar* lv = const_cast<LocalVar*>(
                             reinterpret_cast<const LocalVar*>(hks_inst->container->ref.id));
-                        // VT_CLOSURE containers require assignClosureVarValue() for correct
-                        // scope lookup via thread_find_closure_var()
-                        if (hks_inst->container->getType() == VT_CLOSURE) {
-                            assignClosureVarValue(lv, QoreValue(new_h), xsink);
-                        } else {
-                            assignLocalVarValue(lv, QoreValue(new_h), xsink);
-                        }
+                        assignLocalVarValue(lv, QoreValue(new_h), xsink);
                         if (xsink && *xsink) {
                             new_h->deref(xsink);
                             cleanupValues(values, cleanup, xsink, true, cleanup_log);
@@ -3271,13 +3265,7 @@ load_local_done:
                         QoreListNode* new_l = l->copy();
                         LocalVar* lv = const_cast<LocalVar*>(
                             reinterpret_cast<const LocalVar*>(lis_inst->container->ref.id));
-                        // VT_CLOSURE containers require assignClosureVarValue() for correct
-                        // scope lookup via thread_find_closure_var()
-                        if (lis_inst->container->getType() == VT_CLOSURE) {
-                            assignClosureVarValue(lv, QoreValue(new_l), xsink);
-                        } else {
-                            assignLocalVarValue(lv, QoreValue(new_l), xsink);
-                        }
+                        assignLocalVarValue(lv, QoreValue(new_l), xsink);
                         if (xsink && *xsink) {
                             new_l->deref(xsink);
                             cleanupValues(values, cleanup, xsink, true, cleanup_log);
