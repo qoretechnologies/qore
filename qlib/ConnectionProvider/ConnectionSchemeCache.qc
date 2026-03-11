@@ -93,6 +93,8 @@ public class ConnectionSchemeCache {
 
             "cin7core": "Cin7CoreRestClient",
 
+            "closerest": "CloseRestClient",
+
             "db": "DbDataProvider",
 
             "deel": "DeelRestClient",

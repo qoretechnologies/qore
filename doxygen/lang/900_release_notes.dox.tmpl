@@ -886,6 +886,20 @@ cargo install tree-sitter-cli@0.26.5
       - new module providing a REST client for Chargebee's subscription billing API
       - supports HTTP Basic Authentication with API Key as username
       - provides ChargebeeRestConnection for connection management with \c chargebee:// URL scheme
+    - @ref closerestclientintro "CloseRestClient" module
+      - new module providing a REST client for Close CRM's REST API
+      - supports OAuth2 authentication with automatic token refresh
+      - provides CloseRestConnection for connection management with \c closerest:// URL scheme
+    - @ref closedataproviderintro "CloseDataProvider" module
+      - new module providing a data provider API for Close CRM
+      - lead management (create, read, update, delete, search)
+      - contact management (create, read, update, delete, search)
+      - opportunity management (create, read, update, delete, search)
+      - task management (create, read, update, delete, search)
+      - activity logging: calls, emails, notes, meetings, SMS
+      - event triggers for leads, contacts, and opportunities (created, updated, deleted)
+      - action catalog integration with 43 actions and 9 triggers
+      - connection support with \c closerest:// URL scheme
     - @ref chargebeedataproviderintro "ChargebeeDataProvider" module
       - new module providing a data provider API for Chargebee subscription billing and revenue management
       - customer management (create, read, update, delete, search)
