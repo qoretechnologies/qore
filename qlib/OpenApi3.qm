@@ -40,7 +40,7 @@
 %define NoXml
 %endtry
 
-%requires(reexport) Mime >= 1.4
+%requires(reexport) Mime >= 1.7
 %requires(reexport) Util >= 1.3
 %requires(reexport) HttpServerUtil >= 0.3.12
 %requires(reexport) RestSchemaValidator >= 2.5
@@ -5993,7 +5993,7 @@ public class OpenApi3SchemaGenerator {
             "required": required_body,
             "content": {
                 "application/json": {"schema": body_schema},
-                "application/x-yaml": {"schema": body_schema},
+                MimeTypeYamlApp: {"schema": body_schema},
             },
         };
     }
@@ -6030,7 +6030,7 @@ public class OpenApi3SchemaGenerator {
                 "description": "Successful response",
                 "content": {
                     "application/json": {"schema": response_schema},
-                    "application/x-yaml": {"schema": response_schema},
+                    MimeTypeYamlApp: {"schema": response_schema},
                 },
             };
 

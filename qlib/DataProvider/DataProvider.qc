@@ -719,8 +719,9 @@ if (!result.success) {
         @since DataProvider 3.3
     */
     static hash<DpqlParseResult> parseDpqlExpressionWithInfo(string text,
-            *hash<string, hash<DataProviderExpressionInfo>> expressions) {
-        DpqlParser parser(expressions ?? DataProviderGenericExpressions);
+            *hash<string, hash<DataProviderExpressionInfo>> expressions,
+            *hash<string, AbstractDataField> fields) {
+        DpqlParser parser(expressions ?? DataProviderGenericExpressions, fields);
         return parser.parseWithInfo(text);
     }
 
@@ -965,6 +966,21 @@ list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@na', 3
         return provider.getCompletions(text, position, fields, template_context);
     }
 
+    #! Returns signature help for the DPQL function call at the given position
+    /** @param text the DPQL expression text
+        @param position cursor position (0-based character offset)
+        @param expressions optional expression map; defaults to @ref DataProviderGenericExpressions
+
+        @return signature help info, or @ref nothing if the cursor is not inside a function call
+
+        @since DataProvider 3.4
+    */
+    static *hash<DpqlSignatureHelp> getDpqlSignatureHelp(string text, int position,
+            *hash<string, hash<DataProviderExpressionInfo>> expressions) {
+        DpqlCompletionProvider provider(expressions ?? DataProviderGenericExpressions);
+        return provider.getSignatureHelp(text, position);
+    }
+
     #! Sets callbacks for template reference resolution
     /** Delegates to @ref AbstractDataProvider::setTemplateCallbacks()
 
@@ -1016,7 +1032,7 @@ if (errors) {
     static list<hash<DpqlDiagnostic>> validateDpqlExpression(string text,
             hash<string, AbstractDataField> fields,
             *hash<string, hash<DataProviderExpressionInfo>> expressions) {
-        DpqlParser parser(expressions ?? DataProviderGenericExpressions);
+        DpqlParser parser(expressions ?? DataProviderGenericExpressions, fields);
         hash<DpqlParseResult> result = parser.parseWithInfo(text);
         list<hash<DpqlDiagnostic>> diags = result.diagnostics;
         if (result.success && result.expression) {

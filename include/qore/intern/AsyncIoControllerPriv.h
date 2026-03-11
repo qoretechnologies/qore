@@ -292,6 +292,7 @@ private:
     // Registered socket tracking (I/O thread only, but updated under lock in phase 3)
     std::unordered_map<std::string, QoreObject*> registered_sockets; //!< key -> Socket obj
     std::unordered_map<std::string, int> registered_events;          //!< sock hash -> current events
+    std::unordered_map<std::string, int> registered_fds;             //!< sock hash -> registered fd
     std::unordered_map<std::string, int> key_events;                 //!< key -> events for this key
     std::unordered_map<std::string, std::unordered_set<std::string>> sock_hash_to_keys; //!< reverse index
 

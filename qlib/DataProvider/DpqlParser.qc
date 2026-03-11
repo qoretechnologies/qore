@@ -71,17 +71,55 @@ public class DpqlParser {
         list<hash<DpqlTokenInfo>> tokens = ();
         #! Available expressions (for validation)
         *hash<string, hash<DataProviderExpressionInfo>> expressions;
+        #! Map of DPQL symbol to expression name (for symbol-based lookup)
+        /** @since DataProvider 3.4
+        */
+        hash<string, string> symbol_to_name;
+        #! Available fields for type resolution
+        /** @since DataProvider 3.4
+        */
+        *hash<string, AbstractDataField> fields;
         #! Current line number for error reporting
         int line = 1;
         #! Current column number for error reporting
         int column = 1;
     }
 
-    #! Creates a parser with optional expression map for validation
+    #! Creates a parser with optional expression map and fields for validation
     /** @param expressions optional map of expression names to their info for validation
+        @param fields optional map of field names to their definitions for type resolution
+
+        @since DataProvider 3.4 added fields parameter
     */
-    constructor(*hash<string, hash<DataProviderExpressionInfo>> expressions) {
+    constructor(*hash<string, hash<DataProviderExpressionInfo>> expressions,
+            *hash<string, AbstractDataField> fields) {
         self.expressions = expressions;
+        self.fields = fields;
+        if (expressions) {
+            buildSymbolToNameMap();
+        }
+    }
+
+    #! Builds a symbol-to-name lookup map from the expression map
+    /** Maps DPQL symbols (with trailing "()" stripped) to their internal expression names
+        (the keys in the expression map). This allows the parser to accept symbol-based
+        syntax in DPQL text while storing the canonical name in \c exp.exp.
+
+        @since DataProvider 3.4
+    */
+    private buildSymbolToNameMap() {
+        foreach string ename in (keys expressions) {
+            hash<DataProviderExpressionInfo> info = expressions{ename};
+            if (!info.symbol) {
+                continue;
+            }
+            string sym = info.symbol;
+            # Strip trailing () from display symbols (e.g. "substr()" -> "substr")
+            if (sym =~ /\(\)$/) {
+                sym = substr(sym, 0, sym.size() - 2);
+            }
+            symbol_to_name{sym} = ename;
+        }
     }
 
     #! Parses a DPQL expression string
@@ -165,10 +203,13 @@ public class DpqlParser {
         # Prepend tokenizer errors (they should come first)
         errors = tokenizer_errors + errors;
 
+        # Determine success: warnings don't count as failures
+        bool has_errors = (select errors, $1.severity == "error") ? True : False;
+
         return <DpqlParseResult>{
             "expression": exp,
             "diagnostics": errors,
-            "success": !parse_failed && !errors,
+            "success": !parse_failed && !has_errors,
             "tokens": tokens,
         };
     }
@@ -252,6 +293,19 @@ public class DpqlParser {
     private addError(string message, string code, hash<DpqlTokenInfo> tok) {
         errors += <DpqlDiagnostic>{
             "severity": "error",
+            "message": message,
+            "code": code,
+            "line": tok.line,
+            "column": tok.column,
+            "end_line": tok.end_line,
+            "end_column": tok.end_column,
+        };
+    }
+
+    #! Adds a warning diagnostic from a token
+    private addWarning(string message, string code, hash<DpqlTokenInfo> tok) {
+        errors += <DpqlDiagnostic>{
+            "severity": "warning",
             "message": message,
             "code": code,
             "line": tok.line,
@@ -623,7 +677,7 @@ public class DpqlParser {
                 skipWhitespace();
                 # Check for function call
                 if (!atEnd() && peek().type == DPQL_TOK_LPAREN) {
-                    return parseFunctionCall(id_tok.value);
+                    return parseFunctionCall(id_tok);
                 }
                 # Check for keywords that can be values
                 string lwr = id_tok.value.lwr();
@@ -1127,17 +1181,64 @@ public class DpqlParser {
     }
 
     #! Parses a function call
-    private hash<DataProviderExpression> parseFunctionCall(string name) {
+    /** Resolves the DPQL symbol to the internal expression name using the symbol-to-name
+        map. Falls back to direct expression map lookup for backward compatibility with
+        old name-based syntax.
+
+        @since DataProvider 3.4 symbol-based resolution
+    */
+    private hash<DataProviderExpression> parseFunctionCall(hash<DpqlTokenInfo> name_tok) {
+        string token_name = name_tok.value;
+
+        # Resolve symbol to internal expression name
+        # 1. Try symbol→name lookup (new symbol-based syntax)
+        # 2. Fall back to direct expression map key lookup (backward compat)
+        string name;
+        if (symbol_to_name{token_name}) {
+            name = symbol_to_name{token_name};
+        } else if (expressions{token_name}) {
+            name = token_name;
+        } else {
+            name = token_name;
+        }
+
         expect(DPQL_TOK_LPAREN, "'('");
         skipWhitespace();
 
         list<auto> args = ();
+        list<hash<DpqlTokenInfo>> arg_tokens = ();
         if (!atEnd() && peek().type != DPQL_TOK_RPAREN) {
-            args = parseArgList();
+            args = parseArgList(\arg_tokens);
         }
 
         skipWhitespace();
         expect(DPQL_TOK_RPAREN, "')'");
+
+        # Validate function name against expression map
+        if (expressions && !expressions{name}) {
+            addWarning(sprintf("Unknown function '%s'", token_name), "DPQL-W001", name_tok);
+        } else if (expressions{name}) {
+            hash<DataProviderExpressionInfo> info = expressions{name};
+            int expected = info.args.size();
+            int actual = args.size();
+            if (info.varargs) {
+                int min = info.min_args ?? (expected > 0 ? expected : 0);
+                if (actual < min) {
+                    addWarning(
+                        sprintf("Function '%s' expects at least %d argument%s, got %d",
+                            token_name, min, min == 1 ? "" : "s", actual),
+                        "DPQL-W002", name_tok);
+                }
+            } else if (expected > 0 && actual != expected) {
+                addWarning(
+                    sprintf("Function '%s' expects %d argument%s, got %d",
+                        token_name, expected, expected == 1 ? "" : "s", actual),
+                    "DPQL-W002", name_tok);
+            }
+
+            # Type-aware argument validation
+            validateFunctionArgTypes(token_name, info, args, arg_tokens);
+        }
 
         return <DataProviderExpression>{
             "exp": name,
@@ -1145,19 +1246,163 @@ public class DpqlParser {
         };
     }
 
-    #! Parses an argument list
-    private list<auto> parseArgList() {
+    #! Validates argument types against function signature
+    /** Checks:
+        - \c type_code constraints: ST_Field requires a field reference, ST_Value requires a literal/expression
+        - Data type compatibility: inferred argument type vs expected signature type
+
+        @since DataProvider 3.4
+    */
+    private validateFunctionArgTypes(string name, hash<DataProviderExpressionInfo> info,
+            list<auto> args, list<hash<DpqlTokenInfo>> arg_tokens) {
+        int check_count = args.size() < info.args.size() ? args.size() : info.args.size();
+        for (int i = 0; i < check_count; ++i) {
+            hash<DataProviderSignatureTypeInfo> sig = info.args[i];
+            auto arg = args[i];
+            hash<DpqlTokenInfo> tok = arg_tokens[i];
+
+            bool is_field_ref = arg instanceof hash<DataProviderFieldReference>;
+
+            # Check type_code constraints
+            if (sig.type_code == ST_Field && !is_field_ref) {
+                string pname = info.arg_info[i].display_name ?? sprintf("arg%d", i);
+                addWarning(
+                    sprintf("Argument '%s' of '%s' expects a field reference (@field)", pname, name),
+                    "DPQL-W003", tok);
+                continue;
+            }
+            if (sig.type_code == ST_Value && is_field_ref) {
+                string pname = info.arg_info[i].display_name ?? sprintf("arg%d", i);
+                addWarning(
+                    sprintf("Argument '%s' of '%s' expects a literal value, not a field reference",
+                        pname, name),
+                    "DPQL-W003", tok);
+                continue;
+            }
+
+            # Infer argument type and check compatibility
+            *AbstractDataProviderType arg_type = inferArgType(arg);
+            if (!arg_type) {
+                # Cannot determine type (template, complex expression) — skip
+                continue;
+            }
+
+            # Check if the argument type is compatible with the expected type
+            if (!sig.type.isAssignableFrom(arg_type)) {
+                string pname = info.arg_info[i].display_name ?? sprintf("arg%d", i);
+                addWarning(
+                    sprintf("Argument '%s' of '%s' has type '%s', expected '%s'",
+                        pname, name, arg_type.getName(), sig.type.getName()),
+                    "DPQL-W004", tok);
+            }
+        }
+
+        # For varargs, validate remaining args against the last signature type
+        if (info.varargs && info.args.size() > 0 && args.size() > info.args.size()) {
+            hash<DataProviderSignatureTypeInfo> last_sig = info.args[info.args.size() - 1];
+            for (int i = info.args.size(); i < args.size(); ++i) {
+                auto arg = args[i];
+                hash<DpqlTokenInfo> tok = arg_tokens[i];
+                bool is_field_ref = arg instanceof hash<DataProviderFieldReference>;
+
+                if (last_sig.type_code == ST_Field && !is_field_ref) {
+                    addWarning(
+                        sprintf("Varargs argument %d of '%s' expects a field reference",
+                            i + 1, name),
+                        "DPQL-W003", tok);
+                    continue;
+                }
+                if (last_sig.type_code == ST_Value && is_field_ref) {
+                    addWarning(
+                        sprintf("Varargs argument %d of '%s' expects a literal value",
+                            i + 1, name),
+                        "DPQL-W003", tok);
+                    continue;
+                }
+
+                *AbstractDataProviderType arg_type = inferArgType(arg);
+                if (arg_type && !last_sig.type.isAssignableFrom(arg_type)) {
+                    addWarning(
+                        sprintf("Varargs argument %d of '%s' has type '%s', expected '%s'",
+                            i + 1, name, arg_type.getName(), last_sig.type.getName()),
+                        "DPQL-W004", tok);
+                }
+            }
+        }
+    }
+
+    #! Infers the type of a parsed argument
+    /** @return the inferred type, or NOTHING if the type cannot be determined
+
+        @since DataProvider 3.4
+    */
+    private *AbstractDataProviderType inferArgType(auto arg) {
+        # Literal values: determine type from Qore type code
+        switch (arg.typeCode()) {
+            case NT_STRING:
+                return AbstractDataProviderType::get(StringType);
+            case NT_INT:
+                return AbstractDataProviderType::get(IntType);
+            case NT_FLOAT:
+                return AbstractDataProviderType::get(FloatType);
+            case NT_BOOLEAN:
+                return AbstractDataProviderType::get(BoolType);
+            case NT_NUMBER:
+                return AbstractDataProviderType::get(NumberType);
+            case NT_DATE:
+                return AbstractDataProviderType::get(DateType);
+            case NT_BINARY:
+                return AbstractDataProviderType::get(BinaryType);
+            case NT_LIST:
+                return AbstractDataProviderType::get(SoftListType);
+            case NT_NULL:
+            case NT_NOTHING:
+                return AbstractDataProviderType::get(NothingType);
+        }
+
+        # Hash types: field references and expressions
+        if (arg instanceof hash<DataProviderFieldReference>) {
+            # Look up field type from fields map
+            if (fields{arg.field}) {
+                return fields{arg.field}.getType();
+            }
+            # Unknown field — cannot determine type
+            return NOTHING;
+        }
+
+        if (arg instanceof hash<DataProviderExpression>) {
+            # Function call — look up return type from expression map
+            if (expressions{arg.exp}) {
+                return expressions{arg.exp}.return_type;
+            }
+            # Built-in operators — return type depends on operator
+            return NOTHING;
+        }
+
+        return NOTHING;
+    }
+
+    #! Parses an argument list, also collecting the start token of each argument
+    /** @param arg_tokens output list populated with the start token of each argument
+
+        @since DataProvider 3.4 added arg_tokens parameter
+    */
+    private list<auto> parseArgList(reference<list<hash<DpqlTokenInfo>>> arg_tokens) {
         list<auto> args = ();
 
         # First argument
+        hash<DpqlTokenInfo> start_tok = peek();
         args += parseOrExpr();
+        arg_tokens += start_tok;
         skipWhitespace();
 
         # Additional arguments
         while (!atEnd() && peek().type == DPQL_TOK_COMMA) {
             nextToken();  # consume comma
             skipWhitespace();
+            start_tok = peek();
             args += parseOrExpr();
+            arg_tokens += start_tok;
             skipWhitespace();
         }
 

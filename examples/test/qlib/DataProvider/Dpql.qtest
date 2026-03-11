@@ -100,6 +100,8 @@ public class DpqlTest inherits QUnit::Test {
         addTestCase("schema-aware key completion tests", \schemaAwareKeyCompletionTests());
         addTestCase("static API tests", \staticApiTests());
         addTestCase("validation tests", \validationTests());
+        addTestCase("function validation tests", \functionValidationTests());
+        addTestCase("signature help tests", \signatureHelpTests());
         addTestCase("field dot edge case tests", \fieldDotEdgeCaseTests());
         addTestCase("DPQL string search API tests", \dpqlStringSearchTests());
         addTestCase("stress tests", \stressTests());
@@ -110,6 +112,7 @@ public class DpqlTest inherits QUnit::Test {
         addTestCase("template completion tests", \templateCompletionTests());
         addTestCase("template validation tests", \templateValidationTests());
         addTestCase("JSON expression serialization tests", \jsonExpressionSerializationTests());
+        addTestCase("argument type validation tests", \argumentTypeValidationTests());
 
         # Return for compatibility with test harnesses that check the return value.
         set_return_value(main());
@@ -769,9 +772,8 @@ public class DpqlTest inherits QUnit::Test {
             assertEq("users", idx.args[0].field);
         }
 
-        # Test hyphenated function name parsing
+        # Test symbol-based function parsing (symbol differs from name)
         {
-            # Create expression map with a hyphenated function-call operator
             hash<string, hash<DataProviderExpressionInfo>> expmap = DataProviderGenericExpressions + {
                 "ends-with": <DataProviderExpressionInfo>{
                     "type": DET_Operator,
@@ -779,20 +781,26 @@ public class DpqlTest inherits QUnit::Test {
                     "display_name": "Ends With",
                     "short_desc": "True if a string ends with a given substring",
                     "desc": "True if a string ends with a given substring",
-                    "symbol": "ends-with",
+                    "symbol": "endsWith",
                     "return_type": AbstractDataProviderType::get(BoolType),
                 },
             };
 
+            # Parse using symbol (new syntax)
             hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
-                'ends-with(@name, "lo")', expmap);
-            assertEq("ends-with", exp.exp);
+                'endsWith(@name, "lo")', expmap);
+            assertEq("ends-with", exp.exp, "symbol resolves to internal name");
             assertEq(2, exp.args.size());
             assertEq("name", exp.args[0].field);
             assertEq("lo", exp.args[1]);
+
+            # Backward compat: parse using internal name still works
+            exp = DataProvider::parseDpqlExpression(
+                'ends-with(@name, "lo")', expmap);
+            assertEq("ends-with", exp.exp, "name-based parsing still works");
         }
 
-        # Test hyphenated function in complex expression
+        # Test symbol-based function in complex expression
         {
             hash<string, hash<DataProviderExpressionInfo>> expmap = DataProviderGenericExpressions + {
                 "starts-with": <DataProviderExpressionInfo>{
@@ -801,15 +809,15 @@ public class DpqlTest inherits QUnit::Test {
                     "display_name": "Starts With",
                     "short_desc": "True if a string starts with a given prefix",
                     "desc": "True if a string starts with a given prefix",
-                    "symbol": "starts-with",
+                    "symbol": "startsWith",
                     "return_type": AbstractDataProviderType::get(BoolType),
                 },
             };
 
             hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
-                'starts-with(@email, "admin") && @active == true', expmap);
+                'startsWith(@email, "admin") && @active == true', expmap);
             assertEq(DP_OP_AND, exp.exp);
-            assertEq("starts-with", exp.args[0].exp);
+            assertEq("starts-with", exp.args[0].exp, "symbol resolves to internal name in complex expr");
             assertEq("email", exp.args[0].args[0].field);
             assertEq("admin", exp.args[0].args[1]);
         }
@@ -996,6 +1004,50 @@ public class DpqlTest inherits QUnit::Test {
             string dpql = DataProvider::serializeDpqlExpression(exp);
             assertEq("@value != null", dpql);
         }
+
+        # Test serializer uses symbol for function calls
+        {
+            hash<string, hash<DataProviderExpressionInfo>> expmap = {
+                "ends-with": <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": "ends-with",
+                    "display_name": "Ends With",
+                    "short_desc": "True if a string ends with a given substring",
+                    "desc": "True if a string ends with a given substring",
+                    "symbol": "endsWith",
+                    "return_type": AbstractDataProviderType::get(BoolType),
+                },
+            };
+
+            hash<DataProviderExpression> exp = <DataProviderExpression>{
+                "exp": "ends-with",
+                "args": (<DataProviderFieldReference>{"field": "name"}, "lo"),
+            };
+            string dpql = DataProvider::serializeDpqlExpression(exp, expmap);
+            assertEq('endsWith(@name, "lo")', dpql, "serializer outputs symbol, not name");
+        }
+
+        # Test serializer uses symbol stripped of () for DET_Function
+        {
+            hash<string, hash<DataProviderExpressionInfo>> expmap = {
+                "substr": <DataProviderExpressionInfo>{
+                    "type": DET_Function,
+                    "name": "substr",
+                    "display_name": "Substring",
+                    "short_desc": "Extracts a substring",
+                    "desc": "Extracts a substring",
+                    "symbol": "substr()",
+                    "return_type": AbstractDataProviderType::get(StringType),
+                },
+            };
+
+            hash<DataProviderExpression> exp = <DataProviderExpression>{
+                "exp": "substr",
+                "args": (<DataProviderFieldReference>{"field": "name"}, 0, 5),
+            };
+            string dpql = DataProvider::serializeDpqlExpression(exp, expmap);
+            assertEq("substr(@name, 0, 5)", dpql, "serializer strips () from function symbol");
+        }
     }
 
     roundTripTests() {
@@ -1048,6 +1100,35 @@ public class DpqlTest inherits QUnit::Test {
             # Compare the expressions
             assertEq(parsed.exp, reparsed.exp, sprintf("Round-trip failed for: %s", expr));
             assertEq(parsed.args.size(), reparsed.args.size(), sprintf("Round-trip args size for: %s", expr));
+        }
+
+        # Symbol-based round-trip: parse symbol → serialize to symbol → parse again
+        {
+            hash<string, hash<DataProviderExpressionInfo>> expmap = DataProviderGenericExpressions + {
+                "ends-with": <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": "ends-with",
+                    "display_name": "Ends With",
+                    "short_desc": "True if a string ends with a given substring",
+                    "desc": "True if a string ends with a given substring",
+                    "symbol": "endsWith",
+                    "return_type": AbstractDataProviderType::get(BoolType),
+                },
+            };
+
+            # Parse using symbol
+            hash<DataProviderExpression> parsed = DataProvider::parseDpqlExpression(
+                'endsWith(@name, "suffix")', expmap);
+            assertEq("ends-with", parsed.exp, "symbol round-trip: name stored in exp");
+
+            # Serialize uses symbol
+            string serialized = DataProvider::serializeDpqlExpression(parsed, expmap);
+            assertEq('endsWith(@name, "suffix")', serialized, "symbol round-trip: serialized with symbol");
+
+            # Re-parse produces same internal representation
+            hash<DataProviderExpression> reparsed = DataProvider::parseDpqlExpression(serialized, expmap);
+            assertEq(parsed.exp, reparsed.exp, "symbol round-trip: consistent internal name");
+            assertEq(parsed.args.size(), reparsed.args.size(), "symbol round-trip: same arg count");
         }
     }
 
@@ -1225,7 +1306,7 @@ public class DpqlTest inherits QUnit::Test {
 
         # === Function-call operator completions ===
 
-        # Operators with identifier-style names should appear as function completions
+        # Operators with identifier-style symbols should appear as function completions
         {
             hash<string, hash<DataProviderExpressionInfo>> expmap = DataProviderGenericExpressions + {
                 "ends-with": <DataProviderExpressionInfo>{
@@ -1234,7 +1315,7 @@ public class DpqlTest inherits QUnit::Test {
                     "display_name": "Ends With",
                     "short_desc": "True if a string ends with a given substring",
                     "desc": "True if a string ends with a given substring",
-                    "symbol": "ends-with",
+                    "symbol": "endsWith",
                     "return_type": AbstractDataProviderType::get(BoolType),
                 },
                 "contains": <DataProviderExpressionInfo>{
@@ -1251,11 +1332,11 @@ public class DpqlTest inherits QUnit::Test {
             list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('', 0, fields, expmap);
             list<hash<DpqlCompletionItem>> fn_items = select items, $1.kind == "function";
             list<string> fn_names = map $1.label, fn_items;
-            assertTrue(inlist("ends-with", fn_names), "ends-with offered as function completion");
+            assertTrue(inlist("endsWith", fn_names), "endsWith symbol offered as function completion");
             assertTrue(inlist("contains", fn_names), "contains offered as function completion");
         }
 
-        # Prefix filtering works for hyphenated operator names
+        # Prefix filtering works for symbol-based operator names
         {
             hash<string, hash<DataProviderExpressionInfo>> expmap = DataProviderGenericExpressions + {
                 "ends-with": <DataProviderExpressionInfo>{
@@ -1264,16 +1345,16 @@ public class DpqlTest inherits QUnit::Test {
                     "display_name": "Ends With",
                     "short_desc": "True if a string ends with a given substring",
                     "desc": "True if a string ends with a given substring",
-                    "symbol": "ends-with",
+                    "symbol": "endsWith",
                     "return_type": AbstractDataProviderType::get(BoolType),
                 },
-                "encode-url": <DataProviderExpressionInfo>{
+                "encode_url": <DataProviderExpressionInfo>{
                     "type": DET_Function,
-                    "name": "encode-url",
+                    "name": "encode_url",
                     "display_name": "Encode URL",
                     "short_desc": "URL-encodes a string",
                     "desc": "URL-encodes a string",
-                    "symbol": "encode-url",
+                    "symbol": "encode_url()",
                     "return_type": AbstractDataProviderType::get(StringType),
                 },
             };
@@ -1281,11 +1362,11 @@ public class DpqlTest inherits QUnit::Test {
             list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('e', 1, fields, expmap);
             list<hash<DpqlCompletionItem>> fn_items = select items, $1.kind == "function";
             list<string> fn_names = map $1.label, fn_items;
-            assertTrue(inlist("ends-with", fn_names), "typing 'e' shows ends-with");
-            assertTrue(inlist("encode-url", fn_names), "typing 'e' shows encode-url");
+            assertTrue(inlist("endsWith", fn_names), "typing 'e' shows endsWith symbol");
+            assertTrue(inlist("encode_url", fn_names), "typing 'e' shows encode_url (stripped ())");
         }
 
-        # Infix operators with render_template starting with $arg are NOT included as functions
+        # All identifier-style operators are offered as function completions (including infix)
         {
             hash<string, hash<DataProviderExpressionInfo>> expmap = DataProviderGenericExpressions + {
                 "between": <DataProviderExpressionInfo>{
@@ -1303,8 +1384,90 @@ public class DpqlTest inherits QUnit::Test {
             list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('b', 1, fields, expmap);
             list<hash<DpqlCompletionItem>> fn_items = select items, $1.kind == "function";
             list<string> fn_names = map $1.label, fn_items;
-            assertFalse(inlist("between", fn_names),
-                "infix operator 'between' not offered as function completion");
+            assertTrue(inlist("between", fn_names),
+                "identifier-style operator 'between' offered as function completion");
+        }
+
+        # DET_Function items are offered as function completions
+        {
+            hash<string, hash<DataProviderExpressionInfo>> expmap = DataProviderGenericExpressions + {
+                "encode_url": <DataProviderExpressionInfo>{
+                    "type": DET_Function,
+                    "name": "encode_url",
+                    "display_name": "Encode URL",
+                    "short_desc": "URL-encodes a string",
+                    "desc": "URL-encodes a string",
+                    "symbol": "encode_url()",
+                    "return_type": AbstractDataProviderType::get(StringType),
+                },
+            };
+
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('e', 1, fields, expmap);
+            list<hash<DpqlCompletionItem>> fn_items = select items, $1.kind == "function";
+            list<string> fn_names = map $1.label, fn_items;
+            assertTrue(inlist("encode_url", fn_names),
+                "DET_Function 'encode_url' offered as function completion");
+        }
+
+        # Symbolic operators are NOT offered as function completions
+        {
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('', 0, fields);
+            list<hash<DpqlCompletionItem>> fn_items = select items, $1.kind == "function";
+            list<string> fn_names = map $1.label, fn_items;
+            assertFalse(inlist("==", fn_names), "symbolic operator == not offered as function");
+            assertFalse(inlist("&&", fn_names), "symbolic operator && not offered as function");
+            assertFalse(inlist("!", fn_names), "symbolic operator ! not offered as function");
+        }
+
+        # Function completions include snippet text with parameter placeholders
+        {
+            hash<string, hash<DataProviderExpressionInfo>> expmap = {
+                "substr": <DataProviderExpressionInfo>{
+                    "type": DET_Function,
+                    "name": "substr",
+                    "display_name": "Substring",
+                    "short_desc": "Returns a substring",
+                    "desc": "Returns a substring",
+                    "symbol": "substr()",
+                    "args": (
+                        <DataProviderSignatureTypeInfo>{"type": AbstractDataProviderType::get(StringType)},
+                        <DataProviderSignatureTypeInfo>{"type": AbstractDataProviderType::get(IntType)},
+                        <DataProviderSignatureTypeInfo>{"type": AbstractDataProviderType::get(IntOrNothingType)},
+                    ),
+                    "arg_info": (
+                        <DataProviderArgInfo>{"display_name": "String Value"},
+                        <DataProviderArgInfo>{"display_name": "Start Position"},
+                        <DataProviderArgInfo>{"display_name": "Length"},
+                    ),
+                    "return_type": AbstractDataProviderType::get(StringType),
+                },
+                "no_args_func": <DataProviderExpressionInfo>{
+                    "type": DET_Function,
+                    "name": "no_args_func",
+                    "display_name": "No Args",
+                    "short_desc": "A function with no args",
+                    "desc": "A function with no args",
+                    "symbol": "no_args_func()",
+                    "return_type": AbstractDataProviderType::get(StringType),
+                },
+            };
+
+            list<hash<DpqlCompletionItem>> items =
+                DataProvider::getDpqlCompletions('s', 1, fields, expmap);
+            list<hash<DpqlCompletionItem>> fn_items = select items, $1.label == "substr";
+            assertEq(1, fn_items.size(), "should find substr completion");
+            # insert_text should still be plain
+            assertEq("substr(", fn_items[0].insert_text, "insert_text is plain");
+            # snippet_text should have placeholders
+            assertTrue(exists fn_items[0].snippet_text, "snippet_text exists for function with args");
+            assertEq("substr(${1:String Value}, ${2:Start Position}, ${3:Length})$0",
+                fn_items[0].snippet_text, "snippet_text has correct placeholders");
+
+            # Function with no args should have no snippet
+            items = DataProvider::getDpqlCompletions('n', 1, fields, expmap);
+            fn_items = select items, $1.label == "no_args_func";
+            assertEq(1, fn_items.size(), "should find no_args_func completion");
+            assertNothing(fn_items[0].snippet_text, "no snippet for function without args");
         }
     }
 
@@ -1745,6 +1908,333 @@ public class DpqlTest inherits QUnit::Test {
             list<hash<DpqlDiagnostic>> errors = DataProvider::validateDpqlExpression(
                 '(@name == "John" && @age > 18) || @status == "admin"', fields);
             assertEq(0, errors.size());
+        }
+    }
+
+    functionValidationTests() {
+        # Unknown function produces warning diagnostic
+        {
+            hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo(
+                'unknown_func(@name, 1)');
+            # Parsing should succeed (warnings don't cause failure)
+            assertTrue(result.success, "unknown function is a warning, not an error");
+            # Should have a warning diagnostic
+            list<hash<DpqlDiagnostic>> warnings = select result.diagnostics,
+                $1.severity == "warning";
+            assertTrue(warnings.size() > 0, "should have warning for unknown function");
+            assertEq("DPQL-W001", warnings[0].code);
+            assertTrue(warnings[0].message.find("unknown_func") >= 0,
+                "warning should mention function name");
+        }
+
+        # Known function produces no warning
+        {
+            hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo(
+                'index(@items, 0)');
+            list<hash<DpqlDiagnostic>> warnings = select result.diagnostics,
+                $1.severity == "warning";
+            assertEq(0, warnings.size(), "known function should have no warnings");
+        }
+
+        # Known function with wrong argument count produces warning
+        {
+            # index() expects 2 args (list, index)
+            hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo(
+                'index(@items)');
+            assertTrue(result.success, "wrong arg count is a warning, not an error");
+            list<hash<DpqlDiagnostic>> warnings = select result.diagnostics,
+                $1.severity == "warning";
+            assertTrue(warnings.size() > 0, "should have warning for wrong arg count");
+            assertEq("DPQL-W002", warnings[0].code);
+        }
+
+        # Known function with correct argument count — no warning
+        {
+            hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo(
+                'key(@data, "name")');
+            list<hash<DpqlDiagnostic>> warnings = select result.diagnostics,
+                $1.severity == "warning";
+            assertEq(0, warnings.size(), "correct arg count should have no warnings");
+        }
+
+        # Varargs function with sufficient args — no warning
+        {
+            # slice() is varargs with 2 args in signature (list, index/range...)
+            hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo(
+                'slice(@items, 0, 1, 2)');
+            list<hash<DpqlDiagnostic>> warnings = select result.diagnostics,
+                $1.severity == "warning";
+            assertEq(0, warnings.size(), "varargs function with enough args should have no warnings");
+        }
+
+        # Custom expression map — known hyphenated function produces no warning
+        {
+            hash<string, hash<DataProviderExpressionInfo>> expmap = DataProviderGenericExpressions + {
+                "ends-with": <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": "ends-with",
+                    "display_name": "Ends With",
+                    "short_desc": "True if a string ends with a given substring",
+                    "desc": "True if a string ends with a given substring",
+                    "symbol": "ends-with",
+                    "return_type": AbstractDataProviderType::get(BoolType),
+                },
+            };
+            hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo(
+                'ends-with(@name, "lo")', expmap);
+            assertTrue(result.success, "known hyphenated function should parse successfully");
+            list<hash<DpqlDiagnostic>> warnings = select result.diagnostics,
+                $1.severity == "warning";
+            assertEq(0, warnings.size(),
+                "known hyphenated function should have no warnings");
+        }
+
+        # Default expression map — unknown function gets warning
+        {
+            hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo(
+                'anything_goes(@x, 1)');
+            assertTrue(result.success, "unknown function is warning, not error");
+            list<hash<DpqlDiagnostic>> warnings = select result.diagnostics,
+                $1.severity == "warning";
+            assertEq(1, warnings.size(),
+                "unknown function with default expressions gets warning");
+            assertEq("DPQL-W001", warnings[0].code);
+        }
+    }
+
+    argumentTypeValidationTests() {
+        hash<string, AbstractDataField> fields = {
+            "name": new QoreDataField("name", NOTHING, AbstractDataProviderType::get(StringType)),
+            "age": new QoreDataField("age", NOTHING, AbstractDataProviderType::get(IntType)),
+            "score": new QoreDataField("score", NOTHING, AbstractDataProviderType::get(FloatType)),
+        };
+
+        # Build expression map with typed args and type_code constraints
+        hash<string, hash<DataProviderExpressionInfo>> expmap = DataProviderGenericExpressions + {
+            "test-func": <DataProviderExpressionInfo>{
+                "type": DET_Function,
+                "name": "test-func",
+                "display_name": "Test Function",
+                "short_desc": "A test function",
+                "desc": "A test function",
+                "symbol": "test-func()",
+                "args": (
+                    <DataProviderSignatureTypeInfo>{
+                        "type": AbstractDataProviderType::get(StringType),
+                        "type_code": ST_Field,
+                    },
+                    <DataProviderSignatureTypeInfo>{
+                        "type": AbstractDataProviderType::get(IntType),
+                        "type_code": ST_Value,
+                    },
+                ),
+                "arg_info": (
+                    <DataProviderArgInfo>{"display_name": "Field"},
+                    <DataProviderArgInfo>{"display_name": "Count"},
+                ),
+                "return_type": AbstractDataProviderType::get(StringType),
+            },
+            "typed-func": <DataProviderExpressionInfo>{
+                "type": DET_Function,
+                "name": "typed-func",
+                "display_name": "Typed Function",
+                "short_desc": "A typed function",
+                "desc": "A typed function",
+                "symbol": "typed-func()",
+                "args": (
+                    <DataProviderSignatureTypeInfo>{
+                        "type": AbstractDataProviderType::get(StringType),
+                    },
+                    <DataProviderSignatureTypeInfo>{
+                        "type": AbstractDataProviderType::get(IntType),
+                    },
+                ),
+                "arg_info": (
+                    <DataProviderArgInfo>{"display_name": "Text"},
+                    <DataProviderArgInfo>{"display_name": "Number"},
+                ),
+                "return_type": AbstractDataProviderType::get(StringType),
+            },
+        };
+
+        # ST_Field violation: literal passed where field ref expected
+        {
+            hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo(
+                "test-func('literal', 5)", expmap, fields);
+            assertTrue(result.success, "ST_Field warning should not fail parse");
+            list<hash<DpqlDiagnostic>> warnings = select result.diagnostics, $1.severity == "warning";
+            assertEq(1, warnings.size(), "should warn about ST_Field violation");
+            assertEq("DPQL-W003", warnings[0].code, "should be type code warning");
+            assertTrue(warnings[0].message.find("field reference") >= 0,
+                "warning should mention field reference");
+        }
+
+        # ST_Value violation: field ref passed where literal expected
+        {
+            hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo(
+                "test-func(@name, @age)", expmap, fields);
+            assertTrue(result.success, "ST_Value warning should not fail parse");
+            list<hash<DpqlDiagnostic>> warnings = select result.diagnostics, $1.severity == "warning";
+            assertEq(1, warnings.size(), "should warn about ST_Value violation");
+            assertEq("DPQL-W003", warnings[0].code, "should be type code warning");
+            assertTrue(warnings[0].message.find("literal value") >= 0,
+                "warning should mention literal value");
+        }
+
+        # Correct usage: field ref for ST_Field, literal for ST_Value
+        {
+            hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo(
+                "test-func(@name, 5)", expmap, fields);
+            assertTrue(result.success, "correct types should parse");
+            list<hash<DpqlDiagnostic>> warnings = select result.diagnostics, $1.severity == "warning";
+            assertEq(0, warnings.size(), "no warnings for correct usage");
+        }
+
+        # Data type mismatch: int passed where string expected
+        {
+            hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo(
+                "typed-func(42, 5)", expmap, fields);
+            assertTrue(result.success, "type mismatch warning should not fail parse");
+            list<hash<DpqlDiagnostic>> warnings = select result.diagnostics, $1.severity == "warning";
+            assertEq(1, warnings.size(), "should warn about int where string expected");
+            assertEq("DPQL-W004", warnings[0].code, "should be data type warning");
+        }
+
+        # Data type mismatch: string passed where int expected
+        {
+            hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo(
+                "typed-func('hello', 'world')", expmap, fields);
+            assertTrue(result.success, "type mismatch warning should not fail parse");
+            list<hash<DpqlDiagnostic>> warnings = select result.diagnostics, $1.severity == "warning";
+            assertEq(1, warnings.size(), "should warn about string where int expected");
+            assertEq("DPQL-W004", warnings[0].code, "should be data type warning");
+        }
+
+        # Correct data types: no warnings
+        {
+            hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo(
+                "typed-func('hello', 42)", expmap, fields);
+            assertTrue(result.success, "correct data types should parse");
+            list<hash<DpqlDiagnostic>> warnings = select result.diagnostics, $1.severity == "warning";
+            assertEq(0, warnings.size(), "no warnings for correct data types");
+        }
+
+        # Field reference type inference: @age is int, passed where string expected
+        {
+            hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo(
+                "typed-func(@age, 5)", expmap, fields);
+            assertTrue(result.success, "field type mismatch should not fail parse");
+            list<hash<DpqlDiagnostic>> warnings = select result.diagnostics, $1.severity == "warning";
+            assertEq(1, warnings.size(), "should warn about int field where string expected");
+            assertEq("DPQL-W004", warnings[0].code);
+        }
+
+        # Field reference type correct: @name is string, passed where string expected
+        {
+            hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo(
+                "typed-func(@name, 5)", expmap, fields);
+            assertTrue(result.success, "correct field type should parse");
+            list<hash<DpqlDiagnostic>> warnings = select result.diagnostics, $1.severity == "warning";
+            assertEq(0, warnings.size(), "no warnings for correct field type");
+        }
+
+        # Without fields: field ref type cannot be inferred, no type warning
+        {
+            hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo(
+                "typed-func(@unknown, 5)", expmap);
+            assertTrue(result.success, "unknown field type should parse");
+            list<hash<DpqlDiagnostic>> warnings = select result.diagnostics,
+                $1.severity == "warning" && $1.code == "DPQL-W004";
+            assertEq(0, warnings.size(), "no type warnings without field info");
+        }
+    }
+
+    signatureHelpTests() {
+        # Test signature help for known function at first arg
+        {
+            # index(@items, |) - cursor after open paren, before first arg
+            *hash<DpqlSignatureHelp> help = DataProvider::getDpqlSignatureHelp(
+                'index(@items, ', 14);
+            assertTrue(exists help, "should return signature help for index()");
+            assertTrue(help.label.find("index(") == 0, "label should start with function name");
+            assertEq(2, help.parameters.size(), "index() has 2 parameters");
+            assertEq(1, help.active_parameter, "after comma, active param should be 1");
+        }
+
+        # Test signature help at first argument (no commas)
+        {
+            *hash<DpqlSignatureHelp> help = DataProvider::getDpqlSignatureHelp(
+                'index(', 6);
+            assertTrue(exists help, "should return signature help right after open paren");
+            assertEq(0, help.active_parameter, "no commas, active param should be 0");
+        }
+
+        # Test signature help for unknown function
+        {
+            *hash<DpqlSignatureHelp> help = DataProvider::getDpqlSignatureHelp(
+                'unknown_func(@x, ', 18);
+            assertNothing(help, "unknown function should return no signature help");
+        }
+
+        # Test signature help outside function call
+        {
+            *hash<DpqlSignatureHelp> help = DataProvider::getDpqlSignatureHelp(
+                '@name == "hello"', 10);
+            assertNothing(help, "no function call, no signature help");
+        }
+
+        # Test signature help with nested function call
+        {
+            # key(index(@items, 0), |) - cursor in outer function second arg
+            *hash<DpqlSignatureHelp> help = DataProvider::getDpqlSignatureHelp(
+                'key(index(@items, 0), ', 22);
+            assertTrue(exists help, "should return signature help for outer function");
+            assertTrue(help.label.find("key(") == 0, "should show key() signature");
+            assertEq(1, help.active_parameter, "after first comma in key(), active param 1");
+        }
+
+        # Test signature help with symbol-based name
+        {
+            hash<string, hash<DataProviderExpressionInfo>> expmap = DataProviderGenericExpressions + {
+                "ends-with": <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": "ends-with",
+                    "display_name": "Ends With",
+                    "short_desc": "True if string ends with a given substring",
+                    "desc": "True if string ends with a given substring",
+                    "symbol": "endsWith",
+                    "arg_info": (
+                        <DataProviderArgInfo>{
+                            "display_name": "String",
+                            "short_desc": "The string to check",
+                            "desc": "The string to check",
+                        },
+                        <DataProviderArgInfo>{
+                            "display_name": "Suffix",
+                            "short_desc": "The suffix to match",
+                            "desc": "The suffix to match",
+                        },
+                    ),
+                    "return_type": AbstractDataProviderType::get(BoolType),
+                },
+            };
+            *hash<DpqlSignatureHelp> help = DataProvider::getDpqlSignatureHelp(
+                'endsWith(@name, ', 17, expmap);
+            assertTrue(exists help, "should return signature help for endsWith");
+            assertTrue(help.label.find("endsWith(") == 0, "label should show endsWith");
+            assertEq(2, help.parameters.size(), "endsWith has 2 parameters");
+            assertEq("String", help.parameters[0].label, "first param label");
+            assertEq("Suffix", help.parameters[1].label, "second param label");
+            assertEq(1, help.active_parameter, "after comma, active param 1");
+            assertTrue(help.documentation.find("ends with") >= 0, "should have documentation");
+        }
+
+        # Test return type in signature label
+        {
+            *hash<DpqlSignatureHelp> help = DataProvider::getDpqlSignatureHelp(
+                'index(', 6);
+            assertTrue(exists help, "should return signature help");
+            assertTrue(help.label.find("→") >= 0, "label should contain return type arrow");
         }
     }
 

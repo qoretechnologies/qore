@@ -1432,6 +1432,7 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
         }
         registered_sockets.clear();
         registered_events.clear();
+        registered_fds.clear();
         key_events.clear();
         sock_hash_to_keys.clear();
         socket_refcounts.clear();
@@ -1731,8 +1732,29 @@ void AsyncIoControllerPriv::updateEventLoopRegistration(const std::string& key,
     }
 
     if (prev_sock && prev_sock_hash == sock_hash) {
-        // Same socket - just update event union
-        applyEventUnion(socket, sock_hash, xsink);
+        // Same socket object - check if underlying fd changed (e.g., reconnection to
+        // a different host during multi-step poll operations like OAuth2 token refresh)
+        bool fd_changed = false;
+        QoreSocketObject* s = static_cast<QoreSocketObject*>(
+            socket->getReferencedPrivateData(CID_SOCKET, xsink));
+        if (s) {
+            int curr_fd = s->getSocket();
+            auto fd_it = registered_fds.find(sock_hash);
+            if (fd_it != registered_fds.end() && fd_it->second != curr_fd) {
+                fd_changed = true;
+                // Remove old fd from EventLoop
+                loop->remove(fd_it->second, xsink);
+                // Add new fd to EventLoop
+                int union_events = computeEventUnion(sock_hash);
+                loop->add(curr_fd, union_events, socket, xsink);
+                registered_fds[sock_hash] = curr_fd;
+                registered_events[sock_hash] = union_events;
+            }
+            s->deref(xsink);
+        }
+        if (!fd_changed) {
+            applyEventUnion(socket, sock_hash, xsink);
+        }
         return;
     }
 
@@ -1751,14 +1773,20 @@ void AsyncIoControllerPriv::updateEventLoopRegistration(const std::string& key,
         auto rit = socket_refcounts.find(prev_sock_hash);
         if (rit != socket_refcounts.end()) {
             if (rit->second <= 1) {
-                // Last reference - remove from EventLoop
-                QoreSocketObject* ps = static_cast<QoreSocketObject*>(
-                    prev_sock->getReferencedPrivateData(CID_SOCKET, xsink));
-                if (ps) {
-                    loop->remove(ps->getSocket(), xsink);
-                    ps->deref(xsink);
+                // Last reference - remove from EventLoop using the registered fd
+                auto fd_it = registered_fds.find(prev_sock_hash);
+                if (fd_it != registered_fds.end()) {
+                    loop->remove(fd_it->second, xsink);
+                } else {
+                    QoreSocketObject* ps = static_cast<QoreSocketObject*>(
+                        prev_sock->getReferencedPrivateData(CID_SOCKET, xsink));
+                    if (ps) {
+                        loop->remove(ps->getSocket(), xsink);
+                        ps->deref(xsink);
+                    }
                 }
                 registered_events.erase(prev_sock_hash);
+                registered_fds.erase(prev_sock_hash);
                 socket_refcounts.erase(rit);
             } else {
                 rit->second--;
@@ -1782,7 +1810,9 @@ void AsyncIoControllerPriv::updateEventLoopRegistration(const std::string& key,
         QoreSocketObject* s = static_cast<QoreSocketObject*>(
             socket->getReferencedPrivateData(CID_SOCKET, xsink));
         if (s) {
-            loop->add(s->getSocket(), union_events, socket, xsink);
+            int fd = s->getSocket();
+            loop->add(fd, union_events, socket, xsink);
+            registered_fds[sock_hash] = fd;
             s->deref(xsink);
         }
         socket_refcounts[sock_hash] = 1;
@@ -1826,7 +1856,11 @@ void AsyncIoControllerPriv::unregisterFromEventLoop(const std::string& key, Exce
         auto rit = socket_refcounts.find(prev_sock_hash);
         if (rit != socket_refcounts.end()) {
             if (rit->second <= 1) {
-                if (ps) {
+                // Last reference - remove from EventLoop using the registered fd
+                auto fd_it = registered_fds.find(prev_sock_hash);
+                if (fd_it != registered_fds.end()) {
+                    loop->remove(fd_it->second, xsink);
+                } else if (ps) {
                     // Need to get socket again for the fd
                     ps = static_cast<QoreSocketObject*>(
                         prev_sock->getReferencedPrivateData(CID_SOCKET, xsink));
@@ -1836,6 +1870,7 @@ void AsyncIoControllerPriv::unregisterFromEventLoop(const std::string& key, Exce
                     }
                 }
                 registered_events.erase(prev_sock_hash);
+                registered_fds.erase(prev_sock_hash);
                 socket_refcounts.erase(rit);
             } else {
                 rit->second--;

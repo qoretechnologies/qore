@@ -60,6 +60,10 @@ public class DpqlSerializer {
     private {
         #! Expression map for rendering
         *hash<string, hash<DataProviderExpressionInfo>> expressions;
+        #! Map of expression name to DPQL symbol (stripped of trailing "()")
+        /** @since DataProvider 3.4
+        */
+        hash<string, string> name_to_symbol;
         #! Cached set of reserved identifiers
         *hash<string, bool> reserved_identifiers;
 
@@ -98,6 +102,27 @@ public class DpqlSerializer {
     */
     constructor(*hash<string, hash<DataProviderExpressionInfo>> expressions) {
         self.expressions = expressions;
+        if (expressions) {
+            buildNameToSymbolMap();
+        }
+    }
+
+    #! Builds a name-to-symbol lookup map from the expression map
+    /** @since DataProvider 3.4
+    */
+    private buildNameToSymbolMap() {
+        foreach string ename in (keys expressions) {
+            hash<DataProviderExpressionInfo> info = expressions{ename};
+            if (!info.symbol) {
+                continue;
+            }
+            string sym = info.symbol;
+            # Strip trailing () from display symbols (e.g. "substr()" -> "substr")
+            if (sym =~ /\(\)$/) {
+                sym = substr(sym, 0, sym.size() - 2);
+            }
+            name_to_symbol{ename} = sym;
+        }
     }
 
     #! Serializes an expression to DPQL string
@@ -293,13 +318,20 @@ public class DpqlSerializer {
         return field + " =~ /" + pattern + "/" + flags;
     }
 
-    #! Serializes a function call
+    #! Serializes a function call using the DPQL symbol
+    /** Uses the symbol from the expression map when available, falling back to the
+        internal name for backward compatibility.
+
+        @since DataProvider 3.4 symbol-based output
+    */
     private string serializeFunctionCall(string name, list<auto> args) {
+        # Use symbol for DPQL output when available
+        string sym = name_to_symbol{name} ?? name;
         list<string> arg_strs = ();
         foreach auto arg in (args) {
             arg_strs += serializeArg(arg, DPQL_PREC_OR + 1);
         }
-        return name + "(" + arg_strs.join(", ") + ")";
+        return sym + "(" + arg_strs.join(", ") + ")";
     }
 
     #! Serializes an argument (value, field ref, or expression)

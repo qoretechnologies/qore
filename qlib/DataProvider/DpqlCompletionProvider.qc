@@ -35,10 +35,41 @@ public hashdecl DpqlCompletionItem {
     string kind;
     #! Text to insert when this completion is selected
     string insert_text;
+    #! Optional snippet text with parameter placeholders (LSP snippet syntax)
+    /** When present, clients should use this instead of \c insert_text and set
+        \c insertTextFormat to \c 2 (snippet).
+
+        @since DataProvider 3.4
+    */
+    *string snippet_text;
     #! Optional documentation or help text
     *string documentation;
     #! Sort priority (lower = higher priority)
     int sort_priority = 100;
+}
+
+#! DPQL signature help parameter info
+/** @since DataProvider 3.4
+*/
+public hashdecl DpqlParameterInfo {
+    #! Parameter label (e.g. "String Value")
+    string label;
+    #! Parameter documentation
+    *string documentation;
+}
+
+#! DPQL signature help result
+/** @since DataProvider 3.4
+*/
+public hashdecl DpqlSignatureHelp {
+    #! Function/operator label (e.g. "ends-with(String, Suffix, Ignore Case?)")
+    string label;
+    #! Function/operator documentation
+    *string documentation;
+    #! Parameter information
+    list<hash<DpqlParameterInfo>> parameters;
+    #! Active parameter index (0-based)
+    int active_parameter;
 }
 
 #! DPQL Completion context structure
@@ -91,6 +122,10 @@ public class DpqlCompletionProvider {
     private {
         #! Available expressions
         *hash<string, hash<DataProviderExpressionInfo>> expressions;
+        #! Map of expression name to DPQL symbol (stripped of trailing "()")
+        /** @since DataProvider 3.4
+        */
+        hash<string, string> name_to_symbol;
 
         #! Comparison operators with descriptions
         const ComparisonOperators = (
@@ -182,6 +217,25 @@ public class DpqlCompletionProvider {
     */
     constructor(*hash<string, hash<DataProviderExpressionInfo>> expressions) {
         self.expressions = expressions;
+        if (expressions) {
+            buildSymbolMaps();
+        }
+    }
+
+    #! Builds name-to-symbol and symbol-to-name lookup maps from the expression map
+    private buildSymbolMaps() {
+        foreach string ename in (keys expressions) {
+            hash<DataProviderExpressionInfo> info = expressions{ename};
+            if (!info.symbol) {
+                continue;
+            }
+            string sym = info.symbol;
+            # Strip trailing () from display symbols (e.g. "substr()" -> "substr")
+            if (sym =~ /\(\)$/) {
+                sym = substr(sym, 0, sym.size() - 2);
+            }
+            name_to_symbol{ename} = sym;
+        }
     }
 
     #! Gets completions at the given position
@@ -593,11 +647,14 @@ public class DpqlCompletionProvider {
         return items;
     }
 
-    #! Gets function completions
-    /** Includes both \c DET_Function expressions and \c DET_Operator expressions that use
-        function-call syntax (identifier-style names like \c ends-with, \c contains).
-        Infix operators with symbolic names (\c ==, \c &&) are excluded as they are
-        handled separately by \c getOperatorCompletions().
+    #! Gets function completions for DPQL
+    /** Includes all expressions that use function-call syntax in DPQL:
+        - All \c DET_Function expressions (e.g. \c substr, \c encode_url, \c encrypt)
+        - \c DET_Operator expressions with identifier-style names (e.g. \c ends-with, \c contains,
+          \c between) — these are operators invoked as \c name(args...) in DPQL text
+
+        Excludes operators with symbolic names (\c ==, \c &&, \c !) which are handled
+        separately by \c getOperatorCompletions().
     */
     private list<hash<DpqlCompletionItem>> getFunctionCompletions(string prefix) {
         list<hash<DpqlCompletionItem>> items = ();
@@ -608,20 +665,34 @@ public class DpqlCompletionProvider {
 
         string lwr_prefix = prefix.lwr();
 
-        foreach string name in (keys expressions) {
-            hash<DataProviderExpressionInfo> info = expressions{name};
-            # Include functions and operators with function-call syntax
-            # Operators with infix/prefix render templates (starting with $arg or !)
-            # are handled separately by getOperatorCompletions()
+        foreach string ename in (keys expressions) {
+            hash<DataProviderExpressionInfo> info = expressions{ename};
+            # Use symbol for DPQL surface syntax
+            string sym = name_to_symbol{ename} ?? ename;
+            # Include all functions and operators with identifier-style symbols
             if (info.type == DET_Function
-                    || (info.type == DET_Operator && name =~ /^[a-zA-Z]/
-                        && (!info.render_template
-                            || !info.render_template.regex("^(\\$arg|!)")))) {
-                if (!prefix || index(name.lwr(), lwr_prefix) == 0) {
+                    || (info.type == DET_Operator && sym =~ /^[a-zA-Z]/)) {
+                if (!prefix || index(sym.lwr(), lwr_prefix) == 0) {
+                    # Build snippet with parameter placeholders
+                    *string snippet;
+                    if (info.args) {
+                        list<string> placeholders = ();
+                        for (int i = 0; i < info.args.size(); ++i) {
+                            string pname;
+                            if (info.arg_info[i].display_name) {
+                                pname = info.arg_info[i].display_name;
+                            } else {
+                                pname = "arg" + string(i);
+                            }
+                            placeholders += sprintf("${%d:%s}", i + 1, pname);
+                        }
+                        snippet = sym + "(" + placeholders.join(", ") + ")$0";
+                    }
                     items += <DpqlCompletionItem>{
-                        "label": name,
+                        "label": sym,
                         "kind": "function",
-                        "insert_text": name + "(",
+                        "insert_text": sym + "(",
+                        "snippet_text": snippet,
                         "documentation": info.short_desc ?? info.desc,
                         "sort_priority": 40,
                     };
@@ -1092,6 +1163,139 @@ public class DpqlCompletionProvider {
             }
         }
         return result;
+    }
+
+    #! Returns signature help for the function call at the given position
+    /** Analyzes the text up to the cursor position to find the enclosing function call,
+        then looks up the function in the expression map to provide parameter info.
+
+        @param text the DPQL expression text
+        @param position cursor position (0-based character offset)
+
+        @return signature help info, or @ref nothing if the cursor is not inside a function call
+
+        @since DataProvider 3.4
+    */
+    *hash<DpqlSignatureHelp> getSignatureHelp(string text, int position) {
+        if (!expressions) {
+            return NOTHING;
+        }
+
+        # Get the text up to the cursor
+        string prefix = position >= text.length() ? text : text.substr(0, position);
+
+        # Scan backwards from cursor to find the enclosing function call
+        int depth = 0;
+        int comma_count = 0;
+        int paren_pos = -1;
+
+        for (int i = prefix.length() - 1; i >= 0; --i) {
+            string c = prefix[i];
+            if (c == ")") {
+                ++depth;
+            } else if (c == "(") {
+                if (depth > 0) {
+                    --depth;
+                } else {
+                    # Found the matching open paren at the top level
+                    paren_pos = i;
+                    break;
+                }
+            } else if (c == "," && depth == 0) {
+                ++comma_count;
+            }
+        }
+
+        if (paren_pos < 0) {
+            return NOTHING;
+        }
+
+        # Extract function name: scan backwards from paren_pos to find identifier
+        int name_end = paren_pos;
+        int name_start = paren_pos - 1;
+        # Skip whitespace before the paren
+        while (name_start >= 0 && prefix[name_start] =~ /\s/) {
+            --name_start;
+        }
+        if (name_start < 0) {
+            return NOTHING;
+        }
+        # Scan the identifier
+        int id_end = name_start + 1;
+        while (name_start >= 0 && prefix[name_start] =~ /[a-zA-Z0-9_]/) {
+            --name_start;
+        }
+        ++name_start;
+        if (name_start >= id_end) {
+            return NOTHING;
+        }
+
+        string func_name = prefix.substr(name_start, id_end - name_start);
+
+        # Resolve symbol to expression name, then look up in expressions
+        *string resolved_name;
+        # Try symbol→name first, then direct name lookup for backward compat
+        foreach string ename in (keys name_to_symbol) {
+            if (name_to_symbol{ename} == func_name) {
+                resolved_name = ename;
+                break;
+            }
+        }
+        if (!resolved_name && expressions{func_name}) {
+            resolved_name = func_name;
+        }
+        if (!resolved_name) {
+            return NOTHING;
+        }
+        *hash<DataProviderExpressionInfo> info = expressions{resolved_name};
+        if (!info) {
+            return NOTHING;
+        }
+
+        # Build parameter info list
+        list<hash<DpqlParameterInfo>> params = ();
+        list<string> param_labels = ();
+        if (info.arg_info) {
+            foreach hash<DataProviderArgInfo> ai in (info.arg_info) {
+                string plabel = ai.display_name;
+                params += <DpqlParameterInfo>{
+                    "label": plabel,
+                    "documentation": ai.short_desc ?? ai.desc,
+                };
+                param_labels += plabel;
+            }
+        } else if (info.args) {
+            for (int i = 0; i < info.args.size(); ++i) {
+                string plabel = sprintf("arg%d", i + 1);
+                params += <DpqlParameterInfo>{
+                    "label": plabel,
+                };
+                param_labels += plabel;
+            }
+        }
+
+        # Build the signature label
+        string sig_label = func_name + "(" + (foldl $1 + ", " + $2, param_labels) + ")";
+        if (info.return_type) {
+            sig_label += " → " + info.return_type.getName();
+        }
+
+        # Clamp active parameter to valid range
+        int active = comma_count;
+        if (params.size() > 0 && active >= params.size()) {
+            if (info.varargs) {
+                active = params.size() - 1;
+            } else {
+                active = params.size() - 1;
+            }
+        }
+
+        return <DpqlSignatureHelp>{
+            "label": sig_label,
+            "documentation": info.short_desc ?? info.desc,
+            "parameters": params,
+            "active_parameter": active,
+        };
     }
 }
 
