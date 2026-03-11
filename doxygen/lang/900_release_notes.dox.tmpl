@@ -188,16 +188,21 @@ cargo install tree-sitter-cli@0.26.5
     needs to be pre-installed.
     @endparblock
 
-    @par New Build Dependencies for the ml Module: Eigen3 (Required) and ONNX Runtime (Optional)
+    @par New Required Build Dependency: Eigen3
     @parblock
-    The new \c ml binary module requires <a href="https://eigen.tuxfamily.org/">Eigen3</a> (>= 3.4) for linear
-    algebra operations. If Eigen3 is not found, the \c ml module will not be built.
+    <a href="https://eigen.tuxfamily.org/">Eigen3</a> (>= 3.4, including Eigen 5.x) is now a
+    <b>required</b> build dependency. It is used by the new \c ml binary module for linear algebra
+    operations. The build will fail if Eigen3 is not found.
+
+    On macOS, CMake now automatically detects MacPorts (\c /opt/local) and Homebrew prefixes for
+    finding Eigen3 and other dependencies.
 
     Install the Eigen3 development packages:
     - <b>Debian/Ubuntu:</b> \c libeigen3-dev
     - <b>RHEL/Fedora:</b> \c eigen3-devel
     - <b>Alpine:</b> \c eigen-dev
     - <b>macOS (Homebrew):</b> \c eigen
+    - <b>macOS (MacPorts):</b> \c eigen3
 
     Optional <a href="https://onnxruntime.ai/">ONNX Runtime</a> support enables the \c OnnxModel class for
     running pre-trained ONNX models. Without ONNX Runtime, all native ML algorithms are still available.

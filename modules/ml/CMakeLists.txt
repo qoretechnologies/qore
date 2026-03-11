@@ -21,7 +21,11 @@
 # DEALINGS IN THE SOFTWARE.
 
 # Eigen is required (checked in top-level CMakeLists.txt)
-find_package(Eigen3 3.4 REQUIRED NO_MODULE)
+# Try with version constraint first (Eigen 3.4.x), then without (Eigen 5.x)
+find_package(Eigen3 3.4 QUIET NO_MODULE)
+if (NOT Eigen3_FOUND)
+    find_package(Eigen3 REQUIRED NO_MODULE)
+endif()
 
 # ONNX Runtime is optional
 set(HAVE_ONNXRUNTIME FALSE)
