@@ -6086,5 +6086,36 @@ printf(\"%d\\n\", l[3]);
             string result = trim(runScript(test4, mode));
             assertEq("30", result, sprintf("multiple list assignments in loop %s", mode));
         }
+
+        # Test 5: Hash += operations in nested method calls (Qorus pattern)
+        # This exercises the exact pattern that crashes in Qorus API metadata generation:
+        # - Multiple hash member assignments in a class
+        # - += operations on list members
+        # - Nested method calls in a loop
+        string test5 = "%modern
+hash<string, hash<auto>> metadata = {};
+for (int ctx = 0; ctx < 3; ctx++) {
+    hash<auto> ctx_data = {
+        \"functions\": (),
+        \"methods\": (),
+    };
+    for (int j = 0; j < 5; j++) {
+        ctx_data.functions += (\"name\": \"f_\" + string(j), \"args\": j);
+        ctx_data.methods += (\"name\": \"m_\" + string(j));
+    }
+    metadata{\"ctx_\" + string(ctx)} = ctx_data;
+}
+int total = 0;
+foreach string key in (metadata.keys()) {
+    total += metadata{key}.functions.size();
+    total += metadata{key}.methods.size();
+}
+printf(\"%d\\n\", total);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(test5, mode));
+            # 3 contexts, each with 5 functions + 5 methods = 30 total
+            assertEq("30", result, sprintf("hash += in nested method calls (Qorus pattern) %s", mode));
+        }
     }
 }
