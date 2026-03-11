@@ -5500,6 +5500,12 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         # This is a regression for IR mode where lowerAssignment() was missing the
         # isReference() check that all compound operators have.
 
+        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        if (!qore_bin || qore_bin == NOTHING) {
+            testSkip("no qore binary path available");
+            return;
+        }
+
         TmpFile script();
         script.file.write("%new-style\n%modern\n");
         script.file.write("int \$x = 42;\n");
@@ -5524,5 +5530,66 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         string err_output = ReadOnlyFile::readTextFile(err.path);
         assertFalse(err_output =~ /RUNTIME-TYPE-ERROR/, "Should not have RUNTIME-TYPE-ERROR for reference assignment");
         assertFalse(err_output =~ /Segmentation fault/, "Should not segfault");
+    }
+
+    testReferenceInvokePath() {
+        # Regression test: Reference write-through inside try/catch (uses Invoke path).
+        # The Invoke-path StoreLValue handler must flush local slot caches after writing
+        # through a reference, since the target variable's cached value becomes stale.
+
+        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        if (!qore_bin || qore_bin == NOTHING) {
+            testSkip("no qore binary path available");
+            return;
+        }
+
+        # Test 1: Reference write-through inside try/catch
+        TmpFile script();
+        script.file.write("%new-style\n%modern\n");
+        script.file.write("int x = 0;\n");
+        script.file.write("reference<int> ref = \\x;\n");
+        script.file.write("try {\n");
+        script.file.write("    ref = 42;\n");
+        script.file.write("    ref = 84;   # second write: slot cache must be cleared by first write's cleanup\n");
+        script.file.write("} catch (hash<auto> ex) {}\n");
+        script.file.write("printf(\"%d\\\\n\", x);\n");
+        script.file.close();
+
+        TmpFile out();
+        TmpFile err();
+
+        string cmd = sprintf("%s --exec-mode=ir %s > %s 2> %s",
+            qore_bin, script.path, out.path, err.path);
+        int rc = runCommand(cmd, script.path);
+
+        assertEq(0, rc, "reference write-through in try/catch should exit cleanly");
+
+        string stdout_output = ReadOnlyFile::readTextFile(out.path);
+        assertEq("84\n", stdout_output, "both reference writes should be visible");
+
+        # Test 2: Hash member write-through inside try/catch
+        TmpFile script2();
+        script2.file.write("%new-style\n%modern\n");
+        script2.file.write("hash<auto> h = {\"a\": 1};\n");
+        script2.file.write("reference<hash<auto>> href = \\h;\n");
+        script2.file.write("try {\n");
+        script2.file.write("    href{\"b\"} = 2;\n");
+        script2.file.write("    int check = h{\"b\"};   # must see 2, not stale value\n");
+        script2.file.write("    href{\"c\"} = check + 1;\n");
+        script2.file.write("} catch (hash<auto> ex) {}\n");
+        script2.file.write("printf(\"%d %d %d\\\\n\", h{\"a\"}, h{\"b\"}, h{\"c\"});\n");
+        script2.file.close();
+
+        TmpFile out2();
+        TmpFile err2();
+
+        string cmd2 = sprintf("%s --exec-mode=ir %s > %s 2> %s",
+            qore_bin, script2.path, out2.path, err2.path);
+        int rc2 = runCommand(cmd2, script2.path);
+
+        assertEq(0, rc2, "hash write-through in try/catch should exit cleanly");
+
+        string stdout_output2 = ReadOnlyFile::readTextFile(out2.path);
+        assertEq("1 2 3\n", stdout_output2, "all hash writes should be visible and consistent");
     }
 }

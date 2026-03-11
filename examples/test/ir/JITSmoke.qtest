@@ -137,6 +137,7 @@ class JITSmokeTest inherits QUnit::Test {
         addTestCase("call references", \testCallReferences());
         addTestCase("parse references", \testParseReferences());
         addTestCase("reference write-through", \testReferenceWriteThrough());
+        addTestCase("reference slot cache invalidation", \testReferenceSlotCacheInvalidation());
         addTestCase("NOTHING input to iterators", \testNothingInputIterators());
         addTestCase("VarRefNewObjectNode split", \testVarRefNewObjectSplit());
         addTestCase("VarRefNewObjectNode typed containers", \testVrnTypedContainers());
@@ -5946,6 +5947,84 @@ printf(\"%d\\n\", \$total);
         foreach string mode in ("ast", "ir", "jit") {
             string result = trim(runScript(loop_code, mode));
             assertEq("99", result, sprintf("reference assignment in loop %s", mode));
+        }
+    }
+
+    testReferenceSlotCacheInvalidation() {
+        # Test parse-type-error fix and all reference target types.
+        # Regression test for: slot cache invalidation and type checking dereferencing.
+
+        # Test 1: Parse-type-error fix — write-through with typed hash (was false PARSE-TYPE-ERROR)
+        string test1 = "%modern
+hashdecl WfLockInfo { int val = 0; }
+hash<string, hash<WfLockInfo>> wflmap = {};
+wflmap{\"key\"} = <WfLockInfo>{};
+reference<hash<WfLockInfo>> info = \\wflmap{\"key\"};
+info = <WfLockInfo>{\"val\": 42};
+printf(\"%d\\n\", wflmap{\"key\"}.val);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(test1, mode));
+            assertEq("42", result, sprintf("parse-type-error fix with typed hash %s", mode));
+        }
+
+        # Test 2: Multiple consecutive write-throughs (slot cache must be invalidated between)
+        string test2 = "%modern
+int x = 0;
+reference<int> ref = \\x;
+ref = 10;
+int a = x;    # read must not use stale cached value
+ref = 20;
+int b = x;    # must not return 10
+printf(\"%d %d\\n\", a, b);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(test2, mode));
+            assertEq("10 20", result, sprintf("consecutive write-throughs %s", mode));
+        }
+
+        # Test 3: Reference to object member
+        string test3 = "%modern
+class Foo {
+    public {
+        int x = 0;
+    }
+}
+Foo obj();
+reference<int> ref = \\obj.x;
+ref = 77;
+printf(\"%d\\n\", obj.x);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(test3, mode));
+            assertEq("77", result, sprintf("reference to object member %s", mode));
+        }
+
+        # Test 4: Reference to global variable
+        string test4 = "%modern
+our int g = 0;
+reference<int> ref = \\g;
+ref = 99;
+printf(\"%d\\n\", g);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(test4, mode));
+            assertEq("99", result, sprintf("reference to global variable %s", mode));
+        }
+
+        # Test 5: Threading - concurrent write-through via shared closure reference
+        string test5 = "%modern
+int x = 0;
+Counter c(2);
+reference<int> ref = \\x;
+background sub() { ref = 42; c.dec(); }();
+background sub() { c.dec(); }();
+c.waitForZero();
+printf(\"%d\\n\", x);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(test5, mode));
+            assertEq("42", result, sprintf("concurrent write-through via closure %s", mode));
         }
     }
 }
