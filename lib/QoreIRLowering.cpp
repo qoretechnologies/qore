@@ -3518,6 +3518,13 @@ QoreIRValue QoreIRLowering::lowerAssignment(const QoreValue& expr, std::string& 
     if (left_var && left_var->getType() == VT_IMMEDIATE) {
         left_var = nullptr;
     }
+    // Force lvalue path for reference-typed variables.
+    // Same pattern used by all compound operators (+=, -=, etc.).
+    // StoreLValue delegates to AST's LValueHelper which correctly handles both
+    // initial reference binding and subsequent write-through assignment.
+    if (left_var && left_var->getTypeInfo() && QoreTypeInfo::isReference(left_var->getTypeInfo())) {
+        left_var = nullptr;
+    }
     if (left_var) {
         if (!storeVarRef(left_var, right, error, "assignment", &right_expr, nullptr, is_weak)) {
             return QoreIRValue();

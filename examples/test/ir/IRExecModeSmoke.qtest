@@ -5492,4 +5492,37 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         bool ok = is_dir("/");
         assertTrue(ok, "is_dir() should work after calling sandboxed sub-program");
     }
+
+    testReferenceAssignmentIRMode() {
+        # Regression test: simple assignment (=) on reference-typed variables
+        # must force StoreLValue path to delegate to AST's LValueHelper.
+        # LValueHelper correctly handles initial binding and write-through assignment.
+        # This is a regression for IR mode where lowerAssignment() was missing the
+        # isReference() check that all compound operators have.
+
+        TmpFile script();
+        script.file.write("%new-style\n%modern\n");
+        script.file.write("int \$x = 42;\n");
+        script.file.write("reference<int> \$ref = \\\$x;\n");
+        script.file.write("\$ref = 100;\n");
+        script.file.write("printf(\"%d\\\\n\", \$x);\n");
+        script.file.close();
+
+        TmpFile out();
+        TmpFile err();
+
+        string cmd = sprintf("%s --exec-mode=ir %s > %s 2> %s",
+            qore_bin, script.path, out.path, err.path);
+        int rc = runCommand(cmd, script.path);
+
+        assertEq(0, rc, "reference assignment in IR mode should exit cleanly");
+
+        string stdout_output = ReadOnlyFile::readTextFile(out.path);
+        assertEq("100\n", stdout_output,
+            "reference write-through assignment should update original variable");
+
+        string err_output = ReadOnlyFile::readTextFile(err.path);
+        assertFalse(err_output =~ /RUNTIME-TYPE-ERROR/, "Should not have RUNTIME-TYPE-ERROR for reference assignment");
+        assertFalse(err_output =~ /Segmentation fault/, "Should not segfault");
+    }
 }

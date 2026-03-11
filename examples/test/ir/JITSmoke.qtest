@@ -5893,4 +5893,59 @@ printf(\"%d\\n\", lc.dump()[0]);
             assertEq("200", result, sprintf("reference list compound assignment %s", mode));
         }
     }
+
+    testReferenceAssignment() {
+        # Regression test: simple assignment (=) on reference-typed variables
+        # must force StoreLValue path to delegate to AST's LValueHelper.
+        # LValueHelper correctly handles initial binding and write-through assignment.
+
+        # Test 1: Initial binding of reference
+        string bind_code = "%modern
+int \$x = 42;
+reference<int> \$ref = \\\$x;
+printf(\"%d %d\\n\", \$x, \$ref);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(bind_code, mode));
+            assertEq("42 42", result, sprintf("reference binding %s", mode));
+        }
+
+        # Test 2: Write-through assignment via reference
+        string write_code = "%modern
+int \$x = 42;
+reference<int> \$ref = \\\$x;
+\$ref = 100;
+printf(\"%d %d\\n\", \$x, \$ref);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(write_code, mode));
+            assertEq("100 100", result, sprintf("reference write-through assignment %s", mode));
+        }
+
+        # Test 3: Hash write-through via reference (Qorus pattern that caused segfault)
+        string hash_code = "%modern
+hash<auto> \$h = {\"a\": 1};
+reference<hash<auto>> \$ref = \\\$h;
+\$ref{\"b\"} = 2;
+printf(\"%d %d\\n\", \$h{\"a\"}, \$h{\"b\"});
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(hash_code, mode));
+            assertEq("1 2", result, sprintf("reference hash write-through %s", mode));
+        }
+
+        # Test 4: Nested reference assignment in loop (stress test)
+        string loop_code = "%modern
+int \$total = 0;
+for (int i = 0; i < 100; ++i) {
+    reference<int> \$ref = \\\$total;
+    \$ref = i;
+}
+printf(\"%d\\n\", \$total);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(loop_code, mode));
+            assertEq("99", result, sprintf("reference assignment in loop %s", mode));
+        }
+    }
 }
