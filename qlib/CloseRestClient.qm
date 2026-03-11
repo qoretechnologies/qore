@@ -142,18 +142,11 @@ public class CloseRestClient inherits RestClient::RestClient {
             "offline_access",
         );
 
-        #! Default OAuth2 auth args to request offline access (refresh tokens)
-        const DefaultAuthArgs = {
-            "access_type": "offline",
-            "prompt": "consent",
-        };
-
         #! Default constructor options
         const DefaultOptions = {
             "data": DefaultData,
             "headers": DefaultHeaders,
             "http_version": "1.1",
-            "oauth2_auth_args": DefaultAuthArgs,
             "ping_headers": DefaultPingHeaders,
             "ping_method": DefaultPingMethod,
             "ping_path": DefaultPingPath,
@@ -270,10 +263,6 @@ public class CloseRestConnection inherits RestClient::RestConnection {
                 + <ConnectionOptionInfo>{
                     "default_value": CloseRestClient::DefaultPingPath,
                 },
-                "oauth2_auth_args": RestConnection::ConnectionScheme.options.oauth2_auth_args
-                + <ConnectionOptionInfo>{
-                    "default_value": CloseRestClient::DefaultAuthArgs,
-                },
                 "oauth2_auth_url": RestConnection::ConnectionScheme.options.oauth2_auth_url
                 + <ConnectionOptionInfo>{
                     "default_value": CloseRestClient::DefaultAuthUrl,
@@ -348,9 +337,6 @@ public class CloseRestConnection inherits RestClient::RestConnection {
         }
         if (!rv.oauth2_scopes) {
             rv.oauth2_scopes = CloseRestClient::DefaultScopes;
-        }
-        if (!rv.oauth2_auth_args) {
-            rv.oauth2_auth_args = CloseRestClient::DefaultAuthArgs;
         }
         return rv;
     }

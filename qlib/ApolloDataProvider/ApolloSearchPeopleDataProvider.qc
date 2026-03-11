@@ -115,7 +115,7 @@ public class ApolloSearchPeopleDataProvider inherits ApolloDataProviderBase {
     }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        hash<auto> result = doPost("mixed_people/search", {} + req);
+        hash<auto> result = doPost("mixed_people/api_search", {} + req);
         return result.people ?? result;
     }
 

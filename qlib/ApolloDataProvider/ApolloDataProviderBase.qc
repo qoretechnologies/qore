@@ -453,11 +453,11 @@ public class ApolloDataProviderBase inherits DataProvider::AbstractDataProvider 
     }
 
     #! Returns available users for reference data
-    /** Apollo users are fetched via GET from `users` */
+    /** Apollo users are fetched via GET from `users/search` */
     private *list<hash<AllowedValueInfo>> getReferenceUsers() {
         list<hash<AllowedValueInfo>> rv = ();
         try {
-            hash<auto> response = doGet("users");
+            hash<auto> response = doGet("users/search");
             if (response.users) {
                 foreach hash<auto> user in (response.users) {
                     string display_name = trim(sprintf("%s %s",

@@ -31,8 +31,7 @@ public class ApolloDataProvider inherits ApolloDataProviderBase {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
             "name": "apollo",
-            "desc": "Apollo data provider for contacts, accounts, deals, tasks, enrichment, "
-                "and search",
+            "desc": "Apollo data provider for contacts, accounts, deals, enrichment, and search",
             "type": "ApolloDataProvider",
             "supports_children": True,
             "children_can_support_apis": True,
@@ -50,7 +49,6 @@ public class ApolloDataProvider inherits ApolloDataProviderBase {
             "contacts": Class::forName("ApolloContactsDataProvider"),
             "accounts": Class::forName("ApolloAccountsDataProvider"),
             "deals": Class::forName("ApolloDealsDataProvider"),
-            "tasks": Class::forName("ApolloTasksDataProvider"),
             "enrichment": Class::forName("ApolloEnrichmentDataProvider"),
             "search": Class::forName("ApolloSearchDataProvider"),
             # Events container
@@ -77,8 +75,7 @@ public class ApolloDataProvider inherits ApolloDataProviderBase {
 
     #! Returns the provider description
     *string getDesc() {
-        return "Apollo data provider for contacts, accounts, deals, tasks, enrichment, "
-            "and search";
+        return "Apollo data provider for contacts, accounts, deals, enrichment, and search";
     }
 
     #! Returns child provider names

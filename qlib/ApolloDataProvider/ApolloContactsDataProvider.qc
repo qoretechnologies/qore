@@ -82,7 +82,6 @@ public class ApolloContactsDataProvider inherits ApolloDataProviderBase {
         const ChildMap = {
             "create": Class::forName("ApolloCreateContactDataProvider"),
             "update": Class::forName("ApolloUpdateContactDataProvider"),
-            "delete": Class::forName("ApolloDeleteContactDataProvider"),
         };
     }
 

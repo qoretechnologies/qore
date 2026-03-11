@@ -55,8 +55,8 @@ module ApolloDataProvider {
             "desc": "Apollo is a B2B sales intelligence and engagement platform providing "
                 "access to 210M+ contacts and 35M+ companies for prospecting, enrichment, "
                 "and deal management.\n\n"
-                "This integration supports CRUD operations on contacts, accounts, deals, "
-                "and tasks, plus people and organization enrichment and search.",
+                "This integration supports CRUD operations on contacts, accounts, and deals, "
+                "plus people and organization enrichment and search.",
             "scheme": "apollorest",
             "logo": ApolloLogo,
             "logo_file_name": "apollo-logo.svg",
@@ -194,29 +194,6 @@ module ApolloDataProvider {
                     "display_name": "Present Address",
                     "short_desc": "Contact current location",
                     "type": AbstractDataProviderTypeMap."*string",
-                },
-            },
-        });
-
-        # Delete a Contact
-        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": ApolloDataProvider::AppName,
-            "path": "/contacts/delete",
-            "action": "delete-contact",
-            "groups": "Contacts",
-            "display_name": "Delete a Contact",
-            "short_desc": "Delete a contact",
-            "desc": "Delete a contact from Apollo",
-            "action_code": DPAT_API,
-            "output_type": AbstractDataProviderTypeMap."hash",
-            "options": {
-                "contact_id": <ActionOptionInfo>{
-                    "display_name": "Contact ID",
-                    "short_desc": "The contact to delete",
-                    "type": AbstractDataProviderTypeMap."string",
-                    "required": True,
-                    "preselected": True,
-                    "ref_data": "contacts",
                 },
             },
         });
@@ -611,105 +588,6 @@ module ApolloDataProvider {
                     "required": True,
                     "preselected": True,
                     "ref_data": "deals",
-                },
-            },
-        });
-
-        # ========== TASK ACTIONS ==========
-
-        # Create a Task
-        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": ApolloDataProvider::AppName,
-            "path": "/tasks/create",
-            "action": "create-task",
-            "groups": "Tasks",
-            "display_name": "Create a Task",
-            "short_desc": "Create a new task",
-            "desc": "Create a new task in Apollo",
-            "action_code": DPAT_API,
-            "output_type": new ApolloTaskDataType(),
-            "options": {
-                "type": <ActionOptionInfo>{
-                    "display_name": "Type",
-                    "short_desc": "Task type",
-                    "type": AbstractDataProviderTypeMap."*string",
-                    "preselected": True,
-                    "desc": "The task type",
-                    "example_value": "call",
-                    "allowed_values": (
-                        <AllowedValueInfo>{"value": "call", "desc": "Phone call"},
-                        <AllowedValueInfo>{"value": "email", "desc": "Email"},
-                        <AllowedValueInfo>{"value": "todo", "desc": "To-do item"},
-                        <AllowedValueInfo>{"value": "action_item", "desc": "Action item"},
-                        <AllowedValueInfo>{"value": "linkedin", "desc": "LinkedIn outreach"},
-                    ),
-                },
-                "priority": <ActionOptionInfo>{
-                    "display_name": "Priority",
-                    "short_desc": "Task priority",
-                    "type": AbstractDataProviderTypeMap."*string",
-                    "allowed_values": (
-                        <AllowedValueInfo>{"value": "high", "desc": "High priority"},
-                        <AllowedValueInfo>{"value": "normal", "desc": "Normal priority"},
-                        <AllowedValueInfo>{"value": "low", "desc": "Low priority"},
-                    ),
-                },
-                "status": <ActionOptionInfo>{
-                    "display_name": "Status",
-                    "short_desc": "Task status",
-                    "type": AbstractDataProviderTypeMap."*string",
-                    "allowed_values": (
-                        <AllowedValueInfo>{"value": "open", "desc": "Open task"},
-                        <AllowedValueInfo>{"value": "complete", "desc": "Completed task"},
-                    ),
-                },
-                "note": <ActionOptionInfo>{
-                    "display_name": "Note",
-                    "short_desc": "Task notes",
-                    "type": AbstractDataProviderTypeMap."*string",
-                },
-                "due_date": <ActionOptionInfo>{
-                    "display_name": "Due Date",
-                    "short_desc": "Task due date",
-                    "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "The due date in ISO 8601 format",
-                },
-                "user_id": <ActionOptionInfo>{
-                    "display_name": "User ID",
-                    "short_desc": "Assigned user ID",
-                    "type": AbstractDataProviderTypeMap."*string",
-                    "ref_data": "users",
-                },
-                "contact_ids": <ActionOptionInfo>{
-                    "display_name": "Contact IDs",
-                    "short_desc": "Associated contact IDs",
-                    "type": AbstractDataProviderTypeMap."*softlist",
-                    "desc": "List of contact IDs associated with this task",
-                },
-            },
-        });
-
-        # Search Tasks
-        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": ApolloDataProvider::AppName,
-            "path": "/tasks",
-            "action": "search-tasks",
-            "groups": "Tasks",
-            "display_name": "Search Tasks",
-            "short_desc": "Search tasks",
-            "desc": "Search tasks in Apollo",
-            "action_code": DPAT_FIND,
-            "options": {
-                "task_id": <ActionOptionInfo>{
-                    "display_name": "Task ID",
-                    "short_desc": "Filter by task ID",
-                    "type": AbstractDataProviderTypeMap."*string",
-                    "preselected": True,
-                },
-                "limit": <ActionOptionInfo>{
-                    "display_name": "Limit",
-                    "short_desc": "Maximum results",
-                    "type": AbstractDataProviderTypeMap."*int",
                 },
             },
         });

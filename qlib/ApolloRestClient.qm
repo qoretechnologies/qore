@@ -119,7 +119,7 @@ public class ApolloRestClient inherits RestClient::RestClient {
         const DefaultPingMethod = "GET";
 
         #! Default ping path (relative - no leading slash since base URL has /api/v1)
-        const DefaultPingPath = "users";
+        const DefaultPingPath = "auth/health";
 
         #! Default ping headers
         const DefaultPingHeaders = {
@@ -137,11 +137,42 @@ public class ApolloRestClient inherits RestClient::RestClient {
             "prompt": "consent",
         };
 
+        #! Default OAuth2 scopes
+        const DefaultScopes = (
+            "read_user_profile",
+            "app_scopes",
+            "contact_read",
+            "contact_write",
+            "contact_update",
+            "contacts_search",
+            "contacts_bulk_create",
+            "contacts_bulk_update",
+            "account_read",
+            "account_write",
+            "account_update",
+            "accounts_search",
+            "opportunity_read",
+            "opportunity_write",
+            "opportunity_update",
+            "tasks_create",
+            "tasks_list",
+            "person_read",
+            "people_match",
+            "people_bulk_match",
+            "organization_read",
+            "organizations_enrich",
+            "organizations_bulk_enrich",
+            "mixed_people_api_search",
+            "mixed_companies_search",
+            "users_list",
+        );
+
         #! Default constructor options
         const DefaultOptions = {
             "data": DefaultData,
             "headers": DefaultHeaders,
             "oauth2_auth_args": DefaultAuthArgs,
+            "oauth2_scopes": DefaultScopes,
             "ping_headers": DefaultPingHeaders,
             "ping_method": DefaultPingMethod,
             "ping_path": DefaultPingPath,
@@ -253,6 +284,10 @@ public class ApolloRestConnection inherits RestClient::RestConnection {
                 + <ConnectionOptionInfo>{
                     "default_value": ApolloRestClient::DefaultAuthArgs,
                 },
+                "oauth2_scopes": RestConnection::ConnectionScheme.options.oauth2_scopes
+                + <ConnectionOptionInfo>{
+                    "default_value": ApolloRestClient::DefaultScopes,
+                },
                 "oauth2_auth_url": RestConnection::ConnectionScheme.options.oauth2_auth_url
                 + <ConnectionOptionInfo>{
                     "default_value": ApolloRestClient::DefaultAuthUrl,
@@ -319,9 +354,6 @@ public class ApolloRestConnection inherits RestClient::RestConnection {
         rv.oauth2_token_url = ApolloRestClient::DefaultTokenUrl;
         if (!rv.oauth2_grant_type) {
             rv.oauth2_grant_type = ApolloRestClient::DefaultGrantType;
-        }
-        if (!rv.oauth2_auth_args) {
-            rv.oauth2_auth_args = ApolloRestClient::DefaultAuthArgs;
         }
         return rv;
     }

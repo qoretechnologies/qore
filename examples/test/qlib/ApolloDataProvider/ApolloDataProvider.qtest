@@ -76,6 +76,13 @@ public class ApolloDataProviderTest inherits QUnit::Test {
         addTestCase("child provider tests", \childProviderTests());
         addTestCase("trigger example data tests", \triggerExampleDataTests());
         addTestCase("integration tests", \integrationTests());
+        addTestCase("deals tests", \dealsTests());
+        addTestCase("search people tests", \searchPeopleTests());
+        addTestCase("search organizations tests", \searchOrganizationsTests());
+        addTestCase("enrich person tests", \enrichPersonTests());
+        addTestCase("enrich organization tests", \enrichOrganizationTests());
+        addTestCase("bulk enrich people tests", \bulkEnrichPeopleTests());
+        addTestCase("bulk enrich organizations tests", \bulkEnrichOrganizationsTests());
 
         # Try to set up connection for integration tests
         try {
@@ -207,11 +214,6 @@ public class ApolloDataProviderTest inherits QUnit::Test {
         assertEq(True, dfields.hasKey("name"), "deal type has name field");
         assertEq(True, dfields.hasKey("amount"), "deal type has amount field");
 
-        # Test task data type
-        ApolloDataProvider::ApolloTaskDataType task_type();
-        hash<auto> tfields = task_type.getFields();
-        assertEq(True, tfields.hasKey("id"), "task type has id field");
-
         # Test enrichment data types
         ApolloDataProvider::ApolloPersonEnrichmentDataType person_type();
         hash<auto> pfields = person_type.getFields();
@@ -245,11 +247,10 @@ public class ApolloDataProviderTest inherits QUnit::Test {
 
         # Verify child names
         *list<string> children = provider.getChildProviderNames();
-        assertEq(True, children.size() >= 7, "at least 7 child providers");
+        assertEq(True, children.size() >= 6, "at least 6 child providers");
         assertEq(True, inlist("contacts", children), "contacts child exists");
         assertEq(True, inlist("accounts", children), "accounts child exists");
         assertEq(True, inlist("deals", children), "deals child exists");
-        assertEq(True, inlist("tasks", children), "tasks child exists");
         assertEq(True, inlist("enrichment", children), "enrichment child exists");
         assertEq(True, inlist("search", children), "search child exists");
         assertEq(True, inlist("events", children), "events child exists");
@@ -324,20 +325,6 @@ public class ApolloDataProviderTest inherits QUnit::Test {
         assertEq(True, new_contact.id.val(), "contact created with ID");
         testContactId = string(new_contact.id);
 
-        on_exit {
-            # Cleanup: delete test contact
-            if (testContactId) {
-                try {
-                    AbstractDataProvider del_dp = contacts_dp.getChildProvider("delete");
-                    del_dp.doRequest({"contact_id": testContactId});
-                } catch (hash<ExceptionInfo> ex) {
-                    if (m_options.verbose) {
-                        printf("Cleanup failed (contact): %s: %s\n", ex.err, ex.desc);
-                    }
-                }
-            }
-        }
-
         # Test get contact by ID
         AbstractDataProviderRecordIterator get_iter = contacts_dp.searchRecords(NOTHING,
             {"contact_id": testContactId});
@@ -376,5 +363,163 @@ public class ApolloDataProviderTest inherits QUnit::Test {
         assertEq(True, acct_iter.next(), "found created account");
         hash<auto> found_acct = acct_iter.getValue();
         assertEq(True, found_acct.name.val(), "account has name field");
+
+        # Test update account
+        AbstractDataProvider update_acct_dp = accounts_dp.getChildProvider("update");
+        hash<auto> updated_acct = update_acct_dp.doRequest({
+            "account_id": testAccountId,
+            "phone": "+1-555-0100",
+        });
+        assertEq(True, updated_acct.val(), "account update returned data");
+
+        # Verify account update persisted
+        AbstractDataProviderRecordIterator verify_acct_iter = accounts_dp.searchRecords(NOTHING,
+            {"account_id": testAccountId});
+        assertEq(True, verify_acct_iter.next(), "re-fetched updated account");
+        hash<auto> verified_acct = verify_acct_iter.getValue();
+        assertEq("+1-555-0100", verified_acct.phone, "account phone was updated");
+    }
+
+    #! Deals integration tests
+    dealsTests() {
+        if (!client) {
+            testSkip("no Apollo credentials available");
+        }
+
+        ApolloDataProvider::ApolloDataProvider provider(client);
+        AbstractDataProvider deals_dp = provider.getChildProvider("deals");
+
+        # Test create deal
+        AbstractDataProvider create_dp = deals_dp.getChildProvider("create");
+        hash<auto> new_deal = create_dp.doRequest({
+            "name": "Test ApolloDP Deal " + now_us().toString(),
+            "amount": 5000.0,
+            "status": "open",
+        });
+        assertEq(True, new_deal.id.val(), "deal created with ID");
+        string deal_id = string(new_deal.id);
+
+        # Test get deal by ID
+        AbstractDataProviderRecordIterator get_iter = deals_dp.searchRecords(NOTHING,
+            {"deal_id": deal_id});
+        assertEq(True, get_iter.next(), "found created deal");
+        hash<auto> found = get_iter.getValue();
+        assertEq(True, found.name.val(), "deal has name field");
+
+        # Test update deal
+        AbstractDataProvider update_dp = deals_dp.getChildProvider("update");
+        hash<auto> updated = update_dp.doRequest({
+            "deal_id": deal_id,
+            "amount": 9999.0,
+        });
+        assertEq(True, updated.val(), "deal update returned data");
+
+        # Verify update persisted
+        AbstractDataProviderRecordIterator verify_iter = deals_dp.searchRecords(NOTHING,
+            {"deal_id": deal_id});
+        assertEq(True, verify_iter.next(), "re-fetched updated deal");
+        hash<auto> verified = verify_iter.getValue();
+        assertEq(9999.0, float(verified.amount), "deal amount was updated");
+    }
+
+    #! Search people tests
+    searchPeopleTests() {
+        if (!client) {
+            testSkip("no Apollo credentials available");
+        }
+
+        ApolloDataProvider::ApolloDataProvider provider(client);
+        AbstractDataProvider search_dp = provider.getChildProvider("search");
+        AbstractDataProvider people_dp = search_dp.getChildProvider("people");
+
+        list<auto> results = people_dp.doRequest({
+            "q_keywords": "software engineer",
+            "per_page": 3,
+        });
+        assertEq(True, results instanceof list, "search people returned a list");
+    }
+
+    #! Search organizations tests
+    searchOrganizationsTests() {
+        if (!client) {
+            testSkip("no Apollo credentials available");
+        }
+
+        ApolloDataProvider::ApolloDataProvider provider(client);
+        AbstractDataProvider search_dp = provider.getChildProvider("search");
+        AbstractDataProvider orgs_dp = search_dp.getChildProvider("organizations");
+
+        list<auto> results = orgs_dp.doRequest({
+            "q_keywords": "software",
+            "per_page": 3,
+        });
+        assertEq(True, results instanceof list, "search organizations returned a list");
+    }
+
+    #! Enrich person tests
+    enrichPersonTests() {
+        if (!client) {
+            testSkip("no Apollo credentials available");
+        }
+
+        ApolloDataProvider::ApolloDataProvider provider(client);
+        AbstractDataProvider enrichment_dp = provider.getChildProvider("enrichment");
+        AbstractDataProvider person_dp = enrichment_dp.getChildProvider("person");
+
+        hash<auto> result = person_dp.doRequest({
+            "email": "tim@apple.com",
+        });
+        assertEq(True, result instanceof hash, "enrich person returned a hash");
+    }
+
+    #! Enrich organization tests
+    enrichOrganizationTests() {
+        if (!client) {
+            testSkip("no Apollo credentials available");
+        }
+
+        ApolloDataProvider::ApolloDataProvider provider(client);
+        AbstractDataProvider enrichment_dp = provider.getChildProvider("enrichment");
+        AbstractDataProvider org_dp = enrichment_dp.getChildProvider("organization");
+
+        hash<auto> result = org_dp.doRequest({
+            "domain": "apollo.io",
+        });
+        assertEq(True, result instanceof hash, "enrich organization returned a hash");
+        assertEq(True, result.name.val(), "enriched org has name");
+    }
+
+    #! Bulk enrich people tests
+    bulkEnrichPeopleTests() {
+        if (!client) {
+            testSkip("no Apollo credentials available");
+        }
+
+        ApolloDataProvider::ApolloDataProvider provider(client);
+        AbstractDataProvider enrichment_dp = provider.getChildProvider("enrichment");
+        AbstractDataProvider bulk_dp = enrichment_dp.getChildProvider("bulk-people");
+
+        list<auto> results = bulk_dp.doRequest({
+            "details": (
+                {"email": "tim@apple.com"},
+            ),
+        });
+        assertEq(True, results instanceof list, "bulk enrich people returned a list");
+    }
+
+    #! Bulk enrich organizations tests
+    bulkEnrichOrganizationsTests() {
+        if (!client) {
+            testSkip("no Apollo credentials available");
+        }
+
+        ApolloDataProvider::ApolloDataProvider provider(client);
+        AbstractDataProvider enrichment_dp = provider.getChildProvider("enrichment");
+        AbstractDataProvider bulk_dp = enrichment_dp.getChildProvider("bulk-organizations");
+
+        list<auto> results = bulk_dp.doRequest({
+            "domains": ("apollo.io",),
+        });
+        assertEq(True, results instanceof list, "bulk enrich organizations returned a list");
     }
 }
