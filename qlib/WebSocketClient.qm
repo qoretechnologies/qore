@@ -2137,7 +2137,12 @@ ws.setEventQueue();
         try {
             deliver();
         } catch (hash<ExceptionInfo> ex) {
-            if (ex.err == "OBJECT-ALREADY-DELETED") {
+            # OBJECT-ALREADY-DELETED: object destroyed between background statement and thread
+            # start, or during execution when the weak self reference becomes invalid
+            # LOCK-ERROR: object destructor ran while the delivery thread was accessing a member
+            # Mutex; the destructor destroys the Mutex while the delivery thread holds the lock.
+            # Both are expected during object destruction and safe to ignore.
+            if (ex.err == "OBJECT-ALREADY-DELETED" || ex.err == "LOCK-ERROR") {
                 return;
             }
             rethrow;
@@ -2152,7 +2157,14 @@ ws.setEventQueue();
     */
     private deliverPendingMessages() {
         while (True) {
-            if (!self || !poll_op) {
+            # Check if the object is being destroyed first; closures capture self with
+            # a weak reference, so the destructor can run while this thread is active.
+            # When !self, member objects (delivery_mutex etc.) may already be destroyed
+            # — accessing them would cause LOCK-ERROR from Mutex::destructor().
+            if (!self) {
+                return;
+            }
+            if (!poll_op) {
                 {
                     AutoLock al(delivery_mutex);
                     delivery_active = False;
@@ -2170,6 +2182,9 @@ ws.setEventQueue();
             # Drain all available messages
             while (True) {
                 # poll_op can be cleared by another thread between the outer check and here
+                if (!self) {
+                    return;
+                }
                 *WebSocketClientPollOperation op = poll_op;
                 if (!op) {
                     AutoLock al(delivery_mutex);
@@ -2211,6 +2226,9 @@ ws.setEventQueue();
             }
 
             # Check if new I/O callbacks fired while we were draining
+            if (!self) {
+                return;
+            }
             {
                 AutoLock al(delivery_mutex);
                 if (delivery_pending == last_seen) {
