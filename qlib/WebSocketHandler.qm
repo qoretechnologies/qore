@@ -1470,7 +1470,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                         break;
                     }
                     *int frame_len = stream_buf ? ws_get_frame_size(stream_buf) : NOTHING;
-                    if (frame_len) {
+                    if (frame_len && stream_buf.size() >= frame_len) {
                         binary frame = stream_buf.substr(0, frame_len);
                         if (frame_len == stream_buf.size()) {
                             remove stream_buf;
