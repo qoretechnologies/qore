@@ -198,8 +198,7 @@ ApolloRestClient apollo({
 });
         @endcode
 
-        @param opts valid options are all the options for the @ref RestClient::RestClient "RestClient" class;
-        additionally, an \c "apikey" option can be provided for API key authentication
+        @param opts valid options are all the options for the @ref RestClient::RestClient "RestClient" class
 
         @param do_not_connect if \c False (the default), then a connection will be immediately established to the
         remote server
@@ -222,9 +221,6 @@ ApolloRestClient apollo({
             # Bearer token mode
             rv.headers.Authorization = "Bearer " + opts.token;
             remove rv.token;
-        } else if (opts.apikey) {
-            # API key mode via x-api-key header
-            rv.headers."x-api-key" = opts.apikey;
         }
 
         return rv;
@@ -246,7 +242,7 @@ public class ApolloRestConnection inherits RestClient::RestConnection {
             "display_name": "Apollo REST Connection",
             "short_desc": "A connection to the Apollo REST API",
             "desc": "A connection to the Apollo REST API for B2B sales intelligence, contacts, "
-                "accounts, deals, tasks, and data enrichment",
+                "accounts, deals, and data enrichment",
             "cls": Class::forName("ApolloRestConnection"),
             "auto_url": True,
             "schemes": {
@@ -256,14 +252,6 @@ public class ApolloRestConnection inherits RestClient::RestConnection {
                 "https": "apollorest",
             },
             "options": RestConnection::ConnectionScheme.options + {
-                "apikey": <ConnectionOptionInfo>{
-                    "display_name": "API Key",
-                    "short_desc": "Apollo API key for authentication",
-                    "type": "string",
-                    "desc": "An Apollo API key for authentication via the `x-api-key` header; "
-                        "use this as an alternative to OAuth2 authentication",
-                    "sensitive": True,
-                },
                 "data": RestConnection::ConnectionScheme.options."data"
                 + <ConnectionOptionInfo>{
                     "default_value": ApolloRestClient::DefaultData,

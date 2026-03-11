@@ -183,7 +183,7 @@ public class ApolloDataProviderBase inherits DataProvider::AbstractDataProvider 
             *int limit, *string extra_qs) {
         list<hash<auto>> results = ();
         int page = 1;
-        int page_size = limit ?? DefaultPageSize;
+        int page_size = (limit && limit < DefaultPageSize) ? limit : DefaultPageSize;
         while (True) {
             hash qparams = cast<hash>(params ?? {});
             qparams.page = page;
@@ -223,7 +223,7 @@ public class ApolloDataProviderBase inherits DataProvider::AbstractDataProvider 
             *int limit) {
         list<hash<auto>> results = ();
         int page = 1;
-        int page_size = limit ?? DefaultPageSize;
+        int page_size = (limit && limit < DefaultPageSize) ? limit : DefaultPageSize;
         while (True) {
             hash<auto> request_body = body ?? {};
             request_body.page = page;

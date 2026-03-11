@@ -50,7 +50,6 @@ public class ApolloDataProviderTest inherits QUnit::Test {
 
         #! Custom command-line options
         const MyOpts = Opts + {
-            "apikey": "k,apikey=s",
             "token": "t,token=s",
             "conn": "c,connection=s",
         };
@@ -110,12 +109,9 @@ public class ApolloDataProviderTest inherits QUnit::Test {
 
         # Try environment variables
         *string token = m_options.token ?? ENV.APOLLO_TOKEN;
-        *string apikey = m_options.apikey ?? ENV.APOLLO_API_KEY;
 
         if (token) {
             client = new ApolloRestClient::ApolloRestClient({"token": token});
-        } else if (apikey) {
-            client = new ApolloRestClient::ApolloRestClient({"apikey": apikey});
         }
     }
 
