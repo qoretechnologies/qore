@@ -165,6 +165,7 @@ class JITSmokeTest inherits QUnit::Test {
         addTestCase("weak assignment (:=)", \testWeakAssignment());
         addTestCase("guard deopt fires on_block_exit handlers", \testGuardDeoptOnBlockExit());
         addTestCase("reference compound assignment writes through", \testReferenceCompoundAssignment());
+        addTestCase("hash/list key store via closure", \testHashKeyStoreClosure());
         set_return_value(main());
     }
 
@@ -6025,6 +6026,65 @@ printf(\"%d\\n\", x);
         foreach string mode in ("ast", "ir", "jit") {
             string result = trim(runScript(test5, mode));
             assertEq("42", result, sprintf("concurrent write-through via closure %s", mode));
+        }
+    }
+
+    testHashKeyStoreClosure() {
+        # Regression test for: HashKeyStore/ListIndexStore COW path using VT_CLOSURE
+        # Bug 1: assignClosureVarValue() required for correct scope lookup
+        # Bug 2: discard old value before reassigning in loop (spurious COW)
+
+        # Test 1: Hash member assignment via closure variable (VT_CLOSURE COW path)
+        # Was crashing: use-after-free in std::list::_M_hook() after new_h was freed
+        string test1 = "%modern
+hash<auto> h = {\"a\": 1};
+code c = sub() { h{\"b\"} = 2; };
+c();
+printf(\"%d %d\\n\", h{\"a\"}, h{\"b\"});
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(test1, mode));
+            assertEq("1 2", result, sprintf("hash member assignment via closure %s", mode));
+        }
+
+        # Test 2: Multiple hash member assignments on same container in a loop
+        # Exercises Bug 2: discard old value before reassigning (prevents spurious COW)
+        string test2 = "%modern
+hash<auto> h = {};
+for (int i = 0; i < 5; i++) {
+    h{\"k\" + string(i)} = i;
+}
+printf(\"%d\\n\", h{\"k3\"});
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(test2, mode));
+            assertEq("3", result, sprintf("multiple hash assignments in loop %s", mode));
+        }
+
+        # Test 3: List index assignment via closure variable (ListIndexStore COW path)
+        string test3 = "%modern
+list<int> l = (1, 2, 3);
+code c = sub() { l[1] = 99; };
+c();
+printf(\"%d\\n\", l[1]);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(test3, mode));
+            assertEq("99", result, sprintf("list index assignment via closure %s", mode));
+        }
+
+        # Test 4: Multiple list index assignments in a loop
+        string test4 = "%modern
+list<int> l = ();
+for (int i = 0; i < 5; i++) {
+    l += i;
+    l[i] = i * 10;
+}
+printf(\"%d\\n\", l[3]);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(test4, mode));
+            assertEq("30", result, sprintf("multiple list assignments in loop %s", mode));
         }
     }
 }
