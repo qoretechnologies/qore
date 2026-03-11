@@ -35,8 +35,6 @@ public class CloseMeetingsDataProvider inherits CloseDataProviderBase {
             "type": "CloseMeetingsDataProvider",
             "supports_read": True,
             "supports_native_search": True,
-            "supports_children": True,
-            "children_can_support_apis": True,
             "constructor_options": ConstructorOptions,
             "search_options": SearchOptions,
         };
@@ -72,12 +70,6 @@ public class CloseMeetingsDataProvider inherits CloseDataProviderBase {
             },
         };
 
-        #! Child provider map
-        const ChildMap = {
-            "create": Class::forName("CloseCreateMeetingDataProvider"),
-            "update": Class::forName("CloseUpdateMeetingDataProvider"),
-            "delete": Class::forName("CloseDeleteMeetingDataProvider"),
-        };
     }
 
     #! Creates the object with a REST client
@@ -92,19 +84,6 @@ public class CloseMeetingsDataProvider inherits CloseDataProviderBase {
     #! Returns the provider description
     *string getDesc() {
         return "Close meetings data provider for listing and searching meeting activities";
-    }
-
-    #! Returns child provider names
-    private *list<string> getChildProviderNamesImpl() {
-        return keys ChildMap;
-    }
-
-    #! Returns a child provider by name
-    private *AbstractDataProvider getChildProviderImpl(string name) {
-        *Class cls = ChildMap{name};
-        if (cls) {
-            return cls.newObject(rest);
-        }
     }
 
     #! Returns the record type

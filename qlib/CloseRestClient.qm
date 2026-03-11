@@ -152,6 +152,7 @@ public class CloseRestClient inherits RestClient::RestClient {
         const DefaultOptions = {
             "data": DefaultData,
             "headers": DefaultHeaders,
+            "http_version": "1.1",
             "oauth2_auth_args": DefaultAuthArgs,
             "ping_headers": DefaultPingHeaders,
             "ping_method": DefaultPingMethod,
