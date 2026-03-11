@@ -2640,7 +2640,15 @@ next_instruction:
                         // cache entry and values[] entries to prevent COW from inflated
                         // refcounts. Non-local targets (members, globals) don't need
                         // slot cache invalidation.
-                        const VarRefNode* inv_base_var = extractLValueBaseVarRef(inv->expr);
+                        // inv->expr is the full QoreAssignmentOperatorNode; extract the lvalue first.
+                        const VarRefNode* inv_base_var = nullptr;
+                        if (inv->expr.hasNode()) {
+                            auto* assign = dynamic_cast<const QoreAssignmentOperatorNode*>(
+                                    inv->expr.getInternalNode());
+                            if (assign) {
+                                inv_base_var = extractLValueBaseVarRef(assign->getLeft());
+                            }
+                        }
                         if (inv_base_var && inv_base_var->ref.id) {
                             auto inv_slot_it = func.local_var_slots.find(
                                 reinterpret_cast<const LocalVar*>(inv_base_var->ref.id));
@@ -2665,6 +2673,22 @@ next_instruction:
                 // cannot modify the current function's local variables.
                 // Fast path: skip if no external values were cached (checked in lambda)
                 invalidateExternalCaches();
+
+                // For reference write-through assignments via StoreLValue invoke, flush all local
+                // caches — writing through a reference can modify any arbitrary local variable.
+                if (inv->invoke_opcode == QoreIROpcode::StoreLValue) {
+                    if (inv->expr.hasNode()) {
+                        auto* assign = dynamic_cast<const QoreAssignmentOperatorNode*>(
+                                inv->expr.getInternalNode());
+                        if (assign) {
+                            const VarRefNode* base = extractLValueBaseVarRef(assign->getLeft());
+                            if (base && base->getTypeInfo()
+                                    && QoreTypeInfo::isReference(base->getTypeInfo())) {
+                                cleanupLocalCaches();
+                            }
+                        }
+                    }
+                }
                 if (xsink && *xsink) {
                     if (debug_active) {
                         tlpd->dbgException(nullptr, xsink);
@@ -5340,6 +5364,15 @@ load_local_done:
                     cleanupLocalCaches();
                     return false;
                 }
+
+                // After a reference write-through, the target variable's slot cache may be stale.
+                // We cannot know statically which variable was modified, so flush all local caches.
+                // Mirrors StoreLocal's cleanupLocalCaches() at lines 4146-4148.
+                if (base_var && base_var->getTypeInfo()
+                        && QoreTypeInfo::isReference(base_var->getTypeInfo())) {
+                    cleanupLocalCaches();
+                }
+
                 // StoreLValue has no result register (result.id == 0); discard
                 // the returned reference to avoid storing into values[0] which
                 // causes double-free when multiple stores accumulate in cleanup
