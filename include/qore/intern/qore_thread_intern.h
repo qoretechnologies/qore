@@ -248,7 +248,7 @@ DLLLOCAL void update_runtime_stack_location(const QoreStackLocation* stack_loc, 
 
 DLLLOCAL const QoreProgramLocation* get_runtime_location();
 DLLLOCAL int swap_runtime_statement_location(ExceptionSink* xsink, const AbstractStatement* stmt,
-        const QoreProgramLocation* loc, const QoreParseOptions& po, const AbstractStatement*& old_stmt,
+        const QoreProgramLocation* loc, QoreParseOptions po, const AbstractStatement*& old_stmt,
         const QoreProgramLocation*& old_loc, QoreParseOptions& old_po);
 DLLLOCAL void swap_runtime_location(const QoreProgramLocation*loc, const AbstractStatement*& old_stmt,
         const QoreProgramLocation*& old_loc);

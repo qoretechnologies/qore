@@ -5477,4 +5477,19 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         assertEq("greet:Hi Alice:Hello Bob\n", stdout_output,
             "Unexpected IR closure default arg omitted output");
     }
+
+    testSandboxedSubProgramParseOptionsSmoke() {
+        # Test that parse options don't leak from a sandboxed sub-program into the caller's context
+        # This is a regression test for an aliasing bug in swap_runtime_statement_location()
+        # where calling a PO_LOCKDOWN sub-program function and then calling is_dir() would fail
+        # with INVALID-FUNCTION-ACCESS because parse options were not properly restored
+        Program p(PO_LOCKDOWN | PO_NEW_STYLE);
+        p.disableParseOptions(PO_NO_TOP_LEVEL_STATEMENTS);
+        p.parse("hash sub get_test() { return {}; }\n", "test");
+        p.run();
+        p.callFunction("get_test");
+        # This must NOT throw INVALID-FUNCTION-ACCESS:
+        bool ok = is_dir("/");
+        assertTrue(ok, "is_dir() should work after calling sandboxed sub-program");
+    }
 }
