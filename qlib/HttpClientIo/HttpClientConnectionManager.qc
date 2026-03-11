@@ -106,6 +106,11 @@ public class HttpClientConnectionManager {
         #! Shutdown flag
         bool shutdown = False;
 
+        #! Mutex + condition to serialize connection creation per pool key
+        Mutex create_mutex();
+        Condition create_cond();
+        hash<string, bool> creating;
+
         #! Protocol cache: "host:port" -> "h2" or "h3"
         hash<string, string> protocol_cache;
 
@@ -438,119 +443,142 @@ public class HttpClientConnectionManager {
     private HttpClientConnection getConnection(hash<auto> url_info) {
         string key = sprintf("%s:%d", url_info.host, url_info.port);
 
-        # Try to find an existing connection with capacity
-        {
-            AutoReadLock al(pool_lock);
-            if (shutdown) {
-                throw "HTTPCLIENT-SHUTDOWN", "connection manager is shutting down";
-            }
-            if (pool.hasKey(key)) {
-                foreach HttpClientConnection conn in (pool{key}) {
-                    if (!conn.isClosed() && !conn.isDraining() && conn.canAcceptStream()) {
-                        log(LoggerLevel::DEBUG, "reusing %s connection %d to %s",
-                            conn.getProtocol(), conn.getConnectionId(), key);
-                        return conn;
-                    }
+        while (True) {
+            # Try to find an existing connection with capacity
+            {
+                AutoReadLock al(pool_lock);
+                if (shutdown) {
+                    throw "HTTPCLIENT-SHUTDOWN", "connection manager is shutting down";
                 }
-            }
-        }
-
-        # Need to create a new connection — resolve protocol and check capacity
-        # under the write lock, then release it before creating the connection
-        # (constructor may call getaddrinfo() which can block)
-        string protocol;
-        {
-            AutoWriteLock al(pool_lock);
-            if (shutdown) {
-                throw "HTTPCLIENT-SHUTDOWN", "connection manager is shutting down";
-            }
-
-            # Resolve protocol under WriteLock to ensure thread-safe access to protocol_cache
-            protocol = resolveProtocol(url_info, key);
-
-            # Evict dead connections
-            if (pool.hasKey(key)) {
-                list<HttpClientConnection> live = ();
-                *HttpClientConnection reusable;
-                foreach HttpClientConnection conn in (pool{key}) {
-                    if (conn.isClosed()) {
-                        log(LoggerLevel::DEBUG, "evicting closed connection %d to %s",
-                            conn.getConnectionId(), key);
-                    } else {
-                        push live, conn;
-                        if (!reusable && !conn.isDraining() && conn.canAcceptStream()) {
-                            reusable = conn;
+                if (pool.hasKey(key)) {
+                    foreach HttpClientConnection conn in (pool{key}) {
+                        if (!conn.isClosed() && !conn.isDraining() && conn.canAcceptStream()) {
+                            log(LoggerLevel::DEBUG, "reusing %s connection %d to %s",
+                                conn.getProtocol(), conn.getConnectionId(), key);
+                            return conn;
                         }
                     }
                 }
-                if (live.size() != pool{key}.size()) {
-                    if (live) {
-                        pool{key} = live;
-                    } else {
-                        remove pool{key};
+            }
+
+            # Serialize connection creation per key to avoid redundant QUIC handshakes.
+            # Without this, N threads all finding no reusable connection would each create
+            # their own, flooding the server with N handshakes when 1 suffices.
+            {
+                AutoLock al(create_mutex);
+                if (creating{key}) {
+                    # Another thread is already creating a connection for this key; wait
+                    # and then re-check the pool
+                    create_cond.wait(create_mutex);
+                    continue;
+                }
+                creating{key} = True;
+            }
+            on_exit {
+                AutoLock al(create_mutex);
+                remove creating{key};
+                create_cond.broadcast();
+            }
+
+            # We are the designated creator for this key.
+            # Resolve protocol and check capacity under the write lock, then release
+            # it before creating the connection (constructor may call getaddrinfo()
+            # which can block)
+            string protocol;
+            {
+                AutoWriteLock al(pool_lock);
+                if (shutdown) {
+                    throw "HTTPCLIENT-SHUTDOWN", "connection manager is shutting down";
+                }
+
+                # Resolve protocol under WriteLock to ensure thread-safe access to
+                # protocol_cache
+                protocol = resolveProtocol(url_info, key);
+
+                # Evict dead connections
+                if (pool.hasKey(key)) {
+                    list<HttpClientConnection> live = ();
+                    *HttpClientConnection reusable;
+                    foreach HttpClientConnection conn in (pool{key}) {
+                        if (conn.isClosed()) {
+                            log(LoggerLevel::DEBUG, "evicting closed connection %d to %s",
+                                conn.getConnectionId(), key);
+                        } else {
+                            push live, conn;
+                            if (!reusable && !conn.isDraining() && conn.canAcceptStream()) {
+                                reusable = conn;
+                            }
+                        }
+                    }
+                    if (live.size() != pool{key}.size()) {
+                        if (live) {
+                            pool{key} = live;
+                        } else {
+                            remove pool{key};
+                        }
+                    }
+                    if (reusable) {
+                        return reusable;
                     }
                 }
-                if (reusable) {
-                    return reusable;
-                }
-            }
 
-            # Check capacity (but don't create connection under lock)
-            int current_count = pool.hasKey(key) ? pool{key}.size() : 0;
-            if (current_count >= opts.max_connections_per_host) {
-                # Pick connection with fewest streams
-                list<HttpClientConnection> candidates;
-                int min_streams = MAXINT;
-                foreach HttpClientConnection conn in (pool{key}) {
-                    int streams = conn.getActiveStreamCount();
-                    if (streams < min_streams) {
-                        min_streams = streams;
-                        candidates = (conn,);
-                    } else if (streams == min_streams) {
-                        push candidates, conn;
+                # Check capacity (but don't create connection under lock)
+                int current_count = pool.hasKey(key) ? pool{key}.size() : 0;
+                if (current_count >= opts.max_connections_per_host) {
+                    # Pick connection with fewest streams
+                    list<HttpClientConnection> candidates;
+                    int min_streams = MAXINT;
+                    foreach HttpClientConnection conn in (pool{key}) {
+                        int streams = conn.getActiveStreamCount();
+                        if (streams < min_streams) {
+                            min_streams = streams;
+                            candidates = (conn,);
+                        } else if (streams == min_streams) {
+                            push candidates, conn;
+                        }
                     }
-                }
-                if (candidates) {
-                    HttpClientConnection best = candidates.size() == 1
-                        ? candidates[0]
-                        : candidates[rand() % candidates.size()];
-                    if (best.canAcceptStream()) {
-                        log(LoggerLevel::DEBUG, "using %s connection %d with %d streams to %s "
-                            "(at connection limit)", best.getProtocol(),
-                            best.getConnectionId(), min_streams, key);
-                        return best;
+                    if (candidates) {
+                        HttpClientConnection best = candidates.size() == 1
+                            ? candidates[0]
+                            : candidates[rand() % candidates.size()];
+                        if (best.canAcceptStream()) {
+                            log(LoggerLevel::DEBUG, "using %s connection %d with %d streams "
+                                "to %s (at connection limit)", best.getProtocol(),
+                                best.getConnectionId(), min_streams, key);
+                            return best;
+                        }
                     }
+                    throw "HTTPCLIENT-CAPACITY-ERROR",
+                        sprintf("all %d connections to %s have reached the concurrent "
+                            "stream limit", current_count, key);
                 }
-                throw "HTTPCLIENT-CAPACITY-ERROR",
-                    sprintf("all %d connections to %s have reached the concurrent stream limit",
-                        current_count, key);
-            }
-        }
-
-        # Create connection outside the write lock — constructor may do DNS
-        # resolution (getaddrinfo) which can block and would stall all pool
-        # operations if done under the lock
-        HttpClientConnection conn = createConnection(url_info, key, protocol);
-
-        {
-            AutoWriteLock al(pool_lock);
-            if (shutdown) {
-                # Manager shut down while we were creating the connection
-                try { conn.close(); } catch () {}
-                throw "HTTPCLIENT-SHUTDOWN", "connection manager is shutting down";
             }
 
-            if (!pool.hasKey(key)) {
-                pool{key} = ();
-            }
-            push pool{key}, conn;
+            # Create connection outside the write lock — constructor may do DNS
+            # resolution (getaddrinfo) which can block and would stall all pool
+            # operations if done under the lock
+            HttpClientConnection conn = createConnection(url_info, key, protocol);
 
-            if (controllerMode && controller) {
-                conn.setControllerRef(controller);
-                submitConnectionToController(key, conn);
-            }
+            {
+                AutoWriteLock al(pool_lock);
+                if (shutdown) {
+                    # Manager shut down while we were creating the connection
+                    try { conn.close(); } catch () {}
+                    throw "HTTPCLIENT-SHUTDOWN", "connection manager is shutting down";
+                }
 
-            return conn;
+                if (!pool.hasKey(key)) {
+                    pool{key} = ();
+                }
+                push pool{key}, conn;
+
+                if (controllerMode && controller) {
+                    conn.setControllerRef(controller);
+                    submitConnectionToController(key, conn);
+                }
+
+                return conn;
+            }
         }
     }
 
