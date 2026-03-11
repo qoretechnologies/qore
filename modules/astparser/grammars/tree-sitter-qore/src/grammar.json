@@ -4746,6 +4746,10 @@
         {
           "type": "SYMBOL",
           "name": "conditional_declaration"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "backquote_expression"
         }
       ]
     },
@@ -6886,6 +6890,26 @@
                 "type": "BLANK"
               }
             ]
+          }
+        ]
+      }
+    },
+    "backquote_expression": {
+      "type": "TOKEN",
+      "content": {
+        "type": "SEQ",
+        "members": [
+          {
+            "type": "STRING",
+            "value": "`"
+          },
+          {
+            "type": "PATTERN",
+            "value": "[^`]*"
+          },
+          {
+            "type": "STRING",
+            "value": "`"
           }
         ]
       }
