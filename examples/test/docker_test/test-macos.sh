@@ -8,8 +8,20 @@ set -x
 # Setup Homebrew environment (Apple Silicon)
 if [ -x /opt/homebrew/bin/brew ]; then
     eval "$(/opt/homebrew/bin/brew shellenv)"
+    HB="$(brew --prefix)"
     # Add keg-only package paths so CMake/find_program can locate them
-    export PATH="/opt/homebrew/opt/bison/bin:/opt/homebrew/opt/flex/bin:${PATH}"
+    export PATH="${HB}/opt/bison/bin:${HB}/opt/flex/bin:${PATH}"
+    # Ensure linker and pkg-config find Homebrew libraries (including keg-only)
+    KEG_PKGS=(openssl@3 libxml2 libxslt zlib bzip2 expat readline ncurses libffi sqlite openldap krb5 libarchive curl libtool)
+    for pkg in "${KEG_PKGS[@]}"; do
+        kp="$(brew --prefix "$pkg" 2>/dev/null)" || continue
+        [ -d "$kp/lib/pkgconfig" ] && export PKG_CONFIG_PATH="$kp/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+        [ -d "$kp/lib" ] && export LDFLAGS="-L$kp/lib ${LDFLAGS:-}"
+        [ -d "$kp/include" ] && export CPPFLAGS="-I$kp/include ${CPPFLAGS:-}"
+    done
+    export LDFLAGS="-L${HB}/lib ${LDFLAGS:-}"
+    export CPPFLAGS="-I${HB}/include ${CPPFLAGS:-}"
+    export PKG_CONFIG_PATH="${HB}/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
 fi
 
 # Add cargo bin to PATH (tree-sitter CLI installed via cargo)
