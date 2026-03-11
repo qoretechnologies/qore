@@ -12,6 +12,11 @@ if [ -x /opt/homebrew/bin/brew ]; then
     export PATH="/opt/homebrew/opt/bison/bin:/opt/homebrew/opt/flex/bin:${PATH}"
 fi
 
+# Add cargo bin to PATH (tree-sitter CLI installed via cargo)
+if [ -d "$HOME/.cargo/bin" ]; then
+    export PATH="$HOME/.cargo/bin:${PATH}"
+fi
+
 # Setup source directory
 QORE_SRC_DIR="${QORE_SRC_DIR:-$(pwd)}"
 cd "${QORE_SRC_DIR}"
