@@ -220,7 +220,6 @@ test-macos:
   stage: test
   tags:
     - macos
-    - shell
   services: []
   variables:
     QORE_TEST_OPTS: '-penable-debug'

@@ -3,7 +3,14 @@
 set -e
 set -x
 
-# macOS CI test script for GitLab Runner (shell executor)
+# macOS CI test script for GitLab Runner (Tart VM executor)
+
+# Setup Homebrew environment (Apple Silicon)
+if [ -x /opt/homebrew/bin/brew ]; then
+    eval "$(/opt/homebrew/bin/brew shellenv)"
+    # Add keg-only package paths so CMake/find_program can locate them
+    export PATH="/opt/homebrew/opt/bison/bin:/opt/homebrew/opt/flex/bin:${PATH}"
+fi
 
 # Setup source directory
 QORE_SRC_DIR="${QORE_SRC_DIR:-$(pwd)}"
@@ -27,11 +34,21 @@ echo "=== Building Qore on macOS ==="
 cd "${BUILD_DIR}"
 
 # Configure with CMake
-# CMAKE_PREFIX_PATH=/opt/local enables MacPorts-installed dependencies (Eigen3, ONNX Runtime, etc.)
+# Detect package manager prefix: Homebrew (/opt/homebrew) or MacPorts (/opt/local)
+if [ -d /opt/homebrew ]; then
+    # Homebrew on Apple Silicon; include keg-only package prefixes for CMake
+    CMAKE_PREFIX="/opt/homebrew;/opt/homebrew/opt/openssl@3;/opt/homebrew/opt/libxml2"
+elif [ -d /opt/local ]; then
+    # MacPorts
+    CMAKE_PREFIX="/opt/local"
+else
+    CMAKE_PREFIX=""
+fi
+
 cmake .. \
     -DCMAKE_BUILD_TYPE=release \
     -DSINGLE_COMPILATION_UNIT=1 \
-    -DCMAKE_PREFIX_PATH=/opt/local
+    ${CMAKE_PREFIX:+-DCMAKE_PREFIX_PATH="${CMAKE_PREFIX}"}
 
 # Build
 make -j${MAKE_JOBS}
