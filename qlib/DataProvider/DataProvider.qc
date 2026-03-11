@@ -719,8 +719,9 @@ if (!result.success) {
         @since DataProvider 3.3
     */
     static hash<DpqlParseResult> parseDpqlExpressionWithInfo(string text,
-            *hash<string, hash<DataProviderExpressionInfo>> expressions) {
-        DpqlParser parser(expressions ?? DataProviderGenericExpressions);
+            *hash<string, hash<DataProviderExpressionInfo>> expressions,
+            *hash<string, AbstractDataField> fields) {
+        DpqlParser parser(expressions ?? DataProviderGenericExpressions, fields);
         return parser.parseWithInfo(text);
     }
 
@@ -1031,7 +1032,7 @@ if (errors) {
     static list<hash<DpqlDiagnostic>> validateDpqlExpression(string text,
             hash<string, AbstractDataField> fields,
             *hash<string, hash<DataProviderExpressionInfo>> expressions) {
-        DpqlParser parser(expressions ?? DataProviderGenericExpressions);
+        DpqlParser parser(expressions ?? DataProviderGenericExpressions, fields);
         hash<DpqlParseResult> result = parser.parseWithInfo(text);
         list<hash<DpqlDiagnostic>> diags = result.diagnostics;
         if (result.success && result.expression) {

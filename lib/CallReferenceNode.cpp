@@ -347,12 +347,18 @@ QoreValue ParseSelfMethodReferenceNode::evalImpl(bool& needs_deref, ExceptionSin
 QoreValue ParseSelfMethodReferenceNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
     assert(needs_deref);
     QoreObject* o = rc.getObject() ? rc.getObject() : runtime_get_stack_object();
-    assert(o);
+    if (!o) {
+        xsink->raiseException("OBJECT-ERROR", "cannot evaluate method reference '\\%s()' when not in an object "
+            "context; if using 'background', evaluate the method reference before the 'background' statement",
+            meth->getName());
+        return QoreValue();
+    }
 
     // return class with method already found at parse time if known
-    if (o->getClass() == meth->getClass())
+    if (o->getClass() == meth->getClass()) {
         return new RunTimeResolvedMethodReferenceNode(loc, o, meth,
             rc.getClass() ? rc.getClass() : runtime_get_class());
+    }
 
     return new RunTimeObjectMethodReferenceNode(loc, o, meth->getName());
 }

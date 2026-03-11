@@ -261,10 +261,12 @@ public class DpqlActionSession {
 
     private hash<auto> handleParse(*hash<auto> args) {
         string text = getRequiredStringArg(args, "text");
-        hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo(text, expressions);
-        *hash<string, AbstractDataField> use_fields = getFieldsOverride(args);
+        *hash<string, AbstractDataField> use_fields = getFieldsOverride(args) ?? fields;
+        hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo(
+            text, expressions, use_fields);
         if (use_fields && result.success) {
-            list<hash<DpqlDiagnostic>> diags = DataProvider::validateDpqlExpression(text, use_fields, expressions);
+            list<hash<DpqlDiagnostic>> diags = DataProvider::validateDpqlExpression(
+                text, use_fields, expressions);
             if (diags) {
                 if (result.diagnostics) {
                     result.diagnostics += diags;

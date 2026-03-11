@@ -112,6 +112,7 @@ public class DpqlTest inherits QUnit::Test {
         addTestCase("template completion tests", \templateCompletionTests());
         addTestCase("template validation tests", \templateValidationTests());
         addTestCase("JSON expression serialization tests", \jsonExpressionSerializationTests());
+        addTestCase("argument type validation tests", \argumentTypeValidationTests());
 
         # Return for compatibility with test harnesses that check the return value.
         set_return_value(main());
@@ -1339,6 +1340,57 @@ public class DpqlTest inherits QUnit::Test {
             assertFalse(inlist("&&", fn_names), "symbolic operator && not offered as function");
             assertFalse(inlist("!", fn_names), "symbolic operator ! not offered as function");
         }
+
+        # Function completions include snippet text with parameter placeholders
+        {
+            hash<string, hash<DataProviderExpressionInfo>> expmap = {
+                "substr": <DataProviderExpressionInfo>{
+                    "type": DET_Function,
+                    "name": "substr",
+                    "display_name": "Substring",
+                    "short_desc": "Returns a substring",
+                    "desc": "Returns a substring",
+                    "symbol": "substr()",
+                    "args": (
+                        <DataProviderSignatureTypeInfo>{"type": AbstractDataProviderType::get(StringType)},
+                        <DataProviderSignatureTypeInfo>{"type": AbstractDataProviderType::get(IntType)},
+                        <DataProviderSignatureTypeInfo>{"type": AbstractDataProviderType::get(IntOrNothingType)},
+                    ),
+                    "arg_info": (
+                        <DataProviderArgInfo>{"display_name": "String Value"},
+                        <DataProviderArgInfo>{"display_name": "Start Position"},
+                        <DataProviderArgInfo>{"display_name": "Length"},
+                    ),
+                    "return_type": AbstractDataProviderType::get(StringType),
+                },
+                "no_args_func": <DataProviderExpressionInfo>{
+                    "type": DET_Function,
+                    "name": "no_args_func",
+                    "display_name": "No Args",
+                    "short_desc": "A function with no args",
+                    "desc": "A function with no args",
+                    "symbol": "no_args_func()",
+                    "return_type": AbstractDataProviderType::get(StringType),
+                },
+            };
+
+            list<hash<DpqlCompletionItem>> items =
+                DataProvider::getDpqlCompletions('s', 1, fields, expmap);
+            list<hash<DpqlCompletionItem>> fn_items = select items, $1.label == "substr";
+            assertEq(1, fn_items.size(), "should find substr completion");
+            # insert_text should still be plain
+            assertEq("substr(", fn_items[0].insert_text, "insert_text is plain");
+            # snippet_text should have placeholders
+            assertTrue(exists fn_items[0].snippet_text, "snippet_text exists for function with args");
+            assertEq("substr(${1:String Value}, ${2:Start Position}, ${3:Length})$0",
+                fn_items[0].snippet_text, "snippet_text has correct placeholders");
+
+            # Function with no args should have no snippet
+            items = DataProvider::getDpqlCompletions('n', 1, fields, expmap);
+            fn_items = select items, $1.label == "no_args_func";
+            assertEq(1, fn_items.size(), "should find no_args_func completion");
+            assertNothing(fn_items[0].snippet_text, "no snippet for function without args");
+        }
     }
 
     schemaAwareKeyCompletionTests() {
@@ -1869,6 +1921,153 @@ public class DpqlTest inherits QUnit::Test {
             assertEq(1, warnings.size(),
                 "unknown function with default expressions gets warning");
             assertEq("DPQL-W001", warnings[0].code);
+        }
+    }
+
+    argumentTypeValidationTests() {
+        hash<string, AbstractDataField> fields = {
+            "name": new QoreDataField("name", NOTHING, AbstractDataProviderType::get(StringType)),
+            "age": new QoreDataField("age", NOTHING, AbstractDataProviderType::get(IntType)),
+            "score": new QoreDataField("score", NOTHING, AbstractDataProviderType::get(FloatType)),
+        };
+
+        # Build expression map with typed args and type_code constraints
+        hash<string, hash<DataProviderExpressionInfo>> expmap = DataProviderGenericExpressions + {
+            "test-func": <DataProviderExpressionInfo>{
+                "type": DET_Function,
+                "name": "test-func",
+                "display_name": "Test Function",
+                "short_desc": "A test function",
+                "desc": "A test function",
+                "symbol": "test-func()",
+                "args": (
+                    <DataProviderSignatureTypeInfo>{
+                        "type": AbstractDataProviderType::get(StringType),
+                        "type_code": ST_Field,
+                    },
+                    <DataProviderSignatureTypeInfo>{
+                        "type": AbstractDataProviderType::get(IntType),
+                        "type_code": ST_Value,
+                    },
+                ),
+                "arg_info": (
+                    <DataProviderArgInfo>{"display_name": "Field"},
+                    <DataProviderArgInfo>{"display_name": "Count"},
+                ),
+                "return_type": AbstractDataProviderType::get(StringType),
+            },
+            "typed-func": <DataProviderExpressionInfo>{
+                "type": DET_Function,
+                "name": "typed-func",
+                "display_name": "Typed Function",
+                "short_desc": "A typed function",
+                "desc": "A typed function",
+                "symbol": "typed-func()",
+                "args": (
+                    <DataProviderSignatureTypeInfo>{
+                        "type": AbstractDataProviderType::get(StringType),
+                    },
+                    <DataProviderSignatureTypeInfo>{
+                        "type": AbstractDataProviderType::get(IntType),
+                    },
+                ),
+                "arg_info": (
+                    <DataProviderArgInfo>{"display_name": "Text"},
+                    <DataProviderArgInfo>{"display_name": "Number"},
+                ),
+                "return_type": AbstractDataProviderType::get(StringType),
+            },
+        };
+
+        # ST_Field violation: literal passed where field ref expected
+        {
+            hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo(
+                "test-func('literal', 5)", expmap, fields);
+            assertTrue(result.success, "ST_Field warning should not fail parse");
+            list<hash<DpqlDiagnostic>> warnings = select result.diagnostics, $1.severity == "warning";
+            assertEq(1, warnings.size(), "should warn about ST_Field violation");
+            assertEq("DPQL-W003", warnings[0].code, "should be type code warning");
+            assertTrue(warnings[0].message.find("field reference") >= 0,
+                "warning should mention field reference");
+        }
+
+        # ST_Value violation: field ref passed where literal expected
+        {
+            hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo(
+                "test-func(@name, @age)", expmap, fields);
+            assertTrue(result.success, "ST_Value warning should not fail parse");
+            list<hash<DpqlDiagnostic>> warnings = select result.diagnostics, $1.severity == "warning";
+            assertEq(1, warnings.size(), "should warn about ST_Value violation");
+            assertEq("DPQL-W003", warnings[0].code, "should be type code warning");
+            assertTrue(warnings[0].message.find("literal value") >= 0,
+                "warning should mention literal value");
+        }
+
+        # Correct usage: field ref for ST_Field, literal for ST_Value
+        {
+            hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo(
+                "test-func(@name, 5)", expmap, fields);
+            assertTrue(result.success, "correct types should parse");
+            list<hash<DpqlDiagnostic>> warnings = select result.diagnostics, $1.severity == "warning";
+            assertEq(0, warnings.size(), "no warnings for correct usage");
+        }
+
+        # Data type mismatch: int passed where string expected
+        {
+            hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo(
+                "typed-func(42, 5)", expmap, fields);
+            assertTrue(result.success, "type mismatch warning should not fail parse");
+            list<hash<DpqlDiagnostic>> warnings = select result.diagnostics, $1.severity == "warning";
+            assertEq(1, warnings.size(), "should warn about int where string expected");
+            assertEq("DPQL-W004", warnings[0].code, "should be data type warning");
+        }
+
+        # Data type mismatch: string passed where int expected
+        {
+            hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo(
+                "typed-func('hello', 'world')", expmap, fields);
+            assertTrue(result.success, "type mismatch warning should not fail parse");
+            list<hash<DpqlDiagnostic>> warnings = select result.diagnostics, $1.severity == "warning";
+            assertEq(1, warnings.size(), "should warn about string where int expected");
+            assertEq("DPQL-W004", warnings[0].code, "should be data type warning");
+        }
+
+        # Correct data types: no warnings
+        {
+            hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo(
+                "typed-func('hello', 42)", expmap, fields);
+            assertTrue(result.success, "correct data types should parse");
+            list<hash<DpqlDiagnostic>> warnings = select result.diagnostics, $1.severity == "warning";
+            assertEq(0, warnings.size(), "no warnings for correct data types");
+        }
+
+        # Field reference type inference: @age is int, passed where string expected
+        {
+            hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo(
+                "typed-func(@age, 5)", expmap, fields);
+            assertTrue(result.success, "field type mismatch should not fail parse");
+            list<hash<DpqlDiagnostic>> warnings = select result.diagnostics, $1.severity == "warning";
+            assertEq(1, warnings.size(), "should warn about int field where string expected");
+            assertEq("DPQL-W004", warnings[0].code);
+        }
+
+        # Field reference type correct: @name is string, passed where string expected
+        {
+            hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo(
+                "typed-func(@name, 5)", expmap, fields);
+            assertTrue(result.success, "correct field type should parse");
+            list<hash<DpqlDiagnostic>> warnings = select result.diagnostics, $1.severity == "warning";
+            assertEq(0, warnings.size(), "no warnings for correct field type");
+        }
+
+        # Without fields: field ref type cannot be inferred, no type warning
+        {
+            hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo(
+                "typed-func(@unknown, 5)", expmap);
+            assertTrue(result.success, "unknown field type should parse");
+            list<hash<DpqlDiagnostic>> warnings = select result.diagnostics,
+                $1.severity == "warning" && $1.code == "DPQL-W004";
+            assertEq(0, warnings.size(), "no type warnings without field info");
         }
     }
 

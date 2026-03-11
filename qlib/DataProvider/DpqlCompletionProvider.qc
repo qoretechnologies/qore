@@ -35,6 +35,13 @@ public hashdecl DpqlCompletionItem {
     string kind;
     #! Text to insert when this completion is selected
     string insert_text;
+    #! Optional snippet text with parameter placeholders (LSP snippet syntax)
+    /** When present, clients should use this instead of \c insert_text and set
+        \c insertTextFormat to \c 2 (snippet).
+
+        @since DataProvider 3.4
+    */
+    *string snippet_text;
     #! Optional documentation or help text
     *string documentation;
     #! Sort priority (lower = higher priority)
@@ -641,10 +648,26 @@ public class DpqlCompletionProvider {
             if (info.type == DET_Function
                     || (info.type == DET_Operator && name =~ /^[a-zA-Z]/)) {
                 if (!prefix || index(name.lwr(), lwr_prefix) == 0) {
+                    # Build snippet with parameter placeholders
+                    *string snippet;
+                    if (info.args) {
+                        list<string> placeholders = ();
+                        for (int i = 0; i < info.args.size(); ++i) {
+                            string pname;
+                            if (info.arg_info[i].display_name) {
+                                pname = info.arg_info[i].display_name;
+                            } else {
+                                pname = "arg" + string(i);
+                            }
+                            placeholders += sprintf("${%d:%s}", i + 1, pname);
+                        }
+                        snippet = name + "(" + placeholders.join(", ") + ")$0";
+                    }
                     items += <DpqlCompletionItem>{
                         "label": name,
                         "kind": "function",
                         "insert_text": name + "(",
+                        "snippet_text": snippet,
                         "documentation": info.short_desc ?? info.desc,
                         "sort_priority": 40,
                     };
