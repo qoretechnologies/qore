@@ -118,8 +118,14 @@ for (int i = 0; i < 20; i++) {
 date elapsed = now_us() - start;
 float seconds = elapsed.toFloat() / 1000000.0;
 
-printf("Results: %d success, %d errors in %.3f seconds (%.1f req/sec)\n",
-       success, errors, seconds, (success + errors) / seconds);
+# Prevent division by zero if test runs too fast
+float req_per_sec = seconds > 0 ? (success + errors) / seconds : -1;
+printf("Results: %d success, %d errors in %.3f seconds", success, errors, seconds);
+if (req_per_sec > 0) {
+    printf(" (%.1f req/sec)\n", req_per_sec);
+} else {
+    printf(" (< 1 microsecond)\n");
+}
 
 mgr.closeAll();
 server.stop();
