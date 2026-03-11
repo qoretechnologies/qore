@@ -99,42 +99,21 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
         }
         res = QTI_IDENT;
     } else if (QoreTypeInfo::hasType(ti)) {
-        // For reference types, dereference before type checking
-        // Assignment through a reference assigns the value to the referenced location,
-        // not to the reference variable itself
-        const QoreTypeInfo* check_ti = ti;
-        const QoreTypeInfo* check_rhs_ti = parse_context.typeInfo;
-
-        if (QoreTypeInfo::isReference(ti)) {
-            const QoreTypeInfo* deref_ti = QoreTypeInfo::getReferenceTarget(ti);
-            if (deref_ti) {
-                check_ti = deref_ti;
-            }
-        }
-
-        // Also dereference the RHS if it's a reference
-        if (QoreTypeInfo::isReference(check_rhs_ti)) {
-            const QoreTypeInfo* deref_rhs_ti = QoreTypeInfo::getReferenceTarget(check_rhs_ti);
-            if (deref_rhs_ti) {
-                check_rhs_ti = deref_rhs_ti;
-            }
-        }
-
         bool may_not_match = false;
         bool may_need_filter = false;
         qore_type_result_e max_result = QTI_NOT_EQUAL;
         // only set the initial assignment flag if the lvalue is a declaration
         bool initial_assignment = (left.getType() == NT_VARREF && left.get<VarRefNode>()->parseIsDecl());
-        res = QoreTypeInfo::parseAccepts(check_ti, check_rhs_ti, may_not_match, may_need_filter, max_result,
+        res = QoreTypeInfo::parseAccepts(ti, parse_context.typeInfo, may_not_match, may_need_filter, max_result,
             initial_assignment);
         // issue #2106 do not set the ident flag for any other type in case runtime types are more specific (complex)
         // than parse types and require filtering
         //printd(5, "QoreAssignmentOperatorNode::parseInitImpl() '%s' <- '%s' res: %d may_not_match: %d "
-        //    "may_need_filter: %d ident: %d\n", QoreTypeInfo::getName(check_ti),
-        //    QoreTypeInfo::getName(check_rhs_ti), res, may_not_match, may_need_filter, ident);
+        //    "may_need_filter: %d ident: %d\n", QoreTypeInfo::getName(ti),
+        //    QoreTypeInfo::getName(parse_context.typeInfo), res, may_not_match, may_need_filter, ident);
 
         // Additional check for typed callable signature compatibility
-        if (res && !QoreTypeInfo::checkComplexCodeCompatibility(check_ti, check_rhs_ti)) {
+        if (res && !QoreTypeInfo::checkComplexCodeCompatibility(ti, parse_context.typeInfo)) {
             res = QTI_NOT_EQUAL;
         }
     } else {
@@ -173,15 +152,7 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
     // - But NOT for direct assignment to auto-type variables (reassignment updates the type)
     // - Otherwise only raise if parse exception sink is enabled
     bool raise_exception = false;
-    // For references, use the dereferenced type in error messages since that's what
-    // the assignment is actually checking against
-    const QoreTypeInfo* error_ti = ti;
-    if (QoreTypeInfo::isReference(ti)) {
-        const QoreTypeInfo* deref_ti = QoreTypeInfo::getReferenceTarget(ti);
-        if (deref_ti) {
-            error_ti = deref_ti;
-        }
-    }
+    const QoreTypeInfo* error_ti = ti;  // Type info to use in error message
 
     if (type_mismatch) {
         if (is_direct_auto_assignment) {
