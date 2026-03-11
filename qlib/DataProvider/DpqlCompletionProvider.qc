@@ -122,6 +122,10 @@ public class DpqlCompletionProvider {
     private {
         #! Available expressions
         *hash<string, hash<DataProviderExpressionInfo>> expressions;
+        #! Map of expression name to DPQL symbol (stripped of trailing "()")
+        /** @since DataProvider 3.4
+        */
+        hash<string, string> name_to_symbol;
 
         #! Comparison operators with descriptions
         const ComparisonOperators = (
@@ -213,6 +217,25 @@ public class DpqlCompletionProvider {
     */
     constructor(*hash<string, hash<DataProviderExpressionInfo>> expressions) {
         self.expressions = expressions;
+        if (expressions) {
+            buildSymbolMaps();
+        }
+    }
+
+    #! Builds name-to-symbol and symbol-to-name lookup maps from the expression map
+    private buildSymbolMaps() {
+        foreach string ename in (keys expressions) {
+            hash<DataProviderExpressionInfo> info = expressions{ename};
+            if (!info.symbol) {
+                continue;
+            }
+            string sym = info.symbol;
+            # Strip trailing () from display symbols (e.g. "substr()" -> "substr")
+            if (sym =~ /\(\)$/) {
+                sym = substr(sym, 0, sym.size() - 2);
+            }
+            name_to_symbol{ename} = sym;
+        }
     }
 
     #! Gets completions at the given position
@@ -642,12 +665,14 @@ public class DpqlCompletionProvider {
 
         string lwr_prefix = prefix.lwr();
 
-        foreach string name in (keys expressions) {
-            hash<DataProviderExpressionInfo> info = expressions{name};
-            # Include all functions and operators with identifier-style names
+        foreach string ename in (keys expressions) {
+            hash<DataProviderExpressionInfo> info = expressions{ename};
+            # Use symbol for DPQL surface syntax
+            string sym = name_to_symbol{ename} ?? ename;
+            # Include all functions and operators with identifier-style symbols
             if (info.type == DET_Function
-                    || (info.type == DET_Operator && name =~ /^[a-zA-Z]/)) {
-                if (!prefix || index(name.lwr(), lwr_prefix) == 0) {
+                    || (info.type == DET_Operator && sym =~ /^[a-zA-Z]/)) {
+                if (!prefix || index(sym.lwr(), lwr_prefix) == 0) {
                     # Build snippet with parameter placeholders
                     *string snippet;
                     if (info.args) {
@@ -661,12 +686,12 @@ public class DpqlCompletionProvider {
                             }
                             placeholders += sprintf("${%d:%s}", i + 1, pname);
                         }
-                        snippet = name + "(" + placeholders.join(", ") + ")$0";
+                        snippet = sym + "(" + placeholders.join(", ") + ")$0";
                     }
                     items += <DpqlCompletionItem>{
-                        "label": name,
+                        "label": sym,
                         "kind": "function",
-                        "insert_text": name + "(",
+                        "insert_text": sym + "(",
                         "snippet_text": snippet,
                         "documentation": info.short_desc ?? info.desc,
                         "sort_priority": 40,
@@ -1195,9 +1220,9 @@ public class DpqlCompletionProvider {
         if (name_start < 0) {
             return NOTHING;
         }
-        # Scan the identifier (including hyphens for hyphenated names)
+        # Scan the identifier
         int id_end = name_start + 1;
-        while (name_start >= 0 && prefix[name_start] =~ /[a-zA-Z0-9_\-]/) {
+        while (name_start >= 0 && prefix[name_start] =~ /[a-zA-Z0-9_]/) {
             --name_start;
         }
         ++name_start;
@@ -1207,8 +1232,22 @@ public class DpqlCompletionProvider {
 
         string func_name = prefix.substr(name_start, id_end - name_start);
 
-        # Look up in expressions
-        *hash<DataProviderExpressionInfo> info = expressions{func_name};
+        # Resolve symbol to expression name, then look up in expressions
+        *string resolved_name;
+        # Try symbol→name first, then direct name lookup for backward compat
+        foreach string ename in (keys name_to_symbol) {
+            if (name_to_symbol{ename} == func_name) {
+                resolved_name = ename;
+                break;
+            }
+        }
+        if (!resolved_name && expressions{func_name}) {
+            resolved_name = func_name;
+        }
+        if (!resolved_name) {
+            return NOTHING;
+        }
+        *hash<DataProviderExpressionInfo> info = expressions{resolved_name};
         if (!info) {
             return NOTHING;
         }

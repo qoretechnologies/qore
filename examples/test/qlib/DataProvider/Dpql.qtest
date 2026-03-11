@@ -772,9 +772,8 @@ public class DpqlTest inherits QUnit::Test {
             assertEq("users", idx.args[0].field);
         }
 
-        # Test hyphenated function name parsing
+        # Test symbol-based function parsing (symbol differs from name)
         {
-            # Create expression map with a hyphenated function-call operator
             hash<string, hash<DataProviderExpressionInfo>> expmap = DataProviderGenericExpressions + {
                 "ends-with": <DataProviderExpressionInfo>{
                     "type": DET_Operator,
@@ -782,20 +781,26 @@ public class DpqlTest inherits QUnit::Test {
                     "display_name": "Ends With",
                     "short_desc": "True if a string ends with a given substring",
                     "desc": "True if a string ends with a given substring",
-                    "symbol": "ends-with",
+                    "symbol": "endsWith",
                     "return_type": AbstractDataProviderType::get(BoolType),
                 },
             };
 
+            # Parse using symbol (new syntax)
             hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
-                'ends-with(@name, "lo")', expmap);
-            assertEq("ends-with", exp.exp);
+                'endsWith(@name, "lo")', expmap);
+            assertEq("ends-with", exp.exp, "symbol resolves to internal name");
             assertEq(2, exp.args.size());
             assertEq("name", exp.args[0].field);
             assertEq("lo", exp.args[1]);
+
+            # Backward compat: parse using internal name still works
+            exp = DataProvider::parseDpqlExpression(
+                'ends-with(@name, "lo")', expmap);
+            assertEq("ends-with", exp.exp, "name-based parsing still works");
         }
 
-        # Test hyphenated function in complex expression
+        # Test symbol-based function in complex expression
         {
             hash<string, hash<DataProviderExpressionInfo>> expmap = DataProviderGenericExpressions + {
                 "starts-with": <DataProviderExpressionInfo>{
@@ -804,15 +809,15 @@ public class DpqlTest inherits QUnit::Test {
                     "display_name": "Starts With",
                     "short_desc": "True if a string starts with a given prefix",
                     "desc": "True if a string starts with a given prefix",
-                    "symbol": "starts-with",
+                    "symbol": "startsWith",
                     "return_type": AbstractDataProviderType::get(BoolType),
                 },
             };
 
             hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
-                'starts-with(@email, "admin") && @active == true', expmap);
+                'startsWith(@email, "admin") && @active == true', expmap);
             assertEq(DP_OP_AND, exp.exp);
-            assertEq("starts-with", exp.args[0].exp);
+            assertEq("starts-with", exp.args[0].exp, "symbol resolves to internal name in complex expr");
             assertEq("email", exp.args[0].args[0].field);
             assertEq("admin", exp.args[0].args[1]);
         }
@@ -999,6 +1004,50 @@ public class DpqlTest inherits QUnit::Test {
             string dpql = DataProvider::serializeDpqlExpression(exp);
             assertEq("@value != null", dpql);
         }
+
+        # Test serializer uses symbol for function calls
+        {
+            hash<string, hash<DataProviderExpressionInfo>> expmap = {
+                "ends-with": <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": "ends-with",
+                    "display_name": "Ends With",
+                    "short_desc": "True if a string ends with a given substring",
+                    "desc": "True if a string ends with a given substring",
+                    "symbol": "endsWith",
+                    "return_type": AbstractDataProviderType::get(BoolType),
+                },
+            };
+
+            hash<DataProviderExpression> exp = <DataProviderExpression>{
+                "exp": "ends-with",
+                "args": (<DataProviderFieldReference>{"field": "name"}, "lo"),
+            };
+            string dpql = DataProvider::serializeDpqlExpression(exp, expmap);
+            assertEq('endsWith(@name, "lo")', dpql, "serializer outputs symbol, not name");
+        }
+
+        # Test serializer uses symbol stripped of () for DET_Function
+        {
+            hash<string, hash<DataProviderExpressionInfo>> expmap = {
+                "substr": <DataProviderExpressionInfo>{
+                    "type": DET_Function,
+                    "name": "substr",
+                    "display_name": "Substring",
+                    "short_desc": "Extracts a substring",
+                    "desc": "Extracts a substring",
+                    "symbol": "substr()",
+                    "return_type": AbstractDataProviderType::get(StringType),
+                },
+            };
+
+            hash<DataProviderExpression> exp = <DataProviderExpression>{
+                "exp": "substr",
+                "args": (<DataProviderFieldReference>{"field": "name"}, 0, 5),
+            };
+            string dpql = DataProvider::serializeDpqlExpression(exp, expmap);
+            assertEq("substr(@name, 0, 5)", dpql, "serializer strips () from function symbol");
+        }
     }
 
     roundTripTests() {
@@ -1051,6 +1100,35 @@ public class DpqlTest inherits QUnit::Test {
             # Compare the expressions
             assertEq(parsed.exp, reparsed.exp, sprintf("Round-trip failed for: %s", expr));
             assertEq(parsed.args.size(), reparsed.args.size(), sprintf("Round-trip args size for: %s", expr));
+        }
+
+        # Symbol-based round-trip: parse symbol → serialize to symbol → parse again
+        {
+            hash<string, hash<DataProviderExpressionInfo>> expmap = DataProviderGenericExpressions + {
+                "ends-with": <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": "ends-with",
+                    "display_name": "Ends With",
+                    "short_desc": "True if a string ends with a given substring",
+                    "desc": "True if a string ends with a given substring",
+                    "symbol": "endsWith",
+                    "return_type": AbstractDataProviderType::get(BoolType),
+                },
+            };
+
+            # Parse using symbol
+            hash<DataProviderExpression> parsed = DataProvider::parseDpqlExpression(
+                'endsWith(@name, "suffix")', expmap);
+            assertEq("ends-with", parsed.exp, "symbol round-trip: name stored in exp");
+
+            # Serialize uses symbol
+            string serialized = DataProvider::serializeDpqlExpression(parsed, expmap);
+            assertEq('endsWith(@name, "suffix")', serialized, "symbol round-trip: serialized with symbol");
+
+            # Re-parse produces same internal representation
+            hash<DataProviderExpression> reparsed = DataProvider::parseDpqlExpression(serialized, expmap);
+            assertEq(parsed.exp, reparsed.exp, "symbol round-trip: consistent internal name");
+            assertEq(parsed.args.size(), reparsed.args.size(), "symbol round-trip: same arg count");
         }
     }
 
@@ -1228,7 +1306,7 @@ public class DpqlTest inherits QUnit::Test {
 
         # === Function-call operator completions ===
 
-        # Operators with identifier-style names should appear as function completions
+        # Operators with identifier-style symbols should appear as function completions
         {
             hash<string, hash<DataProviderExpressionInfo>> expmap = DataProviderGenericExpressions + {
                 "ends-with": <DataProviderExpressionInfo>{
@@ -1237,7 +1315,7 @@ public class DpqlTest inherits QUnit::Test {
                     "display_name": "Ends With",
                     "short_desc": "True if a string ends with a given substring",
                     "desc": "True if a string ends with a given substring",
-                    "symbol": "ends-with",
+                    "symbol": "endsWith",
                     "return_type": AbstractDataProviderType::get(BoolType),
                 },
                 "contains": <DataProviderExpressionInfo>{
@@ -1254,11 +1332,11 @@ public class DpqlTest inherits QUnit::Test {
             list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('', 0, fields, expmap);
             list<hash<DpqlCompletionItem>> fn_items = select items, $1.kind == "function";
             list<string> fn_names = map $1.label, fn_items;
-            assertTrue(inlist("ends-with", fn_names), "ends-with offered as function completion");
+            assertTrue(inlist("endsWith", fn_names), "endsWith symbol offered as function completion");
             assertTrue(inlist("contains", fn_names), "contains offered as function completion");
         }
 
-        # Prefix filtering works for hyphenated operator names
+        # Prefix filtering works for symbol-based operator names
         {
             hash<string, hash<DataProviderExpressionInfo>> expmap = DataProviderGenericExpressions + {
                 "ends-with": <DataProviderExpressionInfo>{
@@ -1267,16 +1345,16 @@ public class DpqlTest inherits QUnit::Test {
                     "display_name": "Ends With",
                     "short_desc": "True if a string ends with a given substring",
                     "desc": "True if a string ends with a given substring",
-                    "symbol": "ends-with",
+                    "symbol": "endsWith",
                     "return_type": AbstractDataProviderType::get(BoolType),
                 },
-                "encode-url": <DataProviderExpressionInfo>{
+                "encode_url": <DataProviderExpressionInfo>{
                     "type": DET_Function,
-                    "name": "encode-url",
+                    "name": "encode_url",
                     "display_name": "Encode URL",
                     "short_desc": "URL-encodes a string",
                     "desc": "URL-encodes a string",
-                    "symbol": "encode-url",
+                    "symbol": "encode_url()",
                     "return_type": AbstractDataProviderType::get(StringType),
                 },
             };
@@ -1284,8 +1362,8 @@ public class DpqlTest inherits QUnit::Test {
             list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('e', 1, fields, expmap);
             list<hash<DpqlCompletionItem>> fn_items = select items, $1.kind == "function";
             list<string> fn_names = map $1.label, fn_items;
-            assertTrue(inlist("ends-with", fn_names), "typing 'e' shows ends-with");
-            assertTrue(inlist("encode-url", fn_names), "typing 'e' shows encode-url");
+            assertTrue(inlist("endsWith", fn_names), "typing 'e' shows endsWith symbol");
+            assertTrue(inlist("encode_url", fn_names), "typing 'e' shows encode_url (stripped ())");
         }
 
         # All identifier-style operators are offered as function completions (including infix)
@@ -2115,7 +2193,7 @@ public class DpqlTest inherits QUnit::Test {
             assertEq(1, help.active_parameter, "after first comma in key(), active param 1");
         }
 
-        # Test signature help with custom expression map including hyphenated name
+        # Test signature help with symbol-based name
         {
             hash<string, hash<DataProviderExpressionInfo>> expmap = DataProviderGenericExpressions + {
                 "ends-with": <DataProviderExpressionInfo>{
@@ -2124,7 +2202,7 @@ public class DpqlTest inherits QUnit::Test {
                     "display_name": "Ends With",
                     "short_desc": "True if string ends with a given substring",
                     "desc": "True if string ends with a given substring",
-                    "symbol": "ends-with",
+                    "symbol": "endsWith",
                     "arg_info": (
                         <DataProviderArgInfo>{
                             "display_name": "String",
@@ -2141,10 +2219,10 @@ public class DpqlTest inherits QUnit::Test {
                 },
             };
             *hash<DpqlSignatureHelp> help = DataProvider::getDpqlSignatureHelp(
-                'ends-with(@name, ', 18, expmap);
-            assertTrue(exists help, "should return signature help for ends-with");
-            assertTrue(help.label.find("ends-with(") == 0, "label should show ends-with");
-            assertEq(2, help.parameters.size(), "ends-with has 2 parameters");
+                'endsWith(@name, ', 17, expmap);
+            assertTrue(exists help, "should return signature help for endsWith");
+            assertTrue(help.label.find("endsWith(") == 0, "label should show endsWith");
+            assertEq(2, help.parameters.size(), "endsWith has 2 parameters");
             assertEq("String", help.parameters[0].label, "first param label");
             assertEq("Suffix", help.parameters[1].label, "second param label");
             assertEq(1, help.active_parameter, "after comma, active param 1");

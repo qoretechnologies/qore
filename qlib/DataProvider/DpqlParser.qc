@@ -71,6 +71,10 @@ public class DpqlParser {
         list<hash<DpqlTokenInfo>> tokens = ();
         #! Available expressions (for validation)
         *hash<string, hash<DataProviderExpressionInfo>> expressions;
+        #! Map of DPQL symbol to expression name (for symbol-based lookup)
+        /** @since DataProvider 3.4
+        */
+        hash<string, string> symbol_to_name;
         #! Available fields for type resolution
         /** @since DataProvider 3.4
         */
@@ -91,6 +95,31 @@ public class DpqlParser {
             *hash<string, AbstractDataField> fields) {
         self.expressions = expressions;
         self.fields = fields;
+        if (expressions) {
+            buildSymbolToNameMap();
+        }
+    }
+
+    #! Builds a symbol-to-name lookup map from the expression map
+    /** Maps DPQL symbols (with trailing "()" stripped) to their internal expression names
+        (the keys in the expression map). This allows the parser to accept symbol-based
+        syntax in DPQL text while storing the canonical name in \c exp.exp.
+
+        @since DataProvider 3.4
+    */
+    private buildSymbolToNameMap() {
+        foreach string ename in (keys expressions) {
+            hash<DataProviderExpressionInfo> info = expressions{ename};
+            if (!info.symbol) {
+                continue;
+            }
+            string sym = info.symbol;
+            # Strip trailing () from display symbols (e.g. "substr()" -> "substr")
+            if (sym =~ /\(\)$/) {
+                sym = substr(sym, 0, sym.size() - 2);
+            }
+            symbol_to_name{sym} = ename;
+        }
     }
 
     #! Parses a DPQL expression string
@@ -1152,8 +1181,27 @@ public class DpqlParser {
     }
 
     #! Parses a function call
+    /** Resolves the DPQL symbol to the internal expression name using the symbol-to-name
+        map. Falls back to direct expression map lookup for backward compatibility with
+        old name-based syntax.
+
+        @since DataProvider 3.4 symbol-based resolution
+    */
     private hash<DataProviderExpression> parseFunctionCall(hash<DpqlTokenInfo> name_tok) {
-        string name = name_tok.value;
+        string token_name = name_tok.value;
+
+        # Resolve symbol to internal expression name
+        # 1. Try symbol→name lookup (new symbol-based syntax)
+        # 2. Fall back to direct expression map key lookup (backward compat)
+        string name;
+        if (symbol_to_name{token_name}) {
+            name = symbol_to_name{token_name};
+        } else if (expressions{token_name}) {
+            name = token_name;
+        } else {
+            name = token_name;
+        }
+
         expect(DPQL_TOK_LPAREN, "'('");
         skipWhitespace();
 
@@ -1168,7 +1216,7 @@ public class DpqlParser {
 
         # Validate function name against expression map
         if (expressions && !expressions{name}) {
-            addWarning(sprintf("Unknown function '%s'", name), "DPQL-W001", name_tok);
+            addWarning(sprintf("Unknown function '%s'", token_name), "DPQL-W001", name_tok);
         } else if (expressions{name}) {
             hash<DataProviderExpressionInfo> info = expressions{name};
             int expected = info.args.size();
@@ -1178,18 +1226,18 @@ public class DpqlParser {
                 if (actual < min) {
                     addWarning(
                         sprintf("Function '%s' expects at least %d argument%s, got %d",
-                            name, min, min == 1 ? "" : "s", actual),
+                            token_name, min, min == 1 ? "" : "s", actual),
                         "DPQL-W002", name_tok);
                 }
             } else if (expected > 0 && actual != expected) {
                 addWarning(
                     sprintf("Function '%s' expects %d argument%s, got %d",
-                        name, expected, expected == 1 ? "" : "s", actual),
+                        token_name, expected, expected == 1 ? "" : "s", actual),
                     "DPQL-W002", name_tok);
             }
 
             # Type-aware argument validation
-            validateFunctionArgTypes(name, info, args, arg_tokens);
+            validateFunctionArgTypes(token_name, info, args, arg_tokens);
         }
 
         return <DataProviderExpression>{

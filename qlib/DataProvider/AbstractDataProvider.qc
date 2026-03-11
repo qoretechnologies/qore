@@ -1688,6 +1688,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     "display_name": "index",
                     "short_desc": "Returns a single element from a list by index",
                     "desc": "Returns a single element from a list by index; supports negative indices",
+                    "symbol": "index()",
                     "args": (DataProviderSignatureAnyType, DataProviderSignatureIntType),
                     "return_type": AbstractDataProviderTypeMap."any",
                 },
@@ -1715,6 +1716,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     "short_desc": "Returns a sub-list from a list by indices and/or ranges",
                     "desc": "Returns a sub-list from a list by indices and/or ranges; supports negative indices "
                         "and open-ended ranges",
+                    "symbol": "slice()",
                     "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType),
                     "varargs": True,
                     "return_type": AbstractDataProviderTypeMap."any",
@@ -1759,6 +1761,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     "short_desc": "Returns hash values by key",
                     "desc": "Returns hash values by one or more keys; for a single key returns the value directly; "
                         "for multiple keys returns a hash subset; when applied to a list, maps over each element",
+                    "symbol": "key()",
                     "args": (DataProviderSignatureAnyType, DataProviderSignatureStringType),
                     "varargs": True,
                     "return_type": AbstractDataProviderTypeMap."any",
