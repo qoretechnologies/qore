@@ -218,6 +218,7 @@ test-alpine-arm64:
 
 test-macos:
   stage: test
+  needs: []
   tags:
     - macos
   services: []
