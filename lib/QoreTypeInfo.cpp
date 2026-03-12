@@ -1835,8 +1835,7 @@ bool QoreTypeSpec::acceptInputComplexHash(ExceptionSink* xsink, const QoreTypeIn
             }
         }
     } else {
-        // Use base complex type, not optional field type (which may have optional modifier)
-        qore_hash_private::get(*h)->complexTypeInfo = qore_get_complex_hash_type(u.ti);
+        qore_hash_private::get(*h)->complexTypeInfo = &typeInfo;
     }
 
     // now we have to fold the value types into our type
@@ -1883,8 +1882,7 @@ bool QoreTypeSpec::acceptInputComplexList(ExceptionSink* xsink, const QoreTypeIn
         lp = qore_list_private::get(*l);
     } else {
         lp = qore_list_private::get(*l);
-        // Use base complex type, not optional field type (which may have optional modifier)
-        lp->complexTypeInfo = qore_get_complex_list_type(u.ti);
+        lp->complexTypeInfo = &typeInfo;
     }
 
     // now we have to fold the value types into our type
