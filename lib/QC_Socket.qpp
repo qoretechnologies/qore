@@ -6358,3 +6358,115 @@ nothing Socket::resetQuicStream(int session_id, int stream_id) {
     }
     s->resetQuicStream(session_id, stream_id, xsink);
 }
+
+//! Send a QUIC DATAGRAM frame associated with an HTTP/3 stream (RFC 9221/9297)
+/** Sends an unreliable, unordered datagram payload on a QUIC datagram channel
+    associated with the given HTTP/3 anchor stream.
+
+    QUIC datagrams (RFC 9221) provide lower latency than streams by avoiding
+    head-of-line blocking and retransmission.  HTTP/3 datagrams (RFC 9297)
+    associate datagrams with HTTP/3 requests via the quarter-stream-ID.
+
+    @param session_id the QUIC session ID
+    @param stream_id the HTTP/3 stream ID (anchor stream for the datagram channel)
+    @param data the datagram payload to send
+
+    @throw QUIC-ERROR if no QUIC session with the given ID is active or parameters are invalid
+    @throw QUIC-DATAGRAM-NOT-SUPPORTED if the remote peer does not support QUIC datagrams
+    @throw QUIC-DATAGRAM-SIZE-ERROR if the payload exceeds the maximum datagram size
+
+    @since %Qore 2.3
+
+    @see @ref readQuicDatagram()
+    @see @ref getQuicMaxDatagramSize()
+    @see @ref isQuicDatagramSupported()
+*/
+nothing Socket::submitQuicDatagram(int session_id, int stream_id, binary data) [dom=NETWORK] {
+    if (session_id <= 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
+        return QoreValue();
+    }
+    if (stream_id < 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid stream_id %lld: must be >= 0", (long long)stream_id);
+        return QoreValue();
+    }
+    s->submitQuicDatagram(session_id, stream_id, data, xsink);
+}
+
+//! Read the next incoming QUIC datagram for an HTTP/3 stream (RFC 9221/9297)
+/** Blocks until a datagram arrives on the given anchor stream or the timeout expires.
+
+    @param session_id the QUIC session ID
+    @param stream_id the HTTP/3 stream ID (anchor stream)
+    @param timeout maximum wait time (default 30 seconds)
+
+    @return the datagram payload as binary data, or @ref nothing on timeout
+
+    @throw QUIC-ERROR if no QUIC session with the given ID is active or parameters are invalid
+
+    @since %Qore 2.3
+
+    @see @ref submitQuicDatagram()
+*/
+*binary Socket::readQuicDatagram(int session_id, int stream_id, timeout timeout = 30s) [dom=NETWORK] {
+    if (session_id <= 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
+        return QoreValue();
+    }
+    if (stream_id < 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid stream_id %lld: must be >= 0", (long long)stream_id);
+        return QoreValue();
+    }
+    return s->readQuicDatagram(session_id, stream_id, (int)timeout, xsink);
+}
+
+//! Get the maximum datagram payload size for a QUIC session (RFC 9221)
+/** Returns the maximum payload that can be sent in a single QUIC DATAGRAM frame,
+    accounting for quarter-stream-ID encoding overhead and path MTU.
+
+    @param session_id the QUIC session ID
+    @param stream_id the HTTP/3 stream ID (for overhead calculation)
+
+    @return maximum payload size in bytes, or 0 if datagrams are not supported
+
+    @throw QUIC-ERROR if no QUIC session with the given ID is active or parameters are invalid
+
+    @since %Qore 2.3
+
+    @see @ref submitQuicDatagram()
+    @see @ref isQuicDatagramSupported()
+*/
+int Socket::getQuicMaxDatagramSize(int session_id, int stream_id) [dom=NETWORK] {
+    if (session_id <= 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
+        return 0;
+    }
+    if (stream_id < 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid stream_id %lld: must be >= 0", (long long)stream_id);
+        return 0;
+    }
+    return s->getQuicMaxDatagramSize(session_id, stream_id, xsink);
+}
+
+//! Check if the remote peer supports QUIC datagrams (RFC 9221)
+/** Returns @ref True if the remote peer advertised a non-zero @c max_datagram_frame_size
+    in its QUIC transport parameters.
+
+    @param session_id the QUIC session ID
+
+    @return @ref True if datagrams are supported, @ref False otherwise
+
+    @throw QUIC-ERROR if no QUIC session with the given ID is active
+
+    @since %Qore 2.3
+
+    @see @ref submitQuicDatagram()
+    @see @ref getQuicMaxDatagramSize()
+*/
+bool Socket::isQuicDatagramSupported(int session_id) [dom=NETWORK] {
+    if (session_id <= 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
+        return false;
+    }
+    return s->isQuicDatagramSupported(session_id, xsink);
+}

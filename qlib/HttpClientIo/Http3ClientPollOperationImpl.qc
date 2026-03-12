@@ -154,6 +154,11 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
         controller_driven = flag;
     }
 
+    #! Returns the QUIC session ID (0 if not yet connected)
+    int getSessionId() {
+        return session_id;
+    }
+
     #! Returns the number of active streams (lock-free for performance)
     /** Overrides the base class locked version for the HTTP/3 hot path.
         The int type in Qore is atomic-read safe, and a stale-by-one value
@@ -437,9 +442,6 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
 
                 int stream_id = output.stream_id;
                 string sid = string(stream_id);
-                log(LoggerLevel::DEBUG, "response ready: stream_id=%d status=%d",
-                    stream_id, output.status_code);
-
                 *code cb;
                 *hash<auto> stream_ctx;
                 {

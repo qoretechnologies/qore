@@ -234,6 +234,12 @@ public:
     //! Maximum stream body size (1 MB)
     static constexpr size_t QUIC_MAX_STREAM_BODY = 1048576;
 
+    //! Maximum DATAGRAM frame size (RFC 9221) advertised in transport parameters
+    /** 65535 is the maximum value; the actual per-datagram payload size is further
+        limited by the path MTU minus QUIC overhead.
+    */
+    static constexpr uint64_t QUIC_MAX_DATAGRAM_FRAME_SIZE = 65535;
+
     //! Client source connection ID length (8 bytes is common; server uses NGTCP2_MAX_CIDLEN)
     static constexpr size_t QUIC_CLIENT_SCID_LEN = 8;
 
@@ -710,6 +716,44 @@ public:
     */
     DLLLOCAL int cancelStream(int64_t stream_id, uint64_t app_error_code, ExceptionSink* xsink);
 
+    //! Send a QUIC DATAGRAM frame associated with an HTTP/3 stream (RFC 9221/9297)
+    /** The quarter-stream-ID is computed from the stream ID and prepended to the payload
+        as a variable-length integer per RFC 9297 §4.
+
+        @param stream_id the HTTP/3 stream ID (anchor stream for the datagram channel)
+        @param data datagram payload
+        @param len payload length
+        @param xsink exception sink
+        @return 0 on success, -1 on error
+    */
+    DLLLOCAL int submitDatagram(int64_t stream_id, const uint8_t* data, size_t len,
+                       ExceptionSink* xsink);
+
+    //! Read the next incoming QUIC datagram for a stream (RFC 9221/9297)
+    /** Blocks until a datagram arrives or the timeout expires.
+
+        @param stream_id the HTTP/3 stream ID (anchor stream)
+        @param timeout_ms maximum wait time in milliseconds (0 = no wait, -1 = infinite)
+        @param xsink exception sink
+        @return binary datagram payload, or QoreValue() (NOTHING) on timeout or no data
+    */
+    DLLLOCAL QoreValue readDatagram(int64_t stream_id, int timeout_ms, ExceptionSink* xsink);
+
+    //! Get the maximum datagram payload size for this connection (RFC 9221)
+    /** Returns the maximum payload that can be sent in a single QUIC DATAGRAM frame,
+        accounting for quarter-stream-ID encoding overhead.
+
+        @param stream_id the stream ID (for quarter-stream-ID overhead calculation)
+        @return max payload size in bytes, or 0 if datagrams are not supported
+    */
+    DLLLOCAL size_t getMaxDatagramPayloadSize(int64_t stream_id) const;
+
+    //! Check if the remote peer supports QUIC datagrams (RFC 9221)
+    /** Returns true if the peer advertised a non-zero max_datagram_frame_size in its
+        transport parameters.
+    */
+    DLLLOCAL bool isDatagramSupported() const;
+
     //! Write a CONNECTION_CLOSE packet for graceful shutdown
     /** @param buf output buffer (must be at least 1280 bytes for minimum QUIC packet)
         @param buflen size of the output buffer
@@ -848,6 +892,24 @@ private:
                           ExceptionSink* xsink, SSL_CTX* shared_ssl_ctx = nullptr,
                           int ssl_verify_mode = SSL_VERIFY_NONE,
                           bool ssl_accept_all_certs = false);
+
+    //! Encode a QUIC variable-length integer (RFC 9000 §16) into a buffer
+    /** @param buf destination buffer (must have at least 8 bytes)
+        @param value the value to encode (0..2^62-1)
+        @return number of bytes written (1, 2, 4, or 8), or 0 on error (value too large)
+    */
+    DLLLOCAL static size_t encodeVarInt(uint8_t* buf, uint64_t value);
+
+    //! Decode a QUIC variable-length integer (RFC 9000 §16) from a buffer
+    /** @param data source buffer
+        @param datalen buffer length
+        @param value [out] decoded value
+        @return number of bytes consumed, or 0 on error (truncated input)
+    */
+    DLLLOCAL static size_t decodeVarInt(const uint8_t* data, size_t datalen, uint64_t& value);
+
+    //! Get the encoded length of a QUIC variable-length integer
+    DLLLOCAL static size_t varIntLen(uint64_t value);
 
     //! Get timer expiry without locking (caller must hold mtx_)
     DLLLOCAL ngtcp2_tstamp getExpiryLocked() const;
@@ -1023,6 +1085,13 @@ private:
                                                void* conn_user_data);
 #endif
 
+    //! QUIC DATAGRAM received callback (RFC 9221)
+    /** Routes incoming datagrams to per-stream queues using quarter-stream-ID.
+    */
+    DLLLOCAL static int recvDatagramCallback(ngtcp2_conn* conn, uint32_t flags,
+                                             const uint8_t* data, size_t datalen,
+                                             void* user_data);
+
     //! HTTP/3 shutdown (GOAWAY) callback — invoked when remote sends GOAWAY
     DLLLOCAL static int h3ShutdownCallback(nghttp3_conn* conn, int64_t id,
                                            void* conn_user_data);
@@ -1100,6 +1169,28 @@ private:
     */
     std::unordered_map<int64_t, std::vector<uint8_t>> connect_stream_data_;
     std::mutex connect_data_mutex_;  //!< protects connect_stream_data_
+
+    //! Per-stream incoming datagram queue (RFC 9221/9297)
+    /** Keyed by stream_id.  recvDatagramCallback routes datagrams here based on
+        the quarter-stream-ID in the datagram payload.
+        Protected by datagram_mutex_.
+    */
+    std::unordered_map<int64_t, std::deque<std::vector<uint8_t>>> datagram_queues_;
+    std::mutex datagram_mutex_;  //!< protects datagram_queues_
+
+    //! Condition variable for datagram arrival notifications
+    /** Uses the same generation-counter pattern as drain_cv_ to avoid
+        POSIX UB with PTHREAD_MUTEX_RECURSIVE.
+    */
+    std::mutex datagram_cv_mtx_;
+    std::condition_variable datagram_cv_;
+    std::atomic<unsigned> datagram_gen_{0};
+
+    //! Outgoing datagram queue (written by submitDatagram, consumed by writePacketsLocked)
+    /** Each entry is a fully framed datagram (quarter-stream-ID + payload).
+        Protected by mtx_.
+    */
+    std::deque<std::pair<uint64_t, std::vector<uint8_t>>> pending_datagrams_;
 
     //! Remote peer settings for extended CONNECT (RFC 9220)
     std::atomic<bool> remote_enable_connect_protocol_{false};
