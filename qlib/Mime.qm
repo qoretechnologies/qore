@@ -31,7 +31,7 @@
 %modern
 
 module Mime {
-    version = "1.7";
+    version = "1.8";
     desc = "Mime module providing MIME-related definitions";
     author = "David Nichols";
     url = "http://qore.org";
@@ -105,6 +105,13 @@ printf("%y: header word b: %y\n", mime_decode_header(mime_encode_header_word_b(s
     @endverbatim
 
     @section mimereleasenotes Release Notes
+
+    @subsection mime_1_8 v1.8
+    - added @ref Mime::YamlMimeTypes "YamlMimeTypes" constant: set of all equivalent YAML MIME types
+      (\c "text/x-yaml", \c "application/x-yaml", \c "application/yaml", \c "text/yaml") for normalization
+    - added @ref Mime::mime_check_equivalent_type() "mime_check_equivalent_type()" function to check if a
+      content type has an equivalent match in a set of accepted MIME types (currently handles YAML MIME type
+      equivalence)
 
     @subsection mime_1_7 v1.7
     - added new multipart message classes:
@@ -309,6 +316,19 @@ public namespace Mime {
     */
     public const MimeTypeYamlApp = "application/yaml";
 
+    #! Set of all equivalent YAML MIME types for normalization
+    /** All of these MIME types represent YAML content and should be treated as equivalent
+        when validating content types against API schemas.
+
+        @since Mime 1.8
+    */
+    public const YamlMimeTypes = {
+        MimeTypeYaml: True,
+        MimeTypeYamlRpc: True,
+        MimeTypeYamlApp: True,
+        "text/yaml": True,
+    };
+
     #! MIME type for CBOR (RFC 8949)
     /** @since Mime 1.7
     */
@@ -408,6 +428,30 @@ public namespace Mime {
         # Strip charset and other modifiers
         mime =~ s/;.*//;
         return MimeTypesJson{mime} ?? False;
+    }
+
+    #! Checks if a content type has an equivalent match in a set of accepted MIME types
+    /** YAML has multiple equivalent MIME types (\c "application/yaml", \c "text/x-yaml",
+        \c "application/x-yaml", \c "text/yaml") that should be treated as interchangeable
+        when validating content types against API schemas.
+
+        @param content the content type to check
+        @param mime_types a hash of accepted MIME types (keys are MIME type strings)
+
+        @return True if an equivalent MIME type is found in the accepted set
+
+        @since Mime 1.8
+    */
+    public bool sub mime_check_equivalent_type(string content, hash<string, bool> mime_types) {
+        # check YAML equivalence
+        if (YamlMimeTypes{content}) {
+            foreach string yaml_type in (keys YamlMimeTypes) {
+                if (mime_types{yaml_type}) {
+                    return True;
+                }
+            }
+        }
+        return False;
     }
 
     #! A map of default mime types per file extension; the hash keys are file extensions in lower-case without the dot (ex: \c "txt")
