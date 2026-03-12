@@ -2012,6 +2012,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
 
         # Register a slow handler to exhaust the thread pool
         Queue slow_started();
+        Counter slow_done(pool_size);
         SlowHandler slow_handler(slow_started, 10s);
         server.setHandler("slow-handler", "/slow", MimeTypeHtml, slow_handler);
         server.setDefaultHandler("slow-handler", slow_handler);
@@ -2063,6 +2064,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             # Exhaust the handler thread pool with slow requests
             for (int i = 0; i < pool_size; i++) {
                 background sub () {
+                    on_exit slow_done.dec();
                     try {
                         HTTPClient client({
                             "url": "http://localhost:" + test_port,
@@ -2095,6 +2097,10 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             assertEq(200, resp.status_code, "inline handler works with exhausted pool");
             assertEq("inline-ok", resp.body, "inline handler body with exhausted pool");
         }
+
+        # Wait for the background slow requests to finish before teardown. Otherwise the
+        # test races server.stop() against in-flight handler threads and can wedge CI.
+        assertEq(0, slow_done.waitForZero(15s), "slow requests should finish before teardown");
     }
 
     #! Verifies that requests with a body fall back to the thread pool even when

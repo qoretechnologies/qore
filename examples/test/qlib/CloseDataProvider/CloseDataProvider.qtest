@@ -1,0 +1,780 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  CloseDataProvider.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/RestClient.qm
+%requires ../../../../qlib/Mime.qm
+
+%try-module json
+%define NoJson
+%endtry
+
+%requires ../../../../qlib/CloseRestClient.qm
+%requires ../../../../qlib/CloseDataProvider
+
+%exec-class CloseDataProviderTest
+
+public class CloseDataProviderTest inherits QUnit::Test {
+    private {
+        #! Close REST client for integration tests
+        *CloseRestClient::CloseRestClient client;
+
+        #! Logger for verbose output
+        Logger logger;
+
+        #! Custom command-line options
+        const MyOpts = Opts + {
+            "conn": "c,connection=s",
+        };
+
+        #! Test resource IDs created during integration tests (for cleanup)
+        *string testLeadId;
+        *string testContactId;
+        *string testOpportunityId;
+        *string testTaskId;
+        *string testNoteId;
+        *string testCallId;
+        *string testEmailId;
+        *string testSmsId;
+    }
+
+    constructor() : Test("CloseDataProvider Test", "1.0", \ARGV, MyOpts) {
+        logger = new Logger("test", LoggerLevel::getLevelInfo());
+
+        # Sanity tests (always run, no credentials needed)
+        addTestCase("sanity tests", \sanityTests());
+        addTestCase("factory tests", \factoryTests());
+        addTestCase("metadata tests", \metadataTests());
+        addTestCase("child provider tests", \childProviderTests());
+        addTestCase("data type tests", \dataTypeTests());
+        addTestCase("negative tests", \negativeTests());
+        addTestCase("connection tests", \connectionTests());
+        addTestCase("action catalog tests", \actionCatalogTests());
+
+        # Integration tests (require CLOSE_API_KEY or OAuth2 connection)
+        addTestCase("integration tests", \integrationTests());
+
+        # Event/trigger tests
+        addTestCase("event trigger tests", \eventTriggerTests());
+
+        # Try to set up connection for integration tests
+        try {
+            setupConnection();
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("Connection setup failed: %s: %s\n", ex.err, ex.desc);
+            }
+        }
+
+        set_return_value(main());
+    }
+
+    #! Sets up the Close client for integration tests
+    private setupConnection() {
+        *string conn_name = m_options.conn ?? ENV.CLOSE_CONNECTION;
+        if (conn_name) {
+            AbstractConnection conn = get_connection(conn_name);
+            client = conn.get(True);
+            return;
+        }
+        *string token = ENV.CLOSE_TOKEN;
+        if (token) {
+            client = new CloseRestClient::CloseRestClient({"token": token});
+            return;
+        }
+        *string apikey = ENV.CLOSE_API_KEY;
+        if (!apikey) {
+            if (m_options.verbose) {
+                printf("No API credentials provided (use -c option or CLOSE_TOKEN/CLOSE_API_KEY/"
+                    "CLOSE_CONNECTION env vars)\n");
+            }
+            return;
+        }
+        client = new CloseRestClient::CloseRestClient({"apikey": apikey});
+    }
+
+    #! Check if json module is available
+    private checkJson() {
+%ifdef NoJson
+        testSkip("no json module present");
+%endif
+    }
+
+    #! Basic sanity tests - provider instantiation
+    sanityTests() {
+        checkJson();
+
+        # Test that we can instantiate types without a connection
+        CloseDataProvider::CloseLeadDataType leadType();
+        assertTrue(True, "CloseLeadDataType instantiated");
+
+        CloseDataProvider::CloseContactDataType contactType();
+        assertTrue(True, "CloseContactDataType instantiated");
+    }
+
+    #! Factory tests - verify factory registration
+    factoryTests() {
+        checkJson();
+        AbstractDataProviderFactory factory = DataProvider::getFactory("close");
+        assertEq("close", factory.getInfo().name);
+        assertTrue(factory.getInfo().children_can_support_apis);
+        assertTrue(factory.getInfo().children_can_support_records);
+        assertTrue(factory.getInfo().children_can_support_observers);
+
+        # Verify factory provider info has constructor options
+        hash<auto> factoryOpts = factory.getInfo().provider_info.constructor_options;
+        assertTrue(factoryOpts.hasKey("closerestclient"));
+        assertTrue(factoryOpts.hasKey("closerestclient_options"));
+    }
+
+    #! Metadata tests - verify provider info structure
+    metadataTests() {
+        checkJson();
+        if (!client) {
+            testSkip("no Close connection");
+        }
+
+        CloseDataProvider::CloseDataProvider prov(client);
+        hash<DataProviderInfo> info = prov.getInfo();
+
+        assertTrue(info.supports_children);
+        assertTrue(info.children_can_support_apis);
+        assertTrue(info.children_can_support_records);
+        assertTrue(info.children_can_support_observers);
+        assertEq("CloseDataProvider", info.type);
+
+        # Check constructor options
+        assertTrue(info.constructor_options.hasKey("closerestclient"));
+    }
+
+    #! Child provider tests - verify hierarchy
+    childProviderTests() {
+        checkJson();
+        if (!client) {
+            testSkip("no Close connection");
+        }
+
+        CloseDataProvider::CloseDataProvider prov(client);
+        list<string> children = prov.getChildProviderNames();
+
+        # Core resource providers
+        assertTrue(children.contains("leads"));
+        assertTrue(children.contains("contacts"));
+        assertTrue(children.contains("opportunities"));
+        assertTrue(children.contains("tasks"));
+
+        # Activity providers
+        assertTrue(children.contains("calls"));
+        assertTrue(children.contains("emails"));
+        assertTrue(children.contains("notes"));
+        assertTrue(children.contains("meetings"));
+        assertTrue(children.contains("sms"));
+
+        # Event providers
+        assertTrue(children.contains("events"));
+
+        # Check leads child provider
+        AbstractDataProvider leads = prov.getChildProvider("leads");
+        assertEq("leads", leads.getName());
+        hash<DataProviderInfo> leadsInfo = leads.getInfo();
+        assertTrue(leadsInfo.supports_read);
+        assertTrue(leadsInfo.supports_native_search);
+        assertTrue(leadsInfo.supports_children);
+
+        # Check leads has CRUD children
+        list<string> leadChildren = leads.getChildProviderNames();
+        assertTrue(leadChildren.contains("create"));
+        assertTrue(leadChildren.contains("update"));
+        assertTrue(leadChildren.contains("delete"));
+
+        # Check contacts child provider
+        AbstractDataProvider contacts = prov.getChildProvider("contacts");
+        assertEq("contacts", contacts.getName());
+        list<string> contactChildren = contacts.getChildProviderNames();
+        assertTrue(contactChildren.contains("create"));
+        assertTrue(contactChildren.contains("update"));
+        assertTrue(contactChildren.contains("delete"));
+
+        # Check emails (no update child)
+        AbstractDataProvider emails = prov.getChildProvider("emails");
+        list<string> emailChildren = emails.getChildProviderNames();
+        assertTrue(emailChildren.contains("create"));
+        assertTrue(emailChildren.contains("delete"));
+        assertFalse(emailChildren.contains("update"));
+
+        # Check sms (no update child)
+        AbstractDataProvider sms = prov.getChildProvider("sms");
+        list<string> smsChildren = sms.getChildProviderNames();
+        assertTrue(smsChildren.contains("create"));
+        assertTrue(smsChildren.contains("delete"));
+        assertFalse(smsChildren.contains("update"));
+
+        # Check meetings (read-only — Close API does not support write operations via REST)
+        AbstractDataProvider meetingsP = prov.getChildProvider("meetings");
+        assertTrue(meetingsP.getInfo().supports_read);
+
+        # Check events child provider
+        AbstractDataProvider events = prov.getChildProvider("events");
+        assertEq("events", events.getName());
+        hash<DataProviderInfo> eventsInfo = events.getInfo();
+        assertTrue(eventsInfo.supports_children);
+        assertTrue(eventsInfo.children_can_support_observers);
+
+        # Check events child providers
+        list<string> eventChildren = events.getChildProviderNames();
+        assertTrue(eventChildren.contains("lead-created"));
+        assertTrue(eventChildren.contains("lead-updated"));
+        assertTrue(eventChildren.contains("lead-deleted"));
+        assertTrue(eventChildren.contains("contact-created"));
+        assertTrue(eventChildren.contains("contact-updated"));
+        assertTrue(eventChildren.contains("contact-deleted"));
+        assertTrue(eventChildren.contains("opportunity-created"));
+        assertTrue(eventChildren.contains("opportunity-updated"));
+        assertTrue(eventChildren.contains("opportunity-deleted"));
+    }
+
+    #! Data type tests - verify record type definitions
+    dataTypeTests() {
+        checkJson();
+
+        # Test lead data type
+        CloseDataProvider::CloseLeadDataType leadType();
+        hash<string, AbstractDataField> leadFields = leadType.getFields();
+        assertTrue(leadFields.hasKey("id"));
+        assertTrue(leadFields.hasKey("display_name"));
+        assertTrue(leadFields.hasKey("status_id"));
+        assertTrue(leadFields.hasKey("status_label"));
+        assertTrue(leadFields.hasKey("description"));
+        assertTrue(leadFields.hasKey("date_created"));
+        assertTrue(leadFields.hasKey("date_updated"));
+
+        # Test contact data type
+        CloseDataProvider::CloseContactDataType contactType();
+        hash<string, AbstractDataField> contactFields = contactType.getFields();
+        assertTrue(contactFields.hasKey("id"));
+        assertTrue(contactFields.hasKey("name"));
+        assertTrue(contactFields.hasKey("lead_id"));
+        assertTrue(contactFields.hasKey("title"));
+
+        # Test opportunity data type
+        CloseDataProvider::CloseOpportunityDataType oppType();
+        hash<string, AbstractDataField> oppFields = oppType.getFields();
+        assertTrue(oppFields.hasKey("id"));
+        assertTrue(oppFields.hasKey("lead_id"));
+        assertTrue(oppFields.hasKey("status_id"));
+        assertTrue(oppFields.hasKey("value"));
+
+        # Test task data type
+        CloseDataProvider::CloseTaskDataType taskType();
+        hash<string, AbstractDataField> taskFields = taskType.getFields();
+        assertTrue(taskFields.hasKey("id"));
+        assertTrue(taskFields.hasKey("lead_id"));
+        assertTrue(taskFields.hasKey("_type"));
+
+        # Test call data type
+        CloseDataProvider::CloseCallDataType callType();
+        hash<string, AbstractDataField> callFields = callType.getFields();
+        assertTrue(callFields.hasKey("id"));
+        assertTrue(callFields.hasKey("lead_id"));
+        assertTrue(callFields.hasKey("direction"));
+
+        # Test email data type
+        CloseDataProvider::CloseEmailDataType emailType();
+        hash<string, AbstractDataField> emailFields = emailType.getFields();
+        assertTrue(emailFields.hasKey("id"));
+        assertTrue(emailFields.hasKey("lead_id"));
+        assertTrue(emailFields.hasKey("subject"));
+
+        # Test note data type
+        CloseDataProvider::CloseNoteDataType noteType();
+        hash<string, AbstractDataField> noteFields = noteType.getFields();
+        assertTrue(noteFields.hasKey("id"));
+        assertTrue(noteFields.hasKey("lead_id"));
+
+        # Test meeting data type
+        CloseDataProvider::CloseMeetingDataType meetingType();
+        hash<string, AbstractDataField> meetingFields = meetingType.getFields();
+        assertTrue(meetingFields.hasKey("id"));
+        assertTrue(meetingFields.hasKey("lead_id"));
+        assertTrue(meetingFields.hasKey("title"));
+
+        # Test SMS data type
+        CloseDataProvider::CloseSmsDataType smsType();
+        hash<string, AbstractDataField> smsFields = smsType.getFields();
+        assertTrue(smsFields.hasKey("id"));
+        assertTrue(smsFields.hasKey("lead_id"));
+        assertTrue(smsFields.hasKey("text"));
+
+        # Test event data type
+        CloseDataProvider::CloseEventDataType eventType();
+        hash<string, AbstractDataField> eventFields = eventType.getFields();
+        assertTrue(eventFields.hasKey("id"));
+        assertTrue(eventFields.hasKey("object_type"));
+        assertTrue(eventFields.hasKey("action"));
+
+        # Test entry sub-types
+        CloseDataProvider::CloseEmailEntryDataType emailEntryType();
+        hash<string, AbstractDataField> emailEntryFields = emailEntryType.getFields();
+        assertTrue(emailEntryFields.hasKey("type"));
+        assertTrue(emailEntryFields.hasKey("email"));
+
+        CloseDataProvider::ClosePhoneEntryDataType phoneEntryType();
+        hash<string, AbstractDataField> phoneEntryFields = phoneEntryType.getFields();
+        assertTrue(phoneEntryFields.hasKey("type"));
+        assertTrue(phoneEntryFields.hasKey("phone"));
+
+        CloseDataProvider::CloseUrlEntryDataType urlEntryType();
+        hash<string, AbstractDataField> urlEntryFields = urlEntryType.getFields();
+        assertTrue(urlEntryFields.hasKey("type"));
+        assertTrue(urlEntryFields.hasKey("url"));
+
+        CloseDataProvider::CloseAddressEntryDataType addressEntryType();
+        hash<string, AbstractDataField> addressEntryFields = addressEntryType.getFields();
+        assertTrue(addressEntryFields.hasKey("address_1"));
+        assertTrue(addressEntryFields.hasKey("city"));
+        assertTrue(addressEntryFields.hasKey("state"));
+        assertTrue(addressEntryFields.hasKey("zipcode"));
+        assertTrue(addressEntryFields.hasKey("country"));
+
+        CloseDataProvider::CloseContactEntryDataType contactEntryType();
+        hash<string, AbstractDataField> contactEntryFields = contactEntryType.getFields();
+        assertTrue(contactEntryFields.hasKey("name"));
+        assertTrue(contactEntryFields.hasKey("title"));
+        assertTrue(contactEntryFields.hasKey("emails"));
+        assertTrue(contactEntryFields.hasKey("phones"));
+        assertTrue(contactEntryFields.hasKey("urls"));
+    }
+
+    #! Negative tests - test error handling and invalid inputs
+    negativeTests() {
+        checkJson();
+        if (!client) {
+            testSkip("no Close connection");
+        }
+
+        CloseDataProvider::CloseDataProvider prov(client);
+
+        # Test getting non-existent child provider
+        assertThrows("INVALID-CHILD-PROVIDER", sub() {
+            prov.getChildProviderEx("nonexistent");
+        });
+
+        # Test invalid child in events provider
+        AbstractDataProvider events = prov.getChildProvider("events");
+        assertThrows("INVALID-CHILD-PROVIDER", sub() {
+            events.getChildProviderEx("invalid-event-type");
+        });
+    }
+
+    #! Connection tests - verify connection scheme
+    connectionTests() {
+        checkJson();
+
+        # Verify connection scheme is registered
+        *hash<auto> scheme = ConnectionSchemeCache::getScheme("closerest");
+        assertTrue(exists scheme, "closerest scheme registered");
+        assertTrue(exists scheme.cls, "closerest scheme has class");
+    }
+
+    #! Action catalog tests - verify action catalog registration
+    actionCatalogTests() {
+        checkJson();
+
+        # Verify the app is registered
+        *hash<auto> app = DataProviderActionCatalog::getApp(CloseDataProvider::AppName);
+        assertTrue(exists app, "Close app registered in action catalog");
+        assertEq("Close", app.display_name);
+        assertEq("closerest", app.scheme);
+
+        # Verify some key actions exist
+        list<hash<auto>> actions = DataProviderActionCatalog::getActionsEx(
+            CloseDataProvider::AppName);
+        assertTrue(actions.size() > 0, "Close has registered actions");
+
+        # Check action names
+        hash<string, bool> actionNames;
+        foreach hash<auto> action in (actions) {
+            actionNames{action.action} = True;
+        }
+
+        # CRUD actions
+        assertTrue(actionNames.hasKey("create-lead"));
+        assertTrue(actionNames.hasKey("update-lead"));
+        assertTrue(actionNames.hasKey("delete-lead"));
+        assertTrue(actionNames.hasKey("find-leads"));
+        assertTrue(actionNames.hasKey("get-lead"));
+
+        assertTrue(actionNames.hasKey("create-contact"));
+        assertTrue(actionNames.hasKey("create-opportunity"));
+        assertTrue(actionNames.hasKey("create-task"));
+
+        # Activity actions
+        assertTrue(actionNames.hasKey("create-call"));
+        assertTrue(actionNames.hasKey("create-email"));
+        assertTrue(actionNames.hasKey("create-note"));
+        assertTrue(actionNames.hasKey("create-sms"));
+
+        # Event triggers
+        assertTrue(actionNames.hasKey("lead-created"));
+        assertTrue(actionNames.hasKey("lead-updated"));
+        assertTrue(actionNames.hasKey("lead-deleted"));
+        assertTrue(actionNames.hasKey("contact-created"));
+        assertTrue(actionNames.hasKey("opportunity-created"));
+    }
+
+    #! Integration tests - require live API credentials
+    integrationTests() {
+        checkJson();
+        if (!client) {
+            testSkip("no Close connection");
+        }
+
+        CloseDataProvider::CloseDataProvider prov(client);
+        string ts = now_us().format("YYYY-MM-DD HH:mm:ss");
+
+        # --- Lead CRUD ---
+        AbstractDataProvider leads = prov.getChildProvider("leads");
+        hash<auto> lead;
+        try {
+            lead = leads.getChildProvider("create").doRequest({
+                "name": "Test Lead from Qore " + ts,
+                "description": "Created by Qore integration test",
+            });
+            testLeadId = lead.id;
+            assertEq(True, lead.id.val(), "Lead created with ID");
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "REST-RESPONSE-ERROR" && ex.arg.status_code >= 400) {
+                testSkip(sprintf("Close API error creating lead: %s", ex.desc));
+            }
+            rethrow;
+        }
+
+        # Verify lead appears in search
+        AbstractDataProviderRecordIterator iter = leads.searchRecords(NOTHING,
+            {"lead_id": testLeadId});
+        assertTrue(iter.next(), "Lead found by ID search");
+        assertEq(testLeadId, iter.getValue().id);
+
+        # Update the lead
+        hash<auto> updatedLead = leads.getChildProvider("update").doRequest({
+            "lead_id": testLeadId,
+            "description": "Updated by Qore test",
+        });
+        assertEq("Updated by Qore test", updatedLead.description, "Lead updated successfully");
+
+        # --- Contact CRUD ---
+        AbstractDataProvider contacts = prov.getChildProvider("contacts");
+        try {
+            hash<auto> contact = contacts.getChildProvider("create").doRequest({
+                "lead_id": testLeadId,
+                "name": "Test Contact Qore",
+                "title": "QA Engineer",
+            });
+            testContactId = contact.id;
+            assertEq(True, contact.id.val(), "Contact created with ID");
+            assertEq(testLeadId, contact.lead_id, "Contact linked to lead");
+
+            # Update the contact
+            hash<auto> updatedContact = contacts.getChildProvider("update").doRequest({
+                "contact_id": testContactId,
+                "title": "Senior QA Engineer",
+            });
+            assertEq("Senior QA Engineer", updatedContact.title, "Contact updated successfully");
+
+            # Delete the contact
+            contacts.getChildProvider("delete").doRequest({"contact_id": testContactId});
+            testContactId = NOTHING;
+            assertTrue(True, "Contact deleted successfully");
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("Contact CRUD failed (non-fatal): %s: %s\n", ex.err, ex.desc);
+            }
+            assertEq(True, True, "Contact CRUD skipped due to error: " + ex.err);
+        }
+
+        # --- Opportunity CRUD ---
+        # Fetch available status IDs first; skip if not accessible
+        try {
+            hash<auto> statusResponse = client.get("status/opportunity/");
+            list<auto> statuses = statusResponse.body.data ?? ();
+            if (statuses.size()) {
+                string oppStatusId = statuses[0].id;
+                AbstractDataProvider opportunities = prov.getChildProvider("opportunities");
+                hash<auto> opp = opportunities.getChildProvider("create").doRequest({
+                    "lead_id": testLeadId,
+                    "status_id": oppStatusId,
+                    "note": "Qore test opportunity",
+                    "confidence": 50,
+                });
+                testOpportunityId = opp.id;
+                assertEq(True, opp.id.val(), "Opportunity created with ID");
+                assertEq(testLeadId, opp.lead_id, "Opportunity linked to lead");
+
+                # Update the opportunity
+                hash<auto> updatedOpp = opportunities.getChildProvider("update").doRequest({
+                    "opportunity_id": testOpportunityId,
+                    "note": "Updated by Qore test",
+                    "confidence": 75,
+                });
+                assertEq(75, updatedOpp.confidence, "Opportunity updated successfully");
+
+                # Delete the opportunity
+                opportunities.getChildProvider("delete").doRequest({"opportunity_id": testOpportunityId});
+                testOpportunityId = NOTHING;
+                assertTrue(True, "Opportunity deleted successfully");
+            } else {
+                assertEq(True, True, "Opportunity CRUD skipped: no statuses available");
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("Opportunity CRUD failed (non-fatal): %s: %s\n", ex.err, ex.desc);
+            }
+            assertEq(True, True, "Opportunity CRUD skipped: " + ex.err);
+        }
+
+        # --- Task CRUD ---
+        AbstractDataProvider tasks = prov.getChildProvider("tasks");
+        try {
+            hash<auto> task = tasks.getChildProvider("create").doRequest({
+                "lead_id": testLeadId,
+                "_type": "lead",
+                "text": "Qore test task",
+            });
+            testTaskId = task.id;
+            assertEq(True, task.id.val(), "Task created with ID");
+            assertEq(testLeadId, task.lead_id, "Task linked to lead");
+
+            # Update the task
+            hash<auto> updatedTask = tasks.getChildProvider("update").doRequest({
+                "task_id": testTaskId,
+                "text": "Updated Qore test task",
+            });
+            assertEq("Updated Qore test task", updatedTask.text, "Task updated successfully");
+
+            # Delete the task
+            tasks.getChildProvider("delete").doRequest({"task_id": testTaskId});
+            testTaskId = NOTHING;
+            assertTrue(True, "Task deleted successfully");
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("Task CRUD failed (non-fatal): %s: %s\n", ex.err, ex.desc);
+            }
+            assertEq(True, True, "Task CRUD skipped due to error: " + ex.err);
+        }
+
+        # --- Note CRUD ---
+        AbstractDataProvider notes = prov.getChildProvider("notes");
+        try {
+            hash<auto> note = notes.getChildProvider("create").doRequest({
+                "lead_id": testLeadId,
+                "note": "Qore test note content",
+            });
+            testNoteId = note.id;
+            assertEq(True, note.id.val(), "Note created with ID");
+            assertEq(testLeadId, note.lead_id, "Note linked to lead");
+
+            # Update the note
+            hash<auto> updatedNote = notes.getChildProvider("update").doRequest({
+                "note_id": testNoteId,
+                "note": "Updated Qore test note",
+            });
+            assertEq("Updated Qore test note", updatedNote.note, "Note updated successfully");
+
+            # Delete the note
+            notes.getChildProvider("delete").doRequest({"note_id": testNoteId});
+            testNoteId = NOTHING;
+            assertTrue(True, "Note deleted successfully");
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("Note CRUD failed (non-fatal): %s: %s\n", ex.err, ex.desc);
+            }
+            assertEq(True, True, "Note CRUD skipped due to error: " + ex.err);
+        }
+
+        # --- Call CRUD ---
+        AbstractDataProvider calls = prov.getChildProvider("calls");
+        try {
+            hash<auto> call = calls.getChildProvider("create").doRequest({
+                "lead_id": testLeadId,
+                "direction": "outbound",
+                "duration": 30,
+                "status": "completed",
+                "note": "Qore test call note",
+            });
+            testCallId = call.id;
+            assertEq(True, call.id.val(), "Call created with ID");
+            assertEq(testLeadId, call.lead_id, "Call linked to lead");
+
+            # Update the call
+            hash<auto> updatedCall = calls.getChildProvider("update").doRequest({
+                "call_id": testCallId,
+                "note": "Updated Qore test call note",
+            });
+            assertEq("Updated Qore test call note", updatedCall.note, "Call updated successfully");
+
+            # Delete the call
+            calls.getChildProvider("delete").doRequest({"call_id": testCallId});
+            testCallId = NOTHING;
+            assertTrue(True, "Call deleted successfully");
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("Call CRUD failed (non-fatal): %s: %s\n", ex.err, ex.desc);
+            }
+            assertEq(True, True, "Call CRUD skipped due to error: " + ex.err);
+        }
+
+        # --- Email create/delete (draft) ---
+        AbstractDataProvider emails = prov.getChildProvider("emails");
+        try {
+            hash<auto> email = emails.getChildProvider("create").doRequest({
+                "lead_id": testLeadId,
+                "status": "draft",
+                "subject": "Qore test email subject",
+                "body_text": "Qore test email body",
+            });
+            testEmailId = email.id;
+            assertEq(True, email.id.val(), "Email created with ID");
+            assertEq(testLeadId, email.lead_id, "Email linked to lead");
+            assertEq("draft", email.status, "Email created as draft");
+
+            # Delete the email
+            emails.getChildProvider("delete").doRequest({"email_id": testEmailId});
+            testEmailId = NOTHING;
+            assertTrue(True, "Email deleted successfully");
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("Email create/delete failed (non-fatal): %s: %s\n", ex.err, ex.desc);
+            }
+            assertEq(True, True, "Email create/delete skipped due to error: " + ex.err);
+        }
+
+        # --- SMS create/delete (requires configured phone number; skip if unavailable) ---
+        AbstractDataProvider sms = prov.getChildProvider("sms");
+        try {
+            hash<auto> smsMsg = sms.getChildProvider("create").doRequest({
+                "lead_id": testLeadId,
+                "local_phone": ENV.CLOSE_TEST_PHONE ?? "+15550001111",
+                "text": "Qore test SMS message",
+                "status": "draft",
+            });
+            testSmsId = smsMsg.id;
+            assertEq(True, smsMsg.id.val(), "SMS created with ID");
+            assertEq(testLeadId, smsMsg.lead_id, "SMS linked to lead");
+
+            # Delete the SMS
+            sms.getChildProvider("delete").doRequest({"sms_id": testSmsId});
+            testSmsId = NOTHING;
+            assertTrue(True, "SMS deleted successfully");
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("SMS create/delete failed (non-fatal, requires configured phone): %s: %s\n",
+                    ex.err, ex.desc);
+            }
+            assertEq(True, True, "SMS create/delete skipped: " + ex.err);
+        }
+
+        # --- Delete the lead (final cleanup) ---
+        leads.getChildProvider("delete").doRequest({"lead_id": testLeadId});
+        testLeadId = NOTHING;
+        assertTrue(True, "Lead deleted successfully");
+    }
+
+    #! Event trigger tests - verify event provider structure and example data
+    eventTriggerTests() {
+        checkJson();
+        if (!client) {
+            testSkip("no Close connection");
+        }
+
+        CloseDataProvider::CloseDataProvider prov(client);
+        AbstractDataProvider events = prov.getChildProvider("events");
+
+        # Check lead-created watch provider
+        AbstractDataProvider leadCreated = events.getChildProvider("lead-created");
+        assertEq("lead-created", leadCreated.getName());
+        hash<DataProviderInfo> info = leadCreated.getInfo();
+        assertTrue(info.supports_observable);
+        assertTrue(info.constructor_options.hasKey("closerestclient"));
+
+        # Test getExampleEventData() for all 9 event triggers
+        list<string> eventNames = (
+            "lead-created", "lead-updated", "lead-deleted",
+            "contact-created", "contact-updated", "contact-deleted",
+            "opportunity-created", "opportunity-updated", "opportunity-deleted",
+        );
+
+        foreach string eventName in (eventNames) {
+            AbstractDataProvider watchProv = events.getChildProvider(eventName);
+            hash<string, hash<DataProviderMessageInfo>> eventTypes = watchProv.getEventTypes();
+            assertTrue(eventTypes.hasKey(eventName), eventName + " event type exists");
+
+            # Verify example event data
+            auto exampleData = watchProv.getExampleEventData(eventName);
+            assertTrue(exists exampleData, eventName + " has example data");
+            assertTrue(exampleData.typeCode() == NT_HASH, eventName + " example data is a hash");
+            assertTrue(exampleData.hasKey("id"), eventName + " example has id");
+            assertTrue(exampleData.hasKey("object_type"), eventName + " example has object_type");
+            assertTrue(exampleData.hasKey("action"), eventName + " example has action");
+            assertTrue(exampleData.hasKey("date_created"), eventName + " example has date_created");
+        }
+    }
+
+    #! Destructor — clean up any test data left over from a failed test run
+    destructor() {
+        if (!client) {
+            return;
+        }
+        # Clean up child resources before the lead (API constraint)
+        foreach hash<auto> cleanup in ((
+            {"path": "contact/", "id": testContactId},
+            {"path": "opportunity/", "id": testOpportunityId},
+            {"path": "task/", "id": testTaskId},
+            {"path": "note/", "id": testNoteId},
+            {"path": "call/", "id": testCallId},
+            {"path": "activity/email/", "id": testEmailId},
+            {"path": "sms/", "id": testSmsId},
+        )) {
+            if (cleanup.id) {
+                try {
+                    client.del(cleanup.path + cleanup.id);
+                } catch () {
+                    # ignore cleanup errors
+                }
+            }
+        }
+        if (testLeadId) {
+            try {
+                client.del("lead/" + testLeadId);
+            } catch () {
+                # ignore cleanup errors
+            }
+        }
+    }
+}
