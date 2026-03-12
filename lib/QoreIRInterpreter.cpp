@@ -7756,9 +7756,16 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         }
         // Optimized map operations with native loops
         case QoreIROpcode::MapScaleInt: {
-            // left = list, right = scale factor
+            // left = list or single value, right = scale factor
             if (left.getType() != NT_LIST) {
-                return QoreValue();
+                // NOTHING returns NOTHING
+                if (left.isNothing()) {
+                    return QoreValue();
+                }
+                // Handle single-value input: apply operation and return directly
+                int64_t val = left.getAsBigInt();
+                int64_t scale = right.getAsBigInt();
+                return val * scale;
             }
             const QoreListNode* l = left.get<const QoreListNode>();
             size_t sz = l->size();
@@ -7771,7 +7778,14 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         }
         case QoreIROpcode::MapScaleFloat: {
             if (left.getType() != NT_LIST) {
-                return QoreValue();
+                // NOTHING returns NOTHING
+                if (left.isNothing()) {
+                    return QoreValue();
+                }
+                // Handle single-value input: apply operation and return directly
+                double val = left.getAsFloat();
+                double scale = right.getAsFloat();
+                return val * scale;
             }
             const QoreListNode* l = left.get<const QoreListNode>();
             size_t sz = l->size();
@@ -7783,9 +7797,16 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             return result.release();
         }
         case QoreIROpcode::MapOffsetInt: {
-            // left = list, right = offset
+            // left = list or single value, right = offset
             if (left.getType() != NT_LIST) {
-                return QoreValue();
+                // NOTHING returns NOTHING
+                if (left.isNothing()) {
+                    return QoreValue();
+                }
+                // Handle single-value input: apply operation and return directly
+                int64_t val = left.getAsBigInt();
+                int64_t offset = right.getAsBigInt();
+                return val + offset;
             }
             const QoreListNode* l = left.get<const QoreListNode>();
             size_t sz = l->size();
@@ -7798,7 +7819,14 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         }
         case QoreIROpcode::MapOffsetFloat: {
             if (left.getType() != NT_LIST) {
-                return QoreValue();
+                // NOTHING returns NOTHING
+                if (left.isNothing()) {
+                    return QoreValue();
+                }
+                // Handle single-value input: apply operation and return directly
+                double val = left.getAsFloat();
+                double offset = right.getAsFloat();
+                return val + offset;
             }
             const QoreListNode* l = left.get<const QoreListNode>();
             size_t sz = l->size();
@@ -7810,9 +7838,15 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             return result.release();
         }
         case QoreIROpcode::MapSquareInt: {
-            // left = list, right = unused
+            // left = list or single value, right = unused
             if (left.getType() != NT_LIST) {
-                return QoreValue();
+                // NOTHING returns NOTHING
+                if (left.isNothing()) {
+                    return QoreValue();
+                }
+                // Handle single-value input: apply operation and return directly
+                int64_t val = left.getAsBigInt();
+                return val * val;
             }
             const QoreListNode* l = left.get<const QoreListNode>();
             size_t sz = l->size();
@@ -7825,7 +7859,13 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         }
         case QoreIROpcode::MapSquareFloat: {
             if (left.getType() != NT_LIST) {
-                return QoreValue();
+                // NOTHING returns NOTHING
+                if (left.isNothing()) {
+                    return QoreValue();
+                }
+                // Handle single-value input: apply operation and return directly
+                double val = left.getAsFloat();
+                return val * val;
             }
             const QoreListNode* l = left.get<const QoreListNode>();
             size_t sz = l->size();
