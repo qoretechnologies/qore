@@ -67,6 +67,10 @@ public:
         return true;
     }
 
+    inline DLLLOCAL virtual const QoreTypeInfo* getTypeInfo() const {
+        return returnTypeInfo;
+    }
+
 protected:
     const QoreTypeInfo* returnTypeInfo = nullptr;
 
@@ -80,10 +84,6 @@ protected:
     }
 
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context);
-
-    inline DLLLOCAL virtual const QoreTypeInfo* getTypeInfo() const {
-        return returnTypeInfo;
-    }
 
     DLLLOCAL QoreValue mapIterator(AbstractIteratorHelper& h, ExceptionSink* xsink) const;
 

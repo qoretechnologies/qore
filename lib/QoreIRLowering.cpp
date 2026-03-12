@@ -8901,7 +8901,7 @@ QoreIRValue QoreIRLowering::lowerHashMapNative(const QoreHashMapOperatorNode* hm
         // Preheader: create empty result hash and proceed to loop
         builder.setBlock(preheader_block);
         QoreIRValue zero = builder.createConstInt(0, hm->loc)->result;
-        QoreIRValue result_hash = builder.createMakeHash({}, hm->loc)->result;
+        QoreIRValue result_hash = builder.createMakeHash({}, hm->loc, hm->getTypeInfo())->result;
         builder.createBranch(header_block, hm->loc);
 
         // Header block: check if index < size
@@ -9023,7 +9023,7 @@ QoreIRValue QoreIRLowering::lowerHashMapNative(const QoreHashMapOperatorNode* hm
 
     // Preheader: create empty result hash and proceed to loop
     builder.setBlock(preheader_block);
-    QoreIRValue result_hash = builder.createMakeHash({}, hm->loc)->result;
+    QoreIRValue result_hash = builder.createMakeHash({}, hm->loc, hm->getTypeInfo())->result;
     QoreIRValue init_index = builder.createConstInt(0, hm->loc)->result;
     builder.createBranch(header_block, hm->loc);
 
