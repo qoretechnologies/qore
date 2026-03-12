@@ -30,7 +30,6 @@
 
 #include <qore/Qore.h>
 #include <qore/QoreRWLock.h>
-#include <cstdio>
 #include <unordered_set>
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreNamespaceIntern.h"

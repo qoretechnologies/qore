@@ -141,27 +141,31 @@ QoreIRConstInstruction* QoreIRBuilder::createConstEnum(const QoreEnumMember* mem
 }
 
 QoreIRInstruction* QoreIRBuilder::createMakeList(const std::vector<QoreIRValue>& values,
-        const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::MakeList);
+        const QoreProgramLocation* loc, const QoreTypeInfo* typeInfo) {
+    auto inst = block->appendInstruction<QoreIRMakeListInstruction>();
     inst->loc = loc;
+    inst->typeInfo = typeInfo;
     inst->result = func->createValue();
     inst->operands = values;
     return inst;
 }
 
 QoreIRInstruction* QoreIRBuilder::createMakeHash(const std::vector<QoreIRValue>& values,
-        const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::MakeHash);
+        const QoreProgramLocation* loc, const QoreTypeInfo* typeInfo) {
+    auto inst = block->appendInstruction<QoreIRMakeHashInstruction>();
     inst->loc = loc;
+    inst->typeInfo = typeInfo;
     inst->result = func->createValue();
     inst->operands = values;
     return inst;
 }
 
 QoreIRInstruction* QoreIRBuilder::createMakeHashConstKeys(std::vector<std::string>&& keys,
-        const std::vector<QoreIRValue>& values, const QoreProgramLocation* loc) {
+        const std::vector<QoreIRValue>& values, const QoreProgramLocation* loc,
+        const QoreTypeInfo* typeInfo) {
     auto inst = block->appendInstruction<QoreIRMakeHashConstKeysInstruction>(std::move(keys));
     inst->loc = loc;
+    inst->typeInfo = typeInfo;
     inst->result = func->createValue();
     inst->operands = values;
     return inst;

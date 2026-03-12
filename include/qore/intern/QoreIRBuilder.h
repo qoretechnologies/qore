@@ -55,11 +55,12 @@ public:
     QoreIRConstInstruction* createConstEnum(const QoreEnumMember* member,
         const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createMakeList(const std::vector<QoreIRValue>& values,
-        const QoreProgramLocation* loc = nullptr);
+        const QoreProgramLocation* loc = nullptr, const QoreTypeInfo* typeInfo = nullptr);
     QoreIRInstruction* createMakeHash(const std::vector<QoreIRValue>& values,
-        const QoreProgramLocation* loc = nullptr);
+        const QoreProgramLocation* loc = nullptr, const QoreTypeInfo* typeInfo = nullptr);
     QoreIRInstruction* createMakeHashConstKeys(std::vector<std::string>&& keys,
-        const std::vector<QoreIRValue>& values, const QoreProgramLocation* loc = nullptr);
+        const std::vector<QoreIRValue>& values, const QoreProgramLocation* loc = nullptr,
+        const QoreTypeInfo* typeInfo = nullptr);
     QoreIRInstruction* createEmptyList(const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createSizedList(QoreIRValue capacity, const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createListAppend(QoreIRValue list, QoreIRValue value,

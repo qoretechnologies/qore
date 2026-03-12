@@ -2170,6 +2170,7 @@ next_instruction:
                 break;
             }
             case QoreIROpcode::MakeList: {
+                const auto* ml = static_cast<const QoreIRMakeListInstruction*>(inst);
                 ReferenceHolder<QoreListNode> list(new QoreListNode(autoTypeInfo), xsink);
                 const QoreTypeInfo* vtype = nullptr;
                 bool vcommon = false;
@@ -2189,10 +2190,14 @@ next_instruction:
                         return false;
                     }
                 }
-                if (!vtype || vtype == anyTypeInfo || !vcommon) {
-                    vtype = autoTypeInfo;
+                if (ml->typeInfo) {
+                    qore_list_private::get(*list)->complexTypeInfo = ml->typeInfo;
+                } else {
+                    if (!vtype || vtype == anyTypeInfo || !vcommon) {
+                        vtype = autoTypeInfo;
+                    }
+                    qore_list_private::get(*list)->complexTypeInfo = qore_get_complex_list_type(vtype);
                 }
-                qore_list_private::get(*list)->complexTypeInfo = qore_get_complex_list_type(vtype);
                 QoreListNode* raw_list = list.release();
                 setValueSlotDirect(values, inst->result.id, QoreValue(raw_list));
                 cleanup.push_back(inst->result.id);
@@ -2200,6 +2205,7 @@ next_instruction:
                 break;
             }
             case QoreIROpcode::MakeHash: {
+                const auto* mh = static_cast<const QoreIRMakeHashInstruction*>(inst);
                 ReferenceHolder<QoreHashNode> hash(new QoreHashNode(autoTypeInfo), xsink);
                 const QoreTypeInfo* vtype = nullptr;
                 bool vcommon = false;
@@ -2230,10 +2236,14 @@ next_instruction:
                         return false;
                     }
                 }
-                if (!vtype || vtype == anyTypeInfo) {
-                    vtype = autoTypeInfo;
+                if (mh->typeInfo) {
+                    qore_hash_private::get(*hash)->complexTypeInfo = mh->typeInfo;
+                } else {
+                    if (!vtype || vtype == anyTypeInfo) {
+                        vtype = autoTypeInfo;
+                    }
+                    qore_hash_private::get(*hash)->complexTypeInfo = qore_get_complex_hash_type(vtype);
                 }
-                qore_hash_private::get(*hash)->complexTypeInfo = qore_get_complex_hash_type(vtype);
                 setValueSlotDirect(values, inst->result.id, QoreValue(hash.release()));
                 cleanup.push_back(inst->result.id);
                 ++ip;
@@ -2266,10 +2276,14 @@ next_instruction:
                         return false;
                     }
                 }
-                if (!vtype || vtype == anyTypeInfo) {
-                    vtype = autoTypeInfo;
+                if (mhck->typeInfo) {
+                    hp->complexTypeInfo = mhck->typeInfo;
+                } else {
+                    if (!vtype || vtype == anyTypeInfo) {
+                        vtype = autoTypeInfo;
+                    }
+                    hp->complexTypeInfo = qore_get_complex_hash_type(vtype);
                 }
-                hp->complexTypeInfo = qore_get_complex_hash_type(vtype);
                 setValueSlotDirect(values, inst->result.id, QoreValue(hash.release()));
                 cleanup.push_back(inst->result.id);
                 ++ip;

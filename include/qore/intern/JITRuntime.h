@@ -259,11 +259,14 @@ uint64_t qore_rt_lvalue_ternary(int opcode, uint64_t lvalue_bits, uint64_t first
 
 // --- Container construction helpers ---
 
-//! MakeList: takes array of NaN-boxed values, returns NaN-boxed list
-uint64_t qore_rt_make_list(uint64_t* values, int count, ExceptionSink* xsink);
+//! MakeList: takes array of NaN-boxed values with optional parse-time type info, returns NaN-boxed list
+uint64_t qore_rt_make_list(uint64_t* values, int count, const QoreTypeInfo* typeInfo, ExceptionSink* xsink);
 
-//! MakeHash: takes array of key-value pairs (alternating), returns NaN-boxed hash
-uint64_t qore_rt_make_hash(uint64_t* kv_pairs, int count, ExceptionSink* xsink);
+//! MakeHash: takes array of key-value pairs (alternating) with optional parse-time type info, returns NaN-boxed hash
+uint64_t qore_rt_make_hash(uint64_t* kv_pairs, int count, const QoreTypeInfo* typeInfo, ExceptionSink* xsink);
+
+//! MakeHashConstKeys: takes array of const keys and NaN-boxed values with optional parse-time type info, returns NaN-boxed hash
+uint64_t qore_rt_make_hash_const_keys(const char** keys, uint64_t* vals, int count, const QoreTypeInfo* typeInfo, ExceptionSink* xsink);
 
 // --- Statement execution helpers ---
 

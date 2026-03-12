@@ -1105,6 +1105,24 @@ public:
     std::string key2;  //!< secondary key (HashMapTwoKeys only)
 };
 
+//! Make list instruction with optional parse-time type info
+class QoreIRMakeListInstruction : public QoreIRInstruction {
+public:
+    explicit QoreIRMakeListInstruction() : QoreIRInstruction(QoreIROpcode::MakeList) {
+    }
+
+    const QoreTypeInfo* typeInfo = nullptr;  //!< parse-time type info (may be nullptr for auto)
+};
+
+//! Make hash instruction with optional parse-time type info
+class QoreIRMakeHashInstruction : public QoreIRInstruction {
+public:
+    explicit QoreIRMakeHashInstruction() : QoreIRInstruction(QoreIROpcode::MakeHash) {
+    }
+
+    const QoreTypeInfo* typeInfo = nullptr;  //!< parse-time type info (may be nullptr for auto)
+};
+
 //! Make hash with constant string keys - operands are values only, keys are pre-stored
 class QoreIRMakeHashConstKeysInstruction : public QoreIRInstruction {
 public:
@@ -1113,6 +1131,7 @@ public:
     }
 
     std::vector<std::string> keys;  //!< constant key names (one per value operand)
+    const QoreTypeInfo* typeInfo = nullptr;  //!< parse-time type info (may be nullptr for auto)
 };
 
 //! Self member access instruction - loads self.member_name

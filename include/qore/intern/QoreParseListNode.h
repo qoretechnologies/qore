@@ -126,6 +126,10 @@ public:
         return values.size();
     }
 
+    DLLLOCAL const QoreTypeInfo* getParseTypeInfo() const {
+        return typeInfo;
+    }
+
     DLLLOCAL bool empty() const {
         return values.empty();
     }

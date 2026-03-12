@@ -141,6 +141,8 @@
 #include <qore/intern/QoreTypeInfo.h>
 #include <qore/intern/QoreClassIntern.h>
 #include <qore/intern/QoreIRVerifier.h>
+#include <qore/intern/QoreHashNodeIntern.h>
+#include <qore/intern/qore_list_private.h>
 
 #include <atomic>
 
@@ -2975,7 +2977,9 @@ QoreIRValue QoreIRLowering::lowerConstant(const QoreValue& expr, std::string& er
                 }
                 values.push_back(lowered);
             }
-            return builder.createMakeList(values, nullptr)->result;
+            // Extract complexTypeInfo from constant list
+            const QoreTypeInfo* cti = qore_list_private::get(*list)->complexTypeInfo;
+            return builder.createMakeList(values, nullptr, cti)->result;
         }
     }
     if (expr.getType() == NT_HASH && expr.isValue()) {
@@ -2993,7 +2997,9 @@ QoreIRValue QoreIRLowering::lowerConstant(const QoreValue& expr, std::string& er
                 }
                 values.push_back(lowered);
             }
-            return builder.createMakeHash(values, nullptr)->result;
+            // Extract complexTypeInfo from constant hash
+            const QoreTypeInfo* cti = qore_hash_private::get(*hash)->complexTypeInfo;
+            return builder.createMakeHash(values, nullptr, cti)->result;
         }
     }
     if (expr.getType() == NT_STRING && expr.isValue()) {
@@ -6089,6 +6095,9 @@ QoreIRValue QoreIRLowering::lowerParseHash(const QoreValue& expr, std::string& e
         }
     }
 
+    // Get parse-time type info from the QoreParseHashNode
+    const QoreTypeInfo* parse_ti = hash->getParseTypeInfo();
+
     if (all_const_keys) {
         // Optimized path: only value operands, key names embedded in instruction
         std::vector<QoreIRValue> value_operands;
@@ -6100,7 +6109,7 @@ QoreIRValue QoreIRLowering::lowerParseHash(const QoreValue& expr, std::string& e
             }
             value_operands.push_back(value);
         }
-        return builder.createMakeHashConstKeys(std::move(const_keys), value_operands, hash->loc)->result;
+        return builder.createMakeHashConstKeys(std::move(const_keys), value_operands, hash->loc, parse_ti)->result;
     }
 
     // General path: alternating key-value operands
@@ -6118,7 +6127,7 @@ QoreIRValue QoreIRLowering::lowerParseHash(const QoreValue& expr, std::string& e
         operands.push_back(key);
         operands.push_back(value);
     }
-    return builder.createMakeHash(operands, hash->loc)->result;
+    return builder.createMakeHash(operands, hash->loc, parse_ti)->result;
 }
 
 QoreIRValue QoreIRLowering::lowerParseList(const QoreValue& expr, std::string& error) {
@@ -6136,7 +6145,9 @@ QoreIRValue QoreIRLowering::lowerParseList(const QoreValue& expr, std::string& e
         }
         values.push_back(value);
     }
-    return builder.createMakeList(values, list->loc)->result;
+    // Get parse-time type info from the QoreParseListNode
+    const QoreTypeInfo* parse_ti = list->getParseTypeInfo();
+    return builder.createMakeList(values, list->loc, parse_ti)->result;
 }
 
 QoreIRValue QoreIRLowering::lowerExists(const QoreValue& expr, std::string& error) {

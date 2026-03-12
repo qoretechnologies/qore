@@ -1086,7 +1086,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lvalue_ternary(int opcode, uint64_t lvalue
 
 // --- Container construction helpers ---
 
-extern "C" DLLEXPORT uint64_t qore_rt_make_list(uint64_t* vals, int count, ExceptionSink* xsink) {
+extern "C" DLLEXPORT uint64_t qore_rt_make_list(uint64_t* vals, int count, const QoreTypeInfo* typeInfo, ExceptionSink* xsink) {
     // Use pushIntern() to preserve complex types (e.g., hash<string, bool>)
     ReferenceHolder<QoreListNode> list(new QoreListNode(autoTypeInfo), xsink);
     qore_list_private* priv = qore_list_private::get(**list);
@@ -1108,14 +1108,18 @@ extern "C" DLLEXPORT uint64_t qore_rt_make_list(uint64_t* vals, int count, Excep
         }
         priv->pushIntern(v);
     }
-    if (!vtype || vtype == anyTypeInfo || !vcommon) {
-        vtype = autoTypeInfo;
+    if (typeInfo) {
+        priv->complexTypeInfo = typeInfo;
+    } else {
+        if (!vtype || vtype == anyTypeInfo || !vcommon) {
+            vtype = autoTypeInfo;
+        }
+        priv->complexTypeInfo = qore_get_complex_list_type(vtype);
     }
-    priv->complexTypeInfo = qore_get_complex_list_type(vtype);
     return toBits(QoreValue(list.release()));
 }
 
-extern "C" DLLEXPORT uint64_t qore_rt_make_hash(uint64_t* kv_pairs, int count, ExceptionSink* xsink) {
+extern "C" DLLEXPORT uint64_t qore_rt_make_hash(uint64_t* kv_pairs, int count, const QoreTypeInfo* typeInfo, ExceptionSink* xsink) {
     ReferenceHolder<QoreHashNode> hash(new QoreHashNode(autoTypeInfo), xsink);
     // count is the number of key-value pairs; kv_pairs has 2*count elements
     // Track common value type for proper hash typing (e.g., hash<string, string> vs hash<string, auto>)
@@ -1140,10 +1144,14 @@ extern "C" DLLEXPORT uint64_t qore_rt_make_hash(uint64_t* kv_pairs, int count, E
             return toBits(QoreValue());
         }
     }
-    if (!vtype || vtype == anyTypeInfo) {
-        vtype = autoTypeInfo;
+    if (typeInfo) {
+        qore_hash_private::get(*hash)->complexTypeInfo = typeInfo;
+    } else {
+        if (!vtype || vtype == anyTypeInfo) {
+            vtype = autoTypeInfo;
+        }
+        qore_hash_private::get(*hash)->complexTypeInfo = qore_get_complex_hash_type(vtype);
     }
-    qore_hash_private::get(*hash)->complexTypeInfo = qore_get_complex_hash_type(vtype);
     return toBits(QoreValue(hash.release()));
 }
 
@@ -1193,7 +1201,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_sprintf(uint64_t val_bits, ExceptionSink* 
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_make_hash_const_keys(const char** keys, uint64_t* vals,
-        int count, ExceptionSink* xsink) {
+        int count, const QoreTypeInfo* typeInfo, ExceptionSink* xsink) {
     ReferenceHolder<QoreHashNode> hash(new QoreHashNode(autoTypeInfo), xsink);
     qore_hash_private* hp = qore_hash_private::get(*hash);
     hp->hm.reserve(count);
@@ -1216,10 +1224,14 @@ extern "C" DLLEXPORT uint64_t qore_rt_make_hash_const_keys(const char** keys, ui
             return toBits(QoreValue());
         }
     }
-    if (!vtype || vtype == anyTypeInfo) {
-        vtype = autoTypeInfo;
+    if (typeInfo) {
+        hp->complexTypeInfo = typeInfo;
+    } else {
+        if (!vtype || vtype == anyTypeInfo) {
+            vtype = autoTypeInfo;
+        }
+        hp->complexTypeInfo = qore_get_complex_hash_type(vtype);
     }
-    hp->complexTypeInfo = qore_get_complex_hash_type(vtype);
     return toBits(QoreValue(hash.release()));
 }
 

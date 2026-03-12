@@ -7424,6 +7424,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
 
         // === Container construction ===
         case QoreIROpcode::MakeList: {
+            const auto* ml = static_cast<const QoreIRMakeListInstruction*>(inst);
             // Allocate stack array and fill with NaN-boxed operand values
             int count = static_cast<int>(inst->operands.size());
             llvm::Value* count_val = llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), count);
@@ -7440,10 +7441,18 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         {llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), i)});
                 builder->CreateStore(elem_boxed, gep);
             }
+            // Convert typeInfo pointer to llvm::Value (or null pointer if not set)
+            llvm::Value* ti_arg;
+            if (ml->typeInfo) {
+                llvm::Value* ti_ptr = llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(ml->typeInfo));
+                ti_arg = builder->CreateIntToPtr(ti_ptr, ptr_type);
+            } else {
+                ti_arg = llvm::ConstantPointerNull::get(llvm::dyn_cast<llvm::PointerType>(ptr_type));
+            }
             auto helper = module.getOrInsertFunction("qore_rt_make_list",
                     llvm::FunctionType::get(i64_type,
-                        {ptr_type, llvm::Type::getInt32Ty(ctx), ptr_type}, false));
-            llvm::Value* list_result = builder->CreateCall(helper, {arr, count_val, xsink_arg});
+                        {ptr_type, llvm::Type::getInt32Ty(ctx), ptr_type, ptr_type}, false));
+            llvm::Value* list_result = builder->CreateCall(helper, {arr, count_val, ti_arg, xsink_arg});
             values[inst->result.id] = list_result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(list_result, inst->result.id, llvm_func);
@@ -7451,6 +7460,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             return true;
         }
         case QoreIROpcode::MakeHash: {
+            const auto* mh = static_cast<const QoreIRMakeHashInstruction*>(inst);
             // Operands are alternating keys and values
             int pair_count = static_cast<int>(inst->operands.size() / 2);
             int total = static_cast<int>(inst->operands.size());
@@ -7468,10 +7478,18 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         {llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), i)});
                 builder->CreateStore(elem_boxed, gep);
             }
+            // Convert typeInfo pointer to llvm::Value (or null pointer if not set)
+            llvm::Value* ti_arg;
+            if (mh->typeInfo) {
+                llvm::Value* ti_ptr = llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(mh->typeInfo));
+                ti_arg = builder->CreateIntToPtr(ti_ptr, ptr_type);
+            } else {
+                ti_arg = llvm::ConstantPointerNull::get(llvm::dyn_cast<llvm::PointerType>(ptr_type));
+            }
             auto helper = module.getOrInsertFunction("qore_rt_make_hash",
                     llvm::FunctionType::get(i64_type,
-                        {ptr_type, llvm::Type::getInt32Ty(ctx), ptr_type}, false));
-            llvm::Value* hash_result = builder->CreateCall(helper, {arr, count_val, xsink_arg});
+                        {ptr_type, llvm::Type::getInt32Ty(ctx), ptr_type, ptr_type}, false));
+            llvm::Value* hash_result = builder->CreateCall(helper, {arr, count_val, ti_arg, xsink_arg});
             values[inst->result.id] = hash_result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(hash_result, inst->result.id, llvm_func);
@@ -7506,12 +7524,20 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         {llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), i)});
                 builder->CreateStore(val_boxed, val_gep);
             }
+            // Convert typeInfo pointer to llvm::Value (or null pointer if not set)
+            llvm::Value* ti_arg;
+            if (mhck->typeInfo) {
+                llvm::Value* ti_ptr = llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(mhck->typeInfo));
+                ti_arg = builder->CreateIntToPtr(ti_ptr, ptr_type);
+            } else {
+                ti_arg = llvm::ConstantPointerNull::get(llvm::dyn_cast<llvm::PointerType>(ptr_type));
+            }
             auto helper = module.getOrInsertFunction("qore_rt_make_hash_const_keys",
                     llvm::FunctionType::get(i64_type,
-                        {ptr_type, ptr_type, llvm::Type::getInt32Ty(ctx), ptr_type}, false));
+                        {ptr_type, ptr_type, llvm::Type::getInt32Ty(ctx), ptr_type, ptr_type}, false));
             llvm::Value* hash_result = builder->CreateCall(helper,
                     {keys_arr, vals_arr, llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), count),
-                     xsink_arg});
+                     ti_arg, xsink_arg});
             values[inst->result.id] = hash_result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(hash_result, inst->result.id, llvm_func);
