@@ -1583,6 +1583,65 @@ int QoreSocketObject::resetQuicStream(int64_t session_id, int64_t stream_id,
     return session->resetStream(stream_id);
 }
 
+int QoreSocketObject::submitQuicDatagram(int64_t session_id, int64_t stream_id,
+        const BinaryNode* data, ExceptionSink* xsink) {
+    AutoLocker al(priv->m);
+    qore_socket_private* sp = qore_socket_private::get(*priv->socket);
+    std::shared_ptr<QuicSession> session = sp->getQuicSession(session_id);
+    if (!session) {
+        xsink->raiseException("QUIC-ERROR", "no QUIC session with id %lld on this socket",
+            (long long)session_id);
+        return -1;
+    }
+    const uint8_t* ptr = data ? reinterpret_cast<const uint8_t*>(data->getPtr()) : nullptr;
+    size_t len = data ? data->size() : 0;
+    return session->submitDatagram(stream_id, ptr, len, xsink);
+}
+
+QoreValue QoreSocketObject::readQuicDatagram(int64_t session_id, int64_t stream_id,
+        int timeout_ms, ExceptionSink* xsink) {
+    // NOTE: readDatagram uses its own mutex (datagram_mutex_), not the session mutex,
+    // so we don't need to hold priv->m for the blocking read (which would deadlock
+    // the I/O thread). We only hold priv->m briefly to look up the session.
+    std::shared_ptr<QuicSession> session;
+    {
+        AutoLocker al(priv->m);
+        qore_socket_private* sp = qore_socket_private::get(*priv->socket);
+        session = sp->getQuicSession(session_id);
+    }
+    if (!session) {
+        xsink->raiseException("QUIC-ERROR", "no QUIC session with id %lld on this socket",
+            (long long)session_id);
+        return QoreValue();
+    }
+    return session->readDatagram(stream_id, timeout_ms, xsink);
+}
+
+int64_t QoreSocketObject::getQuicMaxDatagramSize(int64_t session_id, int64_t stream_id,
+        ExceptionSink* xsink) {
+    AutoLocker al(priv->m);
+    qore_socket_private* sp = qore_socket_private::get(*priv->socket);
+    std::shared_ptr<QuicSession> session = sp->getQuicSession(session_id);
+    if (!session) {
+        xsink->raiseException("QUIC-ERROR", "no QUIC session with id %lld on this socket",
+            (long long)session_id);
+        return 0;
+    }
+    return static_cast<int64_t>(session->getMaxDatagramPayloadSize(stream_id));
+}
+
+bool QoreSocketObject::isQuicDatagramSupported(int64_t session_id, ExceptionSink* xsink) {
+    AutoLocker al(priv->m);
+    qore_socket_private* sp = qore_socket_private::get(*priv->socket);
+    std::shared_ptr<QuicSession> session = sp->getQuicSession(session_id);
+    if (!session) {
+        xsink->raiseException("QUIC-ERROR", "no QUIC session with id %lld on this socket",
+            (long long)session_id);
+        return false;
+    }
+    return session->isDatagramSupported();
+}
+
 bool my_socket_priv::hasQuicSession() const {
     qore_socket_private* sp = qore_socket_private::get(*socket);
     AutoLocker al(sp->quic_sessions_lock);

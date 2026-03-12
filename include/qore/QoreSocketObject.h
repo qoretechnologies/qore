@@ -768,6 +768,46 @@ public:
     */
     DLLEXPORT int resetQuicStream(int64_t session_id, int64_t stream_id, ExceptionSink* xsink);
 
+    //! Send a QUIC DATAGRAM frame on a stream (RFC 9221/9297)
+    /** @param session_id the QUIC session ID
+        @param stream_id the HTTP/3 stream ID (anchor stream)
+        @param data datagram payload
+        @param xsink exception sink
+        @return 0 on success, -1 on error
+        @since %Qore 2.3
+    */
+    DLLEXPORT int submitQuicDatagram(int64_t session_id, int64_t stream_id,
+        const BinaryNode* data, ExceptionSink* xsink);
+
+    //! Read the next incoming QUIC datagram for a stream (RFC 9221/9297)
+    /** @param session_id the QUIC session ID
+        @param stream_id the HTTP/3 stream ID (anchor stream)
+        @param timeout_ms maximum wait time in milliseconds
+        @param xsink exception sink
+        @return binary datagram payload, or NOTHING on timeout
+        @since %Qore 2.3
+    */
+    DLLEXPORT QoreValue readQuicDatagram(int64_t session_id, int64_t stream_id,
+        int timeout_ms, ExceptionSink* xsink);
+
+    //! Get the maximum datagram payload size for a QUIC session (RFC 9221)
+    /** @param session_id the QUIC session ID
+        @param stream_id the HTTP/3 stream ID (for overhead calculation)
+        @param xsink exception sink
+        @return max payload size in bytes, or 0 if datagrams not supported
+        @since %Qore 2.3
+    */
+    DLLEXPORT int64_t getQuicMaxDatagramSize(int64_t session_id, int64_t stream_id,
+        ExceptionSink* xsink);
+
+    //! Check if the remote peer supports QUIC datagrams (RFC 9221)
+    /** @param session_id the QUIC session ID
+        @param xsink exception sink
+        @return true if datagrams are supported
+        @since %Qore 2.3
+    */
+    DLLEXPORT bool isQuicDatagramSupported(int64_t session_id, ExceptionSink* xsink);
+
 private:
     DLLLOCAL QoreSocketObject(QoreSocket* s, QoreSSLCertificate* cert = nullptr, QoreSSLPrivateKey* pk = nullptr);
 

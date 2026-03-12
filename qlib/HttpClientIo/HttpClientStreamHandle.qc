@@ -367,6 +367,45 @@ public class HttpClientStreamHandle {
         }
     }
 
+    #! Send a QUIC DATAGRAM frame on this stream's datagram channel (RFC 9221/9297)
+    /** @param data the datagram payload to send
+
+        @throw QUIC-DATAGRAM-NOT-SUPPORTED if the protocol does not support QUIC datagrams
+        (e.g., HTTP/2)
+    */
+    sendDatagram(binary data) {
+        throw "QUIC-DATAGRAM-NOT-SUPPORTED",
+            "QUIC datagrams are only supported over HTTP/3; this stream uses "
+            + conn.getProtocol();
+    }
+
+    #! Read the next incoming QUIC datagram on this stream's channel (RFC 9221/9297)
+    /** @param timeout_ms read timeout
+
+        @return the datagram payload, or NOTHING on timeout
+
+        @throw QUIC-DATAGRAM-NOT-SUPPORTED if the protocol does not support QUIC datagrams
+    */
+    *binary readDatagram(timeout timeout_ms = 30s) {
+        throw "QUIC-DATAGRAM-NOT-SUPPORTED",
+            "QUIC datagrams are only supported over HTTP/3; this stream uses "
+            + conn.getProtocol();
+    }
+
+    #! Check if the remote peer supports QUIC datagrams on this connection
+    /** @return True if datagrams are supported, False otherwise
+    */
+    bool isDatagramSupported() {
+        return False;
+    }
+
+    #! Get the maximum datagram payload size for this connection
+    /** @return maximum payload size in bytes, or 0 if datagrams not supported
+    */
+    int getMaxDatagramSize() {
+        return 0;
+    }
+
     #! Internal: logging helper
     private log(int level, string fmt) {
         if (logger) {

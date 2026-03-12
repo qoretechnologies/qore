@@ -225,6 +225,24 @@ public class HttpClientConnection {
         cancelRequestImpl(stream_id);
     }
 
+    #! Wakes the I/O controller or poll notifier to flush pending writes
+    /** Call this after queuing data outside of the normal request path
+        (e.g., QUIC datagrams via submitQuicDatagram()) so the poll loop
+        triggers a write cycle promptly.
+    */
+    notifyPendingData() {
+        *object ctl;
+        {
+            AutoLock al(lock);
+            ctl = controller_ref;
+        }
+        if (ctl) {
+            ctl.wake();
+        } else {
+            poll_notifier.notify();
+        }
+    }
+
     #! Handles poll result from AsyncSocketIoController
     /** Updates state under lock, then calls handlePollResultImpl() for
         protocol-specific handling (e.g. GOAWAY check) while still holding the lock.

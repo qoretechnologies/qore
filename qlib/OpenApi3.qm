@@ -40,7 +40,7 @@
 %define NoXml
 %endtry
 
-%requires(reexport) Mime >= 1.7
+%requires(reexport) Mime >= 1.8
 %requires(reexport) Util >= 1.3
 %requires(reexport) HttpServerUtil >= 0.3.12
 %requires(reexport) RestSchemaValidator >= 2.5
@@ -50,7 +50,7 @@
 %allow-weak-references
 
 module OpenApi3 {
-    version = "2.3";
+    version = "1.0";
     desc = "OpenApi3 module providing functionality for OpenApi 3 schema definitions";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -258,8 +258,11 @@ qore-openapi3-gen -f json -t "My API" -s "https://api.example.com" src/*.qclass
 
     @section openapi3_relnotes OpenApi3 Module Release Notes
 
-    @subsection openapi3_2_3 OpenApi3 v2.3
+    @subsection openapi3_1_0 OpenApi3 v1.0
     - initial release of the %OpenApi3 module
+    - YAML MIME type equivalence: \c "application/yaml" (RFC 9512), \c "text/x-yaml",
+      \c "application/x-yaml", and \c "text/yaml" are treated as interchangeable when
+      validating content types against API schemas
     - classes inherit from abstract base classes in @ref RestSchemaValidator for polymorphic usage:
       - @ref OpenApi3::SchemaBase "SchemaBase": inherits
         @ref RestSchemaValidator::AbstractSchemaBase "AbstractSchemaBase"
@@ -1405,9 +1408,10 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
         hash<string, bool> mime_types = {};
         op.validateResponse(method, path, pio, code, \rv.body, \mime_types, False);
 
-        if (content && !mime_types{content})
+        if (content && !mime_types{content} && !mime_check_equivalent_type(content, mime_types)) {
             throw "DESERIALIZATION-ERROR", sprintf("%s %s: content type %y is not accepted by this operation; "
                 "accepted content types: %y", method.upr(), path, content, keys mime_types);
+        }
 
         return rv;
     }
@@ -1841,8 +1845,9 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
         }
 
         foreach string content in (content_types) {
-            if (!mime_types{content})
+            if (!mime_types{content} && !mime_check_equivalent_type(content, mime_types)) {
                 continue;
+            }
             if (content == MimeTypeMultipartFormData) {
                 # only send binary values with a "filename" attribute
                 hash<string, hash<FormDataMessageInfo>> parts =
@@ -1953,10 +1958,12 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
                 # check that the content type is valid for the response
                 if (asteriskCt) {
                     *list<auto> mt = map $1, mimeTypeKeys, $1.regex(ctRegex);
-                    if (!mt)
+                    if (!mt) {
                         continue;
-                } else if (!mime_types{content})
+                    }
+                } else if (!mime_types{content} && !mime_check_equivalent_type(content, mime_types)) {
                     continue;
+                }
 
                 # check for multipart-form-data case
                 if (content == MimeTypeMultipartFormData) {
@@ -2936,9 +2943,10 @@ public class OperationObject inherits ObjectBase, ParameterGroup, RestSchemaVali
             int pos = content.find(";");
             if (pos != -1)
                 content = content.substr(0, pos);
-            if (!mime_types{content})
+            if (!mime_types{content} && !mime_check_equivalent_type(content, mime_types)) {
                 throw "DESERIALIZATION-ERROR", sprintf("%s: invalid Content-Type: %y; valid MIME types: %y", h.method,
                     content, mime_types);
+            }
         }
 
         # set default parameter values

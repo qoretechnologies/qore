@@ -44,6 +44,15 @@ public hashdecl DpqlCompletionItem {
     *string snippet_text;
     #! Optional documentation or help text
     *string documentation;
+    #! Optional detail text shown next to the label (e.g., type information)
+    /** Displayed in a muted/grey style by most editors. Used to show:
+        - Field type (e.g., \c "string", \c "int")
+        - Function/operator return type (e.g., \c "→ bool")
+        - Expected argument type when inside a function call (e.g., \c "expected: string")
+
+        @since DataProvider 3.4
+    */
+    *string detail;
     #! Sort priority (lower = higher priority)
     int sort_priority = 100;
 }
@@ -86,6 +95,15 @@ public hashdecl DpqlCompletionContext {
     *hash<string, hash<DataProviderExpressionInfo>> expressions;
     #! Optional template context data for filtering (e.g., sandboxed, interface_type)
     *hash<auto> template_context;
+    #! Provider-specific (server-supported) expressions for search context filtering
+    /** When set, completions are filtered to enforce search expression rules:
+        - At top level: only server operators and field references
+        - After field reference: only server comparison operators
+        - Inside Qorus-only subtree: no field references
+
+        @since DataProvider 3.4
+    */
+    *hash<string, hash<DataProviderExpressionInfo>> server_expressions;
 }
 
 #! Completion context types
@@ -142,18 +160,20 @@ public class DpqlCompletionProvider {
             {"label": ">=", "kind": "operator", "insert_text": ">= ",
                 "documentation": "Greater than or equals comparison", "sort_priority": 15},
             {"label": "between", "kind": "keyword", "insert_text": "between ",
-                "documentation": "Range comparison: between X and Y", "sort_priority": 20},
+                "documentation": "Range comparison: `@field between lower_bound and upper_bound`",
+                "sort_priority": 20},
             {"label": "in", "kind": "keyword", "insert_text": "in (",
                 "documentation": "Collection membership: in (val1, val2, ...)", "sort_priority": 21},
-            {"label": "=~", "kind": "operator", "insert_text": "=~ /",
+            {"label": "=~", "kind": "snippet", "insert_text": "=~ /",
+                "snippet_text": "=~ /${1:pattern}/$0",
                 "documentation": "Regex pattern match", "sort_priority": 22},
         );
 
         #! Logical operators with descriptions
         const LogicalOperators = (
-            {"label": "&&", "kind": "operator", "insert_text": " && ",
+            {"label": "&&", "kind": "operator", "insert_text": "&& ",
                 "documentation": "Logical AND", "sort_priority": 30},
-            {"label": "||", "kind": "operator", "insert_text": " || ",
+            {"label": "||", "kind": "operator", "insert_text": "|| ",
                 "documentation": "Logical OR", "sort_priority": 31},
         );
 
@@ -166,7 +186,8 @@ public class DpqlCompletionProvider {
             {"label": "null", "kind": "keyword", "insert_text": "null",
                 "documentation": "Null/nothing value", "sort_priority": 52},
             {"label": "and", "kind": "keyword", "insert_text": "and ",
-                "documentation": "Used in 'between X and Y'", "sort_priority": 53},
+                "documentation": "Used in `@field between lower_bound and upper_bound`",
+                "sort_priority": 53},
         );
 
         #! Accessor completions
@@ -263,6 +284,7 @@ public class DpqlCompletionProvider {
     list<hash<DpqlCompletionItem>> getCompletionsWithContext(hash<DpqlCompletionContext> ctx) {
         # Analyze context to determine what completions are appropriate
         hash<auto> analysis = analyzeContext(ctx.text, ctx.position);
+        bool in_search = ctx.server_expressions ? True : False;
 
         list<hash<DpqlCompletionItem>> items = ();
 
@@ -270,10 +292,49 @@ public class DpqlCompletionProvider {
             case DPQL_CTX_START:
             case DPQL_CTX_AFTER_OP:
             case DPQL_CTX_IN_PAREN:
-                # Can start with field, literal, function, template, or NOT
-                items += getFieldCompletions(ctx.fields, analysis.prefix);
-                items += getValueCompletions(analysis.prefix);
-                items += getFunctionCompletions(analysis.prefix);
+                # After =~, only offer regex pattern completion
+                if (analysis.operator == "=~") {
+                    if (!analysis.prefix || index("/", analysis.prefix) == 0) {
+                        items += <DpqlCompletionItem>{
+                            "label": "/pattern/",
+                            "kind": "snippet",
+                            "insert_text": "/",
+                            "snippet_text": "/${1:pattern}/$0",
+                            "documentation": "Regular expression pattern; use `i` flag after closing `/` "
+                                "for case-insensitive matching (e.g. `/hello/i`)",
+                            "sort_priority": 1,
+                        };
+                    }
+                    break;
+                }
+                # Resolve function argument context for type-aware completions
+                *hash<auto> arg_ctx = getArgContext(analysis, ctx.expressions);
+
+                # If inside a function arg with allowed_values, offer only those
+                if (arg_ctx.allowed_values) {
+                    items += getAllowedValueCompletions(arg_ctx.allowed_values,
+                        arg_ctx.expected_type_name, analysis.prefix);
+                    break;
+                }
+
+                # Filter completions based on argument type constraints
+                if (arg_ctx.type_code != ST_Value) {
+                    # Field refs suppressed for ST_Value (only literal values expected)
+                    items += getFieldCompletions(ctx.fields, analysis.prefix);
+                }
+                if (arg_ctx.type_code != ST_Field) {
+                    # Values suppressed for ST_Field (only field references expected)
+                    items += getValueCompletions(analysis.prefix);
+                }
+                if (arg_ctx.type_code != ST_Field && arg_ctx.type_code != ST_Value) {
+                    # Functions suppressed for both ST_Field and ST_Value constraints
+                    if (in_search) {
+                        items += getFunctionCompletions(analysis.prefix,
+                            ctx.server_expressions);
+                    } else {
+                        items += getFunctionCompletions(analysis.prefix);
+                    }
+                }
                 items += getTemplateCompletions(analysis.prefix, ctx.template_context);
                 if (!analysis.prefix || index("!", analysis.prefix) == 0) {
                     items += <DpqlCompletionItem>{
@@ -283,6 +344,11 @@ public class DpqlCompletionProvider {
                         "documentation": "Logical NOT",
                         "sort_priority": 5,
                     };
+                }
+
+                # Annotate items with expected type when inside a typed argument
+                if (arg_ctx.expected_type_name) {
+                    items = annotateExpectedType(items, arg_ctx.expected_type_name);
                 }
                 break;
 
@@ -299,7 +365,14 @@ public class DpqlCompletionProvider {
             case DPQL_CTX_AFTER_FIELD:
                 # After field, suggest accessors and comparison operators
                 items += getAccessorCompletions(analysis.prefix);
-                items += getOperatorCompletions(analysis.prefix, True);
+                if (in_search) {
+                    # In search context after a field ref: only server-supported comparison ops
+                    items += getServerOperatorCompletions(analysis.prefix, ctx.server_expressions);
+                    items += getInfixComparisonCompletions(analysis.prefix, ctx.server_expressions);
+                } else {
+                    items += getOperatorCompletions(analysis.prefix, True);
+                    items += getInfixComparisonCompletions(analysis.prefix);
+                }
                 break;
 
             case DPQL_CTX_AFTER_VALUE:
@@ -429,20 +502,22 @@ public class DpqlCompletionProvider {
             };
         }
 
-        # After opening paren
+        # After opening paren — detect function call context
         if (last_char == "(") {
+            *hash<auto> func_ctx = findEnclosingFunctionContext(before);
             return {
                 "ctx": DPQL_CTX_IN_PAREN,
                 "prefix": prefix,
-            };
+            } + (func_ctx ?? {});
         }
 
-        # After comma
+        # After comma — detect function argument position
         if (last_char == ",") {
+            *hash<auto> func_ctx = findEnclosingFunctionContext(before);
             return {
                 "ctx": DPQL_CTX_AFTER_OP,
                 "prefix": prefix,
-            };
+            } + (func_ctx ?? {});
         }
 
         # Check if last token was a field reference
@@ -454,10 +529,12 @@ public class DpqlCompletionProvider {
         }
 
         # Check if last token was an operator
-        if (trimmed =~ /(==|!=|<=|>=|<|>|&&|\|\||=~|between|in|and)\s*$/) {
+        *list<*string> op_match = (trimmed =~ x/(==|!=|<=|>=|<|>|&&|\|\||=~|between|in|and)\s*$/);
+        if (op_match) {
             return {
                 "ctx": DPQL_CTX_AFTER_OP,
                 "prefix": prefix,
+                "operator": op_match[0],
             };
         }
 
@@ -469,10 +546,97 @@ public class DpqlCompletionProvider {
             };
         }
 
-        # Default to start context
+        # Default to start context — also check for enclosing function call
+        *hash<auto> func_ctx = findEnclosingFunctionContext(before);
         return {
             "ctx": DPQL_CTX_START,
             "prefix": prefix,
+        } + (func_ctx ?? {});
+    }
+
+    #! Finds the enclosing function call context from text before cursor
+    /** Scans backwards from the end of \a text to find the enclosing open parenthesis,
+        counting commas to determine the argument position, and then extracts the
+        function name preceding the paren.
+
+        @param text the text up to (and including) the cursor position
+        @return a hash with \c func_name (string), \c arg_index (int, 0-based),
+            and \c func_expr_name (string, internal expression name), or \c NOTHING
+            if the cursor is not inside a function call
+
+        @since DataProvider 3.4
+    */
+    private *hash<auto> findEnclosingFunctionContext(string text) {
+        # Scan backwards to find matching open paren, counting commas
+        int depth = 0;
+        int comma_count = 0;
+        int paren_pos = -1;
+
+        for (int i = text.length() - 1; i >= 0; --i) {
+            string c = text[i];
+            if (c == ")") {
+                ++depth;
+            } else if (c == "(") {
+                if (depth > 0) {
+                    --depth;
+                } else {
+                    paren_pos = i;
+                    break;
+                }
+            } else if (c == "," && depth == 0) {
+                ++comma_count;
+            }
+        }
+
+        if (paren_pos < 0) {
+            return NOTHING;
+        }
+
+        # Extract function name before the paren
+        int name_start = paren_pos - 1;
+        while (name_start >= 0 && text[name_start] =~ /\s/) {
+            --name_start;
+        }
+        if (name_start < 0) {
+            return NOTHING;
+        }
+        int id_end = name_start + 1;
+        while (name_start >= 0) {
+            string sc = text[name_start];
+            if (sc =~ /[a-zA-Z0-9_]/) {
+                --name_start;
+            } else if (sc == "-" && name_start + 1 < id_end && text[name_start + 1] =~ /[a-zA-Z]/) {
+                --name_start;
+            } else {
+                break;
+            }
+        }
+        ++name_start;
+        if (name_start >= id_end) {
+            return NOTHING;
+        }
+
+        string func_name = text.substr(name_start, id_end - name_start);
+
+        # Resolve to internal expression name
+        *string resolved_name;
+        foreach string ename in (keys name_to_symbol) {
+            if (name_to_symbol{ename} == func_name) {
+                resolved_name = ename;
+                break;
+            }
+        }
+        if (!resolved_name && expressions{func_name}) {
+            resolved_name = func_name;
+        }
+        if (!resolved_name) {
+            return NOTHING;
+        }
+
+        return {
+            "func_name": func_name,
+            "func_expr_name": resolved_name,
+            "arg_index": comma_count,
         };
     }
 
@@ -602,6 +766,7 @@ public class DpqlCompletionProvider {
                     "label": field_name,
                     "kind": "field",
                     "insert_text": insert_text,
+                    "detail": field.getType().getName(),
                     "documentation": info.short_desc ?? info.desc,
                     "sort_priority": 1,
                 };
@@ -647,6 +812,231 @@ public class DpqlCompletionProvider {
         return items;
     }
 
+    #! Gets operator completions filtered to server-supported operators only (search context)
+    /** @param prefix the current prefix to filter by
+        @param server_expressions the provider-specific expression map
+
+        @since DataProvider 3.4
+    */
+    private list<hash<DpqlCompletionItem>> getServerOperatorCompletions(string prefix,
+            hash<string, hash<DataProviderExpressionInfo>> server_expressions) {
+        list<hash<DpqlCompletionItem>> items = ();
+        string lwr_prefix = prefix.lwr();
+
+        foreach hash<auto> op in (ComparisonOperators) {
+            # Map operator label to expression name for server check
+            *string exp_name = getExpNameForOp(op.label);
+            if (exp_name && !server_expressions{exp_name}) {
+                continue;
+            }
+            if (!prefix || index(op.label.lwr(), lwr_prefix) == 0) {
+                hash<DpqlCompletionItem> item = cast<hash<DpqlCompletionItem>>(op);
+                item.documentation = (item.documentation ?? "") + " (server operator)";
+                items += item;
+            }
+        }
+
+        # Always include logical operators
+        foreach hash<auto> op in (LogicalOperators) {
+            if (!prefix || index(op.label.lwr(), lwr_prefix) == 0) {
+                items += cast<hash<DpqlCompletionItem>>(op);
+            }
+        }
+
+        return items;
+    }
+
+    #! Maps an operator label to its expression name constant
+    private *string getExpNameForOp(string label) {
+        switch (label) {
+            case "==": return DP_SEARCH_OP_EQ;
+            case "!=": return DP_SEARCH_OP_NE;
+            case "<": return DP_SEARCH_OP_LT;
+            case "<=": return DP_SEARCH_OP_LE;
+            case ">": return DP_SEARCH_OP_GT;
+            case ">=": return DP_SEARCH_OP_GE;
+            case "between": return DP_SEARCH_OP_BETWEEN;
+            case "in": return DP_SEARCH_OP_IN;
+            case "=~": return DP_SEARCH_OP_REGEX;
+        }
+        return NOTHING;
+    }
+
+    #! Gets infix comparison operators from the expression map (e.g. "like")
+    /** Returns completions for provider-specific operators that have \c groups containing
+        "Comparison", \c type = DET_Operator, and exactly 2 args. These are rendered as
+        infix operators in DPQL (e.g. \c @field \c like \c "pattern") rather than function
+        calls.
+
+        @param prefix the current prefix to filter by
+        @param filter_expressions optional expression map to filter by (for search context)
+
+        @return a list of completion items for infix comparison operators
+
+        @since DataProvider 3.4
+    */
+    private list<hash<DpqlCompletionItem>> getInfixComparisonCompletions(string prefix,
+            *hash<string, hash<DataProviderExpressionInfo>> filter_expressions) {
+        if (!expressions) {
+            return ();
+        }
+
+        # Built-in comparison operators already handled by ComparisonOperators constant
+        hash<string, bool> builtin_ops;
+        foreach hash<auto> op in (ComparisonOperators) {
+            *string exp_name = getExpNameForOp(op.label);
+            if (exp_name) {
+                builtin_ops{exp_name} = True;
+            }
+        }
+
+        list<hash<DpqlCompletionItem>> items = ();
+        string lwr_prefix = prefix.lwr();
+
+        foreach string ename in (keys expressions) {
+            # Skip built-in operators already in ComparisonOperators
+            if (builtin_ops{ename}) {
+                continue;
+            }
+            hash<DataProviderExpressionInfo> info = expressions{ename};
+            # Only infix comparison operators with exactly 2 args
+            if (info.type != DET_Operator || !inlist("Comparison", info.groups)
+                    || info.args.size() != 2) {
+                continue;
+            }
+            # If filtering by server expressions, skip if not supported
+            if (filter_expressions && !filter_expressions{ename}) {
+                continue;
+            }
+            string sym = name_to_symbol{ename} ?? ename;
+            if (!prefix || index(sym.lwr(), lwr_prefix) == 0) {
+                items += <DpqlCompletionItem>{
+                    "label": sym,
+                    "kind": "keyword",
+                    "insert_text": sym + " ",
+                    "documentation": info.short_desc ?? info.desc,
+                    "detail": info.return_type ? "-> " + info.return_type.getName() : NOTHING,
+                    "sort_priority": 23,
+                };
+            }
+        }
+
+        return items;
+    }
+
+    #! Resolves function argument context from analysis data
+    /** Looks up the enclosing function and determines the expected type,
+        type constraint code, and allowed values for the current argument position.
+
+        @param analysis the context analysis hash (may contain \c func_expr_name and \c arg_index)
+        @param expressions the available expressions map
+        @return a hash with \c expected_type_name (string), \c type_code (int),
+            and \c allowed_values (list), or an empty hash if not in a function arg context
+
+        @since DataProvider 3.4
+    */
+    private hash<auto> getArgContext(hash<auto> analysis,
+            *hash<string, hash<DataProviderExpressionInfo>> expressions) {
+        if (!analysis.func_expr_name || !expressions) {
+            return {};
+        }
+        *hash<DataProviderExpressionInfo> info = expressions{analysis.func_expr_name};
+        if (!info) {
+            return {};
+        }
+
+        int idx = analysis.arg_index;
+        # Clamp to last arg for varargs functions
+        if (info.varargs && idx >= info.args.size()) {
+            idx = info.args.size() - 1;
+        }
+        if (idx < 0 || idx >= info.args.size()) {
+            return {};
+        }
+
+        hash<auto> result = {};
+        # Type constraint
+        hash<DataProviderSignatureTypeInfo> sig = info.args[idx];
+        result.type_code = sig.type_code;
+        if (sig.type) {
+            string tname = sig.type.getName();
+            if (tname != "any" && tname != "auto") {
+                result.expected_type_name = tname;
+            }
+        }
+
+        # Allowed values from arg_info
+        if (info.arg_info && idx < info.arg_info.size()) {
+            hash<DataProviderArgInfo> ai = info.arg_info[idx];
+            if (ai.allowed_values && !ai.allowed_values_creatable) {
+                result.allowed_values = ai.allowed_values;
+            }
+        }
+
+        return result;
+    }
+
+    #! Gets completions for a restricted set of allowed values
+    /** @param allowed_values list of allowed value info hashes
+        @param expected_type_name optional expected type name for detail annotation
+        @param prefix the current prefix to filter by
+        @return a list of completion items for the allowed values
+
+        @since DataProvider 3.4
+    */
+    private list<hash<DpqlCompletionItem>> getAllowedValueCompletions(
+            list<hash<AllowedValueInfo>> allowed_values, *string expected_type_name,
+            string prefix) {
+        list<hash<DpqlCompletionItem>> items = ();
+        string lwr_prefix = prefix.lwr();
+
+        foreach hash<AllowedValueInfo> av in (allowed_values) {
+            string val_str = string(av.value);
+            if (!prefix || index(val_str.lwr(), lwr_prefix) == 0) {
+                # Quote string values
+                string insert;
+                if (av.value.typeCode() == NT_STRING) {
+                    insert = '"' + replace(val_str, '"', '\\"') + '"';
+                } else {
+                    insert = val_str;
+                }
+                items += <DpqlCompletionItem>{
+                    "label": val_str,
+                    "kind": "value",
+                    "insert_text": insert,
+                    "detail": expected_type_name
+                        ? sprintf("expected: %s", expected_type_name) : NOTHING,
+                    "documentation": av.short_desc ?? av.desc,
+                    "sort_priority": 10,
+                };
+            }
+        }
+
+        return items;
+    }
+
+    #! Annotates completion items with the expected type for the current argument position
+    /** Adds a parenthetical expected type note to each item's \c detail field.
+
+        @param items the list of completion items to annotate
+        @param expected_type_name the expected type name to show
+        @return the annotated list
+
+        @since DataProvider 3.4
+    */
+    private list<hash<DpqlCompletionItem>> annotateExpectedType(
+            list<hash<DpqlCompletionItem>> items, string expected_type_name) {
+        string annotation = sprintf("expected: %s", expected_type_name);
+        for (int i = 0; i < items.size(); ++i) {
+            if (items[i].detail) {
+                items[i].detail += "  " + annotation;
+            } else {
+                items[i].detail = annotation;
+            }
+        }
+        return items;
+    }
+
     #! Gets function completions for DPQL
     /** Includes all expressions that use function-call syntax in DPQL:
         - All \c DET_Function expressions (e.g. \c substr, \c encode_url, \c encrypt)
@@ -655,8 +1045,15 @@ public class DpqlCompletionProvider {
 
         Excludes operators with symbolic names (\c ==, \c &&, \c !) which are handled
         separately by \c getOperatorCompletions().
+
+        @param prefix the current prefix to filter by
+        @param filter_expressions optional expression map to filter by; when set, only functions
+            present in this map are offered (search context filtering)
+
+        @since DataProvider 3.4 added filter_expressions parameter
     */
-    private list<hash<DpqlCompletionItem>> getFunctionCompletions(string prefix) {
+    private list<hash<DpqlCompletionItem>> getFunctionCompletions(string prefix,
+            *hash<string, hash<DataProviderExpressionInfo>> filter_expressions) {
         list<hash<DpqlCompletionItem>> items = ();
 
         if (!expressions) {
@@ -667,9 +1064,21 @@ public class DpqlCompletionProvider {
 
         foreach string ename in (keys expressions) {
             hash<DataProviderExpressionInfo> info = expressions{ename};
+            # In search context, skip functions not supported by the server
+            if (filter_expressions && !filter_expressions{ename}) {
+                continue;
+            }
             # Use symbol for DPQL surface syntax
             string sym = name_to_symbol{ename} ?? ename;
             # Include all functions and operators with identifier-style symbols
+            # (e.g., between, contains, substr, encode_url).
+            # Operators with symbolic names (==, &&, !) are handled by getOperatorCompletions().
+            # Skip infix comparison operators (e.g. "like") — they are offered
+            # by getInfixComparisonCompletions() in infix form, not function-call form
+            if (info.type == DET_Operator && inlist("Comparison", info.groups)
+                    && info.args.size() == 2 && sym =~ /^[a-zA-Z]/) {
+                continue;
+            }
             if (info.type == DET_Function
                     || (info.type == DET_Operator && sym =~ /^[a-zA-Z]/)) {
                 if (!prefix || index(sym.lwr(), lwr_prefix) == 0) {
@@ -693,6 +1102,8 @@ public class DpqlCompletionProvider {
                         "kind": "function",
                         "insert_text": sym + "(",
                         "snippet_text": snippet,
+                        "detail": info.return_type
+                            ? "→ " + info.return_type.getName() : NOTHING,
                         "documentation": info.short_desc ?? info.desc,
                         "sort_priority": 40,
                     };

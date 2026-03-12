@@ -588,6 +588,9 @@ int QuicSession::initClient(qore_socket_private* sock, ExceptionSink* xsink,
     callbacks.remove_connection_id = removeConnectionIdCallback;
     callbacks.dcid_status = dcidStatusCallback;
 
+    // RFC 9221: QUIC datagram callback
+    callbacks.recv_datagram = recvDatagramCallback;
+
     // Settings
     ngtcp2_settings settings;
     ngtcp2_settings_default(&settings);
@@ -606,6 +609,8 @@ int QuicSession::initClient(qore_socket_private* sock, ExceptionSink* xsink,
     // lost connections and enables resource exhaustion.  30s is standard for clients.
     params.max_idle_timeout = QUIC_IDLE_TIMEOUT_NS;
     params.active_connection_id_limit = QUIC_ACTIVE_CONNECTION_ID_LIMIT;
+    // RFC 9221: Advertise willingness to receive QUIC DATAGRAM frames
+    params.max_datagram_frame_size = QUIC_MAX_DATAGRAM_FRAME_SIZE;
 
     // Build path from actual socket addresses
     ngtcp2_path path;
@@ -717,6 +722,9 @@ int QuicSession::initServer(qore_socket_private* sock, ExceptionSink* xsink,
     callbacks.remove_connection_id = removeConnectionIdCallback;
     callbacks.dcid_status = dcidStatusCallback;
 
+    // RFC 9221: QUIC datagram callback
+    callbacks.recv_datagram = recvDatagramCallback;
+
     // Settings
     ngtcp2_settings settings;
     ngtcp2_settings_default(&settings);
@@ -735,6 +743,8 @@ int QuicSession::initServer(qore_socket_private* sock, ExceptionSink* xsink,
     // to hold server sessions open indefinitely.  30s matches the client setting.
     params.max_idle_timeout = QUIC_IDLE_TIMEOUT_NS;
     params.active_connection_id_limit = QUIC_ACTIVE_CONNECTION_ID_LIMIT;
+    // RFC 9221: Advertise willingness to receive QUIC DATAGRAM frames
+    params.max_datagram_frame_size = QUIC_MAX_DATAGRAM_FRAME_SIZE;
     params.original_dcid = initial_hdr->dcid;
     params.original_dcid_present = 1;
 
@@ -860,6 +870,8 @@ int QuicSession::setupHttp3(ExceptionSink* xsink) {
     if (is_server_) {
         h3_settings.enable_connect_protocol = 1;
     }
+    // RFC 9297: Enable HTTP/3 datagrams (SETTINGS_H3_DATAGRAM)
+    h3_settings.h3_datagram = 1;
 
     auto* mem = nghttp3_mem_default();
 
@@ -1185,6 +1197,36 @@ int QuicSession::writePacketsLocked(QuicPacketBatch& packets, ExceptionSink* xsi
         }
 
         if (nwrite == 0) {
+            // No stream data to write — try sending queued datagrams (RFC 9221)
+            if (!pending_datagrams_.empty()) {
+                auto& [dgram_id, dgram_data] = pending_datagrams_.front();
+                ngtcp2_vec datav;
+                datav.base = dgram_data.data();
+                datav.len = dgram_data.size();
+                int accepted = 0;
+                ngtcp2_ssize dg_nwrite = ngtcp2_conn_writev_datagram(
+                    conn_, &ps.path, &pi, pkt_buf_, sizeof(pkt_buf_),
+                    &accepted, NGTCP2_WRITE_DATAGRAM_FLAG_NONE,
+                    dgram_id, &datav, 1, ts);
+                if (dg_nwrite < 0) {
+                    if (dg_nwrite == NGTCP2_ERR_CLOSING || dg_nwrite == NGTCP2_ERR_DRAINING) {
+                        pending_write_.store(false, std::memory_order_release);
+                        return total_packets;
+                    }
+                    // Non-fatal datagram write error — skip this datagram
+                    pending_datagrams_.pop_front();
+                    continue;
+                }
+                if (accepted) {
+                    pending_datagrams_.pop_front();
+                }
+                if (dg_nwrite > 0) {
+                    packets.addPacket(pkt_buf_, static_cast<size_t>(dg_nwrite));
+                    ++total_packets;
+                    continue;
+                }
+            }
+
             printd(5, "writePacketsLocked() nwrite=0 stream_id=" QLLD " total_packets=%d\n",
                 stream_id, total_packets);
             // Only clear pending_write_ when there is genuinely nothing more
@@ -1194,7 +1236,7 @@ int QuicSession::writePacketsLocked(QuicPacketBatch& packets, ExceptionSink* xsi
             // the congestion window) triggers another write attempt.
             // When stream_id < 0, no stream data is pending — clear the flag
             // to avoid busy-looping on POLLOUT.
-            if (stream_id < 0) {
+            if (stream_id < 0 && pending_datagrams_.empty()) {
                 pending_write_.store(false, std::memory_order_release);
             }
             break;
@@ -3441,7 +3483,6 @@ nghttp3_ssize QuicSession::h3ReadDataCallback(nghttp3_conn* /* conn */, int64_t 
     auto sit = session->streaming_body_data_.find(stream_id);
     if (sit != session->streaming_body_data_.end()) {
         auto& sbd = sit->second;
-
         if (!sbd.data.empty()) {
             if (veccnt > 0) {
                 // Move staging data into sent_bufs for stable pointer lifetime.
@@ -3677,4 +3718,309 @@ void QuicSession::getExtraFds(std::vector<std::pair<int, int>>& extra_fds) const
             extra_fds.push_back({info.stream_fd, SOCK_POLLIN});
         }
     }
+}
+
+// ===== QUIC Variable-Length Integer Encoding (RFC 9000 §16) =====
+
+size_t QuicSession::encodeVarInt(uint8_t* buf, uint64_t value) {
+    if (value <= 63) {
+        buf[0] = static_cast<uint8_t>(value);
+        return 1;
+    }
+    if (value <= 16383) {
+        buf[0] = static_cast<uint8_t>(0x40 | (value >> 8));
+        buf[1] = static_cast<uint8_t>(value & 0xff);
+        return 2;
+    }
+    if (value <= 1073741823) {
+        buf[0] = static_cast<uint8_t>(0x80 | (value >> 24));
+        buf[1] = static_cast<uint8_t>((value >> 16) & 0xff);
+        buf[2] = static_cast<uint8_t>((value >> 8) & 0xff);
+        buf[3] = static_cast<uint8_t>(value & 0xff);
+        return 4;
+    }
+    if (value <= 4611686018427387903ULL) {
+        buf[0] = static_cast<uint8_t>(0xc0 | (value >> 56));
+        buf[1] = static_cast<uint8_t>((value >> 48) & 0xff);
+        buf[2] = static_cast<uint8_t>((value >> 40) & 0xff);
+        buf[3] = static_cast<uint8_t>((value >> 32) & 0xff);
+        buf[4] = static_cast<uint8_t>((value >> 24) & 0xff);
+        buf[5] = static_cast<uint8_t>((value >> 16) & 0xff);
+        buf[6] = static_cast<uint8_t>((value >> 8) & 0xff);
+        buf[7] = static_cast<uint8_t>(value & 0xff);
+        return 8;
+    }
+    return 0;  // value too large
+}
+
+size_t QuicSession::decodeVarInt(const uint8_t* data, size_t datalen, uint64_t& value) {
+    if (datalen == 0) {
+        return 0;
+    }
+    uint8_t prefix = data[0] >> 6;
+    size_t len = 1ULL << prefix;
+    if (datalen < len) {
+        return 0;  // truncated
+    }
+    value = data[0] & 0x3f;
+    for (size_t i = 1; i < len; ++i) {
+        value = (value << 8) | data[i];
+    }
+    return len;
+}
+
+size_t QuicSession::varIntLen(uint64_t value) {
+    if (value <= 63) {
+        return 1;
+    }
+    if (value <= 16383) {
+        return 2;
+    }
+    if (value <= 1073741823) {
+        return 4;
+    }
+    return 8;
+}
+
+// ===== QUIC Datagram Support (RFC 9221/9297) =====
+
+int QuicSession::recvDatagramCallback(ngtcp2_conn* conn, uint32_t flags,
+                                       const uint8_t* data, size_t datalen,
+                                       void* user_data) {
+    auto* session = static_cast<QuicSession*>(user_data);
+
+    // Decode the quarter-stream-ID from the datagram payload (RFC 9297 §4)
+    uint64_t quarter_stream_id;
+    size_t varint_len = decodeVarInt(data, datalen, quarter_stream_id);
+    if (varint_len == 0) {
+        printd(2, "recvDatagramCallback(): datagram too short to decode quarter-stream-ID "
+            "(len=%zu)\n", datalen);
+        return 0;  // silently discard malformed datagrams
+    }
+
+    // Convert quarter-stream-ID back to stream ID; guard against overflow
+    if (quarter_stream_id > static_cast<uint64_t>(INT64_MAX) / 4) {
+        printd(2, "recvDatagramCallback(): quarter-stream-ID %" PRIu64
+            " would overflow stream_id\n", quarter_stream_id);
+        return 0;  // silently discard
+    }
+    int64_t stream_id = static_cast<int64_t>(quarter_stream_id * 4);
+
+    // Extract payload after the quarter-stream-ID
+    const uint8_t* payload = data + varint_len;
+    size_t payload_len = datalen - varint_len;
+
+    // Route to per-stream datagram queue
+    try {
+        {
+            std::lock_guard<std::mutex> lg(session->datagram_mutex_);
+            auto& queue = session->datagram_queues_[stream_id];
+            queue.emplace_back(payload, payload + payload_len);
+        }
+
+        // Signal waiting readers
+        session->datagram_gen_.fetch_add(1, std::memory_order_release);
+        {
+            std::lock_guard<std::mutex> lg(session->datagram_cv_mtx_);
+        }
+        session->datagram_cv_.notify_all();
+    } catch (...) {
+        // C callback — must not propagate C++ exceptions through ngtcp2's C code
+        printd(0, "recvDatagramCallback(): exception while queuing datagram "
+            "(stream_id=" QLLD ")\n", stream_id);
+    }
+
+    return 0;
+}
+
+int QuicSession::submitDatagram(int64_t stream_id, const uint8_t* data, size_t len,
+                                 ExceptionSink* xsink) {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+
+    if (!conn_) {
+        xsink->raiseException("QUIC-DATAGRAM-ERROR", "QUIC connection not initialized");
+        return -1;
+    }
+
+    // RFC 9297: quarter-stream-ID = stream_id / 4; stream_id must be a multiple of 4
+    if (stream_id < 0 || (stream_id & 3) != 0) {
+        xsink->raiseException("QUIC-DATAGRAM-ERROR",
+            "invalid stream_id " QLLD " for datagram: must be a non-negative multiple of 4",
+            stream_id);
+        return -1;
+    }
+
+    // Check remote support
+    const ngtcp2_transport_params* remote_params =
+        ngtcp2_conn_get_remote_transport_params(conn_);
+    if (!remote_params || remote_params->max_datagram_frame_size == 0) {
+        xsink->raiseException("QUIC-DATAGRAM-NOT-SUPPORTED",
+            "remote peer does not support QUIC datagrams (max_datagram_frame_size=0)");
+        return -1;
+    }
+
+    // Compute quarter-stream-ID (RFC 9297 §4)
+    uint64_t quarter_stream_id = static_cast<uint64_t>(stream_id) / 4;
+    size_t qsid_len = varIntLen(quarter_stream_id);
+
+    // Check size
+    size_t total_len = qsid_len + len;
+    if (total_len > remote_params->max_datagram_frame_size) {
+        xsink->raiseException("QUIC-DATAGRAM-SIZE-ERROR",
+            "datagram payload (%zu bytes + %zu header = %zu total) exceeds remote "
+            "max_datagram_frame_size (%" PRIu64 ")",
+            len, qsid_len, total_len, remote_params->max_datagram_frame_size);
+        return -1;
+    }
+
+    // Build the framed datagram: quarter-stream-ID + payload
+    std::vector<uint8_t> framed(total_len);
+    encodeVarInt(framed.data(), quarter_stream_id);
+    if (len > 0) {
+        memcpy(framed.data() + qsid_len, data, len);
+    }
+
+    // Use monotonically increasing datagram IDs for tracking
+    static std::atomic<uint64_t> next_dgram_id{1};
+    uint64_t dgram_id = next_dgram_id.fetch_add(1, std::memory_order_relaxed);
+
+    pending_datagrams_.emplace_back(dgram_id, std::move(framed));
+    pending_write_.store(true, std::memory_order_release);
+
+    return 0;
+}
+
+QoreValue QuicSession::readDatagram(int64_t stream_id, int timeout_ms, ExceptionSink* xsink) {
+    // Try non-blocking read first
+    {
+        std::lock_guard<std::mutex> lg(datagram_mutex_);
+        auto it = datagram_queues_.find(stream_id);
+        if (it != datagram_queues_.end() && !it->second.empty()) {
+            std::vector<uint8_t> data = std::move(it->second.front());
+            it->second.pop_front();
+            if (it->second.empty()) {
+                datagram_queues_.erase(it);
+            }
+            // Copy data into a malloc'd buffer for BinaryNode ownership
+            if (data.empty()) {
+                SimpleRefHolder<BinaryNode> bn(new BinaryNode());
+                return bn.release();
+            }
+            void* buf = malloc(data.size());
+            if (!buf) {
+                xsink->raiseException("QUIC-DATAGRAM-ERROR", "memory allocation failed");
+                return QoreValue();
+            }
+            memcpy(buf, data.data(), data.size());
+            SimpleRefHolder<BinaryNode> bn(new BinaryNode(buf, data.size()));
+            return bn.release();
+        }
+    }
+
+    if (timeout_ms == 0) {
+        return QoreValue();
+    }
+
+    // Wait for data with timeout using generation-based CV
+    auto deadline = std::chrono::steady_clock::now();
+    if (timeout_ms > 0) {
+        deadline += std::chrono::milliseconds(timeout_ms);
+    }
+
+    while (true) {
+        if (closed_.load(std::memory_order_acquire)) {
+            return QoreValue();
+        }
+
+        unsigned cur_gen = datagram_gen_.load(std::memory_order_acquire);
+
+        // Check again under lock
+        {
+            std::lock_guard<std::mutex> lg(datagram_mutex_);
+            auto it = datagram_queues_.find(stream_id);
+            if (it != datagram_queues_.end() && !it->second.empty()) {
+                std::vector<uint8_t> data = std::move(it->second.front());
+                it->second.pop_front();
+                if (it->second.empty()) {
+                    datagram_queues_.erase(it);
+                }
+                // Copy data into a malloc'd buffer for BinaryNode ownership
+                if (data.empty()) {
+                    SimpleRefHolder<BinaryNode> bn(new BinaryNode());
+                    return bn.release();
+                }
+                void* buf = malloc(data.size());
+                if (!buf) {
+                    xsink->raiseException("QUIC-DATAGRAM-ERROR", "memory allocation failed");
+                    return QoreValue();
+                }
+                memcpy(buf, data.data(), data.size());
+                SimpleRefHolder<BinaryNode> bn(new BinaryNode(buf, data.size()));
+                return bn.release();
+            }
+        }
+
+        // Wait on CV
+        {
+            std::unique_lock<std::mutex> lk(datagram_cv_mtx_);
+            if (timeout_ms < 0) {
+                // Wait up to 100ms per iteration to check for session close
+                datagram_cv_.wait_for(lk, std::chrono::milliseconds(100),
+                    [this, cur_gen]() {
+                        return closed_.load(std::memory_order_acquire)
+                            || datagram_gen_.load(std::memory_order_acquire) != cur_gen;
+                    });
+            } else {
+                auto now = std::chrono::steady_clock::now();
+                if (now >= deadline) {
+                    return QoreValue();
+                }
+                auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    deadline - now);
+                int wait_ms = std::min(static_cast<int>(remaining.count()), 100);
+                datagram_cv_.wait_for(lk, std::chrono::milliseconds(wait_ms),
+                    [this, cur_gen]() {
+                        return closed_.load(std::memory_order_acquire)
+                            || datagram_gen_.load(std::memory_order_acquire) != cur_gen;
+                    });
+            }
+        }
+    }
+}
+
+size_t QuicSession::getMaxDatagramPayloadSize(int64_t stream_id) const {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    if (!conn_) {
+        return 0;
+    }
+
+    const ngtcp2_transport_params* remote_params =
+        ngtcp2_conn_get_remote_transport_params(conn_);
+    if (!remote_params || remote_params->max_datagram_frame_size == 0) {
+        return 0;
+    }
+
+    // Subtract quarter-stream-ID encoding overhead
+    uint64_t quarter_stream_id = static_cast<uint64_t>(stream_id) / 4;
+    size_t qsid_len = varIntLen(quarter_stream_id);
+
+    // Also consider the path MTU limit
+    size_t max_udp = ngtcp2_conn_get_max_tx_udp_payload_size(conn_);
+    // QUIC packet overhead: ~40 bytes (header + encryption), conservative estimate
+    size_t max_datagram_in_packet = max_udp > 60 ? max_udp - 60 : 0;
+
+    size_t max_frame = remote_params->max_datagram_frame_size;
+    size_t effective_max = std::min(max_frame, max_datagram_in_packet);
+
+    return effective_max > qsid_len ? effective_max - qsid_len : 0;
+}
+
+bool QuicSession::isDatagramSupported() const {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    if (!conn_) {
+        return false;
+    }
+    const ngtcp2_transport_params* remote_params =
+        ngtcp2_conn_get_remote_transport_params(conn_);
+    return remote_params && remote_params->max_datagram_frame_size > 0;
 }
