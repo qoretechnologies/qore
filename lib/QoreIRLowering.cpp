@@ -192,6 +192,10 @@ static const QoreTypeInfo* getExprTypeInfo(const QoreValue& val) {
         if (auto* var_ref = dynamic_cast<const VarRefNode*>(node)) {
             return var_ref->getTypeInfo();
         }
+        if (auto* cast_op = dynamic_cast<const QoreCastOperatorNode*>(node)) {
+            // Cast operators should return their target type, not the generic 'auto' type
+            return cast_op->getCastTypeInfo();
+        }
     }
     return val.getTypeInfo();
 }
@@ -7578,9 +7582,35 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
         return QoreIRValue();
     }
 
-    // Check if the input list has a known element type for direct-index optimization
+    // Check if the input is actually a list or a single value
     const QoreTypeInfo* list_type = getExprTypeInfo(map->getRight());
     const QoreTypeInfo* elem_type = QoreTypeInfo::getUniqueReturnComplexList(list_type);
+
+    // If elem_type is null, the input is NOT a list - it's a single value
+    // In this case, apply the map expression to the single value and return it
+    if (!elem_type && (!list_type || !QoreTypeInfo::parseReturns(list_type, NT_LIST))) {
+        // Evaluate the single-value input
+        QoreIRValue input_val = lowerExpression(map->getRight(), error);
+        if (!input_val.isValid()) {
+            return QoreIRValue();
+        }
+
+        // Set virtual implicit context: $1 = input value, $# = 0 (single value)
+        VirtualImplicitContext saved = virtual_implicit;
+        virtual_implicit.arg0 = input_val;
+        virtual_implicit.arg1 = QoreIRValue();
+        virtual_implicit.element = builder.createConstInt(0, map->loc)->result;
+        virtual_implicit.active = true;
+
+        // Lower the map expression
+        QoreIRValue expr_result = lowerExpression(map->getLeft(), error);
+
+        // Restore virtual context
+        virtual_implicit = saved;
+
+        return expr_result;
+    }
+
     bool use_direct_index = false;
     bool elem_is_int = false;
     bool elem_is_float = false;

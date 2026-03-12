@@ -166,6 +166,7 @@ class JITSmokeTest inherits QUnit::Test {
         addTestCase("guard deopt fires on_block_exit handlers", \testGuardDeoptOnBlockExit());
         addTestCase("reference compound assignment writes through", \testReferenceCompoundAssignment());
         addTestCase("hash/list key store via closure", \testHashKeyStoreClosure());
+        addTestCase("map with single-value iterator", \testMapSingleValueIterator());
         set_return_value(main());
     }
 
@@ -5382,6 +5383,78 @@ printf(\"%d:%d:%d\\n\", result.x, result.y, result.z);
             string result = trim(runScript(code, mode));
             assertEq("10:20:30", result,
                     sprintf("HashMapTwoKeys three items %s", mode));
+        }
+    }
+
+    testMapSingleValueIterator() {
+        # Map with a single hash value (not wrapped in a list)
+        # Should apply the map expression to the single value and return it directly,
+        # not wrapped in a list.
+        string code = "%modern
+hash<auto> h = {\"size\": 1024};
+auto result = (map $1, h);
+printf(\"%s:%d\\n\", result.type(), result.size);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("hash:1024", result,
+                    sprintf("map single hash value %s", mode));
+        }
+
+        # Map with single hash + cast expression
+        code = "%modern
+auto result = (map $1, cast<hash<auto>>({\"value\": 42}));
+printf(\"%s:%d\\n\", result.type(), result.value);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("hash:42", result,
+                    sprintf("map single hash with cast %s", mode));
+        }
+
+        # Map over single int value
+        code = "%modern
+auto result = (map $1 * 10, 5);
+printf(\"%d\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("50", result,
+                    sprintf("map single int value %s", mode));
+        }
+
+        # Map over single string value
+        code = "%modern
+auto result = (map $1 + \" modified\", \"hello\");
+printf(\"%s\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("hello modified", result,
+                    sprintf("map single string value %s", mode));
+        }
+
+        # Map with element index ($#) on single value should be 0
+        code = "%modern
+auto result = (map {\"index\": $#}, 42);
+printf(\"%d\\n\", result.index);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("0", result,
+                    sprintf("map single value with element index %s", mode));
+        }
+
+        # Map over NOTHING returns NOTHING
+        code = "%modern
+%disable-warning invalid-operation
+auto result = (map $1 * 2, NOTHING);
+printf(\"%s\\n\", exists result ? \"EXISTS\" : \"NOTHING\");
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("NOTHING", result,
+                    sprintf("map single NOTHING value %s", mode));
         }
     }
 
