@@ -949,9 +949,12 @@ QoreValue StaticMethodCallNode::evalImpl(bool& needs_deref, ExceptionSink* xsink
 }
 
 QoreValue StaticMethodCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    // Pass the class context so that private static methods called from within the same class are visible
+    const qore_class_private* cctx = method ? qore_class_private::get(*qore_method_private::get(*method)->parent_class) : nullptr;
+
     return tmp_args
-        ? qore_method_private::evalTmpArgs(*method, xsink, rc, nullptr, args)
-        : qore_method_private::eval(*method, xsink, rc, nullptr, args);
+        ? qore_method_private::evalTmpArgs(*method, xsink, rc, nullptr, args, cctx)
+        : qore_method_private::eval(*method, xsink, rc, nullptr, args, cctx);
 }
 
 const QoreTypeInfo* StaticMethodCallNode::getTypeInfo() const {
