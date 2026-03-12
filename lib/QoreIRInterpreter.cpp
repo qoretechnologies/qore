@@ -3160,23 +3160,19 @@ load_local_done:
                 if (hash_val.getType() == NT_HASH) {
                     QoreHashNode* h = hash_val.get<QoreHashNode>();
 
-                    // Step 1: Release all IR-held refs for the container.
-                    // Hold an explicit reference to the container during slot clearing.
-                    ValueHolder h_holder(QoreValue(h->refSelf()), xsink);
-
-                    // 1a. Release any auto_ref=true LoadLocal result slots for this container variable.
+                    // Release any auto_ref=true LoadLocal result slots for this container variable.
                     clearLoadSlots(hks_inst->container_slot_id);
 
-                    // 1b. Release the slot cache ref.
+                    // Release the slot cache ref.
                     uint32_t csid = hks_inst->container_slot_id;
                     if (csid != UINT32_MAX && csid < locals_slot_cache.size()) {
                         locals_slot_cache[csid].discard(xsink);
                         locals_slot_cache[csid] = QoreValue();
                     }
 
-                    // At this point, refcount = TLS (1) + h_holder (1) = 2.
+                    // At this point, refcount = TLS (1) only.
                     // Trigger COW if there are additional external references beyond TLS.
-                    if (h->reference_count() > 2) {
+                    if (h->reference_count() > 1) {
                         // COW: create unique copy and update the local variable
                         QoreHashNode* new_h = h->copy();
                         LocalVar* lv = const_cast<LocalVar*>(
@@ -3199,15 +3195,13 @@ load_local_done:
                         h = new_h;
                     }
 
-                    // h is now unique (refcount == 1 in TLS + 1 in h_holder = 2).
-                    // Deref h_holder so refcount drops to 1 before setKeyValue.
-                    h_holder->discard(xsink);
-
-                    // Now h->reference_count() == 1. Call setKeyValue directly.
+                    // Make the update with already-referenced value.
+                    // (hash is already in TLS and will be cleaned up normally)
                     h->setKeyValue(hks_inst->key_name.c_str(), val.refSelf(), xsink);
 
-                    // Re-acquire values[] ref for cleanup tracking
-                    values[hks_inst->operands[0].id] = QoreValue(h->refSelf());
+                    // Clear the container slot so cleanup doesn't try to discard it
+                    // (it's held by TLS and managed separately)
+                    values[hks_inst->operands[0].id] = QoreValue();
                 } else if (hash_val.getType() == NT_OBJECT) {
                     const_cast<QoreObject*>(hash_val.get<const QoreObject>())->setValue(
                         hks_inst->key_name.c_str(), val.refSelf(), xsink);
@@ -3250,23 +3244,19 @@ load_local_done:
                 if (list_val.getType() == NT_LIST) {
                     QoreListNode* l = list_val.get<QoreListNode>();
 
-                    // Step 1: Release all IR-held refs for the container.
-                    // Hold an explicit reference to the container during slot clearing.
-                    ValueHolder l_holder(QoreValue(l->refSelf()), xsink);
-
-                    // 1a. Release any auto_ref=true LoadLocal result slots for this container variable.
+                    // Release any auto_ref=true LoadLocal result slots for this container variable.
                     clearLoadSlots(lis_inst->container_slot_id);
 
-                    // 1b. Release the slot cache ref.
+                    // Release the slot cache ref.
                     uint32_t csid = lis_inst->container_slot_id;
                     if (csid != UINT32_MAX && csid < locals_slot_cache.size()) {
                         locals_slot_cache[csid].discard(xsink);
                         locals_slot_cache[csid] = QoreValue();
                     }
 
-                    // At this point, refcount = TLS (1) + l_holder (1) = 2.
+                    // At this point, refcount = TLS (1) only.
                     // Trigger COW if there are additional external references beyond TLS.
-                    if (l->reference_count() > 2) {
+                    if (l->reference_count() > 1) {
                         // COW: create unique copy and update the local variable
                         QoreListNode* new_l = l->copy();
                         LocalVar* lv = const_cast<LocalVar*>(
@@ -3289,15 +3279,13 @@ load_local_done:
                         l = new_l;
                     }
 
-                    // l is now unique (refcount == 1 in TLS + 1 in l_holder = 2).
-                    // Deref l_holder so refcount drops to 1 before setEntry.
-                    l_holder->discard(xsink);
-
-                    // Now l->reference_count() == 1. Call setEntry directly.
+                    // Make the update with already-referenced value.
+                    // (list is already in TLS and will be cleaned up normally)
                     l->setEntry(index, val.refSelf(), xsink);
 
-                    // Re-acquire values[] ref for cleanup tracking
-                    values[lis_inst->operands[0].id] = QoreValue(l->refSelf());
+                    // Clear the container slot so cleanup doesn't try to discard it
+                    // (it's held by TLS and managed separately)
+                    values[lis_inst->operands[0].id] = QoreValue();
                 }
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
