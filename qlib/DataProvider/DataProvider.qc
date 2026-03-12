@@ -966,6 +966,37 @@ list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@na', 3
         return provider.getCompletions(text, position, fields, template_context);
     }
 
+    #! Returns DPQL completions with search context awareness
+    /** When \a server_expressions is provided, completions are filtered to enforce
+        search expression rules (field references only with server operators, etc.).
+
+        @param text the DPQL expression text
+        @param position cursor position (0-based character offset)
+        @param fields available record fields
+        @param expressions full expression map (merged base + provider)
+        @param template_context optional template context data
+        @param server_expressions provider-specific expressions for search context filtering
+
+        @return a list of completion items
+
+        @since DataProvider 3.4
+    */
+    static list<hash<DpqlCompletionItem>> getDpqlCompletionsWithSearchContext(string text,
+            int position, hash<string, AbstractDataField> fields,
+            *hash<string, hash<DataProviderExpressionInfo>> expressions,
+            *hash<auto> template_context,
+            *hash<string, hash<DataProviderExpressionInfo>> server_expressions) {
+        DpqlCompletionProvider provider(expressions ?? DataProviderGenericExpressions);
+        return provider.getCompletionsWithContext(<DpqlCompletionContext>{
+            "text": text,
+            "position": position,
+            "fields": fields,
+            "expressions": expressions ?? DataProviderGenericExpressions,
+            "template_context": template_context,
+            "server_expressions": server_expressions,
+        });
+    }
+
     #! Returns signature help for the DPQL function call at the given position
     /** @param text the DPQL expression text
         @param position cursor position (0-based character offset)
@@ -1031,12 +1062,17 @@ if (errors) {
     */
     static list<hash<DpqlDiagnostic>> validateDpqlExpression(string text,
             hash<string, AbstractDataField> fields,
-            *hash<string, hash<DataProviderExpressionInfo>> expressions) {
+            *hash<string, hash<DataProviderExpressionInfo>> expressions,
+            *hash<string, hash<DataProviderExpressionInfo>> server_expressions) {
         DpqlParser parser(expressions ?? DataProviderGenericExpressions, fields);
         hash<DpqlParseResult> result = parser.parseWithInfo(text);
         list<hash<DpqlDiagnostic>> diags = result.diagnostics;
         if (result.success && result.expression) {
             diags += parser.validate(result.expression, fields);
+            # Search expression validation — only when server_expressions is provided
+            if (server_expressions) {
+                diags += parser.validateSearchExpression(result.expression, server_expressions);
+            }
         }
         return diags;
     }

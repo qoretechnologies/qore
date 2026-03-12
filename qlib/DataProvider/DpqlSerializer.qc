@@ -140,7 +140,9 @@ public class DpqlSerializer {
     */
     private string serializeExpr(hash<DataProviderExpression> exp, int context_prec) {
         string op = exp.exp;
-        int prec = OperatorPrecedence{op} ?? DPQL_PREC_PRIMARY;
+        int prec = OperatorPrecedence{op}
+            ?? (expressions{op} && inlist("Comparison", expressions{op}.groups)
+                ? DPQL_PREC_COMPARISON : DPQL_PREC_PRIMARY);
         bool need_parens = prec > context_prec;
 
         string result;
@@ -220,8 +222,16 @@ public class DpqlSerializer {
                 break;
 
             default:
-                # Unknown operator - treat as function call
-                result = serializeFunctionCall(op, exp.args);
+                # Check for provider-specific infix comparison operators (e.g. "like")
+                if (expressions{op} && expressions{op}.type == DET_Operator
+                        && inlist("Comparison", expressions{op}.groups)
+                        && exp.args.size() == 2) {
+                    string sym = name_to_symbol{op} ?? op;
+                    result = serializeComparisonOp(exp.args, sym);
+                } else {
+                    # Unknown operator - treat as function call
+                    result = serializeFunctionCall(op, exp.args);
+                }
         }
 
         if (need_parens) {

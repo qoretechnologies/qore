@@ -226,6 +226,249 @@ public class DpqlParser {
         return diags;
     }
 
+    #! Validates search expression rules (only applied in search context)
+    /** Enforces rules about field references and server vs Qorus-only operators
+        in search expressions (where_cond for find/update/delete).
+
+        These rules are ONLY applied when \a server_expressions is provided (search context).
+        In non-search contexts (e.g., value mapping, transformation pipelines), any expression
+        is valid without restriction.
+
+        @param exp the parsed expression to validate
+        @param server_expressions the provider-specific expressions (server-supported operators)
+        @return a list of diagnostic messages for search expression rule violations
+
+        @since DataProvider 3.4
+    */
+    list<hash<DpqlDiagnostic>> validateSearchExpression(hash<DataProviderExpression> exp,
+            hash<string, hash<DataProviderExpressionInfo>> server_expressions) {
+        list<hash<DpqlDiagnostic>> diags = ();
+
+        # DPQL-E040: Check that at least one top-level condition references a field
+        if (!expressionHasFieldRef(exp)) {
+            diags += <DpqlDiagnostic>{
+                "severity": "error",
+                "message": "Search expressions query data provider records — at least one condition "
+                    "must reference a record field (e.g., `@field_name == value`)",
+                "code": "DPQL-E040",
+                "line": 1,
+                "column": 1,
+                "end_line": 1,
+                "end_column": 1,
+            };
+        }
+
+        # Walk the expression tree checking server vs Qorus-only operator rules
+        validateSearchExprRecursive(exp, server_expressions, \diags, True);
+
+        return diags;
+    }
+
+    #! Recursively validates search expression rules
+    /** @param exp the expression to validate
+        @param server_expressions server-supported expressions
+        @param diags output diagnostics list
+        @param is_top_level True if this expression is at the top level or inside &&/||
+    */
+    private validateSearchExprRecursive(hash<DataProviderExpression> exp,
+            hash<string, hash<DataProviderExpressionInfo>> server_expressions,
+            reference<list<hash<DpqlDiagnostic>>> diags, bool is_top_level) {
+        # &&/|| are structural — recurse into children at the same level
+        if (exp.exp == DP_OP_AND || exp.exp == DP_OP_OR) {
+            # DPQL-E043: Check if the provider supports AND/OR at top level
+            if (is_top_level && !server_expressions{exp.exp}) {
+                string op_name = exp.exp == DP_OP_AND ? "&&" : "||";
+                diags += <DpqlDiagnostic>{
+                    "severity": "error",
+                    "message": sprintf("This data provider does not support '%s' at the top level. "
+                        "Combine conditions using operators the provider supports, or restructure "
+                        "as separate queries.", op_name),
+                    "code": "DPQL-E043",
+                    "line": 1,
+                    "column": 1,
+                    "end_line": 1,
+                    "end_column": 1,
+                };
+            }
+            foreach auto arg in (exp.args) {
+                if (arg instanceof hash<DataProviderExpression>) {
+                    validateSearchExprRecursive(arg, server_expressions, \diags, is_top_level);
+                }
+            }
+            return;
+        }
+
+        # NOT operator
+        if (exp.exp == DP_SEARCH_OP_NOT) {
+            bool is_server = server_expressions.hasKey(exp.exp);
+            if (!is_server) {
+                # Qorus-only NOT — check for field refs inside
+                checkNoFieldRefsInQorusOp(exp, exp.exp, server_expressions, \diags);
+            } else {
+                # Server NOT — recurse normally
+                foreach auto arg in (exp.args) {
+                    if (arg instanceof hash<DataProviderExpression>) {
+                        validateSearchExprRecursive(arg, server_expressions, \diags, False);
+                    }
+                }
+            }
+            return;
+        }
+
+        # For all other expressions: check server vs Qorus-only rules
+        bool is_server_op = server_expressions.hasKey(exp.exp);
+
+        if (is_server_op) {
+            # DPQL-E044: Server operator — first arg should be a field reference
+            if (exp.args.size() > 0 && !(exp.args[0] instanceof hash<DataProviderFieldReference>)) {
+                # Check if the operator expects a field ref (most comparison ops do)
+                # Only check for comparison-style operators, not functions
+                if (isComparisonOp(exp.exp)) {
+                    string op_sym = getOpSymbol(exp.exp);
+                    diags += <DpqlDiagnostic>{
+                        "severity": "error",
+                        "message": sprintf("Server operator '%s' expects a record field as its first "
+                            "argument (e.g., `@field_name %s value`). The server needs to know which "
+                            "field to compare.", op_sym, op_sym),
+                        "code": "DPQL-E044",
+                        "line": 1,
+                        "column": 1,
+                        "end_line": 1,
+                        "end_column": 1,
+                    };
+                }
+            }
+            # Recurse into nested expression args (e.g., value-side expressions)
+            foreach auto arg in (exp.args) {
+                if (arg instanceof hash<DataProviderExpression>) {
+                    validateSearchExprRecursive(arg, server_expressions, \diags, False);
+                }
+            }
+        } else {
+            # Qorus-only operator
+            # DPQL-E041: Qorus-only op with field ref
+            if (expressionHasFieldRef(exp)) {
+                # Find the first field ref for the error message
+                *string field_name = findFirstFieldRef(exp);
+                string op_sym = getOpSymbol(exp.exp);
+                # Build list of server operator symbols for guidance
+                list<string> server_ops = ();
+                foreach string sname in (keys server_expressions) {
+                    if (isComparisonOp(sname)) {
+                        server_ops += getOpSymbol(sname);
+                    }
+                }
+                string server_list = server_ops ? server_ops.join(", ") : "(none available)";
+                diags += <DpqlDiagnostic>{
+                    "severity": "error",
+                    "message": sprintf("Operator '%s' runs locally in Qorus, not on the data provider "
+                        "server. Field references like '@%s' can only be used with server-supported "
+                        "operators (%s). Use a server operator, or remove the field reference.",
+                        op_sym, field_name ?? "field", server_list),
+                    "code": "DPQL-E041",
+                    "line": 1,
+                    "column": 1,
+                    "end_line": 1,
+                    "end_column": 1,
+                };
+            }
+        }
+    }
+
+    #! Checks that a Qorus-only operator subtree contains no field references
+    private checkNoFieldRefsInQorusOp(hash<DataProviderExpression> exp, string parent_op,
+            hash<string, hash<DataProviderExpressionInfo>> server_expressions,
+            reference<list<hash<DpqlDiagnostic>>> diags) {
+        foreach auto arg in (exp.args) {
+            if (arg instanceof hash<DataProviderFieldReference>) {
+                string op_sym = getOpSymbol(parent_op);
+                diags += <DpqlDiagnostic>{
+                    "severity": "error",
+                    "message": sprintf("Field reference '@%s' cannot appear inside '%s' — this operator "
+                        "is evaluated locally by Qorus after the server query returns. Move the field "
+                        "reference to a top-level server operator condition.", arg.field, op_sym),
+                    "code": "DPQL-E042",
+                    "line": 1,
+                    "column": 1,
+                    "end_line": 1,
+                    "end_column": 1,
+                };
+            } else if (arg instanceof hash<DataProviderExpression>) {
+                checkNoFieldRefsInQorusOp(arg, parent_op, server_expressions, \diags);
+            }
+        }
+    }
+
+    #! Returns True if the expression tree contains any field references
+    private bool expressionHasFieldRef(auto node) {
+        if (node instanceof hash<DataProviderFieldReference>) {
+            return True;
+        }
+        if (node instanceof hash<DataProviderExpression>) {
+            foreach auto arg in (node.args) {
+                if (expressionHasFieldRef(arg)) {
+                    return True;
+                }
+            }
+        }
+        return False;
+    }
+
+    #! Finds the first field reference name in an expression tree
+    private *string findFirstFieldRef(auto node) {
+        if (node instanceof hash<DataProviderFieldReference>) {
+            return node.field;
+        }
+        if (node instanceof hash<DataProviderExpression>) {
+            foreach auto arg in (node.args) {
+                *string name = findFirstFieldRef(arg);
+                if (name) {
+                    return name;
+                }
+            }
+        }
+        return NOTHING;
+    }
+
+    #! Returns True if the expression name is a comparison operator
+    private bool isComparisonOp(string exp_name) {
+        switch (exp_name) {
+            case DP_SEARCH_OP_EQ:
+            case DP_SEARCH_OP_NE:
+            case DP_SEARCH_OP_LT:
+            case DP_SEARCH_OP_LE:
+            case DP_SEARCH_OP_GT:
+            case DP_SEARCH_OP_GE:
+            case DP_SEARCH_OP_BETWEEN:
+            case DP_SEARCH_OP_IN:
+            case DP_SEARCH_OP_REGEX:
+                return True;
+        }
+        # Check for provider-specific comparison operators (e.g. "like")
+        if (expressions{exp_name} && inlist("Comparison", expressions{exp_name}.groups)) {
+            return True;
+        }
+        return False;
+    }
+
+    #! Returns the DPQL symbol for an operator name
+    private string getOpSymbol(string exp_name) {
+        # For built-in ops, the name IS the symbol
+        if (exp_name =~ /^[^a-zA-Z]/ || exp_name == "between" || exp_name == "in"
+                || exp_name == "regex") {
+            return exp_name;
+        }
+        # Check expression map for a symbol
+        if (expressions{exp_name} && expressions{exp_name}.symbol) {
+            string sym = expressions{exp_name}.symbol;
+            if (sym =~ /\(\)$/) {
+                sym = substr(sym, 0, sym.size() - 2);
+            }
+            return sym;
+        }
+        return exp_name;
+    }
+
     #! Recursively validates an expression
     private validateExprRecursive(hash<DataProviderExpression> exp,
             hash<string, AbstractDataField> fields, reference<list<hash<DpqlDiagnostic>>> diags) {
@@ -252,6 +495,122 @@ public class DpqlParser {
                 } else if (arg.hasKey("exp")) {
                     # Nested expression
                     validateExprRecursive(arg, fields, \diags);
+                }
+            }
+        }
+
+        # Validate logical operator arguments (&&, ||) expect bool operands
+        if (exp.exp == DP_OP_AND || exp.exp == DP_OP_OR) {
+            string op_name = exp.exp == DP_OP_AND ? "&&" : "||";
+            for (int i = 0; i < exp.args.size(); ++i) {
+                *AbstractDataProviderType arg_type = inferArgType(exp.args[i]);
+                if (arg_type && arg_type.getName() != "bool"
+                        && !AbstractDataProviderType::get(BoolType).isAssignableFrom(arg_type)) {
+                    diags += <DpqlDiagnostic>{
+                        "severity": "warning",
+                        "message": sprintf("Argument %d of '%s' has type '%s'; expected 'bool'",
+                            i + 1, op_name, arg_type.getName()),
+                        "code": "DPQL-W004",
+                        "line": 1,
+                        "column": 1,
+                        "end_line": 1,
+                        "end_column": 1,
+                    };
+                }
+            }
+        }
+
+        # Validate comparison operator cross-type compatibility
+        if (exp.exp == DP_SEARCH_OP_EQ || exp.exp == DP_SEARCH_OP_NE
+                || exp.exp == DP_SEARCH_OP_LT || exp.exp == DP_SEARCH_OP_LE
+                || exp.exp == DP_SEARCH_OP_GT || exp.exp == DP_SEARCH_OP_GE) {
+            if (exp.args.size() >= 2) {
+                *AbstractDataProviderType lhs_type = inferArgType(exp.args[0]);
+                *AbstractDataProviderType rhs_type = inferArgType(exp.args[1]);
+                if (lhs_type && rhs_type
+                        && lhs_type.getName() != "any" && rhs_type.getName() != "any"
+                        && !lhs_type.isAssignableFrom(rhs_type)
+                        && !rhs_type.isAssignableFrom(lhs_type)) {
+                    string op_sym;
+                    switch (exp.exp) {
+                        case DP_SEARCH_OP_EQ: op_sym = "=="; break;
+                        case DP_SEARCH_OP_NE: op_sym = "!="; break;
+                        case DP_SEARCH_OP_LT: op_sym = "<"; break;
+                        case DP_SEARCH_OP_LE: op_sym = "<="; break;
+                        case DP_SEARCH_OP_GT: op_sym = ">"; break;
+                        case DP_SEARCH_OP_GE: op_sym = ">="; break;
+                    }
+                    diags += <DpqlDiagnostic>{
+                        "severity": "warning",
+                        "message": sprintf("Type mismatch in comparison: left side is '%s', right side "
+                            "is '%s' (operator '%s')", lhs_type.getName(), rhs_type.getName(), op_sym),
+                        "code": "DPQL-W005",
+                        "line": 1,
+                        "column": 1,
+                        "end_line": 1,
+                        "end_column": 1,
+                    };
+                }
+            }
+        }
+
+        # Validate between type compatibility (all 3 args should be compatible)
+        if (exp.exp == DP_SEARCH_OP_BETWEEN && exp.args.size() >= 3) {
+            *AbstractDataProviderType val_type = inferArgType(exp.args[0]);
+            *AbstractDataProviderType low_type = inferArgType(exp.args[1]);
+            *AbstractDataProviderType high_type = inferArgType(exp.args[2]);
+            if (val_type && val_type.getName() != "any") {
+                if (low_type && low_type.getName() != "any"
+                        && !val_type.isAssignableFrom(low_type)
+                        && !low_type.isAssignableFrom(val_type)) {
+                    diags += <DpqlDiagnostic>{
+                        "severity": "warning",
+                        "message": sprintf("Type mismatch in 'between': value is '%s' but lower bound "
+                            "is '%s'", val_type.getName(), low_type.getName()),
+                        "code": "DPQL-W005",
+                        "line": 1,
+                        "column": 1,
+                        "end_line": 1,
+                        "end_column": 1,
+                    };
+                }
+                if (high_type && high_type.getName() != "any"
+                        && !val_type.isAssignableFrom(high_type)
+                        && !high_type.isAssignableFrom(val_type)) {
+                    diags += <DpqlDiagnostic>{
+                        "severity": "warning",
+                        "message": sprintf("Type mismatch in 'between': value is '%s' but upper bound "
+                            "is '%s'", val_type.getName(), high_type.getName()),
+                        "code": "DPQL-W005",
+                        "line": 1,
+                        "column": 1,
+                        "end_line": 1,
+                        "end_column": 1,
+                    };
+                }
+            }
+        }
+
+        # Validate 'in' type compatibility (list elements vs first arg)
+        if (exp.exp == DP_SEARCH_OP_IN && exp.args.size() >= 2) {
+            *AbstractDataProviderType val_type = inferArgType(exp.args[0]);
+            if (val_type && val_type.getName() != "any") {
+                for (int i = 1; i < exp.args.size(); ++i) {
+                    *AbstractDataProviderType elem_type = inferArgType(exp.args[i]);
+                    if (elem_type && elem_type.getName() != "any"
+                            && !val_type.isAssignableFrom(elem_type)
+                            && !elem_type.isAssignableFrom(val_type)) {
+                        diags += <DpqlDiagnostic>{
+                            "severity": "warning",
+                            "message": sprintf("Type mismatch in 'in': value is '%s' but element %d "
+                                "is '%s'", val_type.getName(), i, elem_type.getName()),
+                            "code": "DPQL-W005",
+                            "line": 1,
+                            "column": 1,
+                            "end_line": 1,
+                            "end_column": 1,
+                        };
+                    }
                 }
             }
         }
@@ -351,7 +710,9 @@ public class DpqlParser {
         auto left = parseAndExpr();
         skipWhitespace();
 
-        list<auto> args = (left,);
+        # Use list<auto!> to prevent runtime type narrowing — args can hold mixed types
+        # (expressions, field references, bare values)
+        list<auto!> args = (left,);
         while (!atEnd()) {
             hash<DpqlTokenInfo> tok = peek();
             if (tok.type != DPQL_TOK_OP_OR) {
@@ -380,7 +741,9 @@ public class DpqlParser {
         auto left = parseUnaryExpr();
         skipWhitespace();
 
-        list<auto> args = (left,);
+        # Use list<auto!> to prevent runtime type narrowing — args can hold mixed types
+        # (expressions, field references, bare values)
+        list<auto!> args = (left,);
         while (!atEnd()) {
             hash<DpqlTokenInfo> tok = peek();
             if (tok.type != DPQL_TOK_OP_AND) {
@@ -545,6 +908,20 @@ public class DpqlParser {
                         "exp": DP_SEARCH_OP_IN,
                         "args": (left,) + values,
                     };
+                }
+                # Check for provider-specific infix comparison operators (e.g. "like")
+                *string exp_name = symbol_to_name{kw};
+                if (exp_name && expressions{exp_name}) {
+                    hash<DataProviderExpressionInfo> info = expressions{exp_name};
+                    if (info.type == DET_Operator && inlist("Comparison", info.groups)
+                            && info.args.size() == 2) {
+                        nextToken();  # consume the operator keyword
+                        skipWhitespace();
+                        return <DataProviderExpression>{
+                            "exp": exp_name,
+                            "args": (left, parseValue()),
+                        };
+                    }
                 }
                 # Not a keyword we recognize here
                 break;
@@ -1371,12 +1748,50 @@ public class DpqlParser {
         }
 
         if (arg instanceof hash<DataProviderExpression>) {
-            # Function call — look up return type from expression map
-            if (expressions{arg.exp}) {
-                return expressions{arg.exp}.return_type;
-            }
-            # Built-in operators — return type depends on operator
-            return NOTHING;
+            return inferExpressionReturnType(arg);
+        }
+
+        return NOTHING;
+    }
+
+    #! Infers the return type of a parsed expression node
+    /** Resolves the return type by looking up the expression in the expression map.
+        For comparison and logical operators, returns bool. For nested expressions,
+        recurses into the inner expression.
+
+        @param exp the parsed expression node
+        @return the inferred return type, or NOTHING if it cannot be determined
+
+        @since DataProvider 3.4
+    */
+    *AbstractDataProviderType inferExpressionReturnType(hash<DataProviderExpression> exp) {
+        # Handle structural expression types before expression map lookup
+        switch (exp.exp) {
+            case DP_EXPR_VALUE:
+                # Value wrapper — return type of the wrapped value
+                if (exp.args.size() > 0) {
+                    return inferArgType(exp.args[0]);
+                }
+                return NOTHING;
+
+            case DP_SEARCH_OP_EQ:
+            case DP_SEARCH_OP_NE:
+            case DP_SEARCH_OP_LT:
+            case DP_SEARCH_OP_LE:
+            case DP_SEARCH_OP_GT:
+            case DP_SEARCH_OP_GE:
+            case DP_SEARCH_OP_IN:
+            case DP_SEARCH_OP_BETWEEN:
+            case DP_SEARCH_OP_REGEX:
+            case DP_SEARCH_OP_NOT:
+            case DP_OP_AND:
+            case DP_OP_OR:
+                return AbstractDataProviderType::get(BoolType);
+        }
+
+        # Known expression in the map — use its return_type
+        if (expressions{exp.exp}) {
+            return expressions{exp.exp}.return_type;
         }
 
         return NOTHING;

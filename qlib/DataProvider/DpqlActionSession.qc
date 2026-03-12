@@ -73,6 +73,24 @@ public class DpqlActionSession {
         */
         *hash<string, hash<DataProviderExpressionInfo>> base_expressions;
 
+        #! Provider-specific expressions (from getExpressionsWithOptions()), before merging with base
+        /** These are the server-supported operators/functions. In search contexts, only these
+            expressions can be used with field references.
+
+            @since DataProvider 3.4
+        */
+        *hash<string, hash<DataProviderExpressionInfo>> provider_expressions;
+
+        #! Whether this session is in a search expression context (where_cond for find/update/delete)
+        /** When True, search expression validation rules are enforced:
+            - Field references can only be used with server-supported operators
+            - At least one condition must reference a record field
+            - Qorus-only operators cannot contain field references
+
+            @since DataProvider 3.4
+        */
+        bool search_context = False;
+
         #! Current record type label
         string record_type = "record";
 
@@ -209,6 +227,37 @@ public class DpqlActionSession {
         return provider;
     }
 
+    #! Returns provider-specific expressions (server-supported operators)
+    /** These are the expressions returned by the provider's \c getExpressionsWithOptions()
+        method, before merging with base expressions.
+
+        @return the provider expression map, or @ref nothing if no provider context is set
+
+        @since DataProvider 3.4
+    */
+    *hash<string, hash<DataProviderExpressionInfo>> getProviderExpressions() {
+        return provider_expressions;
+    }
+
+    #! Returns whether this session is in a search expression context
+    /** @since DataProvider 3.4
+    */
+    bool isSearchContext() {
+        return search_context;
+    }
+
+    #! Sets whether this session is in a search expression context
+    /** When set to True, search expression validation rules are enforced during
+        parse and validate operations.
+
+        @param val True to enable search context validation
+
+        @since DataProvider 3.4
+    */
+    setSearchContext(bool val) {
+        search_context = val;
+    }
+
     private hash<auto> handleSetContext(*hash<auto> args) {
         if (!args || !args.provider) {
             throw "MISSING-PARAMETER", "Missing 'provider' parameter";
@@ -237,6 +286,8 @@ public class DpqlActionSession {
         delete provider;
         provider = next_provider;
         fields = next_fields;
+        # Store provider expressions separately for search context validation
+        provider_expressions = next_expressions;
         # Merge base expressions with provider expressions; provider takes priority
         expressions = base_expressions + next_expressions;
         record_type = rtype;
@@ -266,7 +317,8 @@ public class DpqlActionSession {
             text, expressions, use_fields);
         if (use_fields && result.success) {
             list<hash<DpqlDiagnostic>> diags = DataProvider::validateDpqlExpression(
-                text, use_fields, expressions);
+                text, use_fields, expressions,
+                search_context ? provider_expressions : NOTHING);
             if (diags) {
                 if (result.diagnostics) {
                     result.diagnostics += diags;
@@ -280,10 +332,8 @@ public class DpqlActionSession {
             "success": result.success,
             "diagnostics": result.diagnostics,
             "tokens": formatTokens(result.tokens),
+            "expression": result.expression,
         };
-        if (token_format == "dpql") {
-            rv.expression = result.expression;
-        }
         return rv;
     }
 
@@ -293,7 +343,8 @@ public class DpqlActionSession {
         if (!use_fields) {
             throw "NO-CONTEXT", "Context must be set before validation";
         }
-        list<hash<DpqlDiagnostic>> diags = DataProvider::validateDpqlExpression(text, use_fields, expressions);
+        list<hash<DpqlDiagnostic>> diags = DataProvider::validateDpqlExpression(text, use_fields, expressions,
+            search_context ? provider_expressions : NOTHING);
         return {
             "diagnostics": diags,
         };
@@ -310,8 +361,9 @@ public class DpqlActionSession {
             throw "INVALID-PARAMETER", sprintf("Parameter 'template_context' must be a hash, got %s",
                 args.template_context.type());
         }
-        list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions(text, position, use_fields,
-            expressions, args.template_context);
+        list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletionsWithSearchContext(
+            text, position, use_fields, expressions, args.template_context,
+            search_context ? provider_expressions : NOTHING);
         return {
             "completions": items,
         };
