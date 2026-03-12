@@ -8873,6 +8873,16 @@ QoreIRValue QoreIRLowering::lowerHashMapNative(const QoreHashMapOperatorNode* hm
     const QoreTypeInfo* elem_type = QoreTypeInfo::getUniqueReturnComplexList(list_type);
     bool use_direct_index = (elem_type != nullptr);
 
+    // Get or infer hash map result type
+    const QoreTypeInfo* hash_result_type = hm->getTypeInfo();
+    if (!hash_result_type) {
+        // If returnTypeInfo wasn't set during parsing, try to infer from value expression
+        const QoreTypeInfo* value_type = getExprTypeInfo(hm->get(1));
+        if (value_type && QoreTypeInfo::hasType(value_type)) {
+            hash_result_type = qore_get_complex_hash_type(value_type);
+        }
+    }
+
     // Evaluate the input (operand 2)
     QoreIRValue input_list = lowerExpression(hm->get(2), error);
     if (!input_list.isValid()) {
@@ -8901,7 +8911,7 @@ QoreIRValue QoreIRLowering::lowerHashMapNative(const QoreHashMapOperatorNode* hm
         // Preheader: create empty result hash and proceed to loop
         builder.setBlock(preheader_block);
         QoreIRValue zero = builder.createConstInt(0, hm->loc)->result;
-        QoreIRValue result_hash = builder.createMakeHash({}, hm->loc, hm->getTypeInfo())->result;
+        QoreIRValue result_hash = builder.createMakeHash({}, hm->loc, hash_result_type)->result;
         builder.createBranch(header_block, hm->loc);
 
         // Header block: check if index < size
@@ -9023,7 +9033,7 @@ QoreIRValue QoreIRLowering::lowerHashMapNative(const QoreHashMapOperatorNode* hm
 
     // Preheader: create empty result hash and proceed to loop
     builder.setBlock(preheader_block);
-    QoreIRValue result_hash = builder.createMakeHash({}, hm->loc, hm->getTypeInfo())->result;
+    QoreIRValue result_hash = builder.createMakeHash({}, hm->loc, hash_result_type)->result;
     QoreIRValue init_index = builder.createConstInt(0, hm->loc)->result;
     builder.createBranch(header_block, hm->loc);
 
@@ -9140,6 +9150,16 @@ QoreIRValue QoreIRLowering::lowerHashMapSelectNative(const QoreHashMapSelectOper
     const QoreTypeInfo* elem_type = QoreTypeInfo::getUniqueReturnComplexList(list_type);
     bool use_direct_index = (elem_type != nullptr);
 
+    // Get or infer hash map+select result type
+    const QoreTypeInfo* hash_result_type = hms->getTypeInfo();
+    if (!hash_result_type) {
+        // If returnTypeInfo wasn't set during parsing, try to infer from value expression
+        const QoreTypeInfo* value_type = getExprTypeInfo(hms->get(1));
+        if (value_type && QoreTypeInfo::hasType(value_type)) {
+            hash_result_type = qore_get_complex_hash_type(value_type);
+        }
+    }
+
     // Evaluate the input (operand 2)
     QoreIRValue input_list = lowerExpression(hms->get(2), error);
     if (!input_list.isValid()) {
@@ -9171,7 +9191,7 @@ QoreIRValue QoreIRLowering::lowerHashMapSelectNative(const QoreHashMapSelectOper
         // Preheader: create empty result hash and proceed to loop
         builder.setBlock(preheader_block);
         QoreIRValue zero = builder.createConstInt(0, hms->loc)->result;
-        QoreIRValue result_hash = builder.createMakeHash({}, hms->loc, hms->getTypeInfo())->result;
+        QoreIRValue result_hash = builder.createMakeHash({}, hms->loc, hash_result_type)->result;
         builder.createBranch(header_block, hms->loc);
 
         // Header block: check if index < size
@@ -9316,7 +9336,7 @@ QoreIRValue QoreIRLowering::lowerHashMapSelectNative(const QoreHashMapSelectOper
 
     // Preheader: create empty result hash and proceed to loop
     builder.setBlock(preheader_block);
-    QoreIRValue result_hash = builder.createMakeHash({}, hms->loc, hms->getTypeInfo())->result;
+    QoreIRValue result_hash = builder.createMakeHash({}, hms->loc, hash_result_type)->result;
     QoreIRValue init_index = builder.createConstInt(0, hms->loc)->result;
     builder.createBranch(header_block, hms->loc);
 
