@@ -101,7 +101,7 @@ public class LemlistTasksDataProvider inherits LemlistDataProviderBase {
             *hash<auto> search_options) {
         # If taskId is provided, get a specific task
         if (search_options.taskId) {
-            auto response = doGet(sprintf("/tasks/%s", search_options.taskId));
+            auto response = doGet(sprintf("/tasks/%s", encode_url(search_options.taskId, True)));
             list<hash<auto>> records;
             if (response.typeCode() == NT_HASH) {
                 records = (response,);
