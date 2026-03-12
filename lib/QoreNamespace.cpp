@@ -3358,15 +3358,15 @@ void qore_ns_private::scanMergeCommittedNamespace(const qore_ns_private& mns, Qo
 
             const QoreClass* c = classList.find(cli.getName());
             if (c) {
-                // ignore if the class is injected or already imported
-                if (qore_class_private::get(*c) != qore_class_private::get(*cli.get()) &&
-                    !qore_class_private::injected(*c))
-                qmc.error("duplicate class %s::%s" , name.c_str(), cli.getName());
-                /*
-                qmc.error("duplicate class %s::%s (c: %p cli: %p c inj: %d cli inj: %d)", name.c_str(), cli.getName(),
-                    qore_class_private::get(*c), qore_class_private::get(*cli.get()),
-                    qore_class_private::injected(*c), qore_class_private::injected(*cli.get()));
-                */
+                const qore_class_private* c_priv = qore_class_private::get(*c);
+                const qore_class_private* cli_priv = qore_class_private::get(*cli.get());
+                // ignore if the class is injected, already imported (same pointer), or is a copy of the
+                // same original class (same classID — happens when a class is imported into a module's
+                // Program container and then exported as a module declaration)
+                if (c_priv != cli_priv && !qore_class_private::injected(*c)
+                    && c_priv->classID != cli_priv->classID) {
+                    qmc.error("duplicate class %s::%s", name.c_str(), cli.getName());
+                }
             } else if (hashDeclList.find(cli.getName()))
                 qmc.error("duplicate hashdecl %s::%s", name.c_str(), cli.getName());
         }
@@ -3408,7 +3408,13 @@ void qore_ns_private::scanMergeCommittedNamespace(const qore_ns_private& mns, Qo
 
             const TypedHashDecl* curr = hashDeclList.find(th->getName());
             if (curr) {
-                qmc.error("duplicate hashdecl %s::%s", name.c_str(), i.getName());
+                // ignore if it's a copy of the same original hashdecl (same orig pointer —
+                // happens when a hashdecl is imported into a module's Program container and
+                // then exported as a module declaration)
+                if (typed_hash_decl_private::get(*curr)->getOrig()
+                    != typed_hash_decl_private::get(*th)->getOrig()) {
+                    qmc.error("duplicate hashdecl %s::%s", name.c_str(), i.getName());
+                }
             }
         }
     }

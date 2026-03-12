@@ -109,9 +109,11 @@ void QoreClassList::mergeUserPublic(const QoreClassList& old, qore_ns_private* n
 
         QoreClass* qc = find(i->first);
         if (qc) {
-            // the class must be injected or already imported
+            // the class must be injected, already imported (same pointer), or a copy of the same
+            // original class (same classID)
             assert(qore_class_private::injected(*qc)
-                || qore_class_private::get(*qc) == qore_class_private::get(*i->second.cls));
+                || qore_class_private::get(*qc) == qore_class_private::get(*i->second.cls)
+                || qore_class_private::get(*qc)->classID == qore_class_private::get(*i->second.cls)->classID);
             continue;
         }
 

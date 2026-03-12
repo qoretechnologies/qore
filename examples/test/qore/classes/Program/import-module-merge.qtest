@@ -1,0 +1,204 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+%allow-injection
+
+%requires ../../../../../qlib/Util.qm
+%requires ../../../../../qlib/QUnit.qm
+%exec-class ImportModuleMergeTest
+
+# Define classes in the test program that we'll import into sub-Programs
+public class ImportTestBaseClass {
+    string name() {
+        return "BaseClass";
+    }
+}
+
+public hashdecl ImportTestHashDecl {
+    string name;
+    int value;
+}
+
+#! Tests that classes and hashdecls imported into a module's Program container don't cause
+#! "duplicate class" / "duplicate hashdecl" errors when the module is loaded into another
+#! Program that already has the same classes/hashdecls.
+class ImportModuleMergeTest inherits QUnit::Test {
+    public {
+        # Module that defines a new class (no namespace conflicts)
+        const ModuleSource = "%modern
+%new-style
+
+module ImportMergeTestMod {
+    version = \"1.0\";
+    desc = \"test module for import-merge test\";
+    author = \"Qore Technologies\";
+    url = \"https://qore.org\";
+}
+
+public class ImportTestModClass {
+    string identify() {
+        return 'ModClass';
+    }
+}
+";
+
+        # Module that defines a new class using the imported hashdecl
+        const HdModuleSource = "%modern
+%new-style
+
+module ImportMergeHdTestMod {
+    version = \"1.0\";
+    desc = \"test module for import-merge hashdecl test\";
+    author = \"Qore Technologies\";
+    url = \"https://qore.org\";
+}
+
+public class ImportTestHashUser {
+    hash<ImportTestHashDecl> getData() {
+        return <ImportTestHashDecl>{
+            'name': 'test',
+            'value': 42,
+        };
+    }
+}
+";
+
+        # Module with a truly different class (for negative test)
+        const TrueDupModuleSource = "%modern
+%new-style
+
+module TrueDupTestMod {
+    version = \"1.0\";
+    desc = \"test module for true duplicate test\";
+    author = \"Qore Technologies\";
+    url = \"https://qore.org\";
+}
+
+public class ConflictClass {
+    string id() { return 'from-module'; }
+}
+";
+    }
+
+    private {
+        string mod_path;
+        string hd_mod_path;
+        string true_dup_mod_path;
+    }
+
+    constructor() : QUnit::Test("ImportModuleMergeTest", "1.0") {
+        addTestCase("imported class not flagged as duplicate", \testImportedClassNotDuplicate());
+        addTestCase("imported hashdecl not flagged as duplicate", \testImportedHashDeclNotDuplicate());
+        addTestCase("truly duplicate class still detected", \testTrulyDuplicateClassDetected());
+        set_return_value(main());
+    }
+
+    setUp() {
+        string dir = tmp_location() + DirSep;
+
+        mod_path = dir + "ImportMergeTestMod.qm";
+        {
+            File f();
+            f.open2(mod_path, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(ModuleSource);
+        }
+
+        hd_mod_path = dir + "ImportMergeHdTestMod.qm";
+        {
+            File f();
+            f.open2(hd_mod_path, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(HdModuleSource);
+        }
+
+        true_dup_mod_path = dir + "TrueDupTestMod.qm";
+        {
+            File f();
+            f.open2(true_dup_mod_path, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(TrueDupModuleSource);
+        }
+    }
+
+    tearDown() {
+        if (mod_path && is_file(mod_path)) {
+            unlink(mod_path);
+        }
+        if (hd_mod_path && is_file(hd_mod_path)) {
+            unlink(hd_mod_path);
+        }
+        if (true_dup_mod_path && is_file(true_dup_mod_path)) {
+            unlink(true_dup_mod_path);
+        }
+    }
+
+    testImportedClassNotDuplicate() {
+        # Step 1: Create a module Program container, import BaseClass from test program
+        Program mod_pgm(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES
+            | PO_NO_INHERIT_USER_CLASSES | PO_NO_INHERIT_USER_HASHDECLS
+            | PO_ALLOW_INJECTION);
+        mod_pgm.importClass("ImportTestBaseClass");
+        mod_pgm.loadApplyToUserModule(mod_path);
+
+        # Step 2: Create a target Program that also has BaseClass imported, and load the module
+        # This would previously fail with "duplicate class ImportTestBaseClass"
+        Program target_pgm(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES
+            | PO_NO_INHERIT_USER_CLASSES | PO_NO_INHERIT_USER_HASHDECLS);
+        target_pgm.importClass("ImportTestBaseClass");
+
+        # This is the critical call — it should NOT throw a duplicate class error
+        try {
+            target_pgm.loadModule("ImportMergeTestMod");
+            assertTrue(True, "loading module with imported class succeeded");
+        } catch (hash<ExceptionInfo> ex) {
+            assertTrue(False, sprintf("loading module with imported class should not throw: %s: %s",
+                ex.err, ex.desc));
+        }
+    }
+
+    testImportedHashDeclNotDuplicate() {
+        # Step 1: Create a module Program container, import TestHashDecl from test program
+        Program mod_pgm(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES
+            | PO_NO_INHERIT_USER_CLASSES | PO_NO_INHERIT_USER_HASHDECLS
+            | PO_ALLOW_INJECTION);
+        mod_pgm.importHashDecl("ImportTestHashDecl");
+        mod_pgm.loadApplyToUserModule(hd_mod_path);
+
+        # Step 2: Target Program with the same hashdecl loads the module
+        Program target_pgm(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES
+            | PO_NO_INHERIT_USER_CLASSES | PO_NO_INHERIT_USER_HASHDECLS);
+        target_pgm.importHashDecl("ImportTestHashDecl");
+
+        try {
+            target_pgm.loadModule("ImportMergeHdTestMod");
+            assertTrue(True, "loading module with imported hashdecl succeeded");
+        } catch (hash<ExceptionInfo> ex) {
+            assertTrue(False, sprintf("loading module with imported hashdecl should not throw: %s: %s",
+                ex.err, ex.desc));
+        }
+    }
+
+    testTrulyDuplicateClassDetected() {
+        # Create a module with a unique class
+        Program mod_pgm(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES
+            | PO_NO_INHERIT_USER_CLASSES | PO_NO_INHERIT_USER_HASHDECLS
+            | PO_ALLOW_INJECTION);
+        mod_pgm.loadApplyToUserModule(true_dup_mod_path);
+
+        # Create a target that defines a DIFFERENT class with the SAME name
+        Program target_pgm(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES
+            | PO_NO_INHERIT_USER_CLASSES | PO_NO_INHERIT_USER_HASHDECLS);
+        target_pgm.parse("
+%modern
+%new-style
+
+public class ConflictClass {
+    string id() { return 'local'; }
+}
+", "true-dup-local");
+
+        # Loading the module should fail — different class with same name (different classID)
+        assertThrows("MODULE-LOAD-ERROR", "duplicate class",
+            sub () { target_pgm.loadModule("TrueDupTestMod"); });
+    }
+}
