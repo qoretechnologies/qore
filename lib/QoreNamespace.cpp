@@ -3421,7 +3421,11 @@ void qore_ns_private::scanMergeCommittedNamespace(const qore_ns_private& mns, Qo
 
             const TypedHashDecl* curr = hashDeclList.find(th->getName());
             if (curr) {
-                qmc.error("duplicate hashdecl %s::%s", name.c_str(), i.getName());
+                // ignore if the hashdecl is the same (same module re-imported via different dependency paths)
+                // or if it's from an imported namespace (will be validated when the module is loaded)
+                if (typed_hash_decl_private::get(*curr) != typed_hash_decl_private::get(*th) && !mns.imported) {
+                    qmc.error("duplicate hashdecl %s::%s", name.c_str(), i.getName());
+                }
             }
         }
     }
