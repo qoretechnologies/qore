@@ -1789,7 +1789,13 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_closure_fast(uint64_t ref_bits, uint6
 extern "C" DLLEXPORT uint64_t qore_rt_map_scale_int(uint64_t list_val, int64_t scale) {
     QoreValue v = fromBits(list_val);
     if (v.getType() != NT_LIST) {
-        return toBits(QoreValue());
+        // NOTHING returns NOTHING
+        if (v.isNothing()) {
+            return toBits(QoreValue());
+        }
+        // Handle single-value input: apply operation and return directly
+        int64_t val = v.getAsBigInt();
+        return toBits(QoreValue(val * scale));
     }
     const QoreListNode* l = v.get<const QoreListNode>();
     size_t sz = l->size();
@@ -1803,7 +1809,13 @@ extern "C" DLLEXPORT uint64_t qore_rt_map_scale_int(uint64_t list_val, int64_t s
 extern "C" DLLEXPORT uint64_t qore_rt_map_scale_float(uint64_t list_val, double scale) {
     QoreValue v = fromBits(list_val);
     if (v.getType() != NT_LIST) {
-        return toBits(QoreValue());
+        // NOTHING returns NOTHING
+        if (v.isNothing()) {
+            return toBits(QoreValue());
+        }
+        // Handle single-value input: apply operation and return directly
+        double val = v.getAsFloat();
+        return toBits(QoreValue(val * scale));
     }
     const QoreListNode* l = v.get<const QoreListNode>();
     size_t sz = l->size();
@@ -1817,7 +1829,13 @@ extern "C" DLLEXPORT uint64_t qore_rt_map_scale_float(uint64_t list_val, double 
 extern "C" DLLEXPORT uint64_t qore_rt_map_offset_int(uint64_t list_val, int64_t offset) {
     QoreValue v = fromBits(list_val);
     if (v.getType() != NT_LIST) {
-        return toBits(QoreValue());
+        // NOTHING returns NOTHING
+        if (v.isNothing()) {
+            return toBits(QoreValue());
+        }
+        // Handle single-value input: apply operation and return directly
+        int64_t val = v.getAsBigInt();
+        return toBits(QoreValue(val + offset));
     }
     const QoreListNode* l = v.get<const QoreListNode>();
     size_t sz = l->size();
@@ -1831,7 +1849,13 @@ extern "C" DLLEXPORT uint64_t qore_rt_map_offset_int(uint64_t list_val, int64_t 
 extern "C" DLLEXPORT uint64_t qore_rt_map_offset_float(uint64_t list_val, double offset) {
     QoreValue v = fromBits(list_val);
     if (v.getType() != NT_LIST) {
-        return toBits(QoreValue());
+        // NOTHING returns NOTHING
+        if (v.isNothing()) {
+            return toBits(QoreValue());
+        }
+        // Handle single-value input: apply operation and return directly
+        double val = v.getAsFloat();
+        return toBits(QoreValue(val + offset));
     }
     const QoreListNode* l = v.get<const QoreListNode>();
     size_t sz = l->size();
@@ -1845,7 +1869,13 @@ extern "C" DLLEXPORT uint64_t qore_rt_map_offset_float(uint64_t list_val, double
 extern "C" DLLEXPORT uint64_t qore_rt_map_square_int(uint64_t list_val) {
     QoreValue v = fromBits(list_val);
     if (v.getType() != NT_LIST) {
-        return toBits(QoreValue());
+        // NOTHING returns NOTHING
+        if (v.isNothing()) {
+            return toBits(QoreValue());
+        }
+        // Handle single-value input: apply operation and return directly
+        int64_t val = v.getAsBigInt();
+        return toBits(QoreValue(val * val));
     }
     const QoreListNode* l = v.get<const QoreListNode>();
     size_t sz = l->size();
@@ -1860,7 +1890,13 @@ extern "C" DLLEXPORT uint64_t qore_rt_map_square_int(uint64_t list_val) {
 extern "C" DLLEXPORT uint64_t qore_rt_map_square_float(uint64_t list_val) {
     QoreValue v = fromBits(list_val);
     if (v.getType() != NT_LIST) {
-        return toBits(QoreValue());
+        // NOTHING returns NOTHING
+        if (v.isNothing()) {
+            return toBits(QoreValue());
+        }
+        // Handle single-value input: apply operation and return directly
+        double val = v.getAsFloat();
+        return toBits(QoreValue(val * val));
     }
     const QoreListNode* l = v.get<const QoreListNode>();
     size_t sz = l->size();
