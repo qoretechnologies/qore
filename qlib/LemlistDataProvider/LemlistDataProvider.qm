@@ -1,0 +1,731 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore LemlistDataProvider module definition
+
+/*  LemlistDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%modern
+# require type definitions everywhere
+# strict argument handling
+# enable all warnings
+
+%requires(reexport) DataProvider
+%requires(reexport) LemlistRestClient
+%try-module json
+%define NoJson
+%endtry
+
+module LemlistDataProvider {
+    version = "1.0";
+    desc = "User module providing a data provider API for Lemlist sales outreach and email campaign services";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # Register the data provider factory
+        DataProvider::registerFactory(new LemlistDataProviderFactory());
+
+        # Register the application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": LemlistDataProvider::AppName,
+            "display_name": "Lemlist",
+            "short_desc": "Lemlist sales outreach and email automation platform",
+            "desc": "Lemlist is a sales engagement platform enabling personalized outreach campaigns with "
+                "email, LinkedIn, and multi-channel automation. This integration enables managing campaigns, "
+                "leads, activities, tasks, and contacts, plus receiving real-time webhook notifications.\n\n"
+                "**Features:**\n"
+                "- Campaign management (create, pause, start)\n"
+                "- Lead management (add, update, remove leads from campaigns)\n"
+                "- Activity tracking (emails sent, opened, clicked, replied, bounced)\n"
+                "- Task management (create and update manual tasks)\n"
+                "- Contact management\n"
+                "- Real-time webhooks for email and engagement events",
+            "scheme": "lemlist",
+            "logo": LemlistLogo,
+            "logo_file_name": "lemlist-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::Marketing, DataProvider::AppGroup::CrmSales,),
+        });
+
+        # ========== CAMPAIGN ACTIONS ==========
+
+        # List Campaigns
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LemlistDataProvider::AppName,
+            "path": "/campaigns",
+            "action": "list-campaigns",
+            "groups": "Campaigns",
+            "display_name": "List Campaigns",
+            "short_desc": "List and search campaigns",
+            "desc": "Retrieve a list of Lemlist campaigns with optional filtering by status.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": LemlistCampaignsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("CampaignList", new LemlistCampaignDataType(), True);
+            },
+            "options": {
+                "status": <ActionOptionInfo>{
+                    "display_name": "Status",
+                    "short_desc": "Filter by campaign status",
+                    "desc": "Filter campaigns by their current status",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "running", "desc": "Running campaigns"},
+                        <AllowedValueInfo>{"value": "draft", "desc": "Draft campaigns"},
+                        <AllowedValueInfo>{"value": "archived", "desc": "Archived campaigns"},
+                        <AllowedValueInfo>{"value": "ended", "desc": "Ended campaigns"},
+                        <AllowedValueInfo>{"value": "paused", "desc": "Paused campaigns"},
+                        <AllowedValueInfo>{"value": "errors", "desc": "Campaigns with errors"},
+                    ),
+                },
+            },
+        });
+
+        # Get Campaign (DPAT_FIND_SINGLE)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LemlistDataProvider::AppName,
+            "path": "/campaigns",
+            "action": "get-campaign",
+            "groups": "Campaigns",
+            "display_name": "Get Campaign",
+            "short_desc": "Get a single campaign by ID",
+            "desc": "Retrieve a single Lemlist campaign by its unique identifier.",
+            "action_code": DPAT_FIND_SINGLE,
+            "data_provider_info": LemlistCampaignsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new LemlistCampaignDataType(); },
+            "options": {
+                "campaignId": <ActionOptionInfo>{
+                    "display_name": "Campaign ID",
+                    "short_desc": "ID of the campaign to retrieve",
+                    "desc": "The unique identifier of the campaign to retrieve",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "campaigns",
+                },
+            },
+        });
+
+        # Create Campaign
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LemlistDataProvider::AppName,
+            "path": "/create-campaign",
+            "action": "create-campaign",
+            "groups": "Campaigns",
+            "display_name": "Create Campaign",
+            "short_desc": "Create a new campaign",
+            "desc": "Create a new Lemlist campaign with the specified name.",
+            "action_code": DPAT_API,
+            "data_provider_info": LemlistCreateCampaignDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return LemlistCreateCampaignDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(LemlistCreateCampaignRequestDataType::Fields),
+        });
+
+        # Pause Campaign
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LemlistDataProvider::AppName,
+            "path": "/pause-campaign",
+            "action": "pause-campaign",
+            "groups": "Campaigns",
+            "display_name": "Pause Campaign",
+            "short_desc": "Pause a running campaign",
+            "desc": "Pause an active Lemlist campaign to temporarily stop sending emails.",
+            "action_code": DPAT_API,
+            "data_provider_info": LemlistPauseCampaignDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return LemlistPauseCampaignDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(LemlistPauseCampaignRequestDataType::Fields),
+        });
+
+        # Start Campaign
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LemlistDataProvider::AppName,
+            "path": "/start-campaign",
+            "action": "start-campaign",
+            "groups": "Campaigns",
+            "display_name": "Start Campaign",
+            "short_desc": "Start or resume a campaign",
+            "desc": "Start or resume a paused Lemlist campaign to begin or continue sending emails.",
+            "action_code": DPAT_API,
+            "data_provider_info": LemlistStartCampaignDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return LemlistStartCampaignDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(LemlistStartCampaignRequestDataType::Fields),
+        });
+
+        # ========== LEAD ACTIONS ==========
+
+        # List Leads
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LemlistDataProvider::AppName,
+            "path": "/leads",
+            "action": "list-leads",
+            "groups": "Leads",
+            "display_name": "List Leads",
+            "short_desc": "List leads in a campaign",
+            "desc": "Retrieve a list of leads enrolled in a specific Lemlist campaign.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": LemlistLeadsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("LeadList", new LemlistLeadDataType(), True);
+            },
+            "options": {
+                "campaignId": <ActionOptionInfo>{
+                    "display_name": "Campaign ID",
+                    "short_desc": "Campaign to list leads from",
+                    "desc": "The identifier of the campaign to retrieve leads from",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "campaigns",
+                },
+            },
+        });
+
+        # Get Lead (DPAT_FIND_SINGLE)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LemlistDataProvider::AppName,
+            "path": "/leads",
+            "action": "get-lead",
+            "groups": "Leads",
+            "display_name": "Get Lead",
+            "short_desc": "Get a single lead from a campaign",
+            "desc": "Retrieve a single Lemlist lead by email address from a specific campaign.",
+            "action_code": DPAT_FIND_SINGLE,
+            "data_provider_info": LemlistLeadsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new LemlistLeadDataType(); },
+            "options": {
+                "campaignId": <ActionOptionInfo>{
+                    "display_name": "Campaign ID",
+                    "short_desc": "Campaign containing the lead",
+                    "desc": "The identifier of the campaign the lead belongs to",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "campaigns",
+                },
+                "email": <ActionOptionInfo>{
+                    "display_name": "Email",
+                    "short_desc": "Lead email address",
+                    "desc": "The email address of the lead to retrieve",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                },
+            },
+        });
+
+        # Create Lead
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LemlistDataProvider::AppName,
+            "path": "/create-lead",
+            "action": "create-lead",
+            "groups": "Leads",
+            "display_name": "Add Lead to Campaign",
+            "short_desc": "Add a lead to a campaign",
+            "desc": "Add a new lead to a Lemlist campaign. The lead will be enrolled in the campaign's "
+                "outreach sequence.",
+            "action_code": DPAT_API,
+            "data_provider_info": LemlistCreateLeadDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return LemlistCreateLeadDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(LemlistCreateLeadRequestDataType::Fields),
+        });
+
+        # Update Lead
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LemlistDataProvider::AppName,
+            "path": "/update-lead",
+            "action": "update-lead",
+            "groups": "Leads",
+            "display_name": "Update Lead",
+            "short_desc": "Update an existing lead",
+            "desc": "Update the properties of an existing Lemlist lead by email address.",
+            "action_code": DPAT_API,
+            "data_provider_info": LemlistUpdateLeadDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return LemlistUpdateLeadDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(LemlistUpdateLeadRequestDataType::Fields),
+        });
+
+        # Delete Lead
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LemlistDataProvider::AppName,
+            "path": "/delete-lead",
+            "action": "delete-lead",
+            "groups": "Leads",
+            "display_name": "Remove Lead from Campaign",
+            "short_desc": "Remove a lead from a campaign",
+            "desc": "Remove a lead from a Lemlist campaign. The lead will stop receiving outreach from "
+                "that campaign.",
+            "action_code": DPAT_API,
+            "data_provider_info": LemlistDeleteLeadDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return LemlistDeleteLeadDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(LemlistDeleteLeadRequestDataType::Fields),
+        });
+
+        # ========== ACTIVITY ACTIONS ==========
+
+        # List Activities
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LemlistDataProvider::AppName,
+            "path": "/activities",
+            "action": "list-activities",
+            "groups": "Activities",
+            "display_name": "List Activities",
+            "short_desc": "List email and engagement activities",
+            "desc": "Retrieve a list of Lemlist activities with optional filtering by type, campaign, or lead.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": LemlistActivitiesDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("ActivityList", new LemlistActivityDataType(), True);
+            },
+            "options": {
+                "type": <ActionOptionInfo>{
+                    "display_name": "Activity Type",
+                    "short_desc": "Filter by activity type",
+                    "desc": "Filter activities by their type",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "emailsSent", "desc": "Emails sent"},
+                        <AllowedValueInfo>{"value": "emailsOpened", "desc": "Emails opened"},
+                        <AllowedValueInfo>{"value": "emailsClicked", "desc": "Emails clicked"},
+                        <AllowedValueInfo>{"value": "emailsReplied", "desc": "Emails replied"},
+                        <AllowedValueInfo>{"value": "emailsBounced", "desc": "Emails bounced"},
+                        <AllowedValueInfo>{"value": "interested", "desc": "Lead interested"},
+                        <AllowedValueInfo>{"value": "notInterested", "desc": "Lead not interested"},
+                    ),
+                },
+                "campaignId": <ActionOptionInfo>{
+                    "display_name": "Campaign ID",
+                    "short_desc": "Filter by campaign",
+                    "desc": "Filter activities by campaign identifier",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                    "ref_data": "campaigns",
+                },
+                "leadId": <ActionOptionInfo>{
+                    "display_name": "Lead ID",
+                    "short_desc": "Filter by lead",
+                    "desc": "Filter activities by lead identifier",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "leads",
+                },
+                "isFirst": <ActionOptionInfo>{
+                    "display_name": "First Occurrence Only",
+                    "short_desc": "Only return first occurrences",
+                    "desc": "If `True`, only returns the first occurrence of each activity type per lead per campaign",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                },
+            },
+        });
+
+        # ========== TASK ACTIONS ==========
+
+        # List Tasks
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LemlistDataProvider::AppName,
+            "path": "/tasks",
+            "action": "list-tasks",
+            "groups": "Tasks",
+            "display_name": "List Tasks",
+            "short_desc": "List manual tasks",
+            "desc": "Retrieve a list of Lemlist manual tasks.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": LemlistTasksDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("TaskList", new LemlistTaskDataType(), True);
+            },
+            "options": {
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum number of results",
+                    "desc": "Maximum number of tasks to return (max 100)",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Get Task (DPAT_FIND_SINGLE)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LemlistDataProvider::AppName,
+            "path": "/tasks",
+            "action": "get-task",
+            "groups": "Tasks",
+            "display_name": "Get Task",
+            "short_desc": "Get a single task by ID",
+            "desc": "Retrieve a single Lemlist manual task by its unique identifier.",
+            "action_code": DPAT_FIND_SINGLE,
+            "data_provider_info": LemlistTasksDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new LemlistTaskDataType(); },
+            "options": {
+                "taskId": <ActionOptionInfo>{
+                    "display_name": "Task ID",
+                    "short_desc": "ID of the task to retrieve",
+                    "desc": "The unique identifier of the task to retrieve",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "tasks",
+                },
+            },
+        });
+
+        # Create Task
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LemlistDataProvider::AppName,
+            "path": "/create-task",
+            "action": "create-task",
+            "groups": "Tasks",
+            "display_name": "Create Task",
+            "short_desc": "Create a manual task",
+            "desc": "Create a new manual task in Lemlist for a lead (e.g., email, LinkedIn message, call).",
+            "action_code": DPAT_API,
+            "data_provider_info": LemlistCreateTaskDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return LemlistCreateTaskDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(LemlistCreateTaskRequestDataType::Fields),
+        });
+
+        # Update Task
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LemlistDataProvider::AppName,
+            "path": "/update-task",
+            "action": "update-task",
+            "groups": "Tasks",
+            "display_name": "Update Task",
+            "short_desc": "Update a task status",
+            "desc": "Update a Lemlist manual task, such as marking it as done or changing the assignee.",
+            "action_code": DPAT_API,
+            "data_provider_info": LemlistUpdateTaskDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return LemlistUpdateTaskDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(LemlistUpdateTaskRequestDataType::Fields),
+        });
+
+        # Delete Task
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LemlistDataProvider::AppName,
+            "path": "/delete-task",
+            "action": "delete-task",
+            "groups": "Tasks",
+            "display_name": "Delete Task",
+            "short_desc": "Delete a manual task",
+            "desc": "Delete a Lemlist manual task by its unique identifier.",
+            "action_code": DPAT_API,
+            "data_provider_info": LemlistDeleteTaskDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return LemlistDeleteTaskDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(LemlistDeleteTaskRequestDataType::Fields),
+        });
+
+        # ========== CONTACT ACTIONS ==========
+
+        # List Contacts
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LemlistDataProvider::AppName,
+            "path": "/contacts",
+            "action": "list-contacts",
+            "groups": "Contacts",
+            "display_name": "List Contacts",
+            "short_desc": "List contacts",
+            "desc": "Retrieve a list of Lemlist contacts. Optionally filter by email to get a specific contact.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": LemlistContactsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("ContactList", new LemlistContactDataType(), True);
+            },
+            "options": {
+                "email": <ActionOptionInfo>{
+                    "display_name": "Email",
+                    "short_desc": "Email address of the contact to retrieve",
+                    "desc": "The email address of the contact to retrieve. The Lemlist v2 API requires a "
+                        "specific email address to look up contacts.",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                },
+            },
+        });
+
+        # Get Contact (DPAT_FIND_SINGLE)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LemlistDataProvider::AppName,
+            "path": "/contacts",
+            "action": "get-contact",
+            "groups": "Contacts",
+            "display_name": "Get Contact",
+            "short_desc": "Get a contact by email",
+            "desc": "Retrieve a single Lemlist contact by their email address.",
+            "action_code": DPAT_FIND_SINGLE,
+            "data_provider_info": LemlistContactsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new LemlistContactDataType(); },
+            "options": {
+                "email": <ActionOptionInfo>{
+                    "display_name": "Email",
+                    "short_desc": "Email address of the contact",
+                    "desc": "The email address of the contact to retrieve",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                },
+            },
+        });
+
+        # Create Contact
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LemlistDataProvider::AppName,
+            "path": "/create-contact",
+            "action": "create-contact",
+            "groups": "Contacts",
+            "display_name": "Create Contact",
+            "short_desc": "Create a new contact",
+            "desc": "Create a new contact in Lemlist.",
+            "action_code": DPAT_API,
+            "data_provider_info": LemlistCreateContactDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return LemlistCreateContactDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(LemlistCreateContactRequestDataType::Fields),
+        });
+
+        # Update Contact
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LemlistDataProvider::AppName,
+            "path": "/update-contact",
+            "action": "update-contact",
+            "groups": "Contacts",
+            "display_name": "Update Contact",
+            "short_desc": "Update an existing contact",
+            "desc": "Update the properties of an existing Lemlist contact by email address.",
+            "action_code": DPAT_API,
+            "data_provider_info": LemlistUpdateContactDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return LemlistUpdateContactDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(LemlistUpdateContactRequestDataType::Fields),
+        });
+
+        # Delete Contact
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LemlistDataProvider::AppName,
+            "path": "/delete-contact",
+            "action": "delete-contact",
+            "groups": "Contacts",
+            "display_name": "Delete Contact",
+            "short_desc": "Delete a contact",
+            "desc": "Delete a Lemlist contact by their email address.",
+            "action_code": DPAT_API,
+            "data_provider_info": LemlistDeleteContactDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return LemlistDeleteContactDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(LemlistDeleteContactRequestDataType::Fields),
+        });
+
+        # ========== TRIGGER ACTIONS (EVENTS) ==========
+
+        # Email Sent Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LemlistDataProvider::AppName,
+            "path": "/events/email-sent",
+            "action": EVENT_EMAIL_SENT,
+            "groups": "Triggers",
+            "display_name": "Email Sent",
+            "short_desc": "Trigger when an email is sent",
+            "desc": "Fires when a Lemlist email is sent to a lead. Provides campaign, lead, and sequence "
+                "step details.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_EMAIL_SENT,
+            "data_provider_info": LemlistEmailSentEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new LemlistEmailSentEventDataType(); },
+            "options": {
+                "campaignId": <ActionOptionInfo>{
+                    "display_name": "Campaign ID",
+                    "short_desc": "Filter events to a specific campaign",
+                    "desc": "Optionally filter events to a specific Lemlist campaign",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "campaigns",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Email Opened Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LemlistDataProvider::AppName,
+            "path": "/events/email-opened",
+            "action": EVENT_EMAIL_OPENED,
+            "groups": "Triggers",
+            "display_name": "Email Opened",
+            "short_desc": "Trigger when a lead opens an email",
+            "desc": "Fires when a lead opens a Lemlist email. Provides campaign, lead, and sequence step details.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_EMAIL_OPENED,
+            "data_provider_info": LemlistEmailOpenedEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new LemlistEmailOpenedEventDataType(); },
+            "options": {
+                "campaignId": <ActionOptionInfo>{
+                    "display_name": "Campaign ID",
+                    "short_desc": "Filter events to a specific campaign",
+                    "desc": "Optionally filter events to a specific Lemlist campaign",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "campaigns",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Email Clicked Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LemlistDataProvider::AppName,
+            "path": "/events/email-clicked",
+            "action": EVENT_EMAIL_CLICKED,
+            "groups": "Triggers",
+            "display_name": "Email Link Clicked",
+            "short_desc": "Trigger when a lead clicks a link",
+            "desc": "Fires when a lead clicks a link in a Lemlist email. Provides campaign, lead, and "
+                "sequence step details.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_EMAIL_CLICKED,
+            "data_provider_info": LemlistEmailClickedEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new LemlistEmailClickedEventDataType(); },
+            "options": {
+                "campaignId": <ActionOptionInfo>{
+                    "display_name": "Campaign ID",
+                    "short_desc": "Filter events to a specific campaign",
+                    "desc": "Optionally filter events to a specific Lemlist campaign",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "campaigns",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Email Replied Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LemlistDataProvider::AppName,
+            "path": "/events/email-replied",
+            "action": EVENT_EMAIL_REPLIED,
+            "groups": "Triggers",
+            "display_name": "Email Replied",
+            "short_desc": "Trigger when a lead replies to an email",
+            "desc": "Fires when a lead replies to a Lemlist email. Provides campaign, lead, and sequence "
+                "step details.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_EMAIL_REPLIED,
+            "data_provider_info": LemlistEmailRepliedEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new LemlistEmailRepliedEventDataType(); },
+            "options": {
+                "campaignId": <ActionOptionInfo>{
+                    "display_name": "Campaign ID",
+                    "short_desc": "Filter events to a specific campaign",
+                    "desc": "Optionally filter events to a specific Lemlist campaign",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "campaigns",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Email Bounced Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LemlistDataProvider::AppName,
+            "path": "/events/email-bounced",
+            "action": EVENT_EMAIL_BOUNCED,
+            "groups": "Triggers",
+            "display_name": "Email Bounced",
+            "short_desc": "Trigger when an email bounces",
+            "desc": "Fires when a Lemlist email bounces. Provides campaign and lead details for follow-up.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_EMAIL_BOUNCED,
+            "data_provider_info": LemlistEmailBouncedEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new LemlistEmailBouncedEventDataType(); },
+            "options": {
+                "campaignId": <ActionOptionInfo>{
+                    "display_name": "Campaign ID",
+                    "short_desc": "Filter events to a specific campaign",
+                    "desc": "Optionally filter events to a specific Lemlist campaign",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "campaigns",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Lead Interested Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LemlistDataProvider::AppName,
+            "path": "/events/lead-interested",
+            "action": EVENT_LEAD_INTERESTED,
+            "groups": "Triggers",
+            "display_name": "Lead Marked Interested",
+            "short_desc": "Trigger when a lead is marked as interested",
+            "desc": "Fires when a lead is marked as interested in Lemlist. This is a key engagement signal "
+                "for sales follow-up.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_LEAD_INTERESTED,
+            "data_provider_info": LemlistLeadInterestedEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new LemlistLeadInterestedEventDataType(); },
+            "options": {
+                "campaignId": <ActionOptionInfo>{
+                    "display_name": "Campaign ID",
+                    "short_desc": "Filter events to a specific campaign",
+                    "desc": "Optionally filter events to a specific Lemlist campaign",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "campaigns",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Lead Not Interested Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LemlistDataProvider::AppName,
+            "path": "/events/lead-not-interested",
+            "action": EVENT_LEAD_NOT_INTERESTED,
+            "groups": "Triggers",
+            "display_name": "Lead Marked Not Interested",
+            "short_desc": "Trigger when a lead is marked as not interested",
+            "desc": "Fires when a lead is marked as not interested in Lemlist. Use to suppress future "
+                "outreach or update CRM records.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_LEAD_NOT_INTERESTED,
+            "data_provider_info": LemlistLeadNotInterestedEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new LemlistLeadNotInterestedEventDataType(); },
+            "options": {
+                "campaignId": <ActionOptionInfo>{
+                    "display_name": "Campaign ID",
+                    "short_desc": "Filter events to a specific campaign",
+                    "desc": "Optionally filter events to a specific Lemlist campaign",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "campaigns",
+                    "preselected": True,
+                },
+            },
+        });
+    };
+}
+
+/** @mainpage LemlistDataProvider Module
+
+    @tableofcontents
+
+    @section lemlistdataproviderintro LemlistDataProvider Introduction
+
+    The %LemlistDataProvider module provides a data provider API for Lemlist sales outreach
+    and email campaign services through the Lemlist REST API.
+
+    To use this module, use \c "%requires LemlistDataProvider" in your code.
+
+    All the public symbols in the module are defined in the LemlistDataProvider namespace.
+
+    @section lemlistdataproviderrelnotes Release Notes
+
+    @subsection lemlistdataproviderv1_0 LemlistDataProvider v1.0
+    - the initial version of the %LemlistDataProvider module
+*/

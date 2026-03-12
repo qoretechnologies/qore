@@ -1,0 +1,923 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  LemlistDataProvider.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/RestClient.qm
+%requires ../../../../qlib/Mime.qm
+
+%try-module json
+%define NoJson
+%endtry
+
+%requires ../../../../qlib/LemlistRestClient.qm
+%requires ../../../../qlib/LemlistDataProvider
+
+%exec-class LemlistDataProviderTest
+
+public class LemlistDataProviderTest inherits QUnit::Test {
+    private {
+        #! Lemlist REST client for integration tests
+        *LemlistRestClient::LemlistRestClient client;
+
+        #! Logger for verbose output
+        Logger logger;
+
+        #! Custom command-line options
+        const MyOpts = Opts + {
+            "apikey": "k,apikey=s",
+        };
+
+        #! Test campaign ID (created during tests, cleaned up after)
+        *string testCampaignId;
+
+        #! Test lead email (created during testLeadRoundTrip, used by contact tests)
+        *string testLeadEmail;
+    }
+
+    constructor() : Test("LemlistDataProvider Test", "1.0", \ARGV, MyOpts) {
+        logger = new Logger("test", LoggerLevel::getLevelInfo());
+
+        # Unit tests (always run, no credentials needed)
+        addTestCase("sanity tests", \sanityTests());
+        addTestCase("factory tests", \factoryTests());
+        addTestCase("metadata tests", \metadataTests());
+        addTestCase("child provider tests", \childProviderTests());
+        addTestCase("data type tests", \dataTypeTests());
+        addTestCase("negative tests", \negativeTests());
+        addTestCase("corner case tests", \cornerCaseTests());
+        addTestCase("connection tests", \connectionTests());
+        addTestCase("action catalog tests", \actionCatalogTests());
+
+        # Integration tests (require LEMLIST_API_KEY)
+        addTestCase("integration tests", \integrationTests());
+
+        # Webhook trigger tests
+        addTestCase("webhook trigger tests", \webhookTriggerTests());
+
+        # Try to set up connection for integration tests
+        try {
+            setupConnection();
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("Connection setup failed: %s: %s\n", ex.err, ex.desc);
+            }
+        }
+
+        set_return_value(main());
+    }
+
+    #! Sets up the Lemlist client for integration tests
+    private setupConnection() {
+        *string apikey = m_options.apikey ?? ENV.LEMLIST_API_KEY;
+        if (!apikey) {
+            if (m_options.verbose) {
+                printf("No API key provided (use -k option or LEMLIST_API_KEY env var)\n");
+            }
+            return;
+        }
+        client = new LemlistRestClient::LemlistRestClient({"apikey": apikey});
+    }
+
+    #! Check if json module is available
+    private checkJson() {
+%ifdef NoJson
+        testSkip("no json module present");
+%endif
+    }
+
+    #! Creates a LemlistDataProvider for unit tests
+    /** Catches connection errors and skips the test (for CI where external APIs may be unavailable)
+        @return the provider, or NOTHING if the test should be skipped
+    */
+    private *LemlistDataProvider::LemlistDataProvider tryCreateProvider() {
+        try {
+            return new LemlistDataProvider::LemlistDataProvider({"apikey": "x"});
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
+                    || ex.err == "QOREADDRINFO-GETINFO-ERROR") {
+                testSkip(sprintf("cannot connect to Lemlist API: %s", ex.desc));
+            }
+            rethrow;
+        }
+    }
+
+    #! Basic sanity tests - provider instantiation
+    sanityTests() {
+        checkJson();
+        *LemlistDataProvider::LemlistDataProvider prov = tryCreateProvider();
+        if (!prov) {
+            return;
+        }
+        assertEq("lemlist", prov.getName());
+        assertEq("Lemlist data provider for sales outreach and email campaign management", prov.getDesc());
+    }
+
+    #! Factory tests - verify factory registration
+    factoryTests() {
+        checkJson();
+        # Verify factory is registered
+        AbstractDataProviderFactory factory = DataProvider::getFactory("lemlist");
+        assertEq("lemlist", factory.getInfo().name);
+        assertTrue(factory.getInfo().children_can_support_apis);
+        assertTrue(factory.getInfo().children_can_support_records);
+
+        # Verify factory exposes constructor options
+        hash<auto> factoryOpts = factory.getInfo().provider_info.constructor_options;
+        assertTrue(factoryOpts.hasKey("apikey"));
+        assertTrue(factoryOpts.hasKey("lemlistrestclient"));
+        assertTrue(factoryOpts.hasKey("lemlistrestclient_options"));
+    }
+
+    #! Metadata tests - verify provider info structure
+    metadataTests() {
+        checkJson();
+        *LemlistDataProvider::LemlistDataProvider prov = tryCreateProvider();
+        if (!prov) {
+            return;
+        }
+        hash<DataProviderInfo> info = prov.getInfo();
+
+        assertTrue(info.supports_children);
+        assertTrue(info.children_can_support_apis);
+        assertTrue(info.children_can_support_records);
+        assertTrue(info.children_can_support_observers);
+        assertEq("LemlistDataProvider", info.type);
+
+        # Check constructor options
+        assertTrue(info.constructor_options.hasKey("apikey"));
+        assertTrue(info.constructor_options.hasKey("lemlistrestclient"));
+    }
+
+    #! Child provider tests - verify hierarchy
+    childProviderTests() {
+        checkJson();
+        *LemlistDataProvider::LemlistDataProvider prov = tryCreateProvider();
+        if (!prov) {
+            return;
+        }
+
+        # Check top-level child names
+        list<string> children = prov.getChildProviderNames();
+        assertTrue(children.contains("campaigns"));
+        assertTrue(children.contains("leads"));
+        assertTrue(children.contains("activities"));
+        assertTrue(children.contains("tasks"));
+        assertTrue(children.contains("contacts"));
+        assertTrue(children.contains("create-campaign"));
+        assertTrue(children.contains("pause-campaign"));
+        assertTrue(children.contains("start-campaign"));
+        assertTrue(children.contains("create-lead"));
+        assertTrue(children.contains("update-lead"));
+        assertTrue(children.contains("delete-lead"));
+        assertTrue(children.contains("create-task"));
+        assertTrue(children.contains("update-task"));
+        assertTrue(children.contains("delete-task"));
+        assertTrue(children.contains("create-contact"));
+        assertTrue(children.contains("update-contact"));
+        assertTrue(children.contains("delete-contact"));
+        assertTrue(children.contains("events"));
+
+        # Check campaigns provider
+        AbstractDataProvider campaigns = prov.getChildProvider("campaigns");
+        assertEq("campaigns", campaigns.getName());
+        hash<DataProviderInfo> campaignsInfo = campaigns.getInfo();
+        assertTrue(campaignsInfo.supports_read);
+        assertTrue(campaignsInfo.supports_native_search);
+        assertTrue(campaignsInfo.has_record);
+
+        # Check leads provider
+        AbstractDataProvider leads = prov.getChildProvider("leads");
+        assertEq("leads", leads.getName());
+        hash<DataProviderInfo> leadsInfo = leads.getInfo();
+        assertTrue(leadsInfo.supports_read);
+        assertTrue(leadsInfo.has_record);
+
+        # Check activities provider
+        AbstractDataProvider activities = prov.getChildProvider("activities");
+        assertEq("activities", activities.getName());
+        hash<DataProviderInfo> activitiesInfo = activities.getInfo();
+        assertTrue(activitiesInfo.supports_read);
+        assertTrue(activitiesInfo.has_record);
+
+        # Check tasks provider
+        AbstractDataProvider tasks = prov.getChildProvider("tasks");
+        assertEq("tasks", tasks.getName());
+        hash<DataProviderInfo> tasksInfo = tasks.getInfo();
+        assertTrue(tasksInfo.supports_read);
+        assertTrue(tasksInfo.has_record);
+
+        # Check contacts provider
+        AbstractDataProvider contacts = prov.getChildProvider("contacts");
+        assertEq("contacts", contacts.getName());
+        hash<DataProviderInfo> contactsInfo = contacts.getInfo();
+        assertTrue(contactsInfo.supports_read);
+        assertTrue(contactsInfo.has_record);
+
+        # Check action providers
+        AbstractDataProvider createCampaign = prov.getChildProvider("create-campaign");
+        assertEq("create-campaign", createCampaign.getName());
+        assertTrue(createCampaign.getInfo().supports_request);
+
+        AbstractDataProvider pauseCampaign = prov.getChildProvider("pause-campaign");
+        assertEq("pause-campaign", pauseCampaign.getName());
+        assertTrue(pauseCampaign.getInfo().supports_request);
+
+        AbstractDataProvider startCampaign = prov.getChildProvider("start-campaign");
+        assertEq("start-campaign", startCampaign.getName());
+        assertTrue(startCampaign.getInfo().supports_request);
+
+        AbstractDataProvider createLead = prov.getChildProvider("create-lead");
+        assertEq("create-lead", createLead.getName());
+        assertTrue(createLead.getInfo().supports_request);
+
+        AbstractDataProvider updateLead = prov.getChildProvider("update-lead");
+        assertEq("update-lead", updateLead.getName());
+        assertTrue(updateLead.getInfo().supports_request);
+
+        AbstractDataProvider deleteLead = prov.getChildProvider("delete-lead");
+        assertEq("delete-lead", deleteLead.getName());
+        assertTrue(deleteLead.getInfo().supports_request);
+
+        AbstractDataProvider createTask = prov.getChildProvider("create-task");
+        assertEq("create-task", createTask.getName());
+        assertTrue(createTask.getInfo().supports_request);
+
+        AbstractDataProvider updateTask = prov.getChildProvider("update-task");
+        assertEq("update-task", updateTask.getName());
+        assertTrue(updateTask.getInfo().supports_request);
+
+        AbstractDataProvider deleteTask = prov.getChildProvider("delete-task");
+        assertEq("delete-task", deleteTask.getName());
+        assertTrue(deleteTask.getInfo().supports_request);
+
+        # Check events provider
+        AbstractDataProvider events = prov.getChildProvider("events");
+        assertEq("events", events.getName());
+        hash<DataProviderInfo> eventsInfo = events.getInfo();
+        assertTrue(eventsInfo.supports_children);
+        assertTrue(eventsInfo.children_can_support_observers);
+
+        # Check event child providers
+        list<string> eventChildren = events.getChildProviderNames();
+        assertTrue(eventChildren.contains("email-sent"));
+        assertTrue(eventChildren.contains("email-opened"));
+        assertTrue(eventChildren.contains("email-clicked"));
+        assertTrue(eventChildren.contains("email-replied"));
+        assertTrue(eventChildren.contains("email-bounced"));
+        assertTrue(eventChildren.contains("lead-interested"));
+        assertTrue(eventChildren.contains("lead-not-interested"));
+    }
+
+    #! Data type tests - verify record type definitions
+    dataTypeTests() {
+        checkJson();
+
+        # Test campaign data type
+        LemlistDataProvider::LemlistCampaignDataType campaignType();
+        hash<string, AbstractDataField> campaignFields = campaignType.getFields();
+        assertTrue(campaignFields.hasKey("_id"));
+        assertTrue(campaignFields.hasKey("name"));
+        assertTrue(campaignFields.hasKey("status"));
+        assertTrue(campaignFields.hasKey("isPaused"));
+        assertTrue(campaignFields.hasKey("createdAt"));
+
+        # Test lead data type
+        LemlistDataProvider::LemlistLeadDataType leadType();
+        hash<string, AbstractDataField> leadFields = leadType.getFields();
+        assertTrue(leadFields.hasKey("_id"));
+        assertTrue(leadFields.hasKey("email"));
+        assertTrue(leadFields.hasKey("firstName"));
+        assertTrue(leadFields.hasKey("lastName"));
+        assertTrue(leadFields.hasKey("campaignId"));
+        assertTrue(leadFields.hasKey("isUnsubscribed"));
+
+        # Test activity data type
+        LemlistDataProvider::LemlistActivityDataType activityType();
+        hash<string, AbstractDataField> activityFields = activityType.getFields();
+        assertTrue(activityFields.hasKey("_id"));
+        assertTrue(activityFields.hasKey("type"));
+        assertTrue(activityFields.hasKey("campaignId"));
+        assertTrue(activityFields.hasKey("leadEmail"));
+        assertTrue(activityFields.hasKey("createdAt"));
+
+        # Test task data type
+        LemlistDataProvider::LemlistTaskDataType taskType();
+        hash<string, AbstractDataField> taskFields = taskType.getFields();
+        assertTrue(taskFields.hasKey("_id"));
+        assertTrue(taskFields.hasKey("type"));
+        assertTrue(taskFields.hasKey("status"));
+        assertTrue(taskFields.hasKey("leadId"));
+        assertTrue(taskFields.hasKey("campaignId"));
+
+        # Test contact data type
+        LemlistDataProvider::LemlistContactDataType contactType();
+        hash<string, AbstractDataField> contactFields = contactType.getFields();
+        assertTrue(contactFields.hasKey("_id"));
+        assertTrue(contactFields.hasKey("email"));
+        assertTrue(contactFields.hasKey("firstName"));
+        assertTrue(contactFields.hasKey("lastName"));
+        assertTrue(contactFields.hasKey("isUnsubscribed"));
+
+        # Test event data types
+        LemlistDataProvider::LemlistEmailSentEventDataType emailSentType();
+        hash<string, AbstractDataField> emailSentFields = emailSentType.getFields();
+        assertTrue(emailSentFields.hasKey("type"));
+        assertTrue(emailSentFields.hasKey("campaignId"));
+        assertTrue(emailSentFields.hasKey("leadEmail"));
+        assertTrue(emailSentFields.hasKey("createdAt"));
+
+        LemlistDataProvider::LemlistLeadInterestedEventDataType interestedType();
+        hash<string, AbstractDataField> interestedFields = interestedType.getFields();
+        assertTrue(interestedFields.hasKey("type"));
+        assertTrue(interestedFields.hasKey("campaignId"));
+        assertTrue(interestedFields.hasKey("leadEmail"));
+    }
+
+    #! Negative tests - test error handling and invalid inputs
+    negativeTests() {
+        checkJson();
+        *LemlistDataProvider::LemlistDataProvider prov = tryCreateProvider();
+        if (!prov) {
+            return;
+        }
+
+        # Test getting non-existent child provider
+        assertThrows("INVALID-CHILD-PROVIDER", sub() {
+            prov.getChildProviderEx("nonexistent");
+        });
+
+        # Test invalid event child
+        AbstractDataProvider events = prov.getChildProvider("events");
+        assertThrows("INVALID-CHILD-PROVIDER", sub() {
+            events.getChildProviderEx("invalid-event-type");
+        });
+    }
+
+    #! Corner case tests - edge cases and boundary conditions
+    cornerCaseTests() {
+        checkJson();
+
+        # Test that REST client requires apikey
+        assertThrows("LEMLIST-ERROR", sub() {
+            new LemlistRestClient::LemlistRestClient({});
+        });
+
+        # Test REST client URL
+        try {
+            LemlistRestClient::LemlistRestClient client1({"apikey": "x"});
+            assertTrue(client1.getURL() =~ /api\.lemlist\.com/);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
+                    || ex.err == "QOREADDRINFO-GETINFO-ERROR") {
+                testSkip(sprintf("cannot connect to Lemlist API: %s", ex.desc));
+                return;
+            }
+            rethrow;
+        }
+    }
+
+    #! Connection tests - verify connection scheme registration
+    connectionTests() {
+        checkJson();
+        # Verify connection scheme is registered
+        hash<ConnectionSchemeInfo> scheme = ConnectionSchemeCache::getScheme("lemlist");
+        assertEq("Lemlist REST Connection", scheme.display_name);
+        assertTrue(scheme.options.hasKey("apikey"));
+        assertTrue(scheme.options."apikey".sensitive);
+
+        # Verify connection can create data provider
+        LemlistRestClient::LemlistRestConnection conn("test", "test connection",
+            "lemlist://api.lemlist.com/api", {}, {"apikey": "x"});
+        assertTrue(conn.hasDataProvider());
+        assertEq("Lemlist", conn.getAppName());
+        assertEq("lemlist", conn.getType());
+    }
+
+    #! Action catalog tests - verify all actions are registered
+    actionCatalogTests() {
+        checkJson();
+        # Get all actions for the Lemlist app
+        *list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActions(
+            LemlistDataProvider::AppName);
+        assertTrue(actions.size() > 0);
+
+        # Verify action names
+        list<string> actionNames = map $1.action, actions;
+
+        # Campaign actions
+        assertTrue(actionNames.contains("list-campaigns"));
+        assertTrue(actionNames.contains("create-campaign"));
+        assertTrue(actionNames.contains("pause-campaign"));
+        assertTrue(actionNames.contains("start-campaign"));
+
+        # Lead actions
+        assertTrue(actionNames.contains("list-leads"));
+        assertTrue(actionNames.contains("get-lead"));
+        assertTrue(actionNames.contains("create-lead"));
+        assertTrue(actionNames.contains("update-lead"));
+        assertTrue(actionNames.contains("delete-lead"));
+
+        # Activity actions
+        assertTrue(actionNames.contains("list-activities"));
+
+        # Task actions
+        assertTrue(actionNames.contains("list-tasks"));
+        assertTrue(actionNames.contains("get-task"));
+        assertTrue(actionNames.contains("create-task"));
+        assertTrue(actionNames.contains("update-task"));
+        assertTrue(actionNames.contains("delete-task"));
+
+        # Contact actions
+        assertTrue(actionNames.contains("list-contacts"));
+        assertTrue(actionNames.contains("get-contact"));
+        assertTrue(actionNames.contains("create-contact"));
+        assertTrue(actionNames.contains("update-contact"));
+        assertTrue(actionNames.contains("delete-contact"));
+
+        # Campaign get-single action
+        assertTrue(actionNames.contains("get-campaign"));
+
+        # Trigger actions
+        assertTrue(actionNames.contains("email-sent"));
+        assertTrue(actionNames.contains("email-opened"));
+        assertTrue(actionNames.contains("email-clicked"));
+        assertTrue(actionNames.contains("email-replied"));
+        assertTrue(actionNames.contains("email-bounced"));
+        assertTrue(actionNames.contains("lead-interested"));
+        assertTrue(actionNames.contains("lead-not-interested"));
+
+        # Verify trigger actions have correct action_code
+        *hash<DataProviderActionInfo> emailSentAction = DataProviderActionCatalog::getAppAction(
+            LemlistDataProvider::AppName, "email-sent");
+        assertTrue(exists emailSentAction, "email-sent action should exist");
+        assertEq(DPAT_EVENT, emailSentAction.action_code);
+
+        *hash<DataProviderActionInfo> leadInterestedAction = DataProviderActionCatalog::getAppAction(
+            LemlistDataProvider::AppName, "lead-interested");
+        assertTrue(exists leadInterestedAction, "lead-interested action should exist");
+        assertEq(DPAT_EVENT, leadInterestedAction.action_code);
+
+        # Verify DPAT_API action has options and output_type
+        *hash<DataProviderActionInfo> createCampaignAction = DataProviderActionCatalog::getAppAction(
+            LemlistDataProvider::AppName, "create-campaign");
+        assertTrue(exists createCampaignAction, "create-campaign action should exist");
+        assertEq(DPAT_API, createCampaignAction.action_code);
+        assertTrue(createCampaignAction.options.hasKey("name"),
+            "create-campaign options should have 'name' field");
+
+        # Verify DPAT_FIND action
+        *hash<DataProviderActionInfo> listCampaignsAction = DataProviderActionCatalog::getAppAction(
+            LemlistDataProvider::AppName, "list-campaigns");
+        assertTrue(exists listCampaignsAction, "list-campaigns action should exist");
+        assertEq(DPAT_FIND, listCampaignsAction.action_code);
+    }
+
+    #! Integration tests - require LEMLIST_API_KEY
+    integrationTests() {
+        checkJson();
+        if (!client) {
+            testSkip("No Lemlist API key provided (use -k option or LEMLIST_API_KEY env var)");
+            return;
+        }
+
+        # Test API connectivity
+        testApiConnectivity();
+
+        # Test listing campaigns
+        testListCampaigns();
+
+        # Test campaign lifecycle: create → pause → start
+        testCampaignLifecycle();
+
+        # Test get-campaign by ID (DPAT_FIND_SINGLE)
+        if (testCampaignId) {
+            testGetCampaign();
+        }
+
+        # Test lead round-trip: create → list → update → task round-trip → delete
+        if (testCampaignId) {
+            testLeadRoundTrip();
+        }
+
+        # Test contact round-trip: create → get → cleanup
+        testContactRoundTrip();
+
+        # Test listing contacts (uses email from lead round-trip)
+        testListContacts();
+
+        # Test listing activities
+        testListActivities();
+
+        # Test listing tasks
+        testListTasks();
+    }
+
+    #! Test basic API connectivity
+    private testApiConnectivity() {
+        # GET /team (singular) should return team info
+        hash<auto> resp = client.get("team");
+        assertTrue(exists resp.body, "team response should have a body");
+        if (m_options.verbose) {
+            printf("API connectivity OK\n");
+        }
+    }
+
+    #! Test listing campaigns
+    private testListCampaigns() {
+        LemlistDataProvider::LemlistDataProvider prov(client);
+        AbstractDataProvider campaigns = prov.getChildProvider("campaigns");
+
+        # List all campaigns (no filter)
+        list<hash<auto>> result = map $1, campaigns.searchRecords();
+        assertTrue(exists result, "campaigns list should be returned");
+
+        # Verify data type if any campaigns returned
+        if (result.size() > 0) {
+            hash<auto> campaign = result[0];
+            assertTrue(exists campaign._id, "campaign should have _id");
+            assertTrue(exists campaign.name, "campaign should have name");
+            if (m_options.verbose) {
+                printf("Listed %d campaign(s), first: %s (%s)\n",
+                    result.size(), campaign.name, campaign._id);
+            }
+        }
+    }
+
+    #! Test campaign lifecycle: create → verify → pause → start
+    private testCampaignLifecycle() {
+        LemlistDataProvider::LemlistDataProvider prov(client);
+
+        # Create a new test campaign
+        string campaignName = sprintf("QoreTest-%s", now_us().format("YYYYMMDDHHmmss"));
+        AbstractDataProvider createCampaign = prov.getChildProvider("create-campaign");
+        hash<auto> createResp = createCampaign.doRequest({"name": campaignName});
+
+        assertTrue(exists createResp._id, "created campaign should have _id");
+        assertTrue(exists createResp.name, "created campaign should have name");
+        assertEq(campaignName, createResp.name, "campaign name should match");
+
+        testCampaignId = createResp._id;
+        if (m_options.verbose) {
+            printf("Created campaign: %s (id=%s)\n", campaignName, testCampaignId);
+        }
+
+        # Verify campaign exists in list
+        AbstractDataProvider campaigns = prov.getChildProvider("campaigns");
+        list<hash<auto>> allCampaigns = map $1, campaigns.searchRecords();
+        bool found = False;
+        foreach hash<auto> c in (allCampaigns) {
+            if (c._id == testCampaignId) {
+                found = True;
+                assertEq(campaignName, c.name, "fetched campaign name should match");
+                break;
+            }
+        }
+        assertTrue(found, sprintf("Created campaign %s should be in campaign list", testCampaignId));
+
+        # Pause campaign
+        AbstractDataProvider pauseCampaign = prov.getChildProvider("pause-campaign");
+        hash<auto> pauseResp = pauseCampaign.doRequest({"campaignId": testCampaignId});
+        assertTrue(exists pauseResp, "pause response should exist");
+        if (m_options.verbose) {
+            printf("Paused campaign %s\n", testCampaignId);
+        }
+
+        # Start campaign
+        AbstractDataProvider startCampaign = prov.getChildProvider("start-campaign");
+        hash<auto> startResp = startCampaign.doRequest({"campaignId": testCampaignId});
+        assertTrue(exists startResp, "start response should exist");
+        if (m_options.verbose) {
+            printf("Started campaign %s\n", testCampaignId);
+        }
+
+        # Note: testCampaignId is intentionally kept for use by testLeadRoundTrip().
+        # Cleanup (archive) is done via the Lemlist API if available; for now, campaigns
+        # do not have a delete endpoint in Lemlist v2, so cleanup is a no-op.
+    }
+
+    #! Test get-campaign: look up a single campaign by ID (DPAT_FIND_SINGLE)
+    private testGetCampaign() {
+        LemlistDataProvider::LemlistDataProvider prov(client);
+        AbstractDataProvider campaigns = prov.getChildProvider("campaigns");
+        list<hash<auto>> result = map $1, campaigns.searchRecords(NOTHING, {"campaignId": testCampaignId});
+        assertTrue(result.size() >= 1, sprintf("get-campaign should return at least 1 result for %s", testCampaignId));
+        *hash<auto> found;
+        foreach hash<auto> c in (result) {
+            if (c._id == testCampaignId) {
+                found = c;
+                break;
+            }
+        }
+        assertTrue(exists found, sprintf("Campaign %s should be in results", testCampaignId));
+        assertTrue(exists found.name, "found campaign should have a name");
+        if (m_options.verbose) {
+            printf("Get campaign %s: name=%s\n", testCampaignId, found.name);
+        }
+    }
+
+    #! Test contacts lookup by email
+    #! Note: Lemlist v2 /contacts API requires a specific email address (idsOrEmails query param)
+    private testListContacts() {
+        if (!testLeadEmail) {
+            testSkip("no test lead email available (testLeadRoundTrip must run first)");
+            return;
+        }
+        LemlistDataProvider::LemlistDataProvider prov(client);
+        AbstractDataProvider contacts = prov.getChildProvider("contacts");
+        # Lemlist v2 /contacts requires a specific email - no general listing supported
+        list<hash<auto>> result = map $1, contacts.searchRecords(NOTHING, {"email": testLeadEmail});
+        assertTrue(exists result, "contacts lookup by email should return a result");
+        if (m_options.verbose) {
+            printf("Contacts lookup for %s: %d result(s)\n", testLeadEmail, result.size());
+        }
+    }
+
+    #! Test listing activities
+    private testListActivities() {
+        LemlistDataProvider::LemlistDataProvider prov(client);
+        AbstractDataProvider activities = prov.getChildProvider("activities");
+        list<hash<auto>> result = map $1, activities.searchRecords(NOTHING, {"limit": 10});
+        assertTrue(exists result, "activities list should be returned");
+
+        if (result.size() > 0) {
+            hash<auto> activity = result[0];
+            assertTrue(exists activity._id, "activity should have _id");
+            assertTrue(exists activity.type, "activity should have type");
+            if (m_options.verbose) {
+                printf("Listed %d activit(y/ies), first type: %s\n", result.size(), activity.type);
+            }
+        }
+    }
+
+    #! Test listing tasks
+    private testListTasks() {
+        LemlistDataProvider::LemlistDataProvider prov(client);
+        AbstractDataProvider tasks = prov.getChildProvider("tasks");
+        try {
+            list<hash<auto>> result = map $1, tasks.searchRecords(NOTHING, {"limit": 10});
+            assertTrue(exists result, "tasks list should be returned");
+
+            if (result.size() > 0) {
+                hash<auto> task = result[0];
+                assertTrue(exists task._id, "task should have _id");
+                assertTrue(exists task.type, "task should have type");
+                if (m_options.verbose) {
+                    printf("Listed %d task(s), first type: %s\n", result.size(), task.type);
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # Tasks API may require specific filters (returns "Malformed filters" without them)
+            if (m_options.verbose) {
+                printf("tasks list requires specific filters (skipping): %s: %s\n", ex.err, ex.desc);
+            }
+        }
+    }
+
+    #! Test contact round-trip: create → get → cleanup
+    #! Note: Lemlist v2 PATCH/DELETE /contacts/{email} return 405 — only create and get are supported
+    private testContactRoundTrip() {
+        LemlistDataProvider::LemlistDataProvider prov(client);
+        string contactEmail = sprintf("qore-contact-%s@test.example.com",
+            now_us().format("YYYYMMDDHHmmssxxx"));
+
+        # --- Create contact ---
+        AbstractDataProvider createContact = prov.getChildProvider("create-contact");
+        hash<auto> createResp;
+        try {
+            createResp = createContact.doRequest({
+                "email": contactEmail,
+                "firstName": "QoreContact",
+                "lastName": "Test",
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            # POST /contacts may not be supported on all plans
+            if (m_options.verbose) {
+                printf("create-contact not supported (skipping contact round-trip): %s: %s\n", ex.err, ex.desc);
+            }
+            return;
+        }
+        assertTrue(exists createResp, "create-contact response should exist");
+        if (m_options.verbose) {
+            printf("Created contact %s\n", contactEmail);
+        }
+
+        # --- Get contact (verify creation) ---
+        AbstractDataProvider contacts = prov.getChildProvider("contacts");
+        list<hash<auto>> found = map $1, contacts.searchRecords(NOTHING, {"email": contactEmail});
+        assertTrue(found.size() >= 1, sprintf("Created contact %s should be retrievable", contactEmail));
+        if (m_options.verbose) {
+            printf("Got contact %s: firstName=%s\n", contactEmail, found[0].firstName);
+        }
+
+        # --- Delete contact (cleanup) ---
+        # Note: Lemlist v2 DELETE /contacts/{email} may return 405 on some plans
+        AbstractDataProvider deleteContact = prov.getChildProvider("delete-contact");
+        try {
+            hash<auto> deleteResp = deleteContact.doRequest({"email": contactEmail});
+            assertTrue(exists deleteResp, "delete-contact response should exist");
+            if (m_options.verbose) {
+                printf("Deleted contact %s\n", contactEmail);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # 405 Method Not Allowed — Lemlist v2 contacts endpoint is read-only for some plans
+            if (m_options.verbose) {
+                printf("delete-contact result (expected 405): %s: %s\n", ex.err, ex.desc);
+            }
+        }
+    }
+
+    #! Test lead round-trip: create → list → update → task round-trip → delete
+    private testLeadRoundTrip() {
+        LemlistDataProvider::LemlistDataProvider prov(client);
+        # Use millisecond precision to avoid graveyard collisions across test runs
+        string testEmail = sprintf("qore-test-%s@test.example.com", now_us().format("YYYYMMDDHHmmssxxx"));
+
+        # Save email for use in contact tests (contacts are accessible by lead email)
+        testLeadEmail = testEmail;
+
+        # --- Create lead ---
+        AbstractDataProvider createLead = prov.getChildProvider("create-lead");
+        hash<auto> createResp = createLead.doRequest({
+            "campaignId": testCampaignId,
+            "email": testEmail,
+            "firstName": "QoreTest",
+            "lastName": "Integration",
+        });
+        assertTrue(exists createResp, "create-lead response should exist");
+        assertEq(testEmail, createResp.email, "created lead email should match");
+        if (m_options.verbose) {
+            printf("Created lead %s in campaign %s\n", testEmail, testCampaignId);
+        }
+
+        # --- List leads (verify lead was added) ---
+        # Note: GET /campaigns/{id}/leads/{email} returns empty body in v2 — confirm via list
+        AbstractDataProvider leads = prov.getChildProvider("leads");
+        list<hash<auto>> leadList = map $1, leads.searchRecords(
+            NOTHING, {"campaignId": testCampaignId, "limit": 100});
+        assertTrue(leadList.size() > 0, sprintf("Campaign should have at least 1 lead after creating %s", testEmail));
+        if (m_options.verbose) {
+            printf("Campaign %s has %d lead(s) after create\n", testCampaignId, leadList.size());
+        }
+
+        # --- Update lead ---
+        AbstractDataProvider updateLead = prov.getChildProvider("update-lead");
+        auto updateResp = updateLead.doRequest({
+            "email": testEmail,
+            "firstName": "QoreUpdated",
+        });
+        # Response may be NOTHING (204 No Content) or the updated lead object
+        if (updateResp.typeCode() == NT_HASH && updateResp.firstName) {
+            assertEq("QoreUpdated", updateResp.firstName, "updated lead firstName should match");
+        }
+        if (m_options.verbose) {
+            printf("Updated lead %s firstName to QoreUpdated\n", testEmail);
+        }
+
+        # --- Delete lead (cleanup) — always runs via on_exit even if task tests fail/skip ---
+        on_exit {
+            AbstractDataProvider deleteLead = prov.getChildProvider("delete-lead");
+            try {
+                deleteLead.doRequest({
+                    "campaignId": testCampaignId,
+                    "email": testEmail,
+                });
+                if (m_options.verbose) {
+                    printf("Deleted lead %s from campaign %s\n", testEmail, testCampaignId);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (m_options.verbose) {
+                    printf("delete-lead cleanup: %s: %s\n", ex.err, ex.desc);
+                }
+            }
+        }
+
+        # --- Task round-trip (requires lead to be alive) ---
+        # leadId in Lemlist v2 is the lead's email address
+        # Note: Lemlist marks deleted leads as unsubscribed but keeps them — contact still accessible after
+        testTaskRoundTrip(prov, testEmail);
+    }
+
+    #! Test task round-trip: create → get → update → delete
+    #! @param prov root data provider
+    #! @param leadId email of the lead to assign the task to (Lemlist v2 uses email as lead ID)
+    private testTaskRoundTrip(LemlistDataProvider::LemlistDataProvider prov, string leadId) {
+        # --- Create task ---
+        AbstractDataProvider createTask = prov.getChildProvider("create-task");
+        hash<auto> createResp;
+        try {
+            createResp = createTask.doRequest({
+                "type": "manualEmail",
+                "leadId": leadId,
+                "campaignId": testCampaignId,
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            # Task API may require specific plan or return 400 without required filters
+            if (m_options.verbose) {
+                printf("create-task not available (skipping task round-trip): %s: %s\n", ex.err, ex.desc);
+            }
+            return;
+        }
+        assertTrue(exists createResp, "create-task response should exist");
+        assertTrue(exists createResp._id, "created task should have _id");
+        assertEq("manualEmail", createResp.type, "created task type should match");
+        string taskId = createResp._id;
+        if (m_options.verbose) {
+            printf("Created task %s (type=manualEmail) for lead %s\n", taskId, leadId);
+        }
+
+        # --- Get task (DPAT_FIND_SINGLE) ---
+        AbstractDataProvider tasks = prov.getChildProvider("tasks");
+        list<hash<auto>> taskList = map $1, tasks.searchRecords(NOTHING, {"taskId": taskId});
+        assertTrue(taskList.size() >= 1, sprintf("get-task should return task %s", taskId));
+        assertEq(taskId, taskList[0]._id, "task ID should match");
+        if (m_options.verbose) {
+            printf("Got task %s: status=%s\n", taskId, taskList[0].status);
+        }
+
+        # --- Update task ---
+        AbstractDataProvider updateTask = prov.getChildProvider("update-task");
+        hash<auto> updateResp = updateTask.doRequest({
+            "taskId": taskId,
+            "status": "done",
+        });
+        assertTrue(exists updateResp, "update-task response should exist");
+        if (m_options.verbose) {
+            printf("Updated task %s status to done\n", taskId);
+        }
+
+        # --- Delete task (cleanup) ---
+        AbstractDataProvider deleteTask = prov.getChildProvider("delete-task");
+        hash<auto> deleteResp = deleteTask.doRequest({"taskId": taskId});
+        assertTrue(exists deleteResp, "delete-task response should exist");
+        if (m_options.verbose) {
+            printf("Deleted task %s\n", taskId);
+        }
+    }
+
+    #! Webhook trigger tests - verify event provider structure
+    webhookTriggerTests() {
+        checkJson();
+        *LemlistDataProvider::LemlistDataProvider prov = tryCreateProvider();
+        if (!prov) {
+            return;
+        }
+
+        AbstractDataProvider events = prov.getChildProvider("events");
+
+        # Verify each event provider
+        foreach string eventName in (LemlistDataProvider::AllEventTypes) {
+            AbstractDataProvider eventProv = events.getChildProvider(eventName);
+            assertEq(eventName, eventProv.getName(),
+                sprintf("event provider name should be %s", eventName));
+            hash<DataProviderInfo> info = eventProv.getInfo();
+            assertTrue(info.supports_observable,
+                sprintf("event provider %s should support observable", eventName));
+        }
+
+        # Verify example event data for each event type
+        foreach string eventName in (LemlistDataProvider::AllEventTypes) {
+            AbstractDataProvider eventProv = events.getChildProvider(eventName);
+            hash<auto> exampleData = eventProv.getExampleEventData(eventName);
+            assertTrue(exists exampleData, sprintf("example data for %s should exist", eventName));
+            assertTrue(exampleData.typeCode() == NT_HASH,
+                sprintf("example data for %s should be a hash", eventName));
+            assertTrue(exists exampleData.type,
+                sprintf("example data for %s should have 'type' field", eventName));
+            assertTrue(exists exampleData.campaignId,
+                sprintf("example data for %s should have 'campaignId' field", eventName));
+            assertTrue(exists exampleData.leadEmail,
+                sprintf("example data for %s should have 'leadEmail' field", eventName));
+            if (m_options.verbose) {
+                printf("Example data for %s: type=%s, campaignId=%s\n",
+                    eventName, exampleData.type, exampleData.campaignId);
+            }
+        }
+    }
+}
