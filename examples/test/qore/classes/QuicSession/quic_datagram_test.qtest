@@ -1,0 +1,347 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+%requires ../../../../../qlib/Util.qm
+%requires ../../../../../qlib/QUnit.qm
+%requires ../../../../../qlib/Logger.qm
+%requires ../../../../../qlib/AsyncSocketIo
+
+# Self-signed test certificate (RSA 2048-bit, CN=localhost, valid 10 years)
+const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIUahuuRGDlubXWYmiPhjVeT66vtNYwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MDIyMjE5MjIwMVoXDTM2MDIy
+MDE5MjIwMVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEAjZNfLFUyyo02MjZjouaR11FybkZNwDWBG/bhkpTVyj/x
+QKlwKf20LbGSCmMIYHaFnODMg6u6E6sfRJVk+ofwVHBN/Ug+mvoL1zlNJanMdXLH
+7oUsUILY6bVUDPm1ACZmFJsAc9jfHfkluJ6vfYG+DOJbyB0nsMfO9/fvrwndQPUQ
+k9eMq2VfDohni4ijk5BWD/P9UmrciZUNOaNISay469Le5ZrtfGt9An1+Ye3TckJC
+tTF4q7+V+GC88w5QtLd1AMQGf/1ax5cwqQv9SSFvhnwj9o3V3Wkz1dq4XA/9rSA1
+ecPHh/tJeGuvbD11Hyr9LTYjQ+DIel0DV0ZDHdc5vwIDAQABo1MwUTAdBgNVHQ4E
+FgQUYBBsVylVinbbAzTbUt0jRM6mJvwwHwYDVR0jBBgwFoAUYBBsVylVinbbAzTb
+Ut0jRM6mJvwwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAfIAE
+EPvLO+gOnm366xJabLr2Sw3hfmvCq/zSTlPcrB9jdBlOLpMmKcdGiOOCNmzg9+BX
+YNX+I6+MNOGp0j3afWlVwEjiMD66ydSMPEQw0FTzvpIjFN3fHo/MJzFbingRLrk8
+LCo94GmjMBYG+50M8MCKE6EzqfmoYT9fiMJcyJwwdptOWf0URNYKKrG1wRlX4+o8
+uNjQ3VwynI95fAw9WcR/ZtP0pkmCor/hKaYgVRsSGjD78Fu0Uuhm/pCAOuObpEHj
+5eoTlaWC3pZzGA67piqlEDOWiRi9Mo2CzG0t5fmQ83KB51ImauKdYB21whxjkZ+5
+BjwMC4hqSD+bzO2B+A==
+-----END CERTIFICATE-----";
+
+const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCNk18sVTLKjTYy
+NmOi5pHXUXJuRk3ANYEb9uGSlNXKP/FAqXAp/bQtsZIKYwhgdoWc4MyDq7oTqx9E
+lWT6h/BUcE39SD6a+gvXOU0lqcx1csfuhSxQgtjptVQM+bUAJmYUmwBz2N8d+SW4
+nq99gb4M4lvIHSewx8739++vCd1A9RCT14yrZV8OiGeLiKOTkFYP8/1SatyJlQ05
+o0hJrLjr0t7lmu18a30CfX5h7dNyQkK1MXirv5X4YLzzDlC0t3UAxAZ//VrHlzCp
+C/1JIW+GfCP2jdXdaTPV2rhcD/2tIDV5w8eH+0l4a69sPXUfKv0tNiND4Mh6XQNX
+RkMd1zm/AgMBAAECggEAATo1WYTgPK75DiS4PBR5UDS7DryvoN/LNOsGLUdQC9b+
+aEaacSrAvKKs9vJr2KuTtfahn0SbsjRKFZtL9aYRuHxZbhLfGWiF4MGflcOBQRq+
+eVFl6clwnaS+S/cq5rZD1/WODUhkisslqhI/cubvNwe2rvyduE510LgxYkLuIZ7a
++SCQz1XyPyhb8eVrWIZiprufjqXvDy01MC74l3ZYqaq1hr1oKi0ZDHI95Os7gtwQ
+4HQ3qdJsmYfbaf1223REp8gybnshsxkyjhKRU3nG7ZvgrRRMFkJvfHZ8VcS3cvsK
+ccKBJg7376+VDtc+RHUcBMyVZ881y4Rq2t6ssYVJVQKBgQDFq+N7ZGKOtQChSIXn
+ju/gP5WzSKJFaZhdkSggHi1K+PkuCZ1SXzKD3CPibreSUx9hzoZAAmTjzOfwhVZ7
+5HDqhrKfkWNeThAdXlglhNX5LVKhhmBsNGawANO8Pmq+pueWhK/76XgiGcOknyt6
+NH1ZE/QZpFeZB2binEhf6leYGwKBgQC3WgF2eaj2c4pugq13oZ9BHms5nsbYQgj8
+1H2C1wsgJNiz4tq6xFdvjiaw+r1OrCFrl9nz7npFc7uohtrRxXr7sq5nwMPO3QAP
+VxzyZ/TFP/FI70Avz6x+xX7HIlptpQ1mWacsdrvtoIG1c8veEJTyA4JgjoMhdDer
+JuPze+ZHLQKBgAzuLIhCzcul/W+Pberyx7A0mJdMtgiyWpwsRaKsNqxD0xD24gqk
+XYqQmOxT78Arnc7pEpEXVwArxDRQlJKwI87DluWnPgfKNXWmWT/DC7gsBc65Go+Z
+ceorc65JqvPjuRx4e4aQBCK+6rRXESICUvzDuGEBBhXljQ5fyMA1dRtnAoGAQSFH
+w74Ttvf0BK2G0SgoWglkLWOpXsiWSLlynDenTBPKppu+9vkn1gi41cU72eZrOL0I
+Pw5HgMRLtOGyeTGdLiuaqGBhLepzSv+22KT03dyI6U+TjWhH7gBZuIMLfEdVKzZN
+nA3RU+fgK4SmtotNXWrBtWrqScfuvm1iK+unMUECgYBrwc1rU/GI9tH4MWvBX99n
+pmFneeIUuXJajOsh7jUyTxcrHl+4kkgHDExuFMNPHfrIG8xCj43fjzxD/spz3xRS
++Ki3i3lYOFNhTUCREt5Xx23hkksK6j7SYlfY0IV2UruWt/UubpsfEqxC1Uk07NTo
+l50Xb2GWQesIt9k5jF5IOw==
+-----END PRIVATE KEY-----";
+
+%exec-class QuicDatagramTest
+
+class QuicDatagramTest inherits QUnit::Test {
+    private {
+        Logger mLogger;
+    }
+
+    constructor() : QUnit::Test("QuicDatagramTest", "1.0", \ARGV, Opts) {
+        addTestCase("datagram support negotiation", \testDatagramSupportNegotiation());
+        addTestCase("datagram max payload size", \testDatagramMaxPayloadSize());
+        addTestCase("datagram read timeout", \testDatagramReadTimeout());
+        addTestCase("datagram submit queues without error", \testDatagramSubmit());
+        addTestCase("invalid session datagram", \testInvalidSessionDatagram());
+        addTestCase("invalid parameter validation", \testInvalidParameterValidation());
+
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        mLogger = new Logger("quic-datagram-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            mLogger.addAppender(new StdoutAppender());
+        }
+    }
+
+    #! Helper: create a QUIC server+client socket pair bound to localhost
+    private hash<auto> createSocketPair() {
+        Socket server_sock();
+        server_sock.bindINET("127.0.0.1", "0", True, AF_INET, SOCK_DGRAM);
+        server_sock.setCertificate(new SSLCertificate(CertPem));
+        server_sock.setPrivateKey(new SSLPrivateKey(KeyPem));
+        int port = server_sock.getSocketInfo().port;
+
+        Socket client_sock();
+        client_sock.bindINET("127.0.0.1", "0", True, AF_INET, SOCK_DGRAM);
+
+        return {
+            "server_sock": server_sock,
+            "client_sock": client_sock,
+            "port": port,
+        };
+    }
+
+    #! Helper: perform QUIC handshake and return context with controller+ops
+    private hash<auto> performHandshake(hash<auto> pair, *timeout to) {
+        if (!to) {
+            to = 15s;
+        }
+        AsyncSocketIo::AsyncSocketIoController ctrl(True);
+        ctrl.start();
+
+        AbstractPollOperation server_op = pair.server_sock.startPollQuicAccept();
+        AbstractPollOperation client_op = pair.client_sock.startPollQuicConnect("127.0.0.1", pair.port);
+
+        Queue server_q = ctrl.submit(<SocketPollOperationInfo>{
+            "sock": pair.server_sock,
+            "spop": server_op,
+            "owner": "server",
+            "to": to,
+        });
+        Queue client_q = ctrl.submit(<SocketPollOperationInfo>{
+            "sock": pair.client_sock,
+            "spop": client_op,
+            "owner": "client",
+            "to": to,
+        });
+
+        return pair + {
+            "ctrl": ctrl,
+            "server_op": server_op,
+            "client_op": client_op,
+            "server_q": server_q,
+            "client_q": client_q,
+        };
+    }
+
+    #! Helper: wait for client to reach "reading" state (HTTP/3 ready)
+    private waitForClientReading(AbstractPollOperation client_op, *timeout to) {
+        if (!to) {
+            to = 10s;
+        }
+        Queue yield_q();
+        date deadline = now_us() + to;
+        while (client_op.getState() != "reading") {
+            date remaining = deadline - now_us();
+            if (remaining <= 0us) {
+                throw "TIMEOUT", sprintf("timeout waiting for client reading state; state=%s",
+                    client_op.getState());
+            }
+            try {
+                yield_q.get(min(remaining, 5ms));
+            } catch () {}
+        }
+    }
+
+    #! Helper: submit a request from client and wait for server to receive it
+    private hash<auto> submitRequestAndWaitForServer(hash<auto> ctx, string method, string path,
+            *hash<auto> req_headers, *data req_body) {
+        waitForClientReading(ctx.client_op);
+
+        int stream_id = ctx.client_sock.submitQuicRequest(method, path, req_headers, req_body);
+        assertTrue(stream_id >= 0, "submitQuicRequest returned valid stream_id");
+        ctx.ctrl.wake();
+
+        auto server_result = ctx.server_q.get(30000);
+        assertTrue(ctx.server_op.goalReached(), "server reached goal");
+
+        hash<auto> server_output = ctx.server_op.getOutput();
+        return {
+            "stream_id": stream_id,
+            "server_output": server_output,
+            "server_result": server_result,
+        };
+    }
+
+    #! Test: verify datagram support is negotiated after handshake
+    testDatagramSupportNegotiation() {
+        hash<auto> pair = createSocketPair();
+        hash<auto> ctx = performHandshake(pair);
+        on_exit {
+            ctx.ctrl.stop();
+        }
+
+        # Submit a request to establish a stream and get session IDs
+        hash<auto> req = submitRequestAndWaitForServer(ctx, "GET", "/test");
+        int server_session_id = req.server_output.session_id;
+        int client_session_id = ctx.client_sock.getQuicSessionId();
+
+        # Both sides should support datagrams after handshake
+        # (both advertise max_datagram_frame_size=65535)
+        assertTrue(ctx.client_sock.isQuicDatagramSupported(client_session_id),
+            "client reports datagram support");
+        assertTrue(ctx.server_sock.isQuicDatagramSupported(server_session_id),
+            "server reports datagram support");
+
+        # Verify session IDs are valid
+        assertTrue(client_session_id > 0, "valid client session ID");
+        assertTrue(server_session_id > 0, "valid server session ID");
+    }
+
+    #! Test: getQuicMaxDatagramSize returns sensible values
+    testDatagramMaxPayloadSize() {
+        hash<auto> pair = createSocketPair();
+        hash<auto> ctx = performHandshake(pair);
+        on_exit {
+            ctx.ctrl.stop();
+        }
+
+        hash<auto> req = submitRequestAndWaitForServer(ctx, "GET", "/max-size");
+        int client_session_id = ctx.client_sock.getQuicSessionId();
+        int stream_id = req.stream_id;
+
+        int max_size = ctx.client_sock.getQuicMaxDatagramSize(client_session_id, stream_id);
+        assertTrue(max_size > 0, sprintf("max datagram size > 0 (got %d)", max_size));
+        # QUIC datagrams should support at least 1000 bytes after overhead
+        assertTrue(max_size >= 1000,
+            sprintf("max datagram size >= 1000 (got %d)", max_size));
+        # Should not exceed 65535 (max_datagram_frame_size)
+        assertTrue(max_size <= 65535,
+            sprintf("max datagram size <= 65535 (got %d)", max_size));
+    }
+
+    #! Test: readQuicDatagram returns NOTHING on timeout
+    testDatagramReadTimeout() {
+        hash<auto> pair = createSocketPair();
+        hash<auto> ctx = performHandshake(pair);
+        on_exit {
+            ctx.ctrl.stop();
+        }
+
+        hash<auto> req = submitRequestAndWaitForServer(ctx, "GET", "/timeout");
+        int client_session_id = ctx.client_sock.getQuicSessionId();
+        int stream_id = req.stream_id;
+
+        # Try to read with a very short timeout — no datagrams pending
+        *binary result = ctx.client_sock.readQuicDatagram(
+            client_session_id, stream_id, 100ms);
+        assertNothing(result, "readQuicDatagram returns NOTHING on timeout");
+
+        # Non-blocking read (0ms timeout) should also return NOTHING
+        *binary result2 = ctx.client_sock.readQuicDatagram(
+            client_session_id, stream_id, 0);
+        assertNothing(result2, "readQuicDatagram returns NOTHING with 0ms timeout");
+    }
+
+    #! Test: submitQuicDatagram queues data without error
+    testDatagramSubmit() {
+        hash<auto> pair = createSocketPair();
+        hash<auto> ctx = performHandshake(pair);
+        on_exit {
+            ctx.ctrl.stop();
+        }
+
+        hash<auto> req = submitRequestAndWaitForServer(ctx, "POST", "/submit");
+        int client_session_id = ctx.client_sock.getQuicSessionId();
+        int server_session_id = req.server_output.session_id;
+        int stream_id = req.stream_id;
+
+        # Client can submit a datagram without error
+        ctx.client_sock.submitQuicDatagram(client_session_id, stream_id, <deadbeef>);
+        assertTrue(True, "client submitQuicDatagram succeeded");
+
+        # Server can submit a datagram without error
+        ctx.server_sock.submitQuicDatagram(server_session_id, stream_id, <cafebabe>);
+        assertTrue(True, "server submitQuicDatagram succeeded");
+
+        # Empty payload is valid
+        ctx.client_sock.submitQuicDatagram(client_session_id, stream_id, binary());
+        assertTrue(True, "empty datagram submitQuicDatagram succeeded");
+    }
+
+    #! Test: datagram methods throw for invalid session
+    testInvalidSessionDatagram() {
+        Socket sock();
+        sock.bindINET("127.0.0.1", "0", True, AF_INET, SOCK_DGRAM);
+
+        assertThrows("QUIC-ERROR", sub() {
+            sock.isQuicDatagramSupported(9999);
+        }, NOTHING, "isQuicDatagramSupported with invalid session");
+
+        assertThrows("QUIC-ERROR", sub() {
+            sock.submitQuicDatagram(9999, 0, <dead>);
+        }, NOTHING, "submitQuicDatagram with invalid session");
+
+        assertThrows("QUIC-ERROR", sub() {
+            sock.readQuicDatagram(9999, 0, 100ms);
+        }, NOTHING, "readQuicDatagram with invalid session");
+
+        assertThrows("QUIC-ERROR", sub() {
+            sock.getQuicMaxDatagramSize(9999, 0);
+        }, NOTHING, "getQuicMaxDatagramSize with invalid session");
+    }
+
+    #! Test: parameter validation (session_id <= 0, stream_id < 0)
+    testInvalidParameterValidation() {
+        Socket sock();
+        sock.bindINET("127.0.0.1", "0", True, AF_INET, SOCK_DGRAM);
+
+        # session_id <= 0 should throw
+        assertThrows("QUIC-ERROR", sub() {
+            sock.submitQuicDatagram(0, 0, <dead>);
+        }, NOTHING, "submitQuicDatagram with session_id=0");
+
+        assertThrows("QUIC-ERROR", sub() {
+            sock.submitQuicDatagram(-1, 0, <dead>);
+        }, NOTHING, "submitQuicDatagram with session_id=-1");
+
+        # stream_id < 0 should throw
+        assertThrows("QUIC-ERROR", sub() {
+            sock.submitQuicDatagram(1, -1, <dead>);
+        }, NOTHING, "submitQuicDatagram with stream_id=-1");
+
+        assertThrows("QUIC-ERROR", sub() {
+            sock.readQuicDatagram(1, -1, 100ms);
+        }, NOTHING, "readQuicDatagram with stream_id=-1");
+
+        assertThrows("QUIC-ERROR", sub() {
+            sock.getQuicMaxDatagramSize(1, -1);
+        }, NOTHING, "getQuicMaxDatagramSize with stream_id=-1");
+
+        # isQuicDatagramSupported with session_id <= 0
+        assertThrows("QUIC-ERROR", sub() {
+            sock.isQuicDatagramSupported(0);
+        }, NOTHING, "isQuicDatagramSupported with session_id=0");
+    }
+}
