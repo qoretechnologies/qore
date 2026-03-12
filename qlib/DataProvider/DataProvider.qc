@@ -159,6 +159,7 @@ public class DataProvider {
             "salesforcerest": "SalesforceRestDataProvider",
             "sax": "SaxDataProvider",
             "servicenowrest": "ServiceNowRestDataProvider",
+            "lemlist": "LemlistDataProvider",
             "shippo": "ShippoDataProvider",
             "shipstation": "ShipStationDataProvider",
             "keap": "KeapDataProvider",
