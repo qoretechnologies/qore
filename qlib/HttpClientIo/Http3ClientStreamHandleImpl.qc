@@ -37,9 +37,15 @@ printf("Status: %d\n", response.status_code);
     @endcode
 */
 public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
+    private {
+        #! Typed reference to the H3 connection (for datagram methods)
+        Http3ClientConnection h3conn;
+    }
+
     #! Creates a new stream handle
     constructor(HttpClientConnection conn, timeout request_timeout = DefaultRequestTimeout,
             *Logger logger) : HttpClientStreamHandle(conn, request_timeout, logger) {
+        h3conn = cast<Http3ClientConnection>(conn);
     }
 
     #! Copying is not supported
@@ -62,6 +68,51 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
                 }
                 callback(resp, err);
             });
+    }
+
+    #! Send a QUIC DATAGRAM frame on this stream's datagram channel (RFC 9221/9297)
+    sendDatagram(binary data) {
+        if (!stream_id) {
+            throw "HTTPCLIENT-STATE-ERROR", "stream not yet established";
+        }
+        int sid = h3conn.getSessionId();
+        if (!sid) {
+            throw "HTTPCLIENT-STATE-ERROR", "QUIC session not yet established";
+        }
+        h3conn.getSocket().submitQuicDatagram(sid, stream_id, data);
+    }
+
+    #! Read the next incoming QUIC datagram on this stream's channel (RFC 9221/9297)
+    *binary readDatagram(timeout timeout_ms = 30s) {
+        if (!stream_id) {
+            throw "HTTPCLIENT-STATE-ERROR", "stream not yet established";
+        }
+        int sid = h3conn.getSessionId();
+        if (!sid) {
+            throw "HTTPCLIENT-STATE-ERROR", "QUIC session not yet established";
+        }
+        return h3conn.getSocket().readQuicDatagram(sid, stream_id, timeout_ms);
+    }
+
+    #! Check if the remote peer supports QUIC datagrams on this connection
+    bool isDatagramSupported() {
+        int sid = h3conn.getSessionId();
+        if (!sid) {
+            return False;
+        }
+        return h3conn.getSocket().isQuicDatagramSupported(sid);
+    }
+
+    #! Get the maximum datagram payload size for this connection
+    int getMaxDatagramSize() {
+        if (!stream_id) {
+            return 0;
+        }
+        int sid = h3conn.getSessionId();
+        if (!sid) {
+            return 0;
+        }
+        return h3conn.getSocket().getQuicMaxDatagramSize(sid, stream_id);
     }
 }
 

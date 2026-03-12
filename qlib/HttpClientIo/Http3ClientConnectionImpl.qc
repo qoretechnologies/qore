@@ -92,6 +92,11 @@ public class Http3ClientConnection inherits HttpClientConnection {
         return poll_op.getSocket();
     }
 
+    #! Returns the QUIC session ID (0 if not yet connected)
+    int getSessionId() {
+        return poll_op.getSessionId();
+    }
+
     #! Sets the controller reference for wake notifications
     /** Also notifies the poll operation that an async controller drives I/O,
         so the STREAM_ID_BLOCKED retry loop does not call continuePoll().
