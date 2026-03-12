@@ -3798,7 +3798,12 @@ int QuicSession::recvDatagramCallback(ngtcp2_conn* conn, uint32_t flags,
         return 0;  // silently discard malformed datagrams
     }
 
-    // Convert quarter-stream-ID back to stream ID
+    // Convert quarter-stream-ID back to stream ID; guard against overflow
+    if (quarter_stream_id > static_cast<uint64_t>(INT64_MAX) / 4) {
+        printd(2, "recvDatagramCallback(): quarter-stream-ID %" PRIu64
+            " would overflow stream_id\n", quarter_stream_id);
+        return 0;  // silently discard
+    }
     int64_t stream_id = static_cast<int64_t>(quarter_stream_id * 4);
 
     // Extract payload after the quarter-stream-ID
@@ -3806,18 +3811,24 @@ int QuicSession::recvDatagramCallback(ngtcp2_conn* conn, uint32_t flags,
     size_t payload_len = datalen - varint_len;
 
     // Route to per-stream datagram queue
-    {
-        std::lock_guard<std::mutex> lg(session->datagram_mutex_);
-        auto& queue = session->datagram_queues_[stream_id];
-        queue.emplace_back(payload, payload + payload_len);
-    }
+    try {
+        {
+            std::lock_guard<std::mutex> lg(session->datagram_mutex_);
+            auto& queue = session->datagram_queues_[stream_id];
+            queue.emplace_back(payload, payload + payload_len);
+        }
 
-    // Signal waiting readers
-    session->datagram_gen_.fetch_add(1, std::memory_order_release);
-    {
-        std::lock_guard<std::mutex> lg(session->datagram_cv_mtx_);
+        // Signal waiting readers
+        session->datagram_gen_.fetch_add(1, std::memory_order_release);
+        {
+            std::lock_guard<std::mutex> lg(session->datagram_cv_mtx_);
+        }
+        session->datagram_cv_.notify_all();
+    } catch (...) {
+        // C callback — must not propagate C++ exceptions through ngtcp2's C code
+        printd(0, "recvDatagramCallback(): exception while queuing datagram "
+            "(stream_id=" QLLD ")\n", stream_id);
     }
-    session->datagram_cv_.notify_all();
 
     return 0;
 }
@@ -3828,6 +3839,14 @@ int QuicSession::submitDatagram(int64_t stream_id, const uint8_t* data, size_t l
 
     if (!conn_) {
         xsink->raiseException("QUIC-DATAGRAM-ERROR", "QUIC connection not initialized");
+        return -1;
+    }
+
+    // RFC 9297: quarter-stream-ID = stream_id / 4; stream_id must be a multiple of 4
+    if (stream_id < 0 || (stream_id & 3) != 0) {
+        xsink->raiseException("QUIC-DATAGRAM-ERROR",
+            "invalid stream_id " QLLD " for datagram: must be a non-negative multiple of 4",
+            stream_id);
         return -1;
     }
 

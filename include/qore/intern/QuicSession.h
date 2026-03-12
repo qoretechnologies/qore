@@ -97,10 +97,6 @@ struct QuicStreamInfo {
     //! after being dispatched (so h3RecvDataCallback can route tunnel data)
     bool connect_tunnel_active = false;
 
-    //! RFC 9297: True if this stream is an HTTP/3 datagram anchor (Capsule-Protocol)
-    //! Datagram payloads flow as QUIC DATAGRAM frames using quarter-stream-ID routing.
-    bool datagram_anchor = false;
-
     //! True after headers-only dispatch (stream stays in map for DATA accumulation)
     bool dispatched = false;
     //! True if FIN was set on the HEADERS frame (no body expected)
