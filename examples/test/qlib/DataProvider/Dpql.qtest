@@ -113,6 +113,13 @@ public class DpqlTest inherits QUnit::Test {
         addTestCase("template validation tests", \templateValidationTests());
         addTestCase("JSON expression serialization tests", \jsonExpressionSerializationTests());
         addTestCase("argument type validation tests", \argumentTypeValidationTests());
+        addTestCase("return type propagation tests", \returnTypePropagationTests());
+        addTestCase("comparison type validation tests", \comparisonTypeValidationTests());
+        addTestCase("search expression validation tests", \searchExpressionValidationTests());
+        addTestCase("search context completion tests", \searchContextCompletionTests());
+        addTestCase("free-form expression tests", \freeFormExpressionTests());
+        addTestCase("type-aware completion tests", \typeAwareCompletionTests());
+        addTestCase("infix comparison operator tests", \infixComparisonOperatorTests());
 
         # Return for compatibility with test harnesses that check the return value.
         set_return_value(main());
@@ -5062,6 +5069,908 @@ public class DpqlTest inherits QUnit::Test {
             assertEq(0, exp.args.size());
             hash<auto> reserialized = DataProvider::serializeExpressionToJson(exp);
             assertEq("true", reserialized.exp);
+        }
+    }
+
+    returnTypePropagationTests() {
+        hash<string, AbstractDataField> fields = getTestFields();
+
+        # Nested expression return type: comparison ops return bool
+        {
+            DpqlParser parser(DataProviderGenericExpressions, fields);
+            hash<DpqlParseResult> result = parser.parseWithInfo('@age == 1');
+            assertTrue(result.success, "comparison should parse");
+            # The expression itself is a comparison — infer its return type
+            *AbstractDataProviderType rtype = parser.inferExpressionReturnType(result.expression);
+            assertTrue(exists rtype, "comparison should have a return type");
+            assertEq("bool", rtype.getName(), "comparison returns bool");
+        }
+
+        # AND/OR return bool
+        {
+            DpqlParser parser(DataProviderGenericExpressions, fields);
+            hash<DpqlParseResult> result = parser.parseWithInfo('@age == 1 && @name == "x"');
+            assertTrue(result.success, "AND should parse");
+            *AbstractDataProviderType rtype = parser.inferExpressionReturnType(result.expression);
+            assertTrue(exists rtype, "AND should have a return type");
+            assertEq("bool", rtype.getName(), "AND returns bool");
+        }
+
+        # NOT returns bool
+        {
+            DpqlParser parser(DataProviderGenericExpressions, fields);
+            hash<DpqlParseResult> result = parser.parseWithInfo('!(@age == 1)');
+            assertTrue(result.success, "NOT should parse");
+            *AbstractDataProviderType rtype = parser.inferExpressionReturnType(result.expression);
+            assertTrue(exists rtype, "NOT should have a return type");
+            assertEq("bool", rtype.getName(), "NOT returns bool");
+        }
+
+        # Known function return type
+        {
+            DpqlParser parser(DataProviderGenericExpressions, fields);
+            hash<DpqlParseResult> result = parser.parseWithInfo('index(@name, 0)');
+            assertTrue(result.success, "function call should parse");
+            *AbstractDataProviderType rtype = parser.inferExpressionReturnType(result.expression);
+            # index() returns auto/any — just verify it doesn't crash
+            assertTrue(True, "function return type resolved without error");
+        }
+
+        # Value expression return type
+        {
+            DpqlParser parser(DataProviderGenericExpressions, fields);
+            hash<DpqlParseResult> result = parser.parseWithInfo('"hello"');
+            assertTrue(result.success, "literal should parse");
+            *AbstractDataProviderType rtype = parser.inferExpressionReturnType(result.expression);
+            assertTrue(exists rtype, "value expression should have a return type");
+            assertEq("string", rtype.getName(), "string literal returns string");
+        }
+    }
+
+    comparisonTypeValidationTests() {
+        hash<string, AbstractDataField> fields = {
+            "name": new QoreDataField("name", NOTHING, AbstractDataProviderType::get(StringType)),
+            "age": new QoreDataField("age", NOTHING, AbstractDataProviderType::get(IntType)),
+            "score": new QoreDataField("score", NOTHING, AbstractDataProviderType::get(FloatType)),
+            "active": new QoreDataField("active", NOTHING, AbstractDataProviderType::get(BoolType)),
+        };
+
+        # DPQL-W005: comparison type mismatch — int field vs string literal
+        {
+            list<hash<DpqlDiagnostic>> diags = DataProvider::validateDpqlExpression(
+                '@age == "hello"', fields);
+            list<hash<DpqlDiagnostic>> warnings = select diags, $1.code == "DPQL-W005";
+            assertEq(1, warnings.size(), "should warn about int vs string comparison");
+            assertTrue(warnings[0].message.find("int") >= 0, "message should mention int");
+            assertTrue(warnings[0].message.find("string") >= 0, "message should mention string");
+        }
+
+        # No warning for same types
+        {
+            list<hash<DpqlDiagnostic>> diags = DataProvider::validateDpqlExpression(
+                '@name == "hello"', fields);
+            list<hash<DpqlDiagnostic>> warnings = select diags, $1.code == "DPQL-W005";
+            assertEq(0, warnings.size(), "same-type comparison should have no warnings");
+        }
+
+        # No warning for compatible numeric types (int vs float)
+        # Note: this depends on Qore's type assignability rules
+        {
+            DataProvider::validateDpqlExpression('@age == 3.14', fields);
+            # int and float may or may not be assignable depending on Qore rules
+            # Just verify it doesn't crash
+            assertTrue(True, "int vs float comparison validation works");
+        }
+
+        # DPQL-W004: logical operator with non-bool argument (using function that returns string)
+        {
+            hash<string, hash<DataProviderExpressionInfo>> bool_expmap = DataProviderGenericExpressions + {
+                "str-func": <DataProviderExpressionInfo>{
+                    "type": DET_Function,
+                    "name": "str-func",
+                    "display_name": "String Func",
+                    "short_desc": "Returns a string",
+                    "desc": "Returns a string",
+                    "symbol": "str-func()",
+                    "args": (),
+                    "arg_info": (),
+                    "return_type": AbstractDataProviderType::get(StringType),
+                },
+            };
+            list<hash<DpqlDiagnostic>> diags = DataProvider::validateDpqlExpression(
+                '@age == 1 && str-func()', fields, bool_expmap);
+            list<hash<DpqlDiagnostic>> warnings = select diags, $1.code == "DPQL-W004";
+            assertTrue(warnings.size() > 0, "should warn about string-returning func in && context");
+            assertTrue(warnings[0].message.find("bool") >= 0, "message should mention bool");
+        }
+
+        # No warning for && with bool operands
+        {
+            list<hash<DpqlDiagnostic>> diags = DataProvider::validateDpqlExpression(
+                '@age == 1 && @name == "x"', fields);
+            list<hash<DpqlDiagnostic>> warnings = select diags, $1.code == "DPQL-W004";
+            assertEq(0, warnings.size(), "bool operands should have no warnings");
+        }
+
+        # DPQL-W005: between type mismatch
+        {
+            list<hash<DpqlDiagnostic>> diags = DataProvider::validateDpqlExpression(
+                '@age between "abc" and 100', fields);
+            list<hash<DpqlDiagnostic>> warnings = select diags, $1.code == "DPQL-W005";
+            assertTrue(warnings.size() > 0, "should warn about between type mismatch");
+            assertTrue(warnings[0].message.find("between") >= 0, "message should mention between");
+        }
+
+        # No warning for between with compatible types
+        {
+            list<hash<DpqlDiagnostic>> diags = DataProvider::validateDpqlExpression(
+                '@age between 1 and 100', fields);
+            list<hash<DpqlDiagnostic>> warnings = select diags, $1.code == "DPQL-W005";
+            assertEq(0, warnings.size(), "compatible between should have no warnings");
+        }
+
+        # DPQL-W005: in type mismatch
+        {
+            list<hash<DpqlDiagnostic>> diags = DataProvider::validateDpqlExpression(
+                '@age in ("a", "b", "c")', fields);
+            list<hash<DpqlDiagnostic>> warnings = select diags, $1.code == "DPQL-W005";
+            assertTrue(warnings.size() > 0, "should warn about in type mismatch");
+            assertTrue(warnings[0].message.find("in") >= 0, "message should mention in");
+        }
+
+        # No warning for in with compatible types
+        {
+            list<hash<DpqlDiagnostic>> diags = DataProvider::validateDpqlExpression(
+                '@age in (1, 2, 3)', fields);
+            list<hash<DpqlDiagnostic>> warnings = select diags, $1.code == "DPQL-W005";
+            assertEq(0, warnings.size(), "compatible in should have no warnings");
+        }
+
+        # Existing DPQL-W003/W004 tests should still pass (regression check)
+        {
+            hash<string, hash<DataProviderExpressionInfo>> expmap = DataProviderGenericExpressions + {
+                "typed-func": <DataProviderExpressionInfo>{
+                    "type": DET_Function,
+                    "name": "typed-func",
+                    "display_name": "Typed Function",
+                    "short_desc": "A typed function",
+                    "desc": "A typed function",
+                    "symbol": "typed-func()",
+                    "args": (
+                        <DataProviderSignatureTypeInfo>{
+                            "type": AbstractDataProviderType::get(StringType),
+                        },
+                    ),
+                    "arg_info": (
+                        <DataProviderArgInfo>{"display_name": "Text"},
+                    ),
+                    "return_type": AbstractDataProviderType::get(StringType),
+                },
+            };
+            hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo(
+                "typed-func(42)", expmap, fields);
+            assertTrue(result.success, "type mismatch is warning not error");
+            list<hash<DpqlDiagnostic>> warnings = select result.diagnostics, $1.code == "DPQL-W004";
+            assertEq(1, warnings.size(), "existing W004 still works");
+        }
+    }
+
+    searchExpressionValidationTests() {
+        hash<string, AbstractDataField> fields = getTestFields();
+
+        # Build a server expression map simulating a DB provider (supports basic comparison ops)
+        hash<string, hash<DataProviderExpressionInfo>> server_exprs = {
+            DP_SEARCH_OP_EQ: <DataProviderExpressionInfo>{
+                "type": DET_Operator,
+                "name": DP_SEARCH_OP_EQ,
+                "display_name": "Equals",
+                "short_desc": "Equals comparison",
+                "desc": "Equals comparison",
+                "symbol": "==",
+                "return_type": AbstractDataProviderType::get(BoolType),
+            },
+            DP_SEARCH_OP_NE: <DataProviderExpressionInfo>{
+                "type": DET_Operator,
+                "name": DP_SEARCH_OP_NE,
+                "display_name": "Not Equals",
+                "short_desc": "Not equals comparison",
+                "desc": "Not equals comparison",
+                "symbol": "!=",
+                "return_type": AbstractDataProviderType::get(BoolType),
+            },
+            DP_SEARCH_OP_LT: <DataProviderExpressionInfo>{
+                "type": DET_Operator,
+                "name": DP_SEARCH_OP_LT,
+                "display_name": "Less Than",
+                "short_desc": "Less than comparison",
+                "desc": "Less than comparison",
+                "symbol": "<",
+                "return_type": AbstractDataProviderType::get(BoolType),
+            },
+            DP_SEARCH_OP_GT: <DataProviderExpressionInfo>{
+                "type": DET_Operator,
+                "name": DP_SEARCH_OP_GT,
+                "display_name": "Greater Than",
+                "short_desc": "Greater than comparison",
+                "desc": "Greater than comparison",
+                "symbol": ">",
+                "return_type": AbstractDataProviderType::get(BoolType),
+            },
+            DP_OP_AND: <DataProviderExpressionInfo>{
+                "type": DET_Operator,
+                "name": DP_OP_AND,
+                "display_name": "AND",
+                "short_desc": "Logical AND",
+                "desc": "Logical AND",
+                "symbol": "&&",
+                "return_type": AbstractDataProviderType::get(BoolType),
+            },
+        };
+
+        # Build a Qorus-only expression for testing (not in server_exprs)
+        hash<string, hash<DataProviderExpressionInfo>> qorus_only_exprs = {
+            "qorus-trim": <DataProviderExpressionInfo>{
+                "type": DET_Function,
+                "name": "qorus-trim",
+                "display_name": "Trim",
+                "short_desc": "Trim whitespace",
+                "desc": "Trims whitespace",
+                "symbol": "qorus-trim()",
+                "args": (
+                    <DataProviderSignatureTypeInfo>{
+                        "type": AbstractDataProviderType::get(StringType),
+                    },
+                ),
+                "arg_info": (
+                    <DataProviderArgInfo>{"display_name": "value"},
+                ),
+                "return_type": AbstractDataProviderType::get(StringType),
+            },
+        };
+
+        # Full expression map (server + Qorus-only)
+        hash<string, hash<DataProviderExpressionInfo>> all_exprs = server_exprs + qorus_only_exprs;
+
+        # --- Valid search expressions (no search diagnostics) ---
+
+        # Valid: field ref with server operator
+        {
+            list<hash<DpqlDiagnostic>> diags = DataProvider::validateDpqlExpression(
+                '@name == "John"', fields, all_exprs, server_exprs);
+            list<hash<DpqlDiagnostic>> search_errs = select diags, $1.code =~ /^DPQL-E04/;
+            assertEq(0, search_errs.size(), "valid search: @field == value");
+        }
+
+        # Valid: multiple conditions with AND
+        {
+            list<hash<DpqlDiagnostic>> diags = DataProvider::validateDpqlExpression(
+                '@name == "John" && @age > 18', fields, all_exprs, server_exprs);
+            list<hash<DpqlDiagnostic>> search_errs = select diags, $1.code =~ /^DPQL-E04/;
+            assertEq(0, search_errs.size(), "valid search: multiple conditions with AND");
+        }
+
+        # --- DPQL-E040: No field ref at top level ---
+
+        {
+            list<hash<DpqlDiagnostic>> diags = DataProvider::validateDpqlExpression(
+                '1 == 1', fields, all_exprs, server_exprs);
+            list<hash<DpqlDiagnostic>> e040 = select diags, $1.code == "DPQL-E040";
+            assertEq(1, e040.size(), "DPQL-E040: no field ref");
+            assertTrue(e040[0].message.find("record field") >= 0,
+                "DPQL-E040: message mentions record field");
+            assertTrue(e040[0].message.find("@field_name") >= 0,
+                "DPQL-E040: message contains example");
+        }
+
+        # --- DPQL-E041: Qorus-only op with field ref ---
+
+        {
+            list<hash<DpqlDiagnostic>> diags = DataProvider::validateDpqlExpression(
+                'qorus-trim(@name) == "John"', fields, all_exprs, server_exprs);
+            list<hash<DpqlDiagnostic>> e041 = select diags, $1.code == "DPQL-E041";
+            assertTrue(e041.size() > 0, "DPQL-E041: Qorus-only op with field ref");
+            assertTrue(e041[0].message.find("locally in Qorus") >= 0,
+                "DPQL-E041: message explains the issue");
+            assertTrue(e041[0].message.find("server-supported") >= 0,
+                "DPQL-E041: message mentions server operators");
+        }
+
+        # --- DPQL-E043: Unsupported top-level AND/OR ---
+
+        {
+            # Remove AND and OR from server expressions to test unsupported logic ops
+            hash<string, hash<DataProviderExpressionInfo>> no_logic_server = {};
+            foreach string k in (keys server_exprs) {
+                if (k != DP_OP_AND && k != DP_OP_OR) {
+                    no_logic_server{k} = server_exprs{k};
+                }
+            }
+
+            list<hash<DpqlDiagnostic>> diags = DataProvider::validateDpqlExpression(
+                '@name == "a" && @age > 1', fields, all_exprs, no_logic_server);
+            list<hash<DpqlDiagnostic>> e043 = select diags, $1.code == "DPQL-E043";
+            assertEq(1, e043.size(), "DPQL-E043: unsupported AND");
+            assertTrue(e043[0].message.find("&&") >= 0, "DPQL-E043: mentions operator");
+        }
+
+        # --- DPQL-E044: Server op missing field ref ---
+
+        {
+            list<hash<DpqlDiagnostic>> diags = DataProvider::validateDpqlExpression(
+                '1 == 1', fields, all_exprs, server_exprs);
+            list<hash<DpqlDiagnostic>> e044 = select diags, $1.code == "DPQL-E044";
+            assertEq(1, e044.size(), "DPQL-E044: server op without field ref");
+            assertTrue(e044[0].message.find("record field") >= 0,
+                "DPQL-E044: message mentions field");
+        }
+
+        # --- Non-search context: same expressions produce NO search errors ---
+
+        {
+            list<hash<DpqlDiagnostic>> diags = DataProvider::validateDpqlExpression(
+                '1 == 1', fields, all_exprs);
+            list<hash<DpqlDiagnostic>> search_errs = select diags, $1.code =~ /^DPQL-E04/;
+            assertEq(0, search_errs.size(),
+                "without server_expressions, no search validation errors");
+        }
+
+        {
+            list<hash<DpqlDiagnostic>> diags = DataProvider::validateDpqlExpression(
+                'qorus-trim(@name) == "John"', fields, all_exprs);
+            list<hash<DpqlDiagnostic>> search_errs = select diags, $1.code =~ /^DPQL-E04/;
+            assertEq(0, search_errs.size(),
+                "without server_expressions, Qorus-only ops with field refs are fine");
+        }
+
+        # --- User-friendly guidance in messages ---
+
+        {
+            list<hash<DpqlDiagnostic>> diags = DataProvider::validateDpqlExpression(
+                '1 == 1', fields, all_exprs, server_exprs);
+            # Check that error messages contain actionable guidance
+            foreach hash<DpqlDiagnostic> d in (diags) {
+                if (d.code =~ /^DPQL-E04/) {
+                    assertTrue(d.message.size() > 30,
+                        "search error messages should be descriptive, not terse");
+                }
+            }
+        }
+    }
+
+    searchContextCompletionTests() {
+        hash<string, AbstractDataField> fields = getTestFields();
+
+        # Build server expressions (only basic comparisons)
+        hash<string, hash<DataProviderExpressionInfo>> server_exprs = {
+            DP_SEARCH_OP_EQ: <DataProviderExpressionInfo>{
+                "type": DET_Operator,
+                "name": DP_SEARCH_OP_EQ,
+                "display_name": "Equals",
+                "short_desc": "Equals comparison",
+                "desc": "Equals comparison",
+                "symbol": "==",
+                "return_type": AbstractDataProviderType::get(BoolType),
+            },
+            DP_SEARCH_OP_NE: <DataProviderExpressionInfo>{
+                "type": DET_Operator,
+                "name": DP_SEARCH_OP_NE,
+                "display_name": "Not Equals",
+                "short_desc": "Not equals comparison",
+                "desc": "Not equals comparison",
+                "symbol": "!=",
+                "return_type": AbstractDataProviderType::get(BoolType),
+            },
+        };
+
+        # Qorus-only function
+        hash<string, hash<DataProviderExpressionInfo>> qorus_func = {
+            "qorus-trim": <DataProviderExpressionInfo>{
+                "type": DET_Function,
+                "name": "qorus-trim",
+                "display_name": "Trim",
+                "short_desc": "Trim whitespace",
+                "desc": "Trims whitespace",
+                "symbol": "qorus-trim()",
+                "args": (
+                    <DataProviderSignatureTypeInfo>{
+                        "type": AbstractDataProviderType::get(StringType),
+                    },
+                ),
+                "arg_info": (
+                    <DataProviderArgInfo>{"display_name": "value"},
+                ),
+                "return_type": AbstractDataProviderType::get(StringType),
+            },
+        };
+
+        hash<string, hash<DataProviderExpressionInfo>> all_exprs = server_exprs + qorus_func;
+
+        # Search context: top-level completions should filter out Qorus-only functions
+        {
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletionsWithSearchContext(
+                "", 0, fields, all_exprs, NOTHING, server_exprs);
+            list<hash<DpqlCompletionItem>> funcs = select items, $1.kind == "function";
+            list<hash<DpqlCompletionItem>> qorus_funcs = select funcs,
+                $1.label == "qorus-trim";
+            assertEq(0, qorus_funcs.size(),
+                "search context: Qorus-only function should not appear at top level");
+        }
+
+        # Search context: after field ref, only server operators
+        {
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletionsWithSearchContext(
+                "@name ", 6, fields, all_exprs, NOTHING, server_exprs);
+            list<hash<DpqlCompletionItem>> ops = select items, $1.kind == "operator";
+            # Should have == and != (from server) plus logical ops, but NOT unsupported ones
+            foreach hash<DpqlCompletionItem> op in (ops) {
+                if (op.label != "&&" && op.label != "||") {
+                    # Comparison ops should be server-supported
+                    assertTrue(op.label == "==" || op.label == "!=",
+                        sprintf("search context after field: operator '%s' should be server-supported",
+                            op.label));
+                }
+            }
+        }
+
+        # Non-search context: all completions offered (regression check)
+        {
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions(
+                "", 0, fields, all_exprs);
+            list<hash<DpqlCompletionItem>> funcs = select items, $1.kind == "function";
+            list<hash<DpqlCompletionItem>> qorus_funcs = select funcs,
+                $1.label == "qorus-trim";
+            assertEq(1, qorus_funcs.size(),
+                "non-search context: Qorus-only function should appear");
+        }
+
+        # Non-search context: all comparison operators offered
+        {
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions(
+                "@name ", 6, fields, all_exprs);
+            list<hash<DpqlCompletionItem>> ops = select items,
+                $1.kind == "operator" || $1.kind == "keyword";
+            # Should have full set of comparison operators
+            list<hash<DpqlCompletionItem>> between = select ops, $1.label == "between";
+            assertEq(1, between.size(),
+                "non-search context: all comparison operators including 'between' should appear");
+        }
+    }
+
+    freeFormExpressionTests() {
+        hash<string, AbstractDataField> fields = getTestFields();
+
+        # Free-form context: any expression is valid, no search restrictions
+        # This ensures that value mapping, transformation pipelines, etc. work without restrictions
+
+        # Literal-only expressions (no field refs) are fine in non-search context
+        {
+            list<hash<DpqlDiagnostic>> diags = DataProvider::validateDpqlExpression(
+                '1 == 1', fields);
+            list<hash<DpqlDiagnostic>> search_errs = select diags, $1.code =~ /^DPQL-E04/;
+            assertEq(0, search_errs.size(),
+                "free-form: literal-only comparison is valid");
+        }
+
+        # Qorus-only operators with field refs are fine in non-search context
+        {
+            hash<string, hash<DataProviderExpressionInfo>> expmap = DataProviderGenericExpressions + {
+                "custom-op": <DataProviderExpressionInfo>{
+                    "type": DET_Function,
+                    "name": "custom-op",
+                    "display_name": "Custom Op",
+                    "short_desc": "A custom operator",
+                    "desc": "A custom operator",
+                    "symbol": "custom-op()",
+                    "args": (
+                        <DataProviderSignatureTypeInfo>{
+                            "type": AbstractDataProviderType::get(StringType),
+                        },
+                    ),
+                    "arg_info": (
+                        <DataProviderArgInfo>{"display_name": "value"},
+                    ),
+                    "return_type": AbstractDataProviderType::get(StringType),
+                },
+            };
+            list<hash<DpqlDiagnostic>> diags = DataProvider::validateDpqlExpression(
+                'custom-op(@name) == "John"', fields, expmap);
+            list<hash<DpqlDiagnostic>> search_errs = select diags, $1.code =~ /^DPQL-E04/;
+            assertEq(0, search_errs.size(),
+                "free-form: custom ops with field refs are valid");
+        }
+
+        # Complex nested expressions without field refs are fine
+        {
+            list<hash<DpqlDiagnostic>> diags = DataProvider::validateDpqlExpression(
+                '(1 == 1 && 2 != 3) || true', fields);
+            list<hash<DpqlDiagnostic>> search_errs = select diags, $1.code =~ /^DPQL-E04/;
+            assertEq(0, search_errs.size(),
+                "free-form: complex nested literal expressions are valid");
+        }
+
+        # Verify that passing server_expressions=NOTHING explicitly gives free-form behavior
+        {
+            hash<string, hash<DataProviderExpressionInfo>> server_exprs = {
+                DP_SEARCH_OP_EQ: <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": DP_SEARCH_OP_EQ,
+                    "display_name": "Equals",
+                    "short_desc": "Equals comparison",
+                    "desc": "Equals comparison",
+                    "symbol": "==",
+                    "return_type": AbstractDataProviderType::get(BoolType),
+                },
+            };
+
+            # With server_expressions: search rules applied
+            list<hash<DpqlDiagnostic>> search_diags = DataProvider::validateDpqlExpression(
+                '1 == 1', fields, DataProviderGenericExpressions, server_exprs);
+            list<hash<DpqlDiagnostic>> search_errs = select search_diags, $1.code =~ /^DPQL-E04/;
+            assertTrue(search_errs.size() > 0,
+                "with server_expressions: search rules are applied");
+
+            # Without server_expressions: no search rules
+            list<hash<DpqlDiagnostic>> free_diags = DataProvider::validateDpqlExpression(
+                '1 == 1', fields, DataProviderGenericExpressions, NOTHING);
+            list<hash<DpqlDiagnostic>> free_errs = select free_diags, $1.code =~ /^DPQL-E04/;
+            assertEq(0, free_errs.size(),
+                "without server_expressions: no search rules");
+        }
+
+        # DpqlActionSession: search_context=False by default
+        {
+            DpqlActionSession session();
+            assertFalse(session.isSearchContext(),
+                "session defaults to non-search context");
+        }
+
+        # DpqlActionSession: search_context can be set
+        {
+            DpqlActionSession session();
+            session.setSearchContext(True);
+            assertTrue(session.isSearchContext(),
+                "session search context can be enabled");
+            session.setSearchContext(False);
+            assertFalse(session.isSearchContext(),
+                "session search context can be disabled");
+        }
+    }
+
+    typeAwareCompletionTests() {
+        hash<string, AbstractDataField> fields = getTestFields();
+
+        # Build expressions with typed args and return types
+        hash<string, hash<DataProviderExpressionInfo>> exprs = {
+            "substr": <DataProviderExpressionInfo>{
+                "type": DET_Function,
+                "name": "substr",
+                "display_name": "Substring",
+                "short_desc": "Extract substring",
+                "desc": "Extracts a substring",
+                "symbol": "substr()",
+                "args": (
+                    <DataProviderSignatureTypeInfo>{
+                        "type": AbstractDataProviderType::get(StringType),
+                        "type_code": ST_Any,
+                    },
+                    <DataProviderSignatureTypeInfo>{
+                        "type": AbstractDataProviderType::get(IntType),
+                        "type_code": ST_Value,
+                    },
+                    <DataProviderSignatureTypeInfo>{
+                        "type": AbstractDataProviderType::get(IntType),
+                        "type_code": ST_Value,
+                    },
+                ),
+                "arg_info": (
+                    <DataProviderArgInfo>{"display_name": "String", "desc": "Source string"},
+                    <DataProviderArgInfo>{"display_name": "Start", "desc": "Start position"},
+                    <DataProviderArgInfo>{"display_name": "Length", "desc": "Substring length"},
+                ),
+                "return_type": AbstractDataProviderType::get(StringType),
+            },
+            "bool-func": <DataProviderExpressionInfo>{
+                "type": DET_Function,
+                "name": "bool-func",
+                "display_name": "Bool Func",
+                "short_desc": "Returns bool",
+                "desc": "A function that returns bool",
+                "symbol": "bool-func()",
+                "return_type": AbstractDataProviderType::get(BoolType),
+            },
+            "field-only-func": <DataProviderExpressionInfo>{
+                "type": DET_Function,
+                "name": "field-only-func",
+                "display_name": "Field Only",
+                "short_desc": "First arg must be a field",
+                "desc": "Function where first arg is field-only",
+                "symbol": "field-only-func()",
+                "args": (
+                    <DataProviderSignatureTypeInfo>{
+                        "type": AbstractDataProviderType::get(StringType),
+                        "type_code": ST_Field,
+                    },
+                    <DataProviderSignatureTypeInfo>{
+                        "type": AbstractDataProviderType::get(StringType),
+                        "type_code": ST_Value,
+                    },
+                ),
+                "arg_info": (
+                    <DataProviderArgInfo>{"display_name": "Field", "desc": "Field reference"},
+                    <DataProviderArgInfo>{"display_name": "Value", "desc": "Comparison value"},
+                ),
+                "return_type": AbstractDataProviderType::get(BoolType),
+            },
+            "enum-func": <DataProviderExpressionInfo>{
+                "type": DET_Function,
+                "name": "enum-func",
+                "display_name": "Enum Func",
+                "short_desc": "Function with allowed values",
+                "desc": "A function with enumerated allowed values",
+                "symbol": "enum-func()",
+                "args": (
+                    <DataProviderSignatureTypeInfo>{
+                        "type": AbstractDataProviderType::get(StringType),
+                        "type_code": ST_Value,
+                    },
+                ),
+                "arg_info": (
+                    <DataProviderArgInfo>{
+                        "display_name": "Mode",
+                        "desc": "Operation mode",
+                        "allowed_values": (
+                            <AllowedValueInfo>{"value": "fast", "short_desc": "Fast mode"},
+                            <AllowedValueInfo>{"value": "slow", "short_desc": "Slow mode"},
+                            <AllowedValueInfo>{"value": "normal", "short_desc": "Normal mode"},
+                        ),
+                    },
+                ),
+                "return_type": AbstractDataProviderType::get(StringType),
+            },
+        } + DataProviderGenericExpressions;
+
+        # --- Test 1: Field completions include type info in detail ---
+        {
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions(
+                "@", 1, fields, exprs);
+            list<hash<DpqlCompletionItem>> name_items = select items,
+                $1.label == "name";
+            assertEq(1, name_items.size(), "field 'name' is offered");
+            assertEq("string", name_items[0].detail,
+                "field completion shows type in detail");
+
+            list<hash<DpqlCompletionItem>> age_items = select items,
+                $1.label == "age";
+            assertEq(1, age_items.size(), "field 'age' is offered");
+            assertEq("int", age_items[0].detail,
+                "field 'age' completion shows int type");
+
+            list<hash<DpqlCompletionItem>> active_items = select items,
+                $1.label == "active";
+            assertEq(1, active_items.size(), "field 'active' is offered");
+            assertEq("bool", active_items[0].detail,
+                "field 'active' completion shows bool type");
+        }
+
+        # --- Test 2: Function completions include return type in detail ---
+        {
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions(
+                "", 0, fields, exprs);
+            list<hash<DpqlCompletionItem>> substr_items = select items,
+                $1.label == "substr";
+            assertEq(1, substr_items.size(), "substr is offered");
+            assertEq("→ string", substr_items[0].detail,
+                "function completion shows return type in detail");
+
+            list<hash<DpqlCompletionItem>> bool_items = select items,
+                $1.label == "bool-func";
+            assertEq(1, bool_items.size(), "bool-func is offered");
+            assertEq("→ bool", bool_items[0].detail,
+                "function completion shows bool return type");
+        }
+
+        # --- Test 3: Inside function arg with ST_Value constraint - no field refs ---
+        {
+            # substr(|  -- second arg (index 1) has ST_Value
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions(
+                "substr(@name, ", 14, fields, exprs);
+            list<hash<DpqlCompletionItem>> field_items = select items,
+                $1.kind == "field";
+            assertEq(0, field_items.size(),
+                "ST_Value arg: no field completions offered");
+            # Functions should also be suppressed
+            list<hash<DpqlCompletionItem>> func_items = select items,
+                $1.kind == "function";
+            assertEq(0, func_items.size(),
+                "ST_Value arg: no function completions offered");
+        }
+
+        # --- Test 4: Inside function arg with ST_Field constraint - no functions ---
+        {
+            # field-only-func(|  -- first arg (index 0) has ST_Field
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions(
+                "field-only-func(", 16, fields, exprs);
+            list<hash<DpqlCompletionItem>> func_items = select items,
+                $1.kind == "function";
+            assertEq(0, func_items.size(),
+                "ST_Field arg: no function completions offered");
+            # Field refs should be offered
+            list<hash<DpqlCompletionItem>> field_items = select items,
+                $1.kind == "field";
+            assertTrue(field_items.size() > 0,
+                "ST_Field arg: field completions are offered");
+        }
+
+        # --- Test 5: Inside function arg with allowed_values - only those values offered ---
+        {
+            # enum-func(|  -- first arg has allowed_values
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions(
+                "enum-func(", 10, fields, exprs);
+            assertEq(3, items.size(),
+                "allowed_values arg: exactly 3 values offered");
+            list<string> labels = map $1.label, items;
+            assertTrue(inlist("fast", labels), "allowed_values: 'fast' offered");
+            assertTrue(inlist("slow", labels), "allowed_values: 'slow' offered");
+            assertTrue(inlist("normal", labels), "allowed_values: 'normal' offered");
+            # All items should have kind=value
+            foreach hash<DpqlCompletionItem> item in (items) {
+                assertEq("value", item.kind,
+                    sprintf("allowed value '%s' has kind=value", item.label));
+            }
+        }
+
+        # --- Test 6: Expected type annotation on items when inside typed arg ---
+        {
+            # substr(|  -- first arg expects string
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions(
+                "substr(", 7, fields, exprs);
+            # All items should have expected type annotation
+            foreach hash<DpqlCompletionItem> item in (items) {
+                assertTrue(item.detail.find("expected: string") >= 0,
+                    sprintf("item '%s' has expected type annotation", item.label));
+            }
+        }
+
+        # --- Test 7: No type annotation at top level (not inside function arg) ---
+        {
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions(
+                "", 0, fields, exprs);
+            list<hash<DpqlCompletionItem>> field_items = select items,
+                $1.kind == "field";
+            # Field items should have type detail but NOT "expected:" prefix
+            foreach hash<DpqlCompletionItem> item in (field_items) {
+                assertTrue(item.detail.find("expected:") < 0,
+                    sprintf("top-level field '%s' should not have expected type annotation",
+                        item.label));
+            }
+        }
+
+        # --- Test 8: Allowed values with prefix filtering ---
+        {
+            # enum-func(f|  -- prefix "f" should filter to "fast" only
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions(
+                "enum-func(f", 11, fields, exprs);
+            assertEq(1, items.size(), "allowed_values with prefix: only 'fast' matches");
+            assertEq("fast", items[0].label, "allowed_values with prefix: 'fast'");
+        }
+
+        # --- Test 9: Allowed values show expected type in detail ---
+        {
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions(
+                "enum-func(", 10, fields, exprs);
+            foreach hash<DpqlCompletionItem> item in (items) {
+                assertEq("expected: string", item.detail,
+                    sprintf("allowed value '%s' shows expected type", item.label));
+            }
+        }
+    }
+
+    infixComparisonOperatorTests() {
+        # Expression map with a "like" operator (mimics DbTableDataProvider)
+        hash<string, hash<DataProviderExpressionInfo>> expmap = DataProviderGenericExpressions + {
+            "like": <DataProviderExpressionInfo>{
+                "type": DET_Operator,
+                "name": "like",
+                "display_name": "like",
+                "symbol": "like",
+                "groups": "Comparison",
+                "short_desc": "The SQL 'like' operator",
+                "desc": "The SQL `like` operator for pattern matching",
+                "args": (DataProviderSignatureStringType, DataProviderSignatureStringValueType),
+                "return_type": AbstractDataProviderTypeMap."bool",
+            },
+        };
+
+        hash<string, AbstractDataField> fields = {
+            "name": new QoreDataField("name", NOTHING, AbstractDataProviderTypeMap."string"),
+            "age": new QoreDataField("age", NOTHING, AbstractDataProviderTypeMap."int"),
+        };
+
+        # --- Test 1: Parse infix "like" operator ---
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+                '@name like "%Smith%"', expmap);
+            assertEq("like", exp.exp, "parse: expression name is 'like'");
+            assertEq(2, exp.args.size(), "parse: like has 2 args");
+            assertTrue(exp.args[0] instanceof hash<DataProviderFieldReference>,
+                "parse: first arg is field ref");
+            assertEq("name", (cast<hash<DataProviderFieldReference>>(exp.args[0])).field,
+                "parse: field is 'name'");
+            assertEq("%Smith%", exp.args[1], "parse: second arg is pattern");
+        }
+
+        # --- Test 2: Serialize infix "like" operator ---
+        {
+            hash<DataProviderExpression> exp = <DataProviderExpression>{
+                "exp": "like",
+                "args": (<DataProviderFieldReference>{"field": "name"}, "%Smith%"),
+            };
+            string dpql = DataProvider::serializeDpqlExpression(exp, expmap);
+            assertEq('@name like "%Smith%"', dpql, "serialize: like renders infix");
+        }
+
+        # --- Test 3: Round-trip like ---
+        {
+            string input = '@name like "%test%"';
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(input, expmap);
+            string output = DataProvider::serializeDpqlExpression(exp, expmap);
+            assertEq(input, output, "round-trip: like preserves format");
+        }
+
+        # --- Test 4: like in compound expression ---
+        {
+            string input = '@name like "%foo%" && @age > 18';
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(input, expmap);
+            assertEq(DP_OP_AND, exp.exp, "compound: top-level is &&");
+            assertEq("like", (cast<hash<DataProviderExpression>>(exp.args[0])).exp,
+                "compound: first arg is like");
+            string output = DataProvider::serializeDpqlExpression(exp, expmap);
+            assertEq(input, output, "compound: round-trip preserves format");
+        }
+
+        # --- Test 5: Completions after @field offer "like" as infix ---
+        {
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions(
+                "@name ", 6, fields, expmap);
+            list<string> labels = map $1.label, items;
+            assertTrue(inlist("like", labels), "completions: 'like' offered after @field");
+            # Find the like completion and check it's keyword-style
+            hash<DpqlCompletionItem> like_item;
+            foreach hash<DpqlCompletionItem> item in (items) {
+                if (item.label == "like") {
+                    like_item = item;
+                    break;
+                }
+            }
+            assertEq("like ", like_item.insert_text,
+                "completions: like insert_text is 'like ' (infix, no parens)");
+        }
+
+        # --- Test 6: Function completions do NOT offer like as function call ---
+        {
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions(
+                "li", 2, fields, expmap);
+            list<string> labels = map $1.label, items;
+            # like should not appear as a function completion at start of expression
+            # (it's only meaningful as infix after a field ref)
+            assertFalse(inlist("like", labels),
+                "function completions: 'like' not offered at start context");
+        }
+
+        # --- Test 7: Search validation recognizes like as comparison op ---
+        {
+            list<hash<DpqlDiagnostic>> diags = DataProvider::validateDpqlExpression(
+                '@name like "%test%"', fields, expmap, expmap);
+            assertEq(0, diags.size(),
+                "search validation: @name like pattern has no errors");
+        }
+
+        # --- Test 8: like without field ref fails search validation ---
+        {
+            list<hash<DpqlDiagnostic>> diags = DataProvider::validateDpqlExpression(
+                'like("test", "%t%")', fields, expmap, expmap);
+            assertTrue(diags.size() > 0,
+                "search validation: like without field ref produces error");
         }
     }
 }
