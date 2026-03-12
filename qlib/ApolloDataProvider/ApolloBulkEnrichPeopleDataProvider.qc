@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
-#! @file CloseDeleteMeetingDataProvider.qc Close delete meeting action data provider
+#! @file ApolloBulkEnrichPeopleDataProvider.qc Apollo bulk enrich people action data provider
 
-/*  CloseDeleteMeetingDataProvider.qc Copyright 2026 Qore Technologies, s.r.o.
+/*  ApolloBulkEnrichPeopleDataProvider.qc Copyright (C) 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -22,80 +22,72 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-#! Contains all public definitions in the CloseDataProvider module
-public namespace CloseDataProvider {
+#! Contains all public definitions in the ApolloDataProvider module
+public namespace ApolloDataProvider {
 
-#! Request type for deleting a meeting
-public class CloseDeleteMeetingRequestDataType inherits HashDataType {
+#! Request type for bulk enriching people
+public class ApolloBulkEnrichPeopleRequestDataType inherits HashDataType {
     public {
-        #! Field definitions for deleting a meeting
         const Fields = {
-            "meeting_id": {
-                "type": StringType,
-                "display_name": "Meeting ID",
-                "short_desc": "The meeting to delete",
-                "desc": "The unique identifier of the meeting to delete",
+            "details": {
+                "type": AutoListType,
+                "display_name": "Details",
+                "short_desc": "List of person detail objects",
+                "desc": "List of person detail objects, each containing fields like `email`, `first_name`, "
+                    "`last_name`, `organization_name`, `domain`",
                 "required": True,
             },
         };
     }
 
-    #! Creates the type
     constructor() {
         addQoreFields(Fields);
     }
 }
 
-#! Close delete meeting action data provider
-public class CloseDeleteMeetingDataProvider inherits CloseDataProviderBase {
+#! Apollo bulk enrich people action data provider
+public class ApolloBulkEnrichPeopleDataProvider inherits ApolloDataProviderBase {
     public {
-        #! Provider info
         const ProviderInfo = <DataProviderInfo>{
-            "name": "delete",
-            "desc": "Delete a meeting activity in Close",
-            "type": "CloseDeleteMeetingDataProvider",
+            "name": "bulk-people",
+            "desc": "Bulk enrich people data using Apollo",
+            "type": "ApolloBulkEnrichPeopleDataProvider",
             "supports_request": True,
             "constructor_options": ConstructorOptions,
         };
 
-        #! Constructor options
         const ConstructorOptions = BaseConstructorOptions;
+
+        static *AbstractDataProviderType RequestType = new ApolloBulkEnrichPeopleRequestDataType();
     }
 
-    #! Creates the object with a REST client
-    constructor(CloseRestClient::CloseRestClient rest) : CloseDataProviderBase(rest) {
+    constructor(ApolloRestClient::ApolloRestClient rest) : ApolloDataProviderBase(rest) {
     }
 
-    #! Returns the provider name
     string getName() {
-        return "delete";
+        return "bulk-people";
     }
 
-    #! Returns the provider description
     *string getDesc() {
-        return "Delete a meeting activity in Close";
+        return "Bulk enrich people data using Apollo";
     }
 
-    #! Returns the request type
     private *AbstractDataProviderType getRequestTypeImpl() {
-        return new CloseDeleteMeetingRequestDataType();
+        return new ApolloBulkEnrichPeopleRequestDataType();
     }
 
-    #! Returns the response type
     private *AbstractDataProviderType getResponseTypeImpl() {
-        return AbstractDataProviderTypeMap."hash";
+        return AbstractDataProviderTypeMap."list";
     }
 
-    #! Makes the request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        doDelete("activity/meeting/" + req.meeting_id);
-        return {};
+        hash<auto> result = doPost("people/bulk_match", {} + req);
+        return result.matches ?? result;
     }
 
-    #! Returns static provider info
     private hash<DataProviderInfo> getStaticInfoImpl() {
         return ProviderInfo;
     }
 }
 
-} # namespace CloseDataProvider
+} # namespace ApolloDataProvider

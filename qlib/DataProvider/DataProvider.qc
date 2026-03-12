@@ -162,6 +162,7 @@ public class DataProvider {
             "shippo": "ShippoDataProvider",
             "shipstation": "ShipStationDataProvider",
             "keap": "KeapDataProvider",
+            "apollo": "ApolloDataProvider",
             "square": "SquareDataProvider",
             "squarespace": "SquarespaceDataProvider",
             "tableau": "TableauDataProvider",

@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
-#! @file CloseMeetingsDataProvider.qc Close meetings collection data provider
+#! @file ApolloAccountsDataProvider.qc Apollo accounts collection data provider
 
-/*  CloseMeetingsDataProvider.qc Copyright 2026 Qore Technologies, s.r.o.
+/*  ApolloAccountsDataProvider.qc Copyright (C) 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -22,19 +22,21 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-#! Contains all public definitions in the CloseDataProvider module
-public namespace CloseDataProvider {
+#! Contains all public definitions in the ApolloDataProvider module
+public namespace ApolloDataProvider {
 
-#! Close meetings collection data provider
-public class CloseMeetingsDataProvider inherits CloseDataProviderBase {
+#! Apollo accounts collection data provider
+public class ApolloAccountsDataProvider inherits ApolloDataProviderBase {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
-            "name": "meetings",
-            "desc": "Close meetings data provider for listing and searching meeting activities",
-            "type": "CloseMeetingsDataProvider",
+            "name": "accounts",
+            "desc": "Apollo accounts data provider for listing and searching accounts",
+            "type": "ApolloAccountsDataProvider",
             "supports_read": True,
             "supports_native_search": True,
+            "supports_children": True,
+            "children_can_support_apis": True,
             "constructor_options": ConstructorOptions,
             "search_options": SearchOptions,
         };
@@ -44,23 +46,23 @@ public class CloseMeetingsDataProvider inherits CloseDataProviderBase {
 
         #! Search options
         const SearchOptions = {
-            "meeting_id": <DataProviderOptionInfo>{
-                "display_name": "Meeting ID",
-                "short_desc": "Get a specific meeting by ID",
+            "account_id": <DataProviderOptionInfo>{
+                "display_name": "Account ID",
+                "short_desc": "Get a specific account by ID",
                 "type": AbstractDataProviderType::get(SoftStringOrNothingType),
-                "desc": "Filter by meeting ID for single record lookup",
+                "desc": "Filter by account ID for single record lookup",
             },
-            "lead_id": <DataProviderOptionInfo>{
-                "display_name": "Lead ID",
-                "short_desc": "Filter by lead ID",
+            "name": <DataProviderOptionInfo>{
+                "display_name": "Name",
+                "short_desc": "Filter by account name",
                 "type": AbstractDataProviderType::get(SoftStringOrNothingType),
-                "desc": "Filter meetings by lead ID",
+                "desc": "Filter accounts by name",
             },
-            "user_id": <DataProviderOptionInfo>{
-                "display_name": "User ID",
-                "short_desc": "Filter by user ID",
+            "domain": <DataProviderOptionInfo>{
+                "display_name": "Domain",
+                "short_desc": "Filter by domain",
                 "type": AbstractDataProviderType::get(SoftStringOrNothingType),
-                "desc": "Filter meetings by user ID",
+                "desc": "Filter accounts by domain",
             },
             "limit": <DataProviderOptionInfo>{
                 "display_name": "Limit",
@@ -70,48 +72,68 @@ public class CloseMeetingsDataProvider inherits CloseDataProviderBase {
             },
         };
 
+        #! Child provider map
+        const ChildMap = {
+            "create": Class::forName("ApolloCreateAccountDataProvider"),
+            "update": Class::forName("ApolloUpdateAccountDataProvider"),
+        };
     }
 
     #! Creates the object with a REST client
-    constructor(CloseRestClient::CloseRestClient rest) : CloseDataProviderBase(rest) {
+    constructor(ApolloRestClient::ApolloRestClient rest) : ApolloDataProviderBase(rest) {
     }
 
     #! Returns the provider name
     string getName() {
-        return "meetings";
+        return "accounts";
     }
 
     #! Returns the provider description
     *string getDesc() {
-        return "Close meetings data provider for listing and searching meeting activities";
+        return "Apollo accounts data provider for listing and searching accounts";
+    }
+
+    #! Returns child provider names
+    private *list<string> getChildProviderNamesImpl() {
+        return keys ChildMap;
+    }
+
+    #! Returns a child provider by name
+    private *AbstractDataProvider getChildProviderImpl(string name) {
+        *Class cls = ChildMap{name};
+        if (cls) {
+            return cls.newObject(rest);
+        }
     }
 
     #! Returns the record type
     private *AbstractDataProviderType getRecordTypeImpl() {
-        return new CloseMeetingDataType();
+        return new ApolloAccountDataType();
     }
 
     #! Returns an iterator for records matching the search criteria
     private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
-        if (search_options.meeting_id) {
-            hash<auto> result = doGet("activity/meeting/" + search_options.meeting_id);
-            return new DefaultRecordIterator(new ListHashIterator((result,)),
+        # If account_id provided, get single record
+        if (search_options.account_id) {
+            hash<auto> result = doGet("accounts/" + search_options.account_id);
+            hash<auto> account = result.account ?? result;
+            return new DefaultRecordIterator(new ListHashIterator((account,)),
                 where_cond, search_options);
         }
 
-        hash<auto> params;
-        if (search_options.lead_id) {
-            params.lead_id = search_options.lead_id;
+        # Build search body for POST /accounts/search
+        hash<auto> body;
+        if (search_options.name) {
+            body.q_keywords = search_options.name;
         }
-        if (search_options.user_id) {
-            params.user_id = search_options.user_id;
+        if (search_options.domain) {
+            body.domain = search_options.domain;
         }
 
-        list<hash<auto>> all_records = fetchAllPages("activity/meeting", params,
+        list<hash<auto>> records = fetchAllPagesPost("accounts/search", "accounts", body,
             search_options.limit);
-        return new DefaultRecordIterator(new ListHashIterator(all_records), where_cond,
-            search_options);
+        return new DefaultRecordIterator(new ListHashIterator(records), where_cond, search_options);
     }
 
     #! Returns static provider info
@@ -120,4 +142,4 @@ public class CloseMeetingsDataProvider inherits CloseDataProviderBase {
     }
 }
 
-} # namespace CloseDataProvider
+} # namespace ApolloDataProvider
