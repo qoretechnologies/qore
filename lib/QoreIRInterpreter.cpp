@@ -3160,17 +3160,7 @@ load_local_done:
                 if (hash_val.getType() == NT_HASH) {
                     QoreHashNode* h = hash_val.get<QoreHashNode>();
 
-                    // Release any auto_ref=true LoadLocal result slots for this container variable.
-                    clearLoadSlots(hks_inst->container_slot_id);
-
-                    // Release the slot cache ref.
-                    uint32_t csid = hks_inst->container_slot_id;
-                    if (csid != UINT32_MAX && csid < locals_slot_cache.size()) {
-                        locals_slot_cache[csid].discard(xsink);
-                        locals_slot_cache[csid] = QoreValue();
-                    }
-
-                    // At this point, refcount = TLS (1) only.
+                    // At this point, refcount = TLS (1) only (no artificial refs held).
                     // Trigger COW if there are additional external references beyond TLS.
                     if (h->reference_count() > 1) {
                         // COW: create unique copy and update the local variable
@@ -3198,6 +3188,17 @@ load_local_done:
                     // Make the update with already-referenced value.
                     // (hash is already in TLS and will be cleaned up normally)
                     h->setKeyValue(hks_inst->key_name.c_str(), val.refSelf(), xsink);
+
+                    // Cleanup must happen AFTER modification completes and locks are released.
+                    // Defer clearing refs that may trigger destructors.
+                    // Release any auto_ref=true LoadLocal result slots for this container variable.
+                    clearLoadSlots(hks_inst->container_slot_id);
+
+                    // Release the slot cache ref.
+                    uint32_t csid = hks_inst->container_slot_id;
+                    if (csid != UINT32_MAX && csid < locals_slot_cache.size()) {
+                        locals_slot_cache[csid].discard(xsink);
+                    }
 
                     // Clear the container slot so cleanup doesn't try to discard it
                     // (it's held by TLS and managed separately)
@@ -3244,17 +3245,7 @@ load_local_done:
                 if (list_val.getType() == NT_LIST) {
                     QoreListNode* l = list_val.get<QoreListNode>();
 
-                    // Release any auto_ref=true LoadLocal result slots for this container variable.
-                    clearLoadSlots(lis_inst->container_slot_id);
-
-                    // Release the slot cache ref.
-                    uint32_t csid = lis_inst->container_slot_id;
-                    if (csid != UINT32_MAX && csid < locals_slot_cache.size()) {
-                        locals_slot_cache[csid].discard(xsink);
-                        locals_slot_cache[csid] = QoreValue();
-                    }
-
-                    // At this point, refcount = TLS (1) only.
+                    // At this point, refcount = TLS (1) only (no artificial refs held).
                     // Trigger COW if there are additional external references beyond TLS.
                     if (l->reference_count() > 1) {
                         // COW: create unique copy and update the local variable
@@ -3282,6 +3273,17 @@ load_local_done:
                     // Make the update with already-referenced value.
                     // (list is already in TLS and will be cleaned up normally)
                     l->setEntry(index, val.refSelf(), xsink);
+
+                    // Cleanup must happen AFTER modification completes and locks are released.
+                    // Defer clearing refs that may trigger destructors.
+                    // Release any auto_ref=true LoadLocal result slots for this container variable.
+                    clearLoadSlots(lis_inst->container_slot_id);
+
+                    // Release the slot cache ref.
+                    uint32_t csid = lis_inst->container_slot_id;
+                    if (csid != UINT32_MAX && csid < locals_slot_cache.size()) {
+                        locals_slot_cache[csid].discard(xsink);
+                    }
 
                     // Clear the container slot so cleanup doesn't try to discard it
                     // (it's held by TLS and managed separately)
