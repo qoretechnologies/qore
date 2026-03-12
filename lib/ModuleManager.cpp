@@ -1301,10 +1301,12 @@ int QoreModuleManager::parseLoadModule(ExceptionSink& xsink, ExceptionSink& wsin
 
         // only lock if not in a nested module load context (depth > 0 means already inside ModuleLoadMapHelper)
         OptLocker ol(module_load_depth == 0 ? &mutex : nullptr);
+        // Pass through the reexport flag from the %requires directive to register module-level reexport declarations
         mod = loadModuleIntern(xsink, wsink, str.c_str(), pgm, reexport, mo, &iv);
     } else {
         // only lock if not in a nested module load context (depth > 0 means already inside ModuleLoadMapHelper)
         OptLocker ol(module_load_depth == 0 ? &mutex : nullptr);
+        // Pass through the reexport flag from the %requires directive to register module-level reexport declarations
         mod = loadModuleIntern(xsink, wsink, name, pgm, reexport);
     }
 
