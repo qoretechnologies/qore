@@ -442,9 +442,6 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
 
                 int stream_id = output.stream_id;
                 string sid = string(stream_id);
-                log(LoggerLevel::DEBUG, "response ready: stream_id=%d status=%d",
-                    stream_id, output.status_code);
-
                 *code cb;
                 *hash<auto> stream_ctx;
                 {

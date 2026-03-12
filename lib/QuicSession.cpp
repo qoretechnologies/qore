@@ -1214,8 +1214,6 @@ int QuicSession::writePacketsLocked(QuicPacketBatch& packets, ExceptionSink* xsi
                         return total_packets;
                     }
                     // Non-fatal datagram write error — skip this datagram
-                    printd(2, "writePacketsLocked() datagram write error: %s\n",
-                        ngtcp2_strerror(static_cast<int>(dg_nwrite)));
                     pending_datagrams_.pop_front();
                     continue;
                 }
@@ -1225,8 +1223,6 @@ int QuicSession::writePacketsLocked(QuicPacketBatch& packets, ExceptionSink* xsi
                 if (dg_nwrite > 0) {
                     packets.addPacket(pkt_buf_, static_cast<size_t>(dg_nwrite));
                     ++total_packets;
-                    printd(5, "writePacketsLocked() datagram packet #%d: %d bytes\n",
-                        total_packets, (int)dg_nwrite);
                     continue;
                 }
             }
@@ -3487,7 +3483,6 @@ nghttp3_ssize QuicSession::h3ReadDataCallback(nghttp3_conn* /* conn */, int64_t 
     auto sit = session->streaming_body_data_.find(stream_id);
     if (sit != session->streaming_body_data_.end()) {
         auto& sbd = sit->second;
-
         if (!sbd.data.empty()) {
             if (veccnt > 0) {
                 // Move staging data into sent_bufs for stable pointer lifetime.
@@ -3810,9 +3805,6 @@ int QuicSession::recvDatagramCallback(ngtcp2_conn* conn, uint32_t flags,
     const uint8_t* payload = data + varint_len;
     size_t payload_len = datalen - varint_len;
 
-    printd(5, "recvDatagramCallback(): quarter_stream_id=%" PRIu64 " stream_id=" QLLD
-        " payload_len=%zu\n", quarter_stream_id, stream_id, payload_len);
-
     // Route to per-stream datagram queue
     {
         std::lock_guard<std::mutex> lg(session->datagram_mutex_);
@@ -3876,9 +3868,6 @@ int QuicSession::submitDatagram(int64_t stream_id, const uint8_t* data, size_t l
     pending_datagrams_.emplace_back(dgram_id, std::move(framed));
     pending_write_.store(true, std::memory_order_release);
 
-    printd(5, "submitDatagram(): stream_id=" QLLD " payload_len=%zu dgram_id=%" PRIu64 "\n",
-        stream_id, len, dgram_id);
-
     return 0;
 }
 
@@ -3893,7 +3882,18 @@ QoreValue QuicSession::readDatagram(int64_t stream_id, int timeout_ms, Exception
             if (it->second.empty()) {
                 datagram_queues_.erase(it);
             }
-            SimpleRefHolder<BinaryNode> bn(new BinaryNode(data.data(), data.size()));
+            // Copy data into a malloc'd buffer for BinaryNode ownership
+            if (data.empty()) {
+                SimpleRefHolder<BinaryNode> bn(new BinaryNode());
+                return bn.release();
+            }
+            void* buf = malloc(data.size());
+            if (!buf) {
+                xsink->raiseException("QUIC-DATAGRAM-ERROR", "memory allocation failed");
+                return QoreValue();
+            }
+            memcpy(buf, data.data(), data.size());
+            SimpleRefHolder<BinaryNode> bn(new BinaryNode(buf, data.size()));
             return bn.release();
         }
     }
@@ -3925,7 +3925,18 @@ QoreValue QuicSession::readDatagram(int64_t stream_id, int timeout_ms, Exception
                 if (it->second.empty()) {
                     datagram_queues_.erase(it);
                 }
-                SimpleRefHolder<BinaryNode> bn(new BinaryNode(data.data(), data.size()));
+                // Copy data into a malloc'd buffer for BinaryNode ownership
+                if (data.empty()) {
+                    SimpleRefHolder<BinaryNode> bn(new BinaryNode());
+                    return bn.release();
+                }
+                void* buf = malloc(data.size());
+                if (!buf) {
+                    xsink->raiseException("QUIC-DATAGRAM-ERROR", "memory allocation failed");
+                    return QoreValue();
+                }
+                memcpy(buf, data.data(), data.size());
+                SimpleRefHolder<BinaryNode> bn(new BinaryNode(buf, data.size()));
                 return bn.release();
             }
         }

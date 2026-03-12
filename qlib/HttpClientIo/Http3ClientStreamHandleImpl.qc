@@ -72,7 +72,7 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
 
     #! Send a QUIC DATAGRAM frame on this stream's datagram channel (RFC 9221/9297)
     sendDatagram(binary data) {
-        if (!stream_id) {
+        if (!exists stream_id) {
             throw "HTTPCLIENT-STATE-ERROR", "stream not yet established";
         }
         int sid = h3conn.getSessionId();
@@ -80,11 +80,13 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
             throw "HTTPCLIENT-STATE-ERROR", "QUIC session not yet established";
         }
         h3conn.getSocket().submitQuicDatagram(sid, stream_id, data);
+        # Wake the I/O controller so the datagram is written promptly
+        conn.notifyPendingData();
     }
 
     #! Read the next incoming QUIC datagram on this stream's channel (RFC 9221/9297)
     *binary readDatagram(timeout timeout_ms = 30s) {
-        if (!stream_id) {
+        if (!exists stream_id) {
             throw "HTTPCLIENT-STATE-ERROR", "stream not yet established";
         }
         int sid = h3conn.getSessionId();
@@ -105,7 +107,7 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
 
     #! Get the maximum datagram payload size for this connection
     int getMaxDatagramSize() {
-        if (!stream_id) {
+        if (!exists stream_id) {
             return 0;
         }
         int sid = h3conn.getSessionId();
