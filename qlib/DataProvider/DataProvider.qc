@@ -162,6 +162,7 @@ public class DataProvider {
             "lemlist": "LemlistDataProvider",
             "shippo": "ShippoDataProvider",
             "shipstation": "ShipStationDataProvider",
+            "instantly": "InstantlyDataProvider",
             "keap": "KeapDataProvider",
             "apollo": "ApolloDataProvider",
             "square": "SquareDataProvider",
