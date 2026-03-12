@@ -7448,6 +7448,11 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
         return nullptr;
     }
 
+    // ensure ans is unique after the recv_callback may have stored a reference to the headers hash
+    if (!ans->is_unique()) {
+        ans = ans->copy();
+    }
+
     ValueHolder body(xsink);
     const char* content_encoding = nullptr;
 
