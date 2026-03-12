@@ -3452,6 +3452,10 @@ void qore_ns_private::scanMergeCommittedNamespace(const qore_ns_private& mns, Qo
     for (nsmap_t::const_iterator i = mns.nsl.nsmap.begin(), e = mns.nsl.nsmap.end(); i != e; ++i) {
         if (!qore_ns_private::isUserPublic(*i->second))
             continue;
+        // skip imported namespaces - they are from other modules and should not be merged again
+        if (i->second->priv->imported) {
+            continue;
+        }
         // see if a subnamespace with the same name exists
         const QoreNamespace* cns = nsl.find(i->first);
 
