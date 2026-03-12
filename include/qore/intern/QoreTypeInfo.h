@@ -982,6 +982,16 @@ public:
         if (bti == ntype->return_vec[0].spec.getBaseTypeInfo()) {
             // issue #3429: when performing type folding with complex types, do not use subtype "any" but rather use "auto"
             if (bti == hashTypeInfo) {
+                // Check if both are hashdecls before degrading to autoHashTypeInfo
+                // Fixes issue where hashdecl type infos from different module load instances are incorrectly
+                // degraded to hash<auto>, causing overload resolution failures and type checking errors
+                const TypedHashDecl* hd1 = ctype->return_vec[0].spec.getHashDecl();
+                const TypedHashDecl* hd2 = ntype->return_vec[0].spec.getHashDecl();
+                if (hd1 && hd2) {
+                    // Both are hashdecls - preserve the typed structure instead of degrading to auto
+                    // Structural equality will be checked at runtime if needed
+                    return true;
+                }
                 ctype = autoHashTypeInfo;
             } else if (bti == listTypeInfo) {
                 ctype = autoListTypeInfo;
