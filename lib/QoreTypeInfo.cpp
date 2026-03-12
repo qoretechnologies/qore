@@ -1845,47 +1845,6 @@ bool QoreTypeSpec::acceptInputComplexHash(ExceptionSink* xsink, const QoreTypeIn
         hash_assignment_priv ha(*qore_hash_private::get(*h), *qhi_priv::get(i)->i);
         QoreValue hn(ha.swap(QoreValue()));
 
-        // If target type is a hashdecl and value is an unstamped hash, construct the hashdecl instance
-        // Only do this if the input hash appears to be compatible (same keys as hashdecl members or a subset)
-        const TypedHashDecl* target_hd = QoreTypeInfo::getUniqueReturnHashDecl(u.ti);
-        if (target_hd && hn.getType() == NT_HASH) {
-            const QoreHashNode* hash_val = hn.get<const QoreHashNode>();
-            if (!hash_val->getHashDecl()) {
-                // Only construct if the hash structure appears compatible with the hashdecl
-                // This avoids corrupting hashes that don't match the hashdecl structure
-                bool compatible = true;
-                {
-                    ConstHashIterator hi(hash_val);
-                    while (hi.next()) {
-                        // Check if the hashdecl has this member
-                        if (!typed_hash_decl_private::get(*target_hd)->findMember(hi.getKey())) {
-                            compatible = false;
-                            break;
-                        }
-                    }
-                }
-
-                if (compatible) {
-                    // Unstamped hash → construct hashdecl instance
-                    QoreHashNode* stamped = typed_hash_decl_private::get(*target_hd)->newHash(hash_val, false, xsink);
-                    if (!stamped) {
-                        err = true;
-                        return true;
-                    }
-                    AbstractQoreNode* old = hn.assign(stamped);
-                    if (lvhelper) {
-                        lvhelper->saveTemp(old);
-                    } else {
-                        discard(old, xsink);
-                        if (xsink && *xsink) {
-                            err = true;
-                            return true;
-                        }
-                    }
-                }
-            }
-        }
-
         u.ti->acceptInputIntern(xsink, arg_type, obj, param_num, param_name, hn, lvhelper);
         ha.swap(hn);
         if (xsink && *xsink) {
