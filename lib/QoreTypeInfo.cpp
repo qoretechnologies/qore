@@ -30,6 +30,7 @@
 
 #include <qore/Qore.h>
 #include <qore/QoreRWLock.h>
+#include <cstdio>
 #include <unordered_set>
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreNamespaceIntern.h"
@@ -1843,6 +1844,12 @@ bool QoreTypeSpec::acceptInputComplexHash(ExceptionSink* xsink, const QoreTypeIn
     while (i.next()) {
         hash_assignment_priv ha(*qore_hash_private::get(*h), *qhi_priv::get(i)->i);
         QoreValue hn(ha.swap(QoreValue()));
+
+        // DEBUG: trace type folding - understand what type pointer is being used
+        fprintf(stderr, "[DEBUG] acceptInputComplexHash: key='%s' target_type_ptr=%p target_type='%s' value_type='%s'\n",
+            i.getKey(), u.ti, QoreTypeInfo::getName(u.ti), hn.getFullTypeName());
+        fflush(stderr);
+
         u.ti->acceptInputIntern(xsink, arg_type, obj, param_num, param_name, hn, lvhelper);
         ha.swap(hn);
         if (xsink && *xsink) {
