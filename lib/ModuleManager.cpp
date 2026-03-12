@@ -1253,7 +1253,7 @@ int QoreModuleManager::parseLoadModule(ExceptionSink& xsink, ExceptionSink& wsin
     assert(!xsink);
 
     char* p = strchrs(name, "<>=");
-    QoreAbstractModule* mod = nullptr;
+    QoreAbstractModule* mod;
     if (p) {
         QoreString str(name, p - name);
         str.trim();
@@ -1301,17 +1301,11 @@ int QoreModuleManager::parseLoadModule(ExceptionSink& xsink, ExceptionSink& wsin
 
         // only lock if not in a nested module load context (depth > 0 means already inside ModuleLoadMapHelper)
         OptLocker ol(module_load_depth == 0 ? &mutex : nullptr);
-        // Skip loading if module is already in the QoreProgram (avoids duplicate constant errors on reexport)
-        if (!qore_program_private::get(*pgm)->hasFeature(str.c_str())) {
-            mod = loadModuleIntern(xsink, wsink, str.c_str(), pgm, reexport, mo, &iv);
-        }
+        mod = loadModuleIntern(xsink, wsink, str.c_str(), pgm, reexport, mo, &iv);
     } else {
         // only lock if not in a nested module load context (depth > 0 means already inside ModuleLoadMapHelper)
         OptLocker ol(module_load_depth == 0 ? &mutex : nullptr);
-        // Skip loading if module is already in the QoreProgram (avoids duplicate constant errors on reexport)
-        if (!qore_program_private::get(*pgm)->hasFeature(name)) {
-            mod = loadModuleIntern(xsink, wsink, name, pgm, reexport);
-        }
+        mod = loadModuleIntern(xsink, wsink, name, pgm, reexport);
     }
 
     if (mod) {
