@@ -77,8 +77,23 @@ make -j${MAKE_JOBS}
 echo "=== Running Tests ==="
 cd "${QORE_SRC_DIR}"
 
-# Set module path to include built modules
-export QORE_MODULE_DIR="${QORE_SRC_DIR}/qlib:${QORE_MODULE_DIR:-}"
+# Set module path to include built modules and pre-installed binary modules
+# The built qore defaults to /usr/local prefix, but binary modules (json, yaml,
+# uuid, etc.) are installed under the Homebrew or MacPorts prefix in the VM
+EXTRA_MODULE_DIRS=""
+if [ -n "${HB:-}" ]; then
+    # Add Homebrew module paths (versioned and unversioned)
+    QORE_API_VER=$(build/qore --module-api 2>/dev/null || true)
+    [ -d "${HB}/lib/qore-modules/${QORE_API_VER}" ] && EXTRA_MODULE_DIRS="${HB}/lib/qore-modules/${QORE_API_VER}:${EXTRA_MODULE_DIRS}"
+    [ -d "${HB}/lib/qore-modules" ] && EXTRA_MODULE_DIRS="${HB}/lib/qore-modules:${EXTRA_MODULE_DIRS}"
+    [ -d "${HB}/share/qore-modules/${QORE_API_VER}" ] && EXTRA_MODULE_DIRS="${HB}/share/qore-modules/${QORE_API_VER}:${EXTRA_MODULE_DIRS}"
+    [ -d "${HB}/share/qore-modules" ] && EXTRA_MODULE_DIRS="${HB}/share/qore-modules:${EXTRA_MODULE_DIRS}"
+elif [ -d /opt/local/lib/qore-modules ]; then
+    QORE_API_VER=$(build/qore --module-api 2>/dev/null || true)
+    [ -d "/opt/local/lib/qore-modules/${QORE_API_VER}" ] && EXTRA_MODULE_DIRS="/opt/local/lib/qore-modules/${QORE_API_VER}:${EXTRA_MODULE_DIRS}"
+    [ -d "/opt/local/lib/qore-modules" ] && EXTRA_MODULE_DIRS="/opt/local/lib/qore-modules:${EXTRA_MODULE_DIRS}"
+fi
+export QORE_MODULE_DIR="${QORE_SRC_DIR}/qlib:${EXTRA_MODULE_DIRS}${QORE_MODULE_DIR:-}"
 
 # Run tests using the built qore binary
 export PATH="${BUILD_DIR}:${PATH}"

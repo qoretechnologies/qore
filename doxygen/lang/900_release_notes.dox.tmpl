@@ -188,16 +188,21 @@ cargo install tree-sitter-cli@0.26.5
     needs to be pre-installed.
     @endparblock
 
-    @par New Build Dependencies for the ml Module: Eigen3 (Required) and ONNX Runtime (Optional)
+    @par New Required Build Dependency: Eigen3
     @parblock
-    The new \c ml binary module requires <a href="https://eigen.tuxfamily.org/">Eigen3</a> (>= 3.4) for linear
-    algebra operations. If Eigen3 is not found, the \c ml module will not be built.
+    <a href="https://eigen.tuxfamily.org/">Eigen3</a> (>= 3.4, including Eigen 5.x) is now a
+    <b>required</b> build dependency. It is used by the new \c ml binary module for linear algebra
+    operations. The build will fail if Eigen3 is not found.
+
+    On macOS, CMake now automatically detects MacPorts (\c /opt/local) and Homebrew prefixes for
+    finding Eigen3 and other dependencies.
 
     Install the Eigen3 development packages:
     - <b>Debian/Ubuntu:</b> \c libeigen3-dev
     - <b>RHEL/Fedora:</b> \c eigen3-devel
     - <b>Alpine:</b> \c eigen-dev
     - <b>macOS (Homebrew):</b> \c eigen
+    - <b>macOS (MacPorts):</b> \c eigen3
 
     Optional <a href="https://onnxruntime.ai/">ONNX Runtime</a> support enables the \c OnnxModel class for
     running pre-trained ONNX models. Without ONNX Runtime, all native ML algorithms are still available.
@@ -881,6 +886,20 @@ cargo install tree-sitter-cli@0.26.5
       - new module providing a REST client for Chargebee's subscription billing API
       - supports HTTP Basic Authentication with API Key as username
       - provides ChargebeeRestConnection for connection management with \c chargebee:// URL scheme
+    - @ref closerestclientintro "CloseRestClient" module
+      - new module providing a REST client for Close CRM's REST API
+      - supports OAuth2 authentication with automatic token refresh
+      - provides CloseRestConnection for connection management with \c closerest:// URL scheme
+    - @ref closedataproviderintro "CloseDataProvider" module
+      - new module providing a data provider API for Close CRM
+      - lead management (create, read, update, delete, search)
+      - contact management (create, read, update, delete, search)
+      - opportunity management (create, read, update, delete, search)
+      - task management (create, read, update, delete, search)
+      - activity logging: calls, emails, notes, meetings, SMS
+      - event triggers for leads, contacts, and opportunities (created, updated, deleted)
+      - action catalog integration with 43 actions and 9 triggers
+      - connection support with \c closerest:// URL scheme
     - @ref chargebeedataproviderintro "ChargebeeDataProvider" module
       - new module providing a data provider API for Chargebee subscription billing and revenue management
       - customer management (create, read, update, delete, search)
@@ -935,6 +954,21 @@ cargo install tree-sitter-cli@0.26.5
       - polling-based event triggers for customers, orders, products, carts, shipments, and addresses
       - action catalog integration with 13 actions and 11 triggers
       - connection support with \c bigcommerceres:// URL scheme
+    - @ref apollorestclientintro "ApolloRestClient" module
+      - new module providing a REST client for Apollo's B2B sales intelligence API
+      - supports OAuth2 authentication and API key authentication via x-api-key header
+      - provides ApolloRestConnection for connection management with \c apollorest:// URL scheme
+    - @ref apollodataproviderintro "ApolloDataProvider" module
+      - new module providing a data provider API for Apollo B2B sales intelligence
+      - contact management (create, update, delete, search, get by ID)
+      - account management (create, update, search, get by ID)
+      - deal management (create, update, list, get by ID)
+      - task management (create, search)
+      - people and organization enrichment (single and bulk)
+      - people and organization search across Apollo's global database
+      - polling-based event triggers for contacts, accounts, and deals
+      - action catalog integration with 20+ actions and 4 triggers
+      - connection support with \c apollorest:// URL scheme
     - @ref keaprestclientintro "KeapRestClient" module
       - new module providing a REST client for Keap's CRM and marketing automation API
       - supports OAuth2 authentication with bearer tokens

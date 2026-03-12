@@ -21,6 +21,24 @@ endif()
 
 project(qore-language)
 
+# On macOS, auto-detect package manager prefixes for find_package() calls.
+# MacPorts (/opt/local) is preferred; Homebrew is added after.
+if (APPLE)
+    if (IS_DIRECTORY /opt/local)
+        list(APPEND CMAKE_PREFIX_PATH /opt/local)
+    endif()
+    execute_process(
+        COMMAND brew --prefix
+        OUTPUT_VARIABLE _brew_prefix
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+        RESULT_VARIABLE _brew_result
+    )
+    if (_brew_result EQUAL 0 AND _brew_prefix)
+        list(APPEND CMAKE_PREFIX_PATH "${_brew_prefix}")
+    endif()
+endif()
+
 option(ICONV_TRANSLIT
        "Force //Translit to iconv encoding to do transliteration, if OFF it is tested for"
        OFF)
@@ -1737,13 +1755,17 @@ if (MONGOC_FOUND)
 else()
     message(STATUS "libmongoc not found - mongodb module will not be built")
 endif()
-# ml module (requires Eigen3)
+# ml module (requires Eigen3 >= 3.4; also accepts Eigen 5.x)
+# Try with version constraint first (works for Eigen 3.4.x), then without (for Eigen 5.x
+# whose Eigen3ConfigVersion.cmake uses range-based checking that rejects bare "3.4")
 find_package(Eigen3 3.4 QUIET NO_MODULE)
-if (Eigen3_FOUND)
-    add_subdirectory(modules/ml)
-else()
-    message(STATUS "Eigen not found - ml module will not be built")
+if (NOT Eigen3_FOUND)
+    find_package(Eigen3 REQUIRED NO_MODULE)
+    if (Eigen3_FOUND AND Eigen3_VERSION VERSION_LESS "3.4")
+        message(FATAL_ERROR "Eigen3 >= 3.4 is required, found ${Eigen3_VERSION}")
+    endif()
 endif()
+add_subdirectory(modules/ml)
 
 # HACK: we need to simulate QORE_USER_MODULES_DIR as the versioned one
 #       for qore core qlib modules.
@@ -1816,9 +1838,7 @@ qore_user_module("qlib/EdifactUtil" "Util;DataProvider;FileLocationHandler")
 
 # base 3 modules
 qore_user_module("qlib/DataProvider" "MapperUtil;Mime;Util" "DataProvider-Full.svg;Qore-Q-square.svg")
-if (Eigen3_FOUND)
-    qore_user_module("qlib/DataProviderML" "DataProvider;modules/ml/ml")
-endif()
+qore_user_module("qlib/DataProviderML" "DataProvider;modules/ml/ml")
 qore_user_module("qlib/DpqlWebSocket" "DataProvider;HttpServerUtil;WebSocketHandler")
 qore_user_module("qlib/DebugProgramControl.qm" "DebugUtil")
 qore_user_module("qlib/HttpServerUtil.qm" "Mime;Util;FileLocationHandler;Logger;modules/logger_bin/logger_bin")
@@ -1895,6 +1915,7 @@ qore_user_module("qlib/BillwerkRestClient.qm" "ConnectionProvider;RestClient")
 qore_user_module("qlib/Sap4HanaRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/CdsRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/ChargebeeRestClient.qm" "ConnectionProvider;Mime;RestClient")
+qore_user_module("qlib/CloseRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/DiscordRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/FreshBooksRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/LinearRestClient.qm" "ConnectionProvider;Mime;RestClient")
@@ -1912,6 +1933,7 @@ qore_user_module("qlib/ShippoRestClient.qm" "ConnectionProvider;Mime;RestClient"
 qore_user_module("qlib/DeelRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/GoHighLevelRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/PdfCoRestClient.qm" "ConnectionProvider;Mime;RestClient")
+qore_user_module("qlib/ApolloRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/KeapRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/SquareRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/SquarespaceRestClient.qm" "ConnectionProvider;Mime;RestClient")
@@ -1962,9 +1984,11 @@ qore_user_module("qlib/ShippoDataProvider" "ShippoRestClient;RestClient;DataProv
 qore_user_module("qlib/DeelDataProvider" "DeelRestClient;RestClient;DataProvider" "deel-logo.svg")
 qore_user_module("qlib/GoHighLevelDataProvider" "GoHighLevelRestClient;RestClient;DataProvider" "gohighlevel-logo.svg")
 qore_user_module("qlib/PdfCoDataProvider" "PdfCoRestClient;RestClient;DataProvider" "pdfco-logo.svg")
+qore_user_module("qlib/ApolloDataProvider" "ApolloRestClient;RestClient;DataProvider" "apollo-logo.svg")
 qore_user_module("qlib/KeapDataProvider" "KeapRestClient;RestClient;DataProvider" "keap-logo.svg")
 qore_user_module("qlib/SquareDataProvider" "SquareRestClient;RestClient;DataProvider" "square-logo.svg")
 qore_user_module("qlib/ChargebeeDataProvider" "ChargebeeRestClient;RestClient;DataProvider" "chargebee-logo.svg")
+qore_user_module("qlib/CloseDataProvider" "CloseRestClient;RestClient;DataProvider" "close-logo.svg")
 qore_user_module("qlib/SquarespaceDataProvider" "SquarespaceRestClient;RestClient;DataProvider" "squarespace-logo.svg")
 qore_user_module("qlib/TableauDataProvider" "TableauRestClient;RestClient;DataProvider" "tableau-logo.svg")
 qore_user_module("qlib/Cin7CoreDataProvider" "Cin7CoreRestClient;RestClient;DataProvider" "cin7core-logo.svg")
@@ -1984,9 +2008,7 @@ qore_user_module("qlib/UnleashedDataProvider" "UnleashedRestClient;RestClient;Da
     set(QORE_LANG_DOC_TAGFILES "${QORE_LANG_DOC_TAGFILES} \"${CMAKE_BINARY_DIR}/modules/reflection/reflection.tag=../../modules/reflection/html\"")
     set(QORE_LANG_DOC_TAGFILES "${QORE_LANG_DOC_TAGFILES} \"${CMAKE_BINARY_DIR}/modules/logger_bin/logger_bin.tag=../../modules/logger_bin/html\"")
     set(QORE_LANG_DOC_TAGFILES "${QORE_LANG_DOC_TAGFILES} \"${CMAKE_BINARY_DIR}/modules/linenoise/linenoise.tag=../../modules/linenoise/html\"")
-    if (Eigen3_FOUND)
-        set(QORE_LANG_DOC_TAGFILES "${QORE_LANG_DOC_TAGFILES} \"${CMAKE_BINARY_DIR}/modules/ml/ml.tag=../../modules/ml/html\"")
-    endif()
+    set(QORE_LANG_DOC_TAGFILES "${QORE_LANG_DOC_TAGFILES} \"${CMAKE_BINARY_DIR}/modules/ml/ml.tag=../../modules/ml/html\"")
     if (MONGOC_FOUND)
         set(QORE_LANG_DOC_TAGFILES "${QORE_LANG_DOC_TAGFILES} \"${CMAKE_BINARY_DIR}/modules/mongodb/mongodb.tag=../../modules/mongodb/html\"")
     endif()
@@ -2022,10 +2044,7 @@ qore_user_module("qlib/UnleashedDataProvider" "UnleashedRestClient;RestClient;Da
         add_dependencies(docs-lang-final docs-${mod})
     endforeach()
     # Binary module doc dependencies
-    add_dependencies(docs-lang-final docs-astparser docs-reflection docs-logger_bin docs-linenoise)
-    if (Eigen3_FOUND)
-        add_dependencies(docs-lang-final docs-ml)
-    endif()
+    add_dependencies(docs-lang-final docs-astparser docs-reflection docs-logger_bin docs-linenoise docs-ml)
     if (MONGOC_FOUND)
         add_dependencies(docs-lang-final docs-mongodb)
     endif()

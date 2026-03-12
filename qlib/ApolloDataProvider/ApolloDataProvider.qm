@@ -1,0 +1,901 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore ApolloDataProvider module definition
+
+/*  ApolloDataProvider.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%modern
+# require type definitions everywhere
+# strict argument handling
+# enable all warnings
+
+%requires(reexport) DataProvider
+%requires(reexport) ApolloRestClient
+%requires uuid
+%try-module json
+%define NoJson
+%endtry
+
+module ApolloDataProvider {
+    version = "1.0";
+    desc = "User module providing a data provider API for Apollo B2B sales intelligence";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # Register the data provider factory
+        DataProvider::registerFactory(new ApolloDataProviderFactory());
+
+        # Register the application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": ApolloDataProvider::AppName,
+            "display_name": "Apollo",
+            "short_desc": "Apollo B2B sales intelligence and engagement platform",
+            "desc": "Apollo is a B2B sales intelligence and engagement platform providing "
+                "access to 210M+ contacts and 35M+ companies for prospecting, enrichment, "
+                "and deal management.\n\n"
+                "This integration supports CRUD operations on contacts, accounts, and deals, "
+                "plus people and organization enrichment and search.",
+            "scheme": "apollorest",
+            "logo": ApolloLogo,
+            "logo_file_name": "apollo-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::CrmSales, DataProvider::AppGroup::Marketing),
+        });
+
+        # ========== CONTACT ACTIONS ==========
+
+        # Create a Contact
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ApolloDataProvider::AppName,
+            "path": "/contacts/create",
+            "action": "create-contact",
+            "groups": "Contacts",
+            "display_name": "Create a Contact",
+            "short_desc": "Create a new contact",
+            "desc": "Create a new contact in Apollo",
+            "action_code": DPAT_API,
+            "output_type": new ApolloContactDataType(),
+            "options": {
+                "first_name": <ActionOptionInfo>{
+                    "display_name": "First Name",
+                    "short_desc": "Contact first name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                    "desc": "The contact's first name",
+                    "example_value": "John",
+                },
+                "last_name": <ActionOptionInfo>{
+                    "display_name": "Last Name",
+                    "short_desc": "Contact last name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                    "desc": "The contact's last name",
+                    "example_value": "Doe",
+                },
+                "email": <ActionOptionInfo>{
+                    "display_name": "Email",
+                    "short_desc": "Contact email address",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                    "desc": "The contact's email address",
+                    "example_value": "john@example.com",
+                },
+                "title": <ActionOptionInfo>{
+                    "display_name": "Job Title",
+                    "short_desc": "Contact job title",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "organization_name": <ActionOptionInfo>{
+                    "display_name": "Organization Name",
+                    "short_desc": "The company name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "phone_number": <ActionOptionInfo>{
+                    "display_name": "Phone Number",
+                    "short_desc": "Contact phone number",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "present_raw_address": <ActionOptionInfo>{
+                    "display_name": "Address",
+                    "short_desc": "Contact address",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "owner_id": <ActionOptionInfo>{
+                    "display_name": "Owner ID",
+                    "short_desc": "Owner user ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The ID of the user who owns this contact",
+                    "ref_data": "users",
+                },
+            },
+        });
+
+        # Update a Contact
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ApolloDataProvider::AppName,
+            "path": "/contacts/update",
+            "action": "update-contact",
+            "groups": "Contacts",
+            "display_name": "Update a Contact",
+            "short_desc": "Update an existing contact",
+            "desc": "Update an existing contact in Apollo",
+            "action_code": DPAT_API,
+            "output_type": new ApolloContactDataType(),
+            "options": {
+                "contact_id": <ActionOptionInfo>{
+                    "display_name": "Contact ID",
+                    "short_desc": "The contact to update",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "contacts",
+                },
+                "first_name": <ActionOptionInfo>{
+                    "display_name": "First Name",
+                    "short_desc": "Contact first name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "last_name": <ActionOptionInfo>{
+                    "display_name": "Last Name",
+                    "short_desc": "Contact last name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "email": <ActionOptionInfo>{
+                    "display_name": "Email",
+                    "short_desc": "Contact email address",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "title": <ActionOptionInfo>{
+                    "display_name": "Job Title",
+                    "short_desc": "Contact job title",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "organization_name": <ActionOptionInfo>{
+                    "display_name": "Organization Name",
+                    "short_desc": "The company name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "owner_id": <ActionOptionInfo>{
+                    "display_name": "Owner ID",
+                    "short_desc": "Owner user ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "users",
+                },
+                "phone_number": <ActionOptionInfo>{
+                    "display_name": "Phone Number",
+                    "short_desc": "Contact phone number",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "present_raw_address": <ActionOptionInfo>{
+                    "display_name": "Present Address",
+                    "short_desc": "Contact current location",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+        });
+
+        # List Contacts
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ApolloDataProvider::AppName,
+            "path": "/contacts",
+            "action": "search-contacts",
+            "groups": "Contacts",
+            "display_name": "Search Contacts",
+            "short_desc": "Search contacts",
+            "desc": "Search contacts in Apollo with optional filtering",
+            "action_code": DPAT_FIND,
+            "options": {
+                "contact_id": <ActionOptionInfo>{
+                    "display_name": "Contact ID",
+                    "short_desc": "Filter by contact ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "contacts",
+                },
+                "email": <ActionOptionInfo>{
+                    "display_name": "Email",
+                    "short_desc": "Filter by email",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "first_name": <ActionOptionInfo>{
+                    "display_name": "First Name",
+                    "short_desc": "Filter by first name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "last_name": <ActionOptionInfo>{
+                    "display_name": "Last Name",
+                    "short_desc": "Filter by last name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+            },
+        });
+
+        # Get a Contact
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ApolloDataProvider::AppName,
+            "path": "/contacts",
+            "action": "get-contact",
+            "groups": "Contacts",
+            "display_name": "Get a Contact",
+            "short_desc": "Get a single contact by ID",
+            "desc": "Retrieve a single contact by ID from Apollo",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "contact_id": <ActionOptionInfo>{
+                    "display_name": "Contact ID",
+                    "short_desc": "The contact ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "contacts",
+                },
+            },
+        });
+
+        # ========== ACCOUNT ACTIONS ==========
+
+        # Create an Account
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ApolloDataProvider::AppName,
+            "path": "/accounts/create",
+            "action": "create-account",
+            "groups": "Accounts",
+            "display_name": "Create an Account",
+            "short_desc": "Create a new account",
+            "desc": "Create a new account in Apollo",
+            "action_code": DPAT_API,
+            "output_type": new ApolloAccountDataType(),
+            "options": {
+                "name": <ActionOptionInfo>{
+                    "display_name": "Name",
+                    "short_desc": "Account name",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The name of the account",
+                    "example_value": "Acme Corp",
+                },
+                "domain": <ActionOptionInfo>{
+                    "display_name": "Domain",
+                    "short_desc": "Company domain",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "website_url": <ActionOptionInfo>{
+                    "display_name": "Website URL",
+                    "short_desc": "Company website URL",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "phone": <ActionOptionInfo>{
+                    "display_name": "Phone",
+                    "short_desc": "Company phone number",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "owner_id": <ActionOptionInfo>{
+                    "display_name": "Owner ID",
+                    "short_desc": "Owner user ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "users",
+                },
+            },
+        });
+
+        # Update an Account
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ApolloDataProvider::AppName,
+            "path": "/accounts/update",
+            "action": "update-account",
+            "groups": "Accounts",
+            "display_name": "Update an Account",
+            "short_desc": "Update an existing account",
+            "desc": "Update an existing account in Apollo",
+            "action_code": DPAT_API,
+            "output_type": new ApolloAccountDataType(),
+            "options": {
+                "account_id": <ActionOptionInfo>{
+                    "display_name": "Account ID",
+                    "short_desc": "The account to update",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "accounts",
+                },
+                "name": <ActionOptionInfo>{
+                    "display_name": "Name",
+                    "short_desc": "Account name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "domain": <ActionOptionInfo>{
+                    "display_name": "Domain",
+                    "short_desc": "Company domain",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "website_url": <ActionOptionInfo>{
+                    "display_name": "Website URL",
+                    "short_desc": "Company website URL",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "phone": <ActionOptionInfo>{
+                    "display_name": "Phone",
+                    "short_desc": "Company phone number",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "owner_id": <ActionOptionInfo>{
+                    "display_name": "Owner ID",
+                    "short_desc": "Owner user ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "users",
+                },
+            },
+        });
+
+        # Search Accounts
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ApolloDataProvider::AppName,
+            "path": "/accounts",
+            "action": "search-accounts",
+            "groups": "Accounts",
+            "display_name": "Search Accounts",
+            "short_desc": "Search accounts",
+            "desc": "Search accounts in Apollo with optional filtering",
+            "action_code": DPAT_FIND,
+            "options": {
+                "account_id": <ActionOptionInfo>{
+                    "display_name": "Account ID",
+                    "short_desc": "Filter by account ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "accounts",
+                },
+                "name": <ActionOptionInfo>{
+                    "display_name": "Name",
+                    "short_desc": "Filter by account name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "domain": <ActionOptionInfo>{
+                    "display_name": "Domain",
+                    "short_desc": "Filter by domain",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+            },
+        });
+
+        # Get an Account
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ApolloDataProvider::AppName,
+            "path": "/accounts",
+            "action": "get-account",
+            "groups": "Accounts",
+            "display_name": "Get an Account",
+            "short_desc": "Get a single account by ID",
+            "desc": "Retrieve a single account by ID from Apollo",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "account_id": <ActionOptionInfo>{
+                    "display_name": "Account ID",
+                    "short_desc": "The account ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "accounts",
+                },
+            },
+        });
+
+        # ========== DEAL ACTIONS ==========
+
+        # Create a Deal
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ApolloDataProvider::AppName,
+            "path": "/deals/create",
+            "action": "create-deal",
+            "groups": "Deals",
+            "display_name": "Create a Deal",
+            "short_desc": "Create a new deal",
+            "desc": "Create a new deal (opportunity) in Apollo",
+            "action_code": DPAT_API,
+            "output_type": new ApolloDealDataType(),
+            "options": {
+                "name": <ActionOptionInfo>{
+                    "display_name": "Name",
+                    "short_desc": "Deal name",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The name of the deal",
+                    "example_value": "Enterprise License",
+                },
+                "amount": <ActionOptionInfo>{
+                    "display_name": "Amount",
+                    "short_desc": "Deal amount",
+                    "type": AbstractDataProviderTypeMap."*float",
+                    "preselected": True,
+                },
+                "closed_date": <ActionOptionInfo>{
+                    "display_name": "Close Date",
+                    "short_desc": "Expected close date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Expected close date in ISO 8601 format",
+                },
+                "stage_name": <ActionOptionInfo>{
+                    "display_name": "Stage",
+                    "short_desc": "Deal stage name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "status": <ActionOptionInfo>{
+                    "display_name": "Status",
+                    "short_desc": "Deal status",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The deal status: `open`, `won`, or `lost`",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "open"},
+                        <AllowedValueInfo>{"value": "won"},
+                        <AllowedValueInfo>{"value": "lost"},
+                    ),
+                },
+                "owner_id": <ActionOptionInfo>{
+                    "display_name": "Owner ID",
+                    "short_desc": "Owner user ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "users",
+                },
+                "account_id": <ActionOptionInfo>{
+                    "display_name": "Account ID",
+                    "short_desc": "Associated account ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "accounts",
+                },
+            },
+        });
+
+        # Update a Deal
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ApolloDataProvider::AppName,
+            "path": "/deals/update",
+            "action": "update-deal",
+            "groups": "Deals",
+            "display_name": "Update a Deal",
+            "short_desc": "Update an existing deal",
+            "desc": "Update an existing deal (opportunity) in Apollo",
+            "action_code": DPAT_API,
+            "output_type": new ApolloDealDataType(),
+            "options": {
+                "deal_id": <ActionOptionInfo>{
+                    "display_name": "Deal ID",
+                    "short_desc": "The deal to update",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "deals",
+                },
+                "name": <ActionOptionInfo>{
+                    "display_name": "Name",
+                    "short_desc": "Deal name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "amount": <ActionOptionInfo>{
+                    "display_name": "Amount",
+                    "short_desc": "Deal amount",
+                    "type": AbstractDataProviderTypeMap."*float",
+                    "preselected": True,
+                },
+                "closed_date": <ActionOptionInfo>{
+                    "display_name": "Close Date",
+                    "short_desc": "Expected close date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "stage_name": <ActionOptionInfo>{
+                    "display_name": "Stage",
+                    "short_desc": "Deal stage name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "status": <ActionOptionInfo>{
+                    "display_name": "Status",
+                    "short_desc": "Deal status",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "open"},
+                        <AllowedValueInfo>{"value": "won"},
+                        <AllowedValueInfo>{"value": "lost"},
+                    ),
+                },
+                "owner_id": <ActionOptionInfo>{
+                    "display_name": "Owner ID",
+                    "short_desc": "Owner user ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "users",
+                },
+            },
+        });
+
+        # List Deals
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ApolloDataProvider::AppName,
+            "path": "/deals",
+            "action": "list-deals",
+            "groups": "Deals",
+            "display_name": "List Deals",
+            "short_desc": "List deals",
+            "desc": "List deals (opportunities) in Apollo",
+            "action_code": DPAT_FIND,
+            "options": {
+                "deal_id": <ActionOptionInfo>{
+                    "display_name": "Deal ID",
+                    "short_desc": "Filter by deal ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "deals",
+                    "preselected": True,
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+            },
+        });
+
+        # Get a Deal
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ApolloDataProvider::AppName,
+            "path": "/deals",
+            "action": "get-deal",
+            "groups": "Deals",
+            "display_name": "Get a Deal",
+            "short_desc": "Get a single deal by ID",
+            "desc": "Retrieve a single deal by ID from Apollo",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "deal_id": <ActionOptionInfo>{
+                    "display_name": "Deal ID",
+                    "short_desc": "The deal ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "deals",
+                },
+            },
+        });
+
+        # ========== ENRICHMENT ACTIONS ==========
+
+        # Enrich Person
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ApolloDataProvider::AppName,
+            "path": "/enrichment/person",
+            "action": "enrich-person",
+            "groups": "Enrichment",
+            "display_name": "Enrich Person",
+            "short_desc": "Enrich a person's data",
+            "desc": "Enrich a person's data using Apollo's database of 210M+ contacts",
+            "action_code": DPAT_API,
+            "output_type": new ApolloPersonEnrichmentDataType(),
+            "options": {
+                "email": <ActionOptionInfo>{
+                    "display_name": "Email",
+                    "short_desc": "Person email for enrichment",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                    "desc": "The person's email address for enrichment",
+                    "example_value": "john@example.com",
+                },
+                "first_name": <ActionOptionInfo>{
+                    "display_name": "First Name",
+                    "short_desc": "Person first name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "last_name": <ActionOptionInfo>{
+                    "display_name": "Last Name",
+                    "short_desc": "Person last name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "organization_name": <ActionOptionInfo>{
+                    "display_name": "Organization Name",
+                    "short_desc": "Person company name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "domain": <ActionOptionInfo>{
+                    "display_name": "Domain",
+                    "short_desc": "Person company domain",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "linkedin_url": <ActionOptionInfo>{
+                    "display_name": "LinkedIn URL",
+                    "short_desc": "Person LinkedIn URL",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+        });
+
+        # Bulk Enrich People
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ApolloDataProvider::AppName,
+            "path": "/enrichment/bulk-people",
+            "action": "bulk-enrich-people",
+            "groups": "Enrichment",
+            "display_name": "Bulk Enrich People",
+            "short_desc": "Bulk enrich people data",
+            "desc": "Bulk enrich multiple people's data using Apollo",
+            "action_code": DPAT_API,
+            "output_type": AbstractDataProviderTypeMap."list",
+            "options": {
+                "details": <ActionOptionInfo>{
+                    "display_name": "Details",
+                    "short_desc": "List of person details to enrich",
+                    "type": AbstractDataProviderTypeMap."list",
+                    "required": True,
+                    "desc": "List of person detail objects, each containing fields like "
+                        "`email`, `first_name`, `last_name`, `organization_name`, `domain`",
+                },
+            },
+        });
+
+        # Enrich Organization
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ApolloDataProvider::AppName,
+            "path": "/enrichment/organization",
+            "action": "enrich-organization",
+            "groups": "Enrichment",
+            "display_name": "Enrich Organization",
+            "short_desc": "Enrich an organization's data",
+            "desc": "Enrich an organization's data using Apollo's database",
+            "action_code": DPAT_API,
+            "output_type": new ApolloOrganizationEnrichmentDataType(),
+            "options": {
+                "domain": <ActionOptionInfo>{
+                    "display_name": "Domain",
+                    "short_desc": "Organization domain",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The organization domain to enrich",
+                    "example_value": "apollo.io",
+                },
+            },
+        });
+
+        # Bulk Enrich Organizations
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ApolloDataProvider::AppName,
+            "path": "/enrichment/bulk-organizations",
+            "action": "bulk-enrich-organizations",
+            "groups": "Enrichment",
+            "display_name": "Bulk Enrich Organizations",
+            "short_desc": "Bulk enrich organizations",
+            "desc": "Bulk enrich multiple organizations using Apollo",
+            "action_code": DPAT_API,
+            "output_type": AbstractDataProviderTypeMap."list",
+            "options": {
+                "domains": <ActionOptionInfo>{
+                    "display_name": "Domains",
+                    "short_desc": "List of domains to enrich",
+                    "type": AbstractDataProviderTypeMap."list",
+                    "required": True,
+                    "desc": "List of organization domains to enrich",
+                },
+            },
+        });
+
+        # ========== SEARCH ACTIONS ==========
+
+        # Search People
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ApolloDataProvider::AppName,
+            "path": "/search/people",
+            "action": "search-people",
+            "groups": "Search",
+            "display_name": "Search People",
+            "short_desc": "Search Apollo's people database",
+            "desc": "Search Apollo's global database of 210M+ people",
+            "action_code": DPAT_API,
+            "output_type": AbstractDataProviderTypeMap."list",
+            "options": {
+                "person_titles": <ActionOptionInfo>{
+                    "display_name": "Job Titles",
+                    "short_desc": "Filter by job titles",
+                    "type": AbstractDataProviderTypeMap."*softlist",
+                    "desc": "List of job titles to search for",
+                },
+                "person_locations": <ActionOptionInfo>{
+                    "display_name": "Locations",
+                    "short_desc": "Filter by locations",
+                    "type": AbstractDataProviderTypeMap."*softlist",
+                    "desc": "List of locations to filter by",
+                },
+                "person_seniorities": <ActionOptionInfo>{
+                    "display_name": "Seniorities",
+                    "short_desc": "Filter by seniority levels",
+                    "type": AbstractDataProviderTypeMap."*softlist",
+                    "desc": "List of seniority levels (e.g., `senior`, `manager`)",
+                },
+                "q_keywords": <ActionOptionInfo>{
+                    "display_name": "Keywords",
+                    "short_desc": "Search keywords",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "organization_domains": <ActionOptionInfo>{
+                    "display_name": "Organization Domains",
+                    "short_desc": "Filter by company domains",
+                    "type": AbstractDataProviderTypeMap."*softlist",
+                },
+                "page": <ActionOptionInfo>{
+                    "display_name": "Page",
+                    "short_desc": "Page number",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "per_page": <ActionOptionInfo>{
+                    "display_name": "Per Page",
+                    "short_desc": "Results per page (max 100)",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+            },
+        });
+
+        # Search Organizations
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ApolloDataProvider::AppName,
+            "path": "/search/organizations",
+            "action": "search-organizations",
+            "groups": "Search",
+            "display_name": "Search Organizations",
+            "short_desc": "Search Apollo's organization database",
+            "desc": "Search Apollo's global database of 35M+ companies",
+            "action_code": DPAT_API,
+            "output_type": AbstractDataProviderTypeMap."list",
+            "options": {
+                "organization_domains": <ActionOptionInfo>{
+                    "display_name": "Domains",
+                    "short_desc": "Filter by domains",
+                    "type": AbstractDataProviderTypeMap."*softlist",
+                    "desc": "List of company domains to search for",
+                },
+                "organization_locations": <ActionOptionInfo>{
+                    "display_name": "Locations",
+                    "short_desc": "Filter by locations",
+                    "type": AbstractDataProviderTypeMap."*softlist",
+                },
+                "organization_num_employees_ranges": <ActionOptionInfo>{
+                    "display_name": "Employee Ranges",
+                    "short_desc": "Filter by employee count",
+                    "type": AbstractDataProviderTypeMap."*softlist",
+                    "desc": "Employee count ranges (e.g., `1,10` or `1001,5000`)",
+                },
+                "q_keywords": <ActionOptionInfo>{
+                    "display_name": "Keywords",
+                    "short_desc": "Search keywords",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "page": <ActionOptionInfo>{
+                    "display_name": "Page",
+                    "short_desc": "Page number",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "per_page": <ActionOptionInfo>{
+                    "display_name": "Per Page",
+                    "short_desc": "Results per page (max 100)",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+            },
+        });
+
+        # ========== EVENT ACTIONS ==========
+
+        # Contact Created
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ApolloDataProvider::AppName,
+            "path": "/events/contact-created",
+            "action": "contact-created",
+            "groups": "Events",
+            "display_name": "Contact Created",
+            "short_desc": "Watch for new contacts",
+            "desc": "Triggers when a new contact is created in Apollo",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_CONTACT_CREATED,
+        });
+
+        # Contact Updated
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ApolloDataProvider::AppName,
+            "path": "/events/contact-updated",
+            "action": "contact-updated",
+            "groups": "Events",
+            "display_name": "Contact Updated",
+            "short_desc": "Watch for contact updates",
+            "desc": "Triggers when a contact is updated in Apollo",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_CONTACT_UPDATED,
+        });
+
+        # Account Created
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ApolloDataProvider::AppName,
+            "path": "/events/account-created",
+            "action": "account-created",
+            "groups": "Events",
+            "display_name": "Account Created",
+            "short_desc": "Watch for new accounts",
+            "desc": "Triggers when a new account is created in Apollo",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_ACCOUNT_CREATED,
+        });
+
+        # Deal Created
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ApolloDataProvider::AppName,
+            "path": "/events/deal-created",
+            "action": "deal-created",
+            "groups": "Events",
+            "display_name": "Deal Created",
+            "short_desc": "Watch for new deals",
+            "desc": "Triggers when a new deal is created in Apollo",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_DEAL_CREATED,
+        });
+    };
+}
+
+/** @mainpage ApolloDataProvider Module
+
+    @tableofcontents
+
+    @section apollodataproviderintro ApolloDataProvider Introduction
+
+    The %ApolloDataProvider module provides a data provider API for the Apollo
+    B2B sales intelligence and engagement platform.
+
+    To use this module, use \c "%requires ApolloDataProvider" in your code.
+
+    All the public symbols in the module are defined in the ApolloDataProvider namespace.
+
+    The main classes are:
+    - @ref ApolloDataProvider::ApolloDataProvider "ApolloDataProvider":
+      the root data provider for Apollo
+    - @ref ApolloDataProvider::ApolloDataProviderFactory "ApolloDataProviderFactory":
+      the data provider factory for Apollo
+
+    @section apollodataproviderrelnotes Release Notes
+
+    @subsection apollodataproviderv1_0 ApolloDataProvider v1.0
+    - the initial version of the %ApolloDataProvider module
+*/
+
+#! Contains all public definitions in the ApolloDataProvider module
+public namespace ApolloDataProvider {
+}
