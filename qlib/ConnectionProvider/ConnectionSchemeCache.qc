@@ -202,6 +202,8 @@ public class ConnectionSchemeCache {
 
             "shipstation": "ShipStationRestClient",
 
+            "instantly": "InstantlyRestClient",
+
             "keaprest": "KeapRestClient",
 
             "apollorest": "ApolloRestClient",

@@ -867,6 +867,17 @@ cargo install tree-sitter-cli@0.26.5
       - webhook-based event triggers for order and shipment notifications
       - action catalog integration with 36 actions and 4 triggers
       - connection support with \c shipstation:// URL scheme
+    - @ref instantlyrestclientintro "InstantlyRestClient" module
+      - new module providing a REST client for Instantly's email outreach API v2
+      - supports Bearer token (API key) authentication
+      - provides InstantlyRestConnection for connection management with \c instantly:// URL scheme
+    - @ref instantlydataproviderintro "InstantlyDataProvider" module
+      - new module providing a data provider API for Instantly email outreach and sales automation
+      - campaign, lead, email account, email, and lead list management
+      - block list, custom tags, inbox placement tests, and workspace management
+      - webhook-based event triggers for replies, bounces, interested leads, and campaign completion
+      - action catalog integration with ~100 actions and 4 triggers
+      - connection support with \c instantly:// URL scheme
     - @ref deelrestclientintro "DeelRestClient" module
       - new module providing a REST client for Deel's global workforce management API
       - supports API key (Bearer token) authentication
