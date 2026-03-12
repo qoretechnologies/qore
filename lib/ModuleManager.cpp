@@ -1253,7 +1253,7 @@ int QoreModuleManager::parseLoadModule(ExceptionSink& xsink, ExceptionSink& wsin
     assert(!xsink);
 
     char* p = strchrs(name, "<>=");
-    QoreAbstractModule* mod;
+    QoreAbstractModule* mod = nullptr;
     if (p) {
         QoreString str(name, p - name);
         str.trim();
