@@ -187,11 +187,17 @@ int QoreParseCastOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
         }
     }
 
+    // Do not check for hashdecl if this is a complex hash like hash<HashdeclType>
+    // In that case, let the complex hash handler take precedence below
     {
-        const TypedHashDecl* hd = or_nothing
-            ? QoreTypeInfo::getTypedHash(parse_context.typeInfo)
-            : QoreTypeInfo::getUniqueReturnHashDecl(parse_context.typeInfo);
-        if (hd) {
+        const QoreTypeInfo* complex_hash_val_type = or_nothing
+            ? QoreTypeInfo::getComplexHashValueType(parse_context.typeInfo)
+            : QoreTypeInfo::getUniqueReturnComplexHash(parse_context.typeInfo);
+        if (!complex_hash_val_type) {
+            const TypedHashDecl* hd = or_nothing
+                ? QoreTypeInfo::getTypedHash(parse_context.typeInfo)
+                : QoreTypeInfo::getUniqueReturnHashDecl(parse_context.typeInfo);
+            if (hd) {
             const_cast<typed_hash_decl_private*>(typed_hash_decl_private::get(*hd))->parseInit();
 
             bool runtime_check = false;
@@ -210,12 +216,13 @@ int QoreParseCastOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
                 }
             }
 
-            parse_context.typeInfo = hd->getTypeInfo();
-            if (exp) {
-                ReferenceHolder<> holder(this, nullptr);
-                val = new QoreHashDeclCastOperatorNode(loc, hd, takeExp(), or_nothing);
-                set_cast_analysis();
-                return err;
+                parse_context.typeInfo = hd->getTypeInfo();
+                if (exp) {
+                    ReferenceHolder<> holder(this, nullptr);
+                    val = new QoreHashDeclCastOperatorNode(loc, hd, takeExp(), or_nothing);
+                    set_cast_analysis();
+                    return err;
+                }
             }
         }
     }
