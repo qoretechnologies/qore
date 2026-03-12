@@ -196,6 +196,10 @@ static const QoreTypeInfo* getExprTypeInfo(const QoreValue& val) {
             // Cast operators should return their target type, not the generic 'auto' type
             return cast_op->getCastTypeInfo();
         }
+        if (auto* rt_const = dynamic_cast<const RuntimeConstantRefNode*>(node)) {
+            // RuntimeConstantRefNode holds the type of the constant (e.g., list<string>)
+            return rt_const->getConstantEntry()->typeInfo;
+        }
     }
     return val.getTypeInfo();
 }
@@ -7585,6 +7589,26 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
     // Check if the input is actually a list or a single value
     const QoreTypeInfo* list_type = getExprTypeInfo(map->getRight());
     const QoreTypeInfo* elem_type = QoreTypeInfo::getUniqueReturnComplexList(list_type);
+
+    // Only enter single-value path when we have positive evidence it's NOT a list:
+    // - elem_type must be null (no list element type extracted)
+    // - list_type must be non-null (we have type information)
+    // - parseReturns must confirm it's NOT a list
+    // This guard prevents entering single-value path for unknown types (like method calls)
+    if (!elem_type && list_type && !QoreTypeInfo::parseReturns(list_type, NT_LIST)) {
+        QoreIRValue input_val = lowerExpression(map->getRight(), error);
+        if (!input_val.isValid()) {
+            return QoreIRValue();
+        }
+        VirtualImplicitContext saved = virtual_implicit;
+        virtual_implicit.arg0 = input_val;
+        virtual_implicit.arg1 = QoreIRValue();
+        virtual_implicit.element = builder.createConstInt(0, map->loc)->result;
+        virtual_implicit.active = true;
+        QoreIRValue expr_result = lowerExpression(map->getLeft(), error);
+        virtual_implicit = saved;
+        return expr_result;
+    }
 
     bool use_direct_index = false;
     bool elem_is_int = false;
