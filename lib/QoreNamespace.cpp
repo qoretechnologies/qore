@@ -3353,7 +3353,17 @@ void qore_ns_private::scanMergeCommittedNamespace(const qore_ns_private& mns, Qo
                 // Identity check: same bits means same refSelf'd node (same module re-imported
                 // via different dependency paths, e.g. QUnit -> Util and FsUtil -> Util)
                 if (!existing->val.isEqualValue(cli.getValue())) {
-                    qmc.error("duplicate constant %s::%s", name.c_str(), cli.getName().c_str());
+                    // Check if the types match - if they do, it's the same constant loaded through
+                    // different module dependency paths (e.g. OpenAiDataProvider loaded as required
+                    // module and via reexport), which is safe to skip
+                    const QoreTypeInfo* existing_type = existing->val.getTypeInfo();
+                    const QoreTypeInfo* new_type = cli.getValue().getTypeInfo();
+                    if (existing_type != new_type) {
+                        // Types don't match - this is a real conflict
+                        qmc.error("duplicate constant %s::%s", name.c_str(), cli.getName().c_str());
+                    }
+                    // Types match - skip as safe duplicate from reexport
+                    continue;
                 }
             }
         }
