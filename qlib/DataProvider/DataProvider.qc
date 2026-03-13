@@ -121,6 +121,9 @@ public class DataProvider {
 
             "gmail": "GmailDataProvider",
 
+            # provided by the amqp module
+            "amqp": "AmqpDataProvider",
+
             # provided by the grpc module
             "grpc": "GrpcDataProvider",
 
