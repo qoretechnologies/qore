@@ -157,6 +157,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         addTestCase("IR hash slice smoke", \testIrHashSliceSmoke());
         addTestCase("IR map dot-eval in try smoke", \testIrMapDotEvalInTrySmoke());
         addTestCase("IR map hash bool value smoke", \testIrMapHashBoolValueSmoke());
+        addTestCase("IR map optional hash pairIterator", \testIrMapOptionalHashPairIterator());
         addTestCase("IR closure default args smoke", \testIrClosureDefaultArgsSmoke());
         addTestCase("IR closure default arg omitted smoke", \testIrClosureDefaultArgOmittedSmoke());
         set_return_value(main());
@@ -5437,6 +5438,43 @@ class IRExecModeSmokeTest inherits QUnit::Test {
 
         string stdout_output = ReadOnlyFile::readTextFile(out.path);
         assertEq("map-hash-bool:ok\n", stdout_output, "map {$1: True} should preserve bool type");
+    }
+
+    testIrMapOptionalHashPairIterator() {
+        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        if (!qore_bin || qore_bin == NOTHING) {
+            testSkip("no qore binary path available");
+            return;
+        }
+
+        # Test: map on optional hash via pairIterator should infer correct type
+        # Regression: optional hash pairIterator() returned null type, causing
+        # map operator to infer generic hash<auto> instead of hash<string, T>
+        TmpFile script();
+        script.file.write("%new-style\n%modern\n");
+        script.file.write("*hash<string, int> h = {\"a\": 1, \"b\": 2};\n");
+        script.file.write("*hash<string, int> result = map {$1.key: $1.value}, h.pairIterator();\n");
+        script.file.write("printf(\"%d:%d\\n\", result.\"a\", result.\"b\");\n");
+        script.file.close();
+
+        TmpFile out();
+        TmpFile err();
+
+        string cmd = sprintf("%s --exec-mode=ir %s > %s 2> %s",
+            qore_bin, script.path, out.path, err.path);
+        int rc = runCommand(cmd, script.path);
+        string err_output = ReadOnlyFile::readTextFile(err.path);
+        if (rc != 0 && err_output =~ /exec-mode/ && err_output =~ /valid long option/) {
+            testSkip("exec-mode option not supported by test qore binary");
+            return;
+        }
+
+        assertEq(0, rc, "IR map optional hash pairIterator should exit cleanly");
+        assertFalse(err_output =~ /IR exec fallback to AST:/, "Unexpected IR fallback warning");
+        assertFalse(err_output =~ /PARSE-TYPE-ERROR/, "Should not get PARSE-TYPE-ERROR for optional hash pairIterator");
+
+        string stdout_output = ReadOnlyFile::readTextFile(out.path);
+        assertEq("1:2\n", stdout_output, "map on optional hash pairIterator should preserve type");
     }
 
     testIrClosureDefaultArgsSmoke() {

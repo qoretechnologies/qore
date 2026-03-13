@@ -168,6 +168,7 @@ class JITSmokeTest inherits QUnit::Test {
         addTestCase("reference compound assignment writes through", \testReferenceCompoundAssignment());
         addTestCase("hash/list key store via closure", \testHashKeyStoreClosure());
         addTestCase("map with single-value iterator", \testMapSingleValueIterator());
+        addTestCase("map with optional hash pairIterator", \testHashMapOptionalPairIterator());
         set_return_value(main());
     }
 
@@ -5510,6 +5511,42 @@ printf(\"%s\\n\", exists result ? \"EXISTS\" : \"NOTHING\");
             string result = trim(runScript(code, mode));
             assertEq("NOTHING", result,
                     sprintf("map single NOTHING value %s", mode));
+        }
+    }
+
+    testHashMapOptionalPairIterator() {
+        # Test that pairIterator() works on optional hashes
+        # Fixed in pseudo_classes_find_method to handle optional types (size==2 with NT_NOTHING)
+
+        # Test iteration on optional hash pairIterator
+        string code = "%modern
+*hash<string, int> h = {\"a\": 10, \"b\": 20};
+int total = 0;
+foreach auto pair in (h.pairIterator()) {
+    total += pair.value;
+}
+printf(\"%d\\n\", total);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("30", result,
+                    sprintf("optional hash pairIterator iteration %s", mode));
+        }
+
+        # Test pairIterator with count
+        code = "%modern
+%disable-warning unreferenced-variable
+*hash<string, int> h = {\"x\": 5, \"y\": 7};
+int count = 0;
+foreach auto p in (h.pairIterator()) {
+    count++;
+}
+printf(\"%d\\n\", count);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("2", result,
+                    sprintf("optional hash pairIterator count %s", mode));
         }
     }
 

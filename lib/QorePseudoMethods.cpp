@@ -208,6 +208,20 @@ const QoreMethod* pseudo_classes_find_method(const QoreTypeInfo* typeInfo, const
         return m;
     }
 
+    // For optional types (exactly X or NOTHING, e.g. *hash<string, T>),
+    // resolve the pseudo-method for the base type X.
+    // This allows methods like pairIterator() on optional hashes to be typed correctly.
+    if (typeInfo->return_vec.size() == 2) {
+        for (int i = 0; i < 2; ++i) {
+            if (typeInfo->return_vec[i].spec.getType() == NT_NOTHING) {
+                int base_idx = 1 - i;
+                m = pseudo_classes_find_method(typeInfo->return_vec[base_idx].spec.getType(), mname, qc);
+                possible_match = m ? true : false;
+                return m;
+            }
+        }
+    }
+
     QoreClass* nqc;
     for (auto& i : typeInfo->return_vec) {
         if (pseudo_classes_find_method(i.spec.getType(), mname, nqc)) {
