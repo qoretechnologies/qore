@@ -55,24 +55,26 @@ auto mgr_h2 = new HttpClientConnectionManager({"protocol": "h2"});
 auto mgr_h3 = new HttpClientConnectionManager({"protocol": "h3"});
     @endcode
 
-    @par Async Mode with AsyncSocketIoController
+    @par Shared Controller (optional)
+    By default the manager auto-creates an AsyncSocketIoController with
+    \c autostop=True.  To share a controller across multiple managers:
     @code{.py}
 %requires HttpClientIo
 %requires AsyncSocketIo
 
-HttpClientConnectionManager manager();
 AsyncSocketIoController controller(False);
-manager.setController(controller);
 controller.start();
 
-manager.submitRequestAsync("https://example.com", "GET", "/api/resource",
-    NOTHING, NOTHING,
-    sub (hash<auto> response, *hash<auto> error) {
-        printf("Response: %y\n", response);
-    });
+HttpClientConnectionManager mgr1();
+mgr1.setController(controller);  # replaces auto-created controller
 
+HttpClientConnectionManager mgr2();
+mgr2.setController(controller);
+
+# ... use mgr1 and mgr2 ...
+mgr1.closeAll();
+mgr2.closeAll();
 controller.stop();
-manager.closeAll();
     @endcode
 */
 public class HttpClientConnectionManager {
@@ -95,13 +97,13 @@ public class HttpClientConnectionManager {
         RWLock pool_lock();
 
         #! AsyncSocketIoController for async operations
-        *AsyncSocketIo::AsyncSocketIoController controller;
+        AsyncSocketIo::AsyncSocketIoController controller;
 
-        #! True if using controller for async mode
-        bool controllerMode = False;
+        #! True if this instance owns the controller (auto-created)
+        bool owns_controller = True;
 
         #! Logger
-        *Logger logger;
+        *LoggerInterface logger;
 
         #! Shutdown flag
         bool shutdown = False;
@@ -124,22 +126,25 @@ public class HttpClientConnectionManager {
     constructor(*hash<HttpClientConnectionManagerOptions> opts) {
         self.opts = opts ?? <HttpClientConnectionManagerOptions>{};
         self.logger = self.opts.logger;
-        if (self.opts.protocol != "auto" && self.opts.protocol != "h2"
-                && self.opts.protocol != "h3") {
+        if (!HttpClientProtocolMap.hasKey(self.opts.protocol)) {
             throw "HTTPCLIENT-OPTION-ERROR",
-                sprintf("invalid protocol %y: must be \"auto\", \"h2\", or \"h3\"",
-                    self.opts.protocol);
+                sprintf("invalid protocol %y: must be one of %y",
+                    self.opts.protocol, keys HttpClientProtocolMap);
         }
-        if (self.opts.max_connections_per_host < 1) {
+        if (self.opts.max_connections_per_host < 0) {
             throw "HTTPCLIENT-OPTION-ERROR",
-                sprintf("max_connections_per_host must be >= 1, got %d",
+                sprintf("max_connections_per_host must be >= 0 (0 = unlimited), got %d",
                     self.opts.max_connections_per_host);
         }
-        if (self.opts.max_streams_per_connection < 1) {
+        if (self.opts.max_streams_per_connection < 0) {
             throw "HTTPCLIENT-OPTION-ERROR",
-                sprintf("max_streams_per_connection must be >= 1, got %d",
+                sprintf("max_streams_per_connection must be >= 0 (0 = unlimited), got %d",
                     self.opts.max_streams_per_connection);
         }
+        # Auto-create an AsyncSocketIoController with autostop=True so the I/O
+        # thread starts lazily on the first poll operation and stops when idle
+        controller = new AsyncSocketIo::AsyncSocketIoController(True);
+
         log(LoggerLevel::DEBUG, "connection manager created: protocol=%s max_conn=%d max_streams=%d idle=%d",
             self.opts.protocol,
             self.opts.max_connections_per_host,
@@ -161,15 +166,48 @@ public class HttpClientConnectionManager {
         }
     }
 
-    #! Sets the AsyncSocketIoController for async operations
-    /** @param controller the I/O controller to use
+    #! Sets an external AsyncSocketIoController for async operations
+    /** Replaces the auto-created controller with a shared external controller.
+        Existing pool connections are migrated to the new controller.
 
-        @note Call this before acquiring any streams.
+        @param controller the I/O controller to use
+
+        @note This is optional; the manager auto-creates a controller with
+        \c autostop=True on construction. Use \c setController() to share a
+        single controller across multiple managers.
     */
     setController(AsyncSocketIo::AsyncSocketIoController controller) {
-        self.controller = controller;
-        self.controllerMode = True;
-        log(LoggerLevel::DEBUG, "controller set, async mode enabled");
+        # Stop the auto-created controller if we own it
+        if (owns_controller) {
+            try {
+                self.controller.cancelByOwner(self.uniqueHash());
+            } catch () {
+            }
+            try {
+                self.controller.stop();
+            } catch () {
+            }
+        }
+
+        # Assign the new controller and migrate connections under write lock
+        # to synchronize with concurrent reads in submitConnectionToController()
+        # and handleConnectionResult()
+        {
+            AutoWriteLock al(pool_lock);
+            self.controller = controller;
+            owns_controller = False;
+
+            foreach string key in (keys pool) {
+                foreach HttpClientConnection conn in (pool{key}) {
+                    if (!conn.isClosed()) {
+                        conn.setControllerRef(controller);
+                        submitConnectionToController(key, conn);
+                    }
+                }
+            }
+        }
+
+        log(LoggerLevel::DEBUG, "external controller set, connections migrated");
     }
 
     #! Returns the AsyncSocketIoController (if set)
@@ -178,8 +216,12 @@ public class HttpClientConnectionManager {
     }
 
     #! Returns True if the manager is in async controller mode
+    /** @return always True; async I/O via controller is the only mode
+
+        @since HttpClientIo 1.1
+    */
     bool isControllerMode() {
-        return controllerMode;
+        return True;
     }
 
     #! Acquires a stream handle for the given URL
@@ -229,7 +271,7 @@ public class HttpClientConnectionManager {
         @return the stream handle (can be used to cancel)
     */
     HttpClientStreamHandle submitRequestAsync(string url, string method, string path,
-            *hash<auto> headers, *data body, code callback) {
+            *hash<auto> headers, *data body, HttpResponseCallback callback) {
         HttpClientStreamHandle stream = acquireStream(url);
         stream.submitAsync(method, path, headers, body, callback);
         return stream;
@@ -290,12 +332,10 @@ public class HttpClientConnectionManager {
             shutdown = True;
         }
 
-        if (controllerMode && controller) {
-            try {
-                controller.cancelByOwner(self.uniqueHash());
-            } catch (hash<ExceptionInfo> ex) {
-                log(LoggerLevel::DEBUG, "closeAll: cancelByOwner error: %s: %s", ex.err, ex.desc);
-            }
+        try {
+            controller.cancelByOwner(self.uniqueHash());
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::DEBUG, "closeAll: cancelByOwner error: %s: %s", ex.err, ex.desc);
         }
 
         # Copy the pool and release the lock before closing connections
@@ -315,6 +355,15 @@ public class HttpClientConnectionManager {
                     log(LoggerLevel::DEBUG, "closeAll: close error for %s: %s: %s",
                         key, ex.err, ex.desc);
                 }
+            }
+        }
+
+        # Stop the auto-created controller after closing connections
+        if (owns_controller) {
+            try {
+                controller.stop();
+            } catch (hash<ExceptionInfo> ex) {
+                log(LoggerLevel::DEBUG, "closeAll: controller stop error: %s: %s", ex.err, ex.desc);
             }
         }
     }
@@ -523,8 +572,10 @@ public class HttpClientConnectionManager {
                 }
 
                 # Check capacity (but don't create connection under lock)
+                # Skip cap when max_connections_per_host == 0 (unlimited)
                 int current_count = pool.hasKey(key) ? pool{key}.size() : 0;
-                if (current_count >= opts.max_connections_per_host) {
+                if (opts.max_connections_per_host
+                        && current_count >= opts.max_connections_per_host) {
                     # Pick connection with fewest streams
                     list<HttpClientConnection> candidates;
                     int min_streams = MAXINT;
@@ -572,10 +623,8 @@ public class HttpClientConnectionManager {
                 }
                 push pool{key}, conn;
 
-                if (controllerMode && controller) {
-                    conn.setControllerRef(controller);
-                    submitConnectionToController(key, conn);
-                }
+                conn.setControllerRef(controller);
+                submitConnectionToController(key, conn);
 
                 return conn;
             }
@@ -712,12 +761,18 @@ public class HttpClientConnectionManager {
     private cacheProtocol(string key, string protocol) {
         protocol_cache{key} = protocol;
         if (protocol_cache.size() > MAX_PROTOCOL_CACHE_SIZE) {
-            # Evict oldest entries (Qore hashes maintain insertion order)
+            # Evict oldest entries (Qore hashes maintain insertion order);
+            # collect only the keys to evict (not the full key list) to avoid
+            # allocating a 1000-element list when evicting 1-2 entries
             int to_evict = protocol_cache.size() - MAX_PROTOCOL_CACHE_SIZE;
-            list<string> evict_keys = keys protocol_cache;
-            for (int i = 0; i < to_evict; ++i) {
-                remove protocol_cache{evict_keys[i]};
-                remove h3_probe_times{evict_keys[i]};
+            list<string> evict_keys;
+            HashIterator it(protocol_cache);
+            while (it.next() && evict_keys.size() < to_evict) {
+                push evict_keys, it.getKey();
+            }
+            foreach string evict_key in (evict_keys) {
+                remove protocol_cache{evict_key};
+                remove h3_probe_times{evict_key};
             }
         }
     }

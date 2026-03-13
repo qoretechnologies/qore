@@ -66,6 +66,7 @@
 #include "qore/intern/QC_AutoWriteLock.h"
 #include "qore/intern/QC_AbstractSmartLock.h"
 #include "qore/intern/QC_AbstractThreadResource.h"
+#include "qore/intern/QC_ConnectionPool.h"
 
 #include <string.h>
 
@@ -3226,6 +3227,10 @@ QoreNamespace* get_thread_ns(QoreNamespace &qorens) {
     Thread->addSystemClass(initThreadPoolClass(*Thread));
 
     Thread->addSystemClass(initAbstractThreadResourceClass(*Thread));
+    Thread->addSystemClass(initAbstractPoolableResourceClass(*Thread));
+    hashdeclConnectionPoolOptions = init_hashdecl_ConnectionPoolOptions(*Thread);
+    hashdeclConnectionPoolStats = init_hashdecl_ConnectionPoolStats(*Thread);
+    Thread->addSystemClass(initAbstractConnectionPoolClass(*Thread));
 
     Thread->addSystemClass(initFutureClass(*Thread));
     Thread->addSystemClass(initPromiseClass(*Thread));

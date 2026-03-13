@@ -1,0 +1,727 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Tests for C++ AbstractConnectionPool and RestClientPool.
+*/
+
+%modern
+
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/RestSchemaValidator.qm
+%requires ../../../../qlib/Swagger.qm
+%requires ../../../../qlib/OpenApi3.qm
+%requires ../../../../qlib/RestClient.qm
+
+%exec-class ConnectionPoolTest
+
+#! Simple counter-based resource for testing
+class TestResource inherits Qore::Thread::AbstractPoolableResource {
+    public {
+        int id;
+        bool reset_called = False;
+        bool close_called = False;
+    }
+
+    constructor(int id) {
+        self.id = id;
+    }
+
+    close() {
+        close_called = True;
+    }
+}
+
+#! Test pool implementation
+class TestPool inherits Qore::Thread::AbstractConnectionPool {
+    private {
+        Sequence id_seq(1);
+    }
+
+    constructor(*hash<Qore::Thread::ConnectionPoolOptions> opts)
+            : AbstractConnectionPool(opts) {
+        self.init();
+    }
+
+    Qore::Thread::AbstractPoolableResource createResource() {
+        return new TestResource(id_seq.next());
+    }
+
+    resetResource(Qore::Thread::AbstractPoolableResource resource) {
+        cast<TestResource>(resource).reset_called = True;
+    }
+
+    destroyResource(Qore::Thread::AbstractPoolableResource resource) {
+        cast<TestResource>(resource).close();
+    }
+}
+
+#! Test pool that tracks destroyResource calls
+class DestroyTrackingPool inherits Qore::Thread::AbstractConnectionPool {
+    private {
+        Sequence id_seq(1);
+    }
+
+    public {
+        list<int> destroyed_ids = ();
+    }
+
+    constructor(*hash<Qore::Thread::ConnectionPoolOptions> opts)
+            : AbstractConnectionPool(opts) {
+        self.init();
+    }
+
+    Qore::Thread::AbstractPoolableResource createResource() {
+        return new TestResource(id_seq.next());
+    }
+
+    destroyResource(Qore::Thread::AbstractPoolableResource resource) {
+        push destroyed_ids, cast<TestResource>(resource).id;
+    }
+}
+
+class ConnectionPoolTest inherits QUnit::Test {
+    constructor() : Test("ConnectionPoolTest", "1.0") {
+        addTestCase("basic acquire/release", \testBasicAcquireRelease());
+        addTestCase("per-thread allocation", \testPerThreadAllocation());
+        addTestCase("pool reuse on same thread", \testPoolReuseSameThread());
+        addTestCase("min pool size", \testMinPoolSize());
+        addTestCase("max pool size exhaustion", \testMaxPoolExhaustion());
+        addTestCase("pool timeout", \testPoolTimeout());
+        addTestCase("pool stats", \testPoolStats());
+        addTestCase("shutdown wakes waiters", \testShutdownWakesWaiters());
+        addTestCase("cleanup on thread exit", \testCleanupOnThreadExit());
+        addTestCase("invalid options", \testInvalidOptions());
+        addTestCase("concurrent acquire/release", \testConcurrentAcquireRelease());
+        addTestCase("burst creation signaling", \testBurstCreationSignaling());
+        addTestCase("warning callback", \testWarningCallback());
+        addTestCase("idle cleanup basic", \testIdleCleanupBasic());
+        addTestCase("idle cleanup respects min size", \testIdleCleanupRespectsMinSize());
+        addTestCase("idle cleanup skips in-use resources", \testIdleCleanupSkipsInUse());
+        addTestCase("pool works after cleanup", \testPoolWorksAfterCleanup());
+        addTestCase("idle cleanup disabled by default", \testIdleCleanupDisabled());
+        addTestCase("idle cleanup destroyResource called", \testIdleCleanupDestroy());
+        addTestCase("RestClientPool", \testRestClientPool());
+        addTestCase("RestClientPool min pre-create", \testRestClientPoolMinPreCreate());
+        addTestCase("destructor calls destroyResource", \testDestructorCallsDestroyResource());
+
+        set_return_value(main());
+    }
+
+    testBasicAcquireRelease() {
+        TestPool pool(<Qore::Thread::ConnectionPoolOptions>{"max": 5});
+        TestResource r = pool.acquire();
+        assertEq(True, r instanceof TestResource);
+        assertEq(True, r.id > 0);
+        pool.release();
+    }
+
+    testPerThreadAllocation() {
+        TestPool pool(<Qore::Thread::ConnectionPoolOptions>{"max": 5});
+        Counter c(1);
+        int main_id;
+        int thread_id;
+
+        # Acquire on main thread
+        TestResource r1 = pool.acquire();
+        main_id = r1.id;
+
+        # Acquire on another thread -- should get a different resource
+        background sub () {
+            on_exit c.dec();
+            TestResource r2 = pool.acquire();
+            on_exit pool.release();
+            thread_id = r2.id;
+        }();
+        c.waitForZero();
+        pool.release();
+
+        assertNeq(main_id, thread_id);
+    }
+
+    testPoolReuseSameThread() {
+        TestPool pool(<Qore::Thread::ConnectionPoolOptions>{"max": 5});
+        TestResource r1 = pool.acquire();
+        int id1 = r1.id;
+        pool.release();
+
+        # Re-acquiring on same thread should get the same resource back (from free list)
+        TestResource r2 = pool.acquire();
+        int id2 = r2.id;
+        pool.release();
+
+        assertEq(id1, id2);
+    }
+
+    testMinPoolSize() {
+        TestPool pool(<Qore::Thread::ConnectionPoolOptions>{"min": 3, "max": 10});
+        hash<Qore::Thread::ConnectionPoolStats> stats = pool.getStats();
+        assertEq(3, stats.pool_size);
+        assertEq(3, stats.free);
+        assertEq(0, stats.in_use);
+    }
+
+    testMaxPoolExhaustion() {
+        TestPool pool(<Qore::Thread::ConnectionPoolOptions>{"max": 2, "timeout_ms": 100});
+        Counter c(2);
+        bool got_error = False;
+
+        # Occupy both slots
+        TestResource r1 = pool.acquire();
+
+        background sub () {
+            on_exit c.dec();
+            TestResource r2 = pool.acquire();
+            on_exit pool.release();
+            # Hold this resource for a bit
+            usleep(200ms);
+        }();
+
+        # Wait a moment for the thread to acquire its resource
+        usleep(50ms);
+
+        # Now try to acquire a 3rd resource -- should time out
+        background sub () {
+            on_exit c.dec();
+            try {
+                TestResource r3 = pool.acquire();
+                pool.release();
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "CONNECTIONPOOL-ERROR") {
+                    got_error = True;
+                }
+            }
+        }();
+
+        c.waitForZero();
+        pool.release();
+
+        assertEq(True, got_error);
+    }
+
+    testPoolTimeout() {
+        TestPool pool(<Qore::Thread::ConnectionPoolOptions>{"max": 1, "timeout_ms": 50});
+        TestResource r1 = pool.acquire();
+
+        Counter c(1);
+        bool timed_out = False;
+
+        background sub () {
+            on_exit c.dec();
+            try {
+                pool.acquire();
+                pool.release();
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "CONNECTIONPOOL-ERROR" && ex.desc =~ /timed out/) {
+                    timed_out = True;
+                }
+            }
+        }();
+
+        c.waitForZero();
+        pool.release();
+
+        assertEq(True, timed_out);
+    }
+
+    testPoolStats() {
+        TestPool pool(<Qore::Thread::ConnectionPoolOptions>{"min": 2, "max": 5});
+
+        hash<Qore::Thread::ConnectionPoolStats> stats = pool.getStats();
+        assertEq(2, stats.pool_size);
+        assertEq(0, stats.in_use);
+        assertEq(2, stats.free);
+        assertEq(0, stats.wait_count);
+        assertEq(2, stats.peak_size);
+
+        pool.acquire();
+        stats = pool.getStats();
+        assertEq(1, stats.in_use);
+        assertEq(1, stats.free);
+        assertEq(1, stats.total_acquires);
+
+        pool.release();
+        stats = pool.getStats();
+        assertEq(0, stats.in_use);
+        assertEq(2, stats.free);
+    }
+
+    testShutdownWakesWaiters() {
+        TestPool pool(<Qore::Thread::ConnectionPoolOptions>{"max": 1, "timeout_ms": 10000});
+        TestResource r1 = pool.acquire();
+
+        Counter started(1);
+        Counter done(1);
+        bool got_shutdown_error = False;
+
+        background sub () {
+            on_exit done.dec();
+            started.dec();
+            try {
+                pool.acquire();
+                pool.release();
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "CONNECTIONPOOL-ERROR" && ex.desc =~ /shut down/) {
+                    got_shutdown_error = True;
+                }
+            }
+        }();
+
+        # Wait for the background thread to start trying to acquire
+        started.waitForZero();
+        # Give it time to actually enter the wait state
+        usleep(100ms);
+        pool.shutdown();
+
+        done.waitForZero();
+        pool.release();
+        assertEq(True, got_shutdown_error);
+    }
+
+    testCleanupOnThreadExit() {
+        TestPool pool(<Qore::Thread::ConnectionPoolOptions>{"max": 5});
+        Counter c(1);
+
+        background sub () {
+            on_exit c.dec();
+            TestResource r = pool.acquire();
+            # Intentionally NOT calling pool.release()
+            # The cleanup() method should handle it when the thread exits
+        }();
+
+        c.waitForZero();
+        # Give thread resource cleanup a moment to run
+        usleep(50ms);
+
+        hash<Qore::Thread::ConnectionPoolStats> stats = pool.getStats();
+        assertEq(0, stats.in_use);
+    }
+
+    testInvalidOptions() {
+        assertThrows("CONNECTIONPOOL-ERROR", sub () {
+            new TestPool(<Qore::Thread::ConnectionPoolOptions>{"min": -1});
+        });
+        assertThrows("CONNECTIONPOOL-ERROR", sub () {
+            new TestPool(<Qore::Thread::ConnectionPoolOptions>{"max": -1});
+        });
+        assertThrows("CONNECTIONPOOL-ERROR", sub () {
+            new TestPool(<Qore::Thread::ConnectionPoolOptions>{"min": 10, "max": 5});
+        });
+        assertThrows("CONNECTIONPOOL-ERROR", sub () {
+            new TestPool(<Qore::Thread::ConnectionPoolOptions>{"timeout_ms": -1});
+        });
+        assertThrows("CONNECTIONPOOL-ERROR", sub () {
+            new TestPool(<Qore::Thread::ConnectionPoolOptions>{"idle_timeout_ms": -1});
+        });
+    }
+
+    testConcurrentAcquireRelease() {
+        TestPool pool(<Qore::Thread::ConnectionPoolOptions>{"min": 2, "max": 10});
+        int num_threads = 8;
+        int iterations = 50;
+        Counter c(num_threads);
+        Counter error_counter(0);
+
+        for (int i = 0; i < num_threads; ++i) {
+            background sub () {
+                on_exit c.dec();
+                for (int j = 0; j < iterations; ++j) {
+                    try {
+                        TestResource r = pool.acquire();
+                        # Simulate some work
+                        usleep(1ms);
+                        pool.release();
+                    } catch (hash<ExceptionInfo> ex) {
+                        error_counter.inc();
+                    }
+                }
+            }();
+        }
+
+        c.waitForZero();
+        assertEq(0, error_counter.getCount());
+
+        hash<Qore::Thread::ConnectionPoolStats> stats = pool.getStats();
+        assertEq(0, stats.in_use);
+        assertEq(num_threads * iterations, stats.total_acquires);
+    }
+
+    testBurstCreationSignaling() {
+        # Verifies that waiters are signaled when creating_count decreases,
+        # so they can re-check and create resources rather than waiting for timeout.
+        # max=8, launch 8 threads simultaneously -- all should acquire within 2s
+        # (without the signal fix, some would wait for the full timeout)
+        TestPool pool(<Qore::Thread::ConnectionPoolOptions>{"max": 8, "timeout_ms": 2000});
+        int num_threads = 8;
+        Counter c(num_threads);
+        Counter errors(0);
+
+        for (int i = 0; i < num_threads; ++i) {
+            background sub () {
+                on_exit c.dec();
+                try {
+                    TestResource r = pool.acquire();
+                    on_exit pool.release();
+                } catch (hash<ExceptionInfo> ex) {
+                    errors.inc();
+                }
+            }();
+        }
+
+        c.waitForZero();
+        assertEq(0, errors.getCount());
+
+        hash<Qore::Thread::ConnectionPoolStats> stats = pool.getStats();
+        assertEq(0, stats.in_use);
+        assertEq(0, stats.total_timeouts);
+        # All 8 threads should have acquired successfully
+        assertEq(8, stats.total_acquires);
+    }
+
+    testWarningCallback() {
+        TestPool pool(<Qore::Thread::ConnectionPoolOptions>{"max": 1, "timeout_ms": 5000});
+
+        # Set up warning callback with a 10ms threshold
+        bool callback_fired = False;
+        *hash<Qore::Thread::ConnectionPoolStats> callback_stats;
+        string callback_arg_val;
+        pool.setWarningCallback(10,
+            sub (hash<Qore::Thread::ConnectionPoolStats> stats, auto arg) {
+                callback_fired = True;
+                callback_stats = stats;
+                callback_arg_val = arg;
+            },
+            "test-arg",
+        );
+
+        # Acquire the only resource on the main thread
+        TestResource r1 = pool.acquire();
+
+        Counter done(1);
+        background sub () {
+            on_exit done.dec();
+            # This will block for ~100ms waiting for the resource, exceeding the 10ms threshold
+            TestResource r2 = pool.acquire();
+            on_exit pool.release();
+        }();
+
+        # Hold the resource for 100ms so the waiter exceeds the warning threshold
+        usleep(100ms);
+        pool.release();
+        done.waitForZero();
+
+        assertEq(True, callback_fired);
+        assertEq("test-arg", callback_arg_val);
+        assertEq(True, callback_stats instanceof hash<Qore::Thread::ConnectionPoolStats>);
+
+        # Test clearWarningCallback
+        pool.clearWarningCallback();
+        callback_fired = False;
+
+        r1 = pool.acquire();
+        Counter done2(1);
+        background sub () {
+            on_exit done2.dec();
+            TestResource r3 = pool.acquire();
+            on_exit pool.release();
+        }();
+        usleep(50ms);
+        pool.release();
+        done2.waitForZero();
+
+        assertEq(False, callback_fired);
+    }
+
+    testIdleCleanupBasic() {
+        TestPool pool(<Qore::Thread::ConnectionPoolOptions>{
+            "max": 5, "idle_timeout_ms": 50,
+        });
+
+        # Create 3 resources by acquiring on 3 threads simultaneously
+        Counter acquired(3);
+        Counter gate(1);
+        for (int i = 0; i < 3; ++i) {
+            background sub () {
+                pool.acquire();
+                acquired.dec();
+                gate.waitForZero();
+                pool.release();
+            }();
+        }
+        acquired.waitForZero();
+
+        hash<Qore::Thread::ConnectionPoolStats> stats = pool.getStats();
+        assertEq(3, stats.pool_size);
+        assertEq(3, stats.in_use);
+        assertEq(0, stats.free);
+
+        # Release all
+        gate.dec();
+        usleep(50ms);
+
+        stats = pool.getStats();
+        assertEq(3, stats.pool_size);
+        assertEq(0, stats.in_use);
+        assertEq(3, stats.free);
+
+        # Wait for idle timeout
+        usleep(100ms);
+
+        # Cleanup should remove all 3 (min=0)
+        int removed = pool.cleanupIdle();
+        assertEq(3, removed);
+
+        stats = pool.getStats();
+        assertEq(0, stats.pool_size);
+        assertEq(0, stats.free);
+    }
+
+    testIdleCleanupRespectsMinSize() {
+        TestPool pool(<Qore::Thread::ConnectionPoolOptions>{
+            "min": 2, "max": 5, "idle_timeout_ms": 50,
+        });
+
+        # Pre-created 2 resources; acquire 3 more via threads simultaneously to force creation
+        Counter acquired(3);
+        Counter gate(1);
+        for (int i = 0; i < 3; ++i) {
+            background sub () {
+                pool.acquire();
+                acquired.dec();
+                gate.waitForZero();
+                pool.release();
+            }();
+        }
+        acquired.waitForZero();
+        gate.dec();
+        usleep(50ms);
+
+        hash<Qore::Thread::ConnectionPoolStats> stats = pool.getStats();
+        int total = stats.pool_size;
+        assertEq(True, total >= 2);
+
+        # Wait for idle timeout
+        usleep(100ms);
+
+        int removed = pool.cleanupIdle();
+        stats = pool.getStats();
+        # Must keep at least min_size=2 resources
+        assertEq(True, stats.pool_size >= 2);
+        assertEq(True, removed <= total - 2);
+    }
+
+    testIdleCleanupSkipsInUse() {
+        TestPool pool(<Qore::Thread::ConnectionPoolOptions>{
+            "max": 3, "idle_timeout_ms": 50,
+        });
+
+        # Acquire on main thread (stays in use)
+        pool.acquire();
+
+        # Acquire+release on 2 other threads simultaneously
+        Counter acquired(2);
+        Counter gate(1);
+        for (int i = 0; i < 2; ++i) {
+            background sub () {
+                pool.acquire();
+                acquired.dec();
+                gate.waitForZero();
+                pool.release();
+            }();
+        }
+        acquired.waitForZero();
+        # All 3 resources now in use -- release the 2 background threads
+        gate.dec();
+        usleep(50ms);
+
+        usleep(100ms);
+
+        int removed = pool.cleanupIdle();
+        # Should only remove the 2 free resources, not the in-use one
+        assertEq(2, removed);
+
+        hash<Qore::Thread::ConnectionPoolStats> stats = pool.getStats();
+        assertEq(1, stats.pool_size);
+        assertEq(1, stats.in_use);
+        assertEq(0, stats.free);
+
+        pool.release();
+    }
+
+    testPoolWorksAfterCleanup() {
+        TestPool pool(<Qore::Thread::ConnectionPoolOptions>{
+            "max": 3, "idle_timeout_ms": 50,
+        });
+
+        # Create 3 resources simultaneously then release
+        Counter acquired(3);
+        Counter gate(1);
+        for (int i = 0; i < 3; ++i) {
+            background sub () {
+                pool.acquire();
+                acquired.dec();
+                gate.waitForZero();
+                pool.release();
+            }();
+        }
+        acquired.waitForZero();
+        gate.dec();
+        usleep(50ms);
+
+        usleep(100ms);
+        pool.cleanupIdle();
+
+        # Pool should still work -- new resources can be created
+        TestResource r = pool.acquire();
+        assertEq(True, r instanceof TestResource);
+        pool.release();
+
+        hash<Qore::Thread::ConnectionPoolStats> stats = pool.getStats();
+        assertEq(1, stats.pool_size);
+        # max_size check should still work with live_count
+        assertEq(True, stats.pool_size <= 3);
+    }
+
+    testIdleCleanupDisabled() {
+        TestPool pool(<Qore::Thread::ConnectionPoolOptions>{
+            "max": 5, "idle_timeout_ms": 0,
+        });
+
+        pool.acquire();
+        pool.release();
+
+        usleep(50ms);
+        int removed = pool.cleanupIdle();
+        assertEq(0, removed);
+
+        hash<Qore::Thread::ConnectionPoolStats> stats = pool.getStats();
+        assertEq(1, stats.pool_size);
+    }
+
+    testIdleCleanupDestroy() {
+        DestroyTrackingPool pool(<Qore::Thread::ConnectionPoolOptions>{
+            "max": 5, "idle_timeout_ms": 50,
+        });
+
+        # Create 2 resources simultaneously
+        Counter acquired(2);
+        Counter gate(1);
+        for (int i = 0; i < 2; ++i) {
+            background sub () {
+                pool.acquire();
+                acquired.dec();
+                gate.waitForZero();
+                pool.release();
+            }();
+        }
+        acquired.waitForZero();
+        gate.dec();
+        usleep(50ms);
+
+        usleep(100ms);
+        int removed = pool.cleanupIdle();
+        assertEq(2, removed);
+        # destroyResource should have been called for each removed resource
+        assertEq(2, pool.destroyed_ids.size());
+    }
+
+    testRestClientPool() {
+        # Test that RestClientPool can be constructed with a factory
+        int create_count = 0;
+        RestClient::RestClientPool pool(
+            RestClient::AbstractRestClient sub () {
+                ++create_count;
+                # Use do_not_connect=True to prevent immediate connection attempt
+                return new RestClient::RestClient({
+                    "url": "http://localhost:12345",
+                    "data": "json",
+                    "error_passthru": True,
+                }, True);
+            },
+            <Qore::Thread::ConnectionPoolOptions>{"min": 0, "max": 5},
+        );
+
+        # Acquire should create a resource using the factory
+        RestClient::AbstractRestClient client = pool.acquire();
+        assertEq(True, client instanceof RestClient::AbstractRestClient);
+        assertEq(True, client instanceof RestClient::RestClient);
+        assertEq(1, create_count);
+
+        pool.release();
+
+        hash<Qore::Thread::ConnectionPoolStats> stats = pool.getStats();
+        assertEq(1, stats.pool_size);
+        assertEq(0, stats.in_use);
+    }
+
+    testRestClientPoolMinPreCreate() {
+        # Test that RestClientPool with min > 0 pre-creates resources correctly
+        # (verifies that factory is assigned before init() calls createResource())
+        int create_count = 0;
+        RestClient::RestClientPool pool(
+            RestClient::AbstractRestClient sub () {
+                ++create_count;
+                return new RestClient::RestClient({
+                    "url": "http://localhost:12345",
+                    "data": "json",
+                    "error_passthru": True,
+                }, True);
+            },
+            <Qore::Thread::ConnectionPoolOptions>{"min": 2, "max": 5},
+        );
+
+        # Factory should have been called twice during construction
+        assertEq(2, create_count);
+
+        hash<Qore::Thread::ConnectionPoolStats> stats = pool.getStats();
+        assertEq(2, stats.pool_size);
+        assertEq(2, stats.free);
+        assertEq(0, stats.in_use);
+    }
+
+    testDestructorCallsDestroyResource() {
+        # Test that pool destructor calls destroyResource() for each resource
+        # Verify via close_called on TestResource — acquire resources, hold refs,
+        # let pool go out of scope, then check close() was called
+        list<TestResource> resources = ();
+        {
+            TestPool pool(<Qore::Thread::ConnectionPoolOptions>{"min": 2, "max": 5});
+            # Acquire both pre-created resources so we can track them
+            resources += cast<TestResource>(pool.acquire());
+            pool.release();
+            resources += cast<TestResource>(pool.acquire());
+            pool.release();
+        }
+        # After pool destruction, close() should have been called on all resources
+        foreach TestResource r in (resources) {
+            assertEq(True, r.close_called,
+                sprintf("resource %d: close() should have been called by destructor", r.id));
+        }
+    }
+}

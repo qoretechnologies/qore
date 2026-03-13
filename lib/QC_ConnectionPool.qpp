@@ -1,0 +1,324 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/** @file QC_ConnectionPool.qpp AbstractPoolableResource, AbstractConnectionPool classes and pool hashdecls */
+/*
+    Qore Programming Language
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Note that the Qore library is released under a choice of three open-source
+    licenses: MIT (as above), LGPL 2+, or GPL 2+; see README-LICENSE for more
+    information.
+*/
+
+#include <qore/Qore.h>
+#include "qore/intern/QC_ConnectionPool.h"
+#include "qore/intern/ConnectionPool.h"
+
+//! Pool configuration options
+/** @since %Qore 2.3
+*/
+hashdecl ConnectionPoolOptions {
+    //! Minimum pool size -- resources created at startup (default: 0)
+    int min = 0;
+    //! Maximum pool size -- 0 means unlimited (default: 0)
+    int max = 0;
+    //! Timeout in milliseconds for waiting when pool is exhausted (default: 120000)
+    int timeout_ms = 120000;
+    //! Idle timeout in milliseconds for free resources -- 0 disables idle cleanup (default: 0)
+    int idle_timeout_ms = 0;
+}
+
+//! Pool statistics
+/** @since %Qore 2.3
+*/
+hashdecl ConnectionPoolStats {
+    //! Current pool size (total allocated resources)
+    int pool_size = 0;
+    //! Number of resources currently in use
+    int in_use = 0;
+    //! Number of free resources available
+    int free = 0;
+    //! Number of threads currently waiting for a resource
+    int wait_count = 0;
+    //! Peak pool size reached
+    int peak_size = 0;
+    //! Total number of successful acquire operations
+    int total_acquires = 0;
+    //! Total number of timeouts
+    int total_timeouts = 0;
+}
+
+//! Abstract interface for resources managed by a connection pool
+/** Pooled resources must implement this interface so the pool can close them
+    when they are permanently removed (e.g., by @ref AbstractConnectionPool::cleanupIdle()).
+
+    @par Example
+    @code{.py}
+class MyConnection inherits AbstractPoolableResource {
+    close() {
+        # close socket, release handles, etc.
+    }
+}
+    @endcode
+
+    @since %Qore 2.3
+*/
+qclass AbstractPoolableResource [arg=AbstractQorePoolableResource* apr; ns=Qore::Thread];
+
+//! Creates the poolable resource
+/**
+*/
+AbstractPoolableResource::constructor() {
+    self->setPrivate(CID_ABSTRACTPOOLABLERESOURCE, new AbstractQorePoolableResource());
+}
+
+//! Closes the resource and releases any underlying handles
+/** Called by the pool when a resource is permanently removed.
+    Subclasses must implement this to release resources (e.g., close connections).
+*/
+abstract nothing AbstractPoolableResource::close();
+
+//! Resets the resource before returning it to the pool
+/** Override to clear per-request state (e.g., roll back transactions).
+    The default implementation does nothing.
+*/
+nothing AbstractPoolableResource::reset() {
+    // default no-op
+}
+
+//! Abstract connection pool with per-thread resource allocation
+/** This class provides generic connection pooling with per-thread allocation,
+    following the same pattern as @ref Qore::SQL::DatasourcePool "DatasourcePool".
+
+    Subclasses must implement @ref createResource() to create new pooled resources.
+
+    @par Thread Safety
+    This class is thread-safe. All mutable state is protected by internal locks.
+
+    @par Thread Resource Management
+    This class extends @ref AbstractThreadResource to automatically release
+    resources when a thread exits without calling @ref release().
+
+    @par Example
+    @code{.py}
+class MyPool inherits AbstractConnectionPool {
+    AbstractPoolableResource createResource() {
+        return new MyConnection();
+    }
+}
+
+MyPool pool({"min": 2, "max": 10});
+auto resource = pool.acquire();
+on_exit pool.release();
+# ... use resource ...
+    @endcode
+
+    @since %Qore 2.3
+*/
+qclass AbstractConnectionPool [dom=THREAD_CLASS; arg=ConnectionPool* cp; ns=Qore::Thread];
+
+//! Creates the pool
+/** @param opts pool configuration options
+
+    @throw CONNECTIONPOOL-ERROR if options are invalid
+
+    @note Subclasses with a \c min > 0 must call @ref init() after their constructor
+    body completes (i.e., after all member assignments).  The base constructor does
+    not call init() automatically because subclass members needed by createResource()
+    are not yet assigned when the base constructor runs.
+*/
+AbstractConnectionPool::constructor(*hash<ConnectionPoolOptions> opts) {
+    // Extract and validate options
+    int min_val = 0, max_val = 0;
+    int64 timeout_val = 120000, idle_timeout_val = 0;
+
+    if (opts) {
+        min_val = (int)opts->getKeyValue("min").getAsBigInt();
+        max_val = (int)opts->getKeyValue("max").getAsBigInt();
+        timeout_val = opts->getKeyValue("timeout_ms").getAsBigInt();
+        idle_timeout_val = opts->getKeyValue("idle_timeout_ms").getAsBigInt();
+    }
+
+    if (min_val < 0) {
+        xsink->raiseException("CONNECTIONPOOL-ERROR", "min must be >= 0, got %d", min_val);
+        return;
+    }
+    if (max_val < 0) {
+        xsink->raiseException("CONNECTIONPOOL-ERROR",
+            "max must be >= 0 (0 = unlimited), got %d", max_val);
+        return;
+    }
+    if (max_val && min_val > max_val) {
+        xsink->raiseException("CONNECTIONPOOL-ERROR",
+            "min (%d) cannot be greater than max (%d)", min_val, max_val);
+        return;
+    }
+    if (timeout_val < 0) {
+        xsink->raiseException("CONNECTIONPOOL-ERROR",
+            "timeout_ms must be >= 0, got " QLLD, timeout_val);
+        return;
+    }
+    if (idle_timeout_val < 0) {
+        xsink->raiseException("CONNECTIONPOOL-ERROR",
+            "idle_timeout_ms must be >= 0, got " QLLD, idle_timeout_val);
+        return;
+    }
+
+    QoreConnectionPool* pool = new QoreConnectionPool(*self, min_val, max_val,
+        timeout_val, idle_timeout_val);
+
+    self->setPrivate(CID_ABSTRACTCONNECTIONPOOL, pool);
+}
+
+//! Copying is not supported
+/** @throw COPY-ERROR AbstractConnectionPool objects cannot be copied
+*/
+AbstractConnectionPool::copy() {
+    xsink->raiseException("COPY-ERROR", "AbstractConnectionPool objects cannot be copied");
+}
+
+//! Destructor — shuts down the pool
+/**
+*/
+AbstractConnectionPool::destructor() {
+    cp->destructor(xsink);
+    cp->deref(xsink);
+}
+
+//! Creates a new pooled resource
+/** Subclasses must implement this method to create the specific resource type.
+
+    @return a new @ref AbstractPoolableResource to be managed by the pool
+*/
+abstract AbstractPoolableResource AbstractConnectionPool::createResource();
+
+//! Resets a resource before returning it to the pool
+/** The default implementation calls @ref AbstractPoolableResource::reset() "resource.reset()".
+    Override to perform additional cleanup.
+
+    @param resource the resource to reset
+*/
+nothing AbstractConnectionPool::resetResource(AbstractPoolableResource resource) {
+    const_cast<QoreObject*>(resource)->evalMethod("reset", nullptr, xsink).discard(xsink);
+}
+
+//! Destroys a resource being permanently removed from the pool
+/** The default implementation calls @ref AbstractPoolableResource::close() "resource.close()".
+    Override to perform additional cleanup when a resource is permanently removed.
+
+    @param resource the resource to destroy
+
+    @note Called outside the pool lock so it is safe to perform blocking I/O.
+*/
+nothing AbstractConnectionPool::destroyResource(AbstractPoolableResource resource) {
+    const_cast<QoreObject*>(resource)->evalMethod("close", nullptr, xsink).discard(xsink);
+}
+
+//! Pre-creates the minimum number of resources configured via the \c min pool option
+/** Subclasses must call this method at the end of their constructor (after all
+    member assignments) so that createResource() can access subclass state.
+
+    @throw CONNECTIONPOOL-ERROR if a resource cannot be created
+
+    @see @ref constructor() for details on why init() is not called automatically
+*/
+nothing AbstractConnectionPool::init() {
+    cp->init(xsink);
+}
+
+//! Acquires a resource for the current thread
+/** If the current thread already has an allocated resource, it is returned immediately.
+    Otherwise, a free resource is allocated or a new one is created (up to the maximum).
+    If the pool is exhausted, the call blocks until a resource becomes available or
+    the timeout expires.
+
+    @return the acquired resource
+
+    @throw CONNECTIONPOOL-ERROR if the pool is shut down or the timeout expires
+*/
+AbstractPoolableResource AbstractConnectionPool::acquire() {
+    QoreObject* rv = cp->acquire(xsink);
+    if (!rv) {
+        assert(*xsink);
+        return QoreValue();
+    }
+    return rv;
+}
+
+//! Releases the current thread's resource back to the pool
+/** If the current thread does not have an allocated resource, this is a no-op.
+*/
+nothing AbstractConnectionPool::release() {
+    cp->release(xsink);
+}
+
+//! Thread resource cleanup — called when a thread exits without releasing
+/** Automatically releases the current thread's resource back to the pool.
+*/
+nothing AbstractConnectionPool::cleanup() {
+    cp->cleanup(xsink);
+}
+
+//! Returns pool statistics
+/** @return a @ref ConnectionPoolStats hash with current pool statistics
+*/
+hash<ConnectionPoolStats> AbstractConnectionPool::getStats() {
+    return cp->getStats(xsink);
+}
+
+//! Removes idle free resources above the minimum pool size
+/** Destroys free resources that have been idle longer than \c idle_timeout_ms,
+    as long as the pool stays at or above the minimum size.
+
+    @return the number of resources removed
+
+    @note Does nothing if \c idle_timeout_ms is 0 (disabled)
+*/
+int AbstractConnectionPool::cleanupIdle() {
+    return cp->cleanupIdle(xsink);
+}
+
+//! Shuts down the pool
+/** Marks the pool as invalid and wakes all waiting threads.
+*/
+nothing AbstractConnectionPool::shutdown() {
+    cp->shutdown(xsink);
+}
+
+//! Sets a warning callback for long wait times
+/** @param warning_ms minimum wait time in milliseconds before the callback is triggered
+    @param callback the callback code to invoke with (hash<ConnectionPoolStats>, arg)
+    @param arg optional argument passed to the callback
+*/
+nothing AbstractConnectionPool::setWarningCallback(int warning_ms, code callback, auto arg) {
+    // the callback will be destroyed when the object is destroyed
+    ReferenceHolder<ResolvedCallReferenceNode> callbackHolder(xsink);
+    // resolve the callback
+    callbackHolder = dynamic_cast<ResolvedCallReferenceNode*>(callback->refRefSelf());
+    cp->setWarningCallback(warning_ms, callbackHolder.release(), arg.refSelf(), xsink);
+}
+
+//! Clears the warning callback
+/**
+*/
+nothing AbstractConnectionPool::clearWarningCallback() {
+    cp->clearWarningCallback(xsink);
+}

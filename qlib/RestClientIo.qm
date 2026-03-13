@@ -1,0 +1,697 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file RestClientIo.qm Qore user module for REST clients over multiplexed HTTP/2 and HTTP/3
+
+/*  RestClientIo.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires Logger
+%requires RestClient >= 2.5
+%requires HttpClientIo
+%requires(reexport) RestSchemaValidator >= 1.0
+%requires Mime >= 1.7
+
+%try-module yaml >= 0.5
+%define NoYaml
+%endtry
+
+%try-module xml >= 1.3
+%define NoXml
+%endtry
+
+%try-module json >= 1.5
+%define NoJson
+%endtry
+
+%try-module json >= 1.12
+%define NoCbor
+%endtry
+
+module RestClientIo {
+    version = "1.0";
+    desc = "REST client over multiplexed HTTP/2 and HTTP/3 connections";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+/** @mainpage RestClientIo Module
+
+    @tableofcontents
+
+    @section restclientio_intro Introduction
+
+    The %RestClientIo module provides a REST client API built on top of the @ref HttpClientIo module,
+    enabling multiplexed HTTP/2 and HTTP/3 connections for REST API calls.
+
+    Unlike @ref RestClient::RestClient "RestClient" which uses a single HTTP/1.1 connection,
+    %RestClientIo uses the @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager"
+    for true multiplexing — multiple concurrent requests share connections without serialization.
+
+    @par Example
+    @code{.py}
+%requires RestClientIo
+
+RestClientIo rest({"url": "https://api.example.com", "data": "json"});
+hash<RestResponseInfo> resp = rest.restPost("/v1/data", {"key": "value"});
+printf("Status: %d, Body: %y\n", resp.status_code, resp.body);
+    @endcode
+
+    @par Async Usage
+    @code{.py}
+%requires RestClientIo
+
+RestClientIo rest({"url": "https://api.example.com", "data": "json"});
+
+# Fire multiple requests concurrently
+RestFuture f1 = rest.restGetAsync("/v1/users");
+RestFuture f2 = rest.restPostAsync("/v1/data", {"key": "value"});
+
+# Collect results
+hash<RestResponseInfo> resp1 = f1.get(30s);
+hash<RestResponseInfo> resp2 = f2.get(30s);
+    @endcode
+
+    @section restclientio_relnotes Release Notes
+
+    @subsection restclientio_v1_0 Version 1.0
+    - Initial release of RestClientIo module
+    - Implements @ref RestClient::AbstractRestClient "AbstractRestClient" interface
+    - HTTP/2 and HTTP/3 multiplexing via @ref HttpClientIo::HttpClientConnectionManager
+    - Data serialization/deserialization via @ref RestSchemaValidator::NullRestSchemaValidator
+    - Support for JSON, YAML, XML, CBOR, URL-encoded, text, and binary formats
+    - Opt-in shared @ref HttpClientIo::HttpClientConnectionManager for connection sharing across
+      multiple RestClientIo instances
+    - Async API: \c restGetAsync(), \c restPostAsync(), etc. returning Future for non-blocking calls
+*/
+
+#! Main namespace for the RestClientIo module
+public namespace RestClientIo {
+    #! Future wrapper that deserializes HTTP responses into RestResponseInfo
+    /** Wraps a raw HTTP response Future from @ref HttpClientIo and applies
+        response deserialization when @ref get() is called.
+
+        @par Usage
+        @code{.py}
+RestFuture f = rest.restGetAsync("/api/users");
+hash<RestResponseInfo> resp = f.get(30s);
+        @endcode
+
+        @since RestClientIo 1.0
+    */
+    public class RestFuture {
+        private {
+            #! The raw HTTP response Future
+            Future raw_future;
+
+            #! Stream handle reference (kept alive to retain the internal Promise)
+            HttpClientIo::HttpClientStreamHandle stream;
+
+            #! Closure that deserializes raw HTTP response to RestResponseInfo
+            code<hash<RestClient::RestResponseInfo>(hash<auto>)> response_builder;
+        }
+
+        #! Creates a new RestFuture
+        /** @param raw_future the raw HTTP response Future
+            @param stream the stream handle (held to keep the internal Promise alive)
+            @param response_builder closure that deserializes the raw response
+        */
+        constructor(Future raw_future, HttpClientIo::HttpClientStreamHandle stream,
+                code<hash<RestClient::RestResponseInfo>(hash<auto>)> response_builder) {
+            self.raw_future = raw_future;
+            self.stream = stream;
+            self.response_builder = response_builder;
+        }
+
+        #! Gets the deserialized REST response, blocking until available
+        /** @param timeout_ms timeout for the operation (default 30s)
+
+            @return the deserialized @ref RestClient::RestResponseInfo hash
+
+            @throw HTTPCLIENT-TIMEOUT if the request times out
+            @throw REST-RESPONSE-ERROR if error_passthru is False and status >= 300
+            @throw FUTURE-TIMEOUT if the Future times out
+        */
+        hash<RestClient::RestResponseInfo> get(timeout timeout_ms = 30s) {
+            hash<auto> raw = raw_future.get(timeout_ms);
+            return response_builder(raw);
+        }
+
+        #! Returns True if the response is available
+        bool isDone() {
+            return raw_future.isDone();
+        }
+    }
+
+    #! REST client using multiplexed HTTP/2 and HTTP/3 connections
+    /** This class implements the @ref RestClient::AbstractRestClient "AbstractRestClient" interface
+        using @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager" for
+        multiplexed HTTP/2 and HTTP/3 connections.
+
+        Multiple concurrent requests are multiplexed over shared connections rather than serializing
+        through a single HTTP/1.1 connection as @ref RestClient::RestClient "RestClient" does.
+
+        @par Constructor Options
+        - \c url (required): the target URL (e.g., \c "https://api.example.com")
+        - \c data: data serialization format (default: \c "auto"); see
+          @ref RestClient::RestClient::DataSerializationOptions "DataSerializationOptions"
+        - \c send_encoding: send encoding (compression) format (e.g., \c "gzip")
+        - \c headers: default headers to send with each request
+        - \c token: authentication token
+        - \c token_type: authentication token type (default: \c "Bearer")
+        - \c error_passthru: if \c True, HTTP error responses are returned rather than throwing
+          exceptions (default: \c False)
+        - \c connect_timeout: connection timeout
+        - \c timeout: request timeout
+        - \c protocol: protocol selection: \c "auto" (default), \c "h2", or \c "h3"
+        - \c max_connections_per_host: maximum connections per host (0 = unlimited)
+        - \c max_streams_per_connection: maximum streams per connection (0 = unlimited)
+        - \c ssl_verify_mode: SSL verification mode
+        - \c accept_all_certs: if \c True, accept all certificates including self-signed
+        - \c no_charset: if \c True, do not add charset to Content-Type header
+
+        @par Shared Connection Manager
+        An optional @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager" can
+        be passed to the constructor to share connections across multiple RestClientIo instances:
+        @code{.py}
+HttpClientIo::HttpClientConnectionManager shared_mgr();
+RestClientIo rest1({"url": "https://api.example.com", "data": "json"}, shared_mgr);
+RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr);
+        @endcode
+        When a shared manager is used, @ref close() does not close the manager — the caller
+        retains ownership.
+
+        @par Thread Safety
+        This class is thread-safe. All mutable state is protected and the underlying
+        @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager" is thread-safe.
+
+        @since RestClientIo 1.0
+    */
+    public class RestClientIo inherits RestClient::AbstractRestClient {
+        private {
+            #! Connection manager for HTTP/2 and HTTP/3 connections
+            HttpClientIo::HttpClientConnectionManager mgr;
+
+            #! True if this instance owns the connection manager (should close on close())
+            bool owns_mgr = True;
+
+            #! Target URL
+            string url;
+
+            #! Schema validator for serialization/deserialization
+            RestSchemaValidator::NullRestSchemaValidator validator;
+
+            #! RWLock protecting mutable config state below; readers (requests) take a shared
+            #! lock so they run concurrently; writers (config methods) take an exclusive lock
+            RWLock config_lock();
+
+            #! If True, HTTP error responses are returned rather than throwing exceptions
+            bool error_passthru = False;
+
+            #! Default headers to send with each request
+            hash<auto> headers = {};
+
+            #! Data serialization code (e.g., "json", "auto")
+            string ds = "auto";
+
+            #! Serialization content type (set from setSerialization)
+            *string sct;
+
+            #! Send encoding hash (set from setSendEncoding)
+            *hash<auto> seh;
+
+            #! If True, do not add charset to Content-Type header
+            bool noCharset = False;
+
+            #! Token type (e.g., "Bearer")
+            *string token_type_val;
+
+            #! Authentication token
+            *string token_val;
+
+            #! Logger
+            *LoggerInterface logger;
+        }
+
+        #! Creates a new RestClientIo with the given options
+        /** @param opts constructor options; see class documentation for valid keys
+            @param shared_mgr an optional shared @ref HttpClientIo::HttpClientConnectionManager
+                "HttpClientConnectionManager" to use instead of creating a new one. When provided,
+                the manager is not closed by @ref close() — the caller retains ownership.
+                This allows multiple RestClientIo instances to share a single connection pool,
+                reducing connection overhead for services that talk to the same host.
+
+            @throw RESTCLIENTIO-ERROR if the \c url option is missing or invalid
+        */
+        constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr) {
+            if (!opts.url) {
+                throw "RESTCLIENTIO-ERROR", "url option is required";
+            }
+            url = opts.url;
+            @assert(url.val());
+
+            validator = new RestSchemaValidator::NullRestSchemaValidator();
+
+            if (opts.headers) {
+                headers += opts.headers;
+            }
+
+            setSerialization(opts.data ?? "auto");
+
+            if (opts.send_encoding) {
+                setSendEncoding(opts.send_encoding);
+            }
+
+            if (opts.token) {
+                string tt = opts.token_type ?? "Bearer";
+                setToken(tt, opts.token);
+            }
+
+            error_passthru = opts.error_passthru.toBool();
+            noCharset = opts.no_charset.toBool();
+
+            if (opts.logger instanceof LoggerInterface) {
+                logger = cast<LoggerInterface>(opts.logger);
+            }
+
+            if (shared_mgr) {
+                # Use shared manager — caller retains ownership
+                mgr = shared_mgr;
+                owns_mgr = False;
+            } else {
+                # Build HttpClientConnectionManager options
+                hash<HttpClientIo::HttpClientConnectionManagerOptions> mgr_opts();
+                if (opts.connect_timeout) {
+                    mgr_opts.connect_timeout = opts.connect_timeout;
+                }
+                if (opts.timeout) {
+                    mgr_opts.request_timeout = opts.timeout;
+                }
+                if (opts.protocol) {
+                    mgr_opts.protocol = opts.protocol;
+                }
+                if (exists opts.max_connections_per_host) {
+                    mgr_opts.max_connections_per_host = opts.max_connections_per_host;
+                }
+                if (exists opts.max_streams_per_connection) {
+                    mgr_opts.max_streams_per_connection = opts.max_streams_per_connection;
+                }
+                if (exists opts.ssl_verify_mode) {
+                    mgr_opts.ssl_verify_mode = opts.ssl_verify_mode;
+                }
+                if (opts.accept_all_certs) {
+                    mgr_opts.accept_all_certs = opts.accept_all_certs.toBool();
+                }
+                if (logger) {
+                    mgr_opts.logger = logger;
+                }
+
+                mgr = new HttpClientIo::HttpClientConnectionManager(mgr_opts);
+            }
+        }
+
+        #! Copying is not supported
+        private copy() {
+            throw "COPY-ERROR", "RestClientIo objects cannot be copied";
+        }
+
+        #! Returns the target URL
+        string getUrl() {
+            return url;
+        }
+
+        #! Returns the underlying connection manager
+        HttpClientIo::HttpClientConnectionManager getConnectionManager() {
+            return mgr;
+        }
+
+        #! Returns connection pool statistics
+        hash<auto> getStats() {
+            return mgr.getStats();
+        }
+
+        #! Sends an HTTP \c GET request and returns a @ref RestClient::RestResponseInfo hash
+        hash<RestClient::RestResponseInfo> restGet(string path, *hash<auto> hdr) {
+            return restDoRequest("GET", path, NOTHING, hdr);
+        }
+
+        #! Sends an HTTP \c HEAD request and returns a @ref RestClient::RestResponseInfo hash
+        hash<RestClient::RestResponseInfo> restHead(string path, *hash<auto> hdr) {
+            return restDoRequest("HEAD", path, NOTHING, hdr);
+        }
+
+        #! Sends an HTTP \c OPTIONS request and returns a @ref RestClient::RestResponseInfo hash
+        hash<RestClient::RestResponseInfo> restOptions(string path, *hash<auto> hdr) {
+            return restDoRequest("OPTIONS", path, NOTHING, hdr);
+        }
+
+        #! Sends an HTTP \c POST request and returns a @ref RestClient::RestResponseInfo hash
+        hash<RestClient::RestResponseInfo> restPost(string path, auto body, *hash<auto> hdr) {
+            return restDoRequest("POST", path, body, hdr);
+        }
+
+        #! Sends an HTTP \c PUT request and returns a @ref RestClient::RestResponseInfo hash
+        hash<RestClient::RestResponseInfo> restPut(string path, auto body, *hash<auto> hdr) {
+            return restDoRequest("PUT", path, body, hdr);
+        }
+
+        #! Sends an HTTP \c PATCH request and returns a @ref RestClient::RestResponseInfo hash
+        hash<RestClient::RestResponseInfo> restPatch(string path, auto body, *hash<auto> hdr) {
+            return restDoRequest("PATCH", path, body, hdr);
+        }
+
+        #! Sends an HTTP \c DELETE request and returns a @ref RestClient::RestResponseInfo hash
+        hash<RestClient::RestResponseInfo> restDel(string path, auto body, *hash<auto> hdr) {
+            return restDoRequest("DELETE", path, body, hdr);
+        }
+
+        #! Sends a generic REST request and returns a @ref RestClient::RestResponseInfo hash
+        hash<RestClient::RestResponseInfo> restDoRequest(string method, string path, auto body,
+                *hash<auto> hdr) {
+            # 1. Snapshot config state and serialize body
+            hash<auto> prepared = prepareRequest(method, path, body, \hdr);
+
+            log(LoggerLevel::DEBUG, "restDoRequest() %s %s%s", method, url, path);
+
+            # 2. Make HTTP request via multiplexed connection manager
+            hash<auto> raw = mgr.request(url, method, path, hdr, prepared.serialized_body);
+
+            # 3. Deserialize and return
+            return buildResponse(raw, prepared.error_passthru, method, path);
+        }
+
+        #! Sends an async generic REST request and returns a RestFuture
+        /** The returned @ref RestFuture wraps a raw HTTP response Future and
+            deserializes the response when \c get() is called.
+
+            @param method HTTP method
+            @param path request path
+            @param body request body (optional)
+            @param hdr request headers (optional)
+
+            @return a RestFuture that resolves to a @ref RestClient::RestResponseInfo hash
+        */
+        RestFuture restDoRequestAsync(string method, string path, auto body, *hash<auto> hdr) {
+            # 1. Snapshot config state and serialize body
+            hash<auto> prepared = prepareRequest(method, path, body, \hdr);
+            bool req_error_passthru = prepared.error_passthru;
+
+            log(LoggerLevel::DEBUG, "restDoRequestAsync() %s %s%s", method, url, path);
+
+            # 2. Submit async request — returns a Future for the raw HTTP response
+            #    The stream handle keeps the Promise alive internally via request_promise
+            HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(url);
+            Future raw_future = stream.requestAsync(method, path, hdr, prepared.serialized_body);
+
+            # 3. Wrap in RestFuture with a closure that deserializes on get()
+            code<hash<RestClient::RestResponseInfo>(hash<auto>)> builder =
+                hash<RestClient::RestResponseInfo> sub (hash<auto> raw) {
+                    return buildResponse(raw, req_error_passthru, method, path);
+                };
+
+            return new RestFuture(raw_future, stream, builder);
+        }
+
+        #! Sends an async HTTP \c GET request and returns a RestFuture
+        /** @return a @ref RestFuture that resolves to a @ref RestClient::RestResponseInfo hash
+        */
+        RestFuture restGetAsync(string path, *hash<auto> hdr) {
+            return restDoRequestAsync("GET", path, NOTHING, hdr);
+        }
+
+        #! Sends an async HTTP \c POST request and returns a RestFuture
+        /** @return a @ref RestFuture that resolves to a @ref RestClient::RestResponseInfo hash
+        */
+        RestFuture restPostAsync(string path, auto body, *hash<auto> hdr) {
+            return restDoRequestAsync("POST", path, body, hdr);
+        }
+
+        #! Sends an async HTTP \c PUT request and returns a RestFuture
+        /** @return a @ref RestFuture that resolves to a @ref RestClient::RestResponseInfo hash
+        */
+        RestFuture restPutAsync(string path, auto body, *hash<auto> hdr) {
+            return restDoRequestAsync("PUT", path, body, hdr);
+        }
+
+        #! Sends an async HTTP \c PATCH request and returns a RestFuture
+        /** @return a @ref RestFuture that resolves to a @ref RestClient::RestResponseInfo hash
+        */
+        RestFuture restPatchAsync(string path, auto body, *hash<auto> hdr) {
+            return restDoRequestAsync("PATCH", path, body, hdr);
+        }
+
+        #! Sends an async HTTP \c DELETE request and returns a RestFuture
+        /** @return a @ref RestFuture that resolves to a @ref RestClient::RestResponseInfo hash
+        */
+        RestFuture restDelAsync(string path, auto body, *hash<auto> hdr) {
+            return restDoRequestAsync("DELETE", path, body, hdr);
+        }
+
+        #! Sends an async HTTP \c HEAD request and returns a RestFuture
+        /** @return a @ref RestFuture that resolves to a @ref RestClient::RestResponseInfo hash
+        */
+        RestFuture restHeadAsync(string path, *hash<auto> hdr) {
+            return restDoRequestAsync("HEAD", path, NOTHING, hdr);
+        }
+
+        #! Sends an async HTTP \c OPTIONS request and returns a RestFuture
+        /** @return a @ref RestFuture that resolves to a @ref RestClient::RestResponseInfo hash
+        */
+        RestFuture restOptionsAsync(string path, *hash<auto> hdr) {
+            return restDoRequestAsync("OPTIONS", path, NOTHING, hdr);
+        }
+
+        #! Internal: snapshots config state and serializes the request body
+        /** @param method HTTP method
+            @param path request path
+            @param body request body (optional)
+            @param hdr reference to headers hash (merged with defaults)
+
+            @return a hash with \c serialized_body and \c error_passthru keys
+        */
+        private hash<auto> prepareRequest(string method, string path, auto body,
+                reference<*hash<auto>> hdr) {
+            *string req_sct;
+            *hash<auto> req_seh;
+            bool req_no_charset;
+            bool req_error_passthru;
+            {
+                AutoReadLock al(config_lock);
+                hdr = headers + hdr;
+                req_sct = sct;
+                req_seh = seh;
+                req_no_charset = noCharset;
+                req_error_passthru = error_passthru;
+            }
+
+            *data serialized_body;
+            if (exists body) {
+                hash<RestSchemaValidator::RestRequestClientInfo> req = validator.processRequest(
+                    method, path, body, hdr, req_sct);
+                serialized_body = req.body;
+                if (!hdr."Content-Type") {
+                    hdr."Content-Type" = req.content;
+                }
+                if (!req_no_charset && serialized_body.typeCode() == NT_STRING
+                        && hdr."Content-Type" !~ /;charset=/) {
+                    hdr."Content-Type" += ";charset=" + serialized_body.encoding();
+                }
+                if (req_seh.ce && serialized_body.size() > RestClient::RestClient::CompressionThreshold) {
+                    hdr."Content-Encoding" = req_seh.ce;
+                    serialized_body = req_seh.func(serialized_body);
+                }
+            }
+
+            return {
+                "serialized_body": serialized_body,
+                "error_passthru": req_error_passthru,
+            };
+        }
+
+        #! Internal: deserializes a raw HTTP response into a RestResponseInfo hash
+        /** @param raw the raw HTTP response hash (status_code, headers, body)
+            @param req_error_passthru if False, throw on HTTP error responses
+            @param method HTTP method (for validator)
+            @param path request path (for validator)
+
+            @return the deserialized RestResponseInfo hash
+
+            @throw REST-RESPONSE-ERROR if \a req_error_passthru is False and status >= 300
+        */
+        private hash<RestClient::RestResponseInfo> buildResponse(hash<auto> raw,
+                bool req_error_passthru, string method, string path) {
+            @assert(raw.hasKey("status_code"));
+            @assert(raw.hasKey("headers"));
+
+            auto resp_body = raw.body;
+            *string content_type = raw.headers."content-type";
+            if (exists resp_body && content_type) {
+                try {
+                    hash<RestSchemaValidator::RestResponseClientInfo> parsed = validator.parseResponse(
+                        method, path, raw.status_code, resp_body, raw.headers);
+                    resp_body = parsed.body;
+                } catch (hash<ExceptionInfo> ex) {
+                    if (ex.err != "DESERIALIZATION-ERROR") {
+                        rethrow;
+                    }
+                    # If deserialization fails, keep raw body
+                }
+            }
+
+            if (!req_error_passthru && raw.status_code >= 300) {
+                throw "REST-RESPONSE-ERROR",
+                    sprintf("HTTP %d response received", raw.status_code),
+                    <RestClient::RestResponseInfo>{
+                        "status_code": raw.status_code,
+                        "headers": raw.headers,
+                        "body": resp_body,
+                        "content_type": content_type,
+                    };
+            }
+
+            return <RestClient::RestResponseInfo>{
+                "status_code": raw.status_code,
+                "headers": raw.headers,
+                "body": resp_body,
+                "content_type": content_type,
+            };
+        }
+
+        #! Sets the data serialization format
+        /** @param data the serialization option (e.g., "auto", "json", "yaml", "xml", "cbor", "url",
+            "text", "bin")
+
+            @throw RESTCLIENT-ERROR invalid or unsupported serialization option
+        */
+        setSerialization(string data = "auto") {
+            if (!RestClient::RestClient::DataSerializationOptions{data}) {
+                throw "RESTCLIENT-ERROR",
+                    sprintf("data serialization option %y is unknown; valid options: %y", data,
+                        RestClient::RestClient::DataSerializationOptions.keys());
+            }
+            log(LoggerLevel::DEBUG, "setSerialization() %y", data);
+            AutoWriteLock al(config_lock);
+            if (data == "auto" && RestClient::RestClient::DataSerializationSupport) {
+                delete sct;
+            } else {
+                if (!RestClient::RestClient::DataSerializationSupport{data}) {
+                    throw "RESTCLIENT-ERROR",
+                        sprintf("data serialization option %y is not supported because the required "
+                            "module could not be loaded; currently supported options: %y", data,
+                            keys RestClient::RestClient::DataSerializationSupport);
+                }
+                sct = RestClient::RestClient::DataSerializationSupport{data};
+            }
+            ds = data;
+        }
+
+        #! Returns the current data serialization format
+        string getSerialization() {
+            AutoReadLock al(config_lock);
+            return ds;
+        }
+
+        #! Sets the send encoding (compression) format
+        /** @param enc the encoding option (e.g., "auto", "gzip", "bzip2", "deflate", "identity")
+
+            @throw RESTCLIENT-ERROR invalid or unsupported encoding option
+        */
+        setSendEncoding(string enc = "auto") {
+            AutoWriteLock al(config_lock);
+            if (enc == "auto") {
+                seh = RestClient::RestClient::EncodingSupport.firstValue();
+            } else {
+                if (!RestClient::RestClient::EncodingSupport{enc}) {
+                    throw "RESTCLIENT-ERROR",
+                        sprintf("send content encoding option %y is unknown; valid options: %y",
+                            enc, keys RestClient::RestClient::EncodingSupport);
+                }
+                seh = RestClient::RestClient::EncodingSupport{enc};
+            }
+        }
+
+        #! Returns the current send encoding format
+        *string getSendEncoding() {
+            AutoReadLock al(config_lock);
+            return seh.ce;
+        }
+
+        #! Adds default headers to each request
+        addDefaultHeaders(hash<auto> h) {
+            AutoWriteLock al(config_lock);
+            headers += h;
+        }
+
+        #! Returns the hash of default headers
+        hash<auto> getDefaultHeaders() {
+            AutoReadLock al(config_lock);
+            return headers;
+        }
+
+        #! Replaces default headers
+        replaceDefaultHeaders(*hash<auto> hdr) {
+            AutoWriteLock al(config_lock);
+            remove headers;
+            headers += hdr;
+        }
+
+        #! Sets a token for authentication
+        setToken(string token_type, string token, *string refresh_token, *date token_expiry) {
+            if (token_type == "bearer") {
+                token_type = "Bearer";
+            }
+            AutoWriteLock al(config_lock);
+            token_type_val = token_type;
+            token_val = token;
+            headers += {"Authorization": sprintf("%s %s", token_type, token)};
+        }
+
+        #! Returns any token set for the connection
+        *string getToken() {
+            AutoReadLock al(config_lock);
+            return token_val;
+        }
+
+        #! Returns the token type
+        string getTokenType() {
+            AutoReadLock al(config_lock);
+            return token_type_val ?? "Bearer";
+        }
+
+        #! Closes all connections managed by this client
+        /** If a shared connection manager was provided to the constructor, this method
+            does nothing — the caller retains ownership of the shared manager.
+        */
+        close() {
+            if (owns_mgr) {
+                mgr.closeAll();
+            }
+        }
+
+        #! Internal: logging helper
+        private log(int level, string fmt) {
+            if (logger) {
+                call_function_args(\logger.log(), (level, "RestClientIo: " + fmt) + argv);
+            }
+        }
+    }
+}

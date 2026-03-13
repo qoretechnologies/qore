@@ -72,7 +72,7 @@ public class HttpClientStreamHandle {
         timeout request_timeout;
 
         #! Logger
-        *Logger logger;
+        *LoggerInterface logger;
     }
 
     #! Creates a new stream handle
@@ -81,7 +81,7 @@ public class HttpClientStreamHandle {
         @param logger optional logger
     */
     constructor(HttpClientConnection conn, timeout request_timeout = DefaultRequestTimeout,
-            *Logger logger) {
+            *LoggerInterface logger) {
         self.conn = conn;
         self.request_timeout = request_timeout;
         self.logger = logger;
@@ -104,7 +104,7 @@ public class HttpClientStreamHandle {
         @return the stream ID assigned to this request
     */
     abstract int submitAsyncImpl(string method, string path, *hash<auto> headers,
-        *data body, code callback);
+        *data body, HttpResponseCallback callback);
 
     #! Returns the stream ID (NOTHING if not yet submitted)
     *int getStreamId() {
@@ -158,7 +158,6 @@ public class HttpClientStreamHandle {
             *timeout timeout_ms) {
         timeout wait_timeout = timeout_ms ?? request_timeout;
         date end_time = now_us() + wait_timeout;
-        bool controller_mode = conn.isControllerMode();
 
         # Wait for connection to become ready
         if (!conn.isReady()) {
@@ -166,14 +165,8 @@ public class HttpClientStreamHandle {
             if (remaining <= 0us) {
                 throw "HTTPCLIENT-TIMEOUT", "connection establishment timed out";
             }
-            if (controller_mode) {
-                if (!conn.waitForReady(remaining)) {
-                    throw "HTTPCLIENT-TIMEOUT", "connection establishment timed out";
-                }
-            } else {
-                if (!conn.driveToReady(remaining)) {
-                    throw "HTTPCLIENT-TIMEOUT", "connection establishment timed out";
-                }
+            if (!conn.waitForReady(remaining)) {
+                throw "HTTPCLIENT-TIMEOUT", "connection establishment timed out";
             }
         }
 
@@ -190,47 +183,77 @@ public class HttpClientStreamHandle {
         Future f = p.getFuture();
 
         submitAsync(method, path, headers, body, \handleAsyncResponse());
+        @assert(exists stream_id);
 
-        if (controller_mode) {
-            try {
-                date remaining = end_time - now_us();
-                return f.get(remaining) ?? {};
-            } catch (hash<ExceptionInfo> ex) {
-                if (ex.err == "FUTURE-TIMEOUT") {
-                    cancel();
-                    throw "HTTPCLIENT-TIMEOUT",
-                        sprintf("request timed out after %d ms", wait_timeout);
-                }
-                if (ex.err == "HTTPCLIENT-CANCELLED") {
-                    throw "HTTPCLIENT-CANCELLED", "request was cancelled";
-                }
-                throw "HTTPCLIENT-REQUEST-ERROR", sprintf("%s: %s", ex.err, ex.desc);
+        try {
+            date remaining = end_time - now_us();
+            return f.get(remaining) ?? {};
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "FUTURE-TIMEOUT") {
+                cancel();
+                throw "HTTPCLIENT-TIMEOUT",
+                    sprintf("request timed out after %d ms", wait_timeout);
             }
-        } else {
-            while (!f.isDone()) {
-                date remaining = end_time - now_us();
-                if (remaining <= 0us) {
-                    cancel();
-                    throw "HTTPCLIENT-TIMEOUT",
-                        sprintf("request timed out after %d ms", wait_timeout);
-                }
-                conn.drivePoll(min(remaining,
-                    conn.getActiveStreamCount() > 1 ? 100ms : 1s));
+            if (ex.err == "HTTPCLIENT-CANCELLED") {
+                throw "HTTPCLIENT-CANCELLED", "request was cancelled";
             }
-            try {
-                return f.get() ?? {};
-            } catch (hash<ExceptionInfo> ex) {
-                if (ex.err == "HTTPCLIENT-CANCELLED") {
-                    throw "HTTPCLIENT-CANCELLED", "request was cancelled";
-                }
-                throw "HTTPCLIENT-REQUEST-ERROR", sprintf("%s: %s", ex.err, ex.desc);
+            throw "HTTPCLIENT-REQUEST-ERROR", sprintf("%s: %s", ex.err, ex.desc);
+        }
+    }
+
+    #! Submits a request and returns a Future for the raw response
+    /** Like \c request() but non-blocking: the Future resolves when the response
+        arrives. The I/O is driven by the controller's event loop.
+
+        @param method HTTP method (GET, POST, etc.)
+        @param path request path
+        @param headers request headers (optional)
+        @param body request body (optional)
+
+        @return a Future that resolves to the raw response hash
+
+        @throw HTTPCLIENT-STATE-ERROR if the stream is already in use
+        @throw HTTPCLIENT-TIMEOUT if the connection establishment times out
+
+        @note The caller must keep the returned Future alive (or call \c get())
+        to receive the response. The stream handle is kept alive internally
+        until the response is received.
+    */
+    Future requestAsync(string method, string path, *hash<auto> headers, *data body) {
+        # Wait for connection to become ready
+        if (!conn.isReady()) {
+            if (!conn.waitForReady(request_timeout)) {
+                throw "HTTPCLIENT-TIMEOUT", "connection establishment timed out";
             }
         }
+
+        # Create Promise/Future — store Promise as member to keep it alive
+        # through the submitAsyncImpl closure chain (which captures self)
+        Promise p();
+        {
+            AutoLock al(lock);
+            request_promise = p;
+        }
+        Future f = p.getFuture();
+
+        try {
+            submitAsync(method, path, headers, body, \handleAsyncResponse());
+        } catch () {
+            # Clear request_promise on failure so the Promise is not leaked;
+            # handleResponse() will never be called for a failed submission
+            {
+                AutoLock al(lock);
+                remove request_promise;
+            }
+            rethrow;
+        }
+
+        return f;
     }
 
     #! Submits an asynchronous request with a callback
     int submitAsync(string method, string path, *hash<auto> headers, *data body,
-            code callback) {
+            HttpResponseCallback callback) {
         {
             AutoLock al(lock);
             if (state != HttpClientStreamState::Pending) {
@@ -242,26 +265,14 @@ public class HttpClientStreamHandle {
 
         # Wait for connection to become ready if not already
         if (!conn.isReady()) {
-            if (conn.isControllerMode()) {
-                if (!conn.waitForReady(request_timeout)) {
-                    {
-                        AutoLock al(lock);
-                        if (state == HttpClientStreamState::Open) {
-                            state = HttpClientStreamState::Pending;
-                        }
+            if (!conn.waitForReady(request_timeout)) {
+                {
+                    AutoLock al(lock);
+                    if (state == HttpClientStreamState::Open) {
+                        state = HttpClientStreamState::Pending;
                     }
-                    throw "HTTPCLIENT-TIMEOUT", "connection establishment timed out";
                 }
-            } else {
-                if (!conn.driveToReady(request_timeout)) {
-                    {
-                        AutoLock al(lock);
-                        if (state == HttpClientStreamState::Open) {
-                            state = HttpClientStreamState::Pending;
-                        }
-                    }
-                    throw "HTTPCLIENT-TIMEOUT", "connection establishment timed out";
-                }
+                throw "HTTPCLIENT-TIMEOUT", "connection establishment timed out";
             }
         }
 
@@ -277,6 +288,7 @@ public class HttpClientStreamHandle {
 
         try {
             stream_id = submitAsyncImpl(method, path, headers, body, callback);
+            @assert(stream_id >= 0);
         } catch (hash<ExceptionInfo> ex) {
             {
                 AutoLock al(lock);
@@ -318,7 +330,7 @@ public class HttpClientStreamHandle {
         @throw QUIC-DATAGRAM-NOT-SUPPORTED if the protocol does not support datagrams
     */
     int submitAsyncWithDatagram(string method, string path, *hash<auto> headers, *data body,
-            code callback, binary datagram) {
+            HttpResponseCallback callback, binary datagram) {
         {
             AutoLock al(lock);
             if (state != HttpClientStreamState::Pending) {
@@ -330,26 +342,14 @@ public class HttpClientStreamHandle {
 
         # Wait for connection to become ready if not already
         if (!conn.isReady()) {
-            if (conn.isControllerMode()) {
-                if (!conn.waitForReady(request_timeout)) {
-                    {
-                        AutoLock al(lock);
-                        if (state == HttpClientStreamState::Open) {
-                            state = HttpClientStreamState::Pending;
-                        }
+            if (!conn.waitForReady(request_timeout)) {
+                {
+                    AutoLock al(lock);
+                    if (state == HttpClientStreamState::Open) {
+                        state = HttpClientStreamState::Pending;
                     }
-                    throw "HTTPCLIENT-TIMEOUT", "connection establishment timed out";
                 }
-            } else {
-                if (!conn.driveToReady(request_timeout)) {
-                    {
-                        AutoLock al(lock);
-                        if (state == HttpClientStreamState::Open) {
-                            state = HttpClientStreamState::Pending;
-                        }
-                    }
-                    throw "HTTPCLIENT-TIMEOUT", "connection establishment timed out";
-                }
+                throw "HTTPCLIENT-TIMEOUT", "connection establishment timed out";
             }
         }
 
@@ -366,6 +366,7 @@ public class HttpClientStreamHandle {
         try {
             stream_id = submitAsyncWithDatagramImpl(method, path, headers, body,
                 callback, datagram);
+            @assert(stream_id >= 0);
         } catch (hash<ExceptionInfo> ex) {
             {
                 AutoLock al(lock);
@@ -396,7 +397,7 @@ public class HttpClientStreamHandle {
         @see submitAsyncWithDatagram() for the public wrapper with state management
     */
     private int submitAsyncWithDatagramImpl(string method, string path, *hash<auto> headers,
-            *data body, code callback, binary datagram) {
+            *data body, HttpResponseCallback callback, binary datagram) {
         throw "QUIC-DATAGRAM-NOT-SUPPORTED",
             "QUIC datagrams are only supported over HTTP/3; this stream uses "
             + conn.getProtocol();
@@ -458,6 +459,9 @@ public class HttpClientStreamHandle {
                 state = HttpClientStreamState::Complete;
             }
             p = request_promise;
+            # Clear the member reference so the Promise is not leaked in the
+            # async path (the sync request() path has its own on_exit cleanup)
+            remove request_promise;
         }
         if (p) {
             if (err) {
