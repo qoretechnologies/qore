@@ -1453,7 +1453,24 @@ QoreHashNode* SocketQuicServerPollOperation::continuePoll(ExceptionSink* xsink) 
             }
 
             case QCS::READING: {
-                // Headers-only mode: check for streams with HEADERS complete but not yet dispatched
+                // Drain all available packets from the socket buffer FIRST.
+                // This ensures QUIC DATAGRAM frames (which may arrive in the
+                // same batch as HEADERS) are buffered in datagram_queues_
+                // before any handler is dispatched via headers-only or
+                // completed-stream checks below.
+                while (true) {
+                    QuicSession* target = nullptr;
+                    int rv = recvAndProcessPacket(xsink, &target);
+                    if (*xsink) {
+                        return nullptr;
+                    }
+                    if (rv == SOCK_POLLIN) {
+                        break;  // EAGAIN — no more data
+                    }
+                }
+
+                // Headers-only mode: check for streams with HEADERS complete
+                // (either from this drain or a previous cycle)
                 {
                     bool handled = false;
                     QoreHashNode* rv = checkHeadersOnlyDispatch(handled, xsink);
@@ -1465,7 +1482,7 @@ QoreHashNode* SocketQuicServerPollOperation::continuePoll(ExceptionSink* xsink) 
                     }
                 }
 
-                // Check ALL sessions for completed streams
+                // Check all sessions for completed streams (after draining)
                 for (auto& entry : sessions_) {
                     auto& session = entry.second;
                     if (session->hasCompletedStreams()) {
@@ -1474,36 +1491,6 @@ QoreHashNode* SocketQuicServerPollOperation::continuePoll(ExceptionSink* xsink) 
                         cached_stream_->session_id = session->getSessionId();
                         cached_stream_->stream = std::move(stream);
                         cached_stream_->session = session;
-                        qcs_state = QCS::REQUEST_READY;
-                        // Restore OS-level blocking mode and clear guard flag
-                        sock->priv->socket->priv->set_non_blocking(false, xsink);
-                        sock->priv->clearNonBlock();
-                        set_non_block = false;
-                        return nullptr;  // goal reached
-                    }
-                }
-
-                // Drain all available datagrams from the socket buffer
-                while (true) {
-                    QuicSession* target = nullptr;
-                    int rv = recvAndProcessPacket(xsink, &target);
-                    if (*xsink) {
-                        return nullptr;
-                    }
-                    if (rv == SOCK_POLLIN) {
-                        break;  // EAGAIN — no more data
-                    }
-                    // Check only the target session for completed streams
-                    if (target && target->hasCompletedStreams()) {
-                        auto stream = target->takeCompletedStream();
-                        cached_stream_ = std::make_unique<CachedStream>();
-                        cached_stream_->session_id = target->getSessionId();
-                        cached_stream_->stream = std::move(stream);
-                        // Look up the shared_ptr for the session
-                        auto sit = sessions_.find(target->getSessionId());
-                        if (sit != sessions_.end()) {
-                            cached_stream_->session = sit->second;
-                        }
                         qcs_state = QCS::REQUEST_READY;
                         sock->priv->socket->priv->set_non_blocking(false, xsink);
                         sock->priv->clearNonBlock();

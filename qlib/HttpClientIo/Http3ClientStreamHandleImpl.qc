@@ -70,6 +70,60 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
             });
     }
 
+    #! Protocol-specific async request + datagram submission for HTTP/3
+    /** Queues both the HTTP/3 request (with suppress_wake) and a QUIC datagram
+        before issuing a single wake, ensuring both are written in the same
+        QUIC packet batch.
+
+        @param method HTTP method
+        @param path request path
+        @param headers request headers (optional)
+        @param body request body (optional)
+        @param callback user callback to invoke after handleResponse()
+        @param datagram the datagram payload to send
+
+        @return the stream ID assigned to this request
+
+        @see HttpClientStreamHandle::submitAsyncWithDatagram() for the public
+        wrapper with state management
+    */
+    private int submitAsyncWithDatagramImpl(string method, string path, *hash<auto> headers,
+            *data body, code callback, binary datagram) {
+        # Submit the HTTP/3 request without waking the I/O controller
+        int sid = conn.submitRequest(method, path, headers, body,
+            sub (hash<auto> resp, *hash<auto> err) {
+                try {
+                    handleResponse(resp, err);
+                } catch (hash<ExceptionInfo> ex) {
+                    log(LoggerLevel::ERROR, "handleResponse error: %s: %s", ex.err, ex.desc);
+                    if (!err) {
+                        err = {"err": ex.err, "desc": ex.desc};
+                    }
+                }
+                callback(resp, err);
+            }, NOTHING, True);
+
+        # Queue the datagram (both request and datagram are now pending)
+        int qsid = h3conn.getSessionId();
+        if (!qsid) {
+            # Cancel the request we just submitted
+            try { conn.cancelRequest(sid); } catch () {}
+            throw "HTTPCLIENT-STATE-ERROR", "QUIC session not yet established";
+        }
+        try {
+            h3conn.getSocket().submitQuicDatagram(qsid, sid, datagram);
+        } catch (hash<ExceptionInfo> ex) {
+            # Cancel the request we just submitted
+            try { conn.cancelRequest(sid); } catch () {}
+            rethrow;
+        }
+
+        # Single wake for both request and datagram
+        conn.notifyPendingData();
+
+        return sid;
+    }
+
     #! Send a QUIC DATAGRAM frame on this stream's datagram channel (RFC 9221/9297)
     sendDatagram(binary data) {
         if (!exists stream_id) {

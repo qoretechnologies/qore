@@ -190,12 +190,28 @@ public class HttpClientConnection {
     #! Submits a new request on this connection
     /** Validates state and delegates to the protocol-specific submitRequestImpl().
 
+        @param method HTTP method (e.g., \c "GET", \c "POST")
+        @param path request path (e.g., \c "/api/users")
+        @param headers request headers (optional)
+        @param body request body (optional)
+        @param callback user callback invoked when the response is complete
+        @param ctx optional context hash passed through to submitRequestImpl()
+        @param suppress_wake if True, suppresses the I/O controller wake after
+        submitting the request.  This allows the caller to queue additional data
+        (e.g., a QUIC datagram) before waking the controller, ensuring both are
+        sent in the same write cycle.  The caller MUST call notifyPendingData()
+        after queuing the additional data to trigger the write.
+
+        @return the stream ID assigned to this request
+
+        @throw HTTPCLIENT-STATE-ERROR if the connection is not ready
+
         @note The capacity check is performed atomically inside the poll operation's
         submitRequest() under stream_lock, so there is no TOCTOU gap between the
         check and the actual stream creation.
     */
     int submitRequest(string method, string path, *hash<auto> headers, *data body,
-            code callback, *hash<auto> ctx) {
+            code callback, *hash<auto> ctx, bool suppress_wake = False) {
         *object ctl;
         {
             AutoLock al(lock);
@@ -210,10 +226,12 @@ public class HttpClientConnection {
         log(LoggerLevel::DEBUG, "submitting request: %s %s", method, path);
         int stream_id = submitRequestImpl(method, path, headers, body, callback, ctx);
 
-        if (ctl) {
-            ctl.wake();
-        } else {
-            poll_notifier.notify();
+        if (!suppress_wake) {
+            if (ctl) {
+                ctl.wake();
+            } else {
+                poll_notifier.notify();
+            }
         }
 
         return stream_id;

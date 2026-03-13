@@ -1,0 +1,2062 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore InstantlyDataProvider module definition
+
+/*  InstantlyDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%modern
+# require type definitions everywhere
+# strict argument handling
+# enable all warnings
+
+%requires(reexport) DataProvider
+%requires(reexport) InstantlyRestClient
+%try-module json
+%define NoJson
+%endtry
+
+module InstantlyDataProvider {
+    version = "1.0";
+    desc = "User module providing a data provider API for Instantly email outreach and sales automation";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # Register the data provider factory
+        DataProvider::registerFactory(new InstantlyDataProviderFactory());
+
+        # Register the application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": InstantlyDataProvider::AppName,
+            "display_name": "Instantly",
+            "short_desc": "Instantly email outreach and sales automation",
+            "desc": "Instantly.ai is a comprehensive platform for cold email outreach and sales automation. "
+                "It provides tools for managing email accounts, running multi-step campaigns, tracking leads, "
+                "and analyzing deliverability.\n\n"
+                "**Features:**\n"
+                "- Email account management and warmup\n"
+                "- Multi-step campaign creation and automation\n"
+                "- Lead management with lists, labels, and interest tracking\n"
+                "- Email deliverability and inbox placement testing\n"
+                "- Campaign analytics and reporting\n"
+                "- Workspace and team collaboration\n"
+                "- Block list management\n"
+                "- Custom tags for organizing resources",
+            "scheme": "instantly",
+            "logo": InstantlyLogo,
+            "logo_file_name": "instantly-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::Email, DataProvider::AppGroup::Marketing,),
+        });
+
+        # ========== ACCOUNT ACTIONS ==========
+
+        # List Accounts
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/accounts",
+            "action": "list-accounts",
+            "groups": "Accounts",
+            "display_name": "List Accounts",
+            "short_desc": "List and search email accounts",
+            "desc": "Retrieve a list of email accounts from Instantly with optional filtering by status.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": InstantlyAccountsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("AccountList", new InstantlyAccountDataType(), True);
+            },
+            "options": {
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum number of results to return",
+                    "desc": "The maximum number of results to return per page",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+                "status": <ActionOptionInfo>{
+                    "display_name": "Status",
+                    "short_desc": "Filter by account status",
+                    "desc": "Filter accounts by status: `1` = Active, `2` = Paused, `3` = Maintenance, "
+                        "`-1` = Connection Error, `-2` = Soft Bounce, `-3` = Sending Error",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": 1, "display_name": "Active"},
+                        <AllowedValueInfo>{"value": 2, "display_name": "Paused"},
+                        <AllowedValueInfo>{"value": 3, "display_name": "Maintenance"},
+                        <AllowedValueInfo>{"value": -1, "display_name": "Connection Error"},
+                        <AllowedValueInfo>{"value": -2, "display_name": "Soft Bounce"},
+                        <AllowedValueInfo>{"value": -3, "display_name": "Sending Error"},
+                    ),
+                },
+            },
+        });
+
+        # Create Account
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/create-account",
+            "action": "create-account",
+            "groups": "Accounts",
+            "display_name": "Create Account",
+            "short_desc": "Create a new email account",
+            "desc": "Add a new email account to Instantly for use in campaigns and warmup.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyCreateAccountDataProvider::ProviderInfo,
+            "output_type": InstantlyCreateAccountDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyCreateAccountRequestDataType::Fields),
+        });
+
+        # Get Account
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/get-account",
+            "action": "get-account",
+            "groups": "Accounts",
+            "display_name": "Get Account",
+            "short_desc": "Get a single account by ID",
+            "desc": "Retrieve detailed information about a specific email account.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyGetAccountDataProvider::ProviderInfo,
+            "output_type": InstantlyGetAccountDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyGetAccountRequestDataType::Fields),
+        });
+
+        # Patch Account
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/patch-account",
+            "action": "patch-account",
+            "groups": "Accounts",
+            "display_name": "Patch Account",
+            "short_desc": "Update an existing account",
+            "desc": "Update properties of an existing email account in Instantly.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyPatchAccountDataProvider::ProviderInfo,
+            "output_type": InstantlyPatchAccountDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyPatchAccountRequestDataType::Fields),
+        });
+
+        # Delete Account
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/delete-account",
+            "action": "delete-account",
+            "groups": "Accounts",
+            "display_name": "Delete Account",
+            "short_desc": "Delete an email account",
+            "desc": "Remove an email account from Instantly. This action cannot be undone.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyDeleteAccountDataProvider::ProviderInfo,
+            "output_type": InstantlyDeleteAccountDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyDeleteAccountRequestDataType::Fields),
+        });
+
+        # Pause Account
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/pause-account",
+            "action": "pause-account",
+            "groups": "Accounts",
+            "display_name": "Pause Account",
+            "short_desc": "Pause an email account",
+            "desc": "Pause an email account to temporarily stop sending and warmup activities.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyPauseAccountDataProvider::ProviderInfo,
+            "output_type": InstantlyPauseAccountDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyPauseAccountRequestDataType::Fields),
+        });
+
+        # Resume Account
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/resume-account",
+            "action": "resume-account",
+            "groups": "Accounts",
+            "display_name": "Resume Account",
+            "short_desc": "Resume a paused account",
+            "desc": "Resume a paused email account to restart sending and warmup activities.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyResumeAccountDataProvider::ProviderInfo,
+            "output_type": InstantlyResumeAccountDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyResumeAccountRequestDataType::Fields),
+        });
+
+        # Mark Account Fixed
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/mark-account-fixed",
+            "action": "mark-account-fixed",
+            "groups": "Accounts",
+            "display_name": "Mark Account Fixed",
+            "short_desc": "Mark an account as fixed",
+            "desc": "Mark an email account as fixed after resolving connection or sending issues.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyMarkAccountFixedDataProvider::ProviderInfo,
+            "output_type": InstantlyMarkAccountFixedDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyMarkAccountFixedRequestDataType::Fields),
+        });
+
+        # Test Account Vitals
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/test-account-vitals",
+            "action": "test-account-vitals",
+            "groups": "Accounts",
+            "display_name": "Test Account Vitals",
+            "short_desc": "Test account vitals and health",
+            "desc": "Run a diagnostic test on an email account to check its health, deliverability, and "
+                "connection status.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyTestAccountVitalsDataProvider::ProviderInfo,
+            "output_type": InstantlyTestAccountVitalsDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyTestAccountVitalsRequestDataType::Fields),
+        });
+
+        # Get Warmup Analytics
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/get-warmup-analytics",
+            "action": "get-warmup-analytics",
+            "groups": "Accounts",
+            "display_name": "Get Warmup Analytics",
+            "short_desc": "Get warmup analytics for an account",
+            "desc": "Retrieve warmup analytics data for an email account, including reputation scores "
+                "and warmup progress.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyGetWarmupAnalyticsDataProvider::ProviderInfo,
+            "output_type": InstantlyGetWarmupAnalyticsDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyGetWarmupAnalyticsRequestDataType::Fields),
+        });
+
+        # Get Custom Tracking Domain Status
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/get-custom-tracking-domain-status",
+            "action": "get-custom-tracking-domain-status",
+            "groups": "Accounts",
+            "display_name": "Get Custom Tracking Domain Status",
+            "short_desc": "Get custom tracking domain status",
+            "desc": "Check the status of a custom tracking domain configured for an email account.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyGetCustomTrackingDomainStatusDataProvider::ProviderInfo,
+            "output_type": InstantlyGetCustomTrackingDomainStatusDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyGetCustomTrackingDomainStatusRequestDataType::Fields),
+        });
+
+        # ========== CAMPAIGN ACTIONS ==========
+
+        # List Campaigns
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/campaigns",
+            "action": "list-campaigns",
+            "groups": "Campaigns",
+            "display_name": "List Campaigns",
+            "short_desc": "List and search campaigns",
+            "desc": "Retrieve a list of campaigns from Instantly with optional filtering by status and name.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": InstantlyCampaignsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("CampaignList", new InstantlyCampaignDataType(), True);
+            },
+            "options": {
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum number of results to return",
+                    "desc": "The maximum number of results to return per page",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+                "status": <ActionOptionInfo>{
+                    "display_name": "Status",
+                    "short_desc": "Filter by campaign status",
+                    "desc": "Filter campaigns by status: `0` = Draft, `1` = Active, `2` = Paused, "
+                        "`3` = Completed, `4` = Running Subsequences",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": 0, "display_name": "Draft"},
+                        <AllowedValueInfo>{"value": 1, "display_name": "Active"},
+                        <AllowedValueInfo>{"value": 2, "display_name": "Paused"},
+                        <AllowedValueInfo>{"value": 3, "display_name": "Completed"},
+                        <AllowedValueInfo>{"value": 4, "display_name": "Running Subsequences"},
+                    ),
+                },
+                "name": <ActionOptionInfo>{
+                    "display_name": "Name",
+                    "short_desc": "Filter by campaign name",
+                    "desc": "Filter campaigns by name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Create Campaign
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/create-campaign",
+            "action": "create-campaign",
+            "groups": "Campaigns",
+            "display_name": "Create Campaign",
+            "short_desc": "Create a new campaign",
+            "desc": "Create a new email outreach campaign in Instantly with specified settings and sequences.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyCreateCampaignDataProvider::ProviderInfo,
+            "output_type": InstantlyCreateCampaignDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyCreateCampaignRequestDataType::Fields),
+        });
+
+        # Get Campaign
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/get-campaign",
+            "action": "get-campaign",
+            "groups": "Campaigns",
+            "display_name": "Get Campaign",
+            "short_desc": "Get a single campaign by ID",
+            "desc": "Retrieve detailed information about a specific campaign.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyGetCampaignDataProvider::ProviderInfo,
+            "output_type": InstantlyGetCampaignDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyGetCampaignRequestDataType::Fields),
+        });
+
+        # Patch Campaign
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/patch-campaign",
+            "action": "patch-campaign",
+            "groups": "Campaigns",
+            "display_name": "Patch Campaign",
+            "short_desc": "Update an existing campaign",
+            "desc": "Update properties of an existing campaign in Instantly.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyPatchCampaignDataProvider::ProviderInfo,
+            "output_type": InstantlyPatchCampaignDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyPatchCampaignRequestDataType::Fields),
+        });
+
+        # Delete Campaign
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/delete-campaign",
+            "action": "delete-campaign",
+            "groups": "Campaigns",
+            "display_name": "Delete Campaign",
+            "short_desc": "Delete a campaign",
+            "desc": "Delete a campaign from Instantly. This action cannot be undone.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyDeleteCampaignDataProvider::ProviderInfo,
+            "output_type": InstantlyDeleteCampaignDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyDeleteCampaignRequestDataType::Fields),
+        });
+
+        # Update Campaign Status
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/update-campaign-status",
+            "action": "update-campaign-status",
+            "groups": "Campaigns",
+            "display_name": "Update Campaign Status",
+            "short_desc": "Update campaign status",
+            "desc": "Change the status of a campaign (e.g., activate, pause, or complete).",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyUpdateCampaignStatusDataProvider::ProviderInfo,
+            "output_type": InstantlyUpdateCampaignStatusDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyUpdateCampaignStatusRequestDataType::Fields),
+        });
+
+        # Share Campaign
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/share-campaign",
+            "action": "share-campaign",
+            "groups": "Campaigns",
+            "display_name": "Share Campaign",
+            "short_desc": "Share a campaign with team members",
+            "desc": "Share a campaign with other workspace members for collaboration.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyShareCampaignDataProvider::ProviderInfo,
+            "output_type": InstantlyShareCampaignDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyShareCampaignRequestDataType::Fields),
+        });
+
+        # Get Campaign Analytics
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/get-campaign-analytics",
+            "action": "get-campaign-analytics",
+            "groups": "Campaigns",
+            "display_name": "Get Campaign Analytics",
+            "short_desc": "Get analytics for a campaign",
+            "desc": "Retrieve analytics data for a specific campaign including open rates, click rates, "
+                "and reply rates.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyGetCampaignAnalyticsDataProvider::ProviderInfo,
+            "output_type": InstantlyGetCampaignAnalyticsDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyGetCampaignAnalyticsRequestDataType::Fields),
+        });
+
+        # Get Campaign Analytics Overview
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/get-campaign-analytics-overview",
+            "action": "get-campaign-analytics-overview",
+            "groups": "Campaigns",
+            "display_name": "Get Campaign Analytics Overview",
+            "short_desc": "Get campaign analytics overview",
+            "desc": "Retrieve a high-level analytics overview for a campaign.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyGetCampaignAnalyticsOverviewDataProvider::ProviderInfo,
+            "output_type": InstantlyGetCampaignAnalyticsOverviewDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyGetCampaignAnalyticsOverviewRequestDataType::Fields),
+        });
+
+        # Get Campaign Daily Analytics
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/get-campaign-daily-analytics",
+            "action": "get-campaign-daily-analytics",
+            "groups": "Campaigns",
+            "display_name": "Get Campaign Daily Analytics",
+            "short_desc": "Get daily analytics for a campaign",
+            "desc": "Retrieve day-by-day analytics data for a specific campaign.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyGetCampaignDailyAnalyticsDataProvider::ProviderInfo,
+            "output_type": InstantlyGetCampaignDailyAnalyticsDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyGetCampaignDailyAnalyticsRequestDataType::Fields),
+        });
+
+        # Get Campaign Step Analytics
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/get-campaign-step-analytics",
+            "action": "get-campaign-step-analytics",
+            "groups": "Campaigns",
+            "display_name": "Get Campaign Step Analytics",
+            "short_desc": "Get step-by-step analytics for a campaign",
+            "desc": "Retrieve analytics data broken down by each step in a campaign sequence.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyGetCampaignStepAnalyticsDataProvider::ProviderInfo,
+            "output_type": InstantlyGetCampaignStepAnalyticsDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyGetCampaignStepAnalyticsRequestDataType::Fields),
+        });
+
+        # ========== CAMPAIGN SUBSEQUENCE ACTIONS ==========
+
+        # List Campaign Subsequences
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/campaign-subsequences",
+            "action": "list-campaign-subsequences",
+            "groups": "Campaign Subsequences",
+            "display_name": "List Campaign Subsequences",
+            "short_desc": "List and search campaign subsequences",
+            "desc": "Retrieve a list of subsequences for a campaign with optional filtering.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": InstantlyCampaignSubsequencesDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("CampaignSubsequenceList", new InstantlyCampaignSubsequenceDataType(), True);
+            },
+            "options": {
+                "parent_campaign": <ActionOptionInfo>{
+                    "display_name": "Parent Campaign",
+                    "short_desc": "Filter by parent campaign UUID",
+                    "desc": "The parent campaign UUID to list subsequences for (required)",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "campaigns",
+                },
+                "search": <ActionOptionInfo>{
+                    "display_name": "Search",
+                    "short_desc": "Search subsequences",
+                    "desc": "Filter subsequences by search query",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum number of results to return",
+                    "desc": "The maximum number of results to return per page",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Create Campaign Subsequence
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/create-campaign-subsequence",
+            "action": "create-campaign-subsequence",
+            "groups": "Campaign Subsequences",
+            "display_name": "Create Campaign Subsequence",
+            "short_desc": "Create a new campaign subsequence",
+            "desc": "Create a new subsequence within an existing campaign.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyCreateCampaignSubsequenceDataProvider::ProviderInfo,
+            "output_type": InstantlyCreateCampaignSubsequenceDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyCreateCampaignSubsequenceRequestDataType::Fields),
+        });
+
+        # Get Campaign Subsequence
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/get-campaign-subsequence",
+            "action": "get-campaign-subsequence",
+            "groups": "Campaign Subsequences",
+            "display_name": "Get Campaign Subsequence",
+            "short_desc": "Get a single campaign subsequence by ID",
+            "desc": "Retrieve detailed information about a specific campaign subsequence.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyGetCampaignSubsequenceDataProvider::ProviderInfo,
+            "output_type": InstantlyGetCampaignSubsequenceDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyGetCampaignSubsequenceRequestDataType::Fields),
+        });
+
+        # Patch Campaign Subsequence
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/patch-campaign-subsequence",
+            "action": "patch-campaign-subsequence",
+            "groups": "Campaign Subsequences",
+            "display_name": "Patch Campaign Subsequence",
+            "short_desc": "Update an existing campaign subsequence",
+            "desc": "Update properties of an existing campaign subsequence.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyPatchCampaignSubsequenceDataProvider::ProviderInfo,
+            "output_type": InstantlyPatchCampaignSubsequenceDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyPatchCampaignSubsequenceRequestDataType::Fields),
+        });
+
+        # Delete Campaign Subsequence
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/delete-campaign-subsequence",
+            "action": "delete-campaign-subsequence",
+            "groups": "Campaign Subsequences",
+            "display_name": "Delete Campaign Subsequence",
+            "short_desc": "Delete a campaign subsequence",
+            "desc": "Delete a campaign subsequence. This action cannot be undone.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyDeleteCampaignSubsequenceDataProvider::ProviderInfo,
+            "output_type": InstantlyDeleteCampaignSubsequenceDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyDeleteCampaignSubsequenceRequestDataType::Fields),
+        });
+
+        # Pause Subsequence
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/pause-subsequence",
+            "action": "pause-subsequence",
+            "groups": "Campaign Subsequences",
+            "display_name": "Pause Subsequence",
+            "short_desc": "Pause a campaign subsequence",
+            "desc": "Pause a running campaign subsequence to temporarily stop its execution.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyPauseCampaignSubsequenceDataProvider::ProviderInfo,
+            "output_type": InstantlyPauseCampaignSubsequenceDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyPauseCampaignSubsequenceRequestDataType::Fields),
+        });
+
+        # Resume Subsequence
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/resume-subsequence",
+            "action": "resume-subsequence",
+            "groups": "Campaign Subsequences",
+            "display_name": "Resume Subsequence",
+            "short_desc": "Resume a paused subsequence",
+            "desc": "Resume a paused campaign subsequence to restart its execution.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyResumeCampaignSubsequenceDataProvider::ProviderInfo,
+            "output_type": InstantlyResumeCampaignSubsequenceDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyResumeCampaignSubsequenceRequestDataType::Fields),
+        });
+
+        # Duplicate Subsequence
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/duplicate-subsequence",
+            "action": "duplicate-subsequence",
+            "groups": "Campaign Subsequences",
+            "display_name": "Duplicate Subsequence",
+            "short_desc": "Duplicate a campaign subsequence",
+            "desc": "Create a copy of an existing campaign subsequence with all its settings.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyDuplicateCampaignSubsequenceDataProvider::ProviderInfo,
+            "output_type": InstantlyDuplicateCampaignSubsequenceDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyDuplicateCampaignSubsequenceRequestDataType::Fields),
+        });
+
+        # ========== LEAD ACTIONS ==========
+
+        # List Leads
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/leads",
+            "action": "list-leads",
+            "groups": "Leads",
+            "display_name": "List Leads",
+            "short_desc": "List and search leads",
+            "desc": "Retrieve a list of leads from Instantly with optional filtering by campaign, list, "
+                "email, and status.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": InstantlyLeadsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("LeadList", new InstantlyLeadDataType(), True);
+            },
+            "options": {
+                "campaign_id": <ActionOptionInfo>{
+                    "display_name": "Campaign ID",
+                    "short_desc": "Filter by campaign UUID",
+                    "desc": "Filter leads by the campaign UUID they belong to",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                    "ref_data": "campaigns",
+                },
+                "list_id": <ActionOptionInfo>{
+                    "display_name": "List ID",
+                    "short_desc": "Filter by lead list UUID",
+                    "desc": "Filter leads by the lead list UUID they belong to",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "lead_lists",
+                },
+                "email": <ActionOptionInfo>{
+                    "display_name": "Email",
+                    "short_desc": "Filter by email address",
+                    "desc": "Filter leads by email address",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "status": <ActionOptionInfo>{
+                    "display_name": "Status",
+                    "short_desc": "Filter by lead status",
+                    "desc": "Filter leads by status: `1` = Active, `2` = Paused, `3` = Completed, "
+                        "`-1` = Bounced, `-2` = Unsubscribed, `-3` = Skipped",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": 1, "display_name": "Active"},
+                        <AllowedValueInfo>{"value": 2, "display_name": "Paused"},
+                        <AllowedValueInfo>{"value": 3, "display_name": "Completed"},
+                        <AllowedValueInfo>{"value": -1, "display_name": "Bounced"},
+                        <AllowedValueInfo>{"value": -2, "display_name": "Unsubscribed"},
+                        <AllowedValueInfo>{"value": -3, "display_name": "Skipped"},
+                    ),
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum number of results to return",
+                    "desc": "The maximum number of results to return per page",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Create Lead
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/create-lead",
+            "action": "create-lead",
+            "groups": "Leads",
+            "display_name": "Create Lead",
+            "short_desc": "Create a new lead",
+            "desc": "Add a new lead to Instantly with email and optional contact information.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyCreateLeadDataProvider::ProviderInfo,
+            "output_type": InstantlyCreateLeadDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyCreateLeadRequestDataType::Fields),
+        });
+
+        # Get Lead
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/get-lead",
+            "action": "get-lead",
+            "groups": "Leads",
+            "display_name": "Get Lead",
+            "short_desc": "Get a single lead by ID",
+            "desc": "Retrieve detailed information about a specific lead.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyGetLeadDataProvider::ProviderInfo,
+            "output_type": InstantlyGetLeadDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyGetLeadRequestDataType::Fields),
+        });
+
+        # Patch Lead
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/patch-lead",
+            "action": "patch-lead",
+            "groups": "Leads",
+            "display_name": "Patch Lead",
+            "short_desc": "Update an existing lead",
+            "desc": "Update properties of an existing lead in Instantly.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyPatchLeadDataProvider::ProviderInfo,
+            "output_type": InstantlyPatchLeadDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyPatchLeadRequestDataType::Fields),
+        });
+
+        # Delete Lead
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/delete-lead",
+            "action": "delete-lead",
+            "groups": "Leads",
+            "display_name": "Delete Lead",
+            "short_desc": "Delete a lead",
+            "desc": "Remove a lead from Instantly. This action cannot be undone.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyDeleteLeadDataProvider::ProviderInfo,
+            "output_type": InstantlyDeleteLeadDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyDeleteLeadRequestDataType::Fields),
+        });
+
+        # Merge Leads
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/merge-leads",
+            "action": "merge-leads",
+            "groups": "Leads",
+            "display_name": "Merge Leads",
+            "short_desc": "Merge duplicate leads",
+            "desc": "Merge two or more duplicate lead records into a single lead.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyMergeLeadsDataProvider::ProviderInfo,
+            "output_type": InstantlyMergeLeadsDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyMergeLeadsRequestDataType::Fields),
+        });
+
+        # Move Leads
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/move-leads",
+            "action": "move-leads",
+            "groups": "Leads",
+            "display_name": "Move Leads",
+            "short_desc": "Move leads between campaigns",
+            "desc": "Move one or more leads from one campaign to another.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyMoveLeadsDataProvider::ProviderInfo,
+            "output_type": InstantlyMoveLeadsDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyMoveLeadsRequestDataType::Fields),
+        });
+
+        # Move Lead to Subsequence
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/move-lead-to-subsequence",
+            "action": "move-lead-to-subsequence",
+            "groups": "Leads",
+            "display_name": "Move Lead to Subsequence",
+            "short_desc": "Move a lead to a campaign subsequence",
+            "desc": "Move a lead to a specific subsequence within a campaign.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyMoveLeadToSubsequenceDataProvider::ProviderInfo,
+            "output_type": InstantlyMoveLeadToSubsequenceDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyMoveLeadToSubsequenceRequestDataType::Fields),
+        });
+
+        # Remove Lead from Subsequence
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/remove-lead-from-subsequence",
+            "action": "remove-lead-from-subsequence",
+            "groups": "Leads",
+            "display_name": "Remove Lead from Subsequence",
+            "short_desc": "Remove a lead from a subsequence",
+            "desc": "Remove a lead from a campaign subsequence and return it to the main campaign flow.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyRemoveLeadFromSubsequenceDataProvider::ProviderInfo,
+            "output_type": InstantlyRemoveLeadFromSubsequenceDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyRemoveLeadFromSubsequenceRequestDataType::Fields),
+        });
+
+        # Update Lead Interest Status
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/update-lead-interest-status",
+            "action": "update-lead-interest-status",
+            "groups": "Leads",
+            "display_name": "Update Lead Interest Status",
+            "short_desc": "Update a lead's interest status",
+            "desc": "Update the interest status of a lead (e.g., interested, not interested, "
+                "maybe later).",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyUpdateLeadInterestStatusDataProvider::ProviderInfo,
+            "output_type": InstantlyUpdateLeadInterestStatusDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyUpdateLeadInterestStatusRequestDataType::Fields),
+        });
+
+        # Bulk Assign Leads
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/bulk-assign-leads",
+            "action": "bulk-assign-leads",
+            "groups": "Leads",
+            "display_name": "Bulk Assign Leads",
+            "short_desc": "Bulk assign leads to a campaign",
+            "desc": "Assign multiple leads to a campaign or list in a single bulk operation.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyBulkAssignLeadsDataProvider::ProviderInfo,
+            "output_type": InstantlyBulkAssignLeadsDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyBulkAssignLeadsRequestDataType::Fields),
+        });
+
+        # Export Leads
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/export-leads",
+            "action": "export-leads",
+            "groups": "Leads",
+            "display_name": "Export Leads",
+            "short_desc": "Export leads to a file",
+            "desc": "Export leads from a campaign or list for download or external processing.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyExportLeadsDataProvider::ProviderInfo,
+            "output_type": InstantlyExportLeadsDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyExportLeadsRequestDataType::Fields),
+        });
+
+        # ========== LEAD LIST ACTIONS ==========
+
+        # List Lead Lists
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/lead-lists",
+            "action": "list-lead-lists",
+            "groups": "Lead Lists",
+            "display_name": "List Lead Lists",
+            "short_desc": "List and search lead lists",
+            "desc": "Retrieve a list of lead lists from Instantly.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": InstantlyLeadListsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("LeadListList", new InstantlyLeadListDataType(), True);
+            },
+            "options": {
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum number of results to return",
+                    "desc": "The maximum number of results to return per page",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Create Lead List
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/create-lead-list",
+            "action": "create-lead-list",
+            "groups": "Lead Lists",
+            "display_name": "Create Lead List",
+            "short_desc": "Create a new lead list",
+            "desc": "Create a new lead list in Instantly for organizing leads.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyCreateLeadListDataProvider::ProviderInfo,
+            "output_type": InstantlyCreateLeadListDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyCreateLeadListRequestDataType::Fields),
+        });
+
+        # Get Lead List
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/get-lead-list",
+            "action": "get-lead-list",
+            "groups": "Lead Lists",
+            "display_name": "Get Lead List",
+            "short_desc": "Get a single lead list by ID",
+            "desc": "Retrieve detailed information about a specific lead list.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyGetLeadListDataProvider::ProviderInfo,
+            "output_type": InstantlyGetLeadListDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyGetLeadListRequestDataType::Fields),
+        });
+
+        # Patch Lead List
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/patch-lead-list",
+            "action": "patch-lead-list",
+            "groups": "Lead Lists",
+            "display_name": "Patch Lead List",
+            "short_desc": "Update an existing lead list",
+            "desc": "Update properties of an existing lead list in Instantly.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyPatchLeadListDataProvider::ProviderInfo,
+            "output_type": InstantlyPatchLeadListDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyPatchLeadListRequestDataType::Fields),
+        });
+
+        # Delete Lead List
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/delete-lead-list",
+            "action": "delete-lead-list",
+            "groups": "Lead Lists",
+            "display_name": "Delete Lead List",
+            "short_desc": "Delete a lead list",
+            "desc": "Delete a lead list from Instantly. This action cannot be undone.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyDeleteLeadListDataProvider::ProviderInfo,
+            "output_type": InstantlyDeleteLeadListDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyDeleteLeadListRequestDataType::Fields),
+        });
+
+        # ========== LEAD LABEL ACTIONS ==========
+
+        # List Lead Labels
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/lead-labels",
+            "action": "list-lead-labels",
+            "groups": "Lead Labels",
+            "display_name": "List Lead Labels",
+            "short_desc": "List and search lead labels",
+            "desc": "Retrieve a list of lead labels from Instantly.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": InstantlyLeadLabelsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("LeadLabelList", new InstantlyLeadLabelDataType(), True);
+            },
+            "options": {
+                "search": <ActionOptionInfo>{
+                    "display_name": "Search",
+                    "short_desc": "Filter labels by name",
+                    "desc": "Filter labels by name (e.g., `Hot Lead`)",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "interest_status": <ActionOptionInfo>{
+                    "display_name": "Interest Status",
+                    "short_desc": "Filter by interest status",
+                    "desc": "Filter by interest status: `positive`, `neutral`, or `negative`",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "positive", "display_name": "Positive"},
+                        <AllowedValueInfo>{"value": "neutral", "display_name": "Neutral"},
+                        <AllowedValueInfo>{"value": "negative", "display_name": "Negative"},
+                    ),
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum number of results to return",
+                    "desc": "The maximum number of results to return per page (1-100)",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Create Lead Label
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/create-lead-label",
+            "action": "create-lead-label",
+            "groups": "Lead Labels",
+            "display_name": "Create Lead Label",
+            "short_desc": "Create a new lead label",
+            "desc": "Create a new lead label in Instantly for categorizing leads.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyCreateLeadLabelDataProvider::ProviderInfo,
+            "output_type": InstantlyCreateLeadLabelDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyCreateLeadLabelRequestDataType::Fields),
+        });
+
+        # Get Lead Label
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/get-lead-label",
+            "action": "get-lead-label",
+            "groups": "Lead Labels",
+            "display_name": "Get Lead Label",
+            "short_desc": "Get a single lead label by ID",
+            "desc": "Retrieve detailed information about a specific lead label.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyGetLeadLabelDataProvider::ProviderInfo,
+            "output_type": InstantlyGetLeadLabelDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyGetLeadLabelRequestDataType::Fields),
+        });
+
+        # Patch Lead Label
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/patch-lead-label",
+            "action": "patch-lead-label",
+            "groups": "Lead Labels",
+            "display_name": "Patch Lead Label",
+            "short_desc": "Update an existing lead label",
+            "desc": "Update properties of an existing lead label in Instantly.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyPatchLeadLabelDataProvider::ProviderInfo,
+            "output_type": InstantlyPatchLeadLabelDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyPatchLeadLabelRequestDataType::Fields),
+        });
+
+        # Delete Lead Label
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/delete-lead-label",
+            "action": "delete-lead-label",
+            "groups": "Lead Labels",
+            "display_name": "Delete Lead Label",
+            "short_desc": "Delete a lead label",
+            "desc": "Delete a lead label from Instantly. This action cannot be undone.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyDeleteLeadLabelDataProvider::ProviderInfo,
+            "output_type": InstantlyDeleteLeadLabelDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyDeleteLeadLabelRequestDataType::Fields),
+        });
+
+        # ========== EMAIL ACTIONS ==========
+
+        # List Emails
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/emails",
+            "action": "list-emails",
+            "groups": "Emails",
+            "display_name": "List Emails",
+            "short_desc": "List and search emails",
+            "desc": "Retrieve a list of emails from Instantly with optional filtering by campaign, lead, "
+                "and type.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": InstantlyEmailsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("EmailList", new InstantlyEmailDataType(), True);
+            },
+            "options": {
+                "campaign_id": <ActionOptionInfo>{
+                    "display_name": "Campaign ID",
+                    "short_desc": "Filter by campaign UUID",
+                    "desc": "Filter emails by campaign UUID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                    "ref_data": "campaigns",
+                },
+                "lead_id": <ActionOptionInfo>{
+                    "display_name": "Lead ID",
+                    "short_desc": "Filter by lead UUID",
+                    "desc": "Filter emails by lead UUID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "ue_type": <ActionOptionInfo>{
+                    "display_name": "Email Type",
+                    "short_desc": "Filter by email type",
+                    "desc": "Filter emails by type: `1` = Campaign, `2` = Received, `3` = Sent, "
+                        "`4` = Scheduled",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": 1, "display_name": "Campaign"},
+                        <AllowedValueInfo>{"value": 2, "display_name": "Received"},
+                        <AllowedValueInfo>{"value": 3, "display_name": "Sent"},
+                        <AllowedValueInfo>{"value": 4, "display_name": "Scheduled"},
+                    ),
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum number of results to return",
+                    "desc": "The maximum number of results to return per page",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Get Email
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/get-email",
+            "action": "get-email",
+            "groups": "Emails",
+            "display_name": "Get Email",
+            "short_desc": "Get a single email by ID",
+            "desc": "Retrieve detailed information about a specific email.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyGetEmailDataProvider::ProviderInfo,
+            "output_type": InstantlyGetEmailDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyGetEmailRequestDataType::Fields),
+        });
+
+        # Patch Email
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/patch-email",
+            "action": "patch-email",
+            "groups": "Emails",
+            "display_name": "Patch Email",
+            "short_desc": "Update an existing email",
+            "desc": "Update properties of an existing email in Instantly.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyPatchEmailDataProvider::ProviderInfo,
+            "output_type": InstantlyPatchEmailDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyPatchEmailRequestDataType::Fields),
+        });
+
+        # Delete Email
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/delete-email",
+            "action": "delete-email",
+            "groups": "Emails",
+            "display_name": "Delete Email",
+            "short_desc": "Delete an email",
+            "desc": "Delete an email from Instantly. This action cannot be undone.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyDeleteEmailDataProvider::ProviderInfo,
+            "output_type": InstantlyDeleteEmailDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyDeleteEmailRequestDataType::Fields),
+        });
+
+        # Reply to Email
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/reply-to-email",
+            "action": "reply-to-email",
+            "groups": "Emails",
+            "display_name": "Reply to Email",
+            "short_desc": "Reply to an email",
+            "desc": "Send a reply to an existing email thread in Instantly.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyReplyToEmailDataProvider::ProviderInfo,
+            "output_type": InstantlyReplyToEmailDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyReplyToEmailRequestDataType::Fields),
+        });
+
+        # Count Unread Emails
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/count-unread-emails",
+            "action": "count-unread-emails",
+            "groups": "Emails",
+            "display_name": "Count Unread Emails",
+            "short_desc": "Count unread emails",
+            "desc": "Get the count of unread emails in the inbox.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyCountUnreadEmailsDataProvider::ProviderInfo,
+            "output_type": InstantlyCountUnreadEmailsDataProvider::ResponseType,
+            "options": {},
+        });
+
+        # Mark Thread as Read
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/mark-thread-as-read",
+            "action": "mark-thread-as-read",
+            "groups": "Emails",
+            "display_name": "Mark Thread as Read",
+            "short_desc": "Mark an email thread as read",
+            "desc": "Mark all emails in a thread as read.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyMarkThreadAsReadDataProvider::ProviderInfo,
+            "output_type": InstantlyMarkThreadAsReadDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyMarkThreadAsReadRequestDataType::Fields),
+        });
+
+        # Get Campaign for Email
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/get-campaign-for-email",
+            "action": "get-campaign-for-email",
+            "groups": "Emails",
+            "display_name": "Get Campaign for Email",
+            "short_desc": "Get the campaign associated with an email",
+            "desc": "Retrieve the campaign that an email belongs to.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyGetCampaignForEmailDataProvider::ProviderInfo,
+            "output_type": InstantlyGetCampaignForEmailDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyGetCampaignForEmailRequestDataType::Fields),
+        });
+
+        # ========== BLOCK LIST ACTIONS ==========
+
+        # List Block List
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/block-list",
+            "action": "list-block-list",
+            "groups": "Block List",
+            "display_name": "List Block List",
+            "short_desc": "List and search block list entries",
+            "desc": "Retrieve a list of block list entries from Instantly.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": InstantlyBlockListDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("BlockListEntryList", new InstantlyBlockListEntryDataType(), True);
+            },
+            "options": {
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum number of results to return",
+                    "desc": "The maximum number of results to return per page",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Create Block List Entry
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/create-block-list-entry",
+            "action": "create-block-list-entry",
+            "groups": "Block List",
+            "display_name": "Create Block List Entry",
+            "short_desc": "Create a new block list entry",
+            "desc": "Add a new email or domain to the block list to prevent sending.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyCreateBlockListEntryDataProvider::ProviderInfo,
+            "output_type": InstantlyCreateBlockListEntryDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyCreateBlockListEntryRequestDataType::Fields),
+        });
+
+        # Delete Block List Entry
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/delete-block-list-entry",
+            "action": "delete-block-list-entry",
+            "groups": "Block List",
+            "display_name": "Delete Block List Entry",
+            "short_desc": "Delete a block list entry",
+            "desc": "Remove an entry from the block list.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyDeleteBlockListEntryDataProvider::ProviderInfo,
+            "output_type": InstantlyDeleteBlockListEntryDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyDeleteBlockListEntryRequestDataType::Fields),
+        });
+
+        # Patch Block List
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/patch-block-list",
+            "action": "patch-block-list",
+            "groups": "Block List",
+            "display_name": "Patch Block List",
+            "short_desc": "Update block list entries",
+            "desc": "Update properties of block list entries in Instantly.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyPatchBlockListDataProvider::ProviderInfo,
+            "output_type": InstantlyPatchBlockListDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyPatchBlockListRequestDataType::Fields),
+        });
+
+        # ========== CUSTOM TAG ACTIONS ==========
+
+        # List Custom Tags
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/custom-tags",
+            "action": "list-custom-tags",
+            "groups": "Custom Tags",
+            "display_name": "List Custom Tags",
+            "short_desc": "List and search custom tags",
+            "desc": "Retrieve a list of custom tags from Instantly with optional filtering by resource type.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": InstantlyCustomTagsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("CustomTagList", new InstantlyCustomTagDataType(), True);
+            },
+            "options": {
+                "resource_type": <ActionOptionInfo>{
+                    "display_name": "Resource Type",
+                    "short_desc": "Filter by resource type",
+                    "desc": "Filter custom tags by resource type (e.g., account, campaign)",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum number of results to return",
+                    "desc": "The maximum number of results to return per page",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Create Custom Tag
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/create-custom-tag",
+            "action": "create-custom-tag",
+            "groups": "Custom Tags",
+            "display_name": "Create Custom Tag",
+            "short_desc": "Create a new custom tag",
+            "desc": "Create a new custom tag in Instantly for organizing resources.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyCreateCustomTagDataProvider::ProviderInfo,
+            "output_type": InstantlyCreateCustomTagDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyCreateCustomTagRequestDataType::Fields),
+        });
+
+        # Get Custom Tag
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/get-custom-tag",
+            "action": "get-custom-tag",
+            "groups": "Custom Tags",
+            "display_name": "Get Custom Tag",
+            "short_desc": "Get a single custom tag by ID",
+            "desc": "Retrieve detailed information about a specific custom tag.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyGetCustomTagDataProvider::ProviderInfo,
+            "output_type": InstantlyGetCustomTagDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyGetCustomTagRequestDataType::Fields),
+        });
+
+        # Patch Custom Tag
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/patch-custom-tag",
+            "action": "patch-custom-tag",
+            "groups": "Custom Tags",
+            "display_name": "Patch Custom Tag",
+            "short_desc": "Update an existing custom tag",
+            "desc": "Update properties of an existing custom tag in Instantly.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyPatchCustomTagDataProvider::ProviderInfo,
+            "output_type": InstantlyPatchCustomTagDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyPatchCustomTagRequestDataType::Fields),
+        });
+
+        # Delete Custom Tag
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/delete-custom-tag",
+            "action": "delete-custom-tag",
+            "groups": "Custom Tags",
+            "display_name": "Delete Custom Tag",
+            "short_desc": "Delete a custom tag",
+            "desc": "Delete a custom tag from Instantly. This action cannot be undone.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyDeleteCustomTagDataProvider::ProviderInfo,
+            "output_type": InstantlyDeleteCustomTagDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyDeleteCustomTagRequestDataType::Fields),
+        });
+
+        # Assign Custom Tag
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/assign-custom-tag",
+            "action": "assign-custom-tag",
+            "groups": "Custom Tags",
+            "display_name": "Assign Custom Tag",
+            "short_desc": "Assign a custom tag to a resource",
+            "desc": "Assign an existing custom tag to a resource such as an account or campaign.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyAssignCustomTagDataProvider::ProviderInfo,
+            "output_type": InstantlyAssignCustomTagDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyAssignCustomTagRequestDataType::Fields),
+        });
+
+        # ========== INBOX PLACEMENT TEST ACTIONS ==========
+
+        # List Inbox Placement Tests
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/inbox-placement-tests",
+            "action": "list-inbox-placement-tests",
+            "groups": "Inbox Placement Tests",
+            "display_name": "List Inbox Placement Tests",
+            "short_desc": "List and search inbox placement tests",
+            "desc": "Retrieve a list of inbox placement tests from Instantly.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": InstantlyInboxPlacementTestsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("InboxPlacementTestList", new InstantlyInboxPlacementTestDataType(), True);
+            },
+            "options": {
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum number of results to return",
+                    "desc": "The maximum number of results to return per page",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Create Inbox Placement Test
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/create-inbox-placement-test",
+            "action": "create-inbox-placement-test",
+            "groups": "Inbox Placement Tests",
+            "display_name": "Create Inbox Placement Test",
+            "short_desc": "Create a new inbox placement test",
+            "desc": "Create a new inbox placement test to check email deliverability.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyCreateInboxPlacementTestDataProvider::ProviderInfo,
+            "output_type": InstantlyCreateInboxPlacementTestDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyCreateInboxPlacementTestRequestDataType::Fields),
+        });
+
+        # Get Inbox Placement Test
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/get-inbox-placement-test",
+            "action": "get-inbox-placement-test",
+            "groups": "Inbox Placement Tests",
+            "display_name": "Get Inbox Placement Test",
+            "short_desc": "Get a single inbox placement test by ID",
+            "desc": "Retrieve detailed information about a specific inbox placement test.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyGetInboxPlacementTestDataProvider::ProviderInfo,
+            "output_type": InstantlyGetInboxPlacementTestDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyGetInboxPlacementTestRequestDataType::Fields),
+        });
+
+        # Patch Inbox Placement Test
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/patch-inbox-placement-test",
+            "action": "patch-inbox-placement-test",
+            "groups": "Inbox Placement Tests",
+            "display_name": "Patch Inbox Placement Test",
+            "short_desc": "Update an existing inbox placement test",
+            "desc": "Update properties of an existing inbox placement test.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyPatchInboxPlacementTestDataProvider::ProviderInfo,
+            "output_type": InstantlyPatchInboxPlacementTestDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyPatchInboxPlacementTestRequestDataType::Fields),
+        });
+
+        # Delete Inbox Placement Test
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/delete-inbox-placement-test",
+            "action": "delete-inbox-placement-test",
+            "groups": "Inbox Placement Tests",
+            "display_name": "Delete Inbox Placement Test",
+            "short_desc": "Delete an inbox placement test",
+            "desc": "Delete an inbox placement test from Instantly. This action cannot be undone.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyDeleteInboxPlacementTestDataProvider::ProviderInfo,
+            "output_type": InstantlyDeleteInboxPlacementTestDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyDeleteInboxPlacementTestRequestDataType::Fields),
+        });
+
+        # ========== INBOX PLACEMENT ANALYTICS ACTIONS ==========
+
+        # Get Inbox Placement Analytics
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/get-inbox-placement-analytics",
+            "action": "get-inbox-placement-analytics",
+            "groups": "Inbox Placement Analytics",
+            "display_name": "Get Inbox Placement Analytics",
+            "short_desc": "Get inbox placement analytics",
+            "desc": "Retrieve inbox placement analytics data showing deliverability across providers.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyGetInboxPlacementAnalyticsDataProvider::ProviderInfo,
+            "output_type": InstantlyGetInboxPlacementAnalyticsDataProvider::ResponseType,
+            "options": {},
+        });
+
+        # Get IP Analytics Stats by Date
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/get-ip-analytics-stats-by-date",
+            "action": "get-ip-analytics-stats-by-date",
+            "groups": "Inbox Placement Analytics",
+            "display_name": "Get IP Analytics Stats by Date",
+            "short_desc": "Get inbox placement analytics by date",
+            "desc": "Retrieve inbox placement analytics statistics grouped by date.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyGetIPAnalyticsStatsByDateDataProvider::ProviderInfo,
+            "output_type": InstantlyGetIPAnalyticsStatsByDateDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyGetIPAnalyticsStatsByDateRequestDataType::Fields),
+        });
+
+        # Get IP Analytics Stats by Test
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/get-ip-analytics-stats-by-test",
+            "action": "get-ip-analytics-stats-by-test",
+            "groups": "Inbox Placement Analytics",
+            "display_name": "Get IP Analytics Stats by Test",
+            "short_desc": "Get inbox placement analytics by test",
+            "desc": "Retrieve inbox placement analytics statistics grouped by test.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyGetIPAnalyticsStatsByTestDataProvider::ProviderInfo,
+            "output_type": InstantlyGetIPAnalyticsStatsByTestDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyGetIPAnalyticsStatsByTestRequestDataType::Fields),
+        });
+
+        # Get IP Deliverability Insights
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/get-ip-deliverability-insights",
+            "action": "get-ip-deliverability-insights",
+            "groups": "Inbox Placement Analytics",
+            "display_name": "Get IP Deliverability Insights",
+            "short_desc": "Get deliverability insights",
+            "desc": "Retrieve deliverability insights for inbox placement tests.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyGetIPDeliverabilityInsightsDataProvider::ProviderInfo,
+            "output_type": InstantlyGetIPDeliverabilityInsightsDataProvider::ResponseType,
+            "options": {},
+        });
+
+        # List IP Analytics
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/ip-analytics",
+            "action": "list-ip-analytics",
+            "groups": "Inbox Placement Analytics",
+            "display_name": "List IP Analytics",
+            "short_desc": "List inbox placement analytics records",
+            "desc": "Retrieve a list of inbox placement analytics records.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": InstantlyListIPAnalyticsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("AnalyticsRecordList", new HashDataType("AnalyticsRecord"), True);
+            },
+            "options": {
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum number of results to return",
+                    "desc": "The maximum number of results to return per page",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Get IP Blacklist Report
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/get-ip-blacklist-report",
+            "action": "get-ip-blacklist-report",
+            "groups": "Inbox Placement Analytics",
+            "display_name": "Get IP Blacklist Report",
+            "short_desc": "Get an IP blacklist report",
+            "desc": "Retrieve a blacklist report showing if sending IPs are listed on any blacklists.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyGetIPBlacklistReportDataProvider::ProviderInfo,
+            "output_type": InstantlyGetIPBlacklistReportDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyGetIPBlacklistReportRequestDataType::Fields),
+        });
+
+        # List IP Blacklist Reports
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/ip-blacklist-reports",
+            "action": "list-ip-blacklist-reports",
+            "groups": "Inbox Placement Analytics",
+            "display_name": "List IP Blacklist Reports",
+            "short_desc": "List IP blacklist reports",
+            "desc": "Retrieve a list of IP blacklist reports.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": InstantlyListIPBlacklistReportsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("BlacklistReportList", new HashDataType("BlacklistReportRecord"), True);
+            },
+            "options": {
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum number of results to return",
+                    "desc": "The maximum number of results to return per page",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # ========== EMAIL VERIFICATION ACTIONS ==========
+
+        # Create Email Verification
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/create-email-verification",
+            "action": "create-email-verification",
+            "groups": "Email Verification",
+            "display_name": "Create Email Verification",
+            "short_desc": "Create an email verification request",
+            "desc": "Submit an email address for verification to check its validity and deliverability.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyCreateEmailVerificationDataProvider::ProviderInfo,
+            "output_type": InstantlyCreateEmailVerificationDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyCreateEmailVerificationRequestDataType::Fields),
+        });
+
+        # Get Email Verification Status
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/get-email-verification-status",
+            "action": "get-email-verification-status",
+            "groups": "Email Verification",
+            "display_name": "Get Email Verification Status",
+            "short_desc": "Get email verification status",
+            "desc": "Retrieve the status and results of an email verification request.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyGetEmailVerificationStatusDataProvider::ProviderInfo,
+            "output_type": InstantlyGetEmailVerificationStatusDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyGetEmailVerificationStatusRequestDataType::Fields),
+        });
+
+        # ========== BACKGROUND JOB ACTIONS ==========
+
+        # List Background Jobs
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/background-jobs",
+            "action": "list-background-jobs",
+            "groups": "Background Jobs",
+            "display_name": "List Background Jobs",
+            "short_desc": "List and search background jobs",
+            "desc": "Retrieve a list of background jobs from Instantly.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": InstantlyBackgroundJobsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("BackgroundJobList", new InstantlyBackgroundJobDataType(), True);
+            },
+            "options": {
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum number of results to return",
+                    "desc": "The maximum number of results to return per page",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Get Background Job
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/get-background-job",
+            "action": "get-background-job",
+            "groups": "Background Jobs",
+            "display_name": "Get Background Job",
+            "short_desc": "Get a single background job by ID",
+            "desc": "Retrieve detailed information about a specific background job.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyGetBackgroundJobDataProvider::ProviderInfo,
+            "output_type": InstantlyGetBackgroundJobDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyGetBackgroundJobRequestDataType::Fields),
+        });
+
+        # ========== WORKSPACE ACTIONS ==========
+
+        # Get Workspace
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/get-workspace",
+            "action": "get-workspace",
+            "groups": "Workspace",
+            "display_name": "Get Workspace",
+            "short_desc": "Get workspace information",
+            "desc": "Retrieve information about the current workspace.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyGetWorkspaceDataProvider::ProviderInfo,
+            "output_type": InstantlyGetWorkspaceDataProvider::ResponseType,
+            "options": {},
+        });
+
+        # Get Workspace Admin
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/get-workspace-admin",
+            "action": "get-workspace-admin",
+            "groups": "Workspace",
+            "display_name": "Get Workspace Admin",
+            "short_desc": "Get workspace admin information",
+            "desc": "Retrieve administrative information about the workspace.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyGetWorkspaceAdminDataProvider::ProviderInfo,
+            "output_type": InstantlyGetWorkspaceAdminDataProvider::ResponseType,
+            "options": {},
+        });
+
+        # Patch Workspace
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/patch-workspace",
+            "action": "patch-workspace",
+            "groups": "Workspace",
+            "display_name": "Patch Workspace",
+            "short_desc": "Update workspace settings",
+            "desc": "Update properties and settings of the current workspace.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyPatchWorkspaceDataProvider::ProviderInfo,
+            "output_type": InstantlyPatchWorkspaceDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyPatchWorkspaceRequestDataType::Fields),
+        });
+
+        # ========== WORKSPACE MEMBER ACTIONS ==========
+
+        # List Workspace Members
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/workspace-members",
+            "action": "list-workspace-members",
+            "groups": "Workspace Members",
+            "display_name": "List Workspace Members",
+            "short_desc": "List and search workspace members",
+            "desc": "Retrieve a list of members in the current workspace.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": InstantlyWorkspaceMembersDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("WorkspaceMemberList", new InstantlyWorkspaceMemberDataType(), True);
+            },
+            "options": {
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum number of results to return",
+                    "desc": "The maximum number of results to return per page",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Create Workspace Member
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/create-workspace-member",
+            "action": "create-workspace-member",
+            "groups": "Workspace Members",
+            "display_name": "Create Workspace Member",
+            "short_desc": "Add a new workspace member",
+            "desc": "Invite a new member to the workspace.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyCreateWorkspaceMemberDataProvider::ProviderInfo,
+            "output_type": InstantlyCreateWorkspaceMemberDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyCreateWorkspaceMemberRequestDataType::Fields),
+        });
+
+        # Get Workspace Member
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/get-workspace-member",
+            "action": "get-workspace-member",
+            "groups": "Workspace Members",
+            "display_name": "Get Workspace Member",
+            "short_desc": "Get a single workspace member by ID",
+            "desc": "Retrieve detailed information about a specific workspace member.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyGetWorkspaceMemberDataProvider::ProviderInfo,
+            "output_type": InstantlyGetWorkspaceMemberDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyGetWorkspaceMemberRequestDataType::Fields),
+        });
+
+        # Patch Workspace Member
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/patch-workspace-member",
+            "action": "patch-workspace-member",
+            "groups": "Workspace Members",
+            "display_name": "Patch Workspace Member",
+            "short_desc": "Update a workspace member",
+            "desc": "Update properties of an existing workspace member.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyPatchWorkspaceMemberDataProvider::ProviderInfo,
+            "output_type": InstantlyPatchWorkspaceMemberDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyPatchWorkspaceMemberRequestDataType::Fields),
+        });
+
+        # Delete Workspace Member
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/delete-workspace-member",
+            "action": "delete-workspace-member",
+            "groups": "Workspace Members",
+            "display_name": "Delete Workspace Member",
+            "short_desc": "Remove a workspace member",
+            "desc": "Remove a member from the workspace. This action cannot be undone.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyDeleteWorkspaceMemberDataProvider::ProviderInfo,
+            "output_type": InstantlyDeleteWorkspaceMemberDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyDeleteWorkspaceMemberRequestDataType::Fields),
+        });
+
+        # ========== WORKSPACE GROUP MEMBER ACTIONS ==========
+
+        # List Workspace Group Members
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/workspace-group-members",
+            "action": "list-workspace-group-members",
+            "groups": "Workspace Group Members",
+            "display_name": "List Workspace Group Members",
+            "short_desc": "List and search workspace group members",
+            "desc": "Retrieve a list of members in a workspace group.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": InstantlyWorkspaceGroupMembersDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("WorkspaceGroupMemberList", new InstantlyWorkspaceGroupMemberDataType(), True);
+            },
+            "options": {
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum number of results to return",
+                    "desc": "The maximum number of results to return per page",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Create Workspace Group Member
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/create-workspace-group-member",
+            "action": "create-workspace-group-member",
+            "groups": "Workspace Group Members",
+            "display_name": "Create Workspace Group Member",
+            "short_desc": "Add a member to a workspace group",
+            "desc": "Add an existing workspace member to a workspace group.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyCreateWorkspaceGroupMemberDataProvider::ProviderInfo,
+            "output_type": InstantlyCreateWorkspaceGroupMemberDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyCreateWorkspaceGroupMemberRequestDataType::Fields),
+        });
+
+        # Get Workspace Group Member
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/get-workspace-group-member",
+            "action": "get-workspace-group-member",
+            "groups": "Workspace Group Members",
+            "display_name": "Get Workspace Group Member",
+            "short_desc": "Get a single workspace group member by ID",
+            "desc": "Retrieve detailed information about a specific workspace group member.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyGetWorkspaceGroupMemberDataProvider::ProviderInfo,
+            "output_type": InstantlyGetWorkspaceGroupMemberDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyGetWorkspaceGroupMemberRequestDataType::Fields),
+        });
+
+        # Delete Workspace Group Member
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/delete-workspace-group-member",
+            "action": "delete-workspace-group-member",
+            "groups": "Workspace Group Members",
+            "display_name": "Delete Workspace Group Member",
+            "short_desc": "Remove a member from a workspace group",
+            "desc": "Remove a member from a workspace group. This action cannot be undone.",
+            "action_code": DPAT_API,
+            "data_provider_info": InstantlyDeleteWorkspaceGroupMemberDataProvider::ProviderInfo,
+            "output_type": InstantlyDeleteWorkspaceGroupMemberDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(InstantlyDeleteWorkspaceGroupMemberRequestDataType::Fields),
+        });
+
+        # ========== AUDIT LOG ACTIONS ==========
+
+        # List Audit Logs
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/audit-logs",
+            "action": "list-audit-logs",
+            "groups": "Audit Log",
+            "display_name": "List Audit Logs",
+            "short_desc": "List and search audit logs",
+            "desc": "Retrieve a list of audit log entries from Instantly for tracking workspace activity.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": InstantlyAuditLogsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("AuditLogList", new InstantlyAuditLogDataType(), True);
+            },
+            "options": {
+                "user_id": <ActionOptionInfo>{
+                    "display_name": "User ID",
+                    "short_desc": "Filter by user UUID",
+                    "desc": "Filter audit logs by the user UUID who performed the action",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "action": <ActionOptionInfo>{
+                    "display_name": "Action",
+                    "short_desc": "Filter by action type",
+                    "desc": "Filter audit logs by the action that was performed",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "resource_type": <ActionOptionInfo>{
+                    "display_name": "Resource Type",
+                    "short_desc": "Filter by resource type",
+                    "desc": "Filter audit logs by the type of resource affected",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "start_date": <ActionOptionInfo>{
+                    "display_name": "Start Date",
+                    "short_desc": "Filter from date",
+                    "desc": "Filter audit logs from this date (inclusive)",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "end_date": <ActionOptionInfo>{
+                    "display_name": "End Date",
+                    "short_desc": "Filter to date",
+                    "desc": "Filter audit logs up to this date (inclusive)",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum number of results to return",
+                    "desc": "The maximum number of results to return per page",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # ========== EVENT TRIGGERS ==========
+
+        # Reply Received Event
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/events/reply_received",
+            "action": "reply-received",
+            "action_val": "reply_received",
+            "groups": "Events",
+            "display_name": "Reply Received",
+            "short_desc": "Triggered when a reply is received",
+            "desc": "This event is triggered when a reply is received to a campaign email.",
+            "action_code": DPAT_EVENT,
+            "data_provider_info": InstantlyReplyReceivedEventDataProvider::ProviderInfo,
+        });
+
+        # Email Bounced Event
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/events/email_bounced",
+            "action": "email-bounced",
+            "action_val": "email_bounced",
+            "groups": "Events",
+            "display_name": "Email Bounced",
+            "short_desc": "Triggered when an email bounces",
+            "desc": "This event is triggered when a campaign email bounces.",
+            "action_code": DPAT_EVENT,
+            "data_provider_info": InstantlyEmailBouncedEventDataProvider::ProviderInfo,
+        });
+
+        # Lead Interested Event
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/events/lead_interested",
+            "action": "lead-interested",
+            "action_val": "lead_interested",
+            "groups": "Events",
+            "display_name": "Lead Interested",
+            "short_desc": "Triggered when a lead shows interest",
+            "desc": "This event is triggered when a lead's interest status changes to interested.",
+            "action_code": DPAT_EVENT,
+            "data_provider_info": InstantlyLeadInterestedEventDataProvider::ProviderInfo,
+        });
+
+        # Campaign Completed Event
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InstantlyDataProvider::AppName,
+            "path": "/events/campaign_completed",
+            "action": "campaign-completed",
+            "action_val": "campaign_completed",
+            "groups": "Events",
+            "display_name": "Campaign Completed",
+            "short_desc": "Triggered when a campaign completes",
+            "desc": "This event is triggered when a campaign finishes sending all its emails.",
+            "action_code": DPAT_EVENT,
+            "data_provider_info": InstantlyCampaignCompletedEventDataProvider::ProviderInfo,
+        });
+    };
+}
+
+/** @mainpage InstantlyDataProvider Module
+
+    @tableofcontents
+
+    @section instantlydataproviderintro InstantlyDataProvider Introduction
+
+    The %InstantlyDataProvider module provides a data provider API for Instantly's email outreach
+    and sales automation platform.
+
+    The following classes are provided by this module:
+    - @ref InstantlyDataProvider::InstantlyDataProvider "InstantlyDataProvider"
+    - @ref InstantlyDataProvider::InstantlyDataProviderFactory "InstantlyDataProviderFactory"
+
+    @section instantlydataprovider_actions Supported Actions
+
+    This data provider supports the following action groups:
+    - **Accounts** - manage email accounts, warmup, and tracking domains
+    - **Campaigns** - create, manage, and analyze email campaigns
+    - **Campaign Subsequences** - manage subsequences within campaigns
+    - **Leads** - manage leads including CRUD, merging, moving, and bulk operations
+    - **Lead Lists** - organize leads into lists
+    - **Lead Labels** - categorize leads with labels
+    - **Emails** - manage emails, replies, and threads
+    - **Block List** - manage blocked email addresses and domains
+    - **Custom Tags** - organize resources with custom tags
+    - **Inbox Placement Tests** - test email deliverability
+    - **Inbox Placement Analytics** - analyze deliverability metrics
+    - **Email Verification** - verify email addresses
+    - **Background Jobs** - monitor background processing jobs
+    - **Workspace** - manage workspace settings
+    - **Workspace Members** - manage workspace team members
+    - **Workspace Group Members** - manage workspace group memberships
+    - **Audit Log** - track workspace activity
+
+    @section instantlydataprovider_auth Authentication
+
+    Instantly uses API key authentication. You need an API key which can be obtained from your
+    Instantly workspace settings.
+
+    @par Example:
+    @code{.py}
+#!/usr/bin/env qore
+
+%requires InstantlyDataProvider
+
+InstantlyDataProvider instantly({"apikey": ENV.INSTANTLY_API_KEY});
+
+# List campaigns
+map printf("Campaign: %s (Status: %d)\n", $1.name, $1.status),
+    instantly.getChildProvider("campaigns").searchRecords({"status": 1});
+
+# Create a lead
+hash<auto> result = instantly.getChildProvider("create-lead").doRequest({
+    "email": "test@example.com",
+    "first_name": "John",
+    "last_name": "Doe",
+    "campaign_id": "your-campaign-uuid",
+});
+printf("Created lead: %s\n", result.id);
+    @endcode
+
+    @section instantlydataproviderrelnotes Release Notes
+
+    @subsection instantlydataproviderv1_0 InstantlyDataProvider v1.0
+    - the initial version of the %InstantlyDataProvider module
+*/
+
+#! Contains all public definitions in the InstantlyDataProvider module
+public namespace InstantlyDataProvider {
+}

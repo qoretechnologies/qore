@@ -301,6 +301,113 @@ public class HttpClientStreamHandle {
         return stream_id;
     }
 
+    #! Submits an asynchronous request with a QUIC datagram atomically
+    /** Queues both the HTTP request and a QUIC datagram before waking the
+        I/O controller, ensuring both are sent in the same write cycle.
+
+        This avoids a race condition where the I/O controller processes the
+        request HEADERS before the datagram is queued, causing the server to
+        time out waiting for the datagram.
+
+        @param method HTTP method (typically "POST")
+        @param path request path
+        @param headers request headers (optional)
+        @param body request body (optional)
+        @param callback user callback invoked when the response is complete
+        @param datagram the datagram payload to send
+
+        @return the stream ID assigned to this request
+
+        @throw HTTPCLIENT-STATE-ERROR if the stream is already in use
+        @throw HTTPCLIENT-TIMEOUT if connection establishment timed out
+        @throw HTTPCLIENT-CANCELLED if the stream was cancelled during connection setup
+        @throw QUIC-DATAGRAM-NOT-SUPPORTED if the protocol does not support datagrams
+    */
+    int submitAsyncWithDatagram(string method, string path, *hash<auto> headers, *data body,
+            code callback, binary datagram) {
+        {
+            AutoLock al(lock);
+            if (state != HttpClientStreamState::Pending) {
+                throw "HTTPCLIENT-STATE-ERROR",
+                    sprintf("stream already in use: state=%y", state);
+            }
+            state = HttpClientStreamState::Open;
+        }
+
+        # Wait for connection to become ready if not already
+        if (!conn.isReady()) {
+            if (conn.isControllerMode()) {
+                if (!conn.waitForReady(request_timeout)) {
+                    {
+                        AutoLock al(lock);
+                        if (state == HttpClientStreamState::Open) {
+                            state = HttpClientStreamState::Pending;
+                        }
+                    }
+                    throw "HTTPCLIENT-TIMEOUT", "connection establishment timed out";
+                }
+            } else {
+                if (!conn.driveToReady(request_timeout)) {
+                    {
+                        AutoLock al(lock);
+                        if (state == HttpClientStreamState::Open) {
+                            state = HttpClientStreamState::Pending;
+                        }
+                    }
+                    throw "HTTPCLIENT-TIMEOUT", "connection establishment timed out";
+                }
+            }
+        }
+
+        # Re-check state after readiness wait — cancel() may have run concurrently
+        {
+            AutoLock al(lock);
+            if (state != HttpClientStreamState::Open) {
+                throw "HTTPCLIENT-CANCELLED", "stream was cancelled during connection setup";
+            }
+        }
+
+        log(LoggerLevel::DEBUG, "submitting async request with datagram: %s %s", method, path);
+
+        try {
+            stream_id = submitAsyncWithDatagramImpl(method, path, headers, body,
+                callback, datagram);
+        } catch (hash<ExceptionInfo> ex) {
+            {
+                AutoLock al(lock);
+                if (state == HttpClientStreamState::Open) {
+                    state = HttpClientStreamState::Pending;
+                }
+            }
+            rethrow;
+        }
+
+        return stream_id;
+    }
+
+    #! Protocol-specific async request + datagram submission (subclasses override)
+    /** Default implementation throws — only HTTP/3 supports QUIC datagrams.
+
+        @param method HTTP method
+        @param path request path
+        @param headers request headers (optional)
+        @param body request body (optional)
+        @param callback user callback to invoke after handleResponse()
+        @param datagram the datagram payload to send
+
+        @return the stream ID assigned to this request
+
+        @throw QUIC-DATAGRAM-NOT-SUPPORTED if the protocol does not support datagrams
+
+        @see submitAsyncWithDatagram() for the public wrapper with state management
+    */
+    private int submitAsyncWithDatagramImpl(string method, string path, *hash<auto> headers,
+            *data body, code callback, binary datagram) {
+        throw "QUIC-DATAGRAM-NOT-SUPPORTED",
+            "QUIC datagrams are only supported over HTTP/3; this stream uses "
+            + conn.getProtocol();
+    }
+
     #! Cancels the request
     cancel() {
         *int sid;

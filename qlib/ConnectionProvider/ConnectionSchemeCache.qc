@@ -196,9 +196,13 @@ public class ConnectionSchemeCache {
             "esmtps": "SmtpClient",
             "esmtptls": "SmtpClient",
 
+            "lemlist": "LemlistRestClient",
+
             "shippo": "ShippoRestClient",
 
             "shipstation": "ShipStationRestClient",
+
+            "instantly": "InstantlyRestClient",
 
             "keaprest": "KeapRestClient",
 

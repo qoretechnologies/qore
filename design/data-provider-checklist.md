@@ -308,6 +308,7 @@ The UI uses `preselected: True` on action options to determine which fields to s
 - [ ] Tests run against real API
 - [ ] Tests clean up test data
 - [ ] Tests call `getExampleEventData()` for each trigger and verify expected fields
+- [ ] Tests verify connection ping succeeds (`conn.ping(True)` returns `ok: True`)
 - [ ] `%modern` directive used (not individual parse directives)
 - [ ] Test file has executable permission (`chmod +x`)
 
