@@ -52,7 +52,11 @@ const QoreTypeInfo* QoreHashMapOperatorNode::setReturnTypeInfo(const QoreTypeInf
     const QoreTypeInfo* typeInfo;
 
     // this operator returns no value if the iterator expression has no value
-    bool or_nothing = QoreTypeInfo::parseReturns(iteratorTypeInfo, NT_NOTHING);
+    // when iteratorTypeInfo is null (unknown type), we cannot know if it can return NOTHING,
+    // so we default to false; only set true when we KNOW the type can be NOTHING
+    bool or_nothing = iteratorTypeInfo
+        ? (QoreTypeInfo::parseReturns(iteratorTypeInfo, NT_NOTHING) != QTI_NOT_EQUAL)
+        : false;
     if (QoreTypeInfo::hasType(expTypeInfo2)) {
         returnTypeInfo = qore_get_complex_hash_type(expTypeInfo2);
 
@@ -79,18 +83,10 @@ int QoreHashMapOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
 
     assert(!parse_context.typeInfo);
     // check iterator expression
-    QoreParseAnalysis iterator_analysis;
-    int err = 0;
-    {
-        QoreParseContextAnalysisHelper ah(parse_context);
-        err = parse_init_value(e[2], parse_context);
-        iterator_analysis = parse_context.analysis;
-    }
+    int err = parse_init_value(e[2], parse_context);
     const QoreTypeInfo* iteratorTypeInfo = parse_context.typeInfo;
 
     const QoreTypeInfo* expTypeInfo2;
-    QoreParseAnalysis key_analysis;
-    QoreParseAnalysis value_analysis;
     {
         // set implicit argv arg type
         const QoreTypeInfo* implicitArgType =
@@ -100,44 +96,18 @@ int QoreHashMapOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
 
         // check key expression
         parse_context.typeInfo = nullptr;
-        {
-            QoreParseContextAnalysisHelper ah(parse_context);
-            if (parse_init_value(e[0], parse_context) && !err) {
-                err = -1;
-            }
-            key_analysis = parse_context.analysis;
+        if (parse_init_value(e[0], parse_context) && !err) {
+            err = -1;
         }
-
         // check value expression2
         parse_context.typeInfo = nullptr;
-        {
-            QoreParseContextAnalysisHelper ah(parse_context);
-            if (parse_init_value(e[1], parse_context) && !err) {
-                err = -1;
-            }
-            // CRITICAL: Capture typeInfo before helper scope exits and analysis is restored
-            expTypeInfo2 = parse_context.typeInfo;
-            value_analysis = parse_context.analysis;
+        if (parse_init_value(e[1], parse_context) && !err) {
+            err = -1;
         }
+        expTypeInfo2 = parse_context.typeInfo;
     }
 
     parse_context.typeInfo = setReturnTypeInfo(returnTypeInfo, expTypeInfo2, iteratorTypeInfo);
-
-    // Set up analysis for map operator result
-    parse_context.analysis.clear();
-    if (parse_context.typeInfo) {
-        parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
-        parse_context.analysis.known_type = parse_context.typeInfo;
-        if (QoreTypeInfo::parseReturns(parse_context.typeInfo, NT_NOTHING) == QTI_NOT_EQUAL) {
-            parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
-        }
-    }
-    if (iterator_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
-        && key_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
-        && value_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
-        parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
-    }
-
     return err;
 }
 
