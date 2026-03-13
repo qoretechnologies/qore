@@ -269,6 +269,11 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             url = opts.url;
             @assert(url.val());
 
+            # Initialize logger first so it's available for other components
+            if (opts.logger instanceof LoggerInterface) {
+                logger = cast<LoggerInterface>(opts.logger);
+            }
+
             validator = new RestSchemaValidator::NullRestSchemaValidator();
 
             if (opts.headers) {
@@ -288,10 +293,6 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
 
             error_passthru = opts.error_passthru.toBool();
             noCharset = opts.no_charset.toBool();
-
-            if (opts.logger instanceof LoggerInterface) {
-                logger = cast<LoggerInterface>(opts.logger);
-            }
 
             if (shared_mgr) {
                 # Use shared manager — caller retains ownership
@@ -388,7 +389,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
         hash<RestClient::RestResponseInfo> restDoRequest(string method, string path, auto body,
                 *hash<auto> hdr) {
             # 1. Snapshot config state and serialize body
-            hash<auto> prepared = prepareRequest(method, path, body, \hdr);
+            hash<auto> prepared = prepareRequest(method, \path, body, \hdr);
 
             log(LoggerLevel::DEBUG, "restDoRequest() %s %s%s", method, url, path);
 
@@ -412,7 +413,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
         */
         RestFuture restDoRequestAsync(string method, string path, auto body, *hash<auto> hdr) {
             # 1. Snapshot config state and serialize body
-            hash<auto> prepared = prepareRequest(method, path, body, \hdr);
+            hash<auto> prepared = prepareRequest(method, \path, body, \hdr);
             bool req_error_passthru = prepared.error_passthru;
 
             log(LoggerLevel::DEBUG, "restDoRequestAsync() %s %s%s", method, url, path);
@@ -488,8 +489,15 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
 
             @return a hash with \c serialized_body and \c error_passthru keys
         */
-        private hash<auto> prepareRequest(string method, string path, auto body,
+        private hash<auto> prepareRequest(string method, reference<string> path, auto body,
                 reference<*hash<auto>> hdr) {
+            # Normalize path to be absolute (HTTP/2/3 :path pseudo-header requires leading "/")
+            if (path.val() && path[0] != "/") {
+                path = "/" + path;
+            } else if (!path.val()) {
+                path = "/";
+            }
+
             *string req_sct;
             *hash<auto> req_seh;
             bool req_no_charset;
@@ -508,15 +516,16 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 hash<RestSchemaValidator::RestRequestClientInfo> req = validator.processRequest(
                     method, path, body, hdr, req_sct);
                 serialized_body = req.body;
-                if (!hdr."Content-Type") {
-                    hdr."Content-Type" = req.content;
+                # Use lowercase header keys for HTTP/2 and HTTP/3 compatibility
+                if (!hdr."content-type") {
+                    hdr."content-type" = req.content;
                 }
                 if (!req_no_charset && serialized_body.typeCode() == NT_STRING
-                        && hdr."Content-Type" !~ /;charset=/) {
-                    hdr."Content-Type" += ";charset=" + serialized_body.encoding();
+                        && hdr."content-type" !~ /;charset=/) {
+                    hdr."content-type" += ";charset=" + serialized_body.encoding();
                 }
                 if (req_seh.ce && serialized_body.size() > RestClient::RestClient::CompressionThreshold) {
-                    hdr."Content-Encoding" = req_seh.ce;
+                    hdr."content-encoding" = req_seh.ce;
                     serialized_body = req_seh.func(serialized_body);
                 }
             }

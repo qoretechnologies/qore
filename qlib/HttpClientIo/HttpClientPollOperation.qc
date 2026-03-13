@@ -185,7 +185,7 @@ public class HttpClientPollOperation inherits AbstractPollOperation {
             HttpResponseCallback cb = callbacks_copy{sid};
             *hash<auto> stream_ctx = ctxs_copy{sid};
             try {
-                cb(NOTHING, err + {"stream_id": sid.toInt(), "ctx": stream_ctx});
+                cb({}, err + {"stream_id": sid.toInt(), "ctx": stream_ctx});
             } catch (hash<ExceptionInfo> ex) {
                 log(LoggerLevel::ERROR, "stream error callback exception: %s: %s",
                     ex.err, ex.desc);

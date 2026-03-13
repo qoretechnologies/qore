@@ -55,9 +55,14 @@ auto mgr_h2 = new HttpClientConnectionManager({"protocol": "h2"});
 auto mgr_h3 = new HttpClientConnectionManager({"protocol": "h3"});
     @endcode
 
-    @par Shared Controller (optional)
-    By default the manager auto-creates an AsyncSocketIoController with
-    \c autostop=True.  To share a controller across multiple managers:
+    @par Shared Static Controller
+    By default all managers share a single static AsyncSocketIoController with
+    \c autostop=True. The controller's I/O thread starts when the first poll
+    operation is submitted and stops when all operations complete. This avoids
+    creating competing I/O threads when multiple managers are used.
+
+    @par Custom Controller (optional)
+    To use a dedicated controller instead of the shared static one:
     @code{.py}
 %requires HttpClientIo
 %requires AsyncSocketIo
@@ -66,7 +71,7 @@ AsyncSocketIoController controller(False);
 controller.start();
 
 HttpClientConnectionManager mgr1();
-mgr1.setController(controller);  # replaces auto-created controller
+mgr1.setController(controller);  # replaces static controller
 
 HttpClientConnectionManager mgr2();
 mgr2.setController(controller);
@@ -99,8 +104,8 @@ public class HttpClientConnectionManager {
         #! AsyncSocketIoController for async operations
         AsyncSocketIo::AsyncSocketIoController controller;
 
-        #! True if this instance owns the controller (auto-created)
-        bool owns_controller = True;
+        #! True if this instance owns the controller (not using static or external)
+        bool owns_controller = False;
 
         #! Logger
         *LoggerInterface logger;
@@ -118,6 +123,26 @@ public class HttpClientConnectionManager {
 
         #! Last H3 probe times: "host:port" -> timestamp
         hash<string, date> h3_probe_times;
+    }
+
+    private:internal {
+        #! Static shared controller; lazily initialized via getStaticController()
+        static Mutex static_ctrl_lock();
+        static *AsyncSocketIo::AsyncSocketIoController static_controller;
+    }
+
+    #! Returns the shared static controller, creating it on first access
+    /** All managers that don't override with setController() share a single
+        I/O thread via this controller. The controller uses autostop=True so
+        the thread starts when the first poll operation is submitted and stops
+        when all operations complete.
+    */
+    private static AsyncSocketIo::AsyncSocketIoController getStaticController() {
+        AutoLock al(static_ctrl_lock);
+        if (!static_controller) {
+            static_controller = new AsyncSocketIo::AsyncSocketIoController(True);
+        }
+        return static_controller;
     }
 
     #! Creates a new connection manager with the given options
@@ -141,9 +166,9 @@ public class HttpClientConnectionManager {
                 sprintf("max_streams_per_connection must be >= 0 (0 = unlimited), got %d",
                     self.opts.max_streams_per_connection);
         }
-        # Auto-create an AsyncSocketIoController with autostop=True so the I/O
-        # thread starts lazily on the first poll operation and stops when idle
-        controller = new AsyncSocketIo::AsyncSocketIoController(True);
+        # Use the shared static controller by default; all managers share a
+        # single I/O thread for efficient async operation
+        controller = getStaticController();
 
         log(LoggerLevel::DEBUG, "connection manager created: protocol=%s max_conn=%d max_streams=%d idle=%d",
             self.opts.protocol,
@@ -167,22 +192,23 @@ public class HttpClientConnectionManager {
     }
 
     #! Sets an external AsyncSocketIoController for async operations
-    /** Replaces the auto-created controller with a shared external controller.
+    /** Replaces the default shared controller with a caller-provided controller.
         Existing pool connections are migrated to the new controller.
 
         @param controller the I/O controller to use
 
-        @note This is optional; the manager auto-creates a controller with
-        \c autostop=True on construction. Use \c setController() to share a
-        single controller across multiple managers.
+        @note This is optional; by default all managers share a static
+        controller with \c autostop=True. Use \c setController() only when
+        you need a dedicated controller.
     */
     setController(AsyncSocketIo::AsyncSocketIoController controller) {
-        # Stop the auto-created controller if we own it
+        # Cancel this manager's operations on the old controller
+        try {
+            self.controller.cancelByOwner(self.uniqueHash());
+        } catch () {
+        }
+        # Stop a privately-owned controller
         if (owns_controller) {
-            try {
-                self.controller.cancelByOwner(self.uniqueHash());
-            } catch () {
-            }
             try {
                 self.controller.stop();
             } catch () {

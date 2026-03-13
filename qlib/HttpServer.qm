@@ -3337,6 +3337,14 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             return;
         }
 
+        # RFC 9113 §8.2.2 / RFC 9114 §4.2: Transfer-Encoding is prohibited in HTTP/2 and HTTP/3;
+        # strip it before the chunked check to prevent the body from being needlessly converted
+        # to a BinaryInputStream (which would trigger the streaming response path)
+        if (cx."header-info".http2 || cx."header-info".http3) {
+            remove rv.hdr."Transfer-Encoding";
+            remove rv.hdr."transfer-encoding";
+        }
+
         bool chunked = rv.chunked_body || (rv.body && (rv.hdr."Transfer-Encoding"
             || (rv.body instanceof InputStream && !rv.hdr."Content-Length")));
         auto body = rv.body;

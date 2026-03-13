@@ -1742,7 +1742,12 @@ void AsyncIoControllerPriv::updateEventLoopRegistration(const std::string& key,
             auto fd_it = registered_fds.find(sock_hash);
             if (fd_it != registered_fds.end() && fd_it->second != curr_fd) {
                 fd_changed = true;
-                // Remove old fd from EventLoop
+                printd(2, "AsyncIoControllerPriv::updateEventLoopRegistration() "
+                    "fd changed for socket '%s': %d -> %d\n",
+                    sock_hash.c_str(), fd_it->second, curr_fd);
+                // Remove old fd from EventLoop — on Linux, epoll auto-removes
+                // closed fds, but we must also clean up fd_map; remove()
+                // silently handles EBADF/ENOENT from already-closed fds
                 loop->remove(fd_it->second, xsink);
                 // Add new fd to EventLoop
                 int union_events = computeEventUnion(sock_hash);
@@ -1859,14 +1864,28 @@ void AsyncIoControllerPriv::unregisterFromEventLoop(const std::string& key, Exce
                 // Last reference - remove from EventLoop using the registered fd
                 auto fd_it = registered_fds.find(prev_sock_hash);
                 if (fd_it != registered_fds.end()) {
-                    loop->remove(fd_it->second, xsink);
-                } else if (ps) {
-                    // Need to get socket again for the fd
-                    ps = static_cast<QoreSocketObject*>(
+                    // Verify the socket still owns this fd before removing from epoll.
+                    // When a socket is closed, its fd is released and may be recycled
+                    // by a new socket.  Calling remove() on a recycled fd would
+                    // accidentally deregister the new socket from epoll.
+                    bool should_remove = true;
+                    QoreSocketObject* check_sock = static_cast<QoreSocketObject*>(
                         prev_sock->getReferencedPrivateData(CID_SOCKET, xsink));
-                    if (ps) {
-                        loop->remove(ps->getSocket(), xsink);
-                        ps->deref(xsink);
+                    if (check_sock) {
+                        int current_fd = check_sock->getSocket();
+                        if (current_fd < 0 || current_fd != fd_it->second) {
+                            // Socket closed or fd changed — skip remove; epoll
+                            // auto-removed the old fd on close
+                            should_remove = false;
+                            printd(2, "AsyncIoControllerPriv::unregisterFromEventLoop() "
+                                "fd reuse detected for '%s': registered=%d current=%d, "
+                                "skipping EventLoop remove\n",
+                                prev_sock_hash.c_str(), fd_it->second, current_fd);
+                        }
+                        check_sock->deref(xsink);
+                    }
+                    if (should_remove) {
+                        loop->remove(fd_it->second, xsink);
                     }
                 }
                 registered_events.erase(prev_sock_hash);
