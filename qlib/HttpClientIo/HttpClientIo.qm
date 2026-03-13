@@ -182,7 +182,7 @@ public namespace HttpClientIo {
     /** @since HttpClientIo 1.1
     */
     public enum HttpClientProtocol {
-        #! Auto-detect protocol (prefer HTTP/2, fall back to HTTP/1.1)
+        #! Auto-detect protocol (prefer HTTP/3 for HTTPS, fall back to HTTP/2)
         Auto = 0,
         #! Force HTTP/2
         H2 = 1,

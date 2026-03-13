@@ -496,7 +496,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             bool req_error_passthru;
             {
                 AutoReadLock al(config_lock);
-                hdr = headers + hdr;
+                hdr = {} + headers + hdr;
                 req_sct = sct;
                 req_seh = seh;
                 req_no_charset = noCharset;
