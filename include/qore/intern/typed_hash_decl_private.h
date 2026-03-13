@@ -142,6 +142,10 @@ public:
         return sys;
     }
 
+    DLLLOCAL const typed_hash_decl_private* getOrig() const {
+        return orig;
+    }
+
     DLLLOCAL void ref() const {
         refs.ROreference();
     }
