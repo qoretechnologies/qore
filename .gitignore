@@ -123,6 +123,9 @@ Doxyfile.???*
 # VS Code
 .vscode
 
+# Claude Code
+.claude
+
 # Node (tools)
 tools/render-version-art/node_modules/
 tools/render-version-art/package-lock.json

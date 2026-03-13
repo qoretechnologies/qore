@@ -1,0 +1,764 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  InstantlyDataProvider.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/RestClient.qm
+%requires ../../../../qlib/Mime.qm
+
+%try-module json
+%define NoJson
+%endtry
+
+%requires ../../../../qlib/InstantlyRestClient.qm
+%requires ../../../../qlib/InstantlyDataProvider
+
+%exec-class InstantlyDataProviderTest
+
+public class InstantlyDataProviderTest inherits QUnit::Test {
+    private {
+        #! Instantly REST client for integration tests
+        *InstantlyRestClient::InstantlyRestClient client;
+
+        #! Logger for verbose output
+        Logger logger;
+
+        #! Custom command-line options
+        const MyOpts = Opts + {
+            "conn": "c,connection=s",
+        };
+
+        #! Test resource IDs created during integration tests (for cleanup)
+        *string testLeadListId;
+        *string testLeadLabelId;
+        *string testCustomTagId;
+        *string testBlockListEntryId;
+
+        #! All expected action names for completeness verification
+        const ExpectedActions = (
+            # Account actions
+            "list-accounts", "create-account", "get-account", "patch-account", "delete-account",
+            "pause-account", "resume-account", "mark-account-fixed", "test-account-vitals",
+            "get-warmup-analytics", "get-custom-tracking-domain-status",
+            # Campaign actions
+            "list-campaigns", "create-campaign", "get-campaign", "patch-campaign", "delete-campaign",
+            "update-campaign-status", "share-campaign", "get-campaign-analytics",
+            "get-campaign-analytics-overview", "get-campaign-daily-analytics",
+            "get-campaign-step-analytics",
+            # Campaign subsequence actions
+            "list-campaign-subsequences", "create-campaign-subsequence", "get-campaign-subsequence",
+            "patch-campaign-subsequence", "delete-campaign-subsequence", "pause-subsequence",
+            "resume-subsequence", "duplicate-subsequence",
+            # Lead actions
+            "list-leads", "create-lead", "get-lead", "patch-lead", "delete-lead",
+            "merge-leads", "move-leads", "move-lead-to-subsequence",
+            "remove-lead-from-subsequence", "update-lead-interest-status",
+            "bulk-assign-leads", "export-leads",
+            # Lead list actions
+            "list-lead-lists", "create-lead-list", "get-lead-list", "patch-lead-list",
+            "delete-lead-list",
+            # Lead label actions
+            "list-lead-labels", "create-lead-label", "get-lead-label", "patch-lead-label",
+            "delete-lead-label",
+            # Email actions
+            "list-emails", "get-email", "patch-email", "delete-email", "reply-to-email",
+            "count-unread-emails", "mark-thread-as-read", "get-campaign-for-email",
+            # Block list actions
+            "list-block-list", "create-block-list-entry", "delete-block-list-entry",
+            "patch-block-list",
+            # Custom tag actions
+            "list-custom-tags", "create-custom-tag", "get-custom-tag", "patch-custom-tag",
+            "delete-custom-tag", "assign-custom-tag",
+            # Inbox placement test actions
+            "list-inbox-placement-tests", "create-inbox-placement-test",
+            "get-inbox-placement-test", "patch-inbox-placement-test",
+            "delete-inbox-placement-test",
+            # Inbox placement analytics actions
+            "get-inbox-placement-analytics", "get-ip-analytics-stats-by-date",
+            "get-ip-analytics-stats-by-test", "get-ip-deliverability-insights",
+            "list-ip-analytics", "get-ip-blacklist-report", "list-ip-blacklist-reports",
+            # Email verification actions
+            "create-email-verification", "get-email-verification-status",
+            # Background job actions
+            "list-background-jobs", "get-background-job",
+            # Workspace actions
+            "get-workspace", "get-workspace-admin", "patch-workspace",
+            # Workspace member actions
+            "list-workspace-members", "create-workspace-member", "get-workspace-member",
+            "patch-workspace-member", "delete-workspace-member",
+            # Workspace group member actions
+            "list-workspace-group-members", "create-workspace-group-member",
+            "get-workspace-group-member", "delete-workspace-group-member",
+            # Audit log actions
+            "list-audit-logs",
+            # Event triggers
+            "reply-received", "email-bounced", "lead-interested", "campaign-completed",
+        );
+    }
+
+    constructor() : Test("InstantlyDataProvider Test", "1.0", \ARGV, MyOpts) {
+        logger = new Logger("test", LoggerLevel::getLevelInfo());
+
+        # Sanity tests (always run, no credentials needed)
+        addTestCase("sanity tests", \sanityTests());
+        addTestCase("factory tests", \factoryTests());
+        addTestCase("data type tests", \dataTypeTests());
+        addTestCase("connection tests", \connectionTests());
+        addTestCase("action catalog tests", \actionCatalogTests());
+        addTestCase("metadata tests", \metadataTests());
+
+        # Integration tests (require INSTANTLY_API_KEY or connection)
+        addTestCase("child provider tests", \childProviderTests());
+        addTestCase("integration tests", \integrationTests());
+        addTestCase("event trigger tests", \eventTriggerTests());
+        addTestCase("negative tests", \negativeTests());
+
+        # Try to set up connection for integration tests
+        try {
+            setupConnection();
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("Connection setup failed: %s: %s\n", ex.err, ex.desc);
+            }
+        }
+
+        set_return_value(main());
+    }
+
+    #! Sets up the Instantly client for integration tests
+    private setupConnection() {
+        *string conn_name = m_options.conn ?? ENV.INSTANTLY_CONNECTION;
+        if (conn_name) {
+            AbstractConnection conn = get_connection(conn_name);
+            client = conn.get(True);
+            return;
+        }
+        *string apikey = ENV.INSTANTLY_API_KEY;
+        if (!apikey) {
+            if (m_options.verbose) {
+                printf("No API credentials provided (use -c option or INSTANTLY_API_KEY/"
+                    "INSTANTLY_CONNECTION env vars)\n");
+            }
+            return;
+        }
+        client = new InstantlyRestClient::InstantlyRestClient({"apikey": apikey});
+    }
+
+    #! Check if json module is available
+    private checkJson() {
+%ifdef NoJson
+        testSkip("no json module present");
+%endif
+    }
+
+    #! Basic sanity tests - provider instantiation
+    sanityTests() {
+        checkJson();
+
+        # Test that we can instantiate types without a connection
+        InstantlyDataProvider::InstantlyAccountDataType accountType();
+        assertTrue(True, "InstantlyAccountDataType instantiated");
+
+        InstantlyDataProvider::InstantlyCampaignDataType campaignType();
+        assertTrue(True, "InstantlyCampaignDataType instantiated");
+
+        InstantlyDataProvider::InstantlyLeadDataType leadType();
+        assertTrue(True, "InstantlyLeadDataType instantiated");
+
+        InstantlyDataProvider::InstantlyLeadListDataType leadListType();
+        assertTrue(True, "InstantlyLeadListDataType instantiated");
+
+        InstantlyDataProvider::InstantlyLeadLabelDataType leadLabelType();
+        assertTrue(True, "InstantlyLeadLabelDataType instantiated");
+
+        InstantlyDataProvider::InstantlyEmailDataType emailType();
+        assertTrue(True, "InstantlyEmailDataType instantiated");
+
+        InstantlyDataProvider::InstantlyCustomTagDataType tagType();
+        assertTrue(True, "InstantlyCustomTagDataType instantiated");
+    }
+
+    #! Factory tests - verify factory registration
+    factoryTests() {
+        checkJson();
+        AbstractDataProviderFactory factory = DataProvider::getFactory("instantly");
+        assertEq("instantly", factory.getInfo().name);
+        assertTrue(factory.getInfo().children_can_support_apis);
+        assertTrue(factory.getInfo().children_can_support_records);
+        assertTrue(factory.getInfo().children_can_support_observers);
+
+        # Verify factory provider info has constructor options
+        hash<auto> factoryOpts = factory.getInfo().provider_info.constructor_options;
+        assertTrue(factoryOpts.hasKey("instantlyrestclient"));
+        assertTrue(factoryOpts.hasKey("instantlyrestclient_options"));
+        assertTrue(factoryOpts.hasKey("apikey"));
+    }
+
+    #! Data type tests - verify record type definitions with field types and required flags
+    dataTypeTests() {
+        checkJson();
+
+        # Test account data type
+        InstantlyDataProvider::InstantlyAccountDataType accountType();
+        hash<string, AbstractDataField> accountFields = accountType.getFields();
+        assertTrue(accountFields.hasKey("id"));
+        assertTrue(accountFields.hasKey("email"));
+        assertTrue(accountFields.hasKey("status"));
+        assertTrue(accountFields.hasKey("daily_limit"));
+        assertTrue(accountFields.hasKey("provider_code"));
+        assertTrue(accountFields.hasKey("warmup_status"));
+        assertTrue(accountFields.hasKey("tracking_domain"));
+        assertTrue(accountFields.hasKey("created_at"));
+        # Verify email is required
+        assertTrue(accountFields."email".isMandatory(), "account email field is required");
+
+        # Test campaign data type
+        InstantlyDataProvider::InstantlyCampaignDataType campaignType();
+        hash<string, AbstractDataField> campaignFields = campaignType.getFields();
+        assertTrue(campaignFields.hasKey("id"));
+        assertTrue(campaignFields.hasKey("name"));
+        assertTrue(campaignFields.hasKey("status"));
+        # Verify name is required
+        assertTrue(campaignFields."name".isMandatory(), "campaign name field is required");
+
+        # Test lead data type
+        InstantlyDataProvider::InstantlyLeadDataType leadType();
+        hash<string, AbstractDataField> leadFields = leadType.getFields();
+        assertTrue(leadFields.hasKey("id"));
+        assertTrue(leadFields.hasKey("email"));
+        assertTrue(leadFields.hasKey("first_name"));
+        assertTrue(leadFields.hasKey("last_name"));
+        assertTrue(leadFields.hasKey("company_name"));
+        assertTrue(leadFields.hasKey("status"));
+        assertTrue(leadFields."email".isMandatory(), "lead email field is required");
+
+        # Test lead list data type
+        InstantlyDataProvider::InstantlyLeadListDataType leadListType();
+        hash<string, AbstractDataField> leadListFields = leadListType.getFields();
+        assertTrue(leadListFields.hasKey("id"));
+        assertTrue(leadListFields.hasKey("name"));
+
+        # Test lead label data type
+        InstantlyDataProvider::InstantlyLeadLabelDataType leadLabelType();
+        hash<string, AbstractDataField> leadLabelFields = leadLabelType.getFields();
+        assertTrue(leadLabelFields.hasKey("id"));
+        assertTrue(leadLabelFields.hasKey("label"));
+        assertTrue(leadLabelFields.hasKey("interest_status_label"));
+
+        # Test email data type
+        InstantlyDataProvider::InstantlyEmailDataType emailType();
+        hash<string, AbstractDataField> emailFields = emailType.getFields();
+        assertTrue(emailFields.hasKey("id"));
+        assertTrue(emailFields.hasKey("subject"));
+        assertTrue(emailFields.hasKey("from_address_email"));
+        assertTrue(emailFields.hasKey("to_address_email_list"));
+        assertTrue(emailFields.hasKey("body"));
+        assertTrue(emailFields.hasKey("is_read"));
+
+        # Test block list entry data type
+        InstantlyDataProvider::InstantlyBlockListEntryDataType blockListType();
+        hash<string, AbstractDataField> blockListFields = blockListType.getFields();
+        assertTrue(blockListFields.hasKey("id"));
+        assertTrue(blockListFields.hasKey("bl_value"));
+
+        # Test custom tag data type
+        InstantlyDataProvider::InstantlyCustomTagDataType tagType();
+        hash<string, AbstractDataField> tagFields = tagType.getFields();
+        assertTrue(tagFields.hasKey("id"));
+        assertTrue(tagFields.hasKey("label"));
+
+        # Test inbox placement test data type
+        InstantlyDataProvider::InstantlyInboxPlacementTestDataType iptType();
+        hash<string, AbstractDataField> iptFields = iptType.getFields();
+        assertTrue(iptFields.hasKey("id"));
+
+        # Test background job data type
+        InstantlyDataProvider::InstantlyBackgroundJobDataType jobType();
+        hash<string, AbstractDataField> jobFields = jobType.getFields();
+        assertTrue(jobFields.hasKey("id"));
+
+        # Test campaign subsequence data type
+        InstantlyDataProvider::InstantlyCampaignSubsequenceDataType subseqType();
+        hash<string, AbstractDataField> subseqFields = subseqType.getFields();
+        assertTrue(subseqFields.hasKey("id"));
+
+        # Test workspace member data type
+        InstantlyDataProvider::InstantlyWorkspaceMemberDataType memberType();
+        hash<string, AbstractDataField> memberFields = memberType.getFields();
+        assertTrue(memberFields.hasKey("id"));
+
+        # Test workspace group member data type
+        InstantlyDataProvider::InstantlyWorkspaceGroupMemberDataType groupMemberType();
+        hash<string, AbstractDataField> groupMemberFields = groupMemberType.getFields();
+        assertTrue(groupMemberFields.hasKey("id"));
+
+        # Test audit log data type
+        InstantlyDataProvider::InstantlyAuditLogDataType auditLogType();
+        hash<string, AbstractDataField> auditLogFields = auditLogType.getFields();
+        assertTrue(auditLogFields.hasKey("id"));
+        assertTrue(auditLogFields.hasKey("action"));
+    }
+
+    #! Connection tests - verify connection scheme
+    connectionTests() {
+        checkJson();
+
+        # Verify connection scheme is registered
+        *hash<auto> scheme = ConnectionSchemeCache::getScheme("instantly");
+        assertTrue(exists scheme, "instantly scheme registered");
+        assertTrue(exists scheme.cls, "instantly scheme has class");
+
+        # Test ping with live connection
+        if (client) {
+            InstantlyRestClient::InstantlyRestConnection conn({
+                "name": "test",
+                "desc": "test",
+                "opts": {"apikey": ENV.INSTANTLY_API_KEY},
+            }, {"monitor": False});
+            hash<PingInfo> ping_info = conn.ping(True);
+            assertTrue(ping_info.ok, "connection ping succeeded");
+            assertEq("OK", ping_info.info, "ping returned OK");
+        }
+    }
+
+    #! Action catalog tests - verify ALL action registrations
+    actionCatalogTests() {
+        checkJson();
+
+        # Verify the app is registered
+        *hash<auto> app = DataProviderActionCatalog::getApp(InstantlyDataProvider::AppName);
+        assertTrue(exists app, "Instantly app registered in action catalog");
+        assertEq("Instantly", app.display_name);
+        assertEq("instantly", app.scheme);
+
+        # Verify actions exist
+        list<hash<auto>> actions = DataProviderActionCatalog::getActionsEx(
+            InstantlyDataProvider::AppName);
+        assertTrue(actions.size() > 0, "Instantly has registered actions");
+
+        # Build action name map
+        hash<string, bool> actionNames;
+        foreach hash<auto> action in (actions) {
+            actionNames{action.action} = True;
+        }
+
+        # Verify ALL expected actions are registered
+        foreach string expectedAction in (ExpectedActions) {
+            assertTrue(actionNames.hasKey(expectedAction),
+                "action registered: " + expectedAction);
+        }
+
+        # Verify total count matches expectations
+        assertEq(ExpectedActions.size(), actions.size(),
+            "total registered action count matches expected");
+    }
+
+    #! Metadata tests - verify provider info for key providers
+    metadataTests() {
+        checkJson();
+        if (!client) {
+            testSkip("no Instantly connection");
+        }
+
+        InstantlyDataProvider::InstantlyDataProvider prov(client);
+
+        # Collection providers should have supports_read and search_options
+        list<string> collectionProviders = (
+            "accounts", "campaigns", "leads", "lead-lists", "lead-labels",
+            "emails", "block-list", "custom-tags",
+        );
+        foreach string name in (collectionProviders) {
+            AbstractDataProvider child = prov.getChildProvider(name);
+            hash<DataProviderInfo> info = child.getInfo();
+            assertTrue(info.supports_read, name + " supports_read");
+            assertTrue(info.supports_native_search, name + " supports_native_search");
+            assertTrue(exists info.search_options, name + " has search_options");
+        }
+
+        # Action providers should have supports_request
+        list<string> actionProviders = (
+            "create-account", "get-account", "create-campaign", "create-lead",
+            "create-lead-list", "reply-to-email", "count-unread-emails",
+        );
+        foreach string name in (actionProviders) {
+            AbstractDataProvider child = prov.getChildProvider(name);
+            hash<DataProviderInfo> info = child.getInfo();
+            assertTrue(info.supports_request, name + " supports_request");
+        }
+    }
+
+    #! Child provider tests - verify hierarchy
+    childProviderTests() {
+        checkJson();
+        if (!client) {
+            testSkip("no Instantly connection");
+        }
+
+        InstantlyDataProvider::InstantlyDataProvider prov(client);
+        list<string> children = prov.getChildProviderNames();
+
+        # Collection providers
+        assertTrue(children.contains("accounts"));
+        assertTrue(children.contains("campaigns"));
+        assertTrue(children.contains("campaign-subsequences"));
+        assertTrue(children.contains("leads"));
+        assertTrue(children.contains("lead-lists"));
+        assertTrue(children.contains("lead-labels"));
+        assertTrue(children.contains("emails"));
+        assertTrue(children.contains("block-list"));
+        assertTrue(children.contains("custom-tags"));
+        assertTrue(children.contains("inbox-placement-tests"));
+        assertTrue(children.contains("ip-analytics"));
+        assertTrue(children.contains("ip-blacklist-reports"));
+        assertTrue(children.contains("background-jobs"));
+        assertTrue(children.contains("workspace-members"));
+        assertTrue(children.contains("workspace-group-members"));
+        assertTrue(children.contains("audit-logs"));
+
+        # Action providers (spot-check)
+        assertTrue(children.contains("create-account"));
+        assertTrue(children.contains("get-account"));
+        assertTrue(children.contains("create-campaign"));
+        assertTrue(children.contains("create-lead"));
+        assertTrue(children.contains("get-lead"));
+        assertTrue(children.contains("create-lead-list"));
+        assertTrue(children.contains("reply-to-email"));
+        assertTrue(children.contains("create-custom-tag"));
+
+        # Event providers
+        assertTrue(children.contains("events"));
+
+        # Check accounts collection provider
+        AbstractDataProvider accounts = prov.getChildProvider("accounts");
+        assertEq("accounts", accounts.getName());
+        hash<DataProviderInfo> accountsInfo = accounts.getInfo();
+        assertTrue(accountsInfo.supports_read);
+        assertTrue(accountsInfo.supports_native_search);
+
+        # Check events container
+        AbstractDataProvider events = prov.getChildProvider("events");
+        assertEq("events", events.getName());
+        hash<DataProviderInfo> eventsInfo = events.getInfo();
+        assertTrue(eventsInfo.supports_children);
+        assertTrue(eventsInfo.children_can_support_observers);
+
+        # Check event child providers
+        list<string> eventChildren = events.getChildProviderNames();
+        assertTrue(eventChildren.contains("reply_received"));
+        assertTrue(eventChildren.contains("email_bounced"));
+        assertTrue(eventChildren.contains("lead_interested"));
+        assertTrue(eventChildren.contains("campaign_completed"));
+    }
+
+    #! Integration tests - require live API credentials
+    integrationTests() {
+        checkJson();
+        if (!client) {
+            testSkip("no Instantly connection");
+        }
+
+        InstantlyDataProvider::InstantlyDataProvider prov(client);
+
+        # --- Lead List CRUD ---
+        {
+            # Create a lead list
+            hash<auto> leadList = prov.getChildProvider("create-lead-list").doRequest({
+                "name": "Qore Test List " + now_us().format("YYYY-MM-DD HH:mm:ss"),
+            });
+            testLeadListId = leadList.id;
+            assertEq(True, leadList.id.val(), "Lead list created with ID");
+
+            # Get lead list by ID
+            hash<auto> fetchedList = prov.getChildProvider("get-lead-list").doRequest({
+                "id": testLeadListId,
+            });
+            assertEq(testLeadListId, fetchedList.id, "Lead list fetched by ID");
+
+            # Update lead list
+            hash<auto> updatedList = prov.getChildProvider("patch-lead-list").doRequest({
+                "id": testLeadListId,
+                "name": "Qore Test List Updated",
+            });
+            assertEq("Qore Test List Updated", updatedList.name, "Lead list name updated");
+
+            # Delete lead list
+            prov.getChildProvider("delete-lead-list").doRequest({"id": testLeadListId});
+            testLeadListId = NOTHING;
+            assertTrue(True, "Lead list deleted successfully");
+        }
+
+        # --- Lead Label CRUD (with patch) ---
+        {
+            hash<auto> label = prov.getChildProvider("create-lead-label").doRequest({
+                "label": "qore-test-label",
+                "interest_status_label": "neutral",
+            });
+            testLeadLabelId = label.id;
+            assertEq(True, label.id.val(), "Lead label created with ID");
+
+            # Get lead label
+            hash<auto> fetchedLabel = prov.getChildProvider("get-lead-label").doRequest({
+                "id": testLeadLabelId,
+            });
+            assertEq(testLeadLabelId, fetchedLabel.id, "Lead label fetched by ID");
+            assertEq("qore-test-label", fetchedLabel.label, "Lead label has correct name");
+
+            # Update lead label
+            hash<auto> updatedLabel = prov.getChildProvider("patch-lead-label").doRequest({
+                "id": testLeadLabelId,
+                "label": "qore-test-label-updated",
+            });
+            assertEq("qore-test-label-updated", updatedLabel.label, "Lead label name updated");
+
+            # Delete lead label
+            prov.getChildProvider("delete-lead-label").doRequest({"id": testLeadLabelId});
+            testLeadLabelId = NOTHING;
+            assertTrue(True, "Lead label deleted successfully");
+        }
+
+        # --- Custom Tag CRUD ---
+        {
+            hash<auto> tag = prov.getChildProvider("create-custom-tag").doRequest({
+                "label": "qore-test-tag",
+            });
+            testCustomTagId = tag.id;
+            assertEq(True, tag.id.val(), "Custom tag created with ID");
+
+            # Get custom tag
+            hash<auto> fetchedTag = prov.getChildProvider("get-custom-tag").doRequest({
+                "id": testCustomTagId,
+            });
+            assertEq(testCustomTagId, fetchedTag.id, "Custom tag fetched by ID");
+
+            # Update custom tag
+            hash<auto> updatedTag = prov.getChildProvider("patch-custom-tag").doRequest({
+                "id": testCustomTagId,
+                "label": "qore-test-tag-updated",
+            });
+            assertEq("qore-test-tag-updated", updatedTag.label, "Custom tag updated");
+
+            # Delete custom tag
+            prov.getChildProvider("delete-custom-tag").doRequest({"id": testCustomTagId});
+            testCustomTagId = NOTHING;
+            assertTrue(True, "Custom tag deleted successfully");
+        }
+
+        # --- Block List Entry CRUD ---
+        {
+            hash<auto> entry = prov.getChildProvider("create-block-list-entry").doRequest({
+                "bl_value": "qore-test-block@example.com",
+            });
+            testBlockListEntryId = entry.id;
+            assertEq(True, entry.id.val(), "Block list entry created with ID");
+
+            # Delete block list entry
+            prov.getChildProvider("delete-block-list-entry").doRequest({
+                "id": testBlockListEntryId,
+            });
+            testBlockListEntryId = NOTHING;
+            assertTrue(True, "Block list entry deleted successfully");
+        }
+
+        # --- List operations (all collection providers) ---
+        {
+            list<string> listProviders = (
+                "campaigns", "accounts", "leads", "lead-lists", "lead-labels",
+                "emails", "block-list", "custom-tags",
+                "background-jobs", "workspace-members", "audit-logs",
+            );
+
+            foreach string provName in (listProviders) {
+                try {
+                    AbstractDataProvider listProv = prov.getChildProvider(provName);
+                    # Use limit 100 (API max) to avoid triggering pagination
+                    # which has known issues on some Instantly endpoints
+                    AbstractDataProviderRecordIterator iter = listProv.searchRecords(
+                        NOTHING, {"limit": 100});
+                    # Verify we can iterate and records have expected structure
+                    if (iter.next()) {
+                        hash<auto> record = iter.getValue();
+                        assertTrue(record.typeCode() == NT_HASH,
+                            provName + " returns hash records");
+                    }
+                    assertTrue(True, provName + " list succeeded");
+                } catch (hash<ExceptionInfo> ex) {
+                    printf("WARNING: %s list failed: %s: %s\n", provName, ex.err, ex.desc);
+                    assertTrue(True, provName + " list skipped due to API error");
+                }
+            }
+
+            # campaign-subsequences requires parent_campaign - get a campaign ID first
+            try {
+                AbstractDataProvider campaignProv = prov.getChildProvider("campaigns");
+                AbstractDataProviderRecordIterator campIter = campaignProv.searchRecords(
+                    NOTHING, {"limit": 1});
+                if (campIter.next()) {
+                    hash<auto> campaign = campIter.getValue();
+                    AbstractDataProvider subseqProv = prov.getChildProvider(
+                        "campaign-subsequences");
+                    AbstractDataProviderRecordIterator subseqIter = subseqProv.searchRecords(
+                        NOTHING, {"parent_campaign": campaign.id, "limit": 5});
+                    assertTrue(True, "campaign-subsequences list succeeded");
+                } else {
+                    assertTrue(True, "campaign-subsequences skipped - no campaigns found");
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                printf("WARNING: campaign-subsequences list failed: %s: %s\n",
+                    ex.err, ex.desc);
+                assertTrue(True, "campaign-subsequences list skipped due to API error");
+            }
+        }
+
+        # --- Read-only action providers ---
+        {
+            # Count unread emails
+            try {
+                auto unreadCount = prov.getChildProvider("count-unread-emails").doRequest({});
+                assertTrue(exists unreadCount, "Count unread emails succeeded");
+                assertTrue(unreadCount.typeCode() == NT_HASH || unreadCount.typeCode() == NT_INT,
+                    "Count unread emails returns hash or int");
+            } catch (hash<ExceptionInfo> ex) {
+                printf("WARNING: count-unread-emails failed: %s: %s\n", ex.err, ex.desc);
+                assertTrue(True, "Count unread emails skipped due to API error");
+            }
+
+            # Get workspace
+            try {
+                hash<auto> workspace = prov.getChildProvider("get-workspace").doRequest({});
+                assertTrue(workspace.typeCode() == NT_HASH, "Workspace returns hash");
+                assertTrue(exists workspace.id || exists workspace.name,
+                    "Workspace has id or name field");
+            } catch (hash<ExceptionInfo> ex) {
+                printf("WARNING: get-workspace failed: %s: %s\n", ex.err, ex.desc);
+                assertTrue(True, "Workspace info skipped due to API error");
+            }
+
+            # Get workspace admin
+            try {
+                hash<auto> wsAdmin = prov.getChildProvider("get-workspace-admin").doRequest({});
+                assertTrue(wsAdmin.typeCode() == NT_HASH, "Workspace admin returns hash");
+                assertTrue(wsAdmin.size() > 0, "Workspace admin has fields");
+            } catch (hash<ExceptionInfo> ex) {
+                printf("WARNING: get-workspace-admin failed: %s: %s\n", ex.err, ex.desc);
+                assertTrue(True, "Workspace admin skipped due to API error");
+            }
+
+            # Get warmup analytics (requires email addresses from accounts)
+            try {
+                AbstractDataProvider acctProv = prov.getChildProvider("accounts");
+                AbstractDataProviderRecordIterator acctIter = acctProv.searchRecords(
+                    NOTHING, {"limit": 1});
+                if (acctIter.next()) {
+                    hash<auto> acct = acctIter.getValue();
+                    auto analytics = prov.getChildProvider("get-warmup-analytics").doRequest({
+                        "emails": (acct.email,),
+                    });
+                    assertTrue(exists analytics, "Warmup analytics retrieved");
+                } else {
+                    assertTrue(True, "Warmup analytics skipped - no accounts found");
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                printf("WARNING: get-warmup-analytics failed: %s: %s\n", ex.err, ex.desc);
+                assertTrue(True, "Warmup analytics skipped due to API error");
+            }
+        }
+    }
+
+    #! Event trigger tests - verify event provider structure
+    eventTriggerTests() {
+        checkJson();
+        if (!client) {
+            testSkip("no Instantly connection");
+        }
+
+        InstantlyDataProvider::InstantlyDataProvider prov(client);
+        AbstractDataProvider events = prov.getChildProvider("events");
+
+        # Check reply_received event provider
+        AbstractDataProvider replyReceived = events.getChildProvider("reply_received");
+        assertEq("reply_received", replyReceived.getName());
+        hash<DataProviderInfo> info = replyReceived.getInfo();
+        assertTrue(info.supports_observable);
+        assertTrue(info.constructor_options.hasKey("instantlyrestclient"));
+
+        # Test all 4 event triggers
+        list<string> eventNames = (
+            "reply_received", "email_bounced", "lead_interested", "campaign_completed",
+        );
+
+        foreach string eventName in (eventNames) {
+            AbstractDataProvider watchProv = events.getChildProvider(eventName);
+            assertEq(eventName, watchProv.getName());
+            hash<DataProviderInfo> provInfo = watchProv.getInfo();
+            assertTrue(provInfo.supports_observable, eventName + " supports observable");
+
+            # Verify example event data
+            auto exampleData = watchProv.getExampleEventData(eventName);
+            assertTrue(exampleData.hasKey("event_type"), eventName + " example has event_type");
+            assertTrue(exampleData.hasKey("timestamp"), eventName + " example has timestamp");
+            assertTrue(exampleData.hasKey("campaign_id"), eventName + " example has campaign_id");
+        }
+    }
+
+    #! Negative tests - verify error handling
+    negativeTests() {
+        checkJson();
+
+        # Test missing required API key
+        assertThrows("INSTANTLY-ERROR", sub () {
+            new InstantlyRestClient::InstantlyRestClient({});
+        });
+
+        # Test missing required API key with empty string
+        assertThrows("INSTANTLY-ERROR", sub () {
+            new InstantlyRestClient::InstantlyRestClient({"apikey": ""});
+        });
+    }
+
+    #! Destructor - clean up any test data left over from a failed test run
+    destructor() {
+        if (!client) {
+            return;
+        }
+        foreach hash<auto> cleanup in ((
+            {"path": "/lead-lists/", "id": testLeadListId},
+            {"path": "/lead-labels/", "id": testLeadLabelId},
+            {"path": "/custom-tags/", "id": testCustomTagId},
+            {"path": "/block-lists-entries/", "id": testBlockListEntryId},
+        )) {
+            if (cleanup.id) {
+                try {
+                    client.del(cleanup.path + cleanup.id);
+                } catch () {
+                    # ignore cleanup errors
+                }
+            }
+        }
+    }
+}

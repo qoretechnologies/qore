@@ -829,6 +829,21 @@ cargo install tree-sitter-cli@0.26.5
       - polling-based event triggers for new invoices, contacts, estimates, expenses, items, and projects
       - action catalog integration with reference data support for organizations, customers, and contacts
       - connection support with \c zohoinvoice:// URL scheme
+    - @ref lemlistrestclientintro "LemlistRestClient" module
+      - new module providing a REST client for Lemlist's sales outreach API
+      - supports HTTP Basic Authentication with API key (empty username, API key as password)
+      - all requests include \c version=v2 query parameter automatically
+      - provides LemlistRestConnection for connection management with \c lemlist:// URL scheme
+    - @ref lemlistdataproviderintro "LemlistDataProvider" module
+      - new module providing a data provider API for Lemlist sales outreach and email campaign services
+      - campaign management (create, pause, start campaigns)
+      - lead management (add, update, remove leads from campaigns)
+      - activity tracking (emails sent, opened, clicked, replied, bounced)
+      - task management (create and update manual tasks)
+      - contact management (list and retrieve contacts)
+      - webhook-based event triggers for 7 email and engagement event types
+      - action catalog integration with 13 actions and 7 triggers
+      - connection support with \c lemlist:// URL scheme
     - @ref shipporestclientintro "ShippoRestClient" module
       - new module providing a REST client for Shippo's shipping API
       - supports dual authentication: OAuth2 and API token (\c ShippoToken header)
@@ -852,6 +867,17 @@ cargo install tree-sitter-cli@0.26.5
       - webhook-based event triggers for order and shipment notifications
       - action catalog integration with 36 actions and 4 triggers
       - connection support with \c shipstation:// URL scheme
+    - @ref instantlyrestclientintro "InstantlyRestClient" module
+      - new module providing a REST client for Instantly's email outreach API v2
+      - supports Bearer token (API key) authentication
+      - provides InstantlyRestConnection for connection management with \c instantly:// URL scheme
+    - @ref instantlydataproviderintro "InstantlyDataProvider" module
+      - new module providing a data provider API for Instantly email outreach and sales automation
+      - campaign, lead, email account, email, and lead list management
+      - block list, custom tags, inbox placement tests, and workspace management
+      - webhook-based event triggers for replies, bounces, interested leads, and campaign completion
+      - action catalog integration with ~100 actions and 4 triggers
+      - connection support with \c instantly:// URL scheme
     - @ref deelrestclientintro "DeelRestClient" module
       - new module providing a REST client for Deel's global workforce management API
       - supports API key (Bearer token) authentication
