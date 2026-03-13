@@ -52,11 +52,7 @@ const QoreTypeInfo* QoreHashMapOperatorNode::setReturnTypeInfo(const QoreTypeInf
     const QoreTypeInfo* typeInfo;
 
     // this operator returns no value if the iterator expression has no value
-    // when iteratorTypeInfo is null (unknown type), we cannot know if it can return NOTHING,
-    // so we default to false; only set true when we KNOW the type can be NOTHING
-    bool or_nothing = iteratorTypeInfo
-        ? (QoreTypeInfo::parseReturns(iteratorTypeInfo, NT_NOTHING) != QTI_NOT_EQUAL)
-        : false;
+    bool or_nothing = QoreTypeInfo::parseReturns(iteratorTypeInfo, NT_NOTHING);
     if (QoreTypeInfo::hasType(expTypeInfo2)) {
         returnTypeInfo = qore_get_complex_hash_type(expTypeInfo2);
 
