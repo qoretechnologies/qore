@@ -94,6 +94,7 @@ class JITSmokeTest inherits QUnit::Test {
         addTestCase("optimized foldl sum/prod", \testJitFoldlSumProd());
         addTestCase("optimized foldl diff/min/max", \testJitFoldlDiffMinMax());
         addTestCase("optimized map patterns", \testJitMapOptimized());
+        addTestCase("map with iterator objects", \testMapWithIteratorObjects());
         addTestCase("optimized select patterns", \testJitSelectOptimized());
         addTestCase("fused map+select patterns", \testJitFusedMapSelect());
         addTestCase("fused map+foldl patterns", \testJitFusedMapFoldl());
@@ -1595,6 +1596,60 @@ printf(\"%d\\n\", result.size());
         foreach string mode in ("ast", "ir", "jit") {
             string result = trim(runScript(empty_code, mode));
             assertEq("0", result, sprintf("map empty list %s", mode));
+        }
+    }
+
+    testMapWithIteratorObjects() {
+        # Test map operator with iterator objects (not just direct lists)
+        # This tests the regression where iterator objects were incorrectly handled
+        # in optimized map opcodes (MapScaleInt, etc.)
+
+        # Test list map with .iterator() using scale pattern
+        string scale_with_iter_code = "%modern
+auto input = (1, 2, 3);
+auto iter = input.iterator();
+auto result = map \$1 * 10, iter;
+printf(\"%s:%d:%d:%d\\n\", type(result), result[0], result[1], result[2]);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(scale_with_iter_code, mode));
+            assertEq("list:10:20:30", result, sprintf("map scale int via iterator %s", mode));
+        }
+
+        # Test list map with .iterator() using offset pattern
+        string offset_with_iter_code = "%modern
+auto input = (1, 2, 3);
+auto iter = input.iterator();
+auto result = map \$1 + 5, iter;
+printf(\"%s:%d:%d:%d\\n\", type(result), result[0], result[1], result[2]);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(offset_with_iter_code, mode));
+            assertEq("list:6:7:8", result, sprintf("map offset int via iterator %s", mode));
+        }
+
+        # Test list map with .iterator() using square pattern
+        string square_with_iter_code = "%modern
+auto input = (2, 3, 4);
+auto iter = input.iterator();
+auto result = map \$1 * \$1, iter;
+printf(\"%s:%d:%d:%d\\n\", type(result), result[0], result[1], result[2]);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(square_with_iter_code, mode));
+            assertEq("list:4:9:16", result, sprintf("map square int via iterator %s", mode));
+        }
+
+        # Test with floats
+        string scale_float_iter_code = "%modern
+auto input = (1.0, 2.0, 3.0);
+auto iter = input.iterator();
+auto result = map \$1 * 2.5, iter;
+printf(\"%.1f,%.1f,%.1f\\n\", result[0], result[1], result[2]);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(scale_float_iter_code, mode));
+            assertEq("2.5,5.0,7.5", result, sprintf("map scale float via iterator %s", mode));
         }
     }
 

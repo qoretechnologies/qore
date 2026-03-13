@@ -1793,6 +1793,27 @@ extern "C" DLLEXPORT uint64_t qore_rt_map_scale_int(uint64_t list_val, int64_t s
         if (v.isNothing()) {
             return toBits(QoreValue());
         }
+        // Handle iterator objects using abstract iterator protocol
+        if (v.getType() == NT_OBJECT) {
+            QoreObject* obj = const_cast<QoreObject*>(v.get<const QoreObject>());
+            ExceptionSink xsink;
+            AbstractIteratorHelper h(&xsink, "map operator", obj);
+            if (h) {
+                ReferenceHolder<QoreListNode> result(new QoreListNode(bigIntTypeInfo), &xsink);
+                while (!xsink) {
+                    bool has_next = h.next(&xsink);
+                    if (xsink || !has_next) break;
+                    ValueHolder iv(h.getValue(&xsink), &xsink);
+                    if (xsink) break;
+                    result->push(iv->getAsBigInt() * scale, &xsink);
+                }
+                if (!xsink) return toBits(result.release());
+                // On exception, fall through (exception already set in thread-local xsink)
+                // Return NOTHING to indicate error
+                return toBits(QoreValue());
+            }
+            // Not an iterator, fall through to single-value handling
+        }
         // Handle single-value input: apply operation and return directly
         int64_t val = v.getAsBigInt();
         return toBits(QoreValue(val * scale));
@@ -1812,6 +1833,27 @@ extern "C" DLLEXPORT uint64_t qore_rt_map_scale_float(uint64_t list_val, double 
         // NOTHING returns NOTHING
         if (v.isNothing()) {
             return toBits(QoreValue());
+        }
+        // Handle iterator objects using abstract iterator protocol
+        if (v.getType() == NT_OBJECT) {
+            QoreObject* obj = const_cast<QoreObject*>(v.get<const QoreObject>());
+            ExceptionSink xsink;
+            AbstractIteratorHelper h(&xsink, "map operator", obj);
+            if (h) {
+                ReferenceHolder<QoreListNode> result(new QoreListNode(floatTypeInfo), &xsink);
+                while (!xsink) {
+                    bool has_next = h.next(&xsink);
+                    if (xsink || !has_next) break;
+                    ValueHolder iv(h.getValue(&xsink), &xsink);
+                    if (xsink) break;
+                    result->push(iv->getAsFloat() * scale, &xsink);
+                }
+                if (!xsink) return toBits(result.release());
+                // On exception, fall through (exception already set in thread-local xsink)
+                // Return NOTHING to indicate error
+                return toBits(QoreValue());
+            }
+            // Not an iterator, fall through to single-value handling
         }
         // Handle single-value input: apply operation and return directly
         double val = v.getAsFloat();
@@ -1833,6 +1875,27 @@ extern "C" DLLEXPORT uint64_t qore_rt_map_offset_int(uint64_t list_val, int64_t 
         if (v.isNothing()) {
             return toBits(QoreValue());
         }
+        // Handle iterator objects using abstract iterator protocol
+        if (v.getType() == NT_OBJECT) {
+            QoreObject* obj = const_cast<QoreObject*>(v.get<const QoreObject>());
+            ExceptionSink xsink;
+            AbstractIteratorHelper h(&xsink, "map operator", obj);
+            if (h) {
+                ReferenceHolder<QoreListNode> result(new QoreListNode(bigIntTypeInfo), &xsink);
+                while (!xsink) {
+                    bool has_next = h.next(&xsink);
+                    if (xsink || !has_next) break;
+                    ValueHolder iv(h.getValue(&xsink), &xsink);
+                    if (xsink) break;
+                    result->push(iv->getAsBigInt() + offset, &xsink);
+                }
+                if (!xsink) return toBits(result.release());
+                // On exception, fall through (exception already set in thread-local xsink)
+                // Return NOTHING to indicate error
+                return toBits(QoreValue());
+            }
+            // Not an iterator, fall through to single-value handling
+        }
         // Handle single-value input: apply operation and return directly
         int64_t val = v.getAsBigInt();
         return toBits(QoreValue(val + offset));
@@ -1852,6 +1915,27 @@ extern "C" DLLEXPORT uint64_t qore_rt_map_offset_float(uint64_t list_val, double
         // NOTHING returns NOTHING
         if (v.isNothing()) {
             return toBits(QoreValue());
+        }
+        // Handle iterator objects using abstract iterator protocol
+        if (v.getType() == NT_OBJECT) {
+            QoreObject* obj = const_cast<QoreObject*>(v.get<const QoreObject>());
+            ExceptionSink xsink;
+            AbstractIteratorHelper h(&xsink, "map operator", obj);
+            if (h) {
+                ReferenceHolder<QoreListNode> result(new QoreListNode(floatTypeInfo), &xsink);
+                while (!xsink) {
+                    bool has_next = h.next(&xsink);
+                    if (xsink || !has_next) break;
+                    ValueHolder iv(h.getValue(&xsink), &xsink);
+                    if (xsink) break;
+                    result->push(iv->getAsFloat() + offset, &xsink);
+                }
+                if (!xsink) return toBits(result.release());
+                // On exception, fall through (exception already set in thread-local xsink)
+                // Return NOTHING to indicate error
+                return toBits(QoreValue());
+            }
+            // Not an iterator, fall through to single-value handling
         }
         // Handle single-value input: apply operation and return directly
         double val = v.getAsFloat();
@@ -1873,6 +1957,28 @@ extern "C" DLLEXPORT uint64_t qore_rt_map_square_int(uint64_t list_val) {
         if (v.isNothing()) {
             return toBits(QoreValue());
         }
+        // Handle iterator objects using abstract iterator protocol
+        if (v.getType() == NT_OBJECT) {
+            QoreObject* obj = const_cast<QoreObject*>(v.get<const QoreObject>());
+            ExceptionSink xsink;
+            AbstractIteratorHelper h(&xsink, "map operator", obj);
+            if (h) {
+                ReferenceHolder<QoreListNode> result(new QoreListNode(bigIntTypeInfo), &xsink);
+                while (!xsink) {
+                    bool has_next = h.next(&xsink);
+                    if (xsink || !has_next) break;
+                    ValueHolder iv(h.getValue(&xsink), &xsink);
+                    if (xsink) break;
+                    int64_t val = iv->getAsBigInt();
+                    result->push(val * val, &xsink);
+                }
+                if (!xsink) return toBits(result.release());
+                // On exception, fall through (exception already set in thread-local xsink)
+                // Return NOTHING to indicate error
+                return toBits(QoreValue());
+            }
+            // Not an iterator, fall through to single-value handling
+        }
         // Handle single-value input: apply operation and return directly
         int64_t val = v.getAsBigInt();
         return toBits(QoreValue(val * val));
@@ -1893,6 +1999,28 @@ extern "C" DLLEXPORT uint64_t qore_rt_map_square_float(uint64_t list_val) {
         // NOTHING returns NOTHING
         if (v.isNothing()) {
             return toBits(QoreValue());
+        }
+        // Handle iterator objects using abstract iterator protocol
+        if (v.getType() == NT_OBJECT) {
+            QoreObject* obj = const_cast<QoreObject*>(v.get<const QoreObject>());
+            ExceptionSink xsink;
+            AbstractIteratorHelper h(&xsink, "map operator", obj);
+            if (h) {
+                ReferenceHolder<QoreListNode> result(new QoreListNode(floatTypeInfo), &xsink);
+                while (!xsink) {
+                    bool has_next = h.next(&xsink);
+                    if (xsink || !has_next) break;
+                    ValueHolder iv(h.getValue(&xsink), &xsink);
+                    if (xsink) break;
+                    double val = iv->getAsFloat();
+                    result->push(val * val, &xsink);
+                }
+                if (!xsink) return toBits(result.release());
+                // On exception, fall through (exception already set in thread-local xsink)
+                // Return NOTHING to indicate error
+                return toBits(QoreValue());
+            }
+            // Not an iterator, fall through to single-value handling
         }
         // Handle single-value input: apply operation and return directly
         double val = v.getAsFloat();

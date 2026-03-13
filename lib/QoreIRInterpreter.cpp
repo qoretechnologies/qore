@@ -7762,6 +7762,25 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
                 if (left.isNothing()) {
                     return QoreValue();
                 }
+                // Handle iterator objects using abstract iterator protocol
+                if (left.getType() == NT_OBJECT) {
+                    QoreObject* obj = const_cast<QoreObject*>(left.get<const QoreObject>());
+                    AbstractIteratorHelper h(xsink, "map operator", obj);
+                    if (h) {
+                        int64_t scale = right.getAsBigInt();
+                        ReferenceHolder<QoreListNode> result(new QoreListNode(bigIntTypeInfo), xsink);
+                        while (true) {
+                            bool has_next = h.next(xsink);
+                            if (*xsink) return QoreValue();
+                            if (!has_next) break;
+                            ValueHolder iv(h.getValue(xsink), xsink);
+                            if (*xsink) return QoreValue();
+                            result->push(iv->getAsBigInt() * scale, xsink);
+                        }
+                        return result.release();
+                    }
+                    // Fall through to single-value handling if not an iterator
+                }
                 // Handle single-value input: apply operation and return directly
                 int64_t val = left.getAsBigInt();
                 int64_t scale = right.getAsBigInt();
@@ -7781,6 +7800,25 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
                 // NOTHING returns NOTHING
                 if (left.isNothing()) {
                     return QoreValue();
+                }
+                // Handle iterator objects using abstract iterator protocol
+                if (left.getType() == NT_OBJECT) {
+                    QoreObject* obj = const_cast<QoreObject*>(left.get<const QoreObject>());
+                    AbstractIteratorHelper h(xsink, "map operator", obj);
+                    if (h) {
+                        double scale = right.getAsFloat();
+                        ReferenceHolder<QoreListNode> result(new QoreListNode(floatTypeInfo), xsink);
+                        while (true) {
+                            bool has_next = h.next(xsink);
+                            if (*xsink) return QoreValue();
+                            if (!has_next) break;
+                            ValueHolder iv(h.getValue(xsink), xsink);
+                            if (*xsink) return QoreValue();
+                            result->push(iv->getAsFloat() * scale, xsink);
+                        }
+                        return result.release();
+                    }
+                    // Fall through to single-value handling if not an iterator
                 }
                 // Handle single-value input: apply operation and return directly
                 double val = left.getAsFloat();
@@ -7803,6 +7841,25 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
                 if (left.isNothing()) {
                     return QoreValue();
                 }
+                // Handle iterator objects using abstract iterator protocol
+                if (left.getType() == NT_OBJECT) {
+                    QoreObject* obj = const_cast<QoreObject*>(left.get<const QoreObject>());
+                    AbstractIteratorHelper h(xsink, "map operator", obj);
+                    if (h) {
+                        int64_t offset = right.getAsBigInt();
+                        ReferenceHolder<QoreListNode> result(new QoreListNode(bigIntTypeInfo), xsink);
+                        while (true) {
+                            bool has_next = h.next(xsink);
+                            if (*xsink) return QoreValue();
+                            if (!has_next) break;
+                            ValueHolder iv(h.getValue(xsink), xsink);
+                            if (*xsink) return QoreValue();
+                            result->push(iv->getAsBigInt() + offset, xsink);
+                        }
+                        return result.release();
+                    }
+                    // Fall through to single-value handling if not an iterator
+                }
                 // Handle single-value input: apply operation and return directly
                 int64_t val = left.getAsBigInt();
                 int64_t offset = right.getAsBigInt();
@@ -7822,6 +7879,25 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
                 // NOTHING returns NOTHING
                 if (left.isNothing()) {
                     return QoreValue();
+                }
+                // Handle iterator objects using abstract iterator protocol
+                if (left.getType() == NT_OBJECT) {
+                    QoreObject* obj = const_cast<QoreObject*>(left.get<const QoreObject>());
+                    AbstractIteratorHelper h(xsink, "map operator", obj);
+                    if (h) {
+                        double offset = right.getAsFloat();
+                        ReferenceHolder<QoreListNode> result(new QoreListNode(floatTypeInfo), xsink);
+                        while (true) {
+                            bool has_next = h.next(xsink);
+                            if (*xsink) return QoreValue();
+                            if (!has_next) break;
+                            ValueHolder iv(h.getValue(xsink), xsink);
+                            if (*xsink) return QoreValue();
+                            result->push(iv->getAsFloat() + offset, xsink);
+                        }
+                        return result.release();
+                    }
+                    // Fall through to single-value handling if not an iterator
                 }
                 // Handle single-value input: apply operation and return directly
                 double val = left.getAsFloat();
@@ -7844,6 +7920,25 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
                 if (left.isNothing()) {
                     return QoreValue();
                 }
+                // Handle iterator objects using abstract iterator protocol
+                if (left.getType() == NT_OBJECT) {
+                    QoreObject* obj = const_cast<QoreObject*>(left.get<const QoreObject>());
+                    AbstractIteratorHelper h(xsink, "map operator", obj);
+                    if (h) {
+                        ReferenceHolder<QoreListNode> result(new QoreListNode(bigIntTypeInfo), xsink);
+                        while (true) {
+                            bool has_next = h.next(xsink);
+                            if (*xsink) return QoreValue();
+                            if (!has_next) break;
+                            ValueHolder iv(h.getValue(xsink), xsink);
+                            if (*xsink) return QoreValue();
+                            int64_t val = iv->getAsBigInt();
+                            result->push(val * val, xsink);
+                        }
+                        return result.release();
+                    }
+                    // Fall through to single-value handling if not an iterator
+                }
                 // Handle single-value input: apply operation and return directly
                 int64_t val = left.getAsBigInt();
                 return val * val;
@@ -7862,6 +7957,25 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
                 // NOTHING returns NOTHING
                 if (left.isNothing()) {
                     return QoreValue();
+                }
+                // Handle iterator objects using abstract iterator protocol
+                if (left.getType() == NT_OBJECT) {
+                    QoreObject* obj = const_cast<QoreObject*>(left.get<const QoreObject>());
+                    AbstractIteratorHelper h(xsink, "map operator", obj);
+                    if (h) {
+                        ReferenceHolder<QoreListNode> result(new QoreListNode(floatTypeInfo), xsink);
+                        while (true) {
+                            bool has_next = h.next(xsink);
+                            if (*xsink) return QoreValue();
+                            if (!has_next) break;
+                            ValueHolder iv(h.getValue(xsink), xsink);
+                            if (*xsink) return QoreValue();
+                            double val = iv->getAsFloat();
+                            result->push(val * val, xsink);
+                        }
+                        return result.release();
+                    }
+                    // Fall through to single-value handling if not an iterator
                 }
                 // Handle single-value input: apply operation and return directly
                 double val = left.getAsFloat();

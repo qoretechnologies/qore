@@ -21,6 +21,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         addTestCase("IR range/maybe-NOTHING smoke", \testIrRangeMaybeSmoke());
         addTestCase("IR fold/map smoke", \testIrFoldMapSmoke());
         addTestCase("IR map select smoke", \testIrMapSelectSmoke());
+        addTestCase("IR map with iterator objects", \testIrMapWithIteratorObjects());
         addTestCase("IR lvalue/op-assign smoke", \testIrLvalueOpSmoke());
         addTestCase("IR store-local smoke", \testIrStoreLocalSmoke());
         addTestCase("IR shift smoke", \testIrShiftSmoke());
@@ -544,6 +545,40 @@ class IRExecModeSmokeTest inherits QUnit::Test {
 
         string stdout_output = ReadOnlyFile::readTextFile(out.path);
         assertEq("mapselect:2:4,8\n", stdout_output, "Unexpected IR map select output");
+    }
+
+    testIrMapWithIteratorObjects() {
+        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        if (!qore_bin || qore_bin == NOTHING) {
+            testSkip("no qore binary path available");
+            return;
+        }
+
+        TmpFile script();
+        script.file.write("%new-style\n%modern\n");
+        script.file.write("auto input = (1, 2, 3);\n");
+        script.file.write("auto iter = input.iterator();\n");
+        script.file.write("auto result = map \$1 * 10, iter;\n");
+        script.file.write("printf(\"%s:%d:%d:%d\\n\", type(result), result[0], result[1], result[2]);\n");
+        script.file.close();
+
+        TmpFile out();
+        TmpFile err();
+
+        string cmd = sprintf("%s --exec-mode=ir %s > %s 2> %s",
+            qore_bin, script.path, out.path, err.path);
+        int rc = runCommand(cmd, script.path);
+        string err_output = ReadOnlyFile::readTextFile(err.path);
+        if (rc != 0 && err_output =~ /exec-mode/ && err_output =~ /valid long option/) {
+            testSkip("exec-mode option not supported by test qore binary");
+            return;
+        }
+
+        assertEq(0, rc, "IR exec mode process should exit cleanly");
+        assertFalse(err_output =~ /IR exec fallback to AST:/, "Unexpected IR fallback warning");
+
+        string stdout_output = ReadOnlyFile::readTextFile(out.path);
+        assertEq("list:10:20:30\n", stdout_output, "Unexpected IR map with iterator output");
     }
 
     testIrLvalueOpSmoke() {

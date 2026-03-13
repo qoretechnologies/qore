@@ -7341,6 +7341,28 @@ QoreIRValue QoreIRLowering::lowerMap(const QoreValue& expr, std::string& error) 
 
     // For optimized patterns, check if we can fuse with a select operand
     if (opt_opcode != QoreIROpcode::MapAny) {
+        // Skip optimized opcode if the right operand is definitely an iterator object.
+        // Optimized opcodes handle NT_LIST, NOTHING, and single values, but not NT_OBJECT iterators.
+        {
+            // Try to get type info from both getExprTypeInfo and getAnalysis
+            const QoreTypeInfo* right_type = getExprTypeInfo(map->getRight());
+            QoreParseAnalysis analysis;
+            if (!right_type && getAnalysis(map->getRight(), analysis)
+                    && analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)) {
+                right_type = analysis.known_type;
+            }
+
+            // Check if the right operand is definitely a class/object type (could be an iterator)
+            if (right_type) {
+                // Check if it's a specific class type (not a list)
+                const QoreClass* obj_class = QoreTypeInfo::getUniqueReturnClass(right_type);
+                if (obj_class) {
+                    // Definitely an object/iterator — use native lowering
+                    return lowerMapNative(map, expr, error);
+                }
+            }
+        }
+
         // Check if the right operand (list) is a select expression with positive filter
         const AbstractQoreNode* right_node = map->getRight().getInternalNode();
         auto* inner_select = dynamic_cast<const QoreSelectOperatorNode*>(right_node);
