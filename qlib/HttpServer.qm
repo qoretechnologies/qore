@@ -3476,6 +3476,13 @@ class HttpPersistentHandlerInfo {
         if (handler) {
             if (handler.isPersistent()) {
                 handler.persistentClosed();
+                # Clear the per-thread persistence state so that subsequent
+                # requests on this thread do not appear persistent on the
+                # handler.  persistentClosed() calls the notification callback
+                # but does not clear _persistent_threads, which would cause
+                # the next request on this thread to incorrectly opt into
+                # persistence.
+                handler.clearPersistentThread();
             }
             remove handler;
             remove dhh;
