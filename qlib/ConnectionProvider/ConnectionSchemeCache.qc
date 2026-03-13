@@ -149,6 +149,10 @@ public class ConnectionSchemeCache {
             "mqtttcp": "MqttDataProvider",
             "mqttssl": "MqttDataProvider",
 
+            # provided by the nats module
+            "nats": "NatsDataProvider",
+            "tls": "NatsDataProvider",
+
             "netsuite": "NetSuiteRestClient",
 
             "openai": "OpenAiRestClient",
