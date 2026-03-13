@@ -149,10 +149,6 @@ public class DataProvider {
             # provided by the jni module
             "mqtt": "MqttDataProvider",
 
-            # provided by the nats module
-            "nats": "NatsDataProvider",
-            "natsjetstream": "NatsJetStreamDataProvider",
-
             "openai": "OpenAiDataProvider",
             "pdfco": "PdfCoDataProvider",
             "pop3": "Pop3ClientDataProvider",
