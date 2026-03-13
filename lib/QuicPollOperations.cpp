@@ -816,6 +816,11 @@ int64_t SocketQuicClientPollOperation::submitRequest(
 }
 
 int SocketQuicClientPollOperation::migrateConnection(ExceptionSink* xsink) {
+    // NOTE: we acquire sock->priv->m for the fd swap section below to
+    // synchronize with continuePoll() which also holds this lock.
+    // The lock is NOT held during new-socket creation / connect() to
+    // avoid blocking the controller I/O thread.
+
     if (!quic_session) {
         xsink->raiseException("QUIC-MIGRATION-ERROR", "QUIC session not initialized");
         return -1;
@@ -901,21 +906,25 @@ int SocketQuicClientPollOperation::migrateConnection(ExceptionSink* xsink) {
         return -1;
     }
 
-    // Migration succeeded — swap the fd.  Set the new fd BEFORE closing the old
-    // one so the socket object always holds a valid fd (no window where it holds
-    // a closed fd that could be recycled by a concurrent socket() call).
+    // Migration succeeded — swap the fd under the socket lock to synchronize
+    // with continuePoll() which holds the same lock during I/O.
     //
     // NOTE: direct assignment to sock->priv->socket->priv->sock is the established
     // pattern in qore_socket_private (no setter abstraction exists).  The socket
     // object has no cached state derived from the fd that would become inconsistent
     // — socket options, non-blocking mode, and pktinfo are set on the new fd above.
-    fd_guard.release();
-    sock->priv->socket->priv->sock = new_fd;
-    ::close(old_fd);
+    {
+        AutoLocker al(sock->priv->m);
+        fd_guard.release();
+        sock->priv->socket->priv->sock = new_fd;
+        // Update cached local address under the same lock
+        memcpy(&local_addr_, &new_local, new_local_len);
+        local_addrlen_ = new_local_len;
+    }
 
-    // Update cached local address
-    memcpy(&local_addr_, &new_local, new_local_len);
-    local_addrlen_ = new_local_len;
+    // Close old fd outside the lock — safe because the socket object now
+    // points to new_fd, so continuePoll() will use the new fd
+    ::close(old_fd);
 
     printd(2, "SocketQuicClientPollOperation::migrateConnection(): migrated fd %d -> %d "
         "(session %lld)\n", old_fd, new_fd,

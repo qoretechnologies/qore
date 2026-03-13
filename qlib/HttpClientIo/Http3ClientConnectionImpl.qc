@@ -148,11 +148,18 @@ public class Http3ClientConnection inherits HttpClientConnection {
     }
 
     #! Initiates QUIC connection migration to a new network path
-    /** @return True if migration was initiated successfully
+    /** Migration creates a new UDP socket and initiates QUIC path migration.
+        The old fd is closed and the controller is woken so that its next
+        forced poll cycle calls continuePoll(), which returns poll info
+        referencing the Socket object (now pointing to the new fd), causing
+        the EventLoop to re-register the new fd.
+
+        @return True if migration was initiated successfully
 
         @throw HTTP3-STATE-ERROR if the connection is not in Ready state
     */
     bool migrate(*timeout migration_timeout) {
+        *object ctl;
         {
             AutoLock al(lock);
             if (state != HttpClientConnectionState::Ready) {
@@ -160,11 +167,18 @@ public class Http3ClientConnection inherits HttpClientConnection {
                     sprintf("cannot migrate: connection not ready (state=%y)", state);
             }
             last_activity = now_us();
+            ctl = controller_ref;
         }
 
         log(LoggerLevel::DEBUG, "initiating QUIC connection migration");
         poll_op.migrate();
         log(LoggerLevel::DEBUG, "QUIC connection migration completed");
+
+        # Wake the controller so it forces a continuePoll() cycle with the new fd
+        if (ctl) {
+            ctl.wake();
+        }
+
         return True;
     }
 

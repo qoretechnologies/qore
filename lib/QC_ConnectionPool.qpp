@@ -32,6 +32,17 @@
 #include "qore/intern/QC_ConnectionPool.h"
 #include "qore/intern/ConnectionPool.h"
 
+static QoreHashNode* AbstractPoolableResource_serializer(const QoreObject& self,
+        const AbstractQorePoolableResource& data, QoreSerializationContext& context,
+        RuntimeConfig& rc, ExceptionSink* xsink) {
+    return nullptr;
+}
+
+static void AbstractPoolableResource_deserializer(QoreObject& self, const QoreHashNode* sdata,
+        QoreDeserializationContext& context, RuntimeConfig& rc, ExceptionSink* xsink) {
+    self.setPrivate(CID_ABSTRACTPOOLABLERESOURCE, new AbstractQorePoolableResource());
+}
+
 //! Pool configuration options
 /** @since %Qore 2.3
 */
@@ -81,7 +92,13 @@ class MyConnection inherits AbstractPoolableResource {
 
     @since %Qore 2.3
 */
-qclass AbstractPoolableResource [arg=AbstractQorePoolableResource* apr; ns=Qore::Thread];
+qclass AbstractPoolableResource [
+    arg=AbstractQorePoolableResource* apr;
+    ns=Qore::Thread;
+    vparent=Serializable;
+    serializer=reinterpret_cast<q_serializer_t>(AbstractPoolableResource_serializer);
+    deserializer=AbstractPoolableResource_deserializer
+];
 
 //! Creates the poolable resource
 /**
