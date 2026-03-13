@@ -363,6 +363,44 @@ matter for real-world applications:
 
 ---
 
+### Multi-connection QUIC limitation (single I/O thread)
+
+The `AsyncSocketIoController` runs a **single I/O thread** that services all
+registered poll operations via one `epoll` instance. This works well for HTTP/2
+(TCP) and for a single QUIC connection, but creates I/O starvation when multiple
+QUIC connections are active simultaneously.
+
+**Why HTTP/2 is unaffected:** TCP connections have kernel-level buffering. When
+the I/O thread is busy with connection A, data for connection B accumulates in
+the kernel's TCP receive buffer. When the thread returns to B, the data is still
+there. TCP also has no userspace timers that expire while waiting.
+
+**Why QUIC is affected:** Each QUIC connection uses a UDP socket with a
+userspace protocol state machine. QUIC processing (handshake, crypto, flow
+control, congestion) runs inside `continuePoll()` in C++ code. When the I/O
+thread is busy calling `continuePoll()` on connection A:
+
+- Connection B's UDP packets sit unprocessed in the socket buffer
+- QUIC has aggressive idle/handshake timeouts (typically seconds)
+- If B's packets aren't processed before its timers expire, the session fails
+
+The starvation pattern is self-reinforcing: connection A generates continuous
+events (response frames arriving), so the thread keeps picking it up. Connection
+B never gets serviced, and its handshake or idle timer expires.
+
+**Workarounds:**
+- Use one `HttpClientConnectionManager` at a time (sequential lifecycle)
+- Use connection pooling within a single manager (one QUIC connection handles
+  many concurrent streams via multiplexing — this is HTTP/3's strength)
+- For HTTP/2 workloads, multiple concurrent managers work fine
+
+**Future fix:** A multi-thread I/O controller that dedicates one thread per QUIC
+connection (or uses a thread pool with per-connection affinity) would eliminate
+this limitation. Alternatively, a single thread with round-robin `continuePoll()`
+scheduling and short time slices could ensure fair servicing across connections.
+
+---
+
 ## Benchmark Reproduction
 
 ```bash
