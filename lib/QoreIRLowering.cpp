@@ -8883,6 +8883,13 @@ QoreIRValue QoreIRLowering::lowerHashMapNative(const QoreHashMapOperatorNode* hm
         }
     }
 
+    // Extract the inner type (value type) for the hash complexTypeInfo
+    // The hash_result_type is the full type like hash<string, ValueType>
+    // but createMakeHash expects just the inner ValueType for complexTypeInfo
+    const QoreTypeInfo* hash_complex_type = hash_result_type
+        ? QoreTypeInfo::getUniqueReturnComplexHash(hash_result_type)
+        : nullptr;
+
     // Evaluate the input (operand 2)
     QoreIRValue input_list = lowerExpression(hm->get(2), error);
     if (!input_list.isValid()) {
@@ -8911,7 +8918,7 @@ QoreIRValue QoreIRLowering::lowerHashMapNative(const QoreHashMapOperatorNode* hm
         // Preheader: create empty result hash and proceed to loop
         builder.setBlock(preheader_block);
         QoreIRValue zero = builder.createConstInt(0, hm->loc)->result;
-        QoreIRValue result_hash = builder.createMakeHash({}, hm->loc, hash_result_type)->result;
+        QoreIRValue result_hash = builder.createMakeHash({}, hm->loc, hash_complex_type)->result;
         builder.createBranch(header_block, hm->loc);
 
         // Header block: check if index < size
@@ -9033,7 +9040,7 @@ QoreIRValue QoreIRLowering::lowerHashMapNative(const QoreHashMapOperatorNode* hm
 
     // Preheader: create empty result hash and proceed to loop
     builder.setBlock(preheader_block);
-    QoreIRValue result_hash = builder.createMakeHash({}, hm->loc, hash_result_type)->result;
+    QoreIRValue result_hash = builder.createMakeHash({}, hm->loc, hash_complex_type)->result;
     QoreIRValue init_index = builder.createConstInt(0, hm->loc)->result;
     builder.createBranch(header_block, hm->loc);
 
