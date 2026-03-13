@@ -151,7 +151,7 @@ public class ConnectionSchemeCache {
 
             # provided by the nats module
             "nats": "NatsDataProvider",
-            "tls": "NatsDataProvider",
+            "natss": "NatsDataProvider",
 
             "netsuite": "NetSuiteRestClient",
 
