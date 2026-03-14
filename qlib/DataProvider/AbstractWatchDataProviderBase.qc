@@ -62,6 +62,11 @@ public class AbstractWatchDataProviderBase inherits DataProvider::DelayedObserva
         self.poll_interval_secs = poll_interval_secs;
     }
 
+    #! Returns the polling interval in seconds
+    int getPollIntervalSeconds() {
+        return poll_interval_secs;
+    }
+
     #! Called when all observers have been added to the object
     /** Starts the background polling thread. Safe to call multiple times; only the first call
         starts a thread.
