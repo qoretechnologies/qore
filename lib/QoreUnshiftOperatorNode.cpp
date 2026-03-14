@@ -79,7 +79,7 @@ int QoreUnshiftOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
                 err = -1;
             }
         } else {
-            returnTypeInfo = listTypeInfo;
+            returnTypeInfo = autoListTypeInfo;
         }
     }
     parse_context.typeInfo = returnTypeInfo;

@@ -260,14 +260,14 @@ int QorePlusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
             if (QoreTypeInfo::equal(elementTypeInfo, rightTypeInfo)) {
                 returnTypeInfo = leftTypeInfo;
             } else {
-                returnTypeInfo = listTypeInfo;
+                returnTypeInfo = autoListTypeInfo;
             }
         } else {
             const QoreTypeInfo* elementTypeInfo = QoreTypeInfo::getElementType(rightTypeInfo);
             if (QoreTypeInfo::equal(elementTypeInfo, leftTypeInfo)) {
                 returnTypeInfo = rightTypeInfo;
             } else {
-                returnTypeInfo = listTypeInfo;
+                returnTypeInfo = autoListTypeInfo;
             }
         }
     }
@@ -305,10 +305,10 @@ int QorePlusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
                 && QoreTypeInfo::isOutputIdentical(leftTypeInfo, rightTypeInfo)) {
                 returnTypeInfo = leftTypeInfo;
             } else {
-                returnTypeInfo = hashTypeInfo;
+                returnTypeInfo = autoHashTypeInfo;
             }
         } else if (QoreTypeInfo::isType(leftTypeInfo, NT_OBJECT)) {
-            returnTypeInfo = hashTypeInfo;
+            returnTypeInfo = autoHashTypeInfo;
         } else if (QoreTypeInfo::isType(rightTypeInfo, NT_OBJECT)) {
             returnTypeInfo = objectTypeInfo;
         } else if (QoreTypeInfo::isType(leftTypeInfo, NT_BINARY) || QoreTypeInfo::isType(rightTypeInfo, NT_BINARY)) {
