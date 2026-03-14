@@ -37,6 +37,7 @@
 #include <qore/QoreEnumDecl.h>
 #include "qore/intern/qore_string_private.h"
 #include "qore/intern/qore_enum_decl_private.h"
+#include "qore/intern/QoreHashNodeIntern.h"
 
 #include "qore/intern/QoreLogicalEqualsOperatorNode.h"
 
@@ -834,9 +835,15 @@ const QoreTypeInfo* QoreValue::getFullTypeInfo() const {
     if (t == NT_HASH && isPointer()) {
         const QoreHashNode* h = reinterpret_cast<const QoreHashNode*>(getPointerUnsafe());
         if (h) {
+            // Check for hashdecl first (typed hash with specific structure)
             const TypedHashDecl* thd = h->getHashDecl();
             if (thd) {
                 return thd->getTypeInfo();
+            }
+            // Check for complex type info (e.g., hash<StatInfo> from cast expressions)
+            const QoreTypeInfo* complex_type = qore_hash_private::get(*h)->complexTypeInfo;
+            if (complex_type) {
+                return complex_type;
             }
         }
     }

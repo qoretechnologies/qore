@@ -1093,6 +1093,10 @@ public:
         if (ti == autoHashTypeInfo || ti == autoHashOrNothingTypeInfo) {
             return autoTypeInfo;
         }
+        // Check if ti is a hashdecl type and return the hashdecl as the value type
+        if (const TypedHashDecl* hd = ti->return_vec[0].spec.getHashDecl()) {
+            return hd->getTypeInfo();
+        }
         return ti->return_vec[0].spec.getComplexHash();
     }
 

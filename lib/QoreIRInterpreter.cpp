@@ -2221,7 +2221,7 @@ next_instruction:
                     QoreValue key_val = getIRValue(values, inst->operands[i]);
                     QoreValue value = getIRValue(values, inst->operands[i + 1]);
                     QoreValue stored = value.hasNode() ? value.refSelf() : value;
-                    const QoreTypeInfo* vt = stored.getTypeInfo();
+                    const QoreTypeInfo* vt = stored.getFullTypeInfo();
                     if (!i) {
                         vtype = vt;
                         vcommon = true;
@@ -2262,7 +2262,7 @@ next_instruction:
                 for (size_t i = 0; i < n; ++i) {
                     QoreValue value = getIRValue(values, inst->operands[i]);
                     QoreValue stored = value.hasNode() ? value.refSelf() : value;
-                    const QoreTypeInfo* vt = stored.getTypeInfo();
+                    const QoreTypeInfo* vt = stored.getFullTypeInfo();
                     if (!i) {
                         vtype = vt;
                         vcommon = true;
