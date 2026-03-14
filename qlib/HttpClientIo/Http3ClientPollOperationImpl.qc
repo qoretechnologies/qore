@@ -268,8 +268,6 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
             ++active_stream_count;
         }
 
-        log(LoggerLevel::DEBUG, "submitted request: method=%y path=%y stream_id=%d", method, path, stream_id);
-
         return stream_id;
     }
 

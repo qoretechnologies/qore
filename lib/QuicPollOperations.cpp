@@ -563,6 +563,31 @@ QoreHashNode* SocketQuicClientPollOperation::trySetupEarlyHttp3(ExceptionSink* x
     return nullptr;
 }
 
+QoreHashNode* SocketQuicClientPollOperation::flushAndReturnPollInfo(ExceptionSink* xsink,
+        bool do_flush) {
+    ngtcp2_tstamp expiry = 0;
+    int srv = 0;
+    if (do_flush) {
+        srv = sendPendingPackets(expiry, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+    } else {
+        // When not flushing, use the QUIC connection's next expiry for the poll
+        // timeout so retransmission timers still fire
+        expiry = quic_session->getExpiry();
+    }
+    int events = SOCK_POLLIN;
+    if (srv == SOCK_POLLOUT || quic_session->hasPendingWrite()) {
+        events |= SOCK_POLLOUT;
+    }
+    QoreHashNode* poll_info = getSocketPollInfoHash(xsink, events);
+    if (poll_info) {
+        setPollTimeoutFromExpiry(poll_info, expiry, xsink);
+    }
+    return poll_info;
+}
+
 QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) {
     AutoLocker al(sock->priv->m);
 
@@ -602,6 +627,7 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
 
             case QCS::HANDSHAKE_RECV: {
                 // Drain all available handshake datagrams
+                int recv_count = 0;
                 while (true) {
                     int rv = recvAndProcessPacket(xsink);
                     if (*xsink) {
@@ -610,8 +636,8 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                     if (rv == SOCK_POLLIN) {
                         break;  // EAGAIN — no more data
                     }
+                    ++recv_count;
                 }
-
                 // 0-RTT: set up HTTP/3 early when 0-RTT TX key is installed
                 // (may be detected after receiving server response to Initial)
                 {
@@ -690,7 +716,7 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                 if (quic_session->hasCompletedStreams()) {
                     cached_stream = quic_session->takeCompletedStream();
                     qcs_state = QCS::RESPONSE_READY;
-                    return nullptr;  // goal reached
+                    return flushAndReturnPollInfo(xsink);
                 }
 
                 // Drain all available datagrams from the socket buffer;
@@ -708,7 +734,7 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                     if (quic_session->hasCompletedStreams()) {
                         cached_stream = quic_session->takeCompletedStream();
                         qcs_state = QCS::RESPONSE_READY;
-                        return nullptr;  // goal reached
+                        return flushAndReturnPollInfo(xsink);
                     }
                 }
 
@@ -734,7 +760,8 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                     if (quic_session->hasCompletedStreams()) {
                         cached_stream = quic_session->takeCompletedStream();
                         qcs_state = QCS::RESPONSE_READY;
-                        return nullptr;  // goal reached
+                        // sendPendingPackets was just called; no need to flush again
+                        return flushAndReturnPollInfo(xsink, false);
                     }
 
                     // After sending (e.g. HTTP/3 request frames), try a
@@ -754,7 +781,8 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                         if (quic_session->hasCompletedStreams()) {
                             cached_stream = quic_session->takeCompletedStream();
                             qcs_state = QCS::RESPONSE_READY;
-                            return nullptr;  // goal reached
+                            // sendPendingPackets was just called; no need to flush again
+                            return flushAndReturnPollInfo(xsink, false);
                         }
                     }
 
@@ -781,7 +809,7 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                 // response) — the QUIC socket always uses raw recvfrom/sendto
                 if (quic_session->hasCompletedStreams()) {
                     cached_stream = quic_session->takeCompletedStream();
-                    return nullptr;
+                    return flushAndReturnPollInfo(xsink);
                 }
                 cached_stream.reset();
                 qcs_state = QCS::READING;

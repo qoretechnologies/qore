@@ -53,6 +53,63 @@ class QoreObject;
 class QoreSocketObject;
 class SocketPollOperationBase;
 
+//! Lightweight dispatcher for executing Qore-language continuePoll() overrides
+/** Manages a small pool of Qore worker threads (with full interpreter stack) that
+    can execute Qore method calls on behalf of dedicated I/O threads (which have
+    minimal stacks and no interpreter context).
+
+    Workers are lazily created up to \c max_workers when work arrives.
+
+    @since %Qore 2.3
+*/
+class QoreCallDispatcher {
+public:
+    //! Work item for cross-thread method dispatch
+    struct WorkItem {
+        QoreObject* spop_obj;           //!< Poll operation object (NOT referenced — caller keeps alive)
+        QoreHashNode* result = nullptr; //!< Output: new poll info hash (referenced) or nullptr
+        ExceptionSink xsink;            //!< Output: exceptions from evalMethod
+        QoreCondition done;             //!< Signaled when work is complete
+        bool completed = false;         //!< Set under dispatcher lock before signal
+    };
+
+    //! Creates the dispatcher
+    /** @param max_workers maximum number of Qore worker threads
+    */
+    DLLLOCAL QoreCallDispatcher(int max_workers = DEFAULT_MAX_WORKERS);
+
+    //! Destructor — does NOT stop workers; call stop() first
+    DLLLOCAL ~QoreCallDispatcher();
+
+    //! Dispatch a continuePoll() call to a Qore worker thread and block until complete
+    /** @param spop_obj the AbstractPollOperation object
+        @param caller_xsink receives any exceptions from the call
+        @return new poll info hash (referenced) or nullptr
+    */
+    DLLLOCAL QoreHashNode* dispatchContinuePoll(QoreObject* spop_obj, ExceptionSink* caller_xsink);
+
+    //! Stop all worker threads
+    DLLLOCAL void stop(ExceptionSink* xsink);
+
+    //! Default maximum workers
+    static constexpr int DEFAULT_MAX_WORKERS = 4;
+
+private:
+    QoreThreadLock m;
+    QoreCondition work_avail;               //!< Signaled when work is available
+    QoreCondition workers_done;             //!< Signaled when all workers have exited
+    std::deque<WorkItem*> queue;            //!< Pending work items
+    int active_workers = 0;                 //!< Number of running worker threads
+    int max_workers;                        //!< Maximum workers
+    bool stopping = false;                  //!< Set during shutdown
+
+    //! Worker thread entry point
+    DLLLOCAL static void workerEntry(ExceptionSink* xsink, void* arg);
+
+    //! Worker thread main loop
+    DLLLOCAL void workerLoop(ExceptionSink* xsink);
+};
+
 // hashdecl pointers
 DLLEXPORT extern const TypedHashDecl* hashdeclSocketPollOperationInfo;
 DLLEXPORT extern const TypedHashDecl* hashdeclSocketPollResultInfo;
@@ -379,6 +436,70 @@ private:
     //! Build a result hash
     DLLLOCAL static QoreHashNode* buildResultHash(PollInfo& pinfo, bool canceled,
         QoreHashNode* ex_hash, ExceptionSink* xsink);
+
+    // --- Dedicated thread support ---
+
+    //! Info for a dedicated I/O thread handling a single poll operation
+    /** @since %Qore 2.3
+    */
+    struct DedicatedThreadInfo {
+        AsyncIoControllerPriv* controller = nullptr; //!< Back-pointer (referenced)
+        std::string key;                        //!< Cache key for this operation
+        PollInfo pinfo;                         //!< The operation (owns refs)
+        SocketPollOperationBase* spop_base = nullptr; //!< C++ poll operation (referenced, or nullptr)
+        bool has_qore_override = false;         //!< True if continuePoll() is overridden in Qore
+        std::atomic<bool> stop_requested{false};//!< Set to request graceful stop
+        QoreEventLoop* loop = nullptr;          //!< Created by dedicated thread
+        QoreEventNotifier* notifier = nullptr;  //!< Created before thread spawn (referenced)
+        QoreCondition exit_cond;                //!< Signaled when thread exits
+        bool exited = false;                    //!< Set under controller lock
+        int tid = 0;                            //!< Thread ID
+    };
+
+    //! Stack size for dedicated I/O threads (128KB — no Qore stack guard enforced)
+    /** These threads run pure C++ I/O code with no Qore interpreter overhead.
+        The stack guard is disabled via QTF_NO_STACK_GUARD in q_start_thread().
+        128KB is needed because glibc reserves ~63KB of static TLS (QUIC/HTTP/3
+        buffers in libqore) from each thread's stack before the thread starts.
+    */
+    static constexpr size_t DEDICATED_THREAD_STACK_SIZE = 128 * 1024;
+
+    //! Dedicated thread map: key -> DedicatedThreadInfo (protected by m)
+    std::unordered_map<std::string, DedicatedThreadInfo*> dedicated_threads;
+
+    //! Deferred delete list for DedicatedThreadInfo objects (protected by m)
+    /** Threads enqueue themselves here after broadcasting exit_cond; the next
+        lock holder (cancelDedicatedThread, stopDedicatedThreads, or destructor)
+        processes the list. This prevents a race where the thread deletes dti
+        while cancelDedicatedThread is still accessing it inside exit_cond.wait().
+    */
+    std::vector<DedicatedThreadInfo*> deferred_dti_deletes;
+
+    //! Shared call dispatcher for Qore-language continuePoll() overrides (lazily created)
+    QoreCallDispatcher* call_dispatcher = nullptr;
+
+    //! Spawn a dedicated I/O thread for an operation
+    /** @param dti the DedicatedThreadInfo (takes ownership)
+        @param xsink for exception handling
+    */
+    DLLLOCAL void spawnDedicatedThread(DedicatedThreadInfo* dti, ExceptionSink* xsink);
+
+    //! Dedicated thread entry point
+    DLLLOCAL static void dedicatedThreadEntry(ExceptionSink* xsink, void* arg);
+
+    //! Dedicated thread main loop
+    DLLLOCAL void dedicatedThread(DedicatedThreadInfo* dti, ExceptionSink* xsink);
+
+    //! Cancel a dedicated thread by key (caller must NOT hold lock)
+    /** @return true if a dedicated thread was found and canceled
+    */
+    DLLLOCAL bool cancelDedicatedThread(const std::string& key, ExceptionSink* xsink);
+
+    //! Stop all dedicated threads (caller must NOT hold lock)
+    DLLLOCAL void stopDedicatedThreads(ExceptionSink* xsink);
+
+    //! Call continuePoll — direct C++ or via dispatcher for Qore overrides
+    DLLLOCAL QoreHashNode* callContinuePollDedicated(DedicatedThreadInfo* dti, ExceptionSink* xsink);
 };
 
 #endif // _QORE_ASYNCIOCONTROLLERPRIV_H

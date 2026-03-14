@@ -474,7 +474,8 @@ public:
         try_reexport : 1,
         finalizing : 1;
 
-    DLLLOCAL ThreadData(int ptid, QoreProgram* p, bool n_foreign = false) :
+    DLLLOCAL ThreadData(int ptid, QoreProgram* p, bool n_foreign = false,
+            int n_flags = QTF_NONE) :
             tid(ptid),
             vlock(ptid),
             current_pgm(p),
@@ -483,50 +484,58 @@ public:
             try_reexport(false),
             finalizing(false) {
 #ifdef QORE_MANAGE_STACK
-        // save this thread's stack size as the default stack size can change
-        size_t stack_guard = QORE_STACK_GUARD;
-        // on Linux the initial thread's stack is extended automatically, so we put a large number here
-        if (tid == initial_thread) {
+        if (n_flags & QTF_NO_STACK_GUARD) {
+            // No stack guard for lightweight threads (e.g. dedicated async I/O threads)
+            // that run pure C++ code with no Qore interpreter overhead
+            stack_start = get_stack_pos();
+            stack_size = 0;
+            stack_limit = 0;
+        } else {
+            // save this thread's stack size as the default stack size can change
+            size_t stack_guard = QORE_STACK_GUARD;
+            // on Linux the initial thread's stack is extended automatically, so we put a large number here
+            if (tid == initial_thread) {
 #ifdef _Q_WINDOWS
-            // windows uses a 1MB stack size for the main thread
-            stack_size = 1024 * 1024;
+                // windows uses a 1MB stack size for the main thread
+                stack_size = 1024 * 1024;
 #else
 #ifdef HAVE_GETRLIMIT
-            // use rlimit to determine the main thread\s stack size
-            rlimit rl;
-            if (!getrlimit(RLIMIT_STACK, &rl) && rl.rlim_cur) {
-                stack_size = rl.rlim_cur;
-                printd(5, "rlimit: stack size: %lld bytes\n", rl.rlim_cur);
-            } else
+                // use rlimit to determine the main thread\s stack size
+                rlimit rl;
+                if (!getrlimit(RLIMIT_STACK, &rl) && rl.rlim_cur) {
+                    stack_size = rl.rlim_cur;
+                    printd(5, "rlimit: stack size: %lld bytes\n", rl.rlim_cur);
+                } else
 #endif
-            {
-                // all other knows OSes use an 8MB stack for the main thread
-                // Linux extends the main stack automatically, but the default is MB
-                // on Alpine Linux get_stack_size() will report a 128K stack size, so we hardcode it here
-                // in case it's too small
-                stack_size = 8 * 1024 * 1024;
-                printd(5, "stack size: %lld (%lld)\n", stack_size, get_stack_size());
+                {
+                    // all other knows OSes use an 8MB stack for the main thread
+                    // Linux extends the main stack automatically, but the default is MB
+                    // on Alpine Linux get_stack_size() will report a 128K stack size, so we hardcode it here
+                    // in case it's too small
+                    stack_size = 8 * 1024 * 1024;
+                    printd(5, "stack size: %lld (%lld)\n", stack_size, get_stack_size());
+                }
+#endif
+                // issue #4392: add 64K of additional stack in the primary thread
+                stack_guard += 64 * 1024;
+            } else {
+                stack_size = get_stack_size();
             }
-#endif
-            // issue #4392: add 64K of additional stack in the primary thread
-            stack_guard += 64 * 1024;
-        } else {
-            stack_size = get_stack_size();
-        }
-        stack_start = get_stack_pos();
-        size_t stack_adjusted_size = stack_size - stack_guard;
-        printd(5, "ThreadData::ThreadData() stack_adjusted_size: %lld qore_thread_stack_limit: %lld\n",
-            stack_adjusted_size, qore_thread_stack_limit);
+            stack_start = get_stack_pos();
+            size_t stack_adjusted_size = stack_size - stack_guard;
+            printd(5, "ThreadData::ThreadData() stack_adjusted_size: %lld qore_thread_stack_limit: %lld\n",
+                stack_adjusted_size, qore_thread_stack_limit);
 #ifdef STACK_DIRECTION_DOWN
-        stack_limit = stack_start - stack_adjusted_size;
+            stack_limit = stack_start - stack_adjusted_size;
 #else
-        stack_limit = stack_start + stack_adjusted_size;
+            stack_limit = stack_start + stack_adjusted_size;
 #endif // #ifdef STACK_DIRECTION_DOWN
 
 #ifdef IA64_64
-        // RSE stack grows up
-        rse_limit = get_rse_bsp() + stack_adjusted_size;
+            // RSE stack grows up
+            rse_limit = get_rse_bsp() + stack_adjusted_size;
 #endif // #ifdef IA64_64
+        }
 #endif // #ifdef QORE_MANAGE_STACK
     }
 
@@ -656,12 +665,12 @@ void ThreadEntry::allocate(tid_node* tn, int stat) {
     assert(!thread_data);
 }
 
-void ThreadEntry::activate(int tid, pthread_t n_ptid, QoreProgram* p, bool foreign) {
+void ThreadEntry::activate(int tid, pthread_t n_ptid, QoreProgram* p, bool foreign, int flags) {
     assert(status == QTS_NA || status == QTS_RESERVED);
     ptid = n_ptid;
     assert(!thread_data);
     assert(!::thread_data.get());
-    thread_data = new ThreadData(tid, p, foreign);
+    thread_data = new ThreadData(tid, p, foreign, flags);
     ::thread_data.set(thread_data);
     status = QTS_ACTIVE;
     // set lvstack if QoreProgram set
@@ -2667,8 +2676,8 @@ void delete_signal_thread() {
 }
 
 // should only be called from the new thread
-void register_thread(int tid, pthread_t ptid, QoreProgram* p, bool foreign) {
-    thread_list.activate(tid, ptid, p, foreign);
+void register_thread(int tid, pthread_t ptid, QoreProgram* p, bool foreign, int flags) {
+    thread_list.activate(tid, ptid, p, foreign, flags);
 }
 
 static void qore_thread_cleanup(void* n = nullptr) {
@@ -2821,8 +2830,10 @@ struct ThreadArg {
     q_thread_t f;
     void* arg;
     int tid;
+    int flags;
 
-    DLLLOCAL ThreadArg(q_thread_t n_f, void* a, int n_tid) : f(n_f), arg(a), tid(n_tid) {
+    DLLLOCAL ThreadArg(q_thread_t n_f, void* a, int n_tid, int n_flags = QTF_NONE)
+            : f(n_f), arg(a), tid(n_tid), flags(n_flags) {
     }
 
     DLLLOCAL void run(ExceptionSink* xsink) {
@@ -2842,7 +2853,7 @@ namespace {
     extern "C" void* q_run_thread(void* arg) {
         ThreadArg* ta = (ThreadArg*)arg;
 
-        register_thread(ta->tid, pthread_self(), 0);
+        register_thread(ta->tid, pthread_self(), 0, false, ta->flags);
         printd(5, "q_run_thread() ta: %p TID %d started\n", ta, ta->tid);
 
         set_tid_thread_name(ta->tid);
@@ -3046,6 +3057,41 @@ int q_start_thread(ExceptionSink* xsink, q_thread_t f, void* arg) {
     //printd(5, "calling pthread_create(%p, %p, %p, %p)\n", &ptid, &ta_default, op_background_thread, tp);
     thread_counter.inc();
     if ((rc = pthread_create(&ptid, ta_default.get_ptr(), q_run_thread, ta))) {
+        delete ta;
+        thread_counter.dec();
+        deregister_thread(tid);
+        xsink->raiseErrnoException("THREAD-CREATION-FAILURE", rc, "could not create thread");
+        return -1;
+    }
+
+    return tid;
+}
+
+int q_start_thread(ExceptionSink* xsink, q_thread_t f, void* arg, size_t stack_size) {
+    int tid = get_thread_entry();
+
+    if (tid == -1) {
+        xsink->raiseException("THREAD-CREATION-FAILURE", "thread list is full with %d threads", MAX_QORE_THREADS);
+        return -1;
+    }
+
+    // QTF_NO_STACK_GUARD: lightweight threads with custom stack sizes bypass the Qore stack guard
+    ThreadArg* ta = new ThreadArg(f, arg, tid, QTF_NO_STACK_GUARD);
+
+    // Create a local pthread attr with the requested stack size
+    QorePThreadAttr local_attr;
+    int rc = local_attr.setstacksize(stack_size);
+    if (rc) {
+        delete ta;
+        deregister_thread(tid);
+        xsink->raiseErrnoException("THREAD-CREATION-FAILURE", rc,
+            "could not set thread stack size to %zu", stack_size);
+        return -1;
+    }
+
+    pthread_t ptid;
+    thread_counter.inc();
+    if ((rc = pthread_create(&ptid, local_attr.get_ptr(), q_run_thread, ta))) {
         delete ta;
         thread_counter.dec();
         deregister_thread(tid);

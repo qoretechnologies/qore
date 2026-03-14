@@ -46,6 +46,14 @@ class AsyncIoControllerTest inherits QUnit::Test {
         addTestCase("controller timer cancel", \testControllerTimerCancel());
         addTestCase("controller timer cleanup on stop", \testControllerTimerCleanupOnStop());
         addTestCase("controller timer with I/O", \testControllerTimerWithIo());
+
+        # Dedicated thread tests
+        addTestCase("dedicated thread with C++ continuePoll", \testDedicatedThreadCpp());
+        addTestCase("dedicated thread with Qore continuePoll", \testDedicatedThreadQore());
+        addTestCase("dedicated thread cancel", \testDedicatedThreadCancel());
+        addTestCase("dedicated thread error propagation", \testDedicatedThreadError());
+        addTestCase("dedicated thread cancel by owner", \testDedicatedThreadCancelByOwner());
+        addTestCase("dedicated thread reuse after cancel", \testDedicatedThreadReuse());
         set_return_value(main());
     }
 
@@ -969,6 +977,223 @@ class AsyncIoControllerTest inherits QUnit::Test {
         assertEq(True, exists result.ex);
         assertEq("TEST-POLL-ERROR", result.ex.err);
     }
+
+    # --- Dedicated thread tests ---
+
+    #! Helper: set up a listener and return a connect poll operation
+    private hash<auto> setupConnectOp() {
+        Socket listener();
+        listener.bind("localhost:0");
+        listener.listen();
+        int port = listener.getSocketInfo().port;
+
+        Socket client();
+        AbstractPollOperation spop = client.startPollConnect("localhost:" + port);
+
+        return {
+            "listener": listener,
+            "client": client,
+            "spop": spop,
+            "port": port,
+        };
+    }
+
+    #! Verify C++ poll operation runs on a dedicated thread (direct path, no dispatcher)
+    testDedicatedThreadCpp() {
+        hash<auto> op = setupConnectOp();
+        on_exit {
+            try { op.listener.close(); } catch () {}
+            try { op.client.close(); } catch () {}
+        }
+
+        AsyncIoController ctrl();
+        on_exit ctrl.stop();
+
+        # Submit with dedicated_thread=True — C++ connect operation, no Qore override
+        Queue q = ctrl.submit(<SocketPollOperationInfo>{
+            "sock": op.client,
+            "spop": op.spop,
+            "owner": "dedicated-test",
+            "to": ConnectTimeout,
+            "dedicated_thread": True,
+        });
+
+        # Controller should show the dedicated thread
+        hash<auto> info = ctrl.getInfo();
+        assertEq(True, info.dedicated_thread_count > 0,
+            "controller should have dedicated threads");
+
+        hash<SocketPollResultInfo> result = q.get(ShortTimeout);
+        assertEq(True, exists result, "should get a result");
+        assertFalse(result.canceled ?? False, "should not be canceled");
+        assertFalse(exists result.ex,
+            sprintf("should have no exception: %y", result.ex));
+        # Accept the connection to clean up
+        Socket accepted = op.listener.accept(ShortTimeout);
+    }
+
+    #! Verify Qore-language continuePoll() override dispatches through the worker pool
+    testDedicatedThreadQore() {
+        hash<auto> op = setupConnectOp();
+        on_exit {
+            try { op.listener.close(); } catch () {}
+            try { op.client.close(); } catch () {}
+        }
+
+        AsyncIoController ctrl();
+        on_exit ctrl.stop();
+
+        # Use QorePollOp which has a Qore-language continuePoll() override
+        auto qore_op = new QorePollOp(op.spop, op.client);
+
+        Queue q = ctrl.submit(<SocketPollOperationInfo>{
+            "sock": op.client,
+            "spop": qore_op,
+            "owner": "qore-dedicated-test",
+            "to": ConnectTimeout,
+            "dedicated_thread": True,
+        });
+
+        hash<SocketPollResultInfo> result = q.get(ShortTimeout);
+        assertEq(True, exists result, "should get a result");
+        assertFalse(result.canceled ?? False, "should not be canceled");
+        assertFalse(exists result.ex,
+            sprintf("should have no exception: %y", result.ex));
+
+        # Verify the Qore continuePoll was actually called
+        assertEq(True, qore_op.wasCalled(), "Qore continuePoll should have been called");
+        Socket accepted = op.listener.accept(ShortTimeout);
+    }
+
+    #! Verify cancel works for dedicated threads
+    testDedicatedThreadCancel() {
+        # Use a connect to a non-routable address so the operation stays in-flight
+        Socket client();
+        # 192.0.2.1 is TEST-NET-1 (RFC 5737) — guaranteed non-routable
+        AbstractPollOperation spop = client.startPollConnect("192.0.2.1:12345");
+
+        AsyncIoController ctrl();
+        on_exit ctrl.stop();
+
+        string key = "cancel-me";
+        Queue q = ctrl.submit(<SocketPollOperationInfo>{
+            "sock": client,
+            "spop": spop,
+            "owner": "cancel-test",
+            "to": ConnectTimeout,
+            "dedicated_thread": True,
+            "key": key,
+        });
+
+        # Cancel the dedicated thread
+        assertTrue(ctrl.cancelByKey(key), "cancelByKey should find the dedicated thread");
+
+        hash<SocketPollResultInfo> result = q.get(ShortTimeout);
+        assertEq(True, exists result, "should get a result");
+        assertEq(True, result.canceled, "result should be canceled");
+    }
+
+    #! Verify exception propagation from Qore continuePoll on dedicated thread
+    testDedicatedThreadError() {
+        # Need a valid socket for the SocketPollOperationInfo
+        Socket listener();
+        listener.bind("localhost:0");
+        listener.listen();
+        int port = listener.getSocketInfo().port;
+        Socket client();
+        client.connect("localhost:" + port);
+        Socket server = listener.accept(ConnectTimeout);
+        on_exit {
+            try { listener.close(); } catch () {}
+            try { server.close(); } catch () {}
+            try { client.close(); } catch () {}
+        }
+
+        AsyncIoController ctrl();
+        on_exit ctrl.stop();
+
+        # ErrorPollOp throws on first continuePoll — dispatched via QoreCallDispatcher
+        Queue q = ctrl.submit(<SocketPollOperationInfo>{
+            "sock": server,
+            "spop": new ErrorPollOp(),
+            "owner": "error-test",
+            "to": ConnectTimeout,
+            "dedicated_thread": True,
+        });
+
+        hash<SocketPollResultInfo> result = q.get(ShortTimeout);
+        assertEq(True, exists result, "should get a result");
+        assertFalse(result.canceled ?? False, "should not be canceled");
+        assertEq(True, exists result.ex, "should have an exception");
+        assertEq("TEST-POLL-ERROR", result.ex.err,
+            "exception err should match");
+    }
+
+    #! Verify cancelByOwner works for dedicated threads
+    testDedicatedThreadCancelByOwner() {
+        # Use non-routable address so the operation stays in-flight
+        Socket client();
+        AbstractPollOperation spop = client.startPollConnect("192.0.2.1:12345");
+
+        AsyncIoController ctrl();
+        on_exit ctrl.stop();
+
+        string owner = "owner-dedicated";
+        Queue q = ctrl.submit(<SocketPollOperationInfo>{
+            "sock": client,
+            "spop": spop,
+            "owner": owner,
+            "to": ConnectTimeout,
+            "dedicated_thread": True,
+        });
+
+        int count = ctrl.cancelByOwner(owner);
+        assertEq(1, count, "cancelByOwner should cancel 1 dedicated thread");
+
+        hash<SocketPollResultInfo> result = q.get(ShortTimeout);
+        assertEq(True, result.canceled, "result should be canceled");
+    }
+
+    #! Verify dedicated threads can be reused after cancel (dispatcher lifecycle)
+    testDedicatedThreadReuse() {
+        Socket listener();
+        listener.bind("localhost:0");
+        listener.listen();
+        int port = listener.getSocketInfo().port;
+        on_exit { try { listener.close(); } catch () {} }
+
+        AsyncIoController ctrl();
+        on_exit ctrl.stop();
+
+        for (int i = 0; i < 3; i++) {
+            Socket client();
+            AbstractPollOperation spop = client.startPollConnect("localhost:" + port);
+            auto qore_op = new QorePollOp(spop, client);
+
+            Queue q = ctrl.submit(<SocketPollOperationInfo>{
+                "sock": client,
+                "spop": qore_op,
+                "owner": sprintf("reuse-%d", i),
+                "to": ConnectTimeout,
+                "dedicated_thread": True,
+            });
+
+            hash<SocketPollResultInfo> result = q.get(ShortTimeout);
+            assertEq(True, exists result,
+                sprintf("cycle %d: should get result", i));
+            assertFalse(result.canceled ?? False,
+                sprintf("cycle %d: should not be canceled", i));
+            assertFalse(exists result.ex,
+                sprintf("cycle %d: should have no exception: %y", i, result.ex));
+            assertEq(True, qore_op.wasCalled(),
+                sprintf("cycle %d: Qore continuePoll should have been called", i));
+
+            # Accept and close the connection
+            Socket accepted = listener.accept(ShortTimeout);
+            try { accepted.close(); } catch () {}
+            try { client.close(); } catch () {}
+        }
+    }
 }
 
 #! Mock poll operation that throws on continuePoll
@@ -987,5 +1212,57 @@ class ErrorPollOp inherits AbstractPollOperation {
 
     *hash<SocketPollInfo> continuePoll() {
         throw "TEST-POLL-ERROR", "intentional error from test poll operation";
+    }
+}
+
+#! Qore-language poll operation wrapper — validates the dispatcher path
+/** Wraps a real C++ poll operation with a Qore-language continuePoll() override.
+    Tracks whether the Qore method was called, proving the QoreCallDispatcher
+    worker thread pool dispatched the call correctly.
+*/
+class QorePollOp inherits AbstractPollOperation {
+    private {
+        AbstractPollOperation inner;
+        Socket sock;
+        bool called = False;
+    }
+
+    constructor(AbstractPollOperation inner, Socket sock) {
+        self.inner = inner;
+        self.sock = sock;
+    }
+
+    string getGoal() {
+        return inner.getGoal();
+    }
+
+    string getState() {
+        return inner.getState();
+    }
+
+    bool goalReached() {
+        return inner.goalReached();
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        called = True;
+        *hash<SocketPollInfo> rv = inner.continuePoll();
+        if (rv) {
+            return rv;
+        }
+        # If the inner operation completed (returned NOTHING), return NOTHING
+        # so the dedicated thread delivers the goal-reached result
+        if (inner.goalReached()) {
+            return NOTHING;
+        }
+        # Still in progress — return POLLIN for the socket
+        return <SocketPollInfo>{
+            "events": SOCK_POLLIN,
+            "socket": sock,
+        };
+    }
+
+    bool wasCalled() {
+        return called;
     }
 }

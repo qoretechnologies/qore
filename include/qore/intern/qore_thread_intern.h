@@ -557,7 +557,8 @@ DLLLOCAL int get_thread_entry(bool reuse_last = false);
 // acquires TID 0 and sets up the signal thread entry, always returns 0
 DLLLOCAL int get_signal_thread_entry();
 DLLLOCAL void deregister_signal_thread();
-DLLLOCAL void register_thread(int tid, pthread_t ptid, QoreProgram* pgm, bool foreign = false);
+DLLLOCAL void register_thread(int tid, pthread_t ptid, QoreProgram* pgm, bool foreign = false,
+    int flags = QTF_NONE);
 DLLLOCAL void deregister_thread(int tid);
 DLLLOCAL void delete_signal_thread();
 

@@ -711,6 +711,7 @@ public class HttpClientConnectionManager {
             "callback": sub (hash<SocketPollResultInfo> result) {
                 handleConnectionResult(key, conn, result);
             },
+            "dedicated_thread": conn.getProtocol() == "h3",
         };
 
         controller.submit(info);
