@@ -3387,5 +3387,15 @@ const QoreTypeInfo* QoreTypeInfo::getImplicitArgTypeForIterator(const QoreValue&
         }
     }
 
+    // If we still don't have an element type, but know the iterator is list-like or an iterator class,
+    // return autoTypeInfo instead of null. This ensures $1 gets a definite type (auto) for hash literal
+    // type inference, allowing "map {$1: $1}, untyped_list" to produce hash<auto> instead of plain hash.
+    if (!implicitArgType && iteratorTypeInfo) {
+        // Check if it's a list type (even without element type info)
+        if (parseReturns(iteratorTypeInfo, NT_LIST) != QTI_NOT_EQUAL) {
+            implicitArgType = autoTypeInfo;
+        }
+    }
+
     return implicitArgType;
 }

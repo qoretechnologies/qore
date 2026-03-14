@@ -29,6 +29,8 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         addTestCase("IR lvalue shift-assign smoke", \testIrLValueShiftAssignSmoke());
         addTestCase("IR hash/list smoke", \testIrHashListSmoke());
         addTestCase("IR hash map select smoke", \testIrHashMapSelectSmoke());
+        addTestCase("IR hash map untyped list iterator", \testIrHashMapUntypedListIterator());
+        addTestCase("IR hash map typed assignment from untyped iterator", \testIrHashMapTypedAssignmentUntypedIterator());
         addTestCase("IR range slice smoke", \testIrRangeSliceSmoke());
         addTestCase("IR range guard smoke", \testIrRangeGuardSmoke());
         addTestCase("IR range typed smoke", \testIrRangeTypedSmoke());
@@ -858,6 +860,72 @@ class IRExecModeSmokeTest inherits QUnit::Test {
 
         string stdout_output = ReadOnlyFile::readTextFile(out.path);
         assertEq("mapselect_hash:2:2,4\n", stdout_output, "Unexpected IR hash map select output");
+    }
+
+    testIrHashMapUntypedListIterator() {
+        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        if (!qore_bin || qore_bin == NOTHING) {
+            testSkip("no qore binary path available");
+            return;
+        }
+
+        TmpFile script();
+        script.file.write("%modern\n");
+        script.file.write("list key_list = (\"a\", \"b\", \"c\");\n");
+        script.file.write("hash result = map {$1: True}, key_list;\n");
+        script.file.write("printf(\"%d:%d:%d\\n\", result.a, result.b, result.c);\n");
+        script.file.close();
+
+        TmpFile out();
+        TmpFile err();
+
+        string cmd = sprintf("%s --exec-mode=ir %s > %s 2> %s",
+            qore_bin, script.path, out.path, err.path);
+        int rc = runCommand(cmd, script.path);
+        string err_output = ReadOnlyFile::readTextFile(err.path);
+        if (rc != 0 && err_output =~ /exec-mode/ && err_output =~ /valid long option/) {
+            testSkip("exec-mode option not supported by test qore binary");
+            return;
+        }
+
+        assertEq(0, rc, "IR exec mode hash map untyped iterator should exit cleanly");
+        assertFalse(err_output =~ /IR exec fallback to AST:/, "Unexpected IR fallback warning");
+
+        string stdout_output = ReadOnlyFile::readTextFile(out.path);
+        assertEq("1:1:1\n", stdout_output, "Unexpected IR hash map untyped iterator output");
+    }
+
+    testIrHashMapTypedAssignmentUntypedIterator() {
+        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        if (!qore_bin || qore_bin == NOTHING) {
+            testSkip("no qore binary path available");
+            return;
+        }
+
+        TmpFile script();
+        script.file.write("%modern\n");
+        script.file.write("list key_list = (\"x\", \"y\");\n");
+        script.file.write("hash<string, int> result = map {$1: 42}, key_list;\n");
+        script.file.write("printf(\"%d:%d\\n\", result.x, result.y);\n");
+        script.file.close();
+
+        TmpFile out();
+        TmpFile err();
+
+        string cmd = sprintf("%s --exec-mode=ir %s > %s 2> %s",
+            qore_bin, script.path, out.path, err.path);
+        int rc = runCommand(cmd, script.path);
+        string err_output = ReadOnlyFile::readTextFile(err.path);
+        if (rc != 0 && err_output =~ /exec-mode/ && err_output =~ /valid long option/) {
+            testSkip("exec-mode option not supported by test qore binary");
+            return;
+        }
+
+        assertEq(0, rc, "IR exec mode hash map typed assignment should exit cleanly");
+        assertFalse(err_output =~ /IR exec fallback to AST:/, "Unexpected IR fallback warning");
+
+        string stdout_output = ReadOnlyFile::readTextFile(out.path);
+        assertEq("42:42\n", stdout_output, "Unexpected IR hash map typed assignment output");
     }
 
     testIrRangeSliceSmoke() {

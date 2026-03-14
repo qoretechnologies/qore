@@ -162,6 +162,8 @@ class JITSmokeTest inherits QUnit::Test {
         addTestCase("hash key access int opcode", \testHashKeyAccessInt());
         addTestCase("direct-index map with heap-allocated results", \testDirectIndexMapHeapResults());
         addTestCase("hash map duplicate keys", \testHashMapDuplicateKeys());
+        addTestCase("hash map untyped list iterator", \testHashMapUntypedListIterator());
+        addTestCase("hash map typed assignment from untyped iterator", \testHashMapTypedAssignmentUntypedIterator());
         addTestCase("hash key access int missing key", \testHashKeyAccessIntMissingKey());
         addTestCase("weak assignment (:=)", \testWeakAssignment());
         addTestCase("guard deopt fires on_block_exit handlers", \testGuardDeoptOnBlockExit());
@@ -5814,6 +5816,82 @@ printf(\"%d:%d\\n\", result.size(), result.x);
             string result = trim(runScript(code, mode));
             assertEq("1:3", result,
                     sprintf("HashMapTwoKeys all duplicates %s", mode));
+        }
+    }
+
+    testHashMapUntypedListIterator() {
+        # Hash map with untyped list iterator — $1 should get auto type, hash should be hash<auto>
+        string code = "%modern
+list key_list = (\"a\", \"b\", \"c\");
+hash result = map {$1: True}, key_list;
+printf(\"%d:%d:%d\\n\", result.a, result.b, result.c);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("1:1:1", result,
+                    sprintf("hash map untyped list iterator %s", mode));
+        }
+
+        # Untyped list with integer values
+        code = "%modern
+list int_list = (10, 20, 30);
+hash result = map {string($1): $1 * 2}, int_list;
+printf(\"%d:%d:%d\\n\", result.\"10\", result.\"20\", result.\"30\");
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("20:40:60", result,
+                    sprintf("hash map untyped list integer computation %s", mode));
+        }
+
+        # Untyped hash in map with hash literal as value
+        code = "%modern
+hash data = (\"x\": 5, \"y\": 10);
+hash result = map {$1.key: {\"val\": $1.value}}, data.pairIterator();
+printf(\"%d:%d\\n\", result.x.val, result.y.val);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("5:10", result,
+                    sprintf("hash map untyped with nested hash literal %s", mode));
+        }
+    }
+
+    testHashMapTypedAssignmentUntypedIterator() {
+        # Assignment to typed hash from untyped iterator — should work via auto type compatibility
+        string code = "%modern
+list key_list = (\"x\", \"y\");
+hash<string, int> result = map {$1: 42}, key_list;
+printf(\"%d:%d\\n\", result.x, result.y);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("42:42", result,
+                    sprintf("hash map typed assignment untyped iterator %s", mode));
+        }
+
+        # Assignment to *hash<string, bool> from untyped iterator
+        code = "%modern
+list flag_list = (\"enabled\", \"disabled\");
+*hash<string, bool> result = map {$1: True}, flag_list;
+printf(\"%d:%d\\n\", result.enabled, result.disabled);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("1:1", result,
+                    sprintf("hash map optional typed assignment untyped iterator %s", mode));
+        }
+
+        # Untyped list assigned to complex hash<string, hash<string, int>>
+        code = "%modern
+list items = ({\"name\": \"a\", \"count\": 1}, {\"name\": \"b\", \"count\": 2});
+hash<string, hash<string, int>> result = map {$1.name: {\"val\": $1.count}}, items;
+printf(\"%d:%d\\n\", result.a.val, result.b.val);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("1:2", result,
+                    sprintf("hash map nested typed assignment untyped iterator %s", mode));
         }
     }
 
