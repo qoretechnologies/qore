@@ -105,8 +105,6 @@ public class HttpClientConnectionManager {
         #! AsyncSocketIoController for async operations
         AsyncSocketIo::AsyncSocketIoController controller;
 
-        #! True if this instance owns the controller (not using static or external)
-        bool owns_controller = False;
 
         #! Logger
         *LoggerInterface logger;
@@ -188,21 +186,12 @@ public class HttpClientConnectionManager {
             self.controller.cancelByOwner(self.uniqueHash());
         } catch () {
         }
-        # Stop a privately-owned controller
-        if (owns_controller) {
-            try {
-                self.controller.stop();
-            } catch () {
-            }
-        }
-
         # Assign the new controller and migrate connections under write lock
         # to synchronize with concurrent reads in submitConnectionToController()
         # and handleConnectionResult()
         {
             AutoWriteLock al(pool_lock);
             self.controller = controller;
-            owns_controller = False;
 
             foreach string key in (keys pool) {
                 foreach HttpClientConnection conn in (pool{key}) {
@@ -365,14 +354,6 @@ public class HttpClientConnectionManager {
             }
         }
 
-        # Stop the privately-owned controller after closing connections (if any)
-        if (owns_controller) {
-            try {
-                controller.stop();
-            } catch (hash<ExceptionInfo> ex) {
-                log(LoggerLevel::DEBUG, "closeAll: controller stop error: %s: %s", ex.err, ex.desc);
-            }
-        }
     }
 
     #! Removes idle connections older than the idle timeout

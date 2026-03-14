@@ -345,6 +345,16 @@ SocketQuicClientPollOperation::SocketQuicClientPollOperation(
         return;
     }
 
+    // Enlarge UDP receive buffer to prevent packet drops under burst traffic.
+    // QUIC sends many small datagrams; the kernel default (~208KB on Linux) is
+    // easily exhausted when the server sends large responses.  1MB matches
+    // common QUIC implementation defaults (e.g., Google, Cloudflare).
+    {
+        int rcvbuf = 1024 * 1024;
+        setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof(rcvbuf));
+        // Ignore errors — non-fatal; the connection will work with a smaller buffer
+    }
+
     // Cache local address after connect — now contains the specific local
     // interface address selected by the kernel (not wildcard)
     local_addrlen_ = sizeof(local_addr_);
@@ -627,7 +637,6 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
 
             case QCS::HANDSHAKE_RECV: {
                 // Drain all available handshake datagrams
-                int recv_count = 0;
                 while (true) {
                     int rv = recvAndProcessPacket(xsink);
                     if (*xsink) {
@@ -636,7 +645,6 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                     if (rv == SOCK_POLLIN) {
                         break;  // EAGAIN — no more data
                     }
-                    ++recv_count;
                 }
                 // 0-RTT: set up HTTP/3 early when 0-RTT TX key is installed
                 // (may be detected after receiving server response to Initial)
@@ -902,6 +910,12 @@ int SocketQuicClientPollOperation::migrateConnection(ExceptionSink* xsink) {
         return -1;
     }
 
+    // Enlarge receive buffer on migration socket (same as initial socket)
+    {
+        int rcvbuf = 1024 * 1024;
+        setsockopt(new_fd, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof(rcvbuf));
+    }
+
     // Get the new local address
     struct sockaddr_storage new_local;
     socklen_t new_local_len = sizeof(new_local);
@@ -1002,6 +1016,15 @@ SocketQuicServerPollOperation::SocketQuicServerPollOperation(
     // Cache local address (family + port); per-packet destination IP is
     // extracted from pktinfo control messages in recvAndProcessPacket()
     int fd = sock->priv->socket->getSocket();
+
+    // Enlarge UDP receive buffer to prevent packet drops under burst traffic.
+    // QUIC servers may receive bursts of client traffic (handshake retries,
+    // multiplexed requests); 1MB matches common QUIC implementation defaults.
+    {
+        int rcvbuf = 1024 * 1024;
+        setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof(rcvbuf));
+    }
+
     local_addrlen_ = sizeof(local_addr_);
     if (getsockname(fd, reinterpret_cast<struct sockaddr*>(&local_addr_), &local_addrlen_) < 0) {
         xsink->raiseErrnoException("QUIC-ERROR", errno, "getsockname() failed on QUIC server socket");
