@@ -55,14 +55,15 @@ auto mgr_h2 = new HttpClientConnectionManager({"protocol": "h2"});
 auto mgr_h3 = new HttpClientConnectionManager({"protocol": "h3"});
     @endcode
 
-    @par Shared Static Controller
-    By default all managers share a single static AsyncSocketIoController with
-    \c autostop=True. The controller's I/O thread starts when the first poll
-    operation is submitted and stops when all operations complete. This avoids
-    creating competing I/O threads when multiple managers are used.
+    @par Shared Global Controller
+    By default all managers share the process-wide AsyncSocketIo global controller
+    (via @ref AsyncSocketIo::getGlobalAsyncIoController()). The controller uses
+    \c autostop=True, so its I/O thread starts when the first poll operation is
+    submitted and stops when all operations complete. This avoids creating
+    competing I/O threads when multiple managers are used.
 
     @par Custom Controller (optional)
-    To use a dedicated controller instead of the shared static one:
+    To use a dedicated controller instead of the shared global one:
     @code{.py}
 %requires HttpClientIo
 %requires AsyncSocketIo
@@ -125,26 +126,6 @@ public class HttpClientConnectionManager {
         hash<string, date> h3_probe_times;
     }
 
-    private:internal {
-        #! Static shared controller; lazily initialized via getStaticController()
-        static Mutex static_ctrl_lock();
-        static *AsyncSocketIo::AsyncSocketIoController static_controller;
-    }
-
-    #! Returns the shared static controller, creating it on first access
-    /** All managers that don't override with setController() share a single
-        I/O thread via this controller. The controller uses autostop=True so
-        the thread starts when the first poll operation is submitted and stops
-        when all operations complete.
-    */
-    private static AsyncSocketIo::AsyncSocketIoController getStaticController() {
-        AutoLock al(static_ctrl_lock);
-        if (!static_controller) {
-            static_controller = new AsyncSocketIo::AsyncSocketIoController(True);
-        }
-        return static_controller;
-    }
-
     #! Creates a new connection manager with the given options
     /** @param opts configuration options including protocol selection
     */
@@ -166,9 +147,9 @@ public class HttpClientConnectionManager {
                 sprintf("max_streams_per_connection must be >= 0 (0 = unlimited), got %d",
                     self.opts.max_streams_per_connection);
         }
-        # Use the shared static controller by default; all managers share a
-        # single I/O thread for efficient async operation
-        controller = getStaticController();
+        # Use the process-wide global controller by default; all managers share
+        # a single I/O thread for efficient async operation
+        controller = AsyncSocketIo::getGlobalAsyncIoController();
 
         log(LoggerLevel::DEBUG, "connection manager created: protocol=%s max_conn=%d max_streams=%d idle=%d",
             self.opts.protocol,
@@ -192,13 +173,13 @@ public class HttpClientConnectionManager {
     }
 
     #! Sets an external AsyncSocketIoController for async operations
-    /** Replaces the default shared controller with a caller-provided controller.
+    /** Replaces the default global controller with a caller-provided controller.
         Existing pool connections are migrated to the new controller.
 
         @param controller the I/O controller to use
 
-        @note This is optional; by default all managers share a static
-        controller with \c autostop=True. Use \c setController() only when
+        @note This is optional; by default all managers share the process-wide
+        global controller with \c autostop=True. Use \c setController() only when
         you need a dedicated controller.
     */
     setController(AsyncSocketIo::AsyncSocketIoController controller) {
@@ -384,7 +365,7 @@ public class HttpClientConnectionManager {
             }
         }
 
-        # Stop the auto-created controller after closing connections
+        # Stop the privately-owned controller after closing connections (if any)
         if (owns_controller) {
             try {
                 controller.stop();

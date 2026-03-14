@@ -772,21 +772,10 @@ public class HttpServer inherits HttpServer::AbstractLogger {
     }
     #! @endcond
 
-    private {
-        #! Global async socket I/O controller for all async operations
-        #! Static: shared across all HttpServer instances in async mode
-        #! Use globalAsyncCtrlRefCount to track active users
-        static AsyncSocketIo::AsyncSocketIoController globalAsyncCtrl(False);
-
-        #! Reference count for globalAsyncCtrl - tracks how many HttpServer instances are using it
-        #! Static: shared across all instances; only stop globalAsyncCtrl when this reaches zero
-        static Counter globalAsyncCtrlRefCount();
-    }
-
     #! @cond nodoc
     #! Returns the global async socket I/O controller (internal use only)
     AsyncSocketIo::AsyncSocketIoController getGlobalAsyncCtrl() {
-        return globalAsyncCtrl;
+        return AsyncSocketIo::getGlobalAsyncIoController();
     }
 
     #! Returns the HTTP async socket I/O controller (useful for testing cache cleanup)
@@ -1405,28 +1394,20 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         }
         # Stop the callback-based async I/O controller
         # The new HttpAsyncSocketIoController.stop() cancels all HTTP operations it manages
-        # (accept, header reads, idle connections) on the shared globalAsyncCtrl
-        @debug(log("stop: asyncMode=%y refcount=%d", asyncMode, globalAsyncCtrlRefCount.getCount()));
+        # (accept, header reads, idle connections) on the global async I/O controller
+        @debug(log("stop: asyncMode=%y", asyncMode));
         if (asyncIo) {
             asyncIo.stop();
         }
 
         if (asyncMode) {
-            # Cancel any remaining operations owned by this server on globalAsyncCtrl
+            # Cancel any remaining operations owned by this server on the global controller
             # (e.g. HTTP/2 and HTTP/3 poll operations from execAsyncPollOperation)
+            AsyncSocketIo::AsyncSocketIoController ctrl = AsyncSocketIo::getGlobalAsyncIoController();
             string ownerId = self.uniqueHash();
-            @debug(log("stop: calling globalAsyncCtrl.cancelByOwner(%s)", ownerId));
-            int canceled = globalAsyncCtrl.cancelByOwner(ownerId);
-            @debug(log("stop: globalAsyncCtrl.cancelByOwner() canceled %d operations", canceled));
-
-            int newCount = globalAsyncCtrlRefCount.dec();
-            @debug(log("stop: refcount after dec=%d", newCount));
-            if (newCount == 0) {
-                # Last server using globalAsyncCtrl - stop the I/O thread
-                @debug(log("stop: calling globalAsyncCtrl.stop()"));
-                globalAsyncCtrl.stop();
-                @debug(log("stop: globalAsyncCtrl.stop() returned"));
-            }
+            @debug(log("stop: calling cancelByOwner(%s)", ownerId));
+            int canceled = ctrl.cancelByOwner(ownerId);
+            @debug(log("stop: cancelByOwner() canceled %d operations", canceled));
         }
 
         # Shutdown all listeners - stop accepting new connections
@@ -2053,9 +2034,8 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             return False;
         }
         timeout = timeout ?? 5s;
-        # Wait for globalAsyncCtrl I/O thread to be ready
-        # The callback-based controller doesn't have a separate coordinator thread
-        return globalAsyncCtrl.waitForProcessing(timeout);
+        # Wait for the global async I/O controller's I/O thread to be ready
+        return AsyncSocketIo::getGlobalAsyncIoController().waitForProcessing(timeout);
     }
 
     startConnection(code c) {
@@ -2105,17 +2085,11 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         asyncMode = opts.async_mode ?? True;
         @debug(log("init: asyncMode=%y", asyncMode));
         if (asyncMode) {
-            # Increment reference count for the shared globalAsyncCtrl
-            # This is decremented in stop() - only the last server to stop will stop globalAsyncCtrl
-            globalAsyncCtrlRefCount.inc();
-            @debug(log("init: globalAsyncCtrlRefCount=%d", globalAsyncCtrlRefCount.getCount()));
-            # Set logger on globalAsyncCtrl for async I/O logging
-            globalAsyncCtrl.setLogger(logger);
-            if (!globalAsyncCtrl.running()) {
-                globalAsyncCtrl.start();
-            }
+            AsyncSocketIo::AsyncSocketIoController ctrl = AsyncSocketIo::getGlobalAsyncIoController();
+            # Set logger on the global controller for async I/O logging
+            ctrl.setLogger(logger);
             asyncTarget = new Priv::HttpServerNativeAsyncTarget(self, logger);
-            asyncIo = new HttpServerAsyncIo::HttpAsyncSocketIoController(globalAsyncCtrl, logger, {
+            asyncIo = new HttpServerAsyncIo::HttpAsyncSocketIoController(ctrl, logger, {
                 "max_handler_threads": opts.max_handler_threads,
                 "min_idle_handler_threads": opts.min_idle_handler_threads,
                 "max_idle_handler_threads": opts.max_idle_handler_threads,
@@ -3225,7 +3199,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         @throw any exception raised during the I/O operation
     */
     execAsyncPollOperation(Socket s, AbstractPollOperation op) {
-        hash<SocketPollResultInfo> result = globalAsyncCtrl.exec(<SocketPollOperationInfo>{
+        hash<SocketPollResultInfo> result = AsyncSocketIo::getGlobalAsyncIoController().exec(<SocketPollOperationInfo>{
             "sock": s,
             "spop": op,
             "to": 30s,
