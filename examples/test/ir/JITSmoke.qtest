@@ -171,6 +171,8 @@ class JITSmokeTest inherits QUnit::Test {
         addTestCase("hash/list key store via closure", \testHashKeyStoreClosure());
         addTestCase("map with single-value iterator", \testMapSingleValueIterator());
         addTestCase("map with optional hash pairIterator", \testHashMapOptionalPairIterator());
+        addTestCase("cast expression type in map operator", \testCastExpressionTypeInMap());
+        addTestCase("exception callstack regression", \testExceptionCallstack());
         set_return_value(main());
     }
 
@@ -6360,5 +6362,78 @@ printf(\"%d\\n\", total);
             # 3 contexts, each with 5 functions + 5 methods = 30 total
             assertEq("30", result, sprintf("hash += in nested method calls (Qorus pattern) %s", mode));
         }
+    }
+
+    testCastExpressionTypeInMap() {
+        # Regression test for cast expression type degradation in map operator
+        # Issue: Hash literals in map body with cast expressions lost complexTypeInfo in IR/JIT,
+        # causing RUNTIME-TYPE-ERROR when assigning result to typed containers
+        # Root cause: lowerHashMapNative() passed inner type to createMakeHash instead of full type
+
+        string code = "%modern
+hashdecl MyInfo { int size; }
+
+# Test 1: Direct map with cast to typed hash
+hash<string, hash<MyInfo>> h = map {\$1: cast<hash<MyInfo>>({\"size\": 1})}, (\"a\", \"b\");
+if (h.size() != 2) { printf(\"FAIL: map size\\n\"); exit(1); }
+if (h{\"a\"}.size != 1) { printf(\"FAIL: value a\\n\"); exit(1); }
+if (h{\"b\"}.size != 1) { printf(\"FAIL: value b\\n\"); exit(1); }
+
+# Test 2: Verify type correctness via data access
+auto items = (\"x\", \"y\", \"z\");
+hash<string, hash<MyInfo>> result = map {
+    \$1: cast<hash<MyInfo>>({\"size\": \$#})
+}, items;
+if (result.size() != 3) { printf(\"FAIL: result size\\n\"); exit(1); }
+if (result{\"x\"}.size != 0) { printf(\"FAIL: value x\\n\"); exit(1); }
+if (result{\"y\"}.size != 1) { printf(\"FAIL: value y\\n\"); exit(1); }
+if (result{\"z\"}.size != 2) { printf(\"FAIL: value z\\n\"); exit(1); }
+printf(\"OK\\n\");
+";
+
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("OK", result, sprintf("cast expression type in map %s", mode));
+        }
+    }
+
+    testExceptionCallstack() {
+        # Regression test for exception callstack regression (issue #4051)
+        # Verifies that exception callstacks are populated correctly and not corrupted
+
+        # Scenario A: Direct throw - verify callstack exists and has correct error info
+        string code_a = "%modern
+hash<ExceptionInfo> ex;
+try {
+    throw \"TEST-ERROR\", \"direct throw\";
+} catch (hash<ExceptionInfo> e) {
+    ex = e;
+}
+printf(\"%s:%s:%d\\n\", ex.err, ex.desc, ex.callstack.size());
+";
+        string result = trim(runScript(code_a));
+        # Verify exception was caught and callstack has at least 1 frame (the throw site)
+        assertRegex("TEST-ERROR:direct throw:\\d+", result, "direct throw exception info and callstack");
+
+        # Scenario B: Throw from called sub (key regression test)
+        # Verifies that callstack correctly shows the function that threw,
+        # not corrupted with wrong frame information
+        string code_b = "%modern
+int sub throwingFunc() {
+    throw \"TEST-ERROR\", \"throw from sub\";
+}
+
+hash<ExceptionInfo> ex;
+try {
+    throwingFunc();
+} catch (hash<ExceptionInfo> e) {
+    ex = e;
+}
+printf(\"%s:%s:%s:%d\\n\", ex.err, ex.desc, ex.callstack[0].function, ex.callstack.size());
+";
+        result = trim(runScript(code_b));
+        # Verify exception shows throwingFunc in callstack (not corrupted)
+        assertRegex("TEST-ERROR:throw from sub:throwingFunc:\\d+", result,
+            "throw from sub shows correct function in callstack");
     }
 }

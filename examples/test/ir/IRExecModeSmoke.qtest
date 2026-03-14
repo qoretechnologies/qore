@@ -162,6 +162,8 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         addTestCase("IR map optional hash pairIterator", \testIrMapOptionalHashPairIterator());
         addTestCase("IR closure default args smoke", \testIrClosureDefaultArgsSmoke());
         addTestCase("IR closure default arg omitted smoke", \testIrClosureDefaultArgOmittedSmoke());
+        addTestCase("IR cast expression in map hash type smoke", \testIrCastInMapHashTypeSmoke());
+        addTestCase("IR exception callstack regression", \testExceptionCallstackIRMode());
         set_return_value(main());
     }
 
@@ -5732,5 +5734,119 @@ class IRExecModeSmokeTest inherits QUnit::Test {
 
         string stdout_output2 = ReadOnlyFile::readTextFile(out2.path);
         assertEq("1 2 3\n", stdout_output2, "all hash writes should be visible and consistent");
+    }
+
+    testIrCastInMapHashTypeSmoke() {
+        # Regression test for cast expression type degradation in map operator (IR mode)
+        # Issue: Hash literals in map body with cast expressions lost complexTypeInfo in IR,
+        # causing RUNTIME-TYPE-ERROR when assigning result to typed containers
+        # Root cause: lowerHashMapNative() passed inner type to createMakeHash instead of full type
+
+        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        if (!qore_bin || qore_bin == NOTHING) {
+            testSkip("no qore binary path available");
+            return;
+        }
+
+        TmpFile script();
+        script.file.write("%modern\n");
+        script.file.write("hashdecl MyInfo { int size; }\n");
+        script.file.write("\n");
+        script.file.write("# Test: map with cast to typed hash\n");
+        script.file.write("hash<string, hash<MyInfo>> h = map {$1: cast<hash<MyInfo>>({\"size\": 1})}, (\"a\", \"b\");\n");
+        script.file.write("if (h.size() != 2) { printf(\"FAIL: wrong size\\n\"); exit(1); }\n");
+        script.file.write("if (h{\"a\"}.size != 1) { printf(\"FAIL: wrong value a\\n\"); exit(1); }\n");
+        script.file.write("if (h{\"b\"}.size != 1) { printf(\"FAIL: wrong value b\\n\"); exit(1); }\n");
+        script.file.write("\n");
+        script.file.write("# Test: map with multiple items and indices\n");
+        script.file.write("auto items = (\"x\", \"y\", \"z\");\n");
+        script.file.write("hash<string, hash<MyInfo>> result = map {$1: cast<hash<MyInfo>>({\"size\": $#})}, items;\n");
+        script.file.write("if (result.size() != 3) { printf(\"FAIL: wrong result size\\n\"); exit(1); }\n");
+        script.file.write("if (result{\"x\"}.size != 0) { printf(\"FAIL: wrong value x\\n\"); exit(1); }\n");
+        script.file.write("if (result{\"y\"}.size != 1) { printf(\"FAIL: wrong value y\\n\"); exit(1); }\n");
+        script.file.write("if (result{\"z\"}.size != 2) { printf(\"FAIL: wrong value z\\n\"); exit(1); }\n");
+        script.file.write("printf(\"OK\\n\");\n");
+        script.file.close();
+
+        TmpFile out();
+        TmpFile err();
+
+        string cmd = sprintf("%s --exec-mode=ir %s > %s 2> %s",
+            qore_bin, script.path, out.path, err.path);
+        int rc = runCommand(cmd, script.path);
+
+        assertEq(0, rc, "IR cast in map hash type should exit cleanly");
+
+        string stdout = ReadOnlyFile::readTextFile(out.path);
+        assertEq("OK\n", stdout, "IR cast in map hash type smoke test passed");
+    }
+
+    testExceptionCallstackIRMode() {
+        # Regression test for IR exception callstack regression (issue #4051)
+        # Verifies that exception callstacks are populated correctly and not corrupted
+
+        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        if (!qore_bin || qore_bin == NOTHING) {
+            testSkip("no qore binary path available");
+            return;
+        }
+
+        # Scenario A: Direct throw - verify callstack exists and has correct error info
+        TmpFile script_a();
+        script_a.file.write("%new-style\n%modern\n");
+        script_a.file.write("hash<ExceptionInfo> ex;\n");
+        script_a.file.write("try {\n");
+        script_a.file.write("    throw \"TEST-ERROR\", \"direct throw\";\n");
+        script_a.file.write("} catch (hash<ExceptionInfo> e) {\n");
+        script_a.file.write("    ex = e;\n");
+        script_a.file.write("}\n");
+        script_a.file.write("printf(\"%s:%s:%d\\\\n\", ex.err, ex.desc, ex.callstack.size());\n");
+        script_a.file.close();
+
+        TmpFile out_a();
+        TmpFile err_a();
+
+        string cmd_a = sprintf("%s --exec-mode=ir %s > %s 2> %s",
+            qore_bin, script_a.path, out_a.path, err_a.path);
+        int rc_a = runCommand(cmd_a, script_a.path);
+
+        assertEq(0, rc_a, "IR direct throw should exit cleanly");
+
+        string stdout_a = ReadOnlyFile::readTextFile(out_a.path);
+        # Verify exception was caught and callstack has at least 1 frame
+        assertTrue(stdout_a =~ /TEST-ERROR:direct throw:\d+/,
+            "IR direct throw exception info and callstack");
+
+        # Scenario B: Throw from called sub (key regression test)
+        # Verifies that callstack correctly shows the function that threw,
+        # not corrupted with wrong frame information
+        TmpFile script_b();
+        script_b.file.write("%new-style\n%modern\n");
+        script_b.file.write("int sub throwingFunc() {\n");
+        script_b.file.write("    throw \"TEST-ERROR\", \"throw from sub\";\n");
+        script_b.file.write("}\n");
+        script_b.file.write("\n");
+        script_b.file.write("hash<ExceptionInfo> ex;\n");
+        script_b.file.write("try {\n");
+        script_b.file.write("    throwingFunc();\n");
+        script_b.file.write("} catch (hash<ExceptionInfo> e) {\n");
+        script_b.file.write("    ex = e;\n");
+        script_b.file.write("}\n");
+        script_b.file.write("printf(\"%s:%s:%s:%d\\\\n\", ex.err, ex.desc, ex.callstack[0].function, ex.callstack.size());\n");
+        script_b.file.close();
+
+        TmpFile out_b();
+        TmpFile err_b();
+
+        string cmd_b = sprintf("%s --exec-mode=ir %s > %s 2> %s",
+            qore_bin, script_b.path, out_b.path, err_b.path);
+        int rc_b = runCommand(cmd_b, script_b.path);
+
+        assertEq(0, rc_b, "IR throw from called sub should exit cleanly");
+
+        string stdout_b = ReadOnlyFile::readTextFile(out_b.path);
+        # Verify exception shows throwingFunc in callstack (not corrupted)
+        assertTrue(stdout_b =~ /TEST-ERROR:throw from sub:throwingFunc:\d+/,
+            "IR throw from sub shows correct function in callstack");
     }
 }
