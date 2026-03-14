@@ -7443,10 +7443,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             }
             // Convert typeInfo pointer to llvm::Value (or null pointer if not set)
             llvm::Value* ti_arg;
-            if (ml->typeInfo) {
+            if (!aot_mode && ml->typeInfo) {
+                // JIT: safe to embed pointer — same process, pointer is valid
                 llvm::Value* ti_ptr = llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(ml->typeInfo));
                 ti_arg = builder->CreateIntToPtr(ti_ptr, ptr_type);
             } else {
+                // AOT: must NOT embed compile-time pointer — ASLR makes it invalid at runtime
+                // qore_rt_make_list() will infer type from actual values when typeInfo is null
                 ti_arg = llvm::ConstantPointerNull::get(llvm::dyn_cast<llvm::PointerType>(ptr_type));
             }
             auto helper = module.getOrInsertFunction("qore_rt_make_list",
@@ -7480,10 +7483,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             }
             // Convert typeInfo pointer to llvm::Value (or null pointer if not set)
             llvm::Value* ti_arg;
-            if (mh->typeInfo) {
+            if (!aot_mode && mh->typeInfo) {
+                // JIT: safe to embed pointer — same process, pointer is valid
                 llvm::Value* ti_ptr = llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(mh->typeInfo));
                 ti_arg = builder->CreateIntToPtr(ti_ptr, ptr_type);
             } else {
+                // AOT: must NOT embed compile-time pointer — ASLR makes it invalid at runtime
+                // qore_rt_make_hash() will infer type from actual values when typeInfo is null
                 ti_arg = llvm::ConstantPointerNull::get(llvm::dyn_cast<llvm::PointerType>(ptr_type));
             }
             auto helper = module.getOrInsertFunction("qore_rt_make_hash",
@@ -7526,10 +7532,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             }
             // Convert typeInfo pointer to llvm::Value (or null pointer if not set)
             llvm::Value* ti_arg;
-            if (mhck->typeInfo) {
+            if (!aot_mode && mhck->typeInfo) {
+                // JIT: safe to embed pointer — same process, pointer is valid
                 llvm::Value* ti_ptr = llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(mhck->typeInfo));
                 ti_arg = builder->CreateIntToPtr(ti_ptr, ptr_type);
             } else {
+                // AOT: must NOT embed compile-time pointer — ASLR makes it invalid at runtime
+                // qore_rt_make_hash_const_keys() will infer type from actual values when typeInfo is null
                 ti_arg = llvm::ConstantPointerNull::get(llvm::dyn_cast<llvm::PointerType>(ptr_type));
             }
             auto helper = module.getOrInsertFunction("qore_rt_make_hash_const_keys",
