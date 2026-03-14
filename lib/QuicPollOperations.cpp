@@ -349,10 +349,16 @@ SocketQuicClientPollOperation::SocketQuicClientPollOperation(
     // QUIC sends many small datagrams; the kernel default (~208KB on Linux) is
     // easily exhausted when the server sends large responses.  1MB matches
     // common QUIC implementation defaults (e.g., Google, Cloudflare).
+    // SO_RCVBUFFORCE bypasses net.core.rmem_max (requires CAP_NET_ADMIN);
+    // fall back to SO_RCVBUF which is capped by rmem_max.
     {
         int rcvbuf = 1024 * 1024;
-        setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof(rcvbuf));
-        // Ignore errors — non-fatal; the connection will work with a smaller buffer
+#ifdef SO_RCVBUFFORCE
+        if (setsockopt(fd, SOL_SOCKET, SO_RCVBUFFORCE, &rcvbuf, sizeof(rcvbuf)) < 0)
+#endif
+        {
+            setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof(rcvbuf));
+        }
     }
 
     // Cache local address after connect — now contains the specific local
@@ -913,7 +919,12 @@ int SocketQuicClientPollOperation::migrateConnection(ExceptionSink* xsink) {
     // Enlarge receive buffer on migration socket (same as initial socket)
     {
         int rcvbuf = 1024 * 1024;
-        setsockopt(new_fd, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof(rcvbuf));
+#ifdef SO_RCVBUFFORCE
+        if (setsockopt(new_fd, SOL_SOCKET, SO_RCVBUFFORCE, &rcvbuf, sizeof(rcvbuf)) < 0)
+#endif
+        {
+            setsockopt(new_fd, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof(rcvbuf));
+        }
     }
 
     // Get the new local address
@@ -1022,7 +1033,12 @@ SocketQuicServerPollOperation::SocketQuicServerPollOperation(
     // multiplexed requests); 1MB matches common QUIC implementation defaults.
     {
         int rcvbuf = 1024 * 1024;
-        setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof(rcvbuf));
+#ifdef SO_RCVBUFFORCE
+        if (setsockopt(fd, SOL_SOCKET, SO_RCVBUFFORCE, &rcvbuf, sizeof(rcvbuf)) < 0)
+#endif
+        {
+            setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof(rcvbuf));
+        }
     }
 
     local_addrlen_ = sizeof(local_addr_);

@@ -2596,6 +2596,9 @@ void AsyncIoControllerPriv::dedicatedThread(DedicatedThreadInfo* dti, ExceptionS
 
         if (poll_xsink) {
             // Error — extract full exception info and deliver result
+            log(QORE_LOG_LEVEL_WARN,
+                "dedicated thread '%s': continuePoll raised exception — thread will exit",
+                dti->key.c_str());
             QoreException* ex_obj = poll_xsink.getException();
             QoreHashNode* ex_hash = ex_obj ? ex_obj->makeExceptionObject() : nullptr;
             poll_xsink.clear();
@@ -2627,6 +2630,10 @@ void AsyncIoControllerPriv::dedicatedThread(DedicatedThreadInfo* dti, ExceptionS
 
         if (!new_poll_info) {
             // Operation completed (goal reached) — deliver success result
+            log(QORE_LOG_LEVEL_WARN,
+                "dedicated thread '%s': continuePoll returned null (goal reached) — "
+                "thread will exit and re-submit via callback",
+                dti->key.c_str());
             QoreHashNode* result_hash = buildResultHash(dti->pinfo, false, nullptr, xsink);
             if (result_hash) {
                 {
