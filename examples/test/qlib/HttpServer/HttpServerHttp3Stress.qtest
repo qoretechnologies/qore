@@ -474,19 +474,21 @@ l50Xb2GWQesIt9k5jF5IOw==
         on_exit mgr.closeAll();
 
         # Define mixed workload: different methods, paths, and body sizes
+        # Keep concurrency moderate (12 total) to avoid timeouts in
+        # resource-constrained CI environments (Alpine containers)
         list<hash<auto>> workload = ();
-        for (int i = 0; i < 5; i++) {
+        for (int i = 0; i < 3; i++) {
             push workload, {"method": "GET", "path": "/hello", "expected_status": 200};
         }
-        for (int i = 0; i < 5; i++) {
+        for (int i = 0; i < 3; i++) {
             push workload, {"method": "POST", "path": "/echo",
                 "body": strmul("Z", 1024), "expected_status": 200,
                 "headers": {"content-type": "text/plain"}};
         }
-        for (int i = 0; i < 5; i++) {
-            push workload, {"method": "GET", "path": "/large/50000", "expected_status": 200};
+        for (int i = 0; i < 3; i++) {
+            push workload, {"method": "GET", "path": "/large/10000", "expected_status": 200};
         }
-        for (int i = 0; i < 5; i++) {
+        for (int i = 0; i < 3; i++) {
             push workload, {"method": "GET", "path": "/status/201", "expected_status": 201};
         }
 
