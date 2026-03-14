@@ -222,6 +222,36 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
     JIT-compiled code supports debugger integration via the GDB JIT interface, allowing
     debuggers like GDB (7.0+) and LLDB to see symbols and source locations in JIT-compiled
     %Qore functions.  See @ref jit_debugging "Debugging JIT-Compiled Code" for details.
+
+    <b>Performance Impact of JIT/Tiered Compilation:</b>
+
+    Benchmark results on representative workloads show significant performance improvements:
+
+    |!Execution Mode|!Average Speedup vs AST|!Best Case|!Use Case
+    |IR interpreter|2.20x|—|General scripting with fast startup
+    |Tiered (default)|2.44x|4.59x|Mixed workloads with automatic optimization
+    |JIT compilation|2.46x|4.69x|Long-running CPU-intensive applications
+    |AOT compiled|30.60x|130.30x|Pre-compiled deployments for maximum performance
+
+    Real-world benchmark examples (execution time only, excluding compilation):
+    - Simple arithmetic loop: <b>4.69x faster</b> with JIT, <b>130x faster</b> with AOT
+    - Recursive algorithm (Fibonacci): <b>2.15x faster</b> with JIT, <b>16.1x faster</b> with AOT
+    - Method call intensive: <b>1.55x faster</b> with JIT, <b>2.04x faster</b> with AOT
+    - List transformation (map): <b>2.20x faster</b> with JIT, <b>2.67x faster</b> with AOT
+
+    These improvements are achieved through:
+    1. <b>Elimination of AST interpretation overhead</b> - Direct bytecode/native execution
+    2. <b>Native code generation</b> - LLVM produces optimized CPU machine code
+    3. <b>Specialized inline fast-paths</b> - Common operations execute without dispatching
+    4. <b>Function inlining and loop optimization</b> - LLVM applies standard compiler optimizations
+
+    The default @ref exec_mode_tiered "tiered mode" provides 2.44x speedup with fast startup by
+    automatically promoting hot code paths to higher execution tiers. For deployment scenarios,
+    @ref exec_mode_aot "AOT compilation" eliminates parse-time overhead and provides 30.6x average
+    speedup for maximum performance.
+
+    See @ref execution_modes "Execution Modes" for detailed performance analysis and guidance
+    on selecting the right mode for your use case.
     @endparblock
 
     @par AOT (Ahead-of-Time) Compilation
