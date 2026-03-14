@@ -5088,9 +5088,6 @@ class ExprTreeSerializer {
             return serializeValue(op->getExp());
         }
 
-        // typeof: needs special handling — check if it exists
-        // typeof is actually just elements in disguise for some nodes, skip for now
-
         // ---- Pre/post increment/decrement ----
         if (auto* op = dynamic_cast<const QorePreIncrementOperatorNode*>(node)) {
             return serializeUnary(AOTExprNodeKind::EN_PRE_INC, op->getExp());

@@ -115,6 +115,12 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT closure default float", \testClosureDefaultFloat());
         addTestCase("AOT closure default multiple", \testClosureDefaultMultiple());
         addTestCase("AOT closure default strip source", \testClosureDefaultStripSource());
+        # Operator expression coverage tests (select, keys, instanceof, map)
+        addTestCase("AOT operator select standalone", \testOperatorSelectStandalone());
+        addTestCase("AOT operator select as argument", \testOperatorSelectAsArgument());
+        addTestCase("AOT operator keys", \testOperatorKeys());
+        addTestCase("AOT operator instanceof", \testOperatorInstanceof());
+        addTestCase("AOT operator map optimized", \testOperatorMapOptimized());
         set_return_value(main());
     }
 
@@ -3032,5 +3038,69 @@ exit(0);
         string interp_out = runInterpreted(code);
         assertEq(interp_out, result.run_out,
             "closure-default-strip output matches interpreter");
+    }
+
+    testOperatorSelectStandalone() {
+        # Test select operator as standalone expression
+        string code = "%modern
+list<int> nums = (1, -2, 3, -4, 5);
+printf(\"%d\\n\", (select nums, \$1 > 0).size());
+exit(0);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "select operator standalone output matches interpreter");
+    }
+
+    testOperatorSelectAsArgument() {
+        # Test select operator passed to function
+        string code = "%modern
+printf(\"%d\\n\", (select (1, -2, 3, -4, 5), \$1 > 0).size());
+exit(0);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "select operator as argument output matches interpreter");
+    }
+
+    testOperatorKeys() {
+        # Test keys operator on hash expressions
+        string code = "%modern
+hash<auto> h = {\"a\": 1, \"b\": 2, \"c\": 3};
+printf(\"%d\\n\", (keys h).size());
+exit(0);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "keys operator output matches interpreter");
+    }
+
+    testOperatorInstanceof() {
+        # Test instanceof operator with class instances
+        string code = "%modern
+class TestClass {
+    public {
+        int x = 42;
+    }
+}
+TestClass obj();
+printf(\"%d\\n\", obj instanceof TestClass ? 1 : 0);
+exit(0);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "instanceof operator output matches interpreter");
+    }
+
+    testOperatorMapOptimized() {
+        # Test map operator on numeric expressions
+        string code = "%modern
+list<int> nums = (1, 2, 3, 4, 5);
+printf(\"%d\\n\", (map \$1 * 2, nums).size());
+exit(0);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "map operator output matches interpreter");
     }
 }

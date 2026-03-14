@@ -678,7 +678,7 @@ enum class AOTExprNodeKind : uint8_t {
     EN_DELETE        = 43,  //!< no metadata
     EN_REMOVE        = 44,  //!< no metadata
     EN_BACKGROUND    = 45,  //!< no metadata
-    EN_TYPEOF        = 46,  //!< no metadata
+    EN_RESERVED_46   = 46,  //!< reserved for binary compatibility (previously EN_TYPEOF, no Qore operator)
     EN_TRIM          = 47,  //!< no metadata
     EN_CHOMP         = 48,  //!< no metadata
     EN_POP           = 49,  //!< no metadata
