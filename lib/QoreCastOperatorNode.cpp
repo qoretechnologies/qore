@@ -129,7 +129,7 @@ int QoreParseCastOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
                     err = -1;
                 }
             }
-            parse_context.typeInfo = hashTypeInfo;
+            parse_context.typeInfo = autoHashTypeInfo;
             if (exp) {
                 ReferenceHolder<> holder(this, nullptr);
                 val = new QoreHashDeclCastOperatorNode(loc, nullptr, takeExp(), or_nothing);
@@ -149,7 +149,7 @@ int QoreParseCastOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
                     err = -1;
                 }
             }
-            parse_context.typeInfo = listTypeInfo;
+            parse_context.typeInfo = autoListTypeInfo;
             if (exp) {
                 ReferenceHolder<> holder(this, nullptr);
                 val = new QoreComplexListCastOperatorNode(loc, nullptr, takeExp(), or_nothing);

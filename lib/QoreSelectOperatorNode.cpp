@@ -98,11 +98,11 @@ int QoreSelectOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& pars
                 "future");
             parse_context.typeInfo = nothingTypeInfo;
         } else if (QoreTypeInfo::isType(iteratorTypeInfo, NT_LIST)) {
-            parse_context.typeInfo = listTypeInfo;
+            parse_context.typeInfo = autoListTypeInfo;
         } else {
             const QoreClass* qc = QoreTypeInfo::getUniqueReturnClass(iteratorTypeInfo);
             if (qc && qore_class_private::parseCheckCompatibleClass(qc, QC_ABSTRACTITERATOR)) {
-                parse_context.typeInfo = listTypeInfo;
+                parse_context.typeInfo = autoListTypeInfo;
             } else if ((QoreTypeInfo::parseReturns(iteratorTypeInfo, NT_LIST) == QTI_NOT_EQUAL)
                 && (QoreTypeInfo::parseReturns(iteratorTypeInfo, QC_ABSTRACTITERATOR) == QTI_NOT_EQUAL)) {
                 parse_context.typeInfo = iteratorTypeInfo;
