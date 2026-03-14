@@ -140,8 +140,6 @@ public class HttpAsyncSocketIoController {
         #! I/O controllers; accepts run on controllers[0], connections are sharded via round-robin
         list<AsyncSocketIoController> controllers;
 
-        #! True if we own the controllers (created internally)
-        bool own_controllers = False;
 
         #! Round-robin index for assigning connections to I/O threads
         int next_controller_idx = 0;
@@ -196,33 +194,6 @@ public class HttpAsyncSocketIoController {
             hash<auto> opts = {}) {
         @assert(controller, "controller cannot be null");
         self.controllers = (controller,);
-        self.logger = logger;
-        self.pool_opts = opts;
-        self.handler_pool = new ThreadPool(
-            opts.max_handler_threads ?? 0,
-            opts.min_idle_handler_threads ?? 0,
-            opts.max_idle_handler_threads ?? 0,
-        );
-    }
-
-    #! Creates the HTTP controller with its own I/O controllers
-    /** @param logger optional logger interface for debugging
-        @param opts optional configuration options:
-        - \c max_handler_threads: maximum number of handler threads (default 0 = unlimited)
-        - \c min_idle_handler_threads: minimum idle handler threads (default 0)
-        - \c max_idle_handler_threads: maximum idle handler threads (default 0)
-        - \c io_threads: number of I/O threads (default 1); each thread runs its own
-          event loop, allowing connections to be processed in parallel across cores
-
-        Creates internal AsyncSocketIoController instances with autostop disabled.
-    */
-    constructor(*LoggerInterface logger, hash<auto> opts = {}) {
-        int io_threads = opts.io_threads ?? 1;
-        @assert(io_threads > 0, "io_threads must be positive");
-        for (int i = 0; i < io_threads; ++i) {
-            self.controllers += new AsyncSocketIoController(False, logger);
-        }
-        self.own_controllers = True;
         self.logger = logger;
         self.pool_opts = opts;
         self.handler_pool = new ThreadPool(
@@ -343,11 +314,6 @@ public class HttpAsyncSocketIoController {
             try {
                 controllers[ci.controller_idx].cancel(ci.sock);
             } catch () {}
-        }
-        if (own_controllers) {
-            foreach AsyncSocketIoController c in (controllers) {
-                c.stop();
-            }
         }
         # Reset stopping flag so the controller can be restarted
         {

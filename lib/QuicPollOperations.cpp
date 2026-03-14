@@ -716,7 +716,9 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                 if (quic_session->hasCompletedStreams()) {
                     cached_stream = quic_session->takeCompletedStream();
                     qcs_state = QCS::RESPONSE_READY;
-                    return flushAndReturnPollInfo(xsink);
+                    // Flush pending writes (ACKs) before signaling goal reached
+                    flushAndReturnPollInfo(xsink);
+                    return nullptr;  // goal reached
                 }
 
                 // Drain all available datagrams from the socket buffer;
@@ -734,7 +736,9 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                     if (quic_session->hasCompletedStreams()) {
                         cached_stream = quic_session->takeCompletedStream();
                         qcs_state = QCS::RESPONSE_READY;
-                        return flushAndReturnPollInfo(xsink);
+                        // Flush pending writes (ACKs) before signaling goal reached
+                        flushAndReturnPollInfo(xsink);
+                        return nullptr;  // goal reached
                     }
                 }
 
@@ -760,8 +764,8 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                     if (quic_session->hasCompletedStreams()) {
                         cached_stream = quic_session->takeCompletedStream();
                         qcs_state = QCS::RESPONSE_READY;
-                        // sendPendingPackets was just called; no need to flush again
-                        return flushAndReturnPollInfo(xsink, false);
+                        // sendPendingPackets was just called; no flush needed
+                        return nullptr;  // goal reached
                     }
 
                     // After sending (e.g. HTTP/3 request frames), try a
@@ -781,8 +785,8 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                         if (quic_session->hasCompletedStreams()) {
                             cached_stream = quic_session->takeCompletedStream();
                             qcs_state = QCS::RESPONSE_READY;
-                            // sendPendingPackets was just called; no need to flush again
-                            return flushAndReturnPollInfo(xsink, false);
+                            // sendPendingPackets was just called; no flush needed
+                            return nullptr;  // goal reached
                         }
                     }
 
