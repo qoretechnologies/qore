@@ -666,7 +666,10 @@ bool AsyncIoControllerPriv::cancelByKey(const QoreStringNode* key, ExceptionSink
         auto it = cache.find(uh);
         if (it != cache.end()) {
             rv = true;
-            if (tid && !io_exiting && q_gettid() != tid) {
+            int current_tid = q_gettid();
+            printd(2, "cancelByKey '%s': current_tid=%d io_tid=%d io_exiting=%d\n",
+                uh.c_str(), current_tid, tid, (int)io_exiting);
+            if (tid && !io_exiting && current_tid != tid) {
                 // I/O thread is running and we're NOT on it — enqueue the cancel command
                 if (!cancel_cond_map.count(uh)) {
                     cancel_cond_map[uh] = new QoreCondition();
@@ -2862,6 +2865,14 @@ bool AsyncIoControllerPriv::cancelDedicatedThread(const std::string& key, Except
         dti->stop_requested.store(true, std::memory_order_relaxed);
         if (dti->notifier) {
             dti->notifier->notify();
+        }
+
+        // If we ARE the I/O thread, we cannot wait synchronously — that would
+        // deadlock since the I/O thread is the one that processes dedicated
+        // thread completions.  Signal the stop and return; the dedicated thread
+        // will clean up asynchronously.
+        if (tid && q_gettid() == tid) {
+            return true;
         }
 
         // Wait for exit
