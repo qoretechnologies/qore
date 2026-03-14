@@ -2399,7 +2399,11 @@ public hash<ExceptionInfo> sub check_exception_serializable(hash<ExceptionInfo> 
                 }
             }
             if (!exists new_arg) {
-                new_arg = sprintf("unserializable arg: %y", ex.arg);
+                try {
+                    new_arg = sprintf("unserializable arg (class %s)", ex.arg.className());
+                } catch (hash<ExceptionInfo> ex1) {
+                    new_arg = "unserializable arg: <unknown object>";
+                }
             }
             ex.arg = new_arg;
         } else {
@@ -2410,8 +2414,9 @@ public hash<ExceptionInfo> sub check_exception_serializable(hash<ExceptionInfo> 
         if (ex.next) {
             ex.next = check_exception_serializable(ex.next);
         }
-    } catch (hash<ExceptionInfo> ex) {
-        ex.arg = sprintf("unserializable arg: %y", ex.arg);
+    } catch (hash<ExceptionInfo> ex0) {
+        # NOTE: do not use %y here as it can throw for unserializable objects
+        ex.arg = sprintf("unserializable arg: <serialization error: %s: %s>", ex0.err, ex0.desc);
     }
     return ex;
 }
