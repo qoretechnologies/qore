@@ -65,9 +65,9 @@ const QoreTypeInfo* QoreHashMapOperatorNode::setReturnTypeInfo(const QoreTypeInf
         } else
             typeInfo = returnTypeInfo;
     } else {
-        returnTypeInfo = hashTypeInfo;
+        returnTypeInfo = autoHashTypeInfo;
         // this operator returns no value if the iterator expression has no value
-        typeInfo = or_nothing ? hashOrNothingTypeInfo : hashTypeInfo;
+        typeInfo = or_nothing ? autoHashOrNothingTypeInfo : autoHashTypeInfo;
     }
 
     //printd(5, "QoreHashMapOperatorNode::setReturnTypeInfoe: '%s' t: '%s' r: '%s'\n",
