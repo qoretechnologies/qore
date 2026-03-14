@@ -479,8 +479,44 @@ ModuleName/
 
     <b>Modules Provided Separately</b>
     |!Type|!Module|!Description
+    |binary|<a href="https://github.com/qoretechnologies/module-amqp">amqp</a>|Provides AMQP 1.0 messaging support using \
+        <a href="https://qpid.apache.org/proton/">Apache Qpid Proton</a>, also provides the following user modules:\n\
+        - <a href="https://github.com/qoretechnologies/module-amqp">AmqpUtil</a>: \
+            provides a high-level client API for AMQP 1.0 messaging including producers, consumers, \
+            request-reply, transactions, durable subscriptions, and broker introspection\n\
+        - <a href="https://github.com/qoretechnologies/module-amqp">AmqpDataProvider</a>: \
+            provides a <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API \
+            for AMQP 1.0 messaging with send and receive actions
+    |binary|<a href="https://github.com/qoretechnologies/module-cairo">cairo</a>|Provides 2D graphics APIs using \
+        <a href="https://www.cairographics.org/">Cairo</a>, also provides the following user module:\n\
+        - <a href="https://github.com/qoretechnologies/module-cairo">CairoDataProvider</a>: \
+            provides a <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API \
+            for 2D graphics rendering
     |binary|<a href="https://github.com/qoretechnologies/module-sybase">freetds</a>|Provides a FreeTDS-based DBI driver for communicating with Sybase and MS SQL Server databases
     |binary|<a href="https://github.com/qoretechnologies/module-fsevent">fsevent</a>|Provides an event-driven filesystem event API
+    |binary|<a href="https://github.com/qoretechnologies/module-geos">geos</a>|Provides geospatial processing APIs using \
+        <a href="https://libgeos.org/">GEOS</a> with spatial predicates, topology operations, \
+        geometry validation, and WKT/WKB serialization, also provides the following user module:\n\
+        - <a href="https://github.com/qoretechnologies/module-geos">GEOSDataProvider</a>: \
+            provides a <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API \
+            for reading and writing WKT and WKB geometries
+    |binary|<a href="https://github.com/qoretechnologies/module-grpc">grpc</a>|Provides gRPC client/server and protocol buffer \
+        support with dynamic protobuf schema loading, all four gRPC call patterns, TLS/SSL, \
+        and server reflection, also provides the following user modules:\n\
+        - <a href="https://github.com/qoretechnologies/module-grpc">GrpcUtil</a>: \
+            provides a core gRPC protocol implementation on %Qore's HTTP/2 stack\n\
+        - <a href="https://github.com/qoretechnologies/module-grpc">GrpcDataProvider</a>: \
+            provides a <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API \
+            for gRPC services\n\
+        - <a href="https://github.com/qoretechnologies/module-grpc">ArrowFlightDataProvider</a>: \
+            provides a <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API \
+            for Apache Arrow Flight columnar data transport
+    |binary|<a href="https://github.com/qoretechnologies/module-imagemagick">imagemagick</a>|Provides comprehensive image \
+        processing and manipulation via <a href="https://imagemagick.org/">ImageMagick</a> MagickWand API, \
+        supporting 200+ formats, transformations, effects, and compositing, also provides the following user module:\n\
+        - <a href="https://github.com/qoretechnologies/module-imagemagick">ImageMagickDataProvider</a>: \
+            provides a <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API \
+            for image processing operations
     |binary|<a href="https://github.com/qoretechnologies/module-jni">jni</a>|Provides access to Java APIs in %Qore as \
         well as the following user modules\n\
         - <a href="https://qoretechnologies.com/manual/qorus/current/jni/ExcelDataProvider/html/index.html">ExcelDataProvider</a>: \
@@ -491,8 +527,30 @@ ModuleName/
             a data provider API for MQTT messaging\n
     |binary|<a href="https://github.com/qoretechnologies/module-json">json</a>|Provides JSON and JSON-RPC client functionality, also provides the following user modules:\n- <a href="http://www.qore.org/manual/modules/json/current/JsonRpcHandler/html/index.html">JsonRpcHandler</a>: provides infrastructure for implementing JSON-RPC server-side services using the <a href="../../modules/HttpServer/html/index.html#httpserverintro">HttpServer</a> module
 
+    |binary|<a href="https://github.com/qoretechnologies/module-magic">magic</a>|Provides file type detection using \
+        magic numbers via <a href="https://www.darwinsys.com/file/">libmagic</a>, providing MIME type and encoding \
+        identification for files and in-memory data buffers
     |binary|<a href="https://github.com/qoretechnologies/module-msgpack">msgpack</a>|Provides APIs for efficient data serialization in %Qore using the <a href="https://msgpack.org/index.html">MessagePack</a> format
     |binary|<a href="https://github.com/qoretechnologies/module-mysql">mysql</a>|Provides a MySQL / MariaDB / Percona DBI driver
+    |binary|<a href="https://github.com/qoretechnologies/module-nats">nats</a>|Provides \
+        <a href="https://nats.io/">NATS</a> messaging client with core publish/subscribe, request/reply, \
+        queue groups, JetStream persistent messaging, and Key-Value store support, also provides \
+        the following user modules:\n\
+        - <a href="https://github.com/qoretechnologies/module-nats">NatsUtil</a>: \
+            provides a high-level NATS client with string operations and channel-based async subscriptions\n\
+        - <a href="https://github.com/qoretechnologies/module-nats">NatsDataProvider</a>: \
+            provides a <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API \
+            for core NATS operations\n\
+        - <a href="https://github.com/qoretechnologies/module-nats">NatsJetStreamDataProvider</a>: \
+            provides a <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API \
+            for JetStream and Key-Value operations
+    |binary|<a href="https://github.com/qoretechnologies/module-ncurses">ncurses</a>|Provides terminal UI support using \
+        ncurses with window management, panel support, mouse support, and REPL frontend, also \
+        provides the following user modules:\n\
+        - <a href="https://github.com/qoretechnologies/module-ncurses">NcursesUi</a>: \
+            provides helper widgets for pop-up menus and browsers\n\
+        - <a href="https://github.com/qoretechnologies/module-ncurses">NcursesReplUi</a>: \
+            provides a REPL UI widget for interactive terminal interfaces
     |binary|<a href="https://github.com/qoretechnologies/module-odbc">odbc</a>|Provides an ODBC DBI driver to %Qore
     |binary|<a href="https://github.com/qoretechnologies/module-oracle">oracle</a>|Provides an Oracle DBI driver, providing many advanced features such as support for named types and collections, advanced queuing, etc, also provides the following user modules:\n- <a href="http://docs.qore.org/modules/oracle/current/OracleExtensions/html/index.html">OracleExtensions</a>: provides infrastructure for SQL tracing
     |binary|<a href="https://github.com/qoretechnologies/module-openldap">openldap</a>|Provides an OpenLDAP API to %Qore, also \
@@ -508,6 +566,9 @@ ModuleName/
             for PDF manipulation
     |binary|<a href="https://github.com/qoretechnologies/module-pgsql">pgsql</a>|Provides a PostgreSQL DBI driver
     |binary|<a href="https://github.com/qoretechnologies/module-process">process</a>|Provides an API for controlling external processes
+    |binary|<a href="https://github.com/qoretechnologies/module-python">python</a>|Provides bidirectional integration between \
+        %Qore and <a href="https://www.python.org/">Python</a>, enabling %Qore code to call Python modules and \
+        Python code to call %Qore APIs, including cross-language inheritance
     |binary|<a href="https://github.com/qoretechnologies/module-sqlite3">sqlite3</a>|Provides an SQLite3 DBI driver
     |binary|<a href="https://github.com/qoretechnologies/module-ssh2">ssh2</a>|Provides SSH2 and SFTP functionality, also provides the following user module:\n- <a href="http://docs.qore.org/modules/ssh2/current/SftpPoller/html/index.html">SftpPoller</a>: provides event-driven support for polling an SFTP server for new data
     |binary|<a href="https://github.com/qoretechnologies/module-sybase">sybase</a>|Provides a Sybase DBI driver
@@ -519,9 +580,20 @@ ModuleName/
             for tar archive manipulation
     |binary|<a href="https://github.com/qoretechnologies/module-tibae">tibae</a>|Provides TIBCO ActiveEnterprise(TM) (TIBCO, Inc) functionality
     |binary|<a href="https://github.com/qoretechnologies/module-tibrv">tibrv</a>|Provides TIBCO Rendezvous(R) (TIBCO, Inc) functionality
+    |binary|<a href="https://github.com/qoretechnologies/module-treesitter">treesitter</a>|Provides syntax parsing via \
+        <a href="https://tree-sitter.github.io/tree-sitter/">tree-sitter</a> with support for Python, Java, \
+        JSON, YAML, JavaScript, Kotlin, TypeScript, and %Qore
     |binary|<a href="https://github.com/qoretechnologies/module-uuid">uuid</a>|Provices an API for generating UUIDs
     |binary|<a href="https://qoretechnologies.com/manual/qorus/current/v8/v8/html">v8</a>|Provides the ability to \
         embed, compile, and execute JavaScript code
+    |binary|<a href="https://github.com/qoretechnologies/module-vss">vss</a>|Provides support for \
+        <a href="https://covesa.github.io/vehicle_signal_specification/">COVESA Vehicle Signal Specification</a> (VSS) \
+        with native .vspec parsing, data validation, and unit conversion, also provides the following user modules:\n\
+        - <a href="https://github.com/qoretechnologies/module-vss">VssLoader</a>: \
+            provides .vspec file parsing and VSS catalog loading\n\
+        - <a href="https://github.com/qoretechnologies/module-vss">VssDataProvider</a>: \
+            provides a <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API \
+            for VSS catalog navigation and metadata
     |binary|<a href="https://github.com/qoretechnologies/module-xml">xml</a>|Provides XML (SAX and DOM parsers), XPath, \
         XML-RPC, SOAP client and server, etc functionality, also provides the following user modules:\n\
         - <a href="https://qoretechnologies.com/manual/qorus/current/xml/SalesforceSoapClient/html/index.html">SalesforceSoapClient</a>: \

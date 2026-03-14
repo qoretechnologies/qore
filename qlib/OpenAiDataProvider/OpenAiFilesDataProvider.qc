@@ -60,7 +60,7 @@ public class OpenAiFilesDataProvider inherits OpenAiDataProviderCommon {
     *list<hash<DataProviderSummaryInfo>> getChildProviderSummaryInfo() {
         return map <DataProviderSummaryInfo>{
             "name": $1.key,
-        } + OpenAiFileDataProvider::ProviderSummaryInfo, getFiles().pairIterator();
+        } + OpenAiFileDataProvider::ProviderSummaryInfo, getFiles();
     }
 
     #! Returns a list of child data provider names, if any

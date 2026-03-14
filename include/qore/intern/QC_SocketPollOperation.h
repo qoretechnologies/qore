@@ -1191,6 +1191,18 @@ public:
     DLLLOCAL virtual QoreValue getOutput() const override;
     DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override;
 
+    //! Flush pending writes and return a SocketPollInfo hash with accurate events
+    /** Called when yielding on RESPONSE_READY to ensure pending requests
+        (queued by concurrent submitQuicRequest() calls) are sent and the
+        caller gets correct POLLOUT events and QUIC retransmission timeout.
+
+        @param xsink for exception handling
+        @param do_flush if true, call sendPendingPackets() before computing events;
+               if false, use the connection's current expiry for the poll timeout
+        @return SocketPollInfo hash or nullptr on error
+    */
+    DLLLOCAL QoreHashNode* flushAndReturnPollInfo(ExceptionSink* xsink, bool do_flush = true);
+
     // NOTE: intentionally does NOT call SocketPollSocketOperationBase::abort() because:
     //  1. The base class closes the socket (abortNeedsClose()), but QUIC uses a shared
     //     UDP socket that must stay open for other sessions

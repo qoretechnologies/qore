@@ -44,7 +44,7 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
 
     #! Creates a new stream handle
     constructor(HttpClientConnection conn, timeout request_timeout = DefaultRequestTimeout,
-            *Logger logger) : HttpClientStreamHandle(conn, request_timeout, logger) {
+            *LoggerInterface logger) : HttpClientStreamHandle(conn, request_timeout, logger) {
         h3conn = cast<Http3ClientConnection>(conn);
     }
 
@@ -55,7 +55,7 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
 
     #! Protocol-specific async request submission
     int submitAsyncImpl(string method, string path, *hash<auto> headers,
-            *data body, code callback) {
+            *data body, HttpResponseCallback callback) {
         return conn.submitRequest(method, path, headers, body,
             sub (hash<auto> resp, *hash<auto> err) {
                 try {
@@ -88,7 +88,7 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
         wrapper with state management
     */
     private int submitAsyncWithDatagramImpl(string method, string path, *hash<auto> headers,
-            *data body, code callback, binary datagram) {
+            *data body, HttpResponseCallback callback, binary datagram) {
         # Submit the HTTP/3 request without waking the I/O controller
         int sid = conn.submitRequest(method, path, headers, body,
             sub (hash<auto> resp, *hash<auto> err) {

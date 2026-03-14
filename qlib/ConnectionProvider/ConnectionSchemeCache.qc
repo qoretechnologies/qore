@@ -81,6 +81,10 @@ public class ConnectionSchemeCache {
             "billwerkrest": "BillwerkRestClient",
             "billwerkrests": "BillwerkRestClient",
 
+            # provided by the amqp module
+            "amqp": "AmqpDataProvider",
+            "amqps": "AmqpDataProvider",
+
             # provided by the jni module
             "bltcp": "BusyLightDataProvider",
             "blssl": "BusyLightDataProvider",

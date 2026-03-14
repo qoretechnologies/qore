@@ -63,7 +63,7 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
 
     #! Creates a new stream handle
     constructor(Http2ClientConnection conn, timeout request_timeout = DefaultRequestTimeout,
-            *Logger logger) : HttpClientStreamHandle(conn, request_timeout, logger) {
+            *LoggerInterface logger) : HttpClientStreamHandle(conn, request_timeout, logger) {
         h2conn = conn;
     }
 
@@ -77,7 +77,7 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
         Promise used by the synchronous request() API.
     */
     int submitAsyncImpl(string method, string path, *hash<auto> headers,
-            *data body, code callback) {
+            *data body, HttpResponseCallback callback) {
         return conn.submitRequest(method, path, headers, body,
             sub (hash<auto> resp, *hash<auto> err) {
                 try {
@@ -121,10 +121,7 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
 
         # Wait for connection to become ready if not already
         if (!conn.isReady()) {
-            bool ready = conn.isControllerMode()
-                ? conn.waitForReady(request_timeout)
-                : conn.driveToReady(request_timeout);
-            if (!ready) {
+            if (!conn.waitForReady(request_timeout)) {
                 {
                     AutoLock al(lock);
                     state = HttpClientStreamState::Pending;
@@ -140,6 +137,7 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
         try {
             stream_id = h2conn.submitRequestStreaming(method, path, headers, NOTHING,
                 \handleStreamingResponse(), NOTHING, body_streaming);
+            @assert(stream_id >= 0);
         } catch (hash<ExceptionInfo> ex) {
             {
                 AutoLock al(lock);
@@ -164,7 +162,6 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
     */
     auto readData(*timeout timeout_ms) {
         timeout wait_timeout = timeout_ms ?? request_timeout;
-        bool controller_mode = conn.isControllerMode();
 
         {
             AutoLock al(lock);
@@ -187,34 +184,16 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
             throw "HTTPCLIENT-STREAM-CLOSED", "stream is closed";
         }
 
-        if (controller_mode) {
-            try {
-                return data_channel.recv(wait_timeout);
-            } catch (hash<ExceptionInfo> ex) {
-                if (ex.err == "CHANNEL-TIMEOUT") {
-                    return NOTHING;
-                }
-                if (ex.err == "CHANNEL-CLOSED") {
-                    throw "HTTPCLIENT-STREAM-CLOSED", "stream is closed";
-                }
-                rethrow;
-            }
-        }
-
-        # Non-controller mode: drive the poll while waiting for data
-        date end_time = now_us() + wait_timeout;
-        while (True) {
-            auto result = data_channel.tryRecv();
-            if (exists result) {
-                return result.value;
-            }
-
-            date remaining = end_time - now_us();
-            if (remaining <= 0us) {
+        try {
+            return data_channel.recv(wait_timeout);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "CHANNEL-TIMEOUT") {
                 return NOTHING;
             }
-
-            conn.drivePoll(min(remaining, 1s));
+            if (ex.err == "CHANNEL-CLOSED") {
+                throw "HTTPCLIENT-STREAM-CLOSED", "stream is closed";
+            }
+            rethrow;
         }
     }
 
@@ -245,10 +224,6 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
 
         log(LoggerLevel::DEBUG, "sending data on stream %d (end_stream=%y)", sid, end_stream);
         h2conn.sendStreamData(sid, data, end_stream);
-
-        if (!conn.isControllerMode()) {
-            conn.drivePoll(1s);
-        }
     }
 
     #! Returns trailers from the completed response

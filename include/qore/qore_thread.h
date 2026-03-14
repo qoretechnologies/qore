@@ -278,6 +278,22 @@ DLLEXPORT int q_deregister_reserved_foreign_thread();
  */
 int q_start_thread(ExceptionSink* xsink, q_thread_t f, void* arg = nullptr);
 
+//! starts a new thread with a custom stack size and no Qore stack guard, when the thread terminates, it deregisters itself
+/** The Qore stack guard is disabled for threads created with this overload, allowing the full
+    stack size to be used. This is intended for lightweight C++ I/O threads that do not execute
+    Qore-language code directly.
+
+    @param xsink any errors starting the new thread will be raised here and cause -1 to be returned
+    @param f the function to start in the new thread
+    @param arg the argument to the function
+    @param stack_size the stack size for the new thread in bytes
+
+    @return the new TID or -1 if an error occurred
+
+    @since %Qore 2.3
+ */
+int q_start_thread(ExceptionSink* xsink, q_thread_t f, void* arg, size_t stack_size);
+
 //! use this class to temporarily register and deregister a foreign thread to allow Qore code to be executed and the Qore library to be used from threads not created by the Qore library
 /** @since %Qore 0.8.7
  */

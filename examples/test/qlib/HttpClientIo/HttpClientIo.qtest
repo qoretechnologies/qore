@@ -411,8 +411,8 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertEq(3, HttpClientIo::HttpClientConnectionState::Closed, "unified conn state Closed");
 
         # Unified constants
-        assertEq(6, HttpClientIo::DefaultMaxConnectionsPerHost, "unified default max connections per host");
-        assertEq(100, HttpClientIo::DefaultMaxStreamsPerConnection, "unified default max streams per connection");
+        assertEq(0, HttpClientIo::DefaultMaxConnectionsPerHost, "unified default max connections per host");
+        assertEq(0, HttpClientIo::DefaultMaxStreamsPerConnection, "unified default max streams per connection");
         assertTrue(HttpClientIo::DefaultConnectionIdleTimeout > 0, "unified default idle timeout > 0");
         assertTrue(HttpClientIo::DefaultConnectTimeout > 0, "unified default connect timeout > 0");
         assertTrue(HttpClientIo::DefaultRequestTimeout > 0, "unified default request timeout > 0");
@@ -923,7 +923,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(mSslUrl);
         HttpClientIo::HttpClientConnection conn = stream.getConnection();
 
-        assertTrue(conn.driveToReady(30s), "connection should become ready");
+        assertTrue(conn.waitForReady(30s), "connection should become ready");
 
         Counter counter(1);
         *hash<auto> callback_response;
@@ -936,10 +936,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
                 counter.dec();
             });
 
-        date end_time = now_us() + 30s;
-        while (counter.getCount() > 0 && now_us() < end_time) {
-            conn.drivePoll(100ms);
-        }
+        counter.waitForZero(30s);
 
         assertEq(0, counter.getCount(), "async callback should complete");
         assertNothing(callback_error, "async callback should not have error");
@@ -955,12 +952,14 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             "logger": mLogger,
         });
 
-        assertFalse(mgr.isControllerMode(), "not in controller mode initially");
-        assertNothing(mgr.getController(), "no controller initially");
+        # Manager always has a controller (auto-created with autostop=True)
+        assertTrue(mgr.isControllerMode(), "always in controller mode");
+        assertTrue(exists mgr.getController(), "auto-created controller exists");
 
+        # Replace auto-created controller with external one
         mgr.setController(controller);
         assertTrue(mgr.isControllerMode(), "in controller mode after setController");
-        assertTrue(exists mgr.getController(), "controller set");
+        assertTrue(exists mgr.getController(), "external controller set");
 
         controller.start();
         on_exit {
@@ -1346,8 +1345,8 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(mSslUrl);
         HttpClientIo::HttpClientConnection conn = stream.getConnection();
 
-        # Drive connection to ready
-        assertTrue(conn.driveToReady(30s), "connection should become ready");
+        # Wait for connection to become ready
+        assertTrue(conn.waitForReady(30s), "connection should become ready");
 
         # Submit async request to slow handler (takes 2s)
         Counter counter(1);
@@ -1408,7 +1407,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         # Acquire first stream and start a slow request in the background
         HttpClientIo::HttpClientStreamHandle stream1 = mgr.acquireStream(mSslUrl);
         HttpClientIo::HttpClientConnection conn = stream1.getConnection();
-        assertTrue(conn.driveToReady(30s), "connection should become ready");
+        assertTrue(conn.waitForReady(30s), "connection should become ready");
 
         Counter counter(1);
         stream1.submitAsync("GET", "/slow/3000", NOTHING, NOTHING,
@@ -1421,11 +1420,8 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertThrows("HTTPCLIENT-CAPACITY-ERROR", \mgr.acquireStream(), (mSslUrl,),
             "should throw capacity error when all connections at stream limit");
 
-        # Wait for the slow request to complete
-        date end_time = now_us() + 10s;
-        while (counter.getCount() > 0 && now_us() < end_time) {
-            conn.drivePoll(100ms);
-        }
+        # Wait for the slow request to complete (controller drives I/O)
+        counter.waitForZero(10s);
     }
 
     testCleanupIdleWithConnections() {
@@ -1470,9 +1466,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             sub () {
                 new HttpClientIo::HttpClientConnectionManager(
                     <HttpClientIo::HttpClientConnectionManagerOptions>{
-                    "max_connections_per_host": 0,
+                    "max_connections_per_host": -1,
                 });
-            }, NOTHING, "zero max_connections should throw");
+            }, NOTHING, "negative max_connections should throw");
     }
 
     testInvalidMaxStreamsOption() {
@@ -1530,8 +1526,8 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(mSslUrl);
         HttpClientIo::HttpClientConnection conn = stream.getConnection();
 
-        # Drive connection to ready
-        assertTrue(conn.driveToReady(30s), "connection should become ready");
+        # Wait for connection to become ready
+        assertTrue(conn.waitForReady(30s), "connection should become ready");
 
         hash<HttpClientIo::HttpClientConnectionInfo> info = conn.getConnectionInfo();
         assertEq("127.0.0.1", info.host, "host should be 127.0.0.1");
@@ -1797,8 +1793,8 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(mSslUrl);
         HttpClientIo::HttpClientConnection conn = stream.getConnection();
 
-        # Drive connection to ready
-        assertTrue(conn.driveToReady(30s), "connection should become ready");
+        # Wait for connection to become ready
+        assertTrue(conn.waitForReady(30s), "connection should become ready");
 
         # Submit async request to slow handler
         *hash<auto> callback_error;

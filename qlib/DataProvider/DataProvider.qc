@@ -121,6 +121,9 @@ public class DataProvider {
 
             "gmail": "GmailDataProvider",
 
+            # provided by the amqp module
+            "amqp": "AmqpDataProvider",
+
             # provided by the grpc module
             "grpc": "GrpcDataProvider",
 
@@ -148,10 +151,6 @@ public class DataProvider {
 
             # provided by the jni module
             "mqtt": "MqttDataProvider",
-
-            # provided by the nats module
-            "nats": "NatsDataProvider",
-            "natsjetstream": "NatsJetStreamDataProvider",
 
             "openai": "OpenAiDataProvider",
             "pdfco": "PdfCoDataProvider",

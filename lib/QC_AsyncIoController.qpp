@@ -80,6 +80,19 @@ hashdecl Qore::SocketPollOperationInfo {
         on a listener) by using distinct keys like "accept:<hash>:1", "accept:<hash>:2".
     */
     *string key;
+
+    //! If True, the operation runs on its own dedicated I/O thread
+    /** Useful for QUIC/HTTP/3 connections where the userspace protocol stack
+        requires prompt packet processing and cannot share an I/O thread with
+        other connections.
+
+        Dedicated threads use a minimal stack (128KB) and call the C++ continuePoll()
+        method directly. If the poll operation has a Qore-language override of
+        continuePoll(), calls are dispatched to a shared Qore worker thread pool.
+
+        @since %Qore 2.3
+    */
+    *bool dedicated_thread;
 }
 
 //! Socket poll result info hash

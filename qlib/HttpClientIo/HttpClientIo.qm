@@ -52,6 +52,8 @@ module HttpClientIo {
     - **Protocol auto-selection**: Try HTTP/3 (QUIC) first, fall back to HTTP/2 (TCP+TLS)
     - **True multiplexing**: Multiple concurrent streams on a single connection
     - **Connection pooling**: Shared connections across multiple clients
+    - **Async I/O**: All I/O driven by AsyncSocketIoController (epoll/kqueue); sync \c request()
+      blocks the caller via Future while the controller event loop handles actual I/O
     - **Sync and async APIs**: Blocking and callback-based interfaces
     - **Streaming support**: WebSocket and SSE over HTTP/2
     - **Connection migration**: QUIC connection migration for HTTP/3
@@ -76,24 +78,24 @@ module HttpClientIo {
 %requires HttpClientIo
 
 # Create a connection manager (default: auto protocol selection)
+# The manager auto-creates an AsyncSocketIoController with autostop=True
 HttpClientConnectionManager manager();
 
 # Synchronous request - protocol selected automatically
+# I/O is driven by the controller's event loop; request() blocks via Future
 hash<HttpClientResponseInfo> resp = manager.request(
     "https://example.com", "GET", "/api/resource");
 printf("Status: %d, Protocol: %s\n", resp.status_code, resp.protocol);
+
+manager.closeAll();
     @endcode
 
-    @par Async Usage (callback API with controller)
+    @par Async Usage (callback API)
     @code{.py}
 %requires HttpClientIo
-%requires AsyncSocketIo
 
-# Create manager with async controller
+# Create manager (controller auto-created)
 HttpClientConnectionManager manager();
-AsyncSocketIoController controller(False);
-manager.setController(controller);
-controller.start();
 
 # Submit async request with callback
 manager.submitRequestAsync("https://example.com", "GET", "/api/resource",
@@ -106,8 +108,31 @@ manager.submitRequestAsync("https://example.com", "GET", "/api/resource",
         }
     });
 
-controller.stop();
 manager.closeAll();
+    @endcode
+
+    @par Custom Controller (optional)
+    By default all managers share a single static AsyncSocketIoController.
+    To use a dedicated controller instead:
+    @code{.py}
+%requires HttpClientIo
+%requires AsyncSocketIo
+
+# Use a custom external controller
+AsyncSocketIoController controller(False);
+controller.start();
+
+HttpClientConnectionManager mgr1();
+mgr1.setController(controller);
+
+HttpClientConnectionManager mgr2();
+mgr2.setController(controller);
+
+# ... use mgr1 and mgr2 ...
+
+mgr1.closeAll();
+mgr2.closeAll();
+controller.stop();
     @endcode
 
     @par Forced Protocol Selection
@@ -125,6 +150,10 @@ auto mgr_h3 = new HttpClientConnectionManager({"protocol": "h3"});
 
     @subsection httpclientio_v1_0 Version 1.0
     - Initial release of unified HttpClientIo module
+    - Async-only I/O: all managers share a single static AsyncSocketIoController
+      with \c autostop=True; sync \c request() blocks via Future while the
+      controller event loop drives actual I/O
+    - \c setController() is optional (for using a custom dedicated controller)
     - Protocol auto-selection with HTTP/3 to HTTP/2 fallback
     - Abstract base classes for protocol-agnostic code
     - Connection pooling with configurable limits
@@ -135,11 +164,12 @@ auto mgr_h3 = new HttpClientConnectionManager({"protocol": "h3"});
 
 #! Main namespace for HttpClientIo module
 public namespace HttpClientIo {
-    #! Default maximum connections per host
-    public const DefaultMaxConnectionsPerHost = 6;
+    #! Default maximum connections per host (0 = unlimited)
+    public const DefaultMaxConnectionsPerHost = 0;
 
-    #! Default maximum streams per connection
-    public const DefaultMaxStreamsPerConnection = 100;
+    #! Default maximum streams per connection (0 = unlimited; the server's SETTINGS_MAX_CONCURRENT_STREAMS is
+    #! enforced at the C++ Socket level regardless of this value)
+    public const DefaultMaxStreamsPerConnection = 0;
 
     #! Default connection idle timeout (60 seconds)
     public const DefaultConnectionIdleTimeout = 60s;
@@ -149,6 +179,40 @@ public namespace HttpClientIo {
 
     #! Default request timeout (60 seconds)
     public const DefaultRequestTimeout = 60s;
+
+    #! Protocol selection enum
+    /** @since HttpClientIo 1.0
+    */
+    public enum HttpClientProtocol {
+        #! Auto-detect protocol (prefer HTTP/3 for HTTPS, fall back to HTTP/2)
+        Auto = 0,
+        #! Force HTTP/2
+        H2 = 1,
+        #! Force HTTP/3 (QUIC)
+        H3 = 2,
+    }
+
+    #! Maps protocol enum values to string identifiers
+    public const HttpClientProtocolMap = {
+        "auto": HttpClientProtocol::Auto,
+        "h2": HttpClientProtocol::H2,
+        "h3": HttpClientProtocol::H3,
+    };
+
+    #! Maps protocol enum values to string identifiers (reverse)
+    public const HttpClientProtocolReverseMap = {
+        HttpClientProtocol::Auto: "auto",
+        HttpClientProtocol::H2: "h2",
+        HttpClientProtocol::H3: "h3",
+    };
+
+    #! Callback type for async HTTP response handling
+    /** @param response the HTTP response hash
+        @param error optional error info hash (set on error)
+
+        @since HttpClientIo 1.0
+    */
+    public typedef HttpResponseCallback = code<nothing(hash<auto> response, *hash<auto> error)>;
 
     #! Connection state enum
     public enum HttpClientConnectionState {
@@ -284,9 +348,11 @@ public namespace HttpClientIo {
         bool accept_all_certs = False;
 
         #! Logger for connection manager
-        *Logger logger;
+        *LoggerInterface logger;
 
         #! Protocol selection: "auto" (default), "h2", or "h3"
+        /** @see HttpClientProtocol, HttpClientProtocolMap
+        */
         string protocol = "auto";
 
         #! HTTP/3-only: client certificate for mutual TLS (mTLS)

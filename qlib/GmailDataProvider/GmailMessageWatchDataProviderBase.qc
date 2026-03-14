@@ -70,6 +70,9 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
         #! Minimum poll interval in seconds
         const MinPollInterval = 30;
 
+        #! Default poll interval in seconds
+        const DefaultPollInterval = 120;
+
         #! For parsing months
         const MonthMap = {
             "jan": 1,
@@ -111,7 +114,8 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
     constructor(GoogleRestClient::GoogleRestClient rest,
             hash<string, hash<DataProviderOptionInfo>> constructor_options, *hash<auto> options)
             : GoogleDataProviderBase(rest),
-              AbstractWatchDataProviderBase(max(options.poll_interval ?? 120, MinPollInterval)) {
+              AbstractWatchDataProviderBase(GmailMessageWatchDataProviderBase::getPollInterval(
+                  DataProviderDataContextHelper::getHash(){keys constructor_options} + options)) {
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", constructor_options,
             DataProviderDataContextHelper::getHash(){keys constructor_options} + options);
         processOptions(copts);
@@ -124,12 +128,7 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
 
     #! Process constructor options
     private processOptions(*hash<auto> copts) {
-        if (copts.poll_interval) {
-            poll_secs = copts.poll_interval;
-            if (poll_secs < MinPollInterval) {
-                poll_secs = MinPollInterval;
-            }
-        }
+        poll_secs = GmailMessageWatchDataProviderBase::getPollInterval(copts);
         if (copts.retrieve_attachments) {
             retrieve_attachments = True;
         }
@@ -141,6 +140,11 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
         }
 
         q = copts.q;
+    }
+
+    #! Returns the effective poll interval in seconds
+    private static int getPollInterval(*hash<auto> opts) {
+        return max(opts.poll_interval ?? DefaultPollInterval, MinPollInterval);
     }
 
     #! Setup for a poll operation
