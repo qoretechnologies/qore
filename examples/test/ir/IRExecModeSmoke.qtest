@@ -163,6 +163,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         addTestCase("IR closure default args smoke", \testIrClosureDefaultArgsSmoke());
         addTestCase("IR closure default arg omitted smoke", \testIrClosureDefaultArgOmittedSmoke());
         addTestCase("IR cast expression in map hash type smoke", \testIrCastInMapHashTypeSmoke());
+        addTestCase("IR map or_nothing from wildcard iterator", \testIrMapOrNothingFromWildcard());
         addTestCase("IR exception callstack regression", \testExceptionCallstackIRMode());
         set_return_value(main());
     }
@@ -5779,6 +5780,45 @@ class IRExecModeSmokeTest inherits QUnit::Test {
 
         string stdout = ReadOnlyFile::readTextFile(out.path);
         assertEq("OK\n", stdout, "IR cast in map hash type smoke test passed");
+    }
+
+    testIrMapOrNothingFromWildcard() {
+        # Regression test for parse-time or_nothing flag issue with wildcard iterator types (IR mode)
+        # Issue: When map operator iterates with unknown type (anyTypeInfo), the inferred
+        # result type should NOT be optional. With anyTypeInfo (hasType=false), or_nothing must be false.
+        # Root cause: setReturnTypeInfo() treated QTI_WILDCARD (from anyTypeInfo) as "can return NOTHING"
+
+        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        if (!qore_bin || qore_bin == NOTHING) {
+            testSkip("no qore binary path available");
+            return;
+        }
+
+        TmpFile script();
+        script.file.write("%modern\n");
+        script.file.write("# Test pattern: Assign to non-optional typed hash\n");
+        script.file.write("# This would fail if map result incorrectly had *hash type\n");
+        script.file.write("hash<string, int> result = map {$1: $# * 10}, (\"a\", \"b\", \"c\");\n");
+        script.file.write("\n");
+        script.file.write("if (result.size() != 3) { printf(\"FAIL: result size %d\\n\", result.size()); exit(1); }\n");
+        script.file.write("if (result{\"a\"} != 0) { printf(\"FAIL: value a %d\\n\", result{\"a\"}); exit(1); }\n");
+        script.file.write("if (result{\"b\"} != 10) { printf(\"FAIL: value b %d\\n\", result{\"b\"}); exit(1); }\n");
+        script.file.write("if (result{\"c\"} != 20) { printf(\"FAIL: value c %d\\n\", result{\"c\"}); exit(1); }\n");
+        script.file.write("\n");
+        script.file.write("printf(\"OK\\n\");\n");
+        script.file.close();
+
+        TmpFile out();
+        TmpFile err();
+
+        string cmd = sprintf("%s --exec-mode=ir %s > %s 2> %s",
+            qore_bin, script.path, out.path, err.path);
+        int rc = runCommand(cmd, script.path);
+
+        assertEq(0, rc, "IR map or_nothing from wildcard iterator should exit cleanly");
+
+        string stdout = ReadOnlyFile::readTextFile(out.path);
+        assertEq("OK\n", stdout, "IR map or_nothing from wildcard iterator smoke test passed");
     }
 
     testExceptionCallstackIRMode() {

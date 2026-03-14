@@ -172,6 +172,7 @@ class JITSmokeTest inherits QUnit::Test {
         addTestCase("map with single-value iterator", \testMapSingleValueIterator());
         addTestCase("map with optional hash pairIterator", \testHashMapOptionalPairIterator());
         addTestCase("cast expression type in map operator", \testCastExpressionTypeInMap());
+        addTestCase("map or_nothing from wildcard iterator", \testMapOrNothingFromWildcardIterator());
         addTestCase("exception callstack regression", \testExceptionCallstack());
         set_return_value(main());
     }
@@ -6394,6 +6395,31 @@ printf(\"OK\\n\");
         foreach string mode in ("ast", "ir", "jit") {
             string result = trim(runScript(code, mode));
             assertEq("OK", result, sprintf("cast expression type in map %s", mode));
+        }
+    }
+
+    testMapOrNothingFromWildcardIterator() {
+        # Regression test for parse-time or_nothing flag issue with wildcard iterator types
+        # Issue: When map operator iterates with unknown type (anyTypeInfo), the inferred
+        # result type should NOT be optional. With anyTypeInfo (hasType=false), or_nothing must be false.
+        # Root cause: setReturnTypeInfo() treated QTI_WILDCARD (from anyTypeInfo) as "can return NOTHING"
+
+        string code = "%modern
+# Test pattern: Assign to non-optional typed hash
+# This would fail if map result incorrectly had *hash type
+hash<string, int> result = map {\$1: \$# * 10}, (\"a\", \"b\", \"c\");
+
+if (result.size() != 3) { printf(\"FAIL: result size %d\\n\", result.size()); exit(1); }
+if (result{\"a\"} != 0) { printf(\"FAIL: value a %d\\n\", result{\"a\"}); exit(1); }
+if (result{\"b\"} != 10) { printf(\"FAIL: value b %d\\n\", result{\"b\"}); exit(1); }
+if (result{\"c\"} != 20) { printf(\"FAIL: value c %d\\n\", result{\"c\"}); exit(1); }
+
+printf(\"OK\\n\");
+";
+
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("OK", result, sprintf("map or_nothing from wildcard iterator %s", mode));
         }
     }
 
