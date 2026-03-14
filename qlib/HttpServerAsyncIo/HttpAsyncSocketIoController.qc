@@ -329,7 +329,7 @@ public class HttpAsyncSocketIoController {
 
     #! Returns True if the controller is running
     bool running() {
-        return controllers[0].running();
+        return !has_been_stopped && controllers[0].running();
     }
 
     #! Waits for all I/O threads to stop
@@ -600,7 +600,7 @@ public class HttpAsyncSocketIoController {
             "listeners": listeners.size(),
             "connections": connections.size(),
             "io_threads": controllers.size(),
-            "running": controllers[0].running(),
+            "running": !has_been_stopped && controllers[0].running(),
         };
     }
 

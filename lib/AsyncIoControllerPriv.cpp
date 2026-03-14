@@ -187,6 +187,14 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
             item->result = rv.release().get<QoreHashNode>();
         }
 
+        // Mark exceptions as externally managed: they were created on this worker
+        // thread (incrementing this thread's active_exceptions counter), but will be
+        // consumed by the caller thread via assimilate().  markExternallyManaged()
+        // decrements this thread's counter so the thread can exit cleanly.
+        if (item->xsink) {
+            item->xsink.markExternallyManaged();
+        }
+
         // Signal completion
         {
             AutoLocker al(m);
