@@ -5230,6 +5230,11 @@ QoreIRValue QoreIRLowering::lowerShiftLeftEquals(const QoreValue& expr, std::str
 
     const AbstractQoreNode* left_node = op->getLeft().getInternalNode();
     auto* left_var = dynamic_cast<const VarRefNode*>(left_node);
+    // Reference-typed locals need lvalue semantics for write-through
+    if (left_var && left_var->getTypeInfo()
+            && QoreTypeInfo::isReference(left_var->getTypeInfo())) {
+        left_var = nullptr;
+    }
     QoreValue right_expr(op->getRight());
     QoreIRValue right = lowerExpression(right_expr, error);
     if (!right.isValid()) {
@@ -5296,6 +5301,11 @@ QoreIRValue QoreIRLowering::lowerShiftRightEquals(const QoreValue& expr, std::st
 
     const AbstractQoreNode* left_node = op->getLeft().getInternalNode();
     auto* left_var = dynamic_cast<const VarRefNode*>(left_node);
+    // Reference-typed locals need lvalue semantics for write-through
+    if (left_var && left_var->getTypeInfo()
+            && QoreTypeInfo::isReference(left_var->getTypeInfo())) {
+        left_var = nullptr;
+    }
     QoreValue right_expr(op->getRight());
     QoreIRValue right = lowerExpression(right_expr, error);
     if (!right.isValid()) {

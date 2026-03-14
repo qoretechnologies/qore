@@ -168,6 +168,7 @@ class JITSmokeTest inherits QUnit::Test {
         addTestCase("weak assignment (:=)", \testWeakAssignment());
         addTestCase("guard deopt fires on_block_exit handlers", \testGuardDeoptOnBlockExit());
         addTestCase("reference compound assignment writes through", \testReferenceCompoundAssignment());
+        addTestCase("reference shift assignment writes through", \testReferenceShiftAssignment());
         addTestCase("hash/list key store via closure", \testHashKeyStoreClosure());
         addTestCase("map with single-value iterator", \testMapSingleValueIterator());
         addTestCase("map with optional hash pairIterator", \testHashMapOptionalPairIterator());
@@ -6139,6 +6140,23 @@ printf(\"%d\\n\", lc.dump()[0]);
         foreach string mode in ("ast", "ir", "jit") {
             string result = trim(runScript(list_code, mode));
             assertEq("200", result, sprintf("reference list compound assignment %s", mode));
+        }
+    }
+
+    testReferenceShiftAssignment() {
+        # Regression test: shift assignment (<<=, >>=) on a reference<int> variable
+        # must write through the reference to the original value, not modify the reference itself
+        string code = "%modern
+int a = 8;
+reference<int> ref = \\a;
+ref <<= 2;
+printf(\"%d\\n\", a);
+ref >>= 1;
+printf(\"%d\\n\", a);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("32\n16", result, sprintf("reference shift assignment %s", mode));
         }
     }
 

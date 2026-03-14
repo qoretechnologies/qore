@@ -147,6 +147,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         addTestCase("IR object construction smoke", \testIrObjectConstructionSmoke());
         addTestCase("IR closure call smoke", \testIrClosureCallSmoke());
         addTestCase("IR reference argument smoke", \testIrReferenceArgumentSmoke());
+        addTestCase("IR reference shift assignment smoke", \testIrReferenceShiftAssignment());
         addTestCase("IR runtime constant smoke", \testIrRuntimeConstantSmoke());
         addTestCase("IR backquote smoke", \testIrBackquoteSmoke());
         addTestCase("IR typed list construction smoke", \testIrTypedListConstructionSmoke());
@@ -5071,6 +5072,42 @@ class IRExecModeSmokeTest inherits QUnit::Test {
 
         string stdout_output = ReadOnlyFile::readTextFile(out.path);
         assertEq("ref:42\n", stdout_output, "Unexpected IR reference argument output");
+    }
+
+    testIrReferenceShiftAssignment() {
+        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        if (!qore_bin || qore_bin == NOTHING) {
+            testSkip("no qore binary path available");
+            return;
+        }
+
+        TmpFile script();
+        script.file.write("%new-style\n%modern\n");
+        script.file.write("int a = 8;\n");
+        script.file.write("reference<int> ref = \\a;\n");
+        script.file.write("ref <<= 2;\n");
+        script.file.write("printf(\"%d\\n\", a);\n");
+        script.file.write("ref >>= 1;\n");
+        script.file.write("printf(\"%d\\n\", a);\n");
+        script.file.close();
+
+        TmpFile out();
+        TmpFile err();
+
+        string cmd = sprintf("%s --exec-mode=ir --ir-fallback-warn %s > %s 2> %s",
+            qore_bin, script.path, out.path, err.path);
+        int rc = runCommand(cmd, script.path);
+        string err_output = ReadOnlyFile::readTextFile(err.path);
+        if (rc != 0 && err_output =~ /exec-mode/ && err_output =~ /valid long option/) {
+            testSkip("exec-mode option not supported by test qore binary");
+            return;
+        }
+
+        assertEq(0, rc, "IR reference shift assignment should exit cleanly");
+        assertFalse(err_output =~ /IR exec fallback to AST:/, "Unexpected IR fallback warning");
+
+        string stdout_output = ReadOnlyFile::readTextFile(out.path);
+        assertEq("32\n16\n", stdout_output, "Unexpected IR reference shift assignment output");
     }
 
     testIrRuntimeConstantSmoke() {

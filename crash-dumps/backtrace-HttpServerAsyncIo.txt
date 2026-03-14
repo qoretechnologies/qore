@@ -1,0 +1,233 @@
+
+This GDB supports auto-downloading debuginfo from the following URLs:
+  <https://debuginfod.ubuntu.com>
+Enable debuginfod for this session? (y or [n]) [answered N; input not from terminal]
+Debuginfod has been disabled.
+To make this setting permanent, add 'set debuginfod enabled off' to .gdbinit.
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+QUnit Test "HttpServerAsyncIo Test" v1.0
+ERROR: stop during active accepts: 0 assertions
+2026-03-14 12:42:45.670580: Unexpected exception: PSEUDO-METHOD-DOES-NOT-EXIST at /home/david/src/qore/git/qore/qlib/HttpServerAsyncIo/HttpAsyncSocketIoController.qc:696 (Qore)
+-----
+	>> System exception: /home/david/src/qore/git/qore/qlib/HttpServerAsyncIo/HttpAsyncSocketIoController.qc:696 (Qore): PSEUDO-METHOD-DOES-NOT-EXIST: no pseudo method <nothing>::submit() has been defined
+	>>   HttpAsyncSocketIoController::submitAcceptOp() called at /home/david/src/qore/git/qore/qlib/HttpServerAsyncIo/HttpAsyncSocketIoController.qc:492 (Qore user code)
+	>>   addListener@93825011619888_128() called at /home/david/src/qore/git/qore/qlib/HttpServerAsyncIo/HttpAsyncSocketIoController.qc:458 (Qore user code)
+	>>   HttpServerAsyncIoTest::stopDuringAcceptsTest() called at <builtin>:-1 (Qore user code)
+	>>   call_function_args() called at /home/david/src/qore/git/qore/qlib/QUnit.qm:504 (Qore builtin code)
+	>>   TestCase::run() called at /home/david/src/qore/git/qore/qlib/QUnit.qm:2271 (Qore user code)
+	>>   Test::main() called at ./examples/test/qlib/HttpServerAsyncIo/HttpServerAsyncIo.qtest:175 (Qore user code)
+	>>   HttpServerAsyncIoTest::constructor() called at <builtin>:-1 (Qore user code)
+	>> chained exception:
+	>> System exception: /home/david/src/qore/git/qore/qlib/HttpServerAsyncIo/HttpAsyncSocketIoController.qc:309 (Qore): PSEUDO-METHOD-DOES-NOT-EXIST: no pseudo method <nothing>::cancelByOwner() has been defined
+	>>   HttpAsyncSocketIoController::stop() called at /home/david/src/qore/git/qore/qlib/HttpServerAsyncIo/HttpAsyncSocketIoController.qc:237 (Qore user code)
+	>>   HttpAsyncSocketIoController::destructor() called at <builtin>:-1 (Qore user code)
+	>>   HttpServerAsyncIoTest::stopDuringAcceptsTest() called at <builtin>:-1 (Qore user code)
+	>>   call_function_args() called at /home/david/src/qore/git/qore/qlib/QUnit.qm:504 (Qore builtin code)
+	>>   TestCase::run() called at /home/david/src/qore/git/qore/qlib/QUnit.qm:2271 (Qore user code)
+	>>   Test::main() called at ./examples/test/qlib/HttpServerAsyncIo/HttpServerAsyncIo.qtest:175 (Qore user code)
+	>>   HttpServerAsyncIoTest::constructor() called at <builtin>:-1 (Qore user code)
+-----
+ERROR: accept replenish contention: 0 assertions
+2026-03-14 12:42:45.671613: Unexpected exception: PSEUDO-METHOD-DOES-NOT-EXIST at /home/david/src/qore/git/qore/qlib/HttpServerAsyncIo/HttpAsyncSocketIoController.qc:696 (Qore)
+-----
+	>> System exception: /home/david/src/qore/git/qore/qlib/HttpServerAsyncIo/HttpAsyncSocketIoController.qc:696 (Qore): PSEUDO-METHOD-DOES-NOT-EXIST: no pseudo method <nothing>::submit() has been defined
+	>>   HttpAsyncSocketIoController::submitAcceptOp() called at /home/david/src/qore/git/qore/qlib/HttpServerAsyncIo/HttpAsyncSocketIoController.qc:492 (Qore user code)
+	>>   addListener@93825011619888_128() called at /home/david/src/qore/git/qore/qlib/HttpServerAsyncIo/HttpAsyncSocketIoController.qc:458 (Qore user code)
+	>>   HttpServerAsyncIoTest::acceptReplenishContentionTest() called at <builtin>:-1 (Qore user code)
+	>>   call_function_args() called at /home/david/src/qore/git/qore/qlib/QUnit.qm:504 (Qore builtin code)
+	>>   TestCase::run() called at /home/david/src/qore/git/qore/qlib/QUnit.qm:2271 (Qore user code)
+	>>   Test::main() called at ./examples/test/qlib/HttpServerAsyncIo/HttpServerAsyncIo.qtest:175 (Qore user code)
+	>>   HttpServerAsyncIoTest::constructor() called at <builtin>:-1 (Qore user code)
+	>> chained exception:
+	>> System exception: /home/david/src/qore/git/qore/qlib/HttpServerAsyncIo/HttpAsyncSocketIoController.qc:309 (Qore): PSEUDO-METHOD-DOES-NOT-EXIST: no pseudo method <nothing>::cancelByOwner() has been defined
+	>>   HttpAsyncSocketIoController::stop() called at /home/david/src/qore/git/qore/qlib/HttpServerAsyncIo/HttpAsyncSocketIoController.qc:237 (Qore user code)
+	>>   HttpAsyncSocketIoController::destructor() called at /home/david/src/qore/git/qore/qlib/HttpServerAsyncIo/HttpAsyncSocketIoController.qc:492 (Qore user code)
+	>>   HttpServerAsyncIoTest::acceptReplenishContentionTest() called at <builtin>:-1 (Qore user code)
+	>>   call_function_args() called at /home/david/src/qore/git/qore/qlib/QUnit.qm:504 (Qore builtin code)
+	>>   TestCase::run() called at /home/david/src/qore/git/qore/qlib/QUnit.qm:2271 (Qore user code)
+	>>   Test::main() called at ./examples/test/qlib/HttpServerAsyncIo/HttpServerAsyncIo.qtest:175 (Qore user code)
+	>>   HttpServerAsyncIoTest::constructor() called at <builtin>:-1 (Qore user code)
+-----
+ERROR: thread pool dispatch: 0 assertions
+2026-03-14 12:42:45.672453: Unexpected exception: PSEUDO-METHOD-DOES-NOT-EXIST at /home/david/src/qore/git/qore/qlib/HttpServerAsyncIo/HttpAsyncSocketIoController.qc:696 (Qore)
+-----
+	>> System exception: /home/david/src/qore/git/qore/qlib/HttpServerAsyncIo/HttpAsyncSocketIoController.qc:696 (Qore): PSEUDO-METHOD-DOES-NOT-EXIST: no pseudo method <nothing>::submit() has been defined
+	>>   HttpAsyncSocketIoController::submitAcceptOp() called at /home/david/src/qore/git/qore/qlib/HttpServerAsyncIo/HttpAsyncSocketIoController.qc:492 (Qore user code)
+	>>   addListener@93825011619888_128() called at /home/david/src/qore/git/qore/qlib/HttpServerAsyncIo/HttpAsyncSocketIoController.qc:458 (Qore user code)
+	>>   HttpServerAsyncIoTest::threadPoolDispatchTest() called at <builtin>:-1 (Qore user code)
+	>>   call_function_args() called at /home/david/src/qore/git/qore/qlib/QUnit.qm:504 (Qore builtin code)
+	>>   TestCase::run() called at /home/david/src/qore/git/qore/qlib/QUnit.qm:2271 (Qore user code)
+	>>   Test::main() called at ./examples/test/qlib/HttpServerAsyncIo/HttpServerAsyncIo.qtest:175 (Qore user code)
+	>>   HttpServerAsyncIoTest::constructor() called at <builtin>:-1 (Qore user code)
+	>> chained exception:
+	>> System exception: /home/david/src/qore/git/qore/qlib/HttpServerAsyncIo/HttpAsyncSocketIoController.qc:309 (Qore): PSEUDO-METHOD-DOES-NOT-EXIST: no pseudo method <nothing>::cancelByOwner() has been defined
+	>>   HttpAsyncSocketIoController::stop() called at /home/david/src/qore/git/qore/qlib/HttpServerAsyncIo/HttpAsyncSocketIoController.qc:237 (Qore user code)
+	>>   HttpAsyncSocketIoController::destructor() called at /home/david/src/qore/git/qore/qlib/HttpServerAsyncIo/HttpAsyncSocketIoController.qc:492 (Qore user code)
+	>>   HttpServerAsyncIoTest::threadPoolDispatchTest() called at <builtin>:-1 (Qore user code)
+	>>   call_function_args() called at /home/david/src/qore/git/qore/qlib/QUnit.qm:504 (Qore builtin code)
+	>>   TestCase::run() called at /home/david/src/qore/git/qore/qlib/QUnit.qm:2271 (Qore user code)
+	>>   Test::main() called at ./examples/test/qlib/HttpServerAsyncIo/HttpServerAsyncIo.qtest:175 (Qore user code)
+	>>   HttpServerAsyncIoTest::constructor() called at <builtin>:-1 (Qore user code)
+-----
+
+Thread 1 "qore/1" received signal SIGSEGV, Segmentation fault.
+___pthread_mutex_lock (mutex=0x6760987d6a47e406) at ./nptl/pthread_mutex_lock.c:80
+warning: 80	./nptl/pthread_mutex_lock.c: No such file or directory
+
+Thread 2 (Thread 0x7fffedbbe6c0 (LWP 1021441) "qore/1"):
+#0  __syscall_cancel_arch () at ../sysdeps/unix/sysv/linux/x86_64/syscall_cancel.S:56
+No locals.
+#1  0x00007fffee6a013c in __internal_syscall_cancel (a1=140737181836864, a2=140737181836592, a3=0, a4=8, a5=0, a6=0, nr=128) at ./nptl/cancellation.c:49
+        result = <optimized out>
+        pd = <optimized out>
+        ch = <optimized out>
+#2  __syscall_cancel (a1=a1@entry=140737181836864, a2=a2@entry=140737181836592, a3=a3@entry=0, a4=a4@entry=8, a5=a5@entry=0, a6=a6@entry=0, nr=128) at ./nptl/cancellation.c:75
+        r = <optimized out>
+#3  0x00007fffee646b25 in __GI___sigtimedwait (set=set@entry=0x7fffedbae640, info=info@entry=0x7fffedbae530, timeout=timeout@entry=0x0) at ../sysdeps/unix/sysv/linux/sigtimedwait.c:31
+        result = <optimized out>
+#4  0x00007fffee646250 in __GI___sigwait (set=0x7fffedbae640, sig=0x7fffedbae604) at ../sysdeps/unix/sysv/linux/sigwait.c:28
+        si = {si_signo = -62392, si_errno = -1, si_code = 0, __pad0 = 0, _sifields = {_pad = {0, 0, 803782656, 1515446527, -402649328, 32767, 24, 0, -402653136, 32767, -306518464, 32767, -306451228, 32767, -13033, 32767, -306518608, 32767, -294959767, 32767, 8388608, 0, -402649136, 32767, 24, 0, -136413560, 32767}, _kill = {si_pid = 0, si_uid = 0}, _timer = {si_tid = 0, si_overrun = 0, si_sigval = {sival_int = 803782656, sival_ptr = 0x5a53e0ff2fe8c000}}, _rt = {si_pid = 0, si_uid = 0, si_sigval = {sival_int = 803782656, sival_ptr = 0x5a53e0ff2fe8c000}}, _sigchld = {si_pid = 0, si_uid = 0, si_status = 803782656, si_utime = 140737085706000, si_stime = 24}, _sigfault = {si_addr = 0x0, si_addr_lsb = -16384, _bounds = {_addr_bnd = {_lower = 0x7fffe8000f10, _upper = 0x18}, _pkey = 3892317968}}, _sigpoll = {si_band = 0, si_fd = 803782656}, _sigsys = {_call_addr = 0x0, _syscall = 803782656, _arch = 1515446527}}}
+        ret = <optimized out>
+#5  0x00007ffff782f13b in QoreSignalManager::signal_handler_thread() () from /home/david/src/qore/git/qore/build/libqore.so.20
+No symbol table info available.
+#6  0x00007ffff782f6e4 in sig_thread () from /home/david/src/qore/git/qore/build/libqore.so.20
+No symbol table info available.
+#7  0x00007fffee6a3d64 in start_thread (arg=<optimized out>) at ./nptl/pthread_create.c:448
+        ret = <optimized out>
+        pd = <optimized out>
+        out = <optimized out>
+        unwind_buf = {cancel_jmp_buf = {{jmp_buf = {140737181902528, -3735919997906889288, 140737181902528, 140737488342032, 22, 140737488342295, -3735919998418594376, -3735912707838093896}, mask_was_saved = 0}}, priv = {pad = {0x0, 0x0, 0x0, 0x0}, data = {prev = 0x0, cleanup = 0x0, canceltype = 0}}}
+        not_first_call = <optimized out>
+#8  0x00007fffee7373fc in __GI___clone3 () at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:78
+No locals.
+
+Thread 1 (Thread 0x7fffedc35e40 (LWP 1021420) "qore/1"):
+#0  ___pthread_mutex_lock (mutex=0x6760987d6a47e406) at ./nptl/pthread_mutex_lock.c:80
+        type = <optimized out>
+        __PRETTY_FUNCTION__ = "___pthread_mutex_lock"
+        id = <optimized out>
+#1  0x00007ffff7942f0c in QoreObject::evalMember(char const*, ExceptionSink*) () from /home/david/src/qore/git/qore/build/libqore.so.20
+No symbol table info available.
+#2  0x00007ffff7a1dd7b in QoreIRInterpreter::execute(QoreIRFunction const&, QoreValue&, ExceptionSink*, std::vector<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::allocator<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > >*, std::vector<QoreValue, std::allocator<QoreValue> > const*, std::vector<QoreValue, std::allocator<QoreValue> > const*, std::unordered_set<LocalVar const*, std::hash<LocalVar const*>, std::equal_to<LocalVar const*>, std::allocator<LocalVar const*> > const*, LocalVar const*, StatementBlock const*, QoreProgram*, bool, IRDirectParams const*) () from /home/david/src/qore/git/qore/build/libqore.so.20
+No symbol table info available.
+#3  0x00007ffff7aa1f9e in UserVariantBase::evalTiered(char const*, ReferenceHolder<QoreListNode>&, QoreObject*, ExceptionSink*) const () from /home/david/src/qore/git/qore/build/libqore.so.20
+No symbol table info available.
+#4  0x00007ffff7aa372f in UserConstructorVariant::evalConstructor(QoreClass const&, QoreObject*, CodeEvaluationHelper&, BCList*, BCEAList*, ExceptionSink*) const () from /home/david/src/qore/git/qore/build/libqore.so.20
+No symbol table info available.
+#5  0x00007ffff793d14d in ConstructorMethodFunction::evalConstructor(AbstractQoreFunctionVariant const*, QoreClass const&, QoreObject*, QoreListNode const*, BCList*, BCEAList*, RuntimeConfig&, ExceptionSink*) const () from /home/david/src/qore/git/qore/build/libqore.so.20
+No symbol table info available.
+#6  0x00007ffff795339a in qore_class_private::execConstructor(ExceptionSink*, RuntimeConfig&, AbstractQoreFunctionVariant const*, QoreListNode const*, QoreClass const*, bool) const () from /home/david/src/qore/git/qore/build/libqore.so.20
+No symbol table info available.
+#7  0x00007ffff7a17c51 in QoreIRInterpreter::execute(QoreIRFunction const&, QoreValue&, ExceptionSink*, std::vector<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::allocator<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > >*, std::vector<QoreValue, std::allocator<QoreValue> > const*, std::vector<QoreValue, std::allocator<QoreValue> > const*, std::unordered_set<LocalVar const*, std::hash<LocalVar const*>, std::equal_to<LocalVar const*>, std::allocator<LocalVar const*> > const*, LocalVar const*, StatementBlock const*, QoreProgram*, bool, IRDirectParams const*) () from /home/david/src/qore/git/qore/build/libqore.so.20
+No symbol table info available.
+#8  0x00007ffff7aa1f9e in UserVariantBase::evalTiered(char const*, ReferenceHolder<QoreListNode>&, QoreObject*, ExceptionSink*) const () from /home/david/src/qore/git/qore/build/libqore.so.20
+No symbol table info available.
+#9  0x00007ffff7aa2994 in UserVariantBase::eval(char const*, CodeEvaluationHelper*, QoreObject*, ExceptionSink*, qore_class_private const*) const () from /home/david/src/qore/git/qore/build/libqore.so.20
+No symbol table info available.
+#10 0x00007ffff7aa3157 in UserMethodVariant::evalMethod(QoreObject*, CodeEvaluationHelper&, ExceptionSink*) const () from /home/david/src/qore/git/qore/build/libqore.so.20
+No symbol table info available.
+#11 0x00007ffff793d64c in NormalMethodFunction::evalMethod(ExceptionSink*, RuntimeConfig&, AbstractQoreFunctionVariant const*, QoreObject*, QoreListNode const*, qore_class_private const*, QoreProgram*) const () from /home/david/src/qore/git/qore/build/libqore.so.20
+No symbol table info available.
+#12 0x00007ffff7947564 in RunTimeResolvedMethodReferenceNode::execValue(QoreListNode const*, ExceptionSink*) const () from /home/david/src/qore/git/qore/build/libqore.so.20
+No symbol table info available.
+#13 0x00007ffff7b74370 in BuiltinFunctionValueVariant::evalFunction(ExceptionSink*, CodeEvaluationHelper&) const () from /home/david/src/qore/git/qore/build/libqore.so.20
+No symbol table info available.
+#14 0x00007ffff7947740 in QoreFunction::evalFunction(AbstractQoreFunctionVariant const*, QoreListNode const*, QoreProgram*, RuntimeConfig&, ExceptionSink*) const () from /home/david/src/qore/git/qore/build/libqore.so.20
+No symbol table info available.
+#15 0x00007ffff76a64dd in AbstractQoreNode::eval(RuntimeConfig&, bool&, ExceptionSink*) const [clone .part.0] () from /home/david/src/qore/git/qore/build/libqore.so.20
+No symbol table info available.
+#16 0x00007ffff76a6978 in ExpressionStatement::execImpl(RuntimeConfig&, QoreValue&, ExceptionSink*) () from /home/david/src/qore/git/qore/build/libqore.so.20
+No symbol table info available.
+#17 0x00007ffff791af42 in AbstractStatement::exec(RuntimeConfig&, QoreValue&, ExceptionSink*) () from /home/david/src/qore/git/qore/build/libqore.so.20
+No symbol table info available.
+#18 0x00007ffff791b4a5 in StatementBlock::execIntern(RuntimeConfig&, QoreValue&, ExceptionSink*) () from /home/david/src/qore/git/qore/build/libqore.so.20
+No symbol table info available.
+#19 0x00007ffff791bac0 in StatementBlock::execImpl(RuntimeConfig&, QoreValue&, ExceptionSink*) () from /home/david/src/qore/git/qore/build/libqore.so.20
+No symbol table info available.
+#20 0x00007ffff7785389 in TryStatement::execImpl(RuntimeConfig&, QoreValue&, ExceptionSink*) () from /home/david/src/qore/git/qore/build/libqore.so.20
+No symbol table info available.
+#21 0x00007ffff791af42 in AbstractStatement::exec(RuntimeConfig&, QoreValue&, ExceptionSink*) () from /home/david/src/qore/git/qore/build/libqore.so.20
+No symbol table info available.
+#22 0x00007ffff791b4a5 in StatementBlock::execIntern(RuntimeConfig&, QoreValue&, ExceptionSink*) () from /home/david/src/qore/git/qore/build/libqore.so.20
+No symbol table info available.
+#23 0x00007ffff791bac0 in StatementBlock::execImpl(RuntimeConfig&, QoreValue&, ExceptionSink*) () from /home/david/src/qore/git/qore/build/libqore.so.20
+No symbol table info available.
+#24 0x00007ffff76680c6 in StatementBlock::exec(ExceptionSink*) () from /home/david/src/qore/git/qore/build/libqore.so.20
+No symbol table info available.
+#25 0x00007ffff7aa16db in UserVariantBase::evalTiered(char const*, ReferenceHolder<QoreListNode>&, QoreObject*, ExceptionSink*) const () from /home/david/src/qore/git/qore/build/libqore.so.20
+No symbol table info available.
+#26 0x00007ffff7aa2994 in UserVariantBase::eval(char const*, CodeEvaluationHelper*, QoreObject*, ExceptionSink*, qore_class_private const*) const () from /home/david/src/qore/git/qore/build/libqore.so.20
+No symbol table info available.
+#27 0x00007ffff7aa3157 in UserMethodVariant::evalMethod(QoreObject*, CodeEvaluationHelper&, ExceptionSink*) const () from /home/david/src/qore/git/qore/build/libqore.so.20
+No symbol table info available.
+#28 0x00007ffff793c514 in qore_method_private::evalNormalVariant(QoreObject*, RuntimeConfig&, QoreExternalMethodVariant const*, QoreListNode const*, ExceptionSink*) const () from /home/david/src/qore/git/qore/build/libqore.so.20
+No symbol table info available.
+#29 0x00007ffff7957bde in QoreDotEvalOperatorNode::evalWithBase(QoreValue, ExceptionSink*) const () from /home/david/src/qore/git/qore/build/libqore.so.20
+No symbol table info available.
+#30 0x00007ffff7958067 in QoreDotEvalOperatorNode::evalImpl(bool&, ExceptionSink*) const () from /home/david/src/qore/git/qore/build/libqore.so.20
+No symbol table info available.
+#31 0x00007ffff76a64dd in AbstractQoreNode::eval(RuntimeConfig&, bool&, ExceptionSink*) const [clone .part.0] () from /home/david/src/qore/git/qore/build/libqore.so.20
+No symbol table info available.
+#32 0x00007ffff76a6978 in ExpressionStatement::execImpl(RuntimeConfig&, QoreValue&, ExceptionSink*) () from /home/david/src/qore/git/qore/build/libqore.so.20
+No symbol table info available.
+#33 0x00007ffff791af42 in AbstractStatement::exec(RuntimeConfig&, QoreValue&, ExceptionSink*) () from /home/david/src/qore/git/qore/build/libqore.so.20
+No symbol table info available.
+#34 0x00007ffff791b4a5 in StatementBlock::execIntern(RuntimeConfig&, QoreValue&, ExceptionSink*) () from /home/david/src/qore/git/qore/build/libqore.so.20
+No symbol table info available.
+#35 0x00007ffff791b82d in StatementBlock::execImpl(RuntimeConfig&, QoreValue&, ExceptionSink*) () from /home/david/src/qore/git/qore/build/libqore.so.20
+No symbol table info available.
+#36 0x00007ffff7a0ec2f in ForEachStatement::execImpl(RuntimeConfig&, QoreValue&, ExceptionSink*) () from /home/david/src/qore/git/qore/build/libqore.so.20
+No symbol table info available.
+#37 0x00007ffff791af42 in AbstractStatement::exec(RuntimeConfig&, QoreValue&, ExceptionSink*) () from /home/david/src/qore/git/qore/build/libqore.so.20
+No symbol table info available.
+#38 0x00007ffff791b4a5 in StatementBlock::execIntern(RuntimeConfig&, QoreValue&, ExceptionSink*) () from /home/david/src/qore/git/qore/build/libqore.so.20
+No symbol table info available.
+#39 0x00007ffff791b82d in StatementBlock::execImpl(RuntimeConfig&, QoreValue&, ExceptionSink*) () from /home/david/src/qore/git/qore/build/libqore.so.20
+No symbol table info available.
+#40 0x00007ffff76680c6 in StatementBlock::exec(ExceptionSink*) () from /home/david/src/qore/git/qore/build/libqore.so.20
+No symbol table info available.
+#41 0x00007ffff7aa16db in UserVariantBase::evalTiered(char const*, ReferenceHolder<QoreListNode>&, QoreObject*, ExceptionSink*) const () from /home/david/src/qore/git/qore/build/libqore.so.20
+No symbol table info available.
+#42 0x00007ffff7aa2994 in UserVariantBase::eval(char const*, CodeEvaluationHelper*, QoreObject*, ExceptionSink*, qore_class_private const*) const () from /home/david/src/qore/git/qore/build/libqore.so.20
+No symbol table info available.
+#43 0x00007ffff7aa3157 in UserMethodVariant::evalMethod(QoreObject*, CodeEvaluationHelper&, ExceptionSink*) const () from /home/david/src/qore/git/qore/build/libqore.so.20
+No symbol table info available.
+#44 0x00007ffff793c514 in qore_method_private::evalNormalVariant(QoreObject*, RuntimeConfig&, QoreExternalMethodVariant const*, QoreListNode const*, ExceptionSink*) const () from /home/david/src/qore/git/qore/build/libqore.so.20
+No symbol table info available.
+#45 0x00007ffff76a3519 in AbstractQoreNode::eval(bool&, ExceptionSink*) const () from /home/david/src/qore/git/qore/build/libqore.so.20
+No symbol table info available.
+#46 0x00007ffff76a646d in evalAndRef(QoreValue&, ExceptionSink*) () from /home/david/src/qore/git/qore/build/libqore.so.20
+No symbol table info available.
+#47 0x00007ffff7a1b009 in QoreIRInterpreter::execute(QoreIRFunction const&, QoreValue&, ExceptionSink*, std::vector<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::allocator<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > >*, std::vector<QoreValue, std::allocator<QoreValue> > const*, std::vector<QoreValue, std::allocator<QoreValue> > const*, std::unordered_set<LocalVar const*, std::hash<LocalVar const*>, std::equal_to<LocalVar const*>, std::allocator<LocalVar const*> > const*, LocalVar const*, StatementBlock const*, QoreProgram*, bool, IRDirectParams const*) () from /home/david/src/qore/git/qore/build/libqore.so.20
+No symbol table info available.
+#48 0x00007ffff7aa1f9e in UserVariantBase::evalTiered(char const*, ReferenceHolder<QoreListNode>&, QoreObject*, ExceptionSink*) const () from /home/david/src/qore/git/qore/build/libqore.so.20
+No symbol table info available.
+#49 0x00007ffff7aa372f in UserConstructorVariant::evalConstructor(QoreClass const&, QoreObject*, CodeEvaluationHelper&, BCList*, BCEAList*, ExceptionSink*) const () from /home/david/src/qore/git/qore/build/libqore.so.20
+No symbol table info available.
+#50 0x00007ffff793d14d in ConstructorMethodFunction::evalConstructor(AbstractQoreFunctionVariant const*, QoreClass const&, QoreObject*, QoreListNode const*, BCList*, BCEAList*, RuntimeConfig&, ExceptionSink*) const () from /home/david/src/qore/git/qore/build/libqore.so.20
+No symbol table info available.
+#51 0x00007ffff795339a in qore_class_private::execConstructor(ExceptionSink*, RuntimeConfig&, AbstractQoreFunctionVariant const*, QoreListNode const*, QoreClass const*, bool) const () from /home/david/src/qore/git/qore/build/libqore.so.20
+No symbol table info available.
+#52 0x00007ffff7953944 in QoreClass::execConstructor(QoreListNode const*, ExceptionSink*) const () from /home/david/src/qore/git/qore/build/libqore.so.20
+No symbol table info available.
+#53 0x00007ffff7953e3a in QoreProgram::runClass(char const*, ExceptionSink*) () from /home/david/src/qore/git/qore/build/libqore.so.20
+No symbol table info available.
+#54 0x00007ffff7953f38 in QoreProgram::run(ExceptionSink*) () from /home/david/src/qore/git/qore/build/libqore.so.20
+No symbol table info available.
+#55 0x000055555555c96f in qore_main_intern(int, char**, int) ()
+No symbol table info available.
+#56 0x00007fffee62a575 in __libc_start_call_main (main=main@entry=0x55555555a630 <main>, argc=argc@entry=2, argv=argv@entry=0x7fffffffd288) at ../sysdeps/nptl/libc_start_call_main.h:58
+        self = <optimized out>
+        result = <optimized out>
+        unwind_buf = {cancel_jmp_buf = {{jmp_buf = {0, -3735881007990352456, 140737488343688, 2, 140737354125312, 93824992468440, -3735881007958895176, -3735912643206752840}, mask_was_saved = 0}}, priv = {pad = {0x0, 0x0, 0x0, 0x7fffffffd288}, data = {prev = 0x0, cleanup = 0x0, canceltype = 0}}}
+        not_first_call = <optimized out>
+#57 0x00007fffee62a628 in __libc_start_main_impl (main=0x55555555a630 <main>, argc=2, argv=0x7fffffffd288, init=<optimized out>, fini=<optimized out>, rtld_fini=<optimized out>, stack_end=0x7fffffffd278) at ../csu/libc-start.c:360
+No locals.
+#58 0x000055555555a6b5 in _start ()
+No symbol table info available.
+A debugging session is active.
+
+	Inferior 1 [process 1021420] will be killed.
+
+Quit anyway? (y or n) [answered Y; input not from terminal]

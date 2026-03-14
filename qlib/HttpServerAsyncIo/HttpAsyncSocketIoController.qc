@@ -219,9 +219,11 @@ public class HttpAsyncSocketIoController {
     constructor(*LoggerInterface logger, hash<auto> opts = {}) {
         int io_threads = opts.io_threads ?? 1;
         @assert(io_threads > 0, "io_threads must be positive");
+        list<AsyncSocketIoController> ctls;
         for (int i = 0; i < io_threads; ++i) {
-            self.controllers += new AsyncSocketIoController(False, logger);
+            ctls += new AsyncSocketIoController(False, logger);
         }
+        self.controllers = ctls;
         self.own_controllers = True;
         self.logger = logger;
         self.pool_opts = opts;
