@@ -2540,6 +2540,9 @@ void AsyncIoControllerPriv::dedicatedThread(DedicatedThreadInfo* dti, ExceptionS
                     AutoLocker al(m);
                     dedicated_threads.erase(dti->key);
                     dti->exited = true;
+                    // Broadcast immediately so cancelDedicatedThread() can proceed
+                    // without waiting for cleanup (prevents mutex starvation deadlock)
+                    dti->exit_cond.broadcast();
                 }
                 // Deliver result
                 if (dti->pinfo.callback) {
@@ -2577,6 +2580,7 @@ void AsyncIoControllerPriv::dedicatedThread(DedicatedThreadInfo* dti, ExceptionS
                     AutoLocker al(m);
                     dedicated_threads.erase(dti->key);
                     dti->exited = true;
+                    dti->exit_cond.broadcast();
                 }
                 if (dti->pinfo.callback) {
                     ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);
@@ -2603,6 +2607,7 @@ void AsyncIoControllerPriv::dedicatedThread(DedicatedThreadInfo* dti, ExceptionS
                     AutoLocker al(m);
                     dedicated_threads.erase(dti->key);
                     dti->exited = true;
+                    dti->exit_cond.broadcast();
                 }
                 if (dti->pinfo.callback) {
                     ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);
@@ -2717,6 +2722,7 @@ void AsyncIoControllerPriv::dedicatedThread(DedicatedThreadInfo* dti, ExceptionS
                 AutoLocker al(m);
                 dedicated_threads.erase(dti->key);
                 dti->exited = true;
+                dti->exit_cond.broadcast();
             }
             if (dti->pinfo.callback) {
                 ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);
@@ -2754,6 +2760,7 @@ cleanup:
                 AutoLocker al(m);
                 dedicated_threads.erase(dti->key);
                 dti->exited = true;
+                dti->exit_cond.broadcast();
             }
             if (dti->pinfo.callback) {
                 ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);
@@ -2776,6 +2783,7 @@ cleanup:
         AutoLocker al(m);
         dedicated_threads.erase(dti->key);
         dti->exited = true;
+        dti->exit_cond.broadcast();
     }
 
 cleanup_after_remove:
@@ -2802,12 +2810,13 @@ cleanup_after_remove:
     // Clean up PollInfo
     dti->pinfo.cleanup(xsink);
 
-    // Signal exit condition and enqueue for deferred delete
-    // (cannot delete here — cancelDedicatedThread may still be accessing dti
-    // inside exit_cond.wait() between the broadcast and mutex reacquisition)
+    // Enqueue for deferred delete — exit_cond was already broadcast when
+    // dti->exited was set to true (above), so cancelDedicatedThread() has
+    // already been unblocked.  We cannot delete dti here because
+    // cancelDedicatedThread may still be accessing it inside exit_cond.wait()
+    // between the broadcast and mutex reacquisition.
     {
         AutoLocker al(m);
-        dti->exit_cond.broadcast();
         deferred_dti_deletes.push_back(dti);
     }
 }
