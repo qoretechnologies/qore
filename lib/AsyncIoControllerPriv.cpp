@@ -498,6 +498,8 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
 
     bool do_signal = false;
     bool need_cancel = false;
+    PollInfo direct_pinfo;
+    bool direct_cancel = false;
 
     {
         AutoLocker al(m);
@@ -515,12 +517,20 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
                     "operation with key '%s' already exists; use replace=True to replace", uh.c_str());
                 return nullptr;
             }
-            // Queue cancel for existing operation
-            if (!cancel_cond_map.count(uh)) {
-                cancel_cond_map[uh] = new QoreCondition();
+            if (q_gettid() == tid) {
+                // On the I/O thread — cancel directly to avoid deadlock
+                direct_pinfo = it->second;
+                it->second = PollInfo();
+                cache.erase(it);
+                direct_cancel = true;
+            } else {
+                // Queue cancel for existing operation
+                if (!cancel_cond_map.count(uh)) {
+                    cancel_cond_map[uh] = new QoreCondition();
+                }
+                do_signal = enqueueCmdLocked(IoCommand::Cancel, uh);
+                need_cancel = true;
             }
-            do_signal = enqueueCmdLocked(IoCommand::Cancel, uh);
-            need_cancel = true;
         }
     }
 
@@ -529,8 +539,11 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         notifier->notify();
     }
 
-    // Wait for cancel to complete
-    if (need_cancel) {
+    // Handle direct cancel (on I/O thread) or wait for enqueued cancel
+    if (direct_cancel) {
+        doCancelIntern(direct_pinfo, xsink);
+        direct_pinfo.cleanup(xsink);
+    } else if (need_cancel) {
         waitCancel(uh);
     }
 
@@ -653,14 +666,16 @@ bool AsyncIoControllerPriv::cancelByKey(const QoreStringNode* key, ExceptionSink
         auto it = cache.find(uh);
         if (it != cache.end()) {
             rv = true;
-            if (tid && !io_exiting) {
-                // I/O thread is running — enqueue the cancel command
+            if (tid && !io_exiting && q_gettid() != tid) {
+                // I/O thread is running and we're NOT on it — enqueue the cancel command
                 if (!cancel_cond_map.count(uh)) {
                     cancel_cond_map[uh] = new QoreCondition();
                 }
                 do_signal = enqueueCmdLocked(IoCommand::Cancel, uh);
             } else {
-                // I/O thread not running — handle cancel directly
+                // I/O thread not running OR we ARE the I/O thread — handle cancel directly
+                // (enqueuing+waiting from the I/O thread would deadlock since the I/O thread
+                // is the one that processes cancel commands)
                 direct_cancel = true;
                 direct_pinfo = it->second;
                 it->second = PollInfo();
@@ -740,12 +755,12 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
         }
 
         if (cache_count > 0) {
-            if (tid && !io_exiting) {
-                // I/O thread is running — enqueue the cancel command
+            if (tid && !io_exiting && q_gettid() != tid) {
+                // I/O thread is running and we're NOT on it — enqueue the cancel command
                 do_signal = enqueueCmdLocked(IoCommand::CancelOwner, std::string(), owner_str, &done_cond,
                     &cancel_done);
             } else {
-                // I/O thread not running — handle cancel directly
+                // I/O thread not running OR we ARE the I/O thread — handle cancel directly
                 std::vector<std::string> keys;
                 for (auto& [key, pinfo] : cache) {
                     if (pinfo.owner == owner_str) {
