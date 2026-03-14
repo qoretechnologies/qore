@@ -181,7 +181,7 @@ public namespace HttpClientIo {
     public const DefaultRequestTimeout = 60s;
 
     #! Protocol selection enum
-    /** @since HttpClientIo 1.1
+    /** @since HttpClientIo 1.0
     */
     public enum HttpClientProtocol {
         #! Auto-detect protocol (prefer HTTP/3 for HTTPS, fall back to HTTP/2)
@@ -210,7 +210,7 @@ public namespace HttpClientIo {
     /** @param response the HTTP response hash
         @param error optional error info hash (set on error)
 
-        @since HttpClientIo 1.1
+        @since HttpClientIo 1.0
     */
     public typedef HttpResponseCallback = code<nothing(hash<auto> response, *hash<auto> error)>;
 

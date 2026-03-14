@@ -511,6 +511,9 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 req_error_passthru = error_passthru;
             }
 
+            # Normalize header keys to lowercase for HTTP/2 and HTTP/3 compatibility
+            hdr = map {$1.key.lwr(): $1.value}, hdr.pairIterator();
+
             *data serialized_body;
             if (exists body) {
                 hash<RestSchemaValidator::RestRequestClientInfo> req = validator.processRequest(
@@ -671,7 +674,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             AutoWriteLock al(config_lock);
             token_type_val = token_type;
             token_val = token;
-            headers += {"Authorization": sprintf("%s %s", token_type, token)};
+            headers += {"authorization": sprintf("%s %s", token_type, token)};
         }
 
         #! Returns any token set for the connection

@@ -348,7 +348,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         rest.setToken("Bearer", "my-token-456");
         assertEq("my-token-456", rest.getToken());
         assertEq("Bearer", rest.getTokenType());
-        assertEq("Bearer my-token-456", rest.getDefaultHeaders().Authorization);
+        assertEq("Bearer my-token-456", rest.getDefaultHeaders().authorization);
     }
 
     testErrorPassthru() {
