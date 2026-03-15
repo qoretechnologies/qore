@@ -1954,6 +1954,13 @@ static bool isConstKeyHashSubscript(const QoreValue& expr,
             reinterpret_cast<const LocalVar*>(vr->ref.id)->getTypeInfo())) {
         return false;
     }
+    // Object-typed containers (e.g., `self`) require the lvalue path for correct
+    // member type-aware initialization (NOTHING → typed list/hash) via evalPlusEquals.
+    // The load-compute-store pattern in emitHashKeyCompoundOp cannot handle this.
+    if (vr->ref.id && QoreTypeInfo::getUniqueReturnClass(
+            reinterpret_cast<const LocalVar*>(vr->ref.id)->getTypeInfo()) != nullptr) {
+        return false;
+    }
     container_var = vr;
     return true;
 }
