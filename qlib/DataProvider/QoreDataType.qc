@@ -329,6 +329,11 @@ public class QoreDataType inherits AbstractDataProviderType {
             throw "RUNTIME-TYPE-ERROR", sprintf("type %y does not accept values of type %y", getName(),
                 value.type());
         }
+        # Reject NULL for non-optional soft types
+        # Use == instead of === because NULL is often treated as empty/falsy value
+        if (value == NULL && type.getName() =~ /^soft/ && type.getName() !~ /^\*soft/) {
+            throw "RUNTIME-TYPE-ERROR", sprintf("type %y does not accept NULL", type.getName());
+        }
         # Only use default value when value is truly missing, not when NULL is explicitly passed
         if (!exists value && exists default_value) {
             return default_value;
