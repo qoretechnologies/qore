@@ -42,6 +42,7 @@
 #include <vector>
 
 class AbstractQoreFunctionVariant;
+class AbstractQoreNode;
 class CaseNodeRegex;
 class ExceptionSink;
 class LocalVar;
@@ -56,6 +57,9 @@ class QoreValue;
 class StatementBlock;
 class UserVariantBase;
 class Var;
+
+// Forward declaration for AOTConstantReverseMap typedef from QoreAOTBinary.h
+typedef std::unordered_map<const AbstractQoreNode*, std::string> AOTConstantReverseMap;
 
 //! Pre-resolved function call target for AOT fast calls (avoids per-call dynamic_cast)
 struct QoreAOTCallTarget {
@@ -468,9 +472,11 @@ void collectStmtSlotStatements(const StatementBlock* block,
     @param slots the slot map for resolving local/global variable references
     @param out receives the serialized binary blob
     @param debug if true, print debug info for unsupported node types
+    @param const_reverse_map optional reverse map for serializing eagerly-evaluated constants
     @return true if successful, false if the tree contains unsupported nodes
 */
-bool serializeExprTreeToBlob(QoreValue v, const AOTSlotMap& slots, std::vector<uint8_t>& out, bool debug = false);
+bool serializeExprTreeToBlob(QoreValue v, const AOTSlotMap& slots, std::vector<uint8_t>& out, bool debug = false,
+    const AOTConstantReverseMap* const_reverse_map = nullptr);
 
 //! Deserialize a binary EXPR_TREE blob back into a QoreValue expression tree.
 /** Used by AOT binary deserialization to reconstruct BCA (Base Class Constructor Argument) expressions.
