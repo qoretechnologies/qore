@@ -1648,6 +1648,11 @@ int Http2Session::onStreamCloseCallback(nghttp2_session* session, int32_t stream
         // Mark as complete even if there was an error (including RST_STREAM without headers)
         stream->body_complete = true;
         h2->markStreamComplete(stream_id);
+        // Ensure the stream is removed from the map after nghttp2 has closed it.
+        // markStreamComplete() may skip erasure for dispatched or headers_only_mode streams;
+        // since the stream is now fully closed by nghttp2, no further callbacks will
+        // reference it, so it's safe to erase unconditionally here.
+        h2->streams.erase(stream_id);
     }
     h2->pending_body_data.erase(stream_id);
     h2->pending_data_providers.erase(stream_id);
