@@ -44,6 +44,14 @@
 extern qore_classid_t CID_QUEUE;
 extern QoreClass* QC_QUEUE;
 
+//! Thread-local flag: true when running on any async I/O thread (main or dedicated).
+//! Used to detect re-entrant calls from Qore object destructors triggered during
+//! callback cleanup on I/O threads.  These threads were not designed to run Qore code,
+//! but closures captured by callbacks can trigger destructor chains that call back into
+//! the controller.  Synchronous waits (waitCancel, cancelByOwner) must be avoided on
+//! I/O threads to prevent deadlock.
+static thread_local bool on_async_io_thread = false;
+
 //! Returns the current time in microseconds since the epoch
 static int64 get_epoch_us() {
     int us;
@@ -517,8 +525,8 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
                     "operation with key '%s' already exists; use replace=True to replace", uh.c_str());
                 return nullptr;
             }
-            if (q_gettid() == tid) {
-                // On the I/O thread — cancel directly to avoid deadlock
+            if (on_async_io_thread) {
+                // On an async I/O thread — cancel directly to avoid deadlock
                 direct_pinfo = it->second;
                 it->second = PollInfo();
                 cache.erase(it);
@@ -666,11 +674,9 @@ bool AsyncIoControllerPriv::cancelByKey(const QoreStringNode* key, ExceptionSink
         auto it = cache.find(uh);
         if (it != cache.end()) {
             rv = true;
-            int current_tid = q_gettid();
-            printd(2, "cancelByKey '%s': current_tid=%d io_tid=%d io_exiting=%d\n",
-                uh.c_str(), current_tid, tid, (int)io_exiting);
-            if (tid && !io_exiting && current_tid != tid) {
-                // I/O thread is running and we're NOT on it — enqueue the cancel command
+            if (tid && !io_exiting && !on_async_io_thread) {
+                // I/O thread is running and we're NOT on any async I/O thread —
+                // enqueue the cancel command
                 if (!cancel_cond_map.count(uh)) {
                     cancel_cond_map[uh] = new QoreCondition();
                 }
@@ -758,8 +764,9 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
         }
 
         if (cache_count > 0) {
-            if (tid && !io_exiting && q_gettid() != tid) {
-                // I/O thread is running and we're NOT on it — enqueue the cancel command
+            if (tid && !io_exiting && !on_async_io_thread) {
+                // I/O thread is running and we're NOT on any async I/O thread —
+                // enqueue the cancel command
                 do_signal = enqueueCmdLocked(IoCommand::CancelOwner, std::string(), owner_str, &done_cond,
                     &cancel_done);
             } else {
@@ -1231,6 +1238,7 @@ void AsyncIoControllerPriv::startIntern(ExceptionSink* xsink) {
 }
 
 void AsyncIoControllerPriv::ioThreadEntry(ExceptionSink* xsink, void* arg) {
+    on_async_io_thread = true;
     AsyncIoControllerPriv* self = static_cast<AsyncIoControllerPriv*>(arg);
     self->ioThread(xsink);
     if (*xsink) {
@@ -2490,6 +2498,7 @@ void AsyncIoControllerPriv::spawnDedicatedThread(DedicatedThreadInfo* dti, Excep
 }
 
 void AsyncIoControllerPriv::dedicatedThreadEntry(ExceptionSink* xsink, void* arg) {
+    on_async_io_thread = true;
     DedicatedThreadInfo* dti = static_cast<DedicatedThreadInfo*>(arg);
     AsyncIoControllerPriv* ctrl = dti->controller;
     ctrl->dedicatedThread(dti, xsink);
@@ -2911,7 +2920,7 @@ bool AsyncIoControllerPriv::cancelDedicatedThread(const std::string& key, Except
         // deadlock since the I/O thread is the one that processes dedicated
         // thread completions.  Signal the stop and return; the dedicated thread
         // will clean up asynchronously.
-        if (tid && q_gettid() == tid) {
+        if (on_async_io_thread) {
             return true;
         }
 
