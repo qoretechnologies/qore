@@ -2735,14 +2735,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     boxed = val;
                 }
 
-                // Check if complex-typed or soft-typed: apply coercion before runtime assignment
-                // Soft types (softnumber, softstring, etc) need coercion to convert input types (e.g., NULL -> 0n)
-                const char* type_name = QoreTypeInfo::getName(linst->local->getTypeInfo());
-                bool is_soft_type = type_name && (type_name[0] == 's' && strstr(type_name, "soft"));
-                bool is_complex_typed_outer = (QoreTypeInfo::isComplex(linst->local->getTypeInfo()) || is_soft_type)
+                // Check if complex-typed: apply coercion before runtime assignment
+                bool is_complex_typed_outer = QoreTypeInfo::isComplex(linst->local->getTypeInfo())
                         && !QoreTypeInfo::isReference(linst->local->getTypeInfo());
                 if (is_complex_typed_outer) {
-                    // Apply type coercion for outer-scope complex-typed or soft-typed locals
+                    // Apply type coercion for outer-scope complex-typed locals
                     llvm::Function* func = builder->GetInsertBlock()->getParent();
                     llvm::BasicBlock* entry = &func->getEntryBlock();
                     llvm::IRBuilder<> alloca_builder(entry, entry->begin());
@@ -2941,12 +2938,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // like translate(list<hash<auto>>, string).  This must happen BEFORE
             // storing to the alloca because LoadLocal reads from the alloca directly.
             bool is_ir_only = ir_only_locals_set && ir_only_locals_set->count(key);
-            // Check if complex-typed or soft-typed: apply coercion before runtime assignment
-            // Soft types (softnumber, softstring, etc) need coercion to convert input types (e.g., NULL -> 0n)
-            const char* type_name_check = linst->local ? QoreTypeInfo::getName(linst->local->getTypeInfo()) : nullptr;
-            bool is_soft_type_check = type_name_check && (type_name_check[0] == 's' && strstr(type_name_check, "soft"));
             bool is_complex_typed = linst->local
-                && (QoreTypeInfo::isComplex(linst->local->getTypeInfo()) || is_soft_type_check)
+                && QoreTypeInfo::isComplex(linst->local->getTypeInfo())
                 && !QoreTypeInfo::isReference(linst->local->getTypeInfo());
 
             if (is_complex_typed && !is_ir_only) {
