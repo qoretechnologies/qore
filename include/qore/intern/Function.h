@@ -1611,6 +1611,7 @@ class UserClosureFunction : public QoreFunction {
 protected:
     LVarSet varlist;  // closure local variable environment
     const QoreTypeInfo* classTypeInfo;
+    bool has_nested_closures = false;  // set during parse if body contains nested closures
 
 public:
     DLLLOCAL UserClosureFunction(StatementBlock* b, int n_sig_first_line, int n_sig_last_line, QoreValue params, RetTypeInfo* rv, bool synced = false, int64 n_flags = QCF_NO_FLAGS) : QoreFunction("<anonymous closure>"), classTypeInfo(0) {
@@ -1634,6 +1635,14 @@ public:
     // returns true if at least one variable in the set of closure-bound local variables could contain an object or a closure (also through a container)
     DLLLOCAL bool needsScan() const {
         return varlist.needsScan();
+    }
+
+    DLLLOCAL bool hasNestedClosures() const {
+        return has_nested_closures;
+    }
+
+    DLLLOCAL void setHasNestedClosures() {
+        has_nested_closures = true;
     }
 };
 

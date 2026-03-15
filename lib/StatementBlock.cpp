@@ -599,7 +599,7 @@ int StatementBlock::parseInitConstructor(const QoreTypeInfo* typeInfo, UserVaria
 int StatementBlock::parseInitClosure(UserVariantBase* uvb, UserClosureFunction* cf) {
     QORE_TRACE("StatementBlock::parseInitClosure");
 
-    ClosureParseEnvironment cenv(cf->getVList());
+    ClosureParseEnvironment cenv(cf->getVList(), cf);
     UserParamListLocalVarHelper ph(uvb, cf->getClassType());
 
     // initialize code block

@@ -45,10 +45,17 @@ private:
     LVarSet* vlist;
     VNode* high_water_mark;
     ClosureParseEnvironment* prev;
+    class UserClosureFunction* owning_cf;   // pointer to the closure being parsed
 
 public:
-    DLLLOCAL ClosureParseEnvironment(LVarSet* n_vlist) : vlist(n_vlist), high_water_mark(getVStack()) {
+    DLLLOCAL ClosureParseEnvironment(LVarSet* n_vlist, class UserClosureFunction* cf = nullptr)
+            : vlist(n_vlist), high_water_mark(getVStack()), owning_cf(cf) {
         prev = thread_get_closure_parse_env();
+        // If we're nested inside another closure, mark the outer closure
+        // as having nested closures for correct background capture.
+        if (prev && prev->owning_cf) {
+            prev->owning_cf->setHasNestedClosures();
+        }
         thread_set_closure_parse_env(this);
     }
 

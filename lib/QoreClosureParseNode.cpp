@@ -133,12 +133,13 @@ QoreValue QoreClosureParseNode::exec(const QoreClosureBase& closure_base, QorePr
 }
 
 QoreClosureBase* QoreClosureParseNode::evalBackground(ExceptionSink* xsink) const {
-    // Always use full cvstack capture for background closures to ensure
-    // nested closure variable capture is correct. Nested closures may reference
-    // variables not in the outer closure's vlist. The performance impact is
-    // negligible compared to starting a new thread.
-    // See: https://github.com/qorelanguage/qore/issues/XXXX
-    cvv_vec_t* cvv = thread_get_all_closure_vars();
+    // Use vlist-filtered capture unless nested closures exist that reference
+    // additional outer variables. In IR mode, ensureLocalInstantiated() accumulates
+    // ALL touched closure-use locals simultaneously (no LIFO scoping), so getAll()
+    // would capture many spurious CVVs. The has_nested_closures flag avoids this.
+    cvv_vec_t* cvv = uf->hasNestedClosures()
+        ? thread_get_all_closure_vars()
+        : thread_get_closure_vars_for_vlist(uf->getVList());
 
     if (in_method) {
         QoreObject* o;
