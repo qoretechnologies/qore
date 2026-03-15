@@ -2590,6 +2590,16 @@ void AsyncIoControllerPriv::dedicatedThread(DedicatedThreadInfo* dti, ExceptionS
             goto cleanup_after_remove;
         }
 
+        // Acknowledge any pending notifier signal — must happen BEFORE
+        // continuePoll() so that new wake() signals arriving during or after
+        // continuePoll() are not consumed and will be seen by the next poll()
+        dti->notifier->acknowledge(xsink);
+        if (*xsink) {
+            log(QORE_LOG_LEVEL_ERROR, "dedicated key '%s': notifier acknowledge error",
+                dti->key.c_str());
+            xsink->clear();
+        }
+
         // Call continuePoll
         int64 cp_start = get_epoch_us();
         ExceptionSink poll_xsink;
@@ -2602,9 +2612,14 @@ void AsyncIoControllerPriv::dedicatedThread(DedicatedThreadInfo* dti, ExceptionS
 
         if (poll_xsink) {
             // Error — extract full exception info and deliver result
-            printd(0, "dedicated thread '%s': continuePoll raised exception — thread will exit\n",
-                dti->key.c_str());
             QoreException* ex_obj = poll_xsink.getException();
+            {
+                const QoreStringNode* err = ex_obj ? ex_obj->err.get<const QoreStringNode>() : nullptr;
+                const QoreStringNode* desc = ex_obj ? ex_obj->desc.get<const QoreStringNode>() : nullptr;
+                printd(0, "dedicated thread '%s': continuePoll raised exception — thread will exit: "
+                    "%s: %s\n", dti->key.c_str(),
+                    err ? err->c_str() : "?", desc ? desc->c_str() : "?");
+            }
             QoreHashNode* ex_hash = ex_obj ? ex_obj->makeExceptionObject() : nullptr;
             poll_xsink.clear();
 
@@ -2652,9 +2667,12 @@ void AsyncIoControllerPriv::dedicatedThread(DedicatedThreadInfo* dti, ExceptionS
                     ExceptionSink cb_xsink;
                     ValueHolder rv(dti->pinfo.callback->execValue(*args, &cb_xsink), &cb_xsink);
                     if (cb_xsink) {
-                        log(QORE_LOG_LEVEL_ERROR,
-                            "callback exception for dedicated key '%s' (goal reached)",
-                            dti->key.c_str());
+                        QoreException* cb_ex = cb_xsink.getException();
+                        const QoreStringNode* cb_err = cb_ex ? cb_ex->err.get<const QoreStringNode>() : nullptr;
+                        const QoreStringNode* cb_desc = cb_ex ? cb_ex->desc.get<const QoreStringNode>() : nullptr;
+                        printd(0, "dedicated thread '%s': callback exception (goal reached): %s: %s\n",
+                            dti->key.c_str(),
+                            cb_err ? cb_err->c_str() : "?", cb_desc ? cb_desc->c_str() : "?");
                         cb_xsink.clear();
                     }
                 } else if (dti->pinfo.queue) {
@@ -2749,13 +2767,17 @@ void AsyncIoControllerPriv::dedicatedThread(DedicatedThreadInfo* dti, ExceptionS
             xsink->clear();
         }
 
-        // Acknowledge notifier if woken
-        dti->notifier->acknowledge(xsink);
-        if (*xsink) {
-            log(QORE_LOG_LEVEL_ERROR, "dedicated key '%s': notifier acknowledge error",
-                dti->key.c_str());
-            xsink->clear();
-        }
+        // Acknowledge notifier BEFORE the next continuePoll() — draining here
+        // ensures that any wake() notification that arrived DURING poll() is
+        // consumed.  A new notify() arriving after this point (e.g., from a
+        // concurrent submitRequest() → wake()) will NOT be consumed by this
+        // acknowledge() and will be visible to the next poll() call.
+        //
+        // Previously, acknowledge() was called AFTER poll() returned and BEFORE
+        // the next loop iteration's continuePoll().  This created a race: if
+        // wake() fired between poll() returning and acknowledge(), the new
+        // notification was drained along with the old one, causing the NEXT
+        // poll() to block until timeout (the "lost wake" bug).
     }
 
     // stop_requested — deliver cancel result
