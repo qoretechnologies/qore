@@ -485,8 +485,15 @@ public:
             try_reexport(false),
             finalizing(false) {
 #ifdef QORE_MANAGE_STACK
-        // save this thread's stack size as the default stack size can change
-        size_t stack_guard = QORE_STACK_GUARD;
+        if (n_flags & QTF_NO_STACK_GUARD) {
+            // No stack guard for lightweight threads (e.g. dedicated async I/O threads)
+            // that run pure C++ code with no Qore interpreter overhead
+            stack_start = get_stack_pos();
+            stack_size = 0;
+            stack_limit = 0;
+        } else {
+            // save this thread's stack size as the default stack size can change
+            size_t stack_guard = QORE_STACK_GUARD;
         // on Linux the initial thread's stack is extended automatically, so we put a large number here
         if (tid == initial_thread) {
 #ifdef _Q_WINDOWS
@@ -2698,7 +2705,7 @@ void delete_signal_thread() {
 }
 
 // should only be called from the new thread
-void register_thread(int tid, pthread_t ptid, QoreProgram* p, bool foreign) {
+void register_thread(int tid, pthread_t ptid, QoreProgram* p, bool foreign, int flags) {
     thread_list.activate(tid, ptid, p, foreign, flags);
 }
 
