@@ -1845,13 +1845,12 @@ bool QoreAOT::compile(QoreProgram* pgm,
         // Serialize program-level metadata (exec-class name)
         serializeProgramMetadata(writer, pp->exec_class_name.c_str());
 
-        // Serialize namespace tree - filter to only locally-defined items
-        // For executables, use "__main__" as the module name to filter out imported module types.
-        // Only items that originated in the script itself (class definitions, helper classes, etc.)
-        // are serialized. Imported module types are available at runtime when modules are loaded.
-        // Items from local modules (relative paths like ./MyModule.qm) are also kept
+        // Serialize namespace tree - filter out module-originated items to avoid
+        // deserializing private/internal module types that can't be resolved;
+        // dependencies are loaded at runtime so their items will be available.
+        // Items from local modules (relative paths like ./MyModule.qm) are kept
         // since they can't be loaded by name at runtime.
-        if (!serializeNamespaceTree(writer, root_ns, "__main__",
+        if (!serializeNamespaceTree(writer, root_ns, "",
                 local_module_names.empty() ? nullptr : &local_module_names)) {
             error = "failed to serialize namespace tree";
             return false;
@@ -1912,23 +1911,9 @@ bool QoreAOT::compile(QoreProgram* pgm,
             return false;
         }
 
-        int original_size = (int)metadata.size();
-        printf("AOT: metadata blob: %d bytes", original_size);
+        printf("AOT: metadata blob: %d bytes\n", (int)metadata.size());
 
-        // Compress metadata to reduce LLVM compilation overhead and executable size
-        std::vector<uint8_t> compressed_metadata;
-        std::string compress_error;
-        if (!compressMetadata(metadata, compressed_metadata, compress_error)) {
-            error = "failed to compress metadata: " + compress_error;
-            return false;
-        }
-
-        hdr.compression = 1;  // Mark as zlib compressed
-        int compressed_size = (int)compressed_metadata.size();
-        printf(" (compressed to %d bytes, %.1f%%)\n", compressed_size,
-            100.0 * compressed_size / original_size);
-
-        generateMainAndTableV2(ctx, *module, compressed_metadata, label, parse_options, compiled_funcs);
+        generateMainAndTableV2(ctx, *module, metadata, label, parse_options, compiled_funcs);
     }
 
     // Finalize shared debug info after all functions are lowered
@@ -3013,21 +2998,7 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
             return false;
         }
 
-        int original_size = (int)metadata.size();
-        printf("AOT: module metadata blob: %d bytes", original_size);
-
-        // Compress metadata to reduce module size
-        std::vector<uint8_t> compressed_metadata;
-        std::string compress_error;
-        if (!compressMetadata(metadata, compressed_metadata, compress_error)) {
-            error = "failed to compress module metadata: " + compress_error;
-            return false;
-        }
-
-        hdr.compression = 1;  // Mark as zlib compressed
-        int compressed_size = (int)compressed_metadata.size();
-        printf(" (compressed to %d bytes, %.1f%%)\n", compressed_size,
-            100.0 * compressed_size / original_size);
+        printf("AOT: module metadata blob: %d bytes\n", (int)metadata.size());
 
         // Add init functions to the function table so they're available at runtime
         for (auto& cif : compiled_init_funcs) {
@@ -3043,7 +3014,7 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
             cf.feature_flags = cif.feature_flags;
             compiled_funcs.push_back(std::move(cf));
         }
-        generateModuleABIV2(ctx, *module, compressed_metadata, label, mod_po, mod_info, compiled_funcs);
+        generateModuleABIV2(ctx, *module, metadata, label, mod_po, mod_info, compiled_funcs);
     }
 
     // Finalize shared debug info after all functions are lowered
@@ -3398,21 +3369,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
                 return false;
             }
 
-            int original_size = (int)metadata.size();
-            printf("AOT: split module metadata blob: %d bytes", original_size);
-
-            // Compress metadata to reduce module size
-            std::vector<uint8_t> compressed_metadata;
-            std::string compress_error;
-            if (!compressMetadata(metadata, compressed_metadata, compress_error)) {
-                error = "failed to compress split module metadata: " + compress_error;
-                return false;
-            }
-
-            hdr.compression = 1;  // Mark as zlib compressed
-            int compressed_size = (int)compressed_metadata.size();
-            printf(" (compressed to %d bytes, %.1f%%)\n", compressed_size,
-                100.0 * compressed_size / original_size);
+            printf("AOT: split module metadata blob: %d bytes\n", (int)metadata.size());
 
             // Add init functions to the function table so they're available at runtime
             for (auto& cif : compiled_init_funcs) {
@@ -3428,7 +3385,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
                 cf.feature_flags = cif.feature_flags;
                 compiled_funcs.push_back(std::move(cf));
             }
-            generateModuleABIV2(ctx, *module, compressed_metadata, qm_path.c_str(), mod_po, mod_info, compiled_funcs);
+            generateModuleABIV2(ctx, *module, metadata, qm_path.c_str(), mod_po, mod_info, compiled_funcs);
         }
 
         // Finalize shared debug info after all functions are lowered
@@ -5726,9 +5683,8 @@ public:
     }
 };
 
-bool serializeExprTreeToBlob(QoreValue v, const AOTSlotMap& slots, std::vector<uint8_t>& out, bool /*debug*/,
-        const AOTConstantReverseMap* const_reverse_map) {
-    ExprTreeSerializer serializer(slots, const_reverse_map);
+bool serializeExprTreeToBlob(QoreValue v, const AOTSlotMap& slots, std::vector<uint8_t>& out, bool /*debug*/) {
+    ExprTreeSerializer serializer(slots);
     if (!serializer.serialize(v)) {
         return false;
     }
