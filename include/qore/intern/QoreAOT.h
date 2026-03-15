@@ -40,6 +40,7 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include "qore/intern/QoreAOTBinary.h"
 
 class AbstractQoreFunctionVariant;
 class CaseNodeRegex;
@@ -201,9 +202,6 @@ struct AOTSlotMap {
         return slot;
     }
 };
-
-//! Map for reverse-lookup of constant values to their names (for BCA serialization)
-using AOTConstantReverseMap = std::unordered_map<const void*, std::string>;
 
 //! AOT function pointer type: takes QoreAOTContext* and ExceptionSink*
 using AotFunctionPtr = uint64_t (*)(QoreAOTContext*, ExceptionSink*);
