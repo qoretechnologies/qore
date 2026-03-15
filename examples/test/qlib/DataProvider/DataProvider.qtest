@@ -3533,7 +3533,7 @@ public class DataProviderTest inherits QUnit::Test {
             QoreSoftBinaryDataType bin1();
             assertEq(<3132>, bin1.acceptsValue("12"));
             assertThrows("RUNTIME-TYPE-ERROR", \bin1.acceptsValue());
-            assertEq(binary(), bin1.acceptsValue(NULL));
+            assertThrows("RUNTIME-TYPE-ERROR", \bin1.acceptsValue(), NULL);
         }
 
         {
@@ -3578,7 +3578,7 @@ public class DataProviderTest inherits QUnit::Test {
             QoreSoftIntDataType int1();
             assertEq(1234, int1.acceptsValue("1234"));
             assertThrows("RUNTIME-TYPE-ERROR", \int1.acceptsValue());
-            assertEq(0, int1.acceptsValue(NULL));
+            assertThrows("RUNTIME-TYPE-ERROR", \int1.acceptsValue(), NULL);
         }
 
         {
@@ -3729,7 +3729,7 @@ public class DataProviderTest inherits QUnit::Test {
             QoreSoftBoolDataType bool1();
             assertEq(True, bool1.acceptsValue("1234"));
             assertThrows("RUNTIME-TYPE-ERROR", \bool1.acceptsValue());
-            assertEq(False, bool1.acceptsValue(NULL));
+            assertThrows("RUNTIME-TYPE-ERROR", \bool1.acceptsValue(), NULL);
         }
 
         {
@@ -3775,7 +3775,7 @@ public class DataProviderTest inherits QUnit::Test {
             QoreSoftFloatDataType float1();
             assertEq(1234.0, float1.acceptsValue("1234"));
             assertThrows("RUNTIME-TYPE-ERROR", \float1.acceptsValue());
-            assertEq(0.0, float1.acceptsValue(NULL));
+            assertThrows("RUNTIME-TYPE-ERROR", \float1.acceptsValue(), NULL);
         }
 
         {
@@ -3827,7 +3827,7 @@ public class DataProviderTest inherits QUnit::Test {
                 assertEq(2019-09-13T05:00:00Z, date1.acceptsValue("13.09.2019"));
                 assertEq(1970-01-01Z, date1.acceptsValue(0));
                 assertThrows("RUNTIME-TYPE-ERROR", \date1.acceptsValue());
-                assertEq(1970-01-01, date1.acceptsValue(NULL));
+                assertThrows("RUNTIME-TYPE-ERROR", \date1.acceptsValue(), NULL);
             }
 
             {
@@ -3848,7 +3848,7 @@ public class DataProviderTest inherits QUnit::Test {
             QoreSoftStringDataType str1();
             assertEq("123", str1.acceptsValue(123));
             assertThrows("RUNTIME-TYPE-ERROR", \str1.acceptsValue());
-            assertEq("", str1.acceptsValue(NULL));
+            assertThrows("RUNTIME-TYPE-ERROR", \str1.acceptsValue(), NULL);
         }
 
         {
@@ -3977,12 +3977,12 @@ public class DataProviderTest inherits QUnit::Test {
 
         {
             QoreDataType t(SoftStringType);
-            assertEq("", t.acceptsValue(NULL));
+            assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), NULL);
         }
 
         {
             QoreDataType t(SoftStringType, {"qore.no_null": True});
-            assertThrows("RUNTIME-TYPE-ERROR", "does not accept.*NULL", \t.acceptsValue(), (NULL,));
+            assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), NULL);
         }
 
         {
@@ -3992,7 +3992,7 @@ public class DataProviderTest inherits QUnit::Test {
             assertThrows("RUNTIME-TYPE-ERROR", "list.*integer", \t.acceptsValue(), 1);
             assertThrows("RUNTIME-TYPE-ERROR", "expects.*got type 'integer'", \t.acceptsValue(), (1,));
             assertThrows("RUNTIME-TYPE-ERROR", "int.*string", \t.acceptsValue(), (("a",),));
-            assertThrows("RUNTIME-TYPE-ERROR", "expects.*got type 'NULL'", \t.acceptsValue(), (NULL,));
+            assertThrows("RUNTIME-TYPE-ERROR", "expects|got no value", \t.acceptsValue(), (NULL,));
             assertEq((1,), t.acceptsValue((1,)));
         }
 
@@ -4003,7 +4003,7 @@ public class DataProviderTest inherits QUnit::Test {
             assertThrows("RUNTIME-TYPE-ERROR", "list.*integer", \t.acceptsValue(), 1);
             assertThrows("RUNTIME-TYPE-ERROR", "expects.*got type 'integer'", \t.acceptsValue(), (1,));
             assertThrows("RUNTIME-TYPE-ERROR", "int.*string", \t.acceptsValue(), (("a",),));
-            assertThrows("RUNTIME-TYPE-ERROR", "expects.*got type 'NULL'", \t.acceptsValue(), (NULL,));
+            assertThrows("RUNTIME-TYPE-ERROR", "expects|got no value", \t.acceptsValue(), (NULL,));
             assertEq((1,), t.acceptsValue((1,)));
         }
 

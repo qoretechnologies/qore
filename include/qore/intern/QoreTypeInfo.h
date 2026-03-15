@@ -3333,10 +3333,6 @@ public:
                discard(n.assign(n.getAsBigInt()), xsink);
             }
          },
-         {NT_NULL, [] (QoreValue& n, ExceptionSink* xsink) {
-               discard(n.assign(0ll), xsink);
-            }
-         },
       }, q_return_vec_t {{NT_INT, true}}) {
    }
 
@@ -3423,10 +3419,6 @@ public:
          },
          {NT_NUMBER, [] (QoreValue& n, ExceptionSink* xsink) {
                discard(n.assign(n.getAsFloat()), xsink);
-            }
-         },
-         {NT_NULL, [] (QoreValue& n, ExceptionSink* xsink) {
-               discard(n.assign(0.0), xsink);
             }
          },
       }, q_return_vec_t {{NT_FLOAT, true}}) {
@@ -3517,10 +3509,6 @@ public:
                discard(n.assign(new QoreNumberNode(n.getAsFloat())), xsink);
             }
          },
-         {NT_NULL, [] (QoreValue& n, ExceptionSink* xsink) {
-               discard(n.assign(new QoreNumberNode(0.0)), xsink);
-            }
-         },
       }, q_return_vec_t {{NT_NUMBER, true}}) {
    }
 
@@ -3598,11 +3586,6 @@ public:
                     discard(n.assign(bn.release()), xsink);
                 }
             },
-            {NT_NULL,
-                [] (QoreValue& n, ExceptionSink* xsink) {
-                    discard(n.assign(new BinaryNode), xsink);
-                }
-            },
         }, q_return_vec_t {{NT_BINARY, true}}) {
     }
 
@@ -3678,10 +3661,6 @@ public:
          },
          {NT_NUMBER, [] (QoreValue& n, ExceptionSink* xsink) {
                discard(n.assign(n.getAsBool()), xsink);
-            }
-         },
-         {NT_NULL, [] (QoreValue& n, ExceptionSink* xsink) {
-               n.assign(false);
             }
          },
       }, q_return_vec_t {{NT_BOOLEAN, true}}) {
@@ -3772,10 +3751,6 @@ public:
          {NT_NUMBER, [] (QoreValue& n, ExceptionSink* xsink) {
                QoreStringNodeValueHelper str(n.getInternalNode());
                discard(n.assign(str.getReferencedValue()), xsink);
-            }
-         },
-         {NT_NULL, [] (QoreValue& n, ExceptionSink* xsink) {
-               n.assign(NullString->stringRefSelf());
             }
          },
       }, q_return_vec_t {{NT_STRING, true}}) {
@@ -3870,10 +3845,6 @@ public:
                discard(n.assign(dt.getReferencedValue()), xsink);
             }
          },
-         {NT_NULL, [] (QoreValue& n, ExceptionSink* xsink) {
-               n.assign(new DateTimeNode(0ll));
-            }
-         },
       }, q_return_vec_t {{NT_DATE, true}}) {
    }
 
@@ -3949,6 +3920,12 @@ public:
                     n.assign(l);
                 }
             },
+            {NT_NULL, [] (QoreValue& n, ExceptionSink* xsink) {
+                    if (xsink) {
+                        xsink->raiseException("RUNTIME-TYPE-ERROR", "soft list types do not accept NULL");
+                    }
+                }
+            },
             {NT_ALL, [] (QoreValue& n, ExceptionSink* xsink) {
                     QoreListNode* l = new QoreListNode;
                     l->push(n, nullptr);
@@ -4018,6 +3995,12 @@ public:
             {NT_NOTHING, [] (QoreValue& n, ExceptionSink* xsink) {
                     QoreListNode* l = new QoreListNode(autoTypeInfo);
                     n.assign(l);
+                }
+            },
+            {NT_NULL, [] (QoreValue& n, ExceptionSink* xsink) {
+                    if (xsink) {
+                        xsink->raiseException("RUNTIME-TYPE-ERROR", "soft list types do not accept NULL");
+                    }
                 }
             },
             {NT_ALL, [] (QoreValue& n, ExceptionSink* xsink) {
