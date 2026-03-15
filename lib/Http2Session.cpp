@@ -1169,13 +1169,19 @@ void Http2Session::markStreamComplete(int32_t stream_id) {
             }
         } else {
             // No callback - use completed_streams queue
-            // For CONNECT streams on the server, we need to keep the stream in the map so we can respond
-            // For client-side sessions, we also keep the stream in the map so the caller can access it
-            // Create a copy for completed_streams instead of moving
-            if (is_connect || !is_server) {
+            if (is_connect) {
+                // CONNECT streams: copy to completed_streams, keep original in map
+                // because CONNECT streams are long-lived tunnels that need the stream
+                // state for continued I/O
                 auto copy = std::make_unique<Http2StreamInfo>(*it->second);
                 completed_streams.push(std::move(copy));
-                // Keep the original in streams for the caller to find
+            } else if (!is_server) {
+                // Client non-CONNECT: copy to completed_streams for takeCompletedStream(),
+                // then erase original — the caller reads from the copy, and keeping the
+                // original in the map leaks ~1.4 KiB per request
+                auto copy = std::make_unique<Http2StreamInfo>(*it->second);
+                completed_streams.push(std::move(copy));
+                streams.erase(it);
             } else {
                 completed_streams.push(std::move(it->second));
                 streams.erase(it);
