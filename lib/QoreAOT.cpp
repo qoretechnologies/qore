@@ -1911,9 +1911,23 @@ bool QoreAOT::compile(QoreProgram* pgm,
             return false;
         }
 
-        printf("AOT: metadata blob: %d bytes\n", (int)metadata.size());
+        printf("AOT: metadata blob: %d bytes", (int)metadata.size());
 
-        generateMainAndTableV2(ctx, *module, metadata, label, parse_options, compiled_funcs);
+        // Compress metadata to reduce binary size and LLVM compilation overhead
+        std::vector<uint8_t> compressed_metadata;
+        std::string compress_error;
+        if (compressMetadata(metadata, compressed_metadata, compress_error)) {
+            hdr.compression = 1;  // Mark as zlib compressed
+            int original_size = (int)metadata.size();
+            int compressed_size = (int)compressed_metadata.size();
+            printf(" (compressed to %d bytes, %.1f%%)\n", compressed_size,
+                100.0 * compressed_size / original_size);
+            generateMainAndTableV2(ctx, *module, compressed_metadata, label, parse_options, compiled_funcs);
+        } else {
+            printf(" (compression failed: %s, using uncompressed)\n", compress_error.c_str());
+            hdr.compression = 0;  // Not compressed
+            generateMainAndTableV2(ctx, *module, metadata, label, parse_options, compiled_funcs);
+        }
     }
 
     // Finalize shared debug info after all functions are lowered
@@ -2998,7 +3012,23 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
             return false;
         }
 
-        printf("AOT: module metadata blob: %d bytes\n", (int)metadata.size());
+        printf("AOT: module metadata blob: %d bytes", (int)metadata.size());
+
+        // Compress metadata
+        std::vector<uint8_t> compressed_metadata;
+        std::string compress_error;
+        std::vector<uint8_t>* use_metadata = &metadata;
+        if (compressMetadata(metadata, compressed_metadata, compress_error)) {
+            hdr.compression = 1;
+            int original_size = (int)metadata.size();
+            int compressed_size = (int)compressed_metadata.size();
+            printf(" (compressed to %d bytes, %.1f%%)\n", compressed_size,
+                100.0 * compressed_size / original_size);
+            use_metadata = &compressed_metadata;
+        } else {
+            printf(" (compression failed: %s, using uncompressed)\n", compress_error.c_str());
+            hdr.compression = 0;
+        }
 
         // Add init functions to the function table so they're available at runtime
         for (auto& cif : compiled_init_funcs) {
@@ -3014,7 +3044,7 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
             cf.feature_flags = cif.feature_flags;
             compiled_funcs.push_back(std::move(cf));
         }
-        generateModuleABIV2(ctx, *module, metadata, label, mod_po, mod_info, compiled_funcs);
+        generateModuleABIV2(ctx, *module, *use_metadata, label, mod_po, mod_info, compiled_funcs);
     }
 
     // Finalize shared debug info after all functions are lowered
@@ -3369,7 +3399,23 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
                 return false;
             }
 
-            printf("AOT: split module metadata blob: %d bytes\n", (int)metadata.size());
+            printf("AOT: split module metadata blob: %d bytes", (int)metadata.size());
+
+            // Compress metadata
+            std::vector<uint8_t> compressed_metadata;
+            std::string compress_error;
+            std::vector<uint8_t>* use_metadata = &metadata;
+            if (compressMetadata(metadata, compressed_metadata, compress_error)) {
+                hdr.compression = 1;
+                int original_size = (int)metadata.size();
+                int compressed_size = (int)compressed_metadata.size();
+                printf(" (compressed to %d bytes, %.1f%%)\n", compressed_size,
+                    100.0 * compressed_size / original_size);
+                use_metadata = &compressed_metadata;
+            } else {
+                printf(" (compression failed: %s, using uncompressed)\n", compress_error.c_str());
+                hdr.compression = 0;
+            }
 
             // Add init functions to the function table so they're available at runtime
             for (auto& cif : compiled_init_funcs) {
@@ -3385,7 +3431,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
                 cf.feature_flags = cif.feature_flags;
                 compiled_funcs.push_back(std::move(cf));
             }
-            generateModuleABIV2(ctx, *module, metadata, qm_path.c_str(), mod_po, mod_info, compiled_funcs);
+            generateModuleABIV2(ctx, *module, *use_metadata, qm_path.c_str(), mod_po, mod_info, compiled_funcs);
         }
 
         // Finalize shared debug info after all functions are lowered
