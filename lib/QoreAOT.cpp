@@ -1353,9 +1353,17 @@ static bool emitObjectFile(llvm::Module& module, const std::string& path, std::s
     }
     module.setDataLayout(tm->createDataLayout());
 
+    // Dump IR before optimization if requested
+    if (getenv("QORE_DUMP_IR_BEFORE_OPT")) {
+        fprintf(stderr, "=== IR BEFORE OPTIMIZATION (O%d) ===\n", opt_level);
+        module.print(llvm::errs(), nullptr);
+        fprintf(stderr, "=== END IR BEFORE OPTIMIZATION ===\n");
+    }
+
     // Run optimization passes at the requested level
     llvm::OptimizationLevel llvm_opt = getOptimizationLevel(opt_level);
     if (llvm_opt != llvm::OptimizationLevel::O0) {
+        // For debugging optimizer hangs, we can disable specific passes
         llvm::LoopAnalysisManager LAM;
         llvm::FunctionAnalysisManager FAM;
         llvm::CGSCCAnalysisManager CGAM;
@@ -1368,6 +1376,13 @@ static bool emitObjectFile(llvm::Module& module, const std::string& path, std::s
         PB.crossRegisterProxies(LAM, FAM, CGAM, MAM);
         auto MPM = PB.buildPerModuleDefaultPipeline(llvm_opt);
         MPM.run(module, MAM);
+    }
+
+    // Dump IR after optimization if requested
+    if (getenv("QORE_DUMP_IR_AFTER_OPT")) {
+        fprintf(stderr, "=== IR AFTER OPTIMIZATION (O%d) ===\n", opt_level);
+        module.print(llvm::errs(), nullptr);
+        fprintf(stderr, "=== END IR AFTER OPTIMIZATION ===\n");
     }
 
     // Emit object file
