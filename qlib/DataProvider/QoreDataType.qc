@@ -329,7 +329,8 @@ public class QoreDataType inherits AbstractDataProviderType {
             throw "RUNTIME-TYPE-ERROR", sprintf("type %y does not accept values of type %y", getName(),
                 value.type());
         }
-        if ((!exists value || value == NULL) && exists default_value) {
+        # Only use default value when value is truly missing, not when NULL is explicitly passed
+        if (!exists value && exists default_value) {
             return default_value;
         }
         value = type.acceptsValue(value);

@@ -3921,9 +3921,7 @@ public:
                 }
             },
             {NT_NULL, [] (QoreValue& n, ExceptionSink* xsink) {
-                    if (xsink) {
-                        xsink->raiseException("RUNTIME-TYPE-ERROR", "soft list types do not accept NULL");
-                    }
+                    xsink->raiseException("RUNTIME-TYPE-ERROR", "soft list types do not accept NULL");
                 }
             },
             {NT_ALL, [] (QoreValue& n, ExceptionSink* xsink) {
@@ -3998,9 +3996,7 @@ public:
                 }
             },
             {NT_NULL, [] (QoreValue& n, ExceptionSink* xsink) {
-                    if (xsink) {
-                        xsink->raiseException("RUNTIME-TYPE-ERROR", "soft list types do not accept NULL");
-                    }
+                    xsink->raiseException("RUNTIME-TYPE-ERROR", "soft list types do not accept NULL");
                 }
             },
             {NT_ALL, [] (QoreValue& n, ExceptionSink* xsink) {
