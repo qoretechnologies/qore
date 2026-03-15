@@ -946,44 +946,31 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     # ---- Controller Mode Tests ----
 
     testControllerModeSetup() {
-        AsyncSocketIo::AsyncSocketIoController controller(False);
         HttpClientIo::HttpClientConnectionManager mgr(
                 <HttpClientIo::HttpClientConnectionManagerOptions>{
             "logger": mLogger,
         });
 
-        # Manager always has a controller (auto-created with autostop=True)
-        assertTrue(mgr.isControllerMode(), "always in controller mode");
-        assertTrue(exists mgr.getController(), "auto-created controller exists");
+        # Manager always has the global controller (autostop=True)
+        assertTrue(exists mgr.getController(), "global controller exists");
 
-        # Replace auto-created controller with external one
-        mgr.setController(controller);
-        assertTrue(mgr.isControllerMode(), "in controller mode after setController");
-        assertTrue(exists mgr.getController(), "external controller set");
-
-        controller.start();
         on_exit {
-            controller.stop();
             mgr.closeAll();
         }
 
         hash<auto> stats = mgr.getStats();
-        assertEq(0, stats.total_connections, "controller mode initial connections");
+        assertEq(0, stats.total_connections, "initial connections");
     }
 
     testControllerModeBasicRequest() {
-        AsyncSocketIo::AsyncSocketIoController controller(False);
         HttpClientIo::HttpClientConnectionManager mgr(
                 <HttpClientIo::HttpClientConnectionManagerOptions>{
             "accept_all_certs": True,
             "protocol": "h2",
             "logger": mLogger,
         });
-        mgr.setController(controller);
-        controller.start();
 
         on_exit {
-            controller.stop();
             mgr.closeAll();
         }
 
@@ -993,18 +980,14 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     }
 
     testControllerModeConcurrent() {
-        AsyncSocketIo::AsyncSocketIoController controller(False);
         HttpClientIo::HttpClientConnectionManager mgr(
                 <HttpClientIo::HttpClientConnectionManagerOptions>{
             "accept_all_certs": True,
             "protocol": "h2",
             "logger": mLogger,
         });
-        mgr.setController(controller);
-        controller.start();
 
         on_exit {
-            controller.stop();
             mgr.closeAll();
         }
 
@@ -1050,18 +1033,14 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     }
 
     testControllerModeCallback() {
-        AsyncSocketIo::AsyncSocketIoController controller(False);
         HttpClientIo::HttpClientConnectionManager mgr(
                 <HttpClientIo::HttpClientConnectionManagerOptions>{
             "accept_all_certs": True,
             "protocol": "h2",
             "logger": mLogger,
         });
-        mgr.setController(controller);
-        controller.start();
 
         on_exit {
-            controller.stop();
             mgr.closeAll();
         }
 
@@ -1084,18 +1063,14 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     }
 
     testControllerModeTimeout() {
-        AsyncSocketIo::AsyncSocketIoController controller(False);
         HttpClientIo::HttpClientConnectionManager mgr(
                 <HttpClientIo::HttpClientConnectionManagerOptions>{
             "accept_all_certs": True,
             "protocol": "h2",
             "logger": mLogger,
         });
-        mgr.setController(controller);
-        controller.start();
 
         on_exit {
-            controller.stop();
             mgr.closeAll();
         }
 
@@ -1240,18 +1215,13 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     # ---- Streaming Tests (HTTP/2 only) ----
 
     testH2StreamingBasic() {
-        # Use controller mode for reliable streaming delivery
-        AsyncSocketIo::AsyncSocketIoController controller(False);
         HttpClientIo::HttpClientConnectionManager mgr(
                 <HttpClientIo::HttpClientConnectionManagerOptions>{
             "accept_all_certs": True,
             "protocol": "h2",
             "logger": mLogger,
         });
-        mgr.setController(controller);
-        controller.start();
         on_exit {
-            controller.stop();
             mgr.closeAll();
         }
 
@@ -1293,17 +1263,13 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     }
 
     testH2StreamingStateError() {
-        AsyncSocketIo::AsyncSocketIoController controller(False);
         HttpClientIo::HttpClientConnectionManager mgr(
                 <HttpClientIo::HttpClientConnectionManagerOptions>{
             "accept_all_certs": True,
             "protocol": "h2",
             "logger": mLogger,
         });
-        mgr.setController(controller);
-        controller.start();
         on_exit {
-            controller.stop();
             mgr.closeAll();
         }
 
@@ -1855,17 +1821,13 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     # ---- Bidi Streaming Race Condition Tests ----
 
     testH2BidiSendAfterServerClose() {
-        AsyncSocketIo::AsyncSocketIoController controller(False);
         HttpClientIo::HttpClientConnectionManager mgr(
                 <HttpClientIo::HttpClientConnectionManagerOptions>{
             "accept_all_certs": True,
             "protocol": "h2",
             "logger": mLogger,
         });
-        mgr.setController(controller);
-        controller.start();
         on_exit {
-            controller.stop();
             mgr.closeAll();
         }
 
@@ -1913,17 +1875,13 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     }
 
     testH2BidiEchoStreaming() {
-        AsyncSocketIo::AsyncSocketIoController controller(False);
         HttpClientIo::HttpClientConnectionManager mgr(
                 <HttpClientIo::HttpClientConnectionManagerOptions>{
             "accept_all_certs": True,
             "protocol": "h2",
             "logger": mLogger,
         });
-        mgr.setController(controller);
-        controller.start();
         on_exit {
-            controller.stop();
             mgr.closeAll();
         }
 

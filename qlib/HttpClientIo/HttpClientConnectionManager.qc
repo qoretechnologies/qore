@@ -56,32 +56,13 @@ auto mgr_h3 = new HttpClientConnectionManager({"protocol": "h3"});
     @endcode
 
     @par Shared Global Controller
-    By default all managers share the process-wide AsyncSocketIo global controller
+    All managers share the process-wide AsyncSocketIo global controller singleton
     (via @ref AsyncSocketIo::getGlobalAsyncIoController()). The controller uses
     \c autostop=True, so its I/O thread starts when the first poll operation is
-    submitted and stops when all operations complete. This avoids creating
-    competing I/O threads when multiple managers are used.
-
-    @par Custom Controller (optional)
-    To use a dedicated controller instead of the shared global one:
-    @code{.py}
-%requires HttpClientIo
-%requires AsyncSocketIo
-
-AsyncSocketIoController controller(False);
-controller.start();
-
-HttpClientConnectionManager mgr1();
-mgr1.setController(controller);  # replaces static controller
-
-HttpClientConnectionManager mgr2();
-mgr2.setController(controller);
-
-# ... use mgr1 and mgr2 ...
-mgr1.closeAll();
-mgr2.closeAll();
-controller.stop();
-    @endcode
+    submitted and stops when all operations complete. This single-controller
+    architecture eliminates cross-controller deadlocks that can occur when object
+    destructors fire on one controller's I/O thread and cancel operations on
+    another controller.
 */
 public class HttpClientConnectionManager {
     public {
@@ -170,54 +151,9 @@ public class HttpClientConnectionManager {
         }
     }
 
-    #! Sets an external AsyncSocketIoController for async operations
-    /** Replaces the default global controller with a caller-provided controller.
-        Existing pool connections are migrated to the new controller.
-
-        @param controller the I/O controller to use
-
-        @note This is optional; by default all managers share the process-wide
-        global controller with \c autostop=True. Use \c setController() only when
-        you need a dedicated controller.
-    */
-    setController(AsyncSocketIo::AsyncSocketIoController controller) {
-        # Cancel this manager's operations on the old controller
-        try {
-            self.controller.cancelByOwner(self.uniqueHash());
-        } catch () {
-        }
-        # Assign the new controller and migrate connections under write lock
-        # to synchronize with concurrent reads in submitConnectionToController()
-        # and handleConnectionResult()
-        {
-            AutoWriteLock al(pool_lock);
-            self.controller = controller;
-
-            foreach string key in (keys pool) {
-                foreach HttpClientConnection conn in (pool{key}) {
-                    if (!conn.isClosed()) {
-                        conn.setControllerRef(controller);
-                        submitConnectionToController(key, conn);
-                    }
-                }
-            }
-        }
-
-        log(LoggerLevel::DEBUG, "external controller set, connections migrated");
-    }
-
-    #! Returns the AsyncSocketIoController (if set)
-    *AsyncSocketIo::AsyncSocketIoController getController() {
+    #! Returns the AsyncSocketIoController
+    AsyncSocketIo::AsyncSocketIoController getController() {
         return controller;
-    }
-
-    #! Returns True if the manager is in async controller mode
-    /** @return always True; async I/O via controller is the only mode
-
-        @since HttpClientIo 1.1
-    */
-    bool isControllerMode() {
-        return True;
     }
 
     #! Acquires a stream handle for the given URL
@@ -654,10 +590,6 @@ public class HttpClientConnectionManager {
 
     #! Internal: submits a connection poll operation to the controller
     private submitConnectionToController(string key, HttpClientConnection conn) {
-        if (!controller) {
-            return;
-        }
-
         HttpClientPollOperation op = conn.getPollOperation();
         Socket sock = conn.getSocket();
         string owner = self.uniqueHash();

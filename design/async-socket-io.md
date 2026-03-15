@@ -196,9 +196,10 @@ Connection pool manager with:
   Protected by `RWLock pool_lock()`.
 - **Load balancing**: `getConnection()` finds a connection with available stream capacity or creates
   a new one.
-- **Controller integration**: `setController(controller)` enables async mode. New connections are
-  submitted to the controller with `to = -1s` (no timeout) and callback delivery. The callback
-  re-submits the connection after handling each result, keeping it alive in the event loop.
+- **Controller integration**: All managers share the global AsyncSocketIoController singleton
+  (via `getGlobalAsyncIoController()`). New connections are submitted to the controller with
+  `to = -1s` (no timeout) and callback delivery. The callback re-submits the connection after
+  handling each result, keeping it alive in the event loop.
 - **Cleanup**: `closeAll()` calls `controller.cancelByOwner(self.uniqueHash())` for bulk cancellation
   of all managed connections.
 

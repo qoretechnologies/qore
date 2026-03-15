@@ -606,7 +606,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         ctrl.removeListener(server);
     }
 
-    #! Tests that an external controller is used correctly and io_threads reports 1
+    #! Tests that an external controller is used correctly
     externalControllerTest() {
         InstrumentedTarget target();
 
@@ -617,9 +617,11 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         ctrl.start();
         on_exit delete ctrl;
 
-        # Verify getStats reports correct io_threads
+        # Verify getStats reports expected keys (no io_threads since single-controller)
         hash<auto> stats = ctrl.getStats();
-        assertEq(1, stats.io_threads, "external controller should report 1 I/O thread");
+        assertTrue(stats.hasKey("listeners"), "stats should have listeners key");
+        assertTrue(stats.hasKey("connections"), "stats should have connections key");
+        assertTrue(stats.hasKey("running"), "stats should have running key");
 
         Socket server();
         server.bind("127.0.0.1:0");

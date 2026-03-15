@@ -111,30 +111,6 @@ manager.submitRequestAsync("https://example.com", "GET", "/api/resource",
 manager.closeAll();
     @endcode
 
-    @par Custom Controller (optional)
-    By default all managers share a single static AsyncSocketIoController.
-    To use a dedicated controller instead:
-    @code{.py}
-%requires HttpClientIo
-%requires AsyncSocketIo
-
-# Use a custom external controller
-AsyncSocketIoController controller(False);
-controller.start();
-
-HttpClientConnectionManager mgr1();
-mgr1.setController(controller);
-
-HttpClientConnectionManager mgr2();
-mgr2.setController(controller);
-
-# ... use mgr1 and mgr2 ...
-
-mgr1.closeAll();
-mgr2.closeAll();
-controller.stop();
-    @endcode
-
     @par Forced Protocol Selection
     @code{.py}
 %requires HttpClientIo
@@ -150,10 +126,10 @@ auto mgr_h3 = new HttpClientConnectionManager({"protocol": "h3"});
 
     @subsection httpclientio_v1_0 Version 1.0
     - Initial release of unified HttpClientIo module
-    - Async-only I/O: all managers share a single static AsyncSocketIoController
-      with \c autostop=True; sync \c request() blocks via Future while the
-      controller event loop drives actual I/O
-    - \c setController() is optional (for using a custom dedicated controller)
+    - Async-only I/O: all managers share the process-wide global
+      AsyncSocketIoController singleton with \c autostop=True; sync \c request()
+      blocks via Future while the controller event loop drives actual I/O
+    - Single-controller architecture eliminates cross-controller deadlocks
     - Protocol auto-selection with HTTP/3 to HTTP/2 fallback
     - Abstract base classes for protocol-agnostic code
     - Connection pooling with configurable limits
