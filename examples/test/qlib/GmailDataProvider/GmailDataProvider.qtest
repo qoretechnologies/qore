@@ -30,6 +30,8 @@ public class GmailDataProviderTest inherits QUnit::Test {
 
     constructor() : Test("GmailDataProviderTest Test", "1.0", \ARGV, MyOpts) {
         addTestCase("gmail test", \gmailTest());
+        addTestCase("gmail watch poll interval from data context", \gmailWatchPollIntervalFromDataContextTest());
+        addTestCase("gmail watch poll interval default", \gmailWatchPollIntervalDefaultTest());
 
         try {
             setupConnection();
@@ -51,6 +53,35 @@ public class GmailDataProviderTest inherits QUnit::Test {
         }
 
         assertEq("gmail", gdp.getName());
+    }
+
+    gmailWatchPollIntervalFromDataContextTest() {
+        hash opts = {
+            "api_profile": "gmail",
+            "url": "https://example.com",
+        };
+        GoogleRestClient rest = new GoogleRestClient(opts, True);
+        {
+            DataProviderDataContextHelper dc({
+                "poll_interval": 30,
+            });
+            GmailMessageWatchDataProvider provider = new GmailMessageWatchDataProvider(rest, (
+                "q": "in:inbox",
+            ));
+            assertEq(30, provider.getPollIntervalSeconds());
+        }
+    }
+
+    gmailWatchPollIntervalDefaultTest() {
+        hash opts = {
+            "api_profile": "gmail",
+            "url": "https://example.com",
+        };
+        GoogleRestClient rest = new GoogleRestClient(opts, True);
+        GmailMessageWatchDataProvider provider = new GmailMessageWatchDataProvider(rest, (
+            "q": "in:inbox",
+        ));
+        assertEq(120, provider.getPollIntervalSeconds());
     }
 
     private usageIntern() {

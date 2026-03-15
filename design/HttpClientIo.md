@@ -159,14 +159,8 @@ public class HttpClientConnectionManager {
     #! Creates a new connection manager
     constructor(*hash<HttpClientConnectionManagerOptions> opts);
 
-    #! Sets the async I/O controller for non-blocking operation
-    setController(AsyncSocketIo::AsyncSocketIoController controller);
-
-    #! Returns the async I/O controller, if set
-    *AsyncSocketIo::AsyncSocketIoController getController();
-
-    #! Returns True if running in controller-driven mode
-    bool isControllerMode();
+    #! Returns the global async I/O controller
+    AsyncSocketIo::AsyncSocketIoController getController();
 
     #! Acquires a stream from the pool, creating a connection if necessary
     HttpClientStreamHandle acquireStream(string url);
@@ -412,23 +406,21 @@ printf("Status: %d, Protocol: %s\n", resp.status_code, resp.protocol);
 mgr.closeAll();
 ```
 
-### Async with Controller
+### Async with Global Controller
 
 ```qore
 %modern
 %requires HttpClientIo
-%requires AsyncSocketIo
 
-auto ctrl = new AsyncSocketIoController();
+# Manager uses the global AsyncSocketIoController singleton (autostop=True)
 auto mgr = new HttpClientConnectionManager({"protocol": "auto"});
-mgr.setController(ctrl);
 
 mgr.submitRequestAsync("https://api.example.com", "GET", "/data", NOTHING, NOTHING,
     sub (hash<HttpClientResponseInfo> resp) {
         printf("Got %d response via %s\n", resp.status_code, resp.protocol);
     });
 
-# Controller drives I/O in background
+# Global controller drives I/O in background
 ```
 
 ### Forced HTTP/3 with mTLS

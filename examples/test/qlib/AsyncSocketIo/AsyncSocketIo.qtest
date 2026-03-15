@@ -963,7 +963,9 @@ public class AsyncSocketIoTest inherits QUnit::Test {
 
     #! Tests that addListener throws after the controller has been stopped
     addListenerAfterStopTest() {
-        HttpAsyncSocketIoController ctrl(logger);
+        AsyncSocketIoController io_ctrl(False, logger);
+        on_exit io_ctrl.stop();
+        HttpAsyncSocketIoController ctrl(io_ctrl, logger);
         on_exit delete ctrl;
 
         # Create a listener socket

@@ -64,7 +64,7 @@ public class Http2ClientPollOperation inherits HttpClientPollOperation {
         @param ssl_verify_mode SSL verification mode (optional)
         @param accept_all_certs if True, accept all SSL certificates including self-signed
     */
-    constructor(hash<auto> url_info, timeout connect_timeout = DefaultConnectTimeout, *Logger logger,
+    constructor(hash<auto> url_info, timeout connect_timeout = DefaultConnectTimeout, *LoggerInterface logger,
             *int ssl_verify_mode, bool accept_all_certs = False) {
         self.url_info = url_info;
         self.connect_timeout = connect_timeout;
@@ -124,7 +124,7 @@ public class Http2ClientPollOperation inherits HttpClientPollOperation {
         @throw HTTP2-CAPACITY-ERROR if the connection is at capacity
     */
     int submitRequest(string method, string path, *hash<auto> headers, *data body,
-            code callback, *hash<auto> ctx, int max_streams, bool streaming = False) {
+            HttpResponseCallback callback, *hash<auto> ctx, int max_streams, bool streaming = False) {
         string current_state = state;
         if (current_state != STATE_READING && current_state != STATE_WAIT_READ) {
             throw "HTTP2-STATE-ERROR", sprintf("cannot submit request in state: %y", current_state);
@@ -152,7 +152,7 @@ public class Http2ClientPollOperation inherits HttpClientPollOperation {
         int stream_id;
         {
             AutoLock al(stream_lock);
-            if (active_stream_count >= max_streams) {
+            if (max_streams && active_stream_count >= max_streams) {
                 throw "HTTP2-CAPACITY-ERROR",
                     sprintf("connection at capacity: %d/%d streams",
                         active_stream_count, max_streams);
@@ -204,7 +204,7 @@ public class Http2ClientPollOperation inherits HttpClientPollOperation {
     #! Cancels a pending request
     cancelRequest(int stream_id) {
         string sid = string(stream_id);
-        *code cb;
+        *HttpResponseCallback cb;
         {
             AutoLock al(stream_lock);
             if (!stream_callbacks.hasKey(sid)) {
@@ -411,7 +411,7 @@ public class Http2ClientPollOperation inherits HttpClientPollOperation {
 
                 # Dispatch to callback if registered
                 bool is_end = output.end_stream.toBool();
-                *code cb;
+                *HttpResponseCallback cb;
                 *hash<auto> stream_ctx;
                 {
                     AutoLock al(stream_lock);

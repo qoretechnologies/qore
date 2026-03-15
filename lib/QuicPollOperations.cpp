@@ -345,6 +345,22 @@ SocketQuicClientPollOperation::SocketQuicClientPollOperation(
         return;
     }
 
+    // Enlarge UDP receive buffer to prevent packet drops under burst traffic.
+    // QUIC sends many small datagrams; the kernel default (~208KB on Linux) is
+    // easily exhausted when the server sends large responses.  1MB matches
+    // common QUIC implementation defaults (e.g., Google, Cloudflare).
+    // SO_RCVBUFFORCE bypasses net.core.rmem_max (requires CAP_NET_ADMIN);
+    // fall back to SO_RCVBUF which is capped by rmem_max.
+    {
+        int rcvbuf = 1024 * 1024;
+#ifdef SO_RCVBUFFORCE
+        if (setsockopt(fd, SOL_SOCKET, SO_RCVBUFFORCE, &rcvbuf, sizeof(rcvbuf)) < 0)
+#endif
+        {
+            setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof(rcvbuf));
+        }
+    }
+
     // Cache local address after connect — now contains the specific local
     // interface address selected by the kernel (not wildcard)
     local_addrlen_ = sizeof(local_addr_);
@@ -563,6 +579,31 @@ QoreHashNode* SocketQuicClientPollOperation::trySetupEarlyHttp3(ExceptionSink* x
     return nullptr;
 }
 
+QoreHashNode* SocketQuicClientPollOperation::flushAndReturnPollInfo(ExceptionSink* xsink,
+        bool do_flush) {
+    ngtcp2_tstamp expiry = 0;
+    int srv = 0;
+    if (do_flush) {
+        srv = sendPendingPackets(expiry, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+    } else {
+        // When not flushing, use the QUIC connection's next expiry for the poll
+        // timeout so retransmission timers still fire
+        expiry = quic_session->getExpiry();
+    }
+    int events = SOCK_POLLIN;
+    if (srv == SOCK_POLLOUT || quic_session->hasPendingWrite()) {
+        events |= SOCK_POLLOUT;
+    }
+    QoreHashNode* poll_info = getSocketPollInfoHash(xsink, events);
+    if (poll_info) {
+        setPollTimeoutFromExpiry(poll_info, expiry, xsink);
+    }
+    return poll_info;
+}
+
 QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) {
     AutoLocker al(sock->priv->m);
 
@@ -611,7 +652,6 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                         break;  // EAGAIN — no more data
                     }
                 }
-
                 // 0-RTT: set up HTTP/3 early when 0-RTT TX key is installed
                 // (may be detected after receiving server response to Initial)
                 {
@@ -690,6 +730,8 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                 if (quic_session->hasCompletedStreams()) {
                     cached_stream = quic_session->takeCompletedStream();
                     qcs_state = QCS::RESPONSE_READY;
+                    // Flush pending writes (ACKs) before signaling goal reached
+                    flushAndReturnPollInfo(xsink);
                     return nullptr;  // goal reached
                 }
 
@@ -708,6 +750,8 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                     if (quic_session->hasCompletedStreams()) {
                         cached_stream = quic_session->takeCompletedStream();
                         qcs_state = QCS::RESPONSE_READY;
+                        // Flush pending writes (ACKs) before signaling goal reached
+                        flushAndReturnPollInfo(xsink);
                         return nullptr;  // goal reached
                     }
                 }
@@ -734,6 +778,7 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                     if (quic_session->hasCompletedStreams()) {
                         cached_stream = quic_session->takeCompletedStream();
                         qcs_state = QCS::RESPONSE_READY;
+                        // sendPendingPackets was just called; no flush needed
                         return nullptr;  // goal reached
                     }
 
@@ -754,6 +799,7 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                         if (quic_session->hasCompletedStreams()) {
                             cached_stream = quic_session->takeCompletedStream();
                             qcs_state = QCS::RESPONSE_READY;
+                            // sendPendingPackets was just called; no flush needed
                             return nullptr;  // goal reached
                         }
                     }
@@ -781,7 +827,7 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                 // response) — the QUIC socket always uses raw recvfrom/sendto
                 if (quic_session->hasCompletedStreams()) {
                     cached_stream = quic_session->takeCompletedStream();
-                    return nullptr;
+                    return flushAndReturnPollInfo(xsink);
                 }
                 cached_stream.reset();
                 qcs_state = QCS::READING;
@@ -816,6 +862,11 @@ int64_t SocketQuicClientPollOperation::submitRequest(
 }
 
 int SocketQuicClientPollOperation::migrateConnection(ExceptionSink* xsink) {
+    // NOTE: we acquire sock->priv->m for the fd swap section below to
+    // synchronize with continuePoll() which also holds this lock.
+    // The lock is NOT held during new-socket creation / connect() to
+    // avoid blocking the controller I/O thread.
+
     if (!quic_session) {
         xsink->raiseException("QUIC-MIGRATION-ERROR", "QUIC session not initialized");
         return -1;
@@ -865,6 +916,17 @@ int SocketQuicClientPollOperation::migrateConnection(ExceptionSink* xsink) {
         return -1;
     }
 
+    // Enlarge receive buffer on migration socket (same as initial socket)
+    {
+        int rcvbuf = 1024 * 1024;
+#ifdef SO_RCVBUFFORCE
+        if (setsockopt(new_fd, SOL_SOCKET, SO_RCVBUFFORCE, &rcvbuf, sizeof(rcvbuf)) < 0)
+#endif
+        {
+            setsockopt(new_fd, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof(rcvbuf));
+        }
+    }
+
     // Get the new local address
     struct sockaddr_storage new_local;
     socklen_t new_local_len = sizeof(new_local);
@@ -901,21 +963,25 @@ int SocketQuicClientPollOperation::migrateConnection(ExceptionSink* xsink) {
         return -1;
     }
 
-    // Migration succeeded — swap the fd.  Set the new fd BEFORE closing the old
-    // one so the socket object always holds a valid fd (no window where it holds
-    // a closed fd that could be recycled by a concurrent socket() call).
+    // Migration succeeded — swap the fd under the socket lock to synchronize
+    // with continuePoll() which holds the same lock during I/O.
     //
     // NOTE: direct assignment to sock->priv->socket->priv->sock is the established
     // pattern in qore_socket_private (no setter abstraction exists).  The socket
     // object has no cached state derived from the fd that would become inconsistent
     // — socket options, non-blocking mode, and pktinfo are set on the new fd above.
-    fd_guard.release();
-    sock->priv->socket->priv->sock = new_fd;
-    ::close(old_fd);
+    {
+        AutoLocker al(sock->priv->m);
+        fd_guard.release();
+        sock->priv->socket->priv->sock = new_fd;
+        // Update cached local address under the same lock
+        memcpy(&local_addr_, &new_local, new_local_len);
+        local_addrlen_ = new_local_len;
+    }
 
-    // Update cached local address
-    memcpy(&local_addr_, &new_local, new_local_len);
-    local_addrlen_ = new_local_len;
+    // Close old fd outside the lock — safe because the socket object now
+    // points to new_fd, so continuePoll() will use the new fd
+    ::close(old_fd);
 
     printd(2, "SocketQuicClientPollOperation::migrateConnection(): migrated fd %d -> %d "
         "(session %lld)\n", old_fd, new_fd,
@@ -961,6 +1027,20 @@ SocketQuicServerPollOperation::SocketQuicServerPollOperation(
     // Cache local address (family + port); per-packet destination IP is
     // extracted from pktinfo control messages in recvAndProcessPacket()
     int fd = sock->priv->socket->getSocket();
+
+    // Enlarge UDP receive buffer to prevent packet drops under burst traffic.
+    // QUIC servers may receive bursts of client traffic (handshake retries,
+    // multiplexed requests); 1MB matches common QUIC implementation defaults.
+    {
+        int rcvbuf = 1024 * 1024;
+#ifdef SO_RCVBUFFORCE
+        if (setsockopt(fd, SOL_SOCKET, SO_RCVBUFFORCE, &rcvbuf, sizeof(rcvbuf)) < 0)
+#endif
+        {
+            setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof(rcvbuf));
+        }
+    }
+
     local_addrlen_ = sizeof(local_addr_);
     if (getsockname(fd, reinterpret_cast<struct sockaddr*>(&local_addr_), &local_addrlen_) < 0) {
         xsink->raiseErrnoException("QUIC-ERROR", errno, "getsockname() failed on QUIC server socket");

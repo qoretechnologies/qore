@@ -60,6 +60,7 @@
 #include "qore/intern/QC_WaitGroup.h"
 #include "qore/intern/QC_Semaphore.h"
 #include "qore/intern/QC_AutoSemaphore.h"
+#include "qore/intern/QC_ConnectionPool.h"
 #include "qore/intern/QC_AutoLock.h"
 #include "qore/intern/QC_AutoGate.h"
 #include "qore/intern/QC_AutoReadLock.h"
@@ -473,8 +474,9 @@ public:
         try_reexport : 1,
         finalizing : 1;
 
-    DLLLOCAL ThreadData(int ptid, QoreProgram* p, bool n_foreign = false) :
-            runtime_po(),
+    DLLLOCAL ThreadData(int ptid, QoreProgram* p, bool n_foreign = false,
+            int n_flags = QTF_NONE) :
+            
             tid(ptid),
             vlock(ptid),
             current_pgm(p),
@@ -518,10 +520,11 @@ public:
         printd(5, "ThreadData::ThreadData() stack_adjusted_size: %lld qore_thread_stack_limit: %lld\n",
             stack_adjusted_size, qore_thread_stack_limit);
 #ifdef STACK_DIRECTION_DOWN
-        stack_limit = stack_start - stack_adjusted_size;
+            stack_limit = stack_start - stack_adjusted_size;
 #else
-        stack_limit = stack_start + stack_adjusted_size;
+            stack_limit = stack_start + stack_adjusted_size;
 #endif // #ifdef STACK_DIRECTION_DOWN
+        }
 
 #ifdef IA64_64
         // RSE stack grows up
@@ -656,12 +659,12 @@ void ThreadEntry::allocate(tid_node* tn, int stat) {
     assert(!thread_data);
 }
 
-void ThreadEntry::activate(int tid, pthread_t n_ptid, QoreProgram* p, bool foreign) {
+void ThreadEntry::activate(int tid, pthread_t n_ptid, QoreProgram* p, bool foreign, int flags) {
     assert(status == QTS_NA || status == QTS_RESERVED);
     ptid = n_ptid;
     assert(!thread_data);
     assert(!::thread_data.get());
-    thread_data = new ThreadData(tid, p, foreign);
+    thread_data = new ThreadData(tid, p, foreign, flags);
     ::thread_data.set(thread_data);
     status = QTS_ACTIVE;
     // set lvstack if QoreProgram set
@@ -1637,7 +1640,7 @@ const QoreProgramLocation* get_runtime_location() {
 }
 
 int swap_runtime_statement_location(ExceptionSink* xsink, const AbstractStatement* stmt, const QoreProgramLocation* loc,
-        QoreParseOptions po, const AbstractStatement*& old_stmt, const QoreProgramLocation*& old_loc, QoreParseOptions& old_po) {
+        const QoreParseOptions& po, const AbstractStatement*& old_stmt, const QoreProgramLocation*& old_loc, QoreParseOptions& old_po) {
     ThreadData* td = thread_data.get();
     old_stmt = td->runtime_statement;
     old_loc = td->runtime_loc;
@@ -2696,7 +2699,7 @@ void delete_signal_thread() {
 
 // should only be called from the new thread
 void register_thread(int tid, pthread_t ptid, QoreProgram* p, bool foreign) {
-    thread_list.activate(tid, ptid, p, foreign);
+    thread_list.activate(tid, ptid, p, foreign, flags);
 }
 
 static void qore_thread_cleanup(void* n = nullptr) {
@@ -2849,8 +2852,9 @@ struct ThreadArg {
     q_thread_t f;
     void* arg;
     int tid;
+    int flags;
 
-    DLLLOCAL ThreadArg(q_thread_t n_f, void* a, int n_tid) : f(n_f), arg(a), tid(n_tid) {
+    DLLLOCAL ThreadArg(q_thread_t n_f, void* a, int n_tid, int n_flags = QTF_NONE) : f(n_f), arg(a), tid(n_tid), flags(n_flags) {
     }
 
     DLLLOCAL void run(ExceptionSink* xsink) {
@@ -2870,7 +2874,7 @@ namespace {
     extern "C" void* q_run_thread(void* arg) {
         ThreadArg* ta = (ThreadArg*)arg;
 
-        register_thread(ta->tid, pthread_self(), 0);
+        register_thread(ta->tid, pthread_self(), 0, false, ta->flags);
         printd(5, "q_run_thread() ta: %p TID %d started\n", ta, ta->tid);
 
         set_tid_thread_name(ta->tid);
@@ -3084,6 +3088,41 @@ int q_start_thread(ExceptionSink* xsink, q_thread_t f, void* arg) {
     return tid;
 }
 
+int q_start_thread(ExceptionSink* xsink, q_thread_t f, void* arg, size_t stack_size) {
+    int tid = get_thread_entry();
+
+    if (tid == -1) {
+        xsink->raiseException("THREAD-CREATION-FAILURE", "thread list is full with %d threads", MAX_QORE_THREADS);
+        return -1;
+    }
+
+    // QTF_NO_STACK_GUARD: lightweight threads with custom stack sizes bypass the Qore stack guard
+    ThreadArg* ta = new ThreadArg(f, arg, tid, QTF_NO_STACK_GUARD);
+
+    // Create a local pthread attr with the requested stack size
+    QorePThreadAttr local_attr;
+    int rc = local_attr.setstacksize(stack_size);
+    if (rc) {
+        delete ta;
+        deregister_thread(tid);
+        xsink->raiseErrnoException("THREAD-CREATION-FAILURE", rc,
+            "could not set thread stack size to %zu", stack_size);
+        return -1;
+    }
+
+    pthread_t ptid;
+    thread_counter.inc();
+    if ((rc = pthread_create(&ptid, local_attr.get_ptr(), q_run_thread, ta))) {
+        delete ta;
+        thread_counter.dec();
+        deregister_thread(tid);
+        xsink->raiseErrnoException("THREAD-CREATION-FAILURE", rc, "could not create thread");
+        return -1;
+    }
+
+    return tid;
+}
+
 // returns the default thread stack size for new threads
 size_t q_thread_get_stack_size() {
     // make sure accesses to stack info are made locked
@@ -3258,6 +3297,10 @@ QoreNamespace* get_thread_ns(QoreNamespace &qorens) {
     Thread->addSystemClass(initThreadPoolClass(*Thread));
 
     Thread->addSystemClass(initAbstractThreadResourceClass(*Thread));
+    Thread->addSystemClass(initAbstractPoolableResourceClass(*Thread));
+    hashdeclConnectionPoolOptions = init_hashdecl_ConnectionPoolOptions(*Thread);
+    hashdeclConnectionPoolStats = init_hashdecl_ConnectionPoolStats(*Thread);
+    Thread->addSystemClass(initAbstractConnectionPoolClass(*Thread));
 
     Thread->addSystemClass(initFutureClass(*Thread));
     Thread->addSystemClass(initPromiseClass(*Thread));

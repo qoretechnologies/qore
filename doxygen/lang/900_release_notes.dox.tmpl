@@ -480,6 +480,8 @@ cargo install tree-sitter-cli@0.26.5
       - added the \c ConnectionProvider::RestartableIoHelper class
       - new \c http_version option in \c ConnectionProvider::HttpConnection for HTTP version control ("auto", "1.0", "1.1", "2.0", "3.0")
       - \c RestClient::RestConnection inherits the \c http_version option from \c ConnectionProvider::HttpConnection
+      - added \c amqp and \c amqps connection scheme registrations for the
+        <a href="https://github.com/qoretechnologies/module-amqp">amqp</a> module
     - @ref dataproviderintro "DataProvider" module
       - added DPQL (Data Provider Query Language) for human/AI-readable query expressions
         - new \c DataProvider::DpqlTokenizer class for lexical analysis
@@ -504,6 +506,8 @@ cargo install tree-sitter-cli@0.26.5
       - added \c http3 field to \c DataProvider::DataProviderDebugInfo hashdecl for HTTP/3 connection tracking
       - added \c requires_action_context and \c action_context fields to
         \c DataProvider::DataProviderActionInfo for context-sensitive action filtering and propagation
+      - added \c amqp factory registration to \c DataProvider::FactoryMap for the
+        <a href="https://github.com/qoretechnologies/module-amqp">amqp</a> module
     - @ref openapi3intro "OpenApi3" module
       - new module supporting OpenAPI 3.* schemas for REST API integration
       - new @ref OpenApi3::OpenApi3SchemaGenerator "OpenApi3SchemaGenerator" class for generating OpenAPI 3.0.3 schemas from Qore source code

@@ -37,6 +37,18 @@
 
 #include <atomic>
 
+//! Thread creation flags (bitfield)
+/** @since %Qore 2.3
+*/
+///@{
+//! Default thread behavior
+static constexpr int QTF_NONE = 0;
+//! Skip Qore stack guard enforcement — for lightweight C++ threads (e.g. dedicated async I/O)
+/** The full stack size is usable; check_stack() will never fire.
+*/
+static constexpr int QTF_NO_STACK_GUARD = (1 << 0);
+///@}
+
 // FIXME: move to config.h or something like that
 // not more than this number of threads can be running at the same time
 #ifndef MAX_QORE_THREADS
@@ -90,7 +102,8 @@ public:
 
     DLLLOCAL void allocate(tid_node* tn, int stat = QTS_NA);
 
-    DLLLOCAL void activate(int tid, pthread_t n_ptid, QoreProgram* p, bool foreign = false);
+    DLLLOCAL void activate(int tid, pthread_t n_ptid, QoreProgram* p, bool foreign = false,
+        int flags = QTF_NONE);
 
     DLLLOCAL bool active() const {
         return status == QTS_ACTIVE;
@@ -185,9 +198,10 @@ public:
         return 0;
     }
 
-    DLLLOCAL void activate(int tid, pthread_t ptid = pthread_self(), QoreProgram* p = nullptr, bool foreign = false) {
+    DLLLOCAL void activate(int tid, pthread_t ptid = pthread_self(), QoreProgram* p = nullptr, bool foreign = false,
+            int flags = QTF_NONE) {
         AutoLocker al(lck);
-        entry[tid].activate(tid, ptid, p, foreign);
+        entry[tid].activate(tid, ptid, p, foreign, flags);
     }
 
     DLLLOCAL void setStatus(int tid, int status) {

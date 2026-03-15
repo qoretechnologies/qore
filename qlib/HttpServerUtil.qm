@@ -1694,7 +1694,18 @@ public class AbstractStreamRequest {
                     # Buffer all chunks and send as a single response body since HTTP/2 DATA
                     # frames do not preserve per-chunk boundaries.
                     binary buf;
-                    while (*data chunk = send()) {
+                    while (True) {
+                        auto chunk = send();
+                        if (!exists chunk) {
+                            break;
+                        }
+                        if (chunk.typeCode() == NT_HASH) {
+                            # hash = DataStream error trailer (from ds_get_send catch block);
+                            # HTTP/2 doesn't support chunked trailers, so stop buffering.
+                            # The error is lost at the transport level but sendDataImpl()
+                            # already logged it via the exception handler.
+                            break;
+                        }
                         buf += binary(chunk);
                     }
                     rv.body = buf;

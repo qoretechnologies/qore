@@ -54,7 +54,7 @@ public class Http3ClientConnection inherits HttpClientConnection {
         @param client_pk optional client private key for mutual TLS (mTLS)
     */
     constructor(hash<auto> url_info, timeout connect_timeout = DefaultConnectTimeout,
-            *Logger logger, int max_streams = DefaultMaxStreamsPerConnection,
+            *LoggerInterface logger, int max_streams = DefaultMaxStreamsPerConnection,
             *int ssl_verify_mode, bool accept_all_certs = False,
             *SSLCertificate client_cert, *SSLPrivateKey client_pk) {
         self.url_info = url_info;
@@ -111,7 +111,7 @@ public class Http3ClientConnection inherits HttpClientConnection {
         under the stream_lock.
     */
     int submitRequestImpl(string method, string path, *hash<auto> headers,
-            *data body, code callback, *hash<auto> ctx) {
+            *data body, HttpResponseCallback callback, *hash<auto> ctx) {
         return poll_op.submitRequest(method, path, headers, body, callback, ctx,
             max_concurrent_streams);
     }
@@ -122,26 +122,11 @@ public class Http3ClientConnection inherits HttpClientConnection {
     }
 
     #! Closes the connection (protocol-specific)
-    /** @par Thread Safety
-        Coordinates with the driving mechanism: sets state to Closed
-        and waits for any active driver thread to finish before calling abort().
-    */
     closeImpl(*timeout close_timeout) {
-        timeout ct = close_timeout ?? 10s;
         {
             AutoLock al(lock);
             state = HttpClientConnectionState::Closed;
             ready_cond.broadcast();
-            # Wait for any active driver to finish before aborting poll_op
-            date end_time = now_us() + ct;
-            while (driving) {
-                date remaining = end_time - now_us();
-                if (remaining <= 0us) {
-                    log(LoggerLevel::ERROR, "close() timed out waiting for driver thread");
-                    break;
-                }
-                ready_cond.wait(lock, min(remaining, 5s));
-            }
         }
         try {
             poll_op.abort();
@@ -163,43 +148,37 @@ public class Http3ClientConnection inherits HttpClientConnection {
     }
 
     #! Initiates QUIC connection migration to a new network path
-    /** @param migration_timeout maximum time to wait for the driver thread to yield
+    /** Migration creates a new UDP socket and initiates QUIC path migration.
+        The old fd is closed and the controller is woken so that its next
+        forced poll cycle calls continuePoll(), which returns poll info
+        referencing the Socket object (now pointing to the new fd), causing
+        the EventLoop to re-register the new fd.
 
         @return True if migration was initiated successfully
 
         @throw HTTP3-STATE-ERROR if the connection is not in Ready state
-        @throw QUIC-MIGRATION-ERROR if migration fails or times out
     */
     bool migrate(*timeout migration_timeout) {
-        timeout mt = migration_timeout ?? 10s;
+        *object ctl;
         {
             AutoLock al(lock);
             if (state != HttpClientConnectionState::Ready) {
                 throw "HTTP3-STATE-ERROR",
                     sprintf("cannot migrate: connection not ready (state=%y)", state);
             }
-            date end_time = now_us() + mt;
-            while (driving) {
-                date remaining = end_time - now_us();
-                if (remaining <= 0us) {
-                    throw "QUIC-MIGRATION-ERROR",
-                        "timed out waiting for I/O driver thread to yield";
-                }
-                ready_cond.wait(lock, min(remaining, 1s));
-            }
-            driving = True;
             last_activity = now_us();
-        }
-
-        on_exit {
-            AutoLock al(lock);
-            driving = False;
-            ready_cond.broadcast();
+            ctl = controller_ref;
         }
 
         log(LoggerLevel::DEBUG, "initiating QUIC connection migration");
         poll_op.migrate();
         log(LoggerLevel::DEBUG, "QUIC connection migration completed");
+
+        # Wake the controller so it forces a continuePoll() cycle with the new fd
+        if (ctl) {
+            ctl.wake();
+        }
+
         return True;
     }
 

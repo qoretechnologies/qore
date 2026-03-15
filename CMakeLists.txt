@@ -217,6 +217,7 @@ set(LIBQORE_QPP_SRC
     lib/QC_RangeIterator.qpp
     lib/QC_Datasource.qpp
     lib/QC_DatasourcePool.qpp
+    lib/QC_ConnectionPool.qpp
     lib/QC_Dir.qpp
     lib/QC_ReadOnlyFile.qpp
     lib/QC_File.qpp
@@ -998,6 +999,7 @@ set(LIBQORE_CPP_SRC
     lib/SmartMutex.cpp
     lib/Datasource.cpp
     lib/DatasourcePool.cpp
+    lib/ConnectionPool.cpp
     lib/ManagedDatasource.cpp
     lib/SQLStatement.cpp
     lib/QoreSQLStatement.cpp
@@ -1292,6 +1294,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/SmartMutex.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/Datasource.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/DatasourcePool.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/ConnectionPool.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/ManagedDatasource.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/SQLStatement.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreSQLStatement.cpp\"
@@ -1481,6 +1484,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_BINARY_DIR}/QC_AbstractSQLStatement.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_Datasource.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_DatasourcePool.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_ConnectionPool.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_SQLStatement.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_Queue.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_Mutex.cpp\"
@@ -1988,6 +1992,8 @@ qore_user_module("qlib/JdbcPostgresqlSqlUtil.qm" "PgsqlSqlUtilBase;SqlUtil;DataP
 qore_user_module("qlib/JdbcFirebirdSqlUtil.qm" "XdbcFirebirdSqlUtilBase;SqlUtil;DataProvider")
 qore_user_module("qlib/OdbcFirebirdSqlUtil.qm" "XdbcFirebirdSqlUtilBase;SqlUtil;DataProvider")
 qore_user_module("qlib/RestClient.qm" "DataProvider;ConnectionProvider;Mime;RestSchemaValidator;Swagger;OpenApi3;FileLocationHandler")
+qore_user_module("qlib/RestClientIo.qm" "RestClient;HttpClientIo;RestSchemaValidator;Mime")
+
 
 # base 7 modules
 qore_user_module("qlib/SalesforceRestClient.qm" "ConnectionProvider;Mime;RestClient;DataProvider")

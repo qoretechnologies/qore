@@ -8,6 +8,7 @@
 %requires ../../../../qlib/Mime.qm
 %requires ../../../../qlib/Logger.qm
 %requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/AsyncSocketIo
 %requires ../../../../qlib/HttpServerAsyncIo
 %requires ../../../../qlib/HttpServer.qm
 %requires ../../../../qlib/WebSocketUtil.qm
@@ -882,12 +883,12 @@ OKKqgBjNAlYDdPhOy8O8Agk=
 
     asyncModeHttpsTest() {
         # Verify the async I/O controller is running
-        assertTrue(mAsyncServer.getGlobalAsyncCtrl().running(), "globalAsyncCtrl should be running");
+        assertTrue(AsyncSocketIo::getGlobalAsyncIoController().running(), "global async I/O controller should be running");
 
-        # Debug: check listener SSL detection
-        hash<auto> info = mAsyncServer.getGlobalAsyncCtrl().getInfo();
+        # Debug: check controller info
+        hash<auto> info = AsyncSocketIo::getGlobalAsyncIoController().getInfo();
         if (m_options.verbose > 2) {
-            printf("DEBUG: globalAsyncCtrl info: %N\n", info);
+            printf("DEBUG: global async I/O controller info: %N\n", info);
         }
 
         # Test HTTPS connections with async mode

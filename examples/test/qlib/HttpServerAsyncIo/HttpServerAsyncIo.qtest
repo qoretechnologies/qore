@@ -169,7 +169,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         addTestCase("stop during active accepts", \stopDuringAcceptsTest());
         addTestCase("accept replenish contention", \acceptReplenishContentionTest());
         addTestCase("thread pool dispatch", \threadPoolDispatchTest());
-        addTestCase("multi I/O thread distribution", \multiIoThreadTest());
+        addTestCase("external controller", \externalControllerTest());
         addTestCase("stop with in-flight handlers", \stopWithInFlightHandlersTest());
         addTestCase("stop during SSL handshake", \stopDuringSslHandshakeTest());
         set_return_value(main());
@@ -261,7 +261,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
     controllerStartStopTest() {
         # Create controller
-        HttpAsyncSocketIoController ctrl();
+        AsyncSocketIoController io_ctrl(False);
+        on_exit io_ctrl.stop();
+        HttpAsyncSocketIoController ctrl(io_ctrl);
 
         # Verify initial state
         assertFalse(ctrl.running());
@@ -278,6 +280,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
         # Stop controller
         ctrl.stop();
+        io_ctrl.stop();
         assertFalse(ctrl.running());
     }
 
@@ -397,7 +400,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
     #! Tests concurrent addListener/removeListener — exercises lock contention on m
     concurrentListenerTest() {
-        HttpAsyncSocketIoController ctrl();
+        AsyncSocketIoController io_ctrl(False);
+        on_exit io_ctrl.stop();
+        HttpAsyncSocketIoController ctrl(io_ctrl);
         ctrl.start();
         on_exit delete ctrl;
 
@@ -451,7 +456,8 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     stopDuringAcceptsTest() {
         # Run several iterations to increase the chance of hitting the race window
         for (int iter = 0; iter < 5; ++iter) {
-            HttpAsyncSocketIoController ctrl();
+            AsyncSocketIoController io_ctrl(False);
+            HttpAsyncSocketIoController ctrl(io_ctrl);
             ctrl.start();
 
             TestTarget target();
@@ -480,13 +486,16 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             client.close();
             server.close();
             delete ctrl;
+            io_ctrl.stop();
         }
         assertTrue(True, "stop during active accepts completed without deadlock");
     }
 
     #! Tests accept replenish under heavy client connection load
     acceptReplenishContentionTest() {
-        HttpAsyncSocketIoController ctrl();
+        AsyncSocketIoController io_ctrl(False);
+        on_exit io_ctrl.stop();
+        HttpAsyncSocketIoController ctrl(io_ctrl);
         ctrl.start();
         on_exit delete ctrl;
 
@@ -557,7 +566,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     threadPoolDispatchTest() {
         InstrumentedTarget target();
 
-        HttpAsyncSocketIoController ctrl();
+        AsyncSocketIoController io_ctrl(False);
+        on_exit io_ctrl.stop();
+        HttpAsyncSocketIoController ctrl(io_ctrl);
         ctrl.start();
         on_exit delete ctrl;
 
@@ -595,18 +606,22 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         ctrl.removeListener(server);
     }
 
-    #! Tests that io_threads option creates multiple I/O threads and distributes connections
-    multiIoThreadTest() {
+    #! Tests that an external controller is used correctly
+    externalControllerTest() {
         InstrumentedTarget target();
 
-        # Create controller with 2 I/O threads
-        HttpAsyncSocketIoController ctrl(NOTHING, {"io_threads": 2});
+        # Create controller with an explicit external AsyncSocketIoController
+        AsyncSocketIoController io_ctrl(False);
+        on_exit io_ctrl.stop();
+        HttpAsyncSocketIoController ctrl(io_ctrl);
         ctrl.start();
         on_exit delete ctrl;
 
-        # Verify getStats reports correct io_threads
+        # Verify getStats reports expected keys (no io_threads since single-controller)
         hash<auto> stats = ctrl.getStats();
-        assertEq(2, stats.io_threads, "should report 2 I/O threads");
+        assertTrue(stats.hasKey("listeners"), "stats should have listeners key");
+        assertTrue(stats.hasKey("connections"), "stats should have connections key");
+        assertTrue(stats.hasKey("running"), "stats should have running key");
 
         Socket server();
         server.bind("127.0.0.1:0");
@@ -616,7 +631,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
         ctrl.addListener(server, target);
 
-        # Send requests sequentially — they should work correctly regardless of thread distribution
+        # Send requests sequentially — they should work correctly
         int num_requests = 10;
         for (int i = 0; i < num_requests; ++i) {
             doHttpRequest(port);
@@ -626,25 +641,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         usleep(500ms);
 
         assertEq(num_requests, target.request_count,
-            "all requests should complete with 2 I/O threads");
-
-        # Test with default 1 thread — verify backward compatibility
-        {
-            HttpAsyncSocketIoController ctrl1();
-            hash<auto> stats1 = ctrl1.getStats();
-            assertEq(1, stats1.io_threads, "default should be 1 I/O thread");
-            delete ctrl1;
-        }
-
-        # Test with explicit external controller — should report 1
-        {
-            AsyncSocketIoController ext_ctrl(False);
-            HttpAsyncSocketIoController ctrl_ext(ext_ctrl);
-            hash<auto> stats_ext = ctrl_ext.getStats();
-            assertEq(1, stats_ext.io_threads,
-                "external controller should report 1 I/O thread");
-            delete ctrl_ext;
-        }
+            "all requests should complete with external controller");
 
         ctrl.removeListener(server);
     }
@@ -764,7 +761,8 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     #! Tests that stop() during SSL handshake doesn't leak operations
     stopDuringSslHandshakeTest() {
         for (int iter = 0; iter < 5; ++iter) {
-            HttpAsyncSocketIoController ctrl();
+            AsyncSocketIoController io_ctrl(False);
+            HttpAsyncSocketIoController ctrl(io_ctrl);
             ctrl.start();
 
             TestTarget target();
@@ -804,6 +802,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             client.close();
             server.close();
             delete ctrl;
+            io_ctrl.stop();
         }
         assertTrue(True, "stop during SSL handshake completed cleanly");
     }
@@ -815,7 +814,8 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             # Handler sleeps 500ms to ensure stop() is called while handlers are active
             target.handler_delay = 500ms;
 
-            HttpAsyncSocketIoController ctrl();
+            AsyncSocketIoController io_ctrl(False);
+            HttpAsyncSocketIoController ctrl(io_ctrl);
             ctrl.start();
 
             Socket server();
@@ -852,6 +852,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             client_done.waitForZero(5s);
             server.close();
             delete ctrl;
+            io_ctrl.stop();
         }
         assertTrue(True, "stop with in-flight handlers completed without leaks");
     }

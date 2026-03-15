@@ -62,7 +62,7 @@ public class HttpClientPollOperation inherits AbstractPollOperation {
         AbstractPollOperation current_op;
 
         #! Pending stream callbacks: stream_id -> callback
-        hash<string, code> stream_callbacks;
+        hash<string, HttpResponseCallback> stream_callbacks;
 
         #! Pending stream contexts: stream_id -> context hash
         hash<string, hash<auto>> stream_ctxs;
@@ -89,10 +89,10 @@ public class HttpClientPollOperation inherits AbstractPollOperation {
         timeout connect_timeout;
 
         #! Logger
-        *Logger logger;
+        *LoggerInterface logger;
 
         #! Callback invoked when connection becomes ready
-        *code ready_callback;
+        *code<nothing()> ready_callback;
     }
 
     #! Returns True if the connection is closed
@@ -121,7 +121,7 @@ public class HttpClientPollOperation inherits AbstractPollOperation {
     /** @note Must be called during construction, before any continuePoll()
         invocation.  Not safe to call concurrently with continuePoll().
     */
-    setReadyCallback(code callback) {
+    setReadyCallback(code<nothing()> callback) {
         ready_callback = callback;
     }
 
@@ -171,7 +171,7 @@ public class HttpClientPollOperation inherits AbstractPollOperation {
 
     #! Internal: notifies all pending streams of an error
     private notifyPendingStreams(hash<auto> err) {
-        *hash<string, code> callbacks_copy;
+        *hash<string, HttpResponseCallback> callbacks_copy;
         *hash<string, hash<auto>> ctxs_copy;
         {
             AutoLock al(stream_lock);
@@ -182,10 +182,10 @@ public class HttpClientPollOperation inherits AbstractPollOperation {
             active_stream_count = 0;
         }
         foreach string sid in (keys callbacks_copy) {
-            code cb = callbacks_copy{sid};
+            HttpResponseCallback cb = callbacks_copy{sid};
             *hash<auto> stream_ctx = ctxs_copy{sid};
             try {
-                cb(NOTHING, err + {"stream_id": sid.toInt(), "ctx": stream_ctx});
+                cb({}, err + {"stream_id": sid.toInt(), "ctx": stream_ctx});
             } catch (hash<ExceptionInfo> ex) {
                 log(LoggerLevel::ERROR, "stream error callback exception: %s: %s",
                     ex.err, ex.desc);

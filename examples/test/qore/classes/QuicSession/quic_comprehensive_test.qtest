@@ -155,8 +155,10 @@ class QuicComprehensiveTest inherits QUnit::Test {
         if (!to) {
             to = 15s;
         }
-        AsyncSocketIo::AsyncSocketIoController ctrl(True);
-        ctrl.start();
+        AsyncSocketIo::AsyncSocketIoController ctrl = AsyncSocketIo::getGlobalAsyncIoController();
+
+        # Use unique owner IDs to isolate this test's operations
+        string owner_base = pair.server_sock.uniqueHash();
 
         AbstractPollOperation server_op = pair.server_sock.startPollQuicAccept();
         AbstractPollOperation client_op = pair.client_sock.startPollQuicConnect("127.0.0.1", pair.port);
@@ -164,23 +166,34 @@ class QuicComprehensiveTest inherits QUnit::Test {
         Queue server_q = ctrl.submit(<SocketPollOperationInfo>{
             "sock": pair.server_sock,
             "spop": server_op,
-            "owner": "server",
+            "owner": owner_base + "-server",
             "to": to,
         });
         Queue client_q = ctrl.submit(<SocketPollOperationInfo>{
             "sock": pair.client_sock,
             "spop": client_op,
-            "owner": "client",
+            "owner": owner_base + "-client",
             "to": to,
         });
 
         return pair + {
             "ctrl": ctrl,
+            "owner_base": owner_base,
             "server_op": server_op,
             "client_op": client_op,
             "server_q": server_q,
             "client_q": client_q,
         };
+    }
+
+    #! Helper: cancel all operations for this test context on the global controller
+    private cleanupContext(hash<auto> ctx) {
+        try {
+            ctx.ctrl.cancelByOwner(ctx.owner_base + "-server");
+        } catch () {}
+        try {
+            ctx.ctrl.cancelByOwner(ctx.owner_base + "-client");
+        } catch () {}
     }
 
     #! Helper: wait for client to reach "reading" state (HTTP/3 ready)
@@ -246,12 +259,12 @@ class QuicComprehensiveTest inherits QUnit::Test {
         AbstractPollOperation send_op = ctx.server_sock.startPollQuicSendResponse(
             session_id, stream_id, status_code, resp_headers, resp_body);
 
-        # Submit the send-response operation; use a custom key to avoid conflict with
-        # the accept op that may still be registered on the same socket
+        # Submit the send-response operation; use the server owner so cancelByOwner
+        # covers it; use a custom key to avoid conflict with the accept op
         Queue send_q = ctx.ctrl.submit(<SocketPollOperationInfo>{
             "sock": ctx.server_sock,
             "spop": send_op,
-            "owner": "server-send",
+            "owner": ctx.owner_base + "-server",
             "key": "server-send-" + string(stream_id),
             "to": 30s,
         }, True);
@@ -332,7 +345,7 @@ class QuicComprehensiveTest inherits QUnit::Test {
         ctx.server_q = ctx.ctrl.submit(<SocketPollOperationInfo>{
             "sock": ctx.server_sock,
             "spop": ctx.server_op,
-            "owner": "server",
+            "owner": ctx.owner_base + "-server",
             "to": 30s,
         }, True);
 
@@ -340,7 +353,7 @@ class QuicComprehensiveTest inherits QUnit::Test {
         ctx.client_q = ctx.ctrl.submit(<SocketPollOperationInfo>{
             "sock": ctx.client_sock,
             "spop": ctx.client_op,
-            "owner": "client",
+            "owner": ctx.owner_base + "-client",
             "to": 30s,
         }, True);
     }
@@ -352,7 +365,7 @@ class QuicComprehensiveTest inherits QUnit::Test {
         hash<auto> pair = createSocketPair();
         hash<auto> ctx = performHandshake(pair);
         on_exit {
-            ctx.ctrl.stop();
+            cleanupContext(ctx);
         }
 
         string resp_body_str = "Hello World";
@@ -388,7 +401,7 @@ class QuicComprehensiveTest inherits QUnit::Test {
         hash<auto> pair = createSocketPair();
         hash<auto> ctx = performHandshake(pair);
         on_exit {
-            ctx.ctrl.stop();
+            cleanupContext(ctx);
         }
 
         string req_body = "This is the POST body content for testing";
@@ -429,7 +442,7 @@ class QuicComprehensiveTest inherits QUnit::Test {
         hash<auto> pair = createSocketPair();
         hash<auto> ctx = performHandshake(pair);
         on_exit {
-            ctx.ctrl.stop();
+            cleanupContext(ctx);
         }
 
         list<int> status_codes = (200, 201, 204, 301, 400, 404, 500);
@@ -455,7 +468,7 @@ class QuicComprehensiveTest inherits QUnit::Test {
         hash<auto> pair = createSocketPair();
         hash<auto> ctx = performHandshake(pair);
         on_exit {
-            ctx.ctrl.stop();
+            cleanupContext(ctx);
         }
 
         hash<auto> req_headers = {
@@ -497,7 +510,7 @@ class QuicComprehensiveTest inherits QUnit::Test {
         hash<auto> pair = createSocketPair();
         hash<auto> ctx = performHandshake(pair);
         on_exit {
-            ctx.ctrl.stop();
+            cleanupContext(ctx);
         }
 
         int num_requests = 5;
@@ -533,7 +546,7 @@ class QuicComprehensiveTest inherits QUnit::Test {
         hash<auto> pair = createSocketPair();
         hash<auto> ctx = performHandshake(pair);
         on_exit {
-            ctx.ctrl.stop();
+            cleanupContext(ctx);
         }
 
         int num_streams = 3;
@@ -566,7 +579,7 @@ class QuicComprehensiveTest inherits QUnit::Test {
         Queue send_q = ctx.ctrl.submit(<SocketPollOperationInfo>{
             "sock": ctx.server_sock,
             "spop": send_op,
-            "owner": "server-send",
+            "owner": ctx.owner_base + "-server",
             "to": 30s,
         });
         send_q.get(30000);
@@ -585,7 +598,7 @@ class QuicComprehensiveTest inherits QUnit::Test {
             ctx.server_q = ctx.ctrl.submit(<SocketPollOperationInfo>{
                 "sock": ctx.server_sock,
                 "spop": ctx.server_op,
-                "owner": "server",
+                "owner": ctx.owner_base + "-server",
                 "to": 30s,
             }, True);
 
@@ -593,7 +606,7 @@ class QuicComprehensiveTest inherits QUnit::Test {
             ctx.client_q = ctx.ctrl.submit(<SocketPollOperationInfo>{
                 "sock": ctx.client_sock,
                 "spop": ctx.client_op,
-                "owner": "client",
+                "owner": ctx.owner_base + "-client",
                 "to": 30s,
             }, True);
 
@@ -610,7 +623,7 @@ class QuicComprehensiveTest inherits QUnit::Test {
             send_q = ctx.ctrl.submit(<SocketPollOperationInfo>{
                 "sock": ctx.server_sock,
                 "spop": send_op,
-                "owner": "server-send",
+                "owner": ctx.owner_base + "-server",
                 "to": 30s,
             });
             send_q.get(30000);
@@ -633,7 +646,7 @@ class QuicComprehensiveTest inherits QUnit::Test {
         hash<auto> pair = createSocketPair();
         hash<auto> ctx = performHandshake(pair);
         on_exit {
-            ctx.ctrl.stop();
+            cleanupContext(ctx);
         }
 
         # Generate 100KB payload
@@ -660,7 +673,7 @@ class QuicComprehensiveTest inherits QUnit::Test {
         Queue send_q = ctx.ctrl.submit(<SocketPollOperationInfo>{
             "sock": ctx.server_sock,
             "spop": send_op,
-            "owner": "server-send",
+            "owner": ctx.owner_base + "-server",
             "key": "server-send",
             "to": 30s,
         }, True);
@@ -697,7 +710,7 @@ class QuicComprehensiveTest inherits QUnit::Test {
         hash<auto> pair = createSocketPair();
         hash<auto> ctx = performHandshake(pair);
         on_exit {
-            ctx.ctrl.stop();
+            cleanupContext(ctx);
         }
 
         # Generate 100KB payload
@@ -732,7 +745,7 @@ class QuicComprehensiveTest inherits QUnit::Test {
         hash<auto> pair = createSocketPair();
         hash<auto> ctx = performHandshake(pair);
         on_exit {
-            ctx.ctrl.stop();
+            cleanupContext(ctx);
         }
 
         int completed = 0;
@@ -805,10 +818,13 @@ class QuicComprehensiveTest inherits QUnit::Test {
                     Socket cli();
                     cli.bindINET("127.0.0.1", "0", True, AF_INET, SOCK_DGRAM);
 
-                    AsyncSocketIo::AsyncSocketIoController ctrl(True);
-                    ctrl.start();
+                    AsyncSocketIo::AsyncSocketIoController ctrl =
+                        AsyncSocketIo::getGlobalAsyncIoController();
+                    string owner_server = srv.uniqueHash() + "-server";
+                    string owner_client = cli.uniqueHash() + "-client";
                     on_exit {
-                        ctrl.stop();
+                        try { ctrl.cancelByOwner(owner_server); } catch () {}
+                        try { ctrl.cancelByOwner(owner_client); } catch () {}
                     }
 
                     AbstractPollOperation server_op = srv.startPollQuicAccept();
@@ -817,13 +833,13 @@ class QuicComprehensiveTest inherits QUnit::Test {
                     Queue server_q = ctrl.submit(<SocketPollOperationInfo>{
                         "sock": srv,
                         "spop": server_op,
-                        "owner": "server-" + string(conn_idx),
+                        "owner": owner_server,
                         "to": 30s,
                     });
                     Queue client_q = ctrl.submit(<SocketPollOperationInfo>{
                         "sock": cli,
                         "spop": client_op,
-                        "owner": "client-" + string(conn_idx),
+                        "owner": owner_client,
                         "to": 30s,
                     });
 
@@ -858,7 +874,8 @@ class QuicComprehensiveTest inherits QUnit::Test {
                     Queue send_q = ctrl.submit(<SocketPollOperationInfo>{
                         "sock": srv,
                         "spop": send_op,
-                        "owner": "server-send-" + string(conn_idx),
+                        "owner": owner_server,
+                        "key": "server-send-" + string(conn_idx),
                         "to": 30s,
                     });
                     send_q.get(30000);
@@ -913,10 +930,10 @@ class QuicComprehensiveTest inherits QUnit::Test {
         Socket client_sock();
         client_sock.bindINET("127.0.0.1", "0", True, AF_INET, SOCK_DGRAM);
 
-        AsyncSocketIo::AsyncSocketIoController ctrl(True);
-        ctrl.start();
+        AsyncSocketIo::AsyncSocketIoController ctrl = AsyncSocketIo::getGlobalAsyncIoController();
+        string owner = client_sock.uniqueHash() + "-timeout";
         on_exit {
-            ctrl.stop();
+            try { ctrl.cancelByOwner(owner); } catch () {}
         }
 
         AbstractPollOperation client_op = client_sock.startPollQuicConnect("127.0.0.1", port);
@@ -925,7 +942,7 @@ class QuicComprehensiveTest inherits QUnit::Test {
         Queue q = ctrl.submit(<SocketPollOperationInfo>{
             "sock": client_sock,
             "spop": client_op,
-            "owner": "timeout-client",
+            "owner": owner,
             "to": 2s,
         });
 
@@ -946,7 +963,7 @@ class QuicComprehensiveTest inherits QUnit::Test {
         hash<auto> pair = createSocketPair();
         hash<auto> ctx = performHandshake(pair);
         on_exit {
-            ctx.ctrl.stop();
+            cleanupContext(ctx);
         }
 
         hash<auto> result = doRoundTrip(ctx, "GET", "/empty", NOTHING, NOTHING,
@@ -968,7 +985,7 @@ class QuicComprehensiveTest inherits QUnit::Test {
         hash<auto> pair = createSocketPair();
         hash<auto> ctx = performHandshake(pair);
         on_exit {
-            ctx.ctrl.stop();
+            cleanupContext(ctx);
         }
 
         # Generate random binary data with all byte values
@@ -1034,7 +1051,7 @@ class QuicComprehensiveTest inherits QUnit::Test {
     testGoawayShutdown() {
         hash<auto> pair = createSocketPair();
         hash<auto> ctx = performHandshake(pair);
-        on_exit ctx.ctrl.stop();
+        on_exit cleanupContext(ctx);
 
         # First, do a normal round-trip to confirm the connection works
         hash<auto> req_result = submitRequestAndWaitForServer(ctx, "GET", "/test");
@@ -1082,7 +1099,7 @@ class QuicComprehensiveTest inherits QUnit::Test {
     testGoawayStateQuery() {
         hash<auto> pair = createSocketPair();
         hash<auto> ctx = performHandshake(pair);
-        on_exit ctx.ctrl.stop();
+        on_exit cleanupContext(ctx);
 
         # Wait for client to be ready
         waitForClientReading(ctx.client_op);

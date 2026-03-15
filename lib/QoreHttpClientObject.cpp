@@ -5665,18 +5665,25 @@ QoreHashNode* qore_httpclient_priv::sendHttp2MessageAndGetResponse(const char* m
         if (val.getType() == NT_STRING) {
             headers[key] = val.get<const QoreStringNode>()->c_str();
         } else if (val.getType() == NT_LIST) {
-            // For multi-value headers, use first value
+            // RFC 9113 Section 8.2.3: combine multi-value headers with comma
             const QoreListNode* l = val.get<const QoreListNode>();
-            if (l->size() > 0) {
-                QoreValue first = l->retrieveEntry(0);
-                if (first.getType() == NT_STRING) {
-                    headers[key] = first.get<const QoreStringNode>()->c_str();
+            std::string joined;
+            for (size_t i = 0; i < l->size(); ++i) {
+                QoreValue elem = l->retrieveEntry(i);
+                if (elem.getType() == NT_STRING) {
+                    if (!joined.empty()) {
+                        joined += ", ";
+                    }
+                    joined += elem.get<const QoreStringNode>()->c_str();
                 }
+            }
+            if (!joined.empty()) {
+                headers[key] = std::move(joined);
             }
         }
     }
 
-    // Convert Host to :authority pseudo-header (RFC 9114 Section 4.3.1)
+    // Convert Host to :authority pseudo-header (RFC 7540 Section 8.1.2.3)
     auto host_it = headers.find("Host");
     if (host_it != headers.end()) {
         headers[":authority"] = host_it->second;
@@ -5695,6 +5702,32 @@ QoreHashNode* qore_httpclient_priv::sendHttp2MessageAndGetResponse(const char* m
         if (!body_data && body) {
             body_data = body->c_str();
             body_len = body->size();
+        }
+    }
+
+    // Set Content-Length if body present and header not already set (non-streaming only)
+    if (body_len > 0) {
+        auto cl_it = headers.find("content-length");
+        if (cl_it == headers.end()) {
+            headers["content-length"] = std::to_string(body_len);
+        }
+    }
+
+    // Add ";charset=xxx" to Content-Type for non-ISO-8859-1 text bodies
+    if (!streaming && body && body_len > 0) {
+        auto ct_it = headers.find("content-type");
+        if (ct_it != headers.end()) {
+            // Only add charset if not already present and not a boundary type
+            if (ct_it->second.find("charset=") == std::string::npos
+                    && ct_it->second.find("boundary=") == std::string::npos) {
+                const QoreEncoding* enc = msock->socket->getEncoding();
+                if (enc != QCS_ISO_8859_1) {
+                    QoreString code(enc->getCode());
+                    code.tolwr();
+                    ct_it->second += ";charset=";
+                    ct_it->second += code.c_str();
+                }
+            }
         }
     }
 

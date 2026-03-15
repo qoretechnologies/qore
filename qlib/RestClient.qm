@@ -58,7 +58,7 @@
 %endtry
 
 module RestClient {
-    version = "2.4";
+    version = "2.5";
     desc = "user module for calling REST services";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -351,9 +351,98 @@ public hashdecl AuthCodeInfo {
     *string code_verifier;
 }
 
+#! Unified REST response info returned by @ref AbstractRestClient methods
+/** @since RestClient 2.5
+*/
+public hashdecl RestResponseInfo {
+    #! HTTP status code
+    int status_code;
+
+    #! Response headers
+    hash<auto> headers;
+
+    #! Deserialized response body
+    auto body;
+
+    #! Content-Type header value from the response (if any)
+    *string content_type;
+}
+
+#! Abstract interface for REST clients
+/** This class defines a common API for REST clients that can be implemented by both
+    @ref RestClient (HTTP/1.1) and \c RestClientIo (HTTP/2/3 multiplexed).
+
+    @par Design
+    GET, HEAD, and OPTIONS methods do not accept a body parameter, correcting the original
+    design that allowed bodies on these methods contrary to REST conventions.
+
+    @since RestClient 2.5
+*/
+public class AbstractRestClient inherits Serializable, Qore::Thread::AbstractPoolableResource {
+    #! Sends an HTTP \c GET request and returns the response
+    abstract hash<RestResponseInfo> restGet(string path, *hash<auto> hdr);
+
+    #! Sends an HTTP \c HEAD request and returns the response
+    abstract hash<RestResponseInfo> restHead(string path, *hash<auto> hdr);
+
+    #! Sends an HTTP \c OPTIONS request and returns the response
+    abstract hash<RestResponseInfo> restOptions(string path, *hash<auto> hdr);
+
+    #! Sends an HTTP \c POST request and returns the response
+    abstract hash<RestResponseInfo> restPost(string path, auto body, *hash<auto> hdr);
+
+    #! Sends an HTTP \c PUT request and returns the response
+    abstract hash<RestResponseInfo> restPut(string path, auto body, *hash<auto> hdr);
+
+    #! Sends an HTTP \c PATCH request and returns the response
+    abstract hash<RestResponseInfo> restPatch(string path, auto body, *hash<auto> hdr);
+
+    #! Sends an HTTP \c DELETE request and returns the response
+    abstract hash<RestResponseInfo> restDel(string path, auto body, *hash<auto> hdr);
+
+    #! Sends a generic REST request and returns the response
+    abstract hash<RestResponseInfo> restDoRequest(string method, string path, auto body, *hash<auto> hdr);
+
+    #! Sets the data serialization format
+    abstract setSerialization(string data = "auto");
+
+    #! Returns the current data serialization format
+    abstract string getSerialization();
+
+    #! Sets the send encoding (compression) format
+    abstract setSendEncoding(string enc = "auto");
+
+    #! Returns the current send encoding format
+    abstract *string getSendEncoding();
+
+    #! Adds default headers to each request
+    abstract addDefaultHeaders(hash<auto> h);
+
+    #! Returns the hash of default headers
+    abstract hash<auto> getDefaultHeaders();
+
+    #! Replaces default headers
+    abstract replaceDefaultHeaders(*hash<auto> hdr);
+
+    #! Sets a token for authentication
+    abstract setToken(string token_type, string token, *string refresh_token, *date token_expiry);
+
+    #! Returns any token set for the connection
+    abstract *string getToken();
+
+    #! Returns the token type
+    abstract string getTokenType();
+
+    #! Closes the client and releases any underlying connections
+    /** Subclasses must implement this to release resources (e.g., disconnect HTTP connections,
+        close connection pools).
+    */
+    abstract close();
+}
+
 #! this class provides the REST client API
 public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, ConnectionProvider::UpdateOptionsInterface,
-        ConnectionProvider::OptionHelper {
+        ConnectionProvider::OptionHelper, AbstractRestClient {
     public {
         #! Data serialization support mapping codes to MIME types and de/serialization functions
         const DataSerializationSupport = {
@@ -427,7 +516,7 @@ public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, Connec
         const AcceptMap = map {$1: True}, AcceptList;
 
         #! RestClient Version
-        const Version = "2.2";
+        const Version = "2.5";
 
         #! RestClient Version String
         const VersionString = sprintf("Qore-RestClient/%s", RestClient::Version);
@@ -1462,6 +1551,81 @@ hash<auto> ans = rest.del("/orders/1");
     */
     hash<auto> del(string path, auto body, *reference<hash<auto>> info, *hash<auto> hdr) {
         return doRequest("DELETE", path, body, \info, NOTHING, hdr);
+    }
+
+    #! Sends an HTTP \c GET request and returns a @ref RestResponseInfo hash
+    /** @since RestClient 2.5
+    */
+    hash<RestResponseInfo> restGet(string path, *hash<auto> hdr) {
+        return makeRestResponse(doRequest("GET", path, NOTHING, NOTHING, NOTHING, hdr));
+    }
+
+    #! Sends an HTTP \c HEAD request and returns a @ref RestResponseInfo hash
+    /** @since RestClient 2.5
+    */
+    hash<RestResponseInfo> restHead(string path, *hash<auto> hdr) {
+        return makeRestResponse(doRequest("HEAD", path, NOTHING, NOTHING, NOTHING, hdr));
+    }
+
+    #! Sends an HTTP \c OPTIONS request and returns a @ref RestResponseInfo hash
+    /** @since RestClient 2.5
+    */
+    hash<RestResponseInfo> restOptions(string path, *hash<auto> hdr) {
+        return makeRestResponse(doRequest("OPTIONS", path, NOTHING, NOTHING, NOTHING, hdr));
+    }
+
+    #! Sends an HTTP \c POST request and returns a @ref RestResponseInfo hash
+    /** @since RestClient 2.5
+    */
+    hash<RestResponseInfo> restPost(string path, auto body, *hash<auto> hdr) {
+        return makeRestResponse(doRequest("POST", path, body, NOTHING, NOTHING, hdr));
+    }
+
+    #! Sends an HTTP \c PUT request and returns a @ref RestResponseInfo hash
+    /** @since RestClient 2.5
+    */
+    hash<RestResponseInfo> restPut(string path, auto body, *hash<auto> hdr) {
+        return makeRestResponse(doRequest("PUT", path, body, NOTHING, NOTHING, hdr));
+    }
+
+    #! Sends an HTTP \c PATCH request and returns a @ref RestResponseInfo hash
+    /** @since RestClient 2.5
+    */
+    hash<RestResponseInfo> restPatch(string path, auto body, *hash<auto> hdr) {
+        return makeRestResponse(doRequest("PATCH", path, body, NOTHING, NOTHING, hdr));
+    }
+
+    #! Sends an HTTP \c DELETE request and returns a @ref RestResponseInfo hash
+    /** @since RestClient 2.5
+    */
+    hash<RestResponseInfo> restDel(string path, auto body, *hash<auto> hdr) {
+        return makeRestResponse(doRequest("DELETE", path, body, NOTHING, NOTHING, hdr));
+    }
+
+    #! Sends a generic REST request and returns a @ref RestResponseInfo hash
+    /** @since RestClient 2.5
+    */
+    hash<RestResponseInfo> restDoRequest(string method, string path, auto body, *hash<auto> hdr) {
+        return makeRestResponse(doRequest(method, path, body, NOTHING, NOTHING, hdr));
+    }
+
+    #! Closes the client by disconnecting the underlying HTTP connection
+    /** @since RestClient 2.5
+    */
+    close() {
+        disconnect();
+    }
+
+    #! Converts a raw RestClient response hash to a @ref RestResponseInfo hash
+    /** @since RestClient 2.5
+    */
+    private hash<RestResponseInfo> makeRestResponse(hash<auto> rv) {
+        return <RestResponseInfo>{
+            "status_code": rv.status_code,
+            "headers": rv.hdr ?? (rv - ("body", "status_code")),
+            "body": rv.body,
+            "content_type": rv."content-type",
+        };
     }
 
     #! returns the current validator object
@@ -4822,6 +4986,55 @@ public class RestRequestPollOperation inherits Qore::AbstractPollOperation {
             poller = rc.startOAuth2PollRefreshToken();
         }
 %endif
+    }
+}
+
+#! Connection pool for REST clients
+/** Provides a pool of @ref AbstractRestClient instances with per-thread allocation,
+    following the same pattern as @ref Qore::SQL::DatasourcePool "DatasourcePool".
+
+    Since @ref AbstractRestClient inherits @ref Qore::Thread::AbstractPoolableResource "AbstractPoolableResource",
+    REST clients can be pooled directly without adapter objects.
+
+    @par Example
+    @code{.py}
+RestClientPool pool(sub () { return new RestClient({"url": "https://api.example.com"}); },
+    {"min": 2, "max": 10});
+AbstractRestClient rc = pool.acquire();
+on_exit pool.release();
+hash<RestResponseInfo> resp = rc.restGet("/api/data");
+    @endcode
+
+    @since RestClient 2.5
+*/
+public class RestClientPool inherits Qore::Thread::AbstractConnectionPool {
+    private {
+        #! Factory callback that creates AbstractRestClient instances
+        code<AbstractRestClient()> factory;
+    }
+
+    #! Creates a new pool with the given factory and options
+    /** @param factory a callback that returns a new @ref AbstractRestClient instance
+        @param pool_opts pool configuration options
+    */
+    constructor(code<AbstractRestClient()> factory,
+            *hash<Qore::Thread::ConnectionPoolOptions> pool_opts)
+            : AbstractConnectionPool(pool_opts) {
+        self.factory = factory;
+        # Pre-create min resources now that factory is assigned
+        cast<Qore::Thread::AbstractConnectionPool>(self).init();
+    }
+
+    #! Creates a new pooled REST client
+    Qore::Thread::AbstractPoolableResource createResource() {
+        return factory();
+    }
+
+    #! Acquires a pooled REST client for the current thread
+    /** @return a pooled @ref AbstractRestClient instance for the current thread
+    */
+    AbstractRestClient acquire() {
+        return cast<AbstractRestClient>(AbstractConnectionPool::acquire());
     }
 }
 }

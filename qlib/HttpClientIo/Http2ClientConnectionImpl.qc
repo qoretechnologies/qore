@@ -56,7 +56,7 @@ public class Http2ClientConnection inherits HttpClientConnection {
         @param accept_all_certs if True, accept all SSL certificates including self-signed
     */
     constructor(hash<auto> url_info, timeout connect_timeout = DefaultConnectTimeout,
-            *Logger logger, int max_streams = DefaultMaxStreamsPerConnection,
+            *LoggerInterface logger, int max_streams = DefaultMaxStreamsPerConnection,
             *int ssl_verify_mode, bool accept_all_certs = False) {
         self.url_info = url_info;
         self.connect_timeout = connect_timeout;
@@ -93,7 +93,7 @@ public class Http2ClientConnection inherits HttpClientConnection {
         under the stream_lock.
     */
     int submitRequestImpl(string method, string path, *hash<auto> headers,
-            *data body, code callback, *hash<auto> ctx) {
+            *data body, HttpResponseCallback callback, *hash<auto> ctx) {
         return poll_op.submitRequest(method, path, headers, body, callback, ctx,
             max_concurrent_streams);
     }
@@ -104,26 +104,11 @@ public class Http2ClientConnection inherits HttpClientConnection {
     }
 
     #! Closes the connection (protocol-specific)
-    /** @par Thread Safety
-        Coordinates with the driving mechanism: sets state to Closed,
-        waits for any active driver thread to finish, then calls abort().
-    */
     closeImpl(*timeout close_timeout) {
-        timeout ct = close_timeout ?? 10s;
         {
             AutoLock al(lock);
             state = HttpClientConnectionState::Closed;
             ready_cond.broadcast();
-            # Wait for any active driver to finish before aborting poll_op
-            date end_time = now_us() + ct;
-            while (driving) {
-                date remaining = end_time - now_us();
-                if (remaining <= 0us) {
-                    log(LoggerLevel::ERROR, "close() timed out waiting for driver thread");
-                    break;
-                }
-                ready_cond.wait(lock, min(remaining, 5s));
-            }
         }
         try {
             poll_op.abort();
@@ -157,8 +142,6 @@ public class Http2ClientConnection inherits HttpClientConnection {
 
         if (ctl) {
             ctl.wake();
-        } else {
-            poll_notifier.notify();
         }
     }
 
@@ -177,7 +160,7 @@ public class Http2ClientConnection inherits HttpClientConnection {
         poll_op.submitRequest() under stream_lock, so there is no TOCTOU gap.
     */
     int submitRequestStreaming(string method, string path, *hash<auto> headers, *data body,
-            code callback, *hash<auto> ctx, bool streaming = False) {
+            HttpResponseCallback callback, *hash<auto> ctx, bool streaming = False) {
         *object ctl;
         {
             AutoLock al(lock);
@@ -195,8 +178,6 @@ public class Http2ClientConnection inherits HttpClientConnection {
 
         if (ctl) {
             ctl.wake();
-        } else {
-            poll_notifier.notify();
         }
 
         return stream_id;

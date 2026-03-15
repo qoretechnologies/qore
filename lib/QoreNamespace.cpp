@@ -1242,13 +1242,15 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     enumHTTP3Mode = init_enum_HTTP3Mode(qns);
     enumExecMode = init_enum_ExecMode(qns);
 
+    // pre-init serializable class before Thread namespace so that classes
+    // with vparent=Serializable (e.g. AbstractPoolableResource) can resolve it
+    preinitSerializableClass();
+
     // add Thread namespace (save pointer for late-bound classes that depend on AbstractIterator)
     QoreNamespace* thread_ns = get_thread_ns(qns);
     qore_ns_private::addNamespace(qns, thread_ns);
 
     // pre-init classes
-    // serializable class
-    preinitSerializableClass();
     preinitInputStreamClass();
     preinitOutputStreamClass();
 

@@ -947,7 +947,12 @@ public namespace RestHandler {
                 # For HTTP/1.x, the body is only available if content-length was set.
                 # For HTTP/2/3 raw streams (e.g. sendRawStream with application/octet-stream),
                 # the body was pre-buffered by HttpServer and stored in cx."orig-request-body".
-                *data sb = cx."stream-body"
+                # cx.body is the deserialized request body (auto type — may be
+                # string, binary, integer, hash, etc. after REST parseRequest).
+                # cx."stream-body" holds raw pre-deserialization data for Connect
+                # protocol streams.  cx."orig-request-body" holds the original
+                # raw body for octet-stream requests.
+                auto sb = cx."stream-body"
                     ?? (cx.hdr."content-length" ? cx.body : NOTHING);
                 if (!sb && cx."orig-request-body"
                         && cx.hdr."_qore_orig_content_type" == MimeTypeOctetStream) {

@@ -248,7 +248,7 @@ DLLLOCAL void update_runtime_stack_location(const QoreStackLocation* stack_loc, 
 
 DLLLOCAL const QoreProgramLocation* get_runtime_location();
 DLLLOCAL int swap_runtime_statement_location(ExceptionSink* xsink, const AbstractStatement* stmt,
-        const QoreProgramLocation* loc, QoreParseOptions po, const AbstractStatement*& old_stmt,
+        const QoreProgramLocation* loc, const QoreParseOptions& po, const AbstractStatement*& old_stmt,
         const QoreProgramLocation*& old_loc, QoreParseOptions& old_po);
 DLLLOCAL void swap_runtime_location(const QoreProgramLocation*loc, const AbstractStatement*& old_stmt,
         const QoreProgramLocation*& old_loc);
@@ -570,7 +570,8 @@ DLLLOCAL int get_thread_entry(bool reuse_last = false);
 // acquires TID 0 and sets up the signal thread entry, always returns 0
 DLLLOCAL int get_signal_thread_entry();
 DLLLOCAL void deregister_signal_thread();
-DLLLOCAL void register_thread(int tid, pthread_t ptid, QoreProgram* pgm, bool foreign = false);
+DLLLOCAL void register_thread(int tid, pthread_t ptid, QoreProgram* pgm, bool foreign = false,
+    int flags = QTF_NONE);
 DLLLOCAL void deregister_thread(int tid);
 DLLLOCAL void delete_signal_thread();
 

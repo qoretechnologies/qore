@@ -1,0 +1,287 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Tests for AbstractRestClient interface, RestResponseInfo hashdecl, and
+    RestClient's implementation of the abstract methods.
+*/
+
+%modern
+
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/RestSchemaValidator.qm
+%requires ../../../../qlib/Swagger.qm
+%requires ../../../../qlib/OpenApi3.qm
+%requires ../../../../qlib/RestClient.qm
+%requires ../../../../qlib/HttpServer.qm
+
+%try-module json >= 1.5
+%define NoJson
+%endtry
+
+%exec-class AbstractRestClientTest
+
+#! Simple JSON echo handler
+class JsonEchoHandler inherits AbstractHttpRequestHandler {
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        hash<auto> resp_body;
+        if (hdr.method == "HEAD") {
+            return makeResponse(200, NOTHING, {"Content-Type": MimeTypeJson});
+        }
+        if (hdr.method == "OPTIONS") {
+            return makeResponse(200, make_json({"allow": "GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS"}),
+                {"Content-Type": MimeTypeJson, "Allow": "GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS"});
+        }
+        if (body) {
+            auto parsed;
+            if (body.typeCode() == NT_BINARY) {
+                parsed = parse_json(body.toString());
+            } else {
+                parsed = parse_json(body);
+            }
+            resp_body = {
+                "method": hdr.method,
+                "path": hdr.path,
+                "body": parsed,
+            };
+        } else {
+            resp_body = {
+                "method": hdr.method,
+                "path": hdr.path,
+            };
+        }
+        int status = hdr.method == "DELETE" ? 204 : 200;
+        return makeResponse(status, make_json(resp_body), {"Content-Type": MimeTypeJson});
+    }
+}
+
+class AbstractRestClientTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        int port;
+        RestClient rest;
+    }
+
+    constructor() : Test("AbstractRestClientTest", "1.0") {
+        addTestCase("RestResponseInfo hashdecl", \testRestResponseInfo());
+        addTestCase("AbstractRestClient conformance", \testAbstractRestClientConformance());
+        addTestCase("restGet", \testRestGet());
+        addTestCase("restHead", \testRestHead());
+        addTestCase("restOptions", \testRestOptions());
+        addTestCase("restPost", \testRestPost());
+        addTestCase("restPut", \testRestPut());
+        addTestCase("restPatch", \testRestPatch());
+        addTestCase("restDel", \testRestDel());
+        addTestCase("restDoRequest", \testRestDoRequest());
+        addTestCase("serialization methods", \testSerializationMethods());
+        addTestCase("header management", \testHeaderManagement());
+        addTestCase("token management", \testTokenManagement());
+        addTestCase("close method", \testClose());
+
+        set_return_value(main());
+    }
+
+    setUp() {
+        Logger logger("test", LoggerLevel::getLevelInfo());
+        hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        };
+        server = new HttpServer(http_opts);
+        server.setHandler("/api", "/api", MimeTypeJson, new JsonEchoHandler());
+        server.setDefaultHandler("/api", new JsonEchoHandler());
+        port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+
+        rest = new RestClient({
+            "url": sprintf("http://localhost:%d", port),
+            "data": "json",
+            "error_passthru": True,
+        });
+    }
+
+    tearDown() {
+        delete rest;
+        delete server;
+    }
+
+    testRestResponseInfo() {
+        hash<RestResponseInfo> info = <RestResponseInfo>{
+            "status_code": 200,
+            "headers": {"content-type": "application/json"},
+            "body": {"key": "value"},
+            "content_type": "application/json",
+        };
+        assertEq(200, info.status_code);
+        assertEq("application/json", info.content_type);
+        assertEq({"key": "value"}, info.body);
+        assertEq({"content-type": "application/json"}, info.headers);
+    }
+
+    testAbstractRestClientConformance() {
+        # RestClient should be an instance of AbstractRestClient
+        AbstractRestClient arc = rest;
+        assertEq(True, arc instanceof AbstractRestClient);
+        assertEq(True, rest instanceof AbstractRestClient);
+    }
+
+    testRestGet() {
+%ifndef NoJson
+        hash<RestResponseInfo> resp = rest.restGet("/api/test");
+        assertEq(200, resp.status_code);
+        assertEq("GET", resp.body.method);
+        assertRegex("api/test", resp.body.path);
+        assertEq(True, resp.headers instanceof hash);
+%endif
+    }
+
+    testRestHead() {
+%ifndef NoJson
+        hash<RestResponseInfo> resp = rest.restHead("/api/test");
+        assertEq(200, resp.status_code);
+        # HEAD responses have no body
+        assertEq(True, !exists resp.body || !resp.body);
+%endif
+    }
+
+    testRestOptions() {
+%ifndef NoJson
+        hash<RestResponseInfo> resp = rest.restOptions("/api/test");
+        assertEq(200, resp.status_code);
+        assertEq(True, exists resp.body);
+%endif
+    }
+
+    testRestPost() {
+%ifndef NoJson
+        hash<auto> body = {"key": "value", "num": 42};
+        hash<RestResponseInfo> resp = rest.restPost("/api/test", body);
+        assertEq(200, resp.status_code);
+        assertEq("POST", resp.body.method);
+        assertEq(body, resp.body.body);
+%endif
+    }
+
+    testRestPut() {
+%ifndef NoJson
+        hash<auto> body = {"update": True};
+        hash<RestResponseInfo> resp = rest.restPut("/api/test", body);
+        assertEq(200, resp.status_code);
+        assertEq("PUT", resp.body.method);
+        assertEq(body, resp.body.body);
+%endif
+    }
+
+    testRestPatch() {
+%ifndef NoJson
+        hash<auto> body = {"patch": "data"};
+        hash<RestResponseInfo> resp = rest.restPatch("/api/test", body);
+        assertEq(200, resp.status_code);
+        assertEq("PATCH", resp.body.method);
+        assertEq(body, resp.body.body);
+%endif
+    }
+
+    testRestDel() {
+%ifndef NoJson
+        hash<RestResponseInfo> resp = rest.restDel("/api/test", NOTHING);
+        assertEq(204, resp.status_code);
+%endif
+    }
+
+    testRestDoRequest() {
+%ifndef NoJson
+        hash<auto> body = {"generic": True};
+        hash<RestResponseInfo> resp = rest.restDoRequest("POST", "/api/test", body);
+        assertEq(200, resp.status_code);
+        assertEq("POST", resp.body.method);
+        assertEq(body, resp.body.body);
+%endif
+    }
+
+    testSerializationMethods() {
+        # Test getSerialization / setSerialization
+        string orig = rest.getSerialization();
+        rest.setSerialization("json");
+        assertEq("json", rest.getSerialization());
+        rest.setSerialization("auto");
+        assertEq("auto", rest.getSerialization());
+        rest.setSerialization(orig);
+
+        # Test invalid serialization
+        assertThrows("RESTCLIENT-ERROR", sub () { rest.setSerialization("invalid"); });
+    }
+
+    testHeaderManagement() {
+        hash<auto> orig = rest.getDefaultHeaders();
+
+        # Test addDefaultHeaders
+        rest.addDefaultHeaders({"X-Test": "value"});
+        assertEq("value", rest.getDefaultHeaders()."X-Test");
+
+        # Test replaceDefaultHeaders
+        rest.replaceDefaultHeaders({"X-New": "header"});
+        assertEq("header", rest.getDefaultHeaders()."X-New");
+        assertEq(True, !rest.getDefaultHeaders()."X-Test");
+
+        # Restore
+        rest.replaceDefaultHeaders(orig);
+    }
+
+    testTokenManagement() {
+        rest.setToken("Bearer", "test-token-123");
+        assertEq("test-token-123", rest.getToken());
+        assertEq("Bearer", rest.getTokenType());
+
+        # Verify token appears in default headers
+        assertEq("Bearer test-token-123", rest.getDefaultHeaders().Authorization);
+    }
+
+    testClose() {
+        # Create a fresh client for this test
+        RestClient client({
+            "url": sprintf("http://localhost:%d", port),
+            "data": "json",
+            "error_passthru": True,
+        });
+
+        # Verify close() exists on AbstractRestClient interface
+        AbstractRestClient arc = client;
+
+        # Make a request to establish a connection
+%ifndef NoJson
+        hash<RestResponseInfo> resp = arc.restGet("/api/test");
+        assertEq(200, resp.status_code);
+%endif
+
+        # close() should disconnect without error
+        arc.close();
+
+        # The client should be disconnected
+        assertEq(False, client.isConnected());
+    }
+}

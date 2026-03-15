@@ -67,19 +67,13 @@ public class HttpClientConnection {
         timeout connect_timeout;
 
         #! Logger
-        *Logger logger;
+        *LoggerInterface logger;
 
         #! Last activity timestamp
         date last_activity;
 
         #! Reference to AsyncSocketIoController for wake notifications
         *object controller_ref;
-
-        #! True when a thread is actively driving to ready
-        bool driving = False;
-
-        #! Notifier to wake blocked poll when new requests are submitted (sync mode)
-        EventNotifier poll_notifier();
     }
 
     #! Returns the protocol identifier: "h2" or "h3"
@@ -93,7 +87,7 @@ public class HttpClientConnection {
 
     #! Submits a request on this connection (protocol-specific)
     abstract int submitRequestImpl(string method, string path, *hash<auto> headers,
-        *data body, code callback, *hash<auto> ctx);
+        *data body, HttpResponseCallback callback, *hash<auto> ctx);
 
     #! Cancels a request (protocol-specific)
     abstract cancelRequestImpl(int stream_id);
@@ -143,7 +137,8 @@ public class HttpClientConnection {
         AutoLock al(lock);
         return (state == HttpClientConnectionState::Ready
                 || state == HttpClientConnectionState::Connecting)
-            && getPollOperation().getActiveStreamCount() < max_concurrent_streams;
+            && (!max_concurrent_streams
+                || getPollOperation().getActiveStreamCount() < max_concurrent_streams);
     }
 
     #! Returns the number of active streams
@@ -211,7 +206,7 @@ public class HttpClientConnection {
         check and the actual stream creation.
     */
     int submitRequest(string method, string path, *hash<auto> headers, *data body,
-            code callback, *hash<auto> ctx, bool suppress_wake = False) {
+            HttpResponseCallback callback, *hash<auto> ctx, bool suppress_wake = False) {
         *object ctl;
         {
             AutoLock al(lock);
@@ -225,13 +220,10 @@ public class HttpClientConnection {
 
         log(LoggerLevel::DEBUG, "submitting request: %s %s", method, path);
         int stream_id = submitRequestImpl(method, path, headers, body, callback, ctx);
+        @assert(stream_id >= 0);
 
-        if (!suppress_wake) {
-            if (ctl) {
-                ctl.wake();
-            } else {
-                poll_notifier.notify();
-            }
+        if (!suppress_wake && ctl) {
+            ctl.wake();
         }
 
         return stream_id;
@@ -256,8 +248,6 @@ public class HttpClientConnection {
         }
         if (ctl) {
             ctl.wake();
-        } else {
-            poll_notifier.notify();
         }
     }
 
@@ -290,6 +280,7 @@ public class HttpClientConnection {
 
     #! Waits for the connection to become ready
     bool waitForReady(timeout timeout_ms = 30s) {
+        log(LoggerLevel::DEBUG, "waitForReady() timeout=%y", timeout_ms);
         date end_time = now_us() + timeout_ms;
 
         AutoLock al(lock);
@@ -308,147 +299,11 @@ public class HttpClientConnection {
 
         if (state == HttpClientConnectionState::Closed) {
             *hash<auto> err = getPollOperation().getError();
-            throw "HTTPCLIENT-STATE-ERROR",
-                sprintf("connection closed: %s: %s", err.err ?? "UNKNOWN", err.desc ?? "unknown");
-        }
-
-        return state == HttpClientConnectionState::Ready;
-    }
-
-    #! Drives the connection synchronously until ready or timeout
-    bool driveToReady(timeout timeout_ms = 30s) {
-        date end_time = now_us() + timeout_ms;
-
-        {
-            AutoLock al(lock);
-            if (isReadyLocked()) {
-                return True;
-            }
-            if (state == HttpClientConnectionState::Closed) {
-                *hash<auto> err = getPollOperation().getError();
-                throw "HTTPCLIENT-CONNECT-ERROR",
-                    sprintf("connection closed: %s: %s", err.err ?? "UNKNOWN", err.desc ?? "unknown");
-            }
-            while (driving) {
-                date remaining = end_time - now_us();
-                if (remaining <= 0us) {
-                    return False;
-                }
-                ready_cond.wait(lock, remaining);
-                if (isReadyLocked()) {
-                    return True;
-                }
-                if (state == HttpClientConnectionState::Closed) {
-                    *hash<auto> err = getPollOperation().getError();
-                    throw "HTTPCLIENT-CONNECT-ERROR",
-                        sprintf("connection closed: %s: %s", err.err ?? "UNKNOWN", err.desc ?? "unknown");
-                }
-            }
-            driving = True;
-        }
-
-        on_exit {
-            AutoLock al(lock);
-            driving = False;
-            ready_cond.broadcast();
-        }
-
-        while (True) {
-            {
-                AutoLock al(lock);
-                if (isReadyLocked() || state == HttpClientConnectionState::Closed) {
-                    break;
-                }
-            }
-            date remaining = end_time - now_us();
-            if (remaining <= 0us) {
-                return False;
-            }
-
-            *hash<SocketPollInfo> poll_info = getPollOperation().continuePoll();
-            if (!poll_info) {
-                handlePollResult();
-                if (getPollOperation().hasError()) {
-                    *hash<auto> err = getPollOperation().getError();
-                    throw "HTTPCLIENT-CONNECT-ERROR",
-                        sprintf("%s: %s", err.err ?? "UNKNOWN", err.desc ?? "unknown");
-                }
-                continue;
-            }
-
-            timeout poll_timeout = min(remaining, 1s);
-            Socket::poll(cast<list<hash<SocketPollInfo>>>((
-                poll_info,
-                <SocketPollInfo>{
-                    "events": SOCK_POLLIN,
-                    "socket": poll_notifier,
-                },
-            )), poll_timeout);
-            poll_notifier.acknowledge();
-            handlePollResult();
-        }
-
-        if (isClosed()) {
-            *hash<auto> err = getPollOperation().getError();
             throw "HTTPCLIENT-CONNECT-ERROR",
                 sprintf("connection closed: %s: %s", err.err ?? "UNKNOWN", err.desc ?? "unknown");
         }
 
-        return isReady();
-    }
-
-    #! Drives the connection poll operation once
-    bool drivePoll(timeout poll_timeout_ms = 1s) {
-        {
-            AutoLock al(lock);
-            if (state == HttpClientConnectionState::Closed) {
-                return False;
-            }
-            if (driving) {
-                ready_cond.wait(lock, poll_timeout_ms);
-                return state != HttpClientConnectionState::Closed
-                    && !getPollOperation().hasError();
-            }
-            driving = True;
-        }
-
-        on_exit {
-            AutoLock al(lock);
-            driving = False;
-            ready_cond.broadcast();
-        }
-
-        *hash<SocketPollInfo> poll_info = getPollOperation().continuePoll();
-        if (!poll_info) {
-            handlePollResult();
-            return !isClosed() && !getPollOperation().hasError();
-        }
-
-        if (getPollOperation().checkAndClearCallbackDispatched()) {
-            handlePollResult();
-            return True;
-        }
-
-        # Honor protocol-level poll timeout hint (e.g., QUIC retransmission
-        # timer expiry) by using the shorter of the caller's timeout and the
-        # hint.  Without this, QUIC timers are delayed by up to poll_timeout_ms
-        # per cycle, causing stalls for large transfers on slow systems.
-        timeout actual_timeout = poll_timeout_ms;
-        if (exists poll_info.poll_timeout_ms
-                && poll_info.poll_timeout_ms < actual_timeout) {
-            actual_timeout = poll_info.poll_timeout_ms;
-        }
-
-        Socket::poll(cast<list<hash<SocketPollInfo>>>((
-            poll_info,
-            <SocketPollInfo>{
-                "events": SOCK_POLLIN,
-                "socket": poll_notifier,
-            },
-        )), actual_timeout);
-        poll_notifier.acknowledge();
-        handlePollResult();
-        return !isClosed() && !getPollOperation().hasError();
+        return state == HttpClientConnectionState::Ready;
     }
 
     #! Sets the connection to draining state (GOAWAY received)

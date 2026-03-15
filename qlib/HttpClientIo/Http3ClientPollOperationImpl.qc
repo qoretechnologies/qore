@@ -73,7 +73,7 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
         @param client_cert optional client certificate for mutual TLS (mTLS)
         @param client_pk optional client private key for mutual TLS (mTLS)
     */
-    constructor(hash<auto> url_info, timeout connect_timeout = DefaultConnectTimeout, *Logger logger,
+    constructor(hash<auto> url_info, timeout connect_timeout = DefaultConnectTimeout, *LoggerInterface logger,
             *int ssl_verify_mode, bool accept_all_certs = False,
             *SSLCertificate client_cert, *SSLPrivateKey client_pk) {
         self.url_info = url_info;
@@ -185,7 +185,7 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
         @throw HTTP3-CAPACITY-ERROR if the connection is at capacity
     */
     int submitRequest(string method, string path, *hash<auto> headers, *data body,
-            code callback, *hash<auto> ctx, int max_streams) {
+            HttpResponseCallback callback, *hash<auto> ctx, int max_streams) {
         string current_state = state;
         if (current_state != STATE_READING && current_state != STATE_WAIT_READ) {
             throw "HTTP3-STATE-ERROR", sprintf("cannot submit request in state: %y", current_state);
@@ -210,7 +210,7 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
         int stream_id;
         {
             AutoLock al(stream_lock);
-            if (active_stream_count >= max_streams) {
+            if (max_streams && active_stream_count >= max_streams) {
                 throw "HTTP3-CAPACITY-ERROR",
                     sprintf("connection at capacity: %d/%d streams",
                         active_stream_count, max_streams);
@@ -268,15 +268,13 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
             ++active_stream_count;
         }
 
-        log(LoggerLevel::DEBUG, "submitted request: method=%y path=%y stream_id=%d", method, path, stream_id);
-
         return stream_id;
     }
 
     #! Cancels a pending request
     cancelRequest(int stream_id) {
         string sid = string(stream_id);
-        *code cb;
+        *HttpResponseCallback cb;
         {
             AutoLock al(stream_lock);
             if (!stream_callbacks.hasKey(sid)) {
@@ -294,9 +292,9 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
             remove stream_callbacks{sid};
             remove stream_ctxs{sid};
             --active_stream_count;
-            # Wake threads waiting in STREAM_ID_BLOCKED retry — a stream slot freed
+            # Wake one thread waiting in STREAM_ID_BLOCKED retry — one stream slot freed
             if (stream_blocked_waiters > 0) {
-                stream_capacity_cond.broadcast();
+                stream_capacity_cond.signal();
             }
         }
 
@@ -442,7 +440,7 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
 
                 int stream_id = output.stream_id;
                 string sid = string(stream_id);
-                *code cb;
+                *HttpResponseCallback cb;
                 *hash<auto> stream_ctx;
                 {
                     AutoLock al(stream_lock);

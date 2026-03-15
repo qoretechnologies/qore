@@ -192,7 +192,7 @@ int Counter::waitForZero(timeout timeout_ms) {
       if (!infinite) {
          remaining -= this_timeout;
          if (remaining <= 0) {
-            return -1;  // Overall timeout exceeded
+            return ETIMEDOUT;  // Overall timeout exceeded
          }
       }
    }

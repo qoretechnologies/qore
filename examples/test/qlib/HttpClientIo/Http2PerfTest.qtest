@@ -525,18 +525,14 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         }
         float direct_total_ms = elapsedMs(direct_start);
 
-        # Controller mode
-        AsyncSocketIo::AsyncSocketIoController controller(False);
+        # Controller mode (uses global controller with autostop)
         HttpClientIo::HttpClientConnectionManager ctrl_manager(<HttpClientIo::HttpClientConnectionManagerOptions>{
             "protocol": "h2",
             "accept_all_certs": True,
             "logger": mLogger,
         });
-        ctrl_manager.setController(controller);
-        controller.start();
 
         on_exit {
-            controller.stop();
             ctrl_manager.closeAll();
         }
 

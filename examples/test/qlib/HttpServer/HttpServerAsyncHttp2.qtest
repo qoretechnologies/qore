@@ -266,6 +266,15 @@ class EmptyErrorHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! Handler that echoes content-length header back in the response body
+class ContentLengthEchoHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        string resp_body = sprintf("content-length=%s body_size=%d",
+            hdr."content-length" ?? "MISSING", body ? body.size() : 0);
+        return makeResponse(200, resp_body, {"Content-Type": "text/plain"});
+    }
+}
+
 #! Handler that returns without sending a response (simulates a buggy handler)
 class NoResponseHandler inherits AbstractHttpRequestHandler {
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
@@ -363,6 +372,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         addTestCase("large HTTP/2 FileInputStream streaming", \testLargeFileStreamResponse());
         addTestCase("concurrent HTTP/2 async responses", \testConcurrentHttp2Responses());
         addTestCase("HTTP/2 status message mapping", \testHttp2StatusMessage());
+        addTestCase("HTTP/2 POST Content-Length header", \testHttp2PostContentLength());
         # POST test has encoding issues - skip for now
         #addTestCase("HTTP/2 POST with large body", \testHttp2PostLargeBody());
         # These tests take too long
@@ -405,6 +415,8 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         mServer.setHandler("chunked-stream", "/chunked-stream", NOTHING, new ChunkedStreamHandler());
         mServer.setHandler("empty-error", "/empty-error", NOTHING, new EmptyErrorHandler());
         mServer.setHandler("no-response", "/no-response", NOTHING, new NoResponseHandler());
+        mServer.setHandler("cl-check", "/cl-check", NOTHING,
+            new ContentLengthEchoHandler());
 
         # Create temporary file for FileInputStream streaming test (2MB)
         mTempFile = tmp_location() + "/http2-stream-test-" + getpid() + "-" + get_random_string(8) + ".bin";
@@ -953,6 +965,33 @@ OKKqgBjNAlYDdPhOy8O8Agk=
 
         if (m_options.verbose) {
             printf("HTTP/2 status message mapping: all %d status codes verified\n", status_tests.size());
+        }
+    }
+
+    #! Test that HTTP/2 POST requests include Content-Length header (issue #5244)
+    testHttp2PostContentLength() {
+        HTTPClient hc({
+            "url": mSslUrl,
+            "ssl_verify_cert": False,
+            "http_version": "2.0",
+            "timeout": 30s,
+        });
+
+        # POST with a known body size
+        string post_body = "grant_type=authorization_code&client_id=test&client_secret=secret";
+        hash<auto> info;
+        hash<auto> resp = hc.send(post_body, "POST", "/cl-check", {
+            "Content-Type": "application/x-www-form-urlencoded",
+        }, True, \info);
+
+        assertEq(200, resp.status_code, "POST should return 200");
+
+        # Server echoes back the content-length it received
+        string expected = sprintf("content-length=%d body_size=%d", post_body.size(), post_body.size());
+        assertEq(expected, resp.body, "HTTP/2 POST must include Content-Length header");
+
+        if (m_options.verbose > 1) {
+            printf("HTTP/2 POST Content-Length: %s\n", resp.body);
         }
     }
 

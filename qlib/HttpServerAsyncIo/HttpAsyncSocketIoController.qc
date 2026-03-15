@@ -137,14 +137,8 @@ public class HttpAsyncSocketIoController {
         #! Logger
         *LoggerInterface logger;
 
-        #! I/O controllers; accepts run on controllers[0], connections are sharded via round-robin
-        list<AsyncSocketIoController> controllers;
-
-        #! True if we own the controllers (created internally)
-        bool own_controllers = False;
-
-        #! Round-robin index for assigning connections to I/O threads
-        int next_controller_idx = 0;
+        #! Async I/O controller for all operations
+        AsyncSocketIoController controller;
 
         #! Thread pool for request handler dispatch
         ThreadPool handler_pool;
@@ -195,34 +189,7 @@ public class HttpAsyncSocketIoController {
     constructor(AsyncSocketIoController controller, *LoggerInterface logger,
             hash<auto> opts = {}) {
         @assert(controller, "controller cannot be null");
-        self.controllers = (controller,);
-        self.logger = logger;
-        self.pool_opts = opts;
-        self.handler_pool = new ThreadPool(
-            opts.max_handler_threads ?? 0,
-            opts.min_idle_handler_threads ?? 0,
-            opts.max_idle_handler_threads ?? 0,
-        );
-    }
-
-    #! Creates the HTTP controller with its own I/O controllers
-    /** @param logger optional logger interface for debugging
-        @param opts optional configuration options:
-        - \c max_handler_threads: maximum number of handler threads (default 0 = unlimited)
-        - \c min_idle_handler_threads: minimum idle handler threads (default 0)
-        - \c max_idle_handler_threads: maximum idle handler threads (default 0)
-        - \c io_threads: number of I/O threads (default 1); each thread runs its own
-          event loop, allowing connections to be processed in parallel across cores
-
-        Creates internal AsyncSocketIoController instances with autostop disabled.
-    */
-    constructor(*LoggerInterface logger, hash<auto> opts = {}) {
-        int io_threads = opts.io_threads ?? 1;
-        @assert(io_threads > 0, "io_threads must be positive");
-        for (int i = 0; i < io_threads; ++i) {
-            self.controllers += new AsyncSocketIoController(False, logger);
-        }
-        self.own_controllers = True;
+        self.controller = controller;
         self.logger = logger;
         self.pool_opts = opts;
         self.handler_pool = new ThreadPool(
@@ -237,7 +204,7 @@ public class HttpAsyncSocketIoController {
         stop();
     }
 
-    #! Starts the I/O controllers
+    #! Starts the I/O controller
     start() {
         {
             AutoWriteLock al(m);
@@ -253,30 +220,28 @@ public class HttpAsyncSocketIoController {
                 pool_stopped = False;
             }
         }
-        foreach AsyncSocketIoController c in (controllers) {
-            if (!c.running()) {
-                c.start();
-            }
+        if (!controller.running()) {
+            controller.start();
         }
         @debug {
             if (getenv("QORE_HTTP_ACCEPT_TRACE")) {
                 log(LoggerLevel::INFO, "HttpAsyncSocketIoController started (%d I/O threads)",
-                    controllers.size());
+                    1);
             }
         }
     }
 
     #! Stops the HTTP controller
     /** Cancels all HTTP operations by their owners.
-        Does NOT stop the shared controllers — other users may still be using them.
-        If the controllers were created internally, they are stopped.
+        Does NOT stop the shared controller — other users may still be using it.
+        If the controller was created internally, it is stopped.
     */
     stop() {
         # Set stopping flag first — prevents handler tasks from submitting new operations
         # Copy keys under lock, then cancel without holding the lock
         # to avoid deadlock with I/O thread callbacks that also acquire m
         *list<string> listener_keys;
-        *list<hash<auto>> conn_cancel_info;
+        *list<Socket> conn_sockets;
         *list<HttpAsyncTarget> streaming_targets;
         {
             AutoWriteLock al(m);
@@ -288,9 +253,7 @@ public class HttpAsyncSocketIoController {
                 streaming_targets = map $1.target, listeners.iterator();
             }
             if (connections) {
-                conn_cancel_info = map (
-                    {"sock": connections{$1}.sock} + {"controller_idx": connections{$1}.controller_idx}
-                ), keys connections;
+                conn_sockets = map connections{$1}.sock, keys connections;
             }
             listeners = {};
             connections = {};
@@ -304,13 +267,12 @@ public class HttpAsyncSocketIoController {
                 persistent_queues{key}.queue.push({"type": "close"});
             }
         }
-        # Accept operations are always on controllers[0]
         foreach string lhash in (listener_keys) {
-            controllers[0].cancelByOwner(lhash);
+            controller.cancelByOwner(lhash);
         }
-        foreach hash<auto> ci in (conn_cancel_info) {
+        foreach Socket sock in (conn_sockets) {
             try {
-                controllers[ci.controller_idx].cancel(ci.sock);
+                controller.cancel(sock);
             } catch () {
                 # ignore - operation may have already completed
             }
@@ -320,7 +282,7 @@ public class HttpAsyncSocketIoController {
         # (lsh{lid}) so handler tasks exit within one poll interval
         map $1.stopStreaming(), streaming_targets;
         # Wait for in-flight handler tasks to complete; the stopping flag prevents
-        # them from submitting new operations to the controllers
+        # them from submitting new operations to the controller
         handler_pool.stopWait();
         pool_stopped = True;  # Mark for recreation in start()
         # NOTE: We don't recreate the pool here anymore. The pool will be recreated
@@ -331,23 +293,16 @@ public class HttpAsyncSocketIoController {
         {
             AutoWriteLock al(m);
             if (connections) {
-                conn_cancel_info = map (
-                    {"sock": connections{$1}.sock} + {"controller_idx": connections{$1}.controller_idx}
-                ), keys connections;
+                conn_sockets = map connections{$1}.sock, keys connections;
                 connections = {};
             } else {
-                conn_cancel_info = NOTHING;
+                conn_sockets = NOTHING;
             }
         }
-        foreach hash<auto> ci in (conn_cancel_info) {
+        foreach Socket sock in (conn_sockets) {
             try {
-                controllers[ci.controller_idx].cancel(ci.sock);
+                controller.cancel(sock);
             } catch () {}
-        }
-        if (own_controllers) {
-            foreach AsyncSocketIoController c in (controllers) {
-                c.stop();
-            }
         }
         # Reset stopping flag so the controller can be restarted
         {
@@ -363,14 +318,12 @@ public class HttpAsyncSocketIoController {
 
     #! Returns True if the controller is running
     bool running() {
-        return controllers[0].running();
+        return !has_been_stopped && controller.running();
     }
 
     #! Waits for all I/O threads to stop
     waitStop() {
-        foreach AsyncSocketIoController c in (controllers) {
-            c.waitStop();
-        }
+        controller.waitStop();
     }
 
     #! Registers a persistent queue for a multiplexed connection
@@ -571,7 +524,7 @@ public class HttpAsyncSocketIoController {
     removeListener(Socket listener) {
         string lhash = listener.uniqueHash();
         @debug(log(LoggerLevel::DEBUG, "removeListener: removing listener %s", lhash));
-        controllers[0].cancelByOwner(lhash);
+        controller.cancelByOwner(lhash);
         {
             AutoWriteLock al(m);
             remove listeners{lhash};
@@ -586,11 +539,10 @@ public class HttpAsyncSocketIoController {
         @param cx connection context
         @param target the target for callbacks
         @param ttl keep-alive timeout
-        @param controller_idx optional controller index
         @param reuse_op optional keep-alive poll operation to reuse
     */
     addIdleConnection(Socket sock, *HttpServer::HttpListenerInterface listener, hash<auto> cx, HttpAsyncTarget target,
-            timeout ttl = DefaultIdleTimeout, *int controller_idx,
+            timeout ttl = DefaultIdleTimeout,
             *HttpKeepAlivePollOperation reuse_op) {
         string uh = sock.uniqueHash();
         hash<HttpActiveConnectionInfo> cinfo;
@@ -599,10 +551,6 @@ public class HttpAsyncSocketIoController {
             if (stopping) {
                 try { sock.close(); } catch () {}
                 return;
-            }
-            if (!exists controller_idx) {
-                controller_idx = next_controller_idx;
-                next_controller_idx = (next_controller_idx + 1) % controllers.size();
             }
             # Opt 5: reuse existing keep-alive operation to avoid EventLoop remove/add
             *HttpKeepAlivePollOperation ka_op = reuse_op;
@@ -619,7 +567,6 @@ public class HttpAsyncSocketIoController {
                 "state": HttpConnectionState::KeepAlive,
                 "keep_alive_op": ka_op,
                 "ttl": ttl,
-                "controller_idx": controller_idx,
             };
         }
 
@@ -633,8 +580,7 @@ public class HttpAsyncSocketIoController {
         return {
             "listeners": listeners.size(),
             "connections": connections.size(),
-            "io_threads": controllers.size(),
-            "running": controllers[0].running(),
+            "running": !has_been_stopped && controller.running(),
         };
     }
 
@@ -643,11 +589,7 @@ public class HttpAsyncSocketIoController {
         after connections are closed indicates a cache leak (poll operations not properly cancelled).
     */
     int getTotalCacheSize() {
-        int total = 0;
-        foreach AsyncSocketIoController c in (controllers) {
-            total += c.getCacheSize();
-        }
-        return total;
+        return controller.getCacheSize();
     }
 
     #! Submits an accept operation to the controller
@@ -693,7 +635,7 @@ public class HttpAsyncSocketIoController {
             }
         }
 
-        controllers[0].submit(<SocketPollOperationInfo>{
+        controller.submit(<SocketPollOperationInfo>{
             "sock": listener,
             "spop": op,
             "key": op_key,
@@ -847,7 +789,6 @@ public class HttpAsyncSocketIoController {
                 }
             }
 
-            # Opt #5/#7: Merge round-robin + connection creation into single lock scope
             # Prepare connection info outside lock
             hash<HttpActiveConnectionInfo> new_cinfo = <HttpActiveConnectionInfo>{
                 "sock": sock,
@@ -859,18 +800,14 @@ public class HttpAsyncSocketIoController {
                 "http_version": output.http_version,
                 "is_http2": False,
             };
-            int cidx;
             hash<HttpActiveConnectionInfo> cinfo;
             {
                 AutoWriteLock al(m);
-                cidx = next_controller_idx;
-                next_controller_idx = (next_controller_idx + 1) % controllers.size();
-                new_cinfo.controller_idx = cidx;
                 cinfo = connections{uh} = new_cinfo;
             }
 
-            # Submit SSL handshake operation on the assigned I/O thread
-            submitSslOp(sock, uh, ssl_op, linfo, output.http_version, cidx);
+            # Submit SSL handshake operation
+            submitSslOp(sock, uh, ssl_op, linfo, output.http_version);
             return;
         }
 
@@ -892,7 +829,6 @@ public class HttpAsyncSocketIoController {
 
             Http2PollOperation h2op(sock, True);
 
-            # Opt #5/#7: Merge round-robin + connection creation into single lock scope
             hash<HttpActiveConnectionInfo> new_cinfo = <HttpActiveConnectionInfo>{
                 "sock": sock,
                 "listener": linfo.http_listener,
@@ -902,17 +838,13 @@ public class HttpAsyncSocketIoController {
                 "stream_op": h2op,
                 "is_http2": True,
             };
-            int cidx;
             hash<HttpActiveConnectionInfo> cinfo;
             {
                 AutoWriteLock al(m);
-                cidx = next_controller_idx;
-                next_controller_idx = (next_controller_idx + 1) % controllers.size();
-                new_cinfo.controller_idx = cidx;
                 cinfo = connections{uh} = new_cinfo;
             }
 
-            log(LoggerLevel::DEBUG, "Starting HTTP/2 connection handling for %y (io_thread=%d)", uh, cidx);
+            log(LoggerLevel::DEBUG, "Starting HTTP/2 connection handling for %y", uh);
             submitConnectionOp(uh, cinfo);
             return;
         }
@@ -932,7 +864,6 @@ public class HttpAsyncSocketIoController {
             }
         }
 
-        # Opt #5/#7: Merge round-robin + connection creation into single lock scope
         hash<HttpActiveConnectionInfo> new_cinfo = <HttpActiveConnectionInfo>{
             "sock": sock,
             "listener": linfo.http_listener,
@@ -942,17 +873,13 @@ public class HttpAsyncSocketIoController {
             "http_version": output.http_version,
             "is_http2": False,
         };
-        int cidx;
         hash<HttpActiveConnectionInfo> cinfo;
         {
             AutoWriteLock al(m);
-            cidx = next_controller_idx;
-            next_controller_idx = (next_controller_idx + 1) % controllers.size();
-            new_cinfo.controller_idx = cidx;
             cinfo = connections{uh} = new_cinfo;
         }
 
-        log(LoggerLevel::DEBUG, "Starting HTTP/1.x header reading for %y (io_thread=%d)", uh, cidx);
+        log(LoggerLevel::DEBUG, "Starting HTTP/1.x header reading for %y", uh);
         submitConnectionOp(uh, cinfo);
     }
 
@@ -971,7 +898,7 @@ public class HttpAsyncSocketIoController {
 
         log(LoggerLevel::DEBUG, "submitQuicAcceptOp: key=%s listener=%s", op_key, owner);
 
-        controllers[0].submit(<SocketPollOperationInfo>{
+        controller.submit(<SocketPollOperationInfo>{
             "sock": listener,
             "spop": h3op,
             "key": op_key,
@@ -1039,7 +966,7 @@ public class HttpAsyncSocketIoController {
                 AutoWriteLock al(m);
                 seq = ++accept_seq;
             }
-            controllers[0].submit(<SocketPollOperationInfo>{
+            controller.submit(<SocketPollOperationInfo>{
                 "sock": listener,
                 "spop": h3op,
                 "key": sprintf("quic-read:%s:%d", owner, seq),
@@ -1117,14 +1044,8 @@ public class HttpAsyncSocketIoController {
             "is_http2": False,
         };
 
-        int cidx;
         {
             AutoWriteLock al(m);
-            cidx = next_controller_idx;
-            next_controller_idx = (next_controller_idx + 1) % controllers.size();
-            # Invariant: controllers list is fixed-size after start(); this index
-            # is safe to capture in closures dispatched to the handler thread pool
-            new_cinfo.controller_idx = cidx;
             # First call: old_uh is the listener key (no-op remove); subsequent
             # calls: old_uh == uh (socket-level key is stable across requests)
             if (old_uh != uh) {
@@ -1185,7 +1106,7 @@ public class HttpAsyncSocketIoController {
                     throw "HTTP3-FLOW-CONTROL", sprintf("stream %d: buffer "
                         "not draining after %d retries", stream_id, retries);
                 }
-                controllers[new_cinfo.controller_idx].wake();
+                controller.wake();
                 # CV-based wait: wakes immediately when I/O thread drains
                 # the buffer, falls back to 50ms timeout otherwise
                 int drain_rv = listener.waitForQuicStreamDrain(
@@ -1195,7 +1116,7 @@ public class HttpAsyncSocketIoController {
                         "removed while waiting for drain", stream_id);
                 }
             }
-            controllers[new_cinfo.controller_idx].wake();
+            controller.wake();
         };
 
         # Convert to HttpConnectionInfo (same dispatch chain as HTTP/2)
@@ -1214,7 +1135,7 @@ public class HttpAsyncSocketIoController {
                 "headers_end_stream": request.headers_end_stream ?? False,
                 "stream_data_queue": stream_data_queue,
                 "send_stream_data": send_stream_data,
-                "io_wake": sub () { controllers[new_cinfo.controller_idx].wake(); },
+                "io_wake": sub () { controller.wake(); },
                 "register_persistent_queue": sub (string key, Queue q,
                         *code<bool(hash<auto>)> filter) {
                     self.registerPersistentQueue(key, q, filter);
@@ -1223,7 +1144,7 @@ public class HttpAsyncSocketIoController {
                     self.deregisterPersistentQueue(key);
                 },
                 "resume_body_streaming": body_streaming ? sub () {
-                    resumeMultiplexedReading(h3op, uh, new_cinfo.controller_idx,
+                    resumeMultiplexedReading(h3op, uh,
                         HttpConnectionState::Http3);
                 } : NOTHING,
             },
@@ -1244,7 +1165,7 @@ public class HttpAsyncSocketIoController {
             *code resume_reading;
             if (body_streaming) {
                 resume_reading = sub () {
-                    resumeMultiplexedReading(h3op, uh, new_cinfo.controller_idx,
+                    resumeMultiplexedReading(h3op, uh,
                         HttpConnectionState::Http3);
                 };
             }
@@ -1254,7 +1175,6 @@ public class HttpAsyncSocketIoController {
                 "stream_id": stream_id,
                 "body_streaming": body_streaming,
                 "resume_reading": resume_reading,
-                "controller_idx": new_cinfo.controller_idx,
             });
             return;
         }
@@ -1285,7 +1205,7 @@ public class HttpAsyncSocketIoController {
                         log(LoggerLevel::DEBUG, "failed to send 500 response for session=%d "
                             "stream=%d: %s: %s", session_id, stream_id, ex2.err, ex2.desc);
                     }
-                    controllers[new_cinfo.controller_idx].wake();
+                    controller.wake();
                 }
             });
         } catch (hash<ExceptionInfo> ex) {
@@ -1299,7 +1219,7 @@ public class HttpAsyncSocketIoController {
                 log(LoggerLevel::DEBUG, "failed to send 503 response for session=%d "
                     "stream=%d: %s: %s", session_id, stream_id, ex2.err, ex2.desc);
             }
-            controllers[new_cinfo.controller_idx].wake();
+            controller.wake();
             # Clean up dispatched stream state for headers-only dispatch
             if (request.hdr) {
                 try {
@@ -1338,7 +1258,7 @@ public class HttpAsyncSocketIoController {
                         "%s: %s", session_id, stream_id, ex.err, ex.desc);
                 }
             }
-            controllers[cinfo.controller_idx].wake();
+            controller.wake();
             return;
         }
 
@@ -1359,13 +1279,13 @@ public class HttpAsyncSocketIoController {
                     int rv = cinfo.sock.submitQuicStreamingResponseWithStream(
                         session_id, stream_id, result.code, resp_hdr, result.input_stream);
                     if (!rv) {
-                        controllers[cinfo.controller_idx].wake();
+                        controller.wake();
                     } else {
                         # Not I/O-thread-safe (rv == 1): handler thread reads chunks and
                         # submits them incrementally to the QUIC session with backpressure
                         cinfo.sock.submitQuicResponseStreaming(
                             session_id, stream_id, result.code, resp_hdr);
-                        controllers[cinfo.controller_idx].wake();
+                        controller.wake();
 
                         result.input_stream.reassignThread();
                         on_exit result.input_stream.unassignThread();
@@ -1379,7 +1299,7 @@ public class HttpAsyncSocketIoController {
                                         throw "HTTP3-FLOW-CONTROL", sprintf("stream %d: buffer "
                                             "not draining after %d retries", stream_id, retries);
                                     }
-                                    controllers[cinfo.controller_idx].wake();
+                                    controller.wake();
                                     # CV-based wait: wakes immediately when I/O thread drains
                                     # the buffer, falls back to 50ms timeout otherwise
                                     int drain_rv = cinfo.sock.waitForQuicStreamDrain(
@@ -1389,11 +1309,11 @@ public class HttpAsyncSocketIoController {
                                             "removed while waiting for drain", stream_id);
                                     }
                                 }
-                                controllers[cinfo.controller_idx].wake();
+                                controller.wake();
                             }
                             cinfo.sock.submitQuicStreamData(
                                 session_id, stream_id, NOTHING, True);
-                            controllers[cinfo.controller_idx].wake();
+                            controller.wake();
                         } catch (hash<ExceptionInfo> ex) {
                             stream_ok = False;
                             log(LoggerLevel::ERROR,
@@ -1401,14 +1321,14 @@ public class HttpAsyncSocketIoController {
                                 "%y: %s: %s", session_id, stream_id, uh, ex.err, ex.desc);
                             try {
                                 cinfo.sock.cancelQuicStream(session_id, stream_id);
-                                controllers[cinfo.controller_idx].wake();
+                                controller.wake();
                             } catch () {}
                         }
                     }
                 } else {
                     cinfo.sock.submitQuicResponse(session_id, stream_id, result.code,
                         result.hdr, result.body);
-                    controllers[cinfo.controller_idx].wake();
+                    controller.wake();
                 }
             } catch (hash<ExceptionInfo> ex) {
                 log(LoggerLevel::ERROR,
@@ -1427,7 +1347,7 @@ public class HttpAsyncSocketIoController {
             # (SSE events sent via submitQuicStreamData).
             # h3op stays on the I/O thread handling other streams.
             # Wake the controller in case the handler already queued data.
-            controllers[cinfo.controller_idx].wake();
+            controller.wake();
             return;
         }
 
@@ -1438,14 +1358,14 @@ public class HttpAsyncSocketIoController {
         if (!result.code) {
             log(LoggerLevel::DEBUG, "HTTP/3 session %d stream %d on %y: handler already sent "
                 "response (no code in result)", session_id, stream_id, uh);
-            controllers[cinfo.controller_idx].wake();
+            controller.wake();
             return;
         }
     }
 
     #! Submits an SSL handshake operation
     private submitSslOp(Socket sock, string uh, AbstractPollOperation ssl_op,
-            hash<HttpListenerInfo> linfo, string http_version, int controller_idx = 0) {
+            hash<HttpListenerInfo> linfo, string http_version) {
         {
             AutoWriteLock al(m);
             if (stopping) {
@@ -1456,7 +1376,7 @@ public class HttpAsyncSocketIoController {
         }
         string owner = linfo.listener.uniqueHash();
         try {
-            controllers[controller_idx].submit(<SocketPollOperationInfo>{
+            controller.submit(<SocketPollOperationInfo>{
                 "sock": sock,
                 "spop": ssl_op,
                 "owner": owner,
@@ -1602,10 +1522,9 @@ public class HttpAsyncSocketIoController {
 
         @param stream_op the Http2PollOperation or Http3ServerPollOperation to resume
         @param uh the unique connection handle
-        @param controller_idx the controller index for waking the I/O thread
         @param state the connection state to set (HttpConnectionState::Http2 or Http3)
     */
-    private resumeMultiplexedReading(AbstractPollOperation stream_op, string uh, int controller_idx,
+    private resumeMultiplexedReading(AbstractPollOperation stream_op, string uh,
             string state) {
         try {
             call_object_method(stream_op, "continueReading");
@@ -1627,7 +1546,7 @@ public class HttpAsyncSocketIoController {
         }
         if (resumed_cinfo) {
             submitConnectionOp(uh, resumed_cinfo);
-            controllers[controller_idx].wake();
+            controller.wake();
         }
     }
 
@@ -1762,7 +1681,7 @@ public class HttpAsyncSocketIoController {
         }
 
         try {
-            controllers[cinfo.controller_idx].submit(<SocketPollOperationInfo>{
+            controller.submit(<SocketPollOperationInfo>{
                 "sock": cinfo.sock,
                 "spop": op,
                 "owner": owner,
@@ -2121,8 +2040,6 @@ public class HttpAsyncSocketIoController {
     private handleRequestResult(Socket sock, auto linfo, hash<auto> cx,
             hash<HttpRequestResultInfo> result, HttpAsyncTarget target) {
         string uh = sock.uniqueHash();
-        # Preserve the I/O thread assignment from the original connection
-        int cidx = linfo.controller_idx ?? 0;
 
         # Opt #3a: InputStream + keep-alive → fused stream send + idle + read header
         if (result.code && !result.streaming && result.input_stream && !result.send_callback
@@ -2146,7 +2063,6 @@ public class HttpAsyncSocketIoController {
                 hash<HttpActiveConnectionInfo> cinfo;
                 {
                     AutoWriteLock al(m);
-                    new_cinfo.controller_idx = cidx;
                     cinfo = connections{uh} = new_cinfo;
                 }
                 submitConnectionOp(uh, cinfo);
@@ -2178,7 +2094,6 @@ public class HttpAsyncSocketIoController {
                 hash<HttpActiveConnectionInfo> cinfo;
                 {
                     AutoWriteLock al(m);
-                    new_cinfo.controller_idx = cidx;
                     cinfo = connections{uh} = new_cinfo;
                 }
                 submitConnectionOp(uh, cinfo);
@@ -2215,7 +2130,6 @@ public class HttpAsyncSocketIoController {
                 hash<HttpActiveConnectionInfo> cinfo;
                 {
                     AutoWriteLock al(m);
-                    new_cinfo.controller_idx = cidx;
                     cinfo = connections{uh} = new_cinfo;
                 }
                 submitConnectionOp(uh, cinfo);
@@ -2267,7 +2181,6 @@ public class HttpAsyncSocketIoController {
                     "state": result.stream_type,
                     "stream_op": result.stream_operation,
                     "ttl": result.ttl ?? DefaultIdleTimeout,
-                    "controller_idx": cidx,
                 };
             }
             submitConnectionOp(uh, cinfo);
@@ -2278,7 +2191,7 @@ public class HttpAsyncSocketIoController {
             # Opt 5: reuse the keep-alive operation for persistent socket registration
             *HttpKeepAlivePollOperation reuse_op = linfo.keep_alive_op;
             addIdleConnection(sock, linfo.listener, cx, target,
-                result.ttl ?? DefaultIdleTimeout, cidx, reuse_op);
+                result.ttl ?? DefaultIdleTimeout, reuse_op);
         }
     }
 
@@ -2341,7 +2254,7 @@ public class HttpAsyncSocketIoController {
 
         # Cancel the poll operation from the I/O controller cache to release socket reference
         try {
-            controllers[cinfo.controller_idx].cancel(cinfo.sock);
+            controller.cancel(cinfo.sock);
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::DEBUG, "Error cancelling operation for %y: %s: %s", uh, ex.err, ex.desc);
         }
@@ -2358,7 +2271,7 @@ public class HttpAsyncSocketIoController {
 
         # Cancel the poll operation from the I/O controller cache to release socket reference
         try {
-            controllers[cinfo.controller_idx].cancel(cinfo.sock);
+            controller.cancel(cinfo.sock);
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::DEBUG, "Error cancelling SSE operation for %y: %s: %s", uh, ex.err, ex.desc);
         }
@@ -2382,7 +2295,7 @@ public class HttpAsyncSocketIoController {
 
         # Cancel the poll operation from the I/O controller cache to release socket reference
         try {
-            controllers[cinfo.controller_idx].cancel(cinfo.sock);
+            controller.cancel(cinfo.sock);
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::DEBUG, "Error cancelling WebSocket operation for %y: %s: %s", uh, ex.err, ex.desc);
         }
@@ -2516,7 +2429,7 @@ public class HttpAsyncSocketIoController {
                 "body": body_streaming ? NOTHING : request.body,
                 "body_streaming": body_streaming,
                 "headers_end_stream": request.headers_end_stream ?? False,
-                "io_wake": sub () { controllers[cinfo.controller_idx].wake(); },
+                "io_wake": sub () { controller.wake(); },
                 "register_persistent_queue": sub (string key, Queue q,
                         *code<bool(hash<auto>)> filter) {
                     self.registerPersistentQueue(key, q, filter);
@@ -2525,7 +2438,7 @@ public class HttpAsyncSocketIoController {
                     self.deregisterPersistentQueue(key);
                 },
                 "resume_body_streaming": body_streaming ? sub () {
-                    resumeMultiplexedReading(h2op, uh, cinfo.controller_idx,
+                    resumeMultiplexedReading(h2op, uh,
                         HttpConnectionState::Http2);
                 } : NOTHING,
             },
@@ -2546,7 +2459,7 @@ public class HttpAsyncSocketIoController {
             *code resume_reading;
             if (body_streaming) {
                 resume_reading = sub () {
-                    resumeMultiplexedReading(h2op, uh, cinfo.controller_idx,
+                    resumeMultiplexedReading(h2op, uh,
                         HttpConnectionState::Http2);
                 };
             }
@@ -2556,7 +2469,6 @@ public class HttpAsyncSocketIoController {
                 "stream_id": stream_id,
                 "body_streaming": body_streaming,
                 "resume_reading": resume_reading,
-                "controller_idx": cinfo.controller_idx,
             });
             return;
         }
@@ -2567,7 +2479,7 @@ public class HttpAsyncSocketIoController {
                 try {
                     hash<HttpRequestResultInfo> result = cinfo.target.onHttpRequest(conn_info);
                     if (body_streaming) {
-                        resumeMultiplexedReading(h2op, uh, cinfo.controller_idx,
+                        resumeMultiplexedReading(h2op, uh,
                             HttpConnectionState::Http2);
                     }
                     handleHttp2MultiplexedResult(uh, cinfo, stream_id, result);
@@ -2575,7 +2487,7 @@ public class HttpAsyncSocketIoController {
                     log(LoggerLevel::ERROR, "Error handling HTTP/2 request stream=%d: %s: %s",
                         stream_id, ex.err, ex.desc);
                     if (body_streaming) {
-                        resumeMultiplexedReading(h2op, uh, cinfo.controller_idx,
+                        resumeMultiplexedReading(h2op, uh,
                             HttpConnectionState::Http2);
                     }
                     try {
@@ -2586,7 +2498,7 @@ public class HttpAsyncSocketIoController {
                         log(LoggerLevel::DEBUG, "submitHttp2Response 500 stream=%d failed: %s: %s",
                             stream_id, ex2.err, ex2.desc);
                     }
-                    controllers[cinfo.controller_idx].wake();
+                    controller.wake();
                 }
             });
         } catch (hash<ExceptionInfo> ex) {
@@ -2609,7 +2521,7 @@ public class HttpAsyncSocketIoController {
                     }
                     if (resumed_cinfo) {
                         submitConnectionOp(uh, resumed_cinfo);
-                        controllers[cinfo.controller_idx].wake();
+                        controller.wake();
                     }
                 } catch () {}
             }
@@ -2619,7 +2531,7 @@ public class HttpAsyncSocketIoController {
                     {"content-type": "text/plain"},
                     "Service Unavailable");
             } catch () {}
-            controllers[cinfo.controller_idx].wake();
+            controller.wake();
         }
     }
 
@@ -2704,7 +2616,7 @@ public class HttpAsyncSocketIoController {
                         }
                         # Buffer full — wake I/O thread to drain, then wait
                         # deterministically for the CV signal
-                        controllers[cinfo.controller_idx].wake();
+                        controller.wake();
                         if (cinfo.sock.waitForHttp2StreamDrain(stream_id, 10s)) {
                             throw "HTTP2-STREAM-ERROR", sprintf("stream %d: drain "
                                 "timed out or stream removed", stream_id);
@@ -2714,7 +2626,7 @@ public class HttpAsyncSocketIoController {
                     rethrow;
                 }
             }
-            controllers[cinfo.controller_idx].wake();
+            controller.wake();
         };
 
         hash<HttpConnectionInfo> conn_info = <HttpConnectionInfo>{
@@ -2729,7 +2641,7 @@ public class HttpAsyncSocketIoController {
                 "body": request.body,
                 "stream_data_queue": stream_data_queue,
                 "send_stream_data": send_stream_data,
-                "io_wake": sub () { controllers[cinfo.controller_idx].wake(); },
+                "io_wake": sub () { controller.wake(); },
             },
             "listener": cinfo.listener,
             "cx": cinfo.cx,
@@ -2754,7 +2666,7 @@ public class HttpAsyncSocketIoController {
                             {"content-type": "text/plain"},
                             "Internal Server Error");
                     } catch () {}
-                    controllers[cinfo.controller_idx].wake();
+                    controller.wake();
                 }
             });
         } catch (hash<ExceptionInfo> ex) {
@@ -2766,7 +2678,7 @@ public class HttpAsyncSocketIoController {
                     {"content-type": "text/plain"},
                     "Service Unavailable");
             } catch () {}
-            controllers[cinfo.controller_idx].wake();
+            controller.wake();
         }
     }
 
@@ -2797,7 +2709,7 @@ public class HttpAsyncSocketIoController {
                         stream_id, ex.err, ex.desc);
                 }
             }
-            controllers[cinfo.controller_idx].wake();
+            controller.wake();
             return;
         }
 
@@ -2838,7 +2750,7 @@ public class HttpAsyncSocketIoController {
                         log(LoggerLevel::DEBUG, "HTTP/2 stream %d: submitting I/O-thread-safe "
                             "InputStream response (CL=%y)",
                             stream_id, result.hdr."Content-Length");
-                        controllers[cinfo.controller_idx].wake();
+                        controller.wake();
                         return;
                     }
 
@@ -2846,7 +2758,7 @@ public class HttpAsyncSocketIoController {
                     # submits them incrementally to the H2 session
                     cinfo.sock.submitHttp2StreamingResponseHeaders(
                         stream_id, result.code, resp_hdr);
-                    controllers[cinfo.controller_idx].wake();
+                    controller.wake();
 
                     result.input_stream.reassignThread();
                     on_exit result.input_stream.unassignThread();
@@ -2854,13 +2766,13 @@ public class HttpAsyncSocketIoController {
                         while (True) {
                             try {
                                 cinfo.sock.sendHttp2StreamData(stream_id, chunk);
-                                controllers[cinfo.controller_idx].wake();
+                                controller.wake();
                                 break;
                             } catch (hash<ExceptionInfo> ex) {
                                 if (ex.err == "HTTP2-FLOW-CONTROL") {
                                     # Buffer full — wake I/O thread to drain, then wait
                                     # deterministically for the CV signal
-                                    controllers[cinfo.controller_idx].wake();
+                                    controller.wake();
                                     if (cinfo.sock.waitForHttp2StreamDrain(stream_id, 10s)) {
                                         # Timed out or stream gone — give up
                                         rethrow;
@@ -2872,7 +2784,7 @@ public class HttpAsyncSocketIoController {
                         }
                     }
                     cinfo.sock.sendHttp2StreamData(stream_id, NOTHING, True);
-                    controllers[cinfo.controller_idx].wake();
+                    controller.wake();
                     return;
                 }
 
@@ -2884,7 +2796,7 @@ public class HttpAsyncSocketIoController {
 
                 # Wake the I/O controller so h2op's continuePoll() runs and sends
                 # the pending response data
-                controllers[cinfo.controller_idx].wake();
+                controller.wake();
             } catch (hash<ExceptionInfo> ex) {
                 log(LoggerLevel::ERROR,
                     "Error submitting HTTP/2 response for stream=%d on %y: %s: %s",
@@ -2903,7 +2815,7 @@ public class HttpAsyncSocketIoController {
             # The streaming handler manages the stream lifecycle directly.
             # h2op stays on the I/O thread reading other streams.
             # Wake the I/O controller in case the handler already queued data.
-            controllers[cinfo.controller_idx].wake();
+            controller.wake();
             return;
         }
 
@@ -2914,7 +2826,7 @@ public class HttpAsyncSocketIoController {
         if (!result.code) {
             log(LoggerLevel::DEBUG, "HTTP/2 stream %d on %y: handler already sent response "
                 "(no code in result)", stream_id, uh);
-            controllers[cinfo.controller_idx].wake();
+            controller.wake();
             return;
         }
 
@@ -2922,7 +2834,7 @@ public class HttpAsyncSocketIoController {
         # This shouldn't happen but handle it gracefully
         try {
             cinfo.sock.submitHttp2Response(stream_id, result.code, result.hdr, result.body);
-            controllers[cinfo.controller_idx].wake();
+            controller.wake();
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::ERROR,
                 "Error submitting HTTP/2 fallback response for stream=%d on %y: %s: %s",
@@ -2956,7 +2868,7 @@ public class HttpAsyncSocketIoController {
 
         # Cancel the poll operation from the I/O controller cache to release socket reference
         try {
-            controllers[cinfo.controller_idx].cancel(cinfo.sock);
+            controller.cancel(cinfo.sock);
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::DEBUG, "Error cancelling HTTP/2 operation for %y: %s: %s", uh, ex.err, ex.desc);
         }
@@ -3010,7 +2922,7 @@ public class HttpAsyncSocketIoController {
 
         # Cancel the poll operation from the I/O controller cache to release socket reference
         try {
-            controllers[cinfo.controller_idx].cancel(cinfo.sock);
+            controller.cancel(cinfo.sock);
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::DEBUG, "Error cancelling HTTP/2 WebSocket operation for %y: %s: %s", uh, ex.err, ex.desc);
         }
@@ -3119,8 +3031,6 @@ hashdecl HttpActiveConnectionInfo {
     #! True if this is an HTTP/2 connection
     bool is_http2 = False;
 
-    #! Index into the controllers list for this connection's I/O thread
-    int controller_idx = 0;
 }
 
 } # namespace Priv

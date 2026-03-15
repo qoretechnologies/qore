@@ -46,9 +46,21 @@ public enum IoCommand : string {
     This class delegates all I/O operations to the native C++ implementation while maintaining
     the same public API for backward compatibility.
 
+    @par Single-Controller Architecture
+    The process should use a single global controller instance, obtained via
+    @ref getGlobalAsyncIoController(). This avoids cross-controller deadlocks that
+    can occur when object destructors fire on one controller's I/O thread and cancel
+    operations on a different controller. The global controller is created during
+    module initialization with \c autostop=True.
+
+    All higher-level components (@ref HttpServerAsyncIo::HttpAsyncSocketIoController,
+    @ref HttpClientIo::HttpClientConnectionManager) use the global controller by
+    default.
+
     @since AsyncSocketIo 1.0
 
     @see Qore::AsyncIoController
+    @see getGlobalAsyncIoController()
 */
 public class AsyncSocketIoController inherits LoggerWrapper {
     public {
@@ -376,7 +388,15 @@ public class AsyncSocketIoController inherits LoggerWrapper {
 }
 
 #! Returns the global async I/O controller singleton
-/** The controller is created during module initialization with autostop enabled.
+/** The controller is created during module initialization with \c autostop=True.
+
+    All async I/O components should use this singleton rather than creating their
+    own controller instances. This single-controller architecture eliminates
+    cross-controller deadlocks.
+
+    @return the process-wide AsyncSocketIoController singleton
+
+    @see AsyncSocketIoController
 */
 public AsyncSocketIoController sub getGlobalAsyncIoController() {
     return globalController;

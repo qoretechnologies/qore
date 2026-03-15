@@ -1897,7 +1897,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         ## Shutdown Sequence
 
         This is called from HttpServer's handler cleanup, which happens after asyncIo.stop()
-        and globalAsyncCtrl.stop(). At this point:
+        and cancelByOwner() on the global async I/O controller. At this point:
         1. No new connections can be accepted
         2. Existing connections need to be signaled to exit
         3. dThreads counter needs to reach zero for listener shutdown to complete
