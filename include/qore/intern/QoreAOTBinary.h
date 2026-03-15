@@ -147,7 +147,8 @@ struct QoreAOTBinaryHeader {
     uint8_t qore_version_major;  //!< Qore version major that compiled this binary
     uint8_t qore_version_minor;  //!< Qore version minor
     uint16_t qore_version_patch; //!< Qore version patch
-    uint16_t reserved;           //!< reserved for future use (must be 0)
+    uint8_t compression;         //!< compression method (0=none, 1=zlib)
+    uint8_t reserved;            //!< reserved for future use (must be 0)
     int64_t parse_options_hi;    //!< high 64 bits of parse options (64-127)
     uint64_t source_hash;        //!< xxHash64 of source file bytes (0 = not set)
     uint64_t feature_flags;      //!< QORE_AOT_FEAT_* bitset of required IR features
@@ -1225,6 +1226,32 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
     QoreProgram* pgm,
     const AOTExprReadFunc& readExpr,
     const std::unordered_map<std::string, LocalVar*>* enclosing_locals,
+    std::string& error);
+
+//! Compress metadata blob using zlib
+/** Compresses the serialized metadata blob to reduce size and LLVM compilation overhead.
+    The compressed data includes the original size as a 4-byte little-endian prefix.
+
+    @param input the uncompressed metadata blob
+    @param output receives the compressed data
+    @param error receives error message on failure
+    @return true on success, false on compression failure
+*/
+bool compressMetadata(const std::vector<uint8_t>& input,
+    std::vector<uint8_t>& output,
+    std::string& error);
+
+//! Decompress metadata blob using zlib
+/** Decompresses metadata previously compressed by compressMetadata().
+
+    @param input pointer to compressed data
+    @param input_len length of compressed data
+    @param output receives the decompressed metadata
+    @param error receives error message on failure
+    @return true on success, false on decompression failure
+*/
+bool decompressMetadata(const uint8_t* input, size_t input_len,
+    std::vector<uint8_t>& output,
     std::string& error);
 
 #endif

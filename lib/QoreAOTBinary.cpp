@@ -67,6 +67,7 @@
 #include <cstring>
 #include <deque>
 #include <unordered_set>
+#include <zlib.h>
 
 // Defined in Function.cpp - collects all local variables from a StatementBlock and nested blocks
 extern void collectAllStatementLocals(const StatementBlock* block, std::vector<LocalVar*>& locals);
@@ -4967,6 +4968,97 @@ bool readFallbackSource(const uint8_t* data, uint32_t size, const char*& source,
     if (src && *src) {
         source = src;
         source_len = strlen(src);
+    }
+
+    return true;
+}
+
+bool compressMetadata(const std::vector<uint8_t>& input,
+        std::vector<uint8_t>& output,
+        std::string& error) {
+    if (input.empty()) {
+        // Empty input, still compress it
+        output.resize(4);
+        // Store original size (0) as 4-byte little-endian
+        output[0] = 0;
+        output[1] = 0;
+        output[2] = 0;
+        output[3] = 0;
+        return true;
+    }
+
+    // Reserve space for original size (4 bytes) + compressed data
+    uLongf compressed_size = compressBound(input.size());
+    output.resize(4 + compressed_size);
+
+    // Store original size as 4-byte little-endian prefix
+    uint32_t orig_size = static_cast<uint32_t>(input.size());
+    output[0] = static_cast<uint8_t>(orig_size & 0xFF);
+    output[1] = static_cast<uint8_t>((orig_size >> 8) & 0xFF);
+    output[2] = static_cast<uint8_t>((orig_size >> 16) & 0xFF);
+    output[3] = static_cast<uint8_t>((orig_size >> 24) & 0xFF);
+
+    // Compress into buffer after the size prefix
+    int ret = compress2(output.data() + 4, &compressed_size,
+                        input.data(), input.size(), 9);
+
+    if (ret != Z_OK) {
+        error = "zlib compression failed (error code " + std::to_string(ret) + ")";
+        output.clear();
+        return false;
+    }
+
+    // Trim output to actual compressed size + 4 byte prefix
+    output.resize(4 + compressed_size);
+    return true;
+}
+
+bool decompressMetadata(const uint8_t* input, size_t input_len,
+        std::vector<uint8_t>& output,
+        std::string& error) {
+    if (input_len < 4) {
+        error = "compressed metadata too short (need at least 4 bytes for size prefix)";
+        return false;
+    }
+
+    // Read original size from first 4 bytes (little-endian)
+    uint32_t orig_size = static_cast<uint32_t>(input[0]) |
+                         (static_cast<uint32_t>(input[1]) << 8) |
+                         (static_cast<uint32_t>(input[2]) << 16) |
+                         (static_cast<uint32_t>(input[3]) << 24);
+
+    if (orig_size == 0) {
+        // Empty metadata
+        output.clear();
+        return true;
+    }
+
+    // Sanity check: decompressed size shouldn't be larger than a reasonable limit
+    const size_t MAX_DECOMPRESSED = 100 * 1024 * 1024;  // 100 MB limit
+    if (orig_size > MAX_DECOMPRESSED) {
+        error = "decompressed metadata size " + std::to_string(orig_size) +
+                " exceeds maximum allowed (" + std::to_string(MAX_DECOMPRESSED) + " bytes)";
+        return false;
+    }
+
+    output.resize(orig_size);
+    uLongf dest_len = orig_size;
+
+    // Decompress
+    int ret = uncompress(output.data(), &dest_len,
+                         input + 4, input_len - 4);
+
+    if (ret != Z_OK) {
+        error = "zlib decompression failed (error code " + std::to_string(ret) + ")";
+        output.clear();
+        return false;
+    }
+
+    if (dest_len != orig_size) {
+        error = "decompressed size " + std::to_string(dest_len) +
+                " does not match expected size " + std::to_string(orig_size);
+        output.clear();
+        return false;
     }
 
     return true;

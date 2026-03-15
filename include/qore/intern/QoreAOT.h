@@ -202,6 +202,9 @@ struct AOTSlotMap {
     }
 };
 
+//! Map for reverse-lookup of constant values to their names (for BCA serialization)
+using AOTConstantReverseMap = std::unordered_map<const void*, std::string>;
+
 //! AOT function pointer type: takes QoreAOTContext* and ExceptionSink*
 using AotFunctionPtr = uint64_t (*)(QoreAOTContext*, ExceptionSink*);
 
@@ -470,7 +473,7 @@ void collectStmtSlotStatements(const StatementBlock* block,
     @param debug if true, print debug info for unsupported node types
     @return true if successful, false if the tree contains unsupported nodes
 */
-bool serializeExprTreeToBlob(QoreValue v, const AOTSlotMap& slots, std::vector<uint8_t>& out, bool debug = false);
+bool serializeExprTreeToBlob(QoreValue v, const AOTSlotMap& slots, std::vector<uint8_t>& out, bool debug = false, const AOTConstantReverseMap* const_reverse_map = nullptr);
 
 //! Deserialize a binary EXPR_TREE blob back into a QoreValue expression tree.
 /** Used by AOT binary deserialization to reconstruct BCA (Base Class Constructor Argument) expressions.

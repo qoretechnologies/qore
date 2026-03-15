@@ -5683,8 +5683,8 @@ public:
     }
 };
 
-bool serializeExprTreeToBlob(QoreValue v, const AOTSlotMap& slots, std::vector<uint8_t>& out, bool /*debug*/) {
-    ExprTreeSerializer serializer(slots);
+bool serializeExprTreeToBlob(QoreValue v, const AOTSlotMap& slots, std::vector<uint8_t>& out, bool /*debug*/, const AOTConstantReverseMap* const_reverse_map) {
+    ExprTreeSerializer serializer(slots, const_reverse_map);
     if (!serializer.serialize(v)) {
         return false;
     }
