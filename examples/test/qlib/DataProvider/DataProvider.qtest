@@ -3480,8 +3480,9 @@ public class DataProviderTest inherits QUnit::Test {
         {
             QoreSoftNumberDataType num1({"number.format": ".,"});
             assertEq(1234.56n, num1.acceptsValue("1.234,56"));
+            # NULL and NOTHING are treated the same for soft types - both reject without qore.no_null
             assertThrows("RUNTIME-TYPE-ERROR", \num1.acceptsValue());
-            assertEq(0n, num1.acceptsValue(NULL));
+            assertThrows("RUNTIME-TYPE-ERROR", \num1.acceptsValue(), NULL);
         }
 
         {
