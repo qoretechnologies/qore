@@ -2591,13 +2591,18 @@ void AsyncIoControllerPriv::dedicatedThread(DedicatedThreadInfo* dti, ExceptionS
         }
 
         // Call continuePoll
+        int64 cp_start = get_epoch_us();
         ExceptionSink poll_xsink;
         QoreHashNode* new_poll_info = callContinuePollDedicated(dti, &poll_xsink);
+        int64 cp_elapsed = get_epoch_us() - cp_start;
+        if (cp_elapsed > 5000000) {  // > 5 seconds
+            printd(0, "dedicated thread '%s': continuePoll took %lld ms\n",
+                dti->key.c_str(), (long long)(cp_elapsed / 1000));
+        }
 
         if (poll_xsink) {
             // Error — extract full exception info and deliver result
-            log(QORE_LOG_LEVEL_WARN,
-                "dedicated thread '%s': continuePoll raised exception — thread will exit",
+            printd(0, "dedicated thread '%s': continuePoll raised exception — thread will exit\n",
                 dti->key.c_str());
             QoreException* ex_obj = poll_xsink.getException();
             QoreHashNode* ex_hash = ex_obj ? ex_obj->makeExceptionObject() : nullptr;
@@ -2630,9 +2635,8 @@ void AsyncIoControllerPriv::dedicatedThread(DedicatedThreadInfo* dti, ExceptionS
 
         if (!new_poll_info) {
             // Operation completed (goal reached) — deliver success result
-            log(QORE_LOG_LEVEL_WARN,
-                "dedicated thread '%s': continuePoll returned null (goal reached) — "
-                "thread will exit and re-submit via callback",
+            printd(0, "dedicated thread '%s': continuePoll returned null (goal reached) — "
+                "thread will exit and re-submit via callback\n",
                 dti->key.c_str());
             QoreHashNode* result_hash = buildResultHash(dti->pinfo, false, nullptr, xsink);
             if (result_hash) {
@@ -2731,7 +2735,14 @@ void AsyncIoControllerPriv::dedicatedThread(DedicatedThreadInfo* dti, ExceptionS
 
         // Poll for events
         std::vector<QoreEventInfo> ev_events;
+        int64 poll_start = get_epoch_us();
         dti->loop->poll(ev_events, timeout_ms, xsink);
+        int64 poll_elapsed = get_epoch_us() - poll_start;
+        if (poll_elapsed > 5000000) {  // > 5 seconds
+            printd(0, "dedicated thread '%s': poll() blocked for %lld ms (timeout_ms=%d events=%d)\n",
+                dti->key.c_str(), (long long)(poll_elapsed / 1000), timeout_ms,
+                (int)ev_events.size());
+        }
         if (*xsink) {
             log(QORE_LOG_LEVEL_ERROR, "dedicated key '%s': EventLoop::poll() error",
                 dti->key.c_str());
