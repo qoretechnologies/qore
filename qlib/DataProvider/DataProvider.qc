@@ -170,6 +170,7 @@ public class DataProvider {
             "shipstation": "ShipStationDataProvider",
             "instantly": "InstantlyDataProvider",
             "keap": "KeapDataProvider",
+            "kit": "KitDataProvider",
             "apollo": "ApolloDataProvider",
             "square": "SquareDataProvider",
             "squarespace": "SquarespaceDataProvider",

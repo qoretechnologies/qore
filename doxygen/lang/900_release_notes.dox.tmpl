@@ -1011,6 +1011,18 @@ cargo install tree-sitter-cli@0.26.5
       - polling-based event triggers for contacts, opportunities, orders, tasks, and notes
       - action catalog integration with 45+ actions and 7 triggers
       - connection support with \c keaprest:// URL scheme
+    - @ref kitrestclientintro "KitRestClient" module
+      - new module providing a REST client for Kit's email marketing API
+      - supports OAuth2 and API key authentication
+      - provides KitRestConnection for connection management with \c kitrest:// URL scheme
+    - @ref kitdataproviderintro "KitDataProvider" module
+      - new module providing a data provider API for Kit email marketing
+      - subscriber management (create, update, unsubscribe, bulk create, list, get by ID)
+      - tag management (create, update, tag/untag subscribers, bulk tag)
+      - custom field, broadcast, form, sequence, and purchase management
+      - polling-based event triggers for 6 subscriber events
+      - action catalog integration with 30+ actions and 6 triggers
+      - connection support with \c kitrest:// URL scheme
     - @ref gohighlevelrestclientintro "GoHighLevelRestClient" module
       - new module providing a REST client for GoHighLevel's CRM and marketing automation API
       - supports OAuth2 authentication with bearer tokens
