@@ -266,6 +266,8 @@ private:
 
     DLLLOCAL void clearIntern(ExceptionSink* xsink);
 
+    size_t runtime_init_hwm = 0;  // high water mark for initialized constants
+
 protected:
     // the object that owns the list (either a class or a namespace)
     ClassNs ptr;

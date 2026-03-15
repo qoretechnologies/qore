@@ -488,14 +488,21 @@ int ConstantList::parseInit() {
 
 int ConstantList::parseCommitRuntimeInit() {
     int err = 0;
+    // Initialize only constants beyond the high water mark to avoid double evaluation
+    // while allowing new constants added in REPL sessions (AOT mode) to be initialized
+    size_t idx = 0;
     for (auto& i : cnemap) {
-        //printd(5, "ConstantList::parseInit() this: %p '%s' %p (class: %p '%s' ns: %p '%s')\n", this, i->first,
-        //  i->second->node, ptr.getClass(), ptr.getClass() ? ptr.getClass()->name.c_str() : "n/a", ptr.getNs(),
-        //  ptr.getNs() ? ptr.getNs()->name.c_str() : "n/a");
-        if (i.second->parseCommitRuntimeInit() && !err) {
-            err = -1;
+        if (idx >= runtime_init_hwm) {
+            //printd(5, "ConstantList::parseInit() this: %p '%s' (class: %p '%s' ns: %p '%s')\n", this, i.first,
+            //  ptr.getClass(), ptr.getClass() ? ptr.getClass()->name.c_str() : "n/a", ptr.getNs(),
+            //  ptr.getNs() ? ptr.getNs()->name.c_str() : "n/a");
+            if (i.second->parseCommitRuntimeInit() && !err) {
+                err = -1;
+            }
         }
+        ++idx;
     }
+    runtime_init_hwm = cnemap.size();
     return err;
 }
 

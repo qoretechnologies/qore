@@ -136,7 +136,8 @@ public:
     bool root = false,   // is this the root namespace?
         pub,      // is this namespace public (inherited by child programs or programs importing user modules)
         builtin,  // is this namespace builtin?
-        imported = false; // was this namespace imported?
+        imported = false, // was this namespace imported?
+        parseCommitRuntimeInitDone = false; // has parseCommitRuntimeInit() been called?
 
     // pointer to parent namespace (nullptr if this is the root namespace or an unattached namespace)
     const qore_ns_private* parent = nullptr;
