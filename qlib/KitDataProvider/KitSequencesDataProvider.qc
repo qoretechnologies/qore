@@ -105,7 +105,7 @@ public class KitSequencesDataProvider inherits KitDataProviderBase {
             *hash<auto> search_options) {
         # If sequence_id provided, get single record
         if (search_options.sequence_id) {
-            hash<auto> result = doGet("sequences/" + search_options.sequence_id);
+            hash<auto> result = doGet("sequences/" + encode_url(search_options.sequence_id, True));
             return new DefaultRecordIterator(new ListHashIterator((result.sequence,)),
                 where_cond, search_options);
         }
