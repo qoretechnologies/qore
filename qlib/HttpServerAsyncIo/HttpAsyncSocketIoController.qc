@@ -245,6 +245,10 @@ public class HttpAsyncSocketIoController {
         *list<HttpAsyncTarget> streaming_targets;
         {
             AutoWriteLock al(m);
+            # Guard against multiple stop() calls (e.g., explicit stop + destructor)
+            if (pool_stopped) {
+                return;
+            }
             stopping = True;
             has_been_stopped = True;
             listener_keys = keys listeners;
