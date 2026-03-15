@@ -826,7 +826,9 @@ public class AbstractDataProviderType inherits Qore::Serializable {
     static AbstractDataProviderType get(Type type, *hash<auto> options, *hash<auto> tags,
             auto default_value, *hash<NameDescInfo> attr) {
         if (type.isTypedHash()) {
-            return new HashDeclDataType(type, options, tags, default_value, attr);
+            # Extract the TypedHash from the Type object before creating HashDeclDataType
+            TypedHash hd = type.getTypedHash();
+            return new HashDeclDataType(hd, options, tags, default_value, attr);
         } else if (type.getBaseTypeCode() == NT_HASH) {
             return new QoreHashDataType(type, options, tags, default_value, attr);
         } else if (type.getBaseTypeCode() == NT_STRING && !type.isOutputCompatible(BinaryType)) {
