@@ -758,7 +758,10 @@ bool AsyncIoControllerPriv::cancelByKey(const QoreStringNode* key, ExceptionSink
         notifier->notify();
     }
 
-    if (stopped) {
+    if (stopped && !on_async_io_thread) {
+        // Do NOT waitStop from the I/O thread — it would deadlock waiting for
+        // itself to exit.  The Quit command has been enqueued; the I/O thread
+        // main loop will process it after returning from the current callback.
         waitStop(xsink);
     }
 
@@ -890,7 +893,10 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
         notifier->notify();
     }
 
-    if (stopped) {
+    if (stopped && !on_async_io_thread) {
+        // Do NOT waitStop from the I/O thread — it would deadlock waiting for
+        // itself to exit.  The Quit command has been enqueued; the I/O thread
+        // main loop will process it after returning from the current callback.
         waitStop(xsink);
     }
 

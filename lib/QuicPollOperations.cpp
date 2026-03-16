@@ -51,6 +51,16 @@ constexpr int QUIC_MAX_RECV_BATCH = 16;
 // Shared sendmmsg() batch helper for QUIC I/O
 #include "qore/intern/QuicCommon.h"
 
+//! Maximum poll timeout (ms) when no QUIC timer is pending.
+/** When the only in-flight packets are ACK-only (not tracked for PTO per RFC 9002),
+    ngtcp2_conn_get_expiry() returns UINT64_MAX.  Without a bounded default, the
+    I/O thread's poll() falls back to the full operation timeout (e.g. 30s), stalling
+    the connection while the peer's PTO-driven retransmissions arrive unseen.
+    1 second is short enough to ensure prompt reaction to incoming data while avoiding
+    excessive wakeups during idle periods.
+*/
+static constexpr int64_t QUIC_NO_TIMER_POLL_MS = 1000;
+
 //! Set the "poll_timeout_ms" key on a poll info hash based on the next QUIC timer expiry.
 /** Clamps the poll timeout so that retransmission/PTO timers fire promptly.
     @param poll_info the poll info hash to update (must not be nullptr)
@@ -59,17 +69,18 @@ constexpr int QUIC_MAX_RECV_BATCH = 16;
 */
 static void setPollTimeoutFromExpiry(QoreHashNode* poll_info, ngtcp2_tstamp expiry,
                                      ExceptionSink* xsink) {
-    if (expiry == UINT64_MAX) {
-        return;
-    }
-    ngtcp2_tstamp now = QuicSession::timestamp();
     int64_t timeout_ms;
-    if (expiry <= now) {
-        timeout_ms = 1;  // fire immediately on next poll cycle
+    if (expiry == UINT64_MAX) {
+        timeout_ms = QUIC_NO_TIMER_POLL_MS;
     } else {
-        timeout_ms = static_cast<int64_t>((expiry - now) / 1000000);
-        if (timeout_ms == 0) {
-            timeout_ms = 1;
+        ngtcp2_tstamp now = QuicSession::timestamp();
+        if (expiry <= now) {
+            timeout_ms = 1;  // fire immediately on next poll cycle
+        } else {
+            timeout_ms = static_cast<int64_t>((expiry - now) / 1000000);
+            if (timeout_ms == 0) {
+                timeout_ms = 1;
+            }
         }
     }
     poll_info->setKeyValue("poll_timeout_ms", timeout_ms, xsink);

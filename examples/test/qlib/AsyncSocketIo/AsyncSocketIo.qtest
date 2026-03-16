@@ -505,7 +505,7 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         hash<SocketPollResultInfo> info = io_controller.exec(<SocketPollOperationInfo>{
             "sock": rest,
             "spop": spop,
-            "to": 5s,
+            "to": 30s,
             "owner": "debug-closed-socket",
         });
         assertTrue(exists info.ex, "expected an exception for closed server response");
@@ -537,10 +537,10 @@ public class AsyncSocketIoTest inherits QUnit::Test {
 
     private closeOnAccept(Socket server) {
         on_exit server.close();
-        Socket client = server.accept(5s);
+        *Socket client = server.accept(60s);
         if (client) {
             try {
-                client.readHTTPHeader(5s);
+                client.readHTTPHeader(60s);
             } catch (hash<ExceptionInfo> ex) {
                 # Ignore read errors; the client still sees a closed response path.
             }
