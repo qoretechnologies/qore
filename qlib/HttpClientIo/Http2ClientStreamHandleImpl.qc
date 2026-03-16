@@ -199,9 +199,12 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
 
     #! Sends data on a streaming connection
     /** @param data the data to send
-        @param end_stream if True, signals end of stream
+        @param end_stream if True, signals end of stream; if the stream is
+        already in a terminal state when \a end_stream is \c True, the call
+        is a no-op (half-close is idempotent)
 
-        @throw HTTPCLIENT-STATE-ERROR if not in streaming mode or stream is closed
+        @throw HTTPCLIENT-STATE-ERROR if not in streaming mode, stream is
+        closed, or stream is not yet established
     */
     sendData(data data, bool end_stream = False) {
         int sid;
@@ -213,6 +216,11 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
             if (state != HttpClientStreamState::Open
                     && state != HttpClientStreamState::HeadersReceived
                     && state != HttpClientStreamState::ReceivingBody) {
+                if (end_stream && data.empty()) {
+                    # Half-close on an already-closed stream is a no-op;
+                    # the send side is already effectively closed
+                    return;
+                }
                 throw "HTTPCLIENT-STATE-ERROR",
                     sprintf("cannot send data in state: %y", state);
             }

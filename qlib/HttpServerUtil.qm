@@ -1625,16 +1625,11 @@ public class AbstractStreamRequest {
                         break;
                     }
                 }
-                if (!recv_error) {
-                    # Normal completion: clean up the stream
-                    s.cleanupHttp2Stream(sid);
-                }
-                # When recv_error is True, skip cleanupHttp2Stream — leaving
-                # the stream in the Http2Session streams map prevents
-                # onDataChunkRecvCallback from sending RST_STREAM for any
-                # remaining client DATA frames.  The error response will be
-                # submitted on this stream normally; after the client receives
-                # it, it will stop sending.
+                # Clean up the stream from the Http2Session streams map.
+                # cleanupHttp2Stream only removes from Qore's tracking map,
+                # not nghttp2's internal state, so the response can still be
+                # sent on this stream.
+                s.cleanupHttp2Stream(sid);
             }
             # signal end of data
             recvImpl({"hdr": NOTHING});

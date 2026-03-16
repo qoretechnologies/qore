@@ -1,0 +1,113 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    ql_alloc_tracking.qpp
+
+    Qore Programming Language
+
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Note that the Qore library is released under a choice of three open-source
+    licenses: MIT (as above), LGPL 2+, or GPL 2+; see README-LICENSE for more
+    information.
+*/
+
+#include <qore/Qore.h>
+
+#ifdef QORE_HAVE_ALLOC_TRACKING
+#include "qore/intern/AllocTracking.h"
+#endif
+
+/** @defgroup alloc_tracking_functions Allocation Tracking Functions
+    Functions for tracking memory allocations to identify leaks.
+
+    These functions install malloc/free interposers that record allocations with backtrace
+    information during a measurement window. Use @ref start_alloc_tracking() before the code
+    to test, then @ref stop_alloc_tracking() to get a hash of allocation sites sorted by
+    net leaked bytes.
+
+    @par Example:
+    @code{.py}
+start_alloc_tracking();
+# ... code to profile ...
+*hash<auto> results = stop_alloc_tracking();
+foreach string key in (keys results) {
+    hash<auto> site = results{key};
+    if (site.leak_bytes > 1024) {
+        printf("LEAK: %d bytes (%d allocs, %d frees)\n", site.leak_bytes,
+            site.alloc_count, site.free_count);
+        map printf("  %s\n", $1), site.frames;
+    }
+}
+    @endcode
+
+    @note Only available on platforms with backtrace support (Linux, macOS).
+    Only one tracking session can be active at a time.
+
+    @since %Qore 2.3
+*/
+///@{
+
+//! Starts tracking memory allocations
+/** Clears any previous tracking data and begins recording all malloc/free calls
+    with backtrace information.
+
+    @note Tracking adds overhead to every malloc/free call. Use only for debugging.
+
+    @throw ALLOC-TRACKING-ERROR if not available on this platform
+
+    @since %Qore 2.3
+*/
+nothing start_alloc_tracking() [dom=PROCESS] {
+#ifdef QORE_HAVE_ALLOC_TRACKING
+    qore_alloc_tracking_start();
+#else
+    xsink->raiseException("ALLOC-TRACKING-ERROR",
+        "allocation tracking is not available on this platform (no backtrace support)");
+#endif
+}
+
+//! Stops tracking and returns allocation statistics
+/** Stops tracking and returns a hash of allocation sites sorted by net leaked bytes
+    (descending). Only sites with positive net allocation are included.
+
+    @return a hash keyed by backtrace hash (hex string) where each value is a hash with:
+    - \c alloc_count (int): number of allocations from this call site
+    - \c alloc_bytes (int): total bytes allocated
+    - \c free_count (int): number of frees matched to this site
+    - \c free_bytes (int): total bytes freed
+    - \c leak_bytes (int): alloc_bytes - free_bytes
+    - \c frames (list<string>): backtrace frame symbols
+
+    @throw ALLOC-TRACKING-ERROR if not available on this platform
+
+    @since %Qore 2.3
+*/
+*hash<auto> stop_alloc_tracking() [dom=PROCESS] {
+#ifdef QORE_HAVE_ALLOC_TRACKING
+    return qore_alloc_tracking_stop(xsink);
+#else
+    xsink->raiseException("ALLOC-TRACKING-ERROR",
+        "allocation tracking is not available on this platform (no backtrace support)");
+    return QoreValue();
+#endif
+}
+
+///@}

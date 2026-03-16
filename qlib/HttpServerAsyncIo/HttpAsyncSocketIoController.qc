@@ -242,7 +242,6 @@ public class HttpAsyncSocketIoController {
         # to avoid deadlock with I/O thread callbacks that also acquire m
         *list<string> listener_keys;
         *list<Socket> conn_sockets;
-        *list<HttpAsyncTarget> streaming_targets;
         {
             AutoWriteLock al(m);
             # Guard against multiple stop() calls (e.g., explicit stop + destructor)
@@ -252,10 +251,6 @@ public class HttpAsyncSocketIoController {
             stopping = True;
             has_been_stopped = True;
             listener_keys = keys listeners;
-            # Collect targets before clearing so we can signal streaming handlers to stop
-            if (listeners) {
-                streaming_targets = map $1.target, listeners.iterator();
-            }
             if (connections) {
                 conn_sockets = map connections{$1}.sock, keys connections;
             }
@@ -281,10 +276,6 @@ public class HttpAsyncSocketIoController {
                 # ignore - operation may have already completed
             }
         }
-        # Signal streaming handlers (SSE, WebSocket) to stop their polling loops
-        # before waiting for the handler pool; this sets handler-level stop flags
-        # (lsh{lid}) so handler tasks exit within one poll interval
-        map $1.stopStreaming(), streaming_targets;
         # Wait for in-flight handler tasks to complete; the stopping flag prevents
         # them from submitting new operations to the controller
         handler_pool.stopWait();
@@ -2396,11 +2387,6 @@ public class HttpAsyncSocketIoController {
         # making isHttp2StreamComplete() return True even when body data exists.
         bool body_streaming = request.hdr.toBool()
             && !request.headers_end_stream.toBool();
-
-        # For requests with END_STREAM on HEADERS (no body), clean up the dispatch map entry
-        if (request.hdr.toBool() && !body_streaming) {
-            cinfo.sock.cleanupHttp2Stream(stream_id);
-        }
 
         if (!body_streaming) {
             # Normal path: resume h2op immediately for multiplexing.

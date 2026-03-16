@@ -1397,6 +1397,10 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         # (accept, header reads, idle connections) on the global async I/O controller
         @debug(log("stop: asyncMode=%y", asyncMode));
         if (asyncIo) {
+            # Signal streaming handlers before stopping the controller so handler tasks
+            # exit promptly (done here instead of in HttpServerNativeAsyncTarget.stopStreaming()
+            # to avoid a reference cycle between the target and HttpServer)
+            signalStreamingHandlersToStop();
             asyncIo.stop();
         }
 
@@ -2088,7 +2092,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             AsyncSocketIo::AsyncSocketIoController ctrl = AsyncSocketIo::getGlobalAsyncIoController();
             # Set logger on the global controller for async I/O logging
             ctrl.setLogger(logger);
-            asyncTarget = new Priv::HttpServerNativeAsyncTarget(self, logger);
+            asyncTarget = new Priv::HttpServerNativeAsyncTarget(logger);
             asyncIo = new HttpServerAsyncIo::HttpAsyncSocketIoController(ctrl, logger, {
                 "max_handler_threads": opts.max_handler_threads,
                 "min_idle_handler_threads": opts.min_idle_handler_threads,
@@ -5523,15 +5527,12 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 }
 
                 # For body_streaming requests where the handler returned early
-                # (e.g., error before reading all client data), do NOT reset or
-                # clean up the stream here.  The response has been queued via
-                # sendMultiplexedResponse() with END_STREAM, and any premature
-                # stream cleanup (resetHttp2Stream or cleanupHttp2Stream) can
-                # cause the queued response to be cancelled or lost.
-                # The stream remains in the Http2Session streams map; remaining
-                # client DATA is buffered harmlessly.  The stream is cleaned up
-                # by onStreamCloseCallback when both sides are done.
+                # (e.g., error before reading all client data), clean up the
+                # dispatched stream now that the handler is done.  The response
+                # has already been queued via sendMultiplexedResponse() which
+                # uses nghttp2's internal state, not our streams map.
                 if (conn_info.header_info.body_streaming) {
+                    s.cleanupHttp2Stream(conn_info.header_info.stream_id);
                     conn_info.header_info.io_wake();
                 }
 
@@ -6055,19 +6056,14 @@ class HttpServerCallbackAppender inherits LoggerAppenderWithLayout {
 */
 class HttpServerNativeAsyncTarget inherits HttpServerAsyncIo::HttpAsyncTarget {
     private {
-        #! Reference to the HttpServer
-        HttpServer server;
-
         #! Logger interface
         *LoggerInterface logger;
     }
 
     #! Creates the native async target
-    /** @param server the HttpServer instance
-        @param logger optional logger interface
+    /** @param logger optional logger interface
     */
-    constructor(HttpServer server, *LoggerInterface logger) {
-        self.server = server;
+    constructor(*LoggerInterface logger) {
         self.logger = logger;
     }
 
@@ -6195,17 +6191,6 @@ class HttpServerNativeAsyncTarget inherits HttpServerAsyncIo::HttpAsyncTarget {
         } catch () {
             # Ignore close errors
         }
-    }
-
-    #! Signals streaming handlers (SSE, WebSocket) to stop their polling loops
-    /** Called by @ref HttpServerAsyncIo::HttpAsyncSocketIoController::stop() before waiting
-        for the handler thread pool to complete.  Signals all active dedicated socket handlers
-        on all listeners so their polling loops (e.g. SSE queue polling) exit promptly.
-
-        @since HttpServer 1.6
-    */
-    stopStreaming() {
-        server.signalStreamingHandlersToStop();
     }
 
     #! Logs a message

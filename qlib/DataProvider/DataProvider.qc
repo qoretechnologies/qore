@@ -152,6 +152,9 @@ public class DataProvider {
             # provided by the jni module
             "mqtt": "MqttDataProvider",
 
+            # provided by the jni module
+            "opcua": "OpcUaDataProvider",
+
             "openai": "OpenAiDataProvider",
             "pdfco": "PdfCoDataProvider",
             "pop3": "Pop3ClientDataProvider",

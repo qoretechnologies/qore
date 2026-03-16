@@ -498,3 +498,27 @@ bool AsyncIoController::cancelTimer(int timer_id) {
 nothing AsyncIoController::setTimerCallback(*code callback) {
     ctrl->setTimerCallback(callback ? callback->refRefSelf() : nullptr, xsink);
 }
+
+//! Submits a task to the controller's thread pool
+/** @par Example:
+    @code{.py}
+    ctrl.submitTask(sub () { process_data(); });
+    @endcode
+
+    The thread pool is lazily created on first use. It provides a shared pool of
+    reusable threads for dispatching callbacks off the I/O thread, avoiding the
+    glibc TLS memory accumulation that occurs with short-lived background threads.
+
+    @param task the @ref closure "closure" or @ref call_reference "call reference" to execute
+    @param cancel an optional @ref closure "closure" or @ref call_reference "call reference"
+    to execute if the pool is stopped before the task can be executed
+
+    @throw ASYNC-IO-ERROR if the controller's thread pool has been stopped
+
+    @note requires @ref Qore::PO_NO_PROCESS_CONTROL to be unset
+
+    @since %Qore 2.3
+*/
+nothing AsyncIoController::submitTask(code<nothing()> task, *code<nothing()> cancel) [dom=PROCESS] {
+    ctrl->submitTask(task->refRefSelf(), cancel ? cancel->refRefSelf() : nullptr, xsink);
+}

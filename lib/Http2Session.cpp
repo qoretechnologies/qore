@@ -1648,6 +1648,18 @@ int Http2Session::onStreamCloseCallback(nghttp2_session* session, int32_t stream
         // Mark as complete even if there was an error (including RST_STREAM without headers)
         stream->body_complete = true;
         h2->markStreamComplete(stream_id);
+        // markStreamComplete() keeps CONNECT, dispatched, and pre-dispatch
+        // headers-only streams in the map. Only clean up pre-dispatch
+        // streams that were closed before being dispatched (e.g. RST_STREAM
+        // before dispatch). Do NOT erase CONNECT streams (needed for continued
+        // tunnel I/O) or dispatched streams (handler thread may still be reading).
+        {
+            auto it = h2->streams.find(stream_id);
+            if (it != h2->streams.end() && !it->second->dispatched
+                    && !it->second->is_connect) {
+                h2->streams.erase(it);
+            }
+        }
     }
     h2->pending_body_data.erase(stream_id);
     h2->pending_data_providers.erase(stream_id);

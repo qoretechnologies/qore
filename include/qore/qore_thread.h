@@ -294,6 +294,22 @@ int q_start_thread(ExceptionSink* xsink, q_thread_t f, void* arg = nullptr);
  */
 int q_start_thread(ExceptionSink* xsink, q_thread_t f, void* arg, size_t stack_size);
 
+//! starts a new thread with lifecycle flags
+/** Threads started with QTF_EXTERNAL_LIFECYCLE are counted in tp_thread_counter instead of
+    thread_counter, so they don't block QoreProgramHelper shutdown. This is used for ThreadPool
+    threads whose lifecycle is managed explicitly.
+
+    @param xsink any errors starting the new thread will be raised here and cause -1 to be returned
+    @param f the function to start in the new thread
+    @param arg the argument to the function
+    @param flags thread flags (e.g. QTF_EXTERNAL_LIFECYCLE)
+
+    @return the new TID or -1 if an error occurred
+
+    @since %Qore 2.3
+ */
+DLLEXPORT int q_start_thread(ExceptionSink* xsink, q_thread_t f, void* arg, int flags);
+
 //! use this class to temporarily register and deregister a foreign thread to allow Qore code to be executed and the Qore library to be used from threads not created by the Qore library
 /** @since %Qore 0.8.7
  */

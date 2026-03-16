@@ -86,6 +86,9 @@
 // functions
 #include "qore/intern/ql_time.h"
 #include "qore/intern/ql_lib.h"
+#ifdef QORE_HAVE_ALLOC_TRACKING
+#include "qore/intern/ql_alloc_tracking.h"
+#endif
 #include "qore/intern/ql_math.h"
 #include "qore/intern/ql_type.h"
 #include "qore/intern/ql_env.h"
@@ -1409,6 +1412,9 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     init_string_functions(qns);
     init_time_functions(qns);
     init_lib_functions(qns);
+#ifdef QORE_HAVE_ALLOC_TRACKING
+    init_alloc_tracking_functions(qns);
+#endif
     init_misc_functions(qns);
     init_list_functions(qns);
     init_type_functions(qns);
