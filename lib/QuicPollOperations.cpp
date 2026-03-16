@@ -907,10 +907,9 @@ int64_t SocketQuicClientPollOperation::submitRequest(
 }
 
 int SocketQuicClientPollOperation::migrateConnection(ExceptionSink* xsink) {
-    // NOTE: we acquire sock->priv->m for the fd swap section below to
-    // synchronize with continuePoll() which also holds this lock.
-    // The lock is NOT held during new-socket creation / connect() to
-    // avoid blocking the controller I/O thread.
+    // Create a new connected UDP socket and swap the fd on the socket object.
+    // The old fd is closed immediately — this removes it from epoll so the
+    // controller's next continuePoll cycle re-adds the new fd cleanly.
 
     if (!quic_session) {
         xsink->raiseException("QUIC-MIGRATION-ERROR", "QUIC session not initialized");
@@ -931,12 +930,7 @@ int SocketQuicClientPollOperation::migrateConnection(ExceptionSink* xsink) {
         int release() { int r = fd; fd = -1; return r; }
     };
 
-    // Create a new UDP socket with the same address family.
-    // NOTE: remote_addr_ is this poll operation's cached copy (not the session's),
-    // so no session lock is needed.  The caller (Http3ClientConnection::migrate())
-    // holds driving=True which prevents concurrent continuePoll() from modifying
-    // poll operation state.
-    // Create UDP socket; set close-on-exec to prevent FD leak on fork/exec
+    // Create a new UDP socket with the same address family
 #ifdef SOCK_CLOEXEC
     int new_fd = ::socket(remote_addr_.ss_family, SOCK_DGRAM | SOCK_CLOEXEC, 0);
 #else
@@ -952,8 +946,7 @@ int SocketQuicClientPollOperation::migrateConnection(ExceptionSink* xsink) {
 #endif
     FdGuard fd_guard(new_fd);
 
-    // Connect the new socket to the same remote address (gives us a specific
-    // local address via getsockname and filters incoming packets)
+    // Connect the new socket to the same remote address
     if (::connect(new_fd, reinterpret_cast<const struct sockaddr*>(&remote_addr_),
                   remote_addrlen_) < 0) {
         xsink->raiseErrnoException("QUIC-MIGRATION-ERROR", errno,
@@ -961,7 +954,7 @@ int SocketQuicClientPollOperation::migrateConnection(ExceptionSink* xsink) {
         return -1;
     }
 
-    // Enlarge receive buffer on migration socket (same as initial socket)
+    // Enlarge receive buffer (same as initial socket)
     {
         int rcvbuf = 1024 * 1024;
 #ifdef SO_RCVBUFFORCE
@@ -982,11 +975,7 @@ int SocketQuicClientPollOperation::migrateConnection(ExceptionSink* xsink) {
         return -1;
     }
 
-    // Enable pktinfo on the new socket.  Failure is non-fatal for client sockets:
-    // the client poll-op path does NOT use extractPktinfoAddr() (see MEMORY.md
-    // "Client pktinfo rule"), so pktinfo is only used for best-effort local address
-    // reporting.  The migration path always has a valid local address from
-    // getsockname() on the connected socket.
+    // Enable pktinfo (non-fatal for client sockets)
     if (enableQuicPktinfo(new_fd, new_local.ss_family) < 0) {
         printd(2, "SocketQuicClientPollOperation::migrateConnection(): enableQuicPktinfo() "
             "failed (non-fatal for client): errno=%d (%s)\n", errno, strerror(errno));
@@ -1008,25 +997,31 @@ int SocketQuicClientPollOperation::migrateConnection(ExceptionSink* xsink) {
         return -1;
     }
 
-    // Migration succeeded — swap the fd under the socket lock to synchronize
-    // with continuePoll() which holds the same lock during I/O.
-    //
-    // NOTE: direct assignment to sock->priv->socket->priv->sock is the established
-    // pattern in qore_socket_private (no setter abstraction exists).  The socket
-    // object has no cached state derived from the fd that would become inconsistent
-    // — socket options, non-blocking mode, and pktinfo are set on the new fd above.
+    // Swap the fd under the socket lock to synchronize with any concurrent
+    // I/O.  Since migrateConnection() is now called from the I/O thread
+    // (via the migration_pending flag), there is no concurrent poll() on the
+    // old fd — the epoll registration is cleanly replaced on the next cycle.
     {
         AutoLocker al(sock->priv->m);
         fd_guard.release();
         sock->priv->socket->priv->sock = new_fd;
-        // Update cached local address under the same lock
         memcpy(&local_addr_, &new_local, new_local_len);
         local_addrlen_ = new_local_len;
     }
 
     // Close old fd outside the lock — safe because the socket object now
-    // points to new_fd, so continuePoll() will use the new fd
+    // points to new_fd
     ::close(old_fd);
+
+    // Send PATH_CHALLENGE + pending request frames immediately so the server
+    // learns the new source address before the next poll() cycle
+    {
+        ngtcp2_tstamp expiry;
+        sendPendingPackets(expiry, xsink);
+        if (*xsink) {
+            xsink->handleExceptions();
+        }
+    }
 
     printd(2, "SocketQuicClientPollOperation::migrateConnection(): migrated fd %d -> %d "
         "(session %lld)\n", old_fd, new_fd,
