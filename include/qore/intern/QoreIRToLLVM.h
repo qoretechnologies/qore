@@ -116,6 +116,14 @@ public:
         shared_di_cu = cu;
     }
 
+    //! Enable deferred exception checking for init functions.
+    //! When set, skip per-instruction exception checks and emit a single consolidated
+    //! check at function end.  This reduces BasicBlock count from 200+ to ~3 for
+    //! large constant init functions, avoiding exponential LLVM code generator hang.
+    void setDeferredExceptionChecking(bool v) {
+        deferred_exception_checking = v;
+    }
+
 private:
     llvm::LLVMContext& ctx;
 
@@ -134,6 +142,13 @@ private:
     bool aot_mode = false;
     const AOTSlotMap* aot_slots = nullptr;
     llvm::Value* aot_ctx_arg = nullptr;   //!< QoreAOTContext* first parameter in AOT mode
+
+    // Deferred exception checking for init functions (Phase 3: LLVM hang fix)
+    // When enabled, skip per-instruction exception checks and accumulate a flag
+    // to emit a single consolidated check at function end.  Reduces BB/inst count
+    // for large constant init functions, avoiding exponential code generator hang.
+    bool deferred_exception_checking = false;  // enabled for __const_init:: functions
+    bool deferred_check_needed = false;        // set when a throwable was skipped
 
     // Deopt counter: pointer to variant's deopt_count atomic for guard failure tracking
     void* deopt_counter_ptr = nullptr;

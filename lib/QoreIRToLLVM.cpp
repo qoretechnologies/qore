@@ -1059,14 +1059,22 @@ void QoreIRToLLVM::trackResultForCleanup(llvm::Value* result, uint32_t result_id
             nullptr, "cleanup");
     alloca_builder.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING),
             cleanup_alloca);
-    // Decref previous value before overwriting (handles loop bodies where
-    // the same alloca is stored to each iteration; first iteration old_val
-    // = NOTHING which is a no-op for decref)
-    auto decref_fn = current_module->getOrInsertFunction("qore_rt_decref",
-            llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
-    llvm::Value* old_val = builder->CreateLoad(i64_type, cleanup_alloca);
-    builder->CreateStore(result, cleanup_alloca);
-    builder->CreateCall(decref_fn, {old_val, xsink_arg});
+
+    if (!deferred_exception_checking) {
+        // In normal mode: pre-store decref (handles re-assignment in loops).
+        // Decref previous value before overwriting (handles loop bodies where
+        // the same alloca is stored to each iteration; first iteration old_val
+        // = NOTHING which is a no-op for decref)
+        auto decref_fn = current_module->getOrInsertFunction("qore_rt_decref",
+                llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+        llvm::Value* old_val = builder->CreateLoad(i64_type, cleanup_alloca);
+        builder->CreateStore(result, cleanup_alloca);
+        builder->CreateCall(decref_fn, {old_val, xsink_arg});
+    } else {
+        // In deferred mode: init functions have no loops; old is always NOTHING
+        builder->CreateStore(result, cleanup_alloca);
+    }
+
     invoke_result_allocas.push_back(cleanup_alloca);
     invoke_alloca_map[result_id] = cleanup_alloca;
 }
@@ -1399,6 +1407,13 @@ llvm::BasicBlock* QoreIRToLLVM::getOrCreateJitDeoptBlock(llvm::Module& module,
 
 void QoreIRToLLVM::emitExceptionCheck(llvm::Module& module, llvm::Function* llvm_func,
         const QoreIRInstruction* inst) {
+    // For deferred exception checking (init functions): skip per-instruction checks
+    // for non-try-block instructions.  Set flag to emit consolidated check at end.
+    if (deferred_exception_checking && !inst->exception_target) {
+        deferred_check_needed = true;
+        return;
+    }
+
     llvm::BasicBlock* exception_block = nullptr;
     if (inst->exception_target) {
         auto except_it = block_map.find(inst->exception_target);
@@ -1439,6 +1454,9 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
 
     // Clear COW tracking for new function
     cow_modified_locals.clear();
+
+    // Reset deferred exception checking flag for new function
+    deferred_check_needed = false;
 
     // Determine function name: use fast_entry_name if set (Approach B)
     const std::string& fn_name = fast_entry_name.empty() ? func.name : fast_entry_name;
@@ -3867,6 +3885,25 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     error = "unsupported return value type for LLVM lowering";
                     return false;
                 }
+                // Deferred exception check for init functions (Phase 3: LLVM hang fix).
+                // Placed before incref so the exception path (→ error_return_block) has no
+                // unmatched incref. The success path (→ cont) handles incref + cleanup + ret.
+                if (deferred_exception_checking && deferred_check_needed) {
+                    auto has_ex = module.getOrInsertFunction("qore_rt_has_exception",
+                            llvm::FunctionType::get(i64_type, {ptr_type}, false));
+                    llvm::Value* ex_check = builder->CreateCall(has_ex, {xsink_arg});
+                    llvm::Value* has_exception = builder->CreateICmpNE(ex_check,
+                            llvm::ConstantInt::get(i64_type, 0));
+                    if (!error_return_block) {
+                        error_return_block = llvm::BasicBlock::Create(ctx, "error_return",
+                            static_cast<llvm::Function*>(builder->GetInsertBlock()->getParent()));
+                    }
+                    llvm::BasicBlock* cont = llvm::BasicBlock::Create(ctx, "no_exception",
+                        static_cast<llvm::Function*>(builder->GetInsertBlock()->getParent()));
+                    builder->CreateCondBr(has_exception, error_return_block, cont);
+                    builder->SetInsertPoint(cont);
+                    // Fall through — incref + cleanup + ret now emitted into cont
+                }
                 // Take a reference to the return value before cleanup.
                 // emitInvokeCleanup will deref the invoke alloca (if any),
                 // balancing this incref. Net refcount change = 0 (correct).
@@ -3892,6 +3929,22 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             return true;
         }
         case QoreIROpcode::ReturnNothing: {
+            // Deferred exception check for init functions (Phase 3: LLVM hang fix)
+            if (deferred_exception_checking && deferred_check_needed) {
+                auto has_ex = module.getOrInsertFunction("qore_rt_has_exception",
+                        llvm::FunctionType::get(i64_type, {ptr_type}, false));
+                llvm::Value* ex_check = builder->CreateCall(has_ex, {xsink_arg});
+                llvm::Value* has_exception = builder->CreateICmpNE(ex_check,
+                        llvm::ConstantInt::get(i64_type, 0));
+                if (!error_return_block) {
+                    error_return_block = llvm::BasicBlock::Create(ctx, "error_return",
+                        static_cast<llvm::Function*>(builder->GetInsertBlock()->getParent()));
+                }
+                llvm::BasicBlock* cont = llvm::BasicBlock::Create(ctx, "no_exception",
+                    static_cast<llvm::Function*>(builder->GetInsertBlock()->getParent()));
+                builder->CreateCondBr(has_exception, error_return_block, cont);
+                builder->SetInsertPoint(cont);
+            }
             emitOnBlockExitExec(module);
             emitIteratorCleanup(module);
             emitPreinstantiatedCleanup(module);

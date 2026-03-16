@@ -1104,6 +1104,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
         // Lower to LLVM
         QoreIRToLLVM lowerer(ctx);
         lowerer.setAOTMode(&slots);
+        lowerer.setDeferredExceptionChecking(true);
         lowerer.setSharedDebugInfo(&di_builder, di_cu);
         std::string llvm_error;
         if (getenv("QORE_AOT_DUMP_IR")) {
@@ -1363,6 +1364,14 @@ static bool emitObjectFile(llvm::Module& module, const std::string& path, std::s
     // Run optimization passes at the requested level
     llvm::OptimizationLevel llvm_opt = getOptimizationLevel(opt_level);
     if (llvm_opt != llvm::OptimizationLevel::O0) {
+        // Print function names during optimization for hang debugging
+        bool debug_opt = getenv("QORE_DEBUG_OPT") != nullptr;
+        if (debug_opt) {
+            fprintf(stderr, "AOT: Starting optimization (O%d) for %d functions in module\n", opt_level,
+                (int)std::distance(module.begin(), module.end()));
+            fflush(stderr);
+        }
+
         // For debugging optimizer hangs, we can disable specific passes
         llvm::LoopAnalysisManager LAM;
         llvm::FunctionAnalysisManager FAM;
@@ -1374,8 +1383,30 @@ static bool emitObjectFile(llvm::Module& module, const std::string& path, std::s
         PB.registerFunctionAnalyses(FAM);
         PB.registerLoopAnalyses(LAM);
         PB.crossRegisterProxies(LAM, FAM, CGAM, MAM);
+
+        // Log each function as we optimize it
+        if (debug_opt) {
+            int func_count = 0;
+            for (auto& func : module) {
+                unsigned bb_count = 0;
+                for ([[maybe_unused]] auto& bb : func) {
+                    bb_count++;
+                }
+                fprintf(stderr, "AOT: Optimizing function %d: %s (%u BB, %u insts)\n",
+                    func_count++, func.getName().str().c_str(),
+                    bb_count,
+                    func.getInstructionCount());
+                fflush(stderr);
+            }
+        }
+
         auto MPM = PB.buildPerModuleDefaultPipeline(llvm_opt);
         MPM.run(module, MAM);
+
+        if (debug_opt) {
+            fprintf(stderr, "AOT: Optimization completed successfully\n");
+            fflush(stderr);
+        }
     }
 
     // Dump IR after optimization if requested
@@ -1386,6 +1417,12 @@ static bool emitObjectFile(llvm::Module& module, const std::string& path, std::s
     }
 
     // Emit object file
+    bool debug_opt = getenv("QORE_DEBUG_OPT") != nullptr;
+    if (debug_opt) {
+        fprintf(stderr, "AOT: Starting object file emission (code generation)\n");
+        fflush(stderr);
+    }
+
     std::error_code EC;
     llvm::raw_fd_ostream dest(path, EC, llvm::sys::fs::OF_None);
     if (EC) {
@@ -1393,14 +1430,38 @@ static bool emitObjectFile(llvm::Module& module, const std::string& path, std::s
         delete tm;
         return false;
     }
+
+    if (debug_opt) {
+        fprintf(stderr, "AOT: Creating legacy PassManager for code generation\n");
+        fflush(stderr);
+    }
+
     llvm::legacy::PassManager emit_pm;
     if (tm->addPassesToEmitFile(emit_pm, dest, nullptr, llvm::CodeGenFileType::ObjectFile)) {
         error = "target machine cannot emit object files";
         delete tm;
         return false;
     }
+
+    if (debug_opt) {
+        fprintf(stderr, "AOT: Running code generation pass manager...\n");
+        fflush(stderr);
+    }
+
     emit_pm.run(module);
+
+    if (debug_opt) {
+        fprintf(stderr, "AOT: Code generation completed, flushing output\n");
+        fflush(stderr);
+    }
+
     dest.flush();
+
+    if (debug_opt) {
+        fprintf(stderr, "AOT: Object file emission completed successfully\n");
+        fflush(stderr);
+    }
+
     delete tm;
     return true;
 }
