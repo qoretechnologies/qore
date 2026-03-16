@@ -227,18 +227,26 @@ int int(string str, int base = 10) [flags=RET_VALUE_ONLY] {
 
 //! Converts the argument to an integer value
 /**
-    @param i the argument to convert to an integer; @ref NULL values are converted to 0
+    @param i the argument to convert to an integer
 
-    @return the integer value corresponding to the argument; 0 if @ref NULL is passed
+    @return the integer value corresponding to the argument
 
     @par Example:
     @code{.py}
 int i = int("1");
-int j = int(NULL); // returns 0
     @endcode
 */
-int int(*softint i) [flags=CONSTANT] {
+int int(softint i) [flags=CONSTANT] {
     return i;
+}
+
+//! Always returns 0
+/** The int() function is used for type conversions, therefore this variant is not tagged with @ref NOOP
+
+    @see int(softint)
+*/
+int int() [flags=CONSTANT] {
+   return 0;
 }
 
 //! Converts the argument to a floating-point (float) value
