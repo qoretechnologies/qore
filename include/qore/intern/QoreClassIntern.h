@@ -1196,13 +1196,18 @@ public:
         const QoreTypeInfo* ti = getTypeInfo();
         // Initialize the actual node value for complex types that need a default container
         // (hashes, lists, etc.) instead of leaving it as NOTHING/nullptr
-        if (QoreTypeInfo::isHashType(ti)) {
+        // Only initialize to empty container for NON-nullable types
+        // Nullable types (*hash<T>, *list<T>) should default to NOTHING
+        if (QoreTypeInfo::isHashType(ti)
+                && QoreTypeInfo::parseReturns(ti, NT_NOTHING) == QTI_NOT_EQUAL) {
             // getReturnComplexHashOrNothing() extracts element type T from hash<string,T>
             // QoreHashNode(valueType) sets complexTypeInfo via qore_get_complex_hash_type()
             val.assignInitial(new QoreHashNode(QoreTypeInfo::getReturnComplexHashOrNothing(ti)));
         }
         // Check if the typeInfo is for a list type and create empty list
-        else if (QoreTypeInfo::isListType(ti)) {
+        // Only for non-nullable types
+        else if (QoreTypeInfo::isListType(ti)
+                && QoreTypeInfo::parseReturns(ti, NT_NOTHING) == QTI_NOT_EQUAL) {
             // getReturnComplexListOrNothing() extracts element type T from list<T>
             // QoreListNode(valueType) sets complexTypeInfo via qore_get_complex_list_type()
             val.assignInitial(new QoreListNode(QoreTypeInfo::getReturnComplexListOrNothing(ti)));

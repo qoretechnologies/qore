@@ -1,2 +1,23 @@
 [Thread debugging using libthread_db enabled]
 Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+[New Thread 0x7fffedbbe6c0 (LWP 1995820)]
+warning: .debug_names not created by gdb; ignoring
+[New Thread 0x7fffeceef6c0 (LWP 1995821)]
+warning: .debug_names not created by gdb; ignoring
+warning: .debug_names not created by gdb; ignoring
+warning: .debug_names not created by gdb; ignoring
+warning: .debug_names not created by gdb; ignoring
+warning: .debug_names not created by gdb; ignoring
+
+Thread 1 "qore/1" received signal SIGSEGV, Segmentation fault.
+0x00007fffcfa5f692 in ?? ()
+#0  0x00007fffcfa5f692 in ?? ()
+#1  0x0000000000000202 in ?? ()
+#2  0x0000000000000000 in ?? ()
+A debugging session is active.
+
+	Inferior 1 [process 1995817] will be killed.
+
+Quit anyway? (y or n) [answered Y; input not from terminal]
