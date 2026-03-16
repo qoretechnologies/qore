@@ -433,9 +433,10 @@ public class OracleColumn inherits SqlUtil::AbstractColumn {
     private constructor() {
     }
 
-    constructor(string n, string nt, *string qt, softint sz = 0, bool nul, *string dv, *string cm,
-            bool is_char = False, bool cu = False, softint bs = 0, int scale = 0)
+    constructor(string n, string nt, *string qt, *softint sz, bool nul, *string dv, *string cm,
+            bool is_char = False, bool cu = False, *softint bs, *int scale)
             : AbstractColumn(n, nt, qt, sz, nul, dv, cm, scale) {
+        if (!exists bs) { bs = 0; }
         # only set "char_used" if we are dealing with a char column
         char_used = is_char && cu;
         byte_size = bs;
@@ -547,8 +548,8 @@ string str = col.getRenameSql(t, "new_name");
 
 #! represents an Oracle number column
 public class OracleNumberColumn inherits OracleColumn {
-    constructor(string n, string nt, *string qt, softint sz = 0, bool nul, *string dv, *string cm, softint bs = 0,
-            softint scale = 0) : OracleColumn(n, nt, qt, sz, nul, dv, cm, False, False, bs, scale) {
+    constructor(string n, string nt, *string qt, *softint sz, bool nul, *string dv, *string cm, *softint bs,
+            *softint scale) : OracleColumn(n, nt, qt, sz, nul, dv, cm, False, False, bs, scale) {
     }
 }
 
