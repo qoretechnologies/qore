@@ -53,7 +53,7 @@
 %endtry
 
 module WebSocketClient {
-    version = "2.9";
+    version = "2.4";
     desc = "user module for providing client support for the WebSocket protocol";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -247,7 +247,7 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
 
     @section websocketclient_relnotes WebSocketClient Module Release History
 
-    @subsection wsc_v2_9 v2.9
+    @subsection wsc_v2_4 v2.4
     - added async I/O support using the global @ref AsyncSocketIo::AsyncSocketIoController for scalable,
       non-blocking WebSocket client connections; enabled by default for HTTP/1.1 connections
       - added the \c async_io constructor option (default @ref True); set to @ref False to use the legacy
@@ -263,8 +263,6 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
       implementing @ref Qore::AbstractPollOperation for non-blocking WebSocket I/O with buffer-based
       frame parsing, thread-safe send/receive queues, and full protocol support (text, binary, ping/pong,
       close handshake, fragmentation, extensions)
-
-    @subsection wsc_v2_7 v2.7
     - added support for WebSocket over HTTP/3 (RFC 9220 — Extended CONNECT over QUIC)
       - automatic detection and use of HTTP/3 extended CONNECT when connecting to HTTP/3 servers
       - added @ref WebSocketClient::WebSocketClient::isHttp3() "WebSocketClient::isHttp3()" method to check if
@@ -275,8 +273,6 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
     - debug info now includes \c http3 field for HTTP/3 WebSocket connections
     - extracted \c readWsMessageFromStream() helper to eliminate duplicate HTTP/2 and HTTP/3
       WebSocket frame reading logic
-
-    @subsection wsc_v2_6 v2.6
     - added async polling API support for WebSocket connections
       - added \c WebSocketConnectionObject::supportsPollingApi() "WebSocketConnectionObject::supportsPollingApi()"
         returning @ref True
@@ -293,8 +289,6 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
     - added debug info collection support via @ref DataProvider::AbstractDataProvider::setDebugCollector()
       "AbstractDataProvider::setDebugCollector()" for the WebSocket data provider
     - debug info includes WebSocket message type, size, timing, connection protocol, and error info
-
-    @subsection wsc_v2_5 v2.5
     - added WebSocket extension support with permessage-deflate compression
       (<a href="https://github.com/qoretechnologies/qore/issues/5065">issue 5065</a>)
       - added \c extensions constructor option for providing extension instances
@@ -304,8 +298,6 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
         method
       - added \c WebSocketClient::WebSocketClient::getActiveExtensions() "WebSocketClient::getActiveExtensions()"
         method
-
-    @subsection wsc_v2_4 v2.4
     - added optional AsyncAPI validation support via \c WebSocketClient::WebSocketClient::setAsyncApiValidator()
       "WebSocketClient::setAsyncApiValidator()" for validating WebSocket messages against AsyncAPI schemas
       (<a href="https://github.com/qoretechnologies/qore/issues/5014">issue 5014</a>)
@@ -527,7 +519,7 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
         const DefaultTimeout = 15s;
 
         #! module version
-        const Version = "2.9";
+        const Version = "2.4";
 
         #! default user agent string for HTTP requests
         const DefaultUserAgent = sprintf("Qore-WebSocketClient/%s", WebSocketClient::Version);
@@ -552,7 +544,7 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
         int stop = 0;
 
         #! Mutex for serializing send operations
-        /** @since WebSocketClient 2.8
+        /** @since WebSocketClient 2.4
         */
         Mutex send_lock();
 
@@ -648,32 +640,32 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
         #! True if async I/O mode is enabled for the current connection
         /** May be temporarily set to False for HTTP/2/HTTP/3 connections.
             Reset from \c async_io_requested on each new connection.
-            @since WebSocketClient 2.9
+            @since WebSocketClient 2.4
         */
         bool async_io = True;
 
         #! Original user preference for async I/O mode
-        /** @since WebSocketClient 2.9
+        /** @since WebSocketClient 2.4
         */
         bool async_io_requested = True;
 
         #! The poll operation for async I/O mode
-        /** @since WebSocketClient 2.9
+        /** @since WebSocketClient 2.4
         */
         *WebSocketClientPollOperation poll_op;
 
         #! Owner string for the async I/O controller
-        /** @since WebSocketClient 2.9
+        /** @since WebSocketClient 2.4
         */
         string async_owner;
 
         #! Mutex for delivery scheduling (prevents concurrent delivery tasks)
-        /** @since WebSocketClient 2.9
+        /** @since WebSocketClient 2.4
         */
         Mutex delivery_mutex();
 
         #! True if a delivery task is currently running on the ThreadPool
-        /** @since WebSocketClient 2.9
+        /** @since WebSocketClient 2.4
         */
         bool delivery_active = False;
 
@@ -681,7 +673,7 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
         /** The delivery task uses this to re-drain the channel if new I/O callbacks fired
             while it was processing messages.
 
-            @since WebSocketClient 2.9
+            @since WebSocketClient 2.4
         */
         int delivery_pending = 0;
 
@@ -690,7 +682,7 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
             The destructor waits for this to reach zero to ensure the delivery thread
             has fully exited before member objects are destroyed.
 
-            @since WebSocketClient 2.10
+            @since WebSocketClient 2.4
         */
         Counter delivery_thread_counter();
 
@@ -699,19 +691,19 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
             self-deadlock case where the destructor is triggered from a user callback
             on the delivery thread itself.
 
-            @since WebSocketClient 2.10
+            @since WebSocketClient 2.4
         */
         int delivery_thread_id = 0;
 
         #! True if a close frame has been sent in async mode (prevents duplicate sends)
-        /** @since WebSocketClient 2.9
+        /** @since WebSocketClient 2.4
         */
         bool async_close_sent = False;
 
         #! TID of the thread running handleAsyncShutdown(), used to detect self-deadlock
         /** Set before closingConnection() so the destructor path can detect that it's being
             called from within handleAsyncShutdown() on the same thread and skip waitTidCleared().
-            @since WebSocketClient 2.9
+            @since WebSocketClient 2.4
         */
         int async_shutdown_tid = -2;
     }
@@ -768,8 +760,7 @@ WebSocketClient ws(\event(), {
         - WebSocketClient 2.3 removed logging closures, added LoggerWrapper as a base class, added token option
           support, added support for subclassing
         - WebSocketClient 2.4 added the \c asyncapi, \c asyncapi_channel, and \c validator options for AsyncAPI
-          schema validation
-        - WebSocketClient 2.9 added the \c async_io option for async I/O support
+          schema validation; added the \c async_io option for async I/O support
     */
     constructor(code cb, hash<auto> opts) {
         constructorInit(opts);
@@ -825,7 +816,7 @@ WebSocketClient ws(\event(), {
     #! Returns True if the permessage-deflate extension is active
     /** @return True if permessage-deflate compression is active on this connection
 
-        @since WebSocketClient 2.5
+        @since WebSocketClient 2.4
     */
     bool hasPerMessageDeflate() {
         if (!active_extensions) {
@@ -842,7 +833,7 @@ WebSocketClient ws(\event(), {
     #! Returns a list of active extension names
     /** @return a list of extension names that are active on this connection, or NOTHING if none
 
-        @since WebSocketClient 2.5
+        @since WebSocketClient 2.4
     */
     *list<string> getActiveExtensions() {
         if (!active_extensions) {
@@ -956,7 +947,7 @@ ws.connect();
 
         @note Only supports HTTP/1.1 WebSocket connections in async mode
 
-        @since WebSocketClient 2.8
+        @since WebSocketClient 2.4
     */
     WebSocketConnectPollOperation startPollConnect(*hash<auto> opts) {
         if (!opts.hdr.Accept) {
@@ -985,7 +976,7 @@ ws.connect();
 
         @note Only supports HTTP/1.1 WebSocket connections
 
-        @since WebSocketClient 2.9
+        @since WebSocketClient 2.4
     */
     connectAsync(*hash<auto> opts, *Queue ready_queue) {
         if (!async_io) {
@@ -1063,7 +1054,7 @@ ws.connect();
 
         @param connect_result the handshake response from the poll operation's getOutput()
 
-        @since WebSocketClient 2.8
+        @since WebSocketClient 2.4
     */
     startEventLoop(hash<auto> connect_result) {
         AutoLock al(m);
@@ -1110,7 +1101,7 @@ ws.connect();
     #! Returns @ref True "True" if the connection is using HTTP/2 WebSocket (RFC 8441)
     /** @return @ref True "True" if connected via HTTP/2 extended CONNECT, @ref False "False" if using HTTP/1.1 Upgrade
 
-        @since WebSocketClient 2.6
+        @since WebSocketClient 2.4
     */
     bool isHttp2() {
         m.lock();
@@ -1122,7 +1113,7 @@ ws.connect();
     #! Returns @ref True "True" if the connection is using HTTP/3 WebSocket (RFC 9220)
     /** @return @ref True "True" if connected via HTTP/3 extended CONNECT
 
-        @since WebSocketClient 2.7
+        @since WebSocketClient 2.4
     */
     bool isHttp3() {
         m.lock();
@@ -1191,8 +1182,7 @@ ws.connect();
         - \c socket: information about the connected local socket (see
           @ref Qore::Socket::getSocketInfo() "Socket::getSocketInfo()")
 
-        @since WebSocketClient 2.6 added \c http2
-        @since WebSocketClient 2.7 added \c http3
+        @since WebSocketClient 2.4
     */
     *hash<auto> getConnectionInfo() {
         # use += to keep "hash<auto>"
@@ -1515,7 +1505,7 @@ ws.setEventQueue();
 
         @return a @ref WebSocketSendPollOperation for the async send
 
-        @since WebSocketClient 2.8
+        @since WebSocketClient 2.4
     */
     WebSocketSendPollOperation startPollSend(string str) {
         return startPollSendIntern(str, WSOP_Text, True);
@@ -1526,7 +1516,7 @@ ws.setEventQueue();
 
         @return a @ref WebSocketSendPollOperation for the async send
 
-        @since WebSocketClient 2.8
+        @since WebSocketClient 2.4
     */
     WebSocketSendPollOperation startPollSend(binary bin) {
         return startPollSendIntern(bin, WSOP_Binary, True);
@@ -1539,14 +1529,14 @@ ws.setEventQueue();
 
         @return a @ref WebSocketSendPollOperation for the async send
 
-        @since WebSocketClient 2.8
+        @since WebSocketClient 2.4
     */
     WebSocketSendPollOperation startPollSend(data msg, int op, bool fin) {
         return startPollSendIntern(msg, op, fin);
     }
 
     #! Internal method to create a poll send operation
-    /** @since WebSocketClient 2.8
+    /** @since WebSocketClient 2.4
     */
     private WebSocketSendPollOperation startPollSendIntern(data msg, int op, bool fin) {
         int rsv_bits = 0;
@@ -2034,7 +2024,7 @@ ws.setEventQueue();
 
     #! Initializes the poll operation and submits it to the async I/O controller
     /** Must be called while holding the mutex \c m.
-        @since WebSocketClient 2.9
+        @since WebSocketClient 2.4
     */
     private startAsyncIo() {
         # Determine transport type
@@ -2107,7 +2097,7 @@ ws.setEventQueue();
     }
 
     #! Stops the async I/O controller for this connection
-    /** @since WebSocketClient 2.9
+    /** @since WebSocketClient 2.4
     */
     private stopAsyncIo() {
         if (async_owner) {
@@ -2123,7 +2113,7 @@ ws.setEventQueue();
     }
 
     #! Wakes the async I/O controller to process pending operations
-    /** @since WebSocketClient 2.9
+    /** @since WebSocketClient 2.4
     */
     private wakeAsyncIo() {
         try {
@@ -2139,7 +2129,7 @@ ws.setEventQueue();
     /** Called from the I/O callback. Only submits a task if no delivery task is currently active,
         ensuring message ordering is preserved (only one delivery task runs at a time per client).
 
-        @since WebSocketClient 2.9
+        @since WebSocketClient 2.4
     */
     private scheduleDelivery() {
         {
@@ -2150,19 +2140,29 @@ ws.setEventQueue();
             }
             delivery_active = True;
         }
-        # Use background thread for delivery instead of ThreadPool to avoid persistent
-        # idle threads that block program exit (QoreProgramHelper waits for all threads
-        # before module del handlers run, creating a deadlock with ThreadPool workers)
-        # Use static method as the background thread entry point to avoid
-        # OBJECT-ALREADY-DELETED when the object is deleted between the background
-        # statement and the thread start
-        # NOTE: the method reference must be evaluated here (not in the background thread)
+        # Use the global async I/O controller's ThreadPool for delivery, avoiding glibc
+        # TLS memory accumulation from short-lived background threads. The controller's
+        # pool has proper lifecycle management (stopped in module del handler).
+        # NOTE: the method reference must be evaluated here (not in the pool thread)
         # because \deliverPendingMessages() needs 'self' which may be invalid by the time
-        # the background thread starts
+        # the pool thread starts
         delivery_thread_counter.inc();
         code<nothing()> deliver = \deliverPendingMessages();
-        background WebSocketClientWithSerialization::deliverInBackground(deliver,
-            delivery_thread_counter);
+        try {
+            AsyncSocketIo::AsyncSocketIoController controller =
+                AsyncSocketIo::getGlobalAsyncIoController();
+            controller.submitTask(sub () {
+                WebSocketClientWithSerialization::deliverInBackground(deliver,
+                    delivery_thread_counter);
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            # Controller may be stopped during shutdown
+            delivery_thread_counter.dec();
+            {
+                AutoLock al(delivery_mutex);
+                delivery_active = False;
+            }
+        }
     }
 
     #! Background thread entry point for message delivery
@@ -2173,7 +2173,7 @@ ws.setEventQueue();
         @param deliver code reference to the \c deliverPendingMessages() method
         @param cnt the delivery thread counter to decrement when the thread exits
 
-        @since WebSocketClient 2.9
+        @since WebSocketClient 2.4
     */
     private static deliverInBackground(code<nothing()> deliver, Counter cnt) {
         on_exit cnt.dec();
@@ -2194,7 +2194,7 @@ ws.setEventQueue();
     /** Runs on a background thread. Processes all available messages in order, then clears the
         delivery_active flag to allow the next delivery task to be scheduled.
 
-        @since WebSocketClient 2.9
+        @since WebSocketClient 2.4
     */
     private deliverPendingMessages() {
         # Track this thread's TID so the destructor can detect the self-deadlock case
@@ -2303,7 +2303,7 @@ ws.setEventQueue();
         or an unrecoverable error occurs. Stops the I/O controller, closes the socket, signals
         any waiting disconnect() callers, and initiates reconnection if configured.
 
-        @since WebSocketClient 2.9
+        @since WebSocketClient 2.4
     */
     private handleAsyncShutdown() {
         if (!self) {
@@ -2401,7 +2401,7 @@ ws.setEventQueue();
     /** @param msg the message hash from WebSocketClientPollOperation::getReceivedMessage()
         @return event disposition code (WSEDC_CONTINUE or WSEDC_BREAK)
 
-        @since WebSocketClient 2.9
+        @since WebSocketClient 2.4
     */
     private int processAsyncMessage(hash<auto> msg) {
         switch (msg.type) {
@@ -2447,7 +2447,7 @@ ws.setEventQueue();
     #! Returns True if async I/O mode is enabled
     /** @return True if the client is using async I/O mode
 
-        @since WebSocketClient 2.9
+        @since WebSocketClient 2.4
     */
     bool isAsyncIo() {
         return async_io;
@@ -2456,7 +2456,7 @@ ws.setEventQueue();
     #! Returns the poll operation for advanced async I/O usage
     /** @return the WebSocketClientPollOperation or NOTHING if not in async mode
 
-        @since WebSocketClient 2.9
+        @since WebSocketClient 2.4
     */
     *WebSocketClientPollOperation getPollOperation() {
         return poll_op;
@@ -2563,8 +2563,9 @@ ws.setEventQueue();
         int rsv_bits = (h.rsv1 ? WS_RSV1 : 0) | (h.rsv2 ? WS_RSV2 : 0) | (h.rsv3 ? WS_RSV3 : 0);
         if (rsv_bits) {
             if (!active_extensions) {
-                logError("RSV bits set but no extensions are active: rsv1=%y rsv2=%y rsv3=%y",
-                    h.rsv1, h.rsv2, h.rsv3);
+                logError("RSV bits set but no extensions are active: rsv1=%y rsv2=%y rsv3=%y op=%s (%d) "
+                    "msg_size=%d masked=%y fin=%y",
+                    h.rsv1, h.rsv2, h.rsv3, WSOPMap{h.op} ?? "unknown", h.op, h.msg.size(), h.masked, h.fin);
                 sendClose(WSCC_ProtocolError);
                 return WSEDC_BREAK;
             }
@@ -2709,7 +2710,7 @@ ws.setEventQueue();
     }
 
     #! Sends raw WebSocket frame data (handles HTTP/2 vs HTTP/1.1)
-    /** @since WebSocketClient 2.6
+    /** @since WebSocketClient 2.4
     */
     private sendWsFrame(binary data) {
         AutoLock al(send_lock);
@@ -2717,7 +2718,7 @@ ws.setEventQueue();
     }
 
     #! Sends a WebSocket frame without acquiring the send lock
-    /** @since WebSocketClient 2.8
+    /** @since WebSocketClient 2.4
     */
     private sendWsFrameUnlocked(binary data) {
         if (http3_websocket && h3_stream_id >= 0) {
@@ -2734,7 +2735,7 @@ ws.setEventQueue();
 
     #! Reads a WebSocket message (handles HTTP/2, HTTP/3, and HTTP/1.1)
     /** @return WebSocket message info hash
-        @since WebSocketClient 2.6
+        @since WebSocketClient 2.4
     */
     private hash<WsMsgInfo> readWsMessage() {
         if (http3_websocket && h3_stream_id >= 0) {
@@ -2765,7 +2766,7 @@ ws.setEventQueue();
 
         @return WebSocket message info hash
 
-        @since WebSocketClient 2.7
+        @since WebSocketClient 2.4
     */
     private hash<WsMsgInfo> readWsMessageFromStream(
             reference<*binary> frame_buf,
@@ -2962,7 +2963,7 @@ ws.setEventQueue();
 
     #! RFC 8441: HTTP/2 WebSocket handshake using extended CONNECT
     /** Uses \c Sec-WebSocket-Key in the CONNECT request and validates the \c Sec-WebSocket-Accept response header.
-        @since WebSocketClient 2.6
+        @since WebSocketClient 2.4
     */
     private hash<auto> connectHttp2WebSocket(hash<auto> hdr, *reference<hash<auto>> info, *bool reconnect) {
         http2_websocket = True;
@@ -3042,7 +3043,7 @@ ws.setEventQueue();
 
     #! RFC 9220: HTTP/3 WebSocket handshake using extended CONNECT
     /** Uses \c Sec-WebSocket-Key in the CONNECT request and validates the \c Sec-WebSocket-Accept response header.
-        @since WebSocketClient 2.7
+        @since WebSocketClient 2.4
     */
     private hash<auto> connectHttp3WebSocket(hash<auto> hdr, *reference<hash<auto>> info, *bool reconnect) {
         http3_websocket = True;
@@ -3414,7 +3415,7 @@ class MyObserver inherits Observer {
 #! Poll operation for WebSocket connection ping
 /** Performs a WebSocket handshake to verify the connection is working.
 
-    @since WebSocketClient 2.6
+    @since WebSocketClient 2.4
 */
 public class WebSocketPingPollOperation inherits Qore::AbstractPollOperation {
     private {
@@ -3443,7 +3444,7 @@ public class WebSocketPingPollOperation inherits Qore::AbstractPollOperation {
         @param headers additional headers for the request
         @param logger optional logger
 
-        @since WebSocketClient 2.6
+        @since WebSocketClient 2.4
     */
     constructor(string base_url, *hash<auto> http_opts, *hash<auto> headers,
             *Logger::LoggerInterface logger) {
@@ -3717,7 +3718,7 @@ public class WebSocketConnectionObject inherits ConnectionProvider::AbstractConn
     #! returns @ref True, since this connection type supports the %Qore @ref Qore::Socket "Socket-based" polling API
     /** @return @ref True
 
-        @since WebSocketClient 2.6
+        @since WebSocketClient 2.4
     */
     bool supportsPollingApi() {
         return True;
@@ -3730,7 +3731,7 @@ public class WebSocketConnectionObject inherits ConnectionProvider::AbstractConn
 
         @see supportsPollingApi()
 
-        @since WebSocketClient 2.6
+        @since WebSocketClient 2.4
     */
     Qore::AbstractPollOperation startPollConnect(*Logger::LoggerInterface logger) {
         hash<auto> http_opts = opts{keys HttpConnection::ConnectionScheme.options};
@@ -4270,11 +4271,6 @@ public class WebSocketClientDataProviderBase inherits DataProvider::AbstractData
         try {
             if (!client.isOpen()) {
                 error_msg = "SOCKET-NOT-OPEN: socket is closed";
-                @debug {
-                    if (logger) {
-                        logger.debug("skipping WebSocket send: %s", error_msg);
-                    }
-                }
                 return;
             }
             switch (message_id) {
@@ -4499,7 +4495,7 @@ public class WebSocketClientEventDataType inherits HashDataType {
 public const WebSocketClientEventDataType = new WebSocketClientEventDataType();
 
 #! WebSocket connected event data type
-/** @since WebSocketClient 2.6
+/** @since WebSocketClient 2.4
 */
 public class WebSocketClientConnectedEventDataType inherits HashDataType {
     #! Creates the type
@@ -4662,7 +4658,7 @@ public class WebSocketClientDataProviderFactory inherits AbstractDataProviderFac
 
     Supports HTTP/1.1, HTTP/2 (RFC 8441), and HTTP/3 (RFC 9220) transports.
 
-    @since WebSocketClient 2.9
+    @since WebSocketClient 2.4
 */
 public class WebSocketClientPollOperation inherits Qore::AbstractPollOperation {
     public {
@@ -4716,7 +4712,7 @@ public class WebSocketClientPollOperation inherits Qore::AbstractPollOperation {
 
         #! Mutex for protecting close handshake state accessed from both user and I/O threads
         /** Protects: state, close_initiated, close_code, close_reason
-            @since WebSocketClient 2.9
+            @since WebSocketClient 2.4
         */
         Mutex close_mutex();
 
@@ -4757,9 +4753,17 @@ public class WebSocketClientPollOperation inherits Qore::AbstractPollOperation {
             Used by WebSocketClient to schedule message delivery via ThreadPool,
             eliminating the need for a dedicated delivery thread.
 
-            @since WebSocketClient 2.9
+            @since WebSocketClient 2.4
         */
         *code on_poll_complete;
+
+        #! Counter for messages queued to recv_channel during processReceivedFrames()
+        /** Only written by the I/O thread (in handleParsedFrame), so no lock needed.
+            Reset before processReceivedFrames() and checked after to determine whether
+            notifyPollComplete() should fire.  Unlike recv_channel.size(), this is not
+            subject to races with the concurrent delivery thread.
+        */
+        int frames_queued = 0;
     }
 
     #! Creates the poll operation for an established WebSocket connection
@@ -4854,6 +4858,7 @@ public class WebSocketClientPollOperation inherits Qore::AbstractPollOperation {
         }
 
         # Process complete frames from the receive buffer
+        frames_queued = 0;
         try {
             processReceivedFrames();
         } catch (hash<ExceptionInfo> ex) {
@@ -4868,6 +4873,14 @@ public class WebSocketClientPollOperation inherits Qore::AbstractPollOperation {
         if (state == STATE_CLOSED || state == STATE_ERROR) {
             notifyPollComplete();
             return NOTHING;
+        }
+
+        # Notify delivery only if processReceivedFrames() actually queued messages.
+        # Uses the I/O-thread-local frames_queued counter (incremented by
+        # handleParsedFrame) instead of recv_channel.size(), which races with the
+        # concurrent delivery thread.
+        if (frames_queued > 0) {
+            notifyPollComplete();
         }
 
         # --- Write phase ---
@@ -4920,8 +4933,6 @@ public class WebSocketClientPollOperation inherits Qore::AbstractPollOperation {
 
         # Always poll for incoming data
         poll_events |= SOCK_POLLIN;
-
-        notifyPollComplete();
 
         return <SocketPollInfo>{
             "events": poll_events,
@@ -5181,6 +5192,7 @@ public class WebSocketClientPollOperation inherits Qore::AbstractPollOperation {
             }
 
             recv_channel.send({"type": "close", "msg": h, "code": code, "reason": reason});
+            ++frames_queued;
 
             if (!we_initiated) {
                 # Server initiated close - echo the close frame back
@@ -5223,6 +5235,7 @@ public class WebSocketClientPollOperation inherits Qore::AbstractPollOperation {
                 state = STATE_CLOSED;
                 recv_channel.send({"type": "closed", "code": WSCC_NormalClosure,
                     "reason": "raw callback requested break"});
+                ++frames_queued;
                 return;
             }
         }
@@ -5233,12 +5246,14 @@ public class WebSocketClientPollOperation inherits Qore::AbstractPollOperation {
                 "data": ws_encode_message(h.msg ?? "heartbeat", WSOP_Pong, True),
             });
             recv_channel.send({"type": "ping", "msg": h, "data": h.msg});
+            ++frames_queued;
             return;
         }
 
         # Handle pong
         if (h.op == WSOP_Pong) {
             recv_channel.send({"type": "pong", "msg": h, "data": h.msg});
+            ++frames_queued;
             return;
         }
 
@@ -5293,6 +5308,7 @@ public class WebSocketClientPollOperation inherits Qore::AbstractPollOperation {
             data processed = applyIncomingExtensions(remove frag_buf, ext_h);
             string msg_type = ext_h.op == WSOP_Text ? "text" : "binary";
             recv_channel.send({"type": msg_type, "msg": ext_h, "data": processed});
+            ++frames_queued;
             return;
         }
 
@@ -5301,6 +5317,7 @@ public class WebSocketClientPollOperation inherits Qore::AbstractPollOperation {
             data processed = applyIncomingExtensions(h.msg, h);
             string msg_type = h.op == WSOP_Text ? "text" : "binary";
             recv_channel.send({"type": msg_type, "msg": h, "data": processed});
+            ++frames_queued;
             return;
         }
 
@@ -5420,7 +5437,7 @@ public class WebSocketClientPollOperation inherits Qore::AbstractPollOperation {
     /** Called at the end of each continuePoll() cycle (including error/close paths)
         to trigger message delivery scheduling.
 
-        @since WebSocketClient 2.9
+        @since WebSocketClient 2.4
     */
     private notifyPollComplete() {
         if (on_poll_complete) {
@@ -5453,7 +5470,7 @@ public class WebSocketClientPollOperation inherits Qore::AbstractPollOperation {
     in the first continuePoll() call since stream multiplexing handles
     the I/O internally.
 
-    @since WebSocketClient 2.8
+    @since WebSocketClient 2.4
 */
 public class WebSocketSendPollOperation inherits Qore::AbstractPollOperation {
     private {
@@ -5577,7 +5594,7 @@ public class WebSocketSendPollOperation inherits Qore::AbstractPollOperation {
     \c WebSocketClient.startEventLoop() with the output to start the background
     receive thread.
 
-    @since WebSocketClient 2.8
+    @since WebSocketClient 2.4
 */
 public class WebSocketConnectPollOperation inherits Qore::AbstractPollOperation {
     private {
@@ -5751,8 +5768,7 @@ const WebSocketsLogoLight = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone
    d=\"m 445.886,268.502 c 0,-34.436 -27.957,-62.393 -62.393,-62.393 H 182.735 c -34.436,0 -62.393,27.957 -62.393,62.393 V 457.2 c 0,34.435 27.957,62.393 62.393,62.393 h 200.758 c 34.436,0 62.393,-27.958 62.393,-62.393 z\"
    style=\"fill:#b3d9ff;stroke:#ffffff;stroke-width:2.31px\" />
             <rect
-   id=\"rect2\"} # namespace WebSocketClient
-
+   id=\"rect2\"
    x=\"186.959\"
    y=\"280.08301\"
    width=\"33.727001\"

@@ -47,6 +47,10 @@ option(SINGLE_COMPILATION_UNIT
        "Build libqore as a single compilation unit for faster builds"
        ON)
 
+option(ENABLE_ALLOC_TRACKING
+       "Enable malloc/free interposer for memory leak tracking (adds overhead to all allocations; debug only)"
+       OFF)
+
 STRING(LENGTH ${VERSION_MINOR} MINOR_LEN)
 if (${MINOR_LEN} EQUAL 1)
     set(VERSION_FORMATTED_MINOR 0${VERSION_MINOR})
@@ -1101,6 +1105,15 @@ set(LIBQORE_CPP_SRC ${LIBQORE_CPP_SRC}
     lib/OutputStream.cpp
 )
 
+# Allocation tracking (malloc/free interposer for leak detection)
+# Must be a separate compilation unit (not in SCU) because it defines global malloc/free symbols
+# Only built when -DENABLE_ALLOC_TRACKING=ON (adds overhead to every malloc/free call)
+if (ENABLE_ALLOC_TRACKING AND Backtrace_FOUND)
+    set(LIBQORE_CPP_SRC ${LIBQORE_CPP_SRC} lib/AllocTracking.cpp)
+    set(LIBQORE_QPP_SRC ${LIBQORE_QPP_SRC} lib/ql_alloc_tracking.qpp)
+    add_definitions(-DQORE_HAVE_ALLOC_TRACKING)
+endif ()
+
 # HTTP/2 support is always enabled (nghttp2 is required)
 set(LIBQORE_CPP_SRC ${LIBQORE_CPP_SRC}
     lib/Http2Session.cpp
@@ -1524,7 +1537,18 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/QuicSessionTicketCache.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QuicPollOperations.cpp\"
 ")
-    add_library(libqore SHARED ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp ${LIBQORE_SOURCE_HEADERS})
+    # Conditionally add alloc tracking QPP to the SCU (the QPP-generated C++ is safe for SCU;
+    # only AllocTracking.cpp with its global malloc/free symbols must be compiled separately)
+    if (ENABLE_ALLOC_TRACKING AND Backtrace_FOUND)
+        file(APPEND ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp
+            "#include \"${CMAKE_BINARY_DIR}/ql_alloc_tracking.cpp\"\n")
+    endif ()
+    # AllocTracking.cpp defines global malloc/free symbols and must be compiled separately from the SCU
+    set(LIBQORE_EXTRA_SRC "")
+    if (ENABLE_ALLOC_TRACKING AND Backtrace_FOUND)
+        set(LIBQORE_EXTRA_SRC lib/AllocTracking.cpp)
+    endif ()
+    add_library(libqore SHARED ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp ${LIBQORE_EXTRA_SRC} ${LIBQORE_SOURCE_HEADERS})
 else (SINGLE_COMPILATION_UNIT)
     add_library(libqore SHARED ${LIBQORE_QPP_CPP_SRC} ${LIBQORE_CPP_SRC} ${LIBQORE_ASM_SRC} ${LIBQORE_SOURCE_HEADERS})
 endif (SINGLE_COMPILATION_UNIT)

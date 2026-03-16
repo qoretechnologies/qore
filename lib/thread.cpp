@@ -89,6 +89,9 @@
 // global background thread counter
 QoreCounter thread_counter;
 
+// global counter for threads with external lifecycle management (ThreadPool)
+QoreCounter tp_thread_counter;
+
 ThreadCleanupList tclist;
 
 DLLLOCAL bool threads_initialized = false;
@@ -2852,6 +2855,8 @@ static void set_tid_thread_name(int tid) {
 namespace {
     extern "C" void* q_run_thread(void* arg) {
         ThreadArg* ta = (ThreadArg*)arg;
+        // save flags before ta is deleted
+        int ta_flags = ta->flags;
 
         register_thread(ta->tid, pthread_self(), 0, false, ta->flags);
         printd(5, "q_run_thread() ta: %p TID %d started\n", ta, ta->tid);
@@ -2901,9 +2906,18 @@ namespace {
         }
 
         pthread_cleanup_pop((int)1);
-        thread_counter.dec();
-        pthread_exit(0);
-        return 0;
+        // NOTE: do not call OPENSSL_thread_stop() here — returning from the
+        // thread function (instead of calling pthread_exit()) already triggers
+        // TLS destructors registered by OpenSSL via pthread_key_create(),
+        // which handles per-thread state cleanup automatically.  Explicit
+        // OPENSSL_thread_stop() acquires OpenSSL's global lock and can cause
+        // contention with concurrent TLS handshakes (e.g. QUIC/ngtcp2).
+        if (ta_flags & QTF_EXTERNAL_LIFECYCLE) {
+            tp_thread_counter.dec();
+        } else {
+            thread_counter.dec();
+        }
+        return nullptr;
     }
 
     extern "C" void* op_background_thread(void* x) {
@@ -2980,9 +2994,10 @@ namespace {
         }
 
         pthread_cleanup_pop(1);
+        // NOTE: do not call OPENSSL_thread_stop() here — returning from the
+        // thread function triggers TLS destructors automatically (see above).
         thread_counter.dec();
-        pthread_exit(0);
-        return 0;
+        return nullptr;
     }
 }
 
@@ -3094,6 +3109,43 @@ int q_start_thread(ExceptionSink* xsink, q_thread_t f, void* arg, size_t stack_s
     if ((rc = pthread_create(&ptid, local_attr.get_ptr(), q_run_thread, ta))) {
         delete ta;
         thread_counter.dec();
+        deregister_thread(tid);
+        xsink->raiseErrnoException("THREAD-CREATION-FAILURE", rc, "could not create thread");
+        return -1;
+    }
+
+    return tid;
+}
+
+int q_start_thread(ExceptionSink* xsink, q_thread_t f, void* arg, int flags) {
+    int tid = get_thread_entry();
+
+    if (tid == -1) {
+        xsink->raiseException("THREAD-CREATION-FAILURE", "thread list is full with %d threads", MAX_QORE_THREADS);
+        return -1;
+    }
+
+    ThreadArg* ta = new ThreadArg(f, arg, tid, flags);
+
+    int rc;
+    pthread_t ptid;
+
+#ifdef QORE_MANAGE_STACK
+    AutoLocker al(stack_lck);
+#endif
+
+    if (flags & QTF_EXTERNAL_LIFECYCLE) {
+        tp_thread_counter.inc();
+    } else {
+        thread_counter.inc();
+    }
+    if ((rc = pthread_create(&ptid, ta_default.get_ptr(), q_run_thread, ta))) {
+        delete ta;
+        if (flags & QTF_EXTERNAL_LIFECYCLE) {
+            tp_thread_counter.dec();
+        } else {
+            thread_counter.dec();
+        }
         deregister_thread(tid);
         xsink->raiseErrnoException("THREAD-CREATION-FAILURE", rc, "could not create thread");
         return -1;

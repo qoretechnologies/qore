@@ -5527,15 +5527,12 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 }
 
                 # For body_streaming requests where the handler returned early
-                # (e.g., error before reading all client data), do NOT reset or
-                # clean up the stream here.  The response has been queued via
-                # sendMultiplexedResponse() with END_STREAM, and any premature
-                # stream cleanup (resetHttp2Stream or cleanupHttp2Stream) can
-                # cause the queued response to be cancelled or lost.
-                # The stream remains in the Http2Session streams map; remaining
-                # client DATA is buffered harmlessly.  The stream is cleaned up
-                # by onStreamCloseCallback when both sides are done.
+                # (e.g., error before reading all client data), clean up the
+                # dispatched stream now that the handler is done.  The response
+                # has already been queued via sendMultiplexedResponse() which
+                # uses nghttp2's internal state, not our streams map.
                 if (conn_info.header_info.body_streaming) {
+                    s.cleanupHttp2Stream(conn_info.header_info.stream_id);
                     conn_info.header_info.io_wake();
                 }
 

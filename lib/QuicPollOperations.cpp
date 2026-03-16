@@ -51,6 +51,16 @@ constexpr int QUIC_MAX_RECV_BATCH = 16;
 // Shared sendmmsg() batch helper for QUIC I/O
 #include "qore/intern/QuicCommon.h"
 
+//! Maximum poll timeout (ms) when no QUIC timer is pending.
+/** When the only in-flight packets are ACK-only (not tracked for PTO per RFC 9002),
+    ngtcp2_conn_get_expiry() returns UINT64_MAX.  Without a bounded default, the
+    I/O thread's poll() falls back to the full operation timeout (e.g. 30s), stalling
+    the connection while the peer's PTO-driven retransmissions arrive unseen.
+    1 second is short enough to ensure prompt reaction to incoming data while avoiding
+    excessive wakeups during idle periods.
+*/
+static constexpr int64_t QUIC_NO_TIMER_POLL_MS = 1000;
+
 //! Set the "poll_timeout_ms" key on a poll info hash based on the next QUIC timer expiry.
 /** Clamps the poll timeout so that retransmission/PTO timers fire promptly.
     @param poll_info the poll info hash to update (must not be nullptr)
@@ -59,17 +69,18 @@ constexpr int QUIC_MAX_RECV_BATCH = 16;
 */
 static void setPollTimeoutFromExpiry(QoreHashNode* poll_info, ngtcp2_tstamp expiry,
                                      ExceptionSink* xsink) {
-    if (expiry == UINT64_MAX) {
-        return;
-    }
-    ngtcp2_tstamp now = QuicSession::timestamp();
     int64_t timeout_ms;
-    if (expiry <= now) {
-        timeout_ms = 1;  // fire immediately on next poll cycle
+    if (expiry == UINT64_MAX) {
+        timeout_ms = QUIC_NO_TIMER_POLL_MS;
     } else {
-        timeout_ms = static_cast<int64_t>((expiry - now) / 1000000);
-        if (timeout_ms == 0) {
-            timeout_ms = 1;
+        ngtcp2_tstamp now = QuicSession::timestamp();
+        if (expiry <= now) {
+            timeout_ms = 1;  // fire immediately on next poll cycle
+        } else {
+            timeout_ms = static_cast<int64_t>((expiry - now) / 1000000);
+            if (timeout_ms == 0) {
+                timeout_ms = 1;
+            }
         }
     }
     poll_info->setKeyValue("poll_timeout_ms", timeout_ms, xsink);
@@ -731,7 +742,12 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                     cached_stream = quic_session->takeCompletedStream();
                     qcs_state = QCS::RESPONSE_READY;
                     // Flush pending writes (ACKs) before signaling goal reached
-                    flushAndReturnPollInfo(xsink);
+                    {
+                        QoreHashNode* flush_info = flushAndReturnPollInfo(xsink);
+                        if (flush_info) {
+                            flush_info->deref(xsink);
+                        }
+                    }
                     return nullptr;  // goal reached
                 }
 
@@ -751,7 +767,12 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                         cached_stream = quic_session->takeCompletedStream();
                         qcs_state = QCS::RESPONSE_READY;
                         // Flush pending writes (ACKs) before signaling goal reached
-                        flushAndReturnPollInfo(xsink);
+                        {
+                            QoreHashNode* flush_info = flushAndReturnPollInfo(xsink);
+                            if (flush_info) {
+                                flush_info->deref(xsink);
+                            }
+                        }
                         return nullptr;  // goal reached
                     }
                 }
@@ -778,7 +799,15 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                     if (quic_session->hasCompletedStreams()) {
                         cached_stream = quic_session->takeCompletedStream();
                         qcs_state = QCS::RESPONSE_READY;
-                        // sendPendingPackets was just called; no flush needed
+                        // Flush pending writes (ACKs) before signaling goal reached;
+                        // sendPendingPackets may have triggered internal processing
+                        // that generated new ACK obligations
+                        {
+                            QoreHashNode* flush_info = flushAndReturnPollInfo(xsink);
+                            if (flush_info) {
+                                flush_info->deref(xsink);
+                            }
+                        }
                         return nullptr;  // goal reached
                     }
 
@@ -799,8 +828,35 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                         if (quic_session->hasCompletedStreams()) {
                             cached_stream = quic_session->takeCompletedStream();
                             qcs_state = QCS::RESPONSE_READY;
-                            // sendPendingPackets was just called; no flush needed
+                            // Flush pending writes (ACKs) before signaling goal
+                            // reached; recvAndProcessPacket generated new ACK
+                            // obligations after sendPendingPackets
+                            {
+                                QoreHashNode* flush_info = flushAndReturnPollInfo(xsink);
+                                if (flush_info) {
+                                    flush_info->deref(xsink);
+                                }
+                            }
                             return nullptr;  // goal reached
+                        }
+                    }
+
+                    // Flush any pending frames generated by the fast-path recv
+                    // (e.g. MAX_STREAM_DATA for flow control).  Without this,
+                    // the server may be blocked waiting for a flow-control
+                    // update that sits unsent until the next continuePoll().
+                    {
+                        ngtcp2_tstamp fast_expiry;
+                        int fast_rv = sendPendingPackets(fast_expiry, xsink);
+                        if (*xsink) {
+                            return nullptr;
+                        }
+                        // Use the tighter expiry / write requirement
+                        if (fast_rv == SOCK_POLLOUT) {
+                            srv = fast_rv;
+                        }
+                        if (fast_expiry < next_expiry) {
+                            next_expiry = fast_expiry;
                         }
                     }
 
@@ -862,10 +918,9 @@ int64_t SocketQuicClientPollOperation::submitRequest(
 }
 
 int SocketQuicClientPollOperation::migrateConnection(ExceptionSink* xsink) {
-    // NOTE: we acquire sock->priv->m for the fd swap section below to
-    // synchronize with continuePoll() which also holds this lock.
-    // The lock is NOT held during new-socket creation / connect() to
-    // avoid blocking the controller I/O thread.
+    // Create a new connected UDP socket and swap the fd on the socket object.
+    // The old fd is closed immediately — this removes it from epoll so the
+    // controller's next continuePoll cycle re-adds the new fd cleanly.
 
     if (!quic_session) {
         xsink->raiseException("QUIC-MIGRATION-ERROR", "QUIC session not initialized");
@@ -886,12 +941,7 @@ int SocketQuicClientPollOperation::migrateConnection(ExceptionSink* xsink) {
         int release() { int r = fd; fd = -1; return r; }
     };
 
-    // Create a new UDP socket with the same address family.
-    // NOTE: remote_addr_ is this poll operation's cached copy (not the session's),
-    // so no session lock is needed.  The caller (Http3ClientConnection::migrate())
-    // holds driving=True which prevents concurrent continuePoll() from modifying
-    // poll operation state.
-    // Create UDP socket; set close-on-exec to prevent FD leak on fork/exec
+    // Create a new UDP socket with the same address family
 #ifdef SOCK_CLOEXEC
     int new_fd = ::socket(remote_addr_.ss_family, SOCK_DGRAM | SOCK_CLOEXEC, 0);
 #else
@@ -907,8 +957,7 @@ int SocketQuicClientPollOperation::migrateConnection(ExceptionSink* xsink) {
 #endif
     FdGuard fd_guard(new_fd);
 
-    // Connect the new socket to the same remote address (gives us a specific
-    // local address via getsockname and filters incoming packets)
+    // Connect the new socket to the same remote address
     if (::connect(new_fd, reinterpret_cast<const struct sockaddr*>(&remote_addr_),
                   remote_addrlen_) < 0) {
         xsink->raiseErrnoException("QUIC-MIGRATION-ERROR", errno,
@@ -916,7 +965,7 @@ int SocketQuicClientPollOperation::migrateConnection(ExceptionSink* xsink) {
         return -1;
     }
 
-    // Enlarge receive buffer on migration socket (same as initial socket)
+    // Enlarge receive buffer (same as initial socket)
     {
         int rcvbuf = 1024 * 1024;
 #ifdef SO_RCVBUFFORCE
@@ -937,11 +986,7 @@ int SocketQuicClientPollOperation::migrateConnection(ExceptionSink* xsink) {
         return -1;
     }
 
-    // Enable pktinfo on the new socket.  Failure is non-fatal for client sockets:
-    // the client poll-op path does NOT use extractPktinfoAddr() (see MEMORY.md
-    // "Client pktinfo rule"), so pktinfo is only used for best-effort local address
-    // reporting.  The migration path always has a valid local address from
-    // getsockname() on the connected socket.
+    // Enable pktinfo (non-fatal for client sockets)
     if (enableQuicPktinfo(new_fd, new_local.ss_family) < 0) {
         printd(2, "SocketQuicClientPollOperation::migrateConnection(): enableQuicPktinfo() "
             "failed (non-fatal for client): errno=%d (%s)\n", errno, strerror(errno));
@@ -963,25 +1008,31 @@ int SocketQuicClientPollOperation::migrateConnection(ExceptionSink* xsink) {
         return -1;
     }
 
-    // Migration succeeded — swap the fd under the socket lock to synchronize
-    // with continuePoll() which holds the same lock during I/O.
-    //
-    // NOTE: direct assignment to sock->priv->socket->priv->sock is the established
-    // pattern in qore_socket_private (no setter abstraction exists).  The socket
-    // object has no cached state derived from the fd that would become inconsistent
-    // — socket options, non-blocking mode, and pktinfo are set on the new fd above.
+    // Swap the fd under the socket lock to synchronize with any concurrent
+    // I/O.  Since migrateConnection() is now called from the I/O thread
+    // (via the migration_pending flag), there is no concurrent poll() on the
+    // old fd — the epoll registration is cleanly replaced on the next cycle.
     {
         AutoLocker al(sock->priv->m);
         fd_guard.release();
         sock->priv->socket->priv->sock = new_fd;
-        // Update cached local address under the same lock
         memcpy(&local_addr_, &new_local, new_local_len);
         local_addrlen_ = new_local_len;
     }
 
     // Close old fd outside the lock — safe because the socket object now
-    // points to new_fd, so continuePoll() will use the new fd
+    // points to new_fd
     ::close(old_fd);
+
+    // Send PATH_CHALLENGE + pending request frames immediately so the server
+    // learns the new source address before the next poll() cycle
+    {
+        ngtcp2_tstamp expiry;
+        sendPendingPackets(expiry, xsink);
+        if (*xsink) {
+            xsink->handleExceptions();
+        }
+    }
 
     printd(2, "SocketQuicClientPollOperation::migrateConnection(): migrated fd %d -> %d "
         "(session %lld)\n", old_fd, new_fd,
@@ -1809,6 +1860,13 @@ SocketQuicSendResponsePollOperation::SocketQuicSendResponsePollOperation(
             errno, strerror(errno));
     }
 
+    // Save stream_id for ACK tracking in FLUSHING state
+    stream_id_ = stream_id;
+
+    // Snapshot migration generation before sending — used in FLUSHING to detect
+    // whether a path migration occurred during this response.
+    send_migration_gen_ = quic_session->getMigrationGen();
+
     // Submit the response to the HTTP/3 layer
     int rv = quic_session->submitResponse(stream_id, status_code, hdr_map, body_ptr, body_len, xsink);
     if (*xsink) {
@@ -1996,7 +2054,34 @@ QoreHashNode* SocketQuicSendResponsePollOperation::continuePoll(ExceptionSink* x
                     return poll_info;
                 }
 
-                // All done
+                // If a connection migration occurred during this response, data
+                // may have been sent to the OLD client address (fire-and-forget
+                // UDP) and never received.  ngtcp2's retransmission will recover
+                // it on the new path, but only if we keep the poll loop running.
+                // Check both bytes_in_flight (connection-level retransmission
+                // tracking) and isStreamFullyAcked (definitive stream-close signal)
+                // to decide when it's safe to exit.
+                if (quic_session->getMigrationGen() != send_migration_gen_) {
+                    // Migration detected — wait until either:
+                    // (a) stream_close callback has fired (all data ACKed), or
+                    // (b) bytes_in_flight drops to 0 (all retransmissions complete)
+                    if (!quic_session->isStreamFullyAcked(stream_id_)
+                        && quic_session->getBytesInFlight() > 0) {
+                        printd(5, "SocketQuicSendResponsePollOperation::continuePoll() "
+                            "FLUSHING stream_id=" QLLD " migration detected, "
+                            "waiting for ACKs (bytes_in_flight=%" PRIu64 ")\n",
+                            stream_id_, quic_session->getBytesInFlight());
+                        QoreHashNode* poll_info = getSocketPollInfoHash(xsink, SOCK_POLLIN);
+                        if (poll_info) {
+                            setPollTimeoutFromExpiry(poll_info, next_expiry, xsink);
+                        }
+                        return poll_info;
+                    }
+                    // Clean up the closed_streams_ entry if stream_close fired
+                    quic_session->removeClosedStream(stream_id_);
+                }
+
+                // All data delivered —
                 qcs_state = QCS::SENT;
                 sock->priv->socket->priv->set_non_blocking(false, xsink);
                 sock->priv->clearNonBlock();

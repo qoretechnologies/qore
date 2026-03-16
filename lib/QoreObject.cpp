@@ -36,6 +36,9 @@
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/QoreHashNodeIntern.h"
+#ifdef QORE_HAVE_ALLOC_TRACKING
+#include "qore/intern/AllocTracking.h"
+#endif
 #include "qore/intern/QoreClosureNode.h"
 #include "qore/intern/QoreQueueIntern.h"
 #include "qore/intern/QC_TreeMap.h"
@@ -1137,6 +1140,11 @@ void QoreObject::externalDelete(qore_classid_t key, ExceptionSink* xsink) {
 // issue #2791: make sure that the internal data hash has type hash<auto> so that types can be stripped if necessary
 QoreObject::QoreObject(const QoreClass* oc, QoreProgram* p) : AbstractQoreNode(NT_OBJECT, false, false, false, true),
         priv(new qore_object_private(this, oc, p, new QoreHashNode(autoTypeInfo))) {
+#ifdef QORE_HAVE_ALLOC_TRACKING
+    if (qore_alloc_tracking_active()) {
+        qore_alloc_tracking_object_created(oc->getName());
+    }
+#endif
 }
 
 // issue #2791: make sure that the internal data hash has type hash<auto> so that types can be stripped if necessary
@@ -1145,15 +1153,30 @@ QoreObject::QoreObject(const QoreClass* oc, QoreProgram* p, AbstractPrivateData*
         priv(new qore_object_private(this, oc, p, new QoreHashNode(autoTypeInfo))) {
     assert(data);
     priv->setPrivate(oc->getID(), data);
+#ifdef QORE_HAVE_ALLOC_TRACKING
+    if (qore_alloc_tracking_active()) {
+        qore_alloc_tracking_object_created(oc->getName());
+    }
+#endif
 }
 
 QoreObject::QoreObject(const QoreClass* oc, QoreProgram* p, QoreHashNode* h)
         : AbstractQoreNode(NT_OBJECT, false, false, false, true), priv(new qore_object_private(this, oc, p, h)) {
+#ifdef QORE_HAVE_ALLOC_TRACKING
+    if (qore_alloc_tracking_active()) {
+        qore_alloc_tracking_object_created(oc->getName());
+    }
+#endif
 }
 
 QoreObject::~QoreObject() {
     //QORE_TRACE("QoreObject::~QoreObject()");
     //printd(5, "QoreObject::~QoreObject() this: %p, pgm: %p, class: %s\n", this, priv->pgm, priv->theclass->getName());
+#ifdef QORE_HAVE_ALLOC_TRACKING
+    if (qore_alloc_tracking_active()) {
+        qore_alloc_tracking_object_destroyed(priv->theclass->getName());
+    }
+#endif
     delete priv;
 }
 

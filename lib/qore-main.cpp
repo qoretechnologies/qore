@@ -333,8 +333,15 @@ void qore_cleanup() {
         purge_thread_resources(&xsink);
     }
 
-    // first delete all user modules
+    // first delete all user modules (runs module del handlers, stops ThreadPools)
     QMM.delUser();
+
+    // wait for ThreadPool threads (QTF_EXTERNAL_LIFECYCLE) to fully exit after
+    // being stopped during module cleanup above
+    {
+        ExceptionSink xsink;
+        tp_thread_counter.waitForZero(&xsink);
+    }
 
 #ifdef _Q_WINDOWS
     // do windows socket cleanup
@@ -358,6 +365,9 @@ void qore_cleanup() {
 
     // issue #3045: clear module options
     qore_delete_module_options();
+
+    // clear application registry
+    qore_delete_app_registry();
 
     // NOTE: cleanupAllPrograms removed - programs should be cleaned up by module deletion
     // Forcing cleanup here causes crashes due to interdependencies between programs

@@ -319,16 +319,21 @@ public class DpqlParser {
         bool is_server_op = server_expressions.hasKey(exp.exp);
 
         if (is_server_op) {
-            # DPQL-E044: Server operator — first arg should be a field reference
-            if (exp.args.size() > 0 && !(exp.args[0] instanceof hash<DataProviderFieldReference>)) {
-                # Check if the operator expects a field ref (most comparison ops do)
-                # Only check for comparison-style operators, not functions
-                if (isComparisonOp(exp.exp)) {
+            # DPQL-E044: Server operator — at least one arg must be a field reference
+            if (exp.args.size() > 0 && isComparisonOp(exp.exp)) {
+                bool has_field_ref = False;
+                foreach auto arg in (exp.args) {
+                    if (arg instanceof hash<DataProviderFieldReference>) {
+                        has_field_ref = True;
+                        break;
+                    }
+                }
+                if (!has_field_ref) {
                     string op_sym = getOpSymbol(exp.exp);
                     diags += <DpqlDiagnostic>{
                         "severity": "error",
-                        "message": sprintf("Server operator '%s' expects a record field as its first "
-                            "argument (e.g., `@field_name %s value`). The server needs to know which "
+                        "message": sprintf("Server operator '%s' requires a record field reference "
+                            "(e.g., `@field_name %s value`). The server needs to know which "
                             "field to compare.", op_sym, op_sym),
                         "code": "DPQL-E044",
                         "line": 1,
@@ -1607,10 +1612,27 @@ public class DpqlParser {
                         "DPQL-W002", name_tok);
                 }
             } else if (expected > 0 && actual != expected) {
-                addWarning(
-                    sprintf("Function '%s' expects %d argument%s, got %d",
-                        token_name, expected, expected == 1 ? "" : "s", actual),
-                    "DPQL-W002", name_tok);
+                # calculate minimum required args by excluding trailing args with default values
+                int min_required = expected;
+                if (info.arg_info) {
+                    while (min_required > 0
+                            && exists info.arg_info[min_required - 1].default_value) {
+                        --min_required;
+                    }
+                }
+                if (actual < min_required) {
+                    addWarning(
+                        sprintf("Function '%s' expects %s%d argument%s, got %d",
+                            token_name,
+                            min_required != expected ? "at least " : "",
+                            min_required, min_required == 1 ? "" : "s", actual),
+                        "DPQL-W002", name_tok);
+                } else if (actual > expected) {
+                    addWarning(
+                        sprintf("Function '%s' expects at most %d argument%s, got %d",
+                            token_name, expected, expected == 1 ? "" : "s", actual),
+                        "DPQL-W002", name_tok);
+                }
             }
 
             # Type-aware argument validation

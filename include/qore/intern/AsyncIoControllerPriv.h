@@ -41,6 +41,8 @@
 #include "qore/intern/QoreEventNotifier.h"
 #include "qore/intern/QoreIoUring.h"
 
+#include "qore/intern/ThreadPool.h"
+
 #include <atomic>
 #include <deque>
 #include <string>
@@ -252,6 +254,19 @@ public:
         @param xsink for exception handling
     */
     DLLLOCAL void setTimerCallback(ResolvedCallReferenceNode* cb, ExceptionSink* xsink);
+
+    //! Submit a task to the controller's thread pool
+    /** The thread pool is lazily created on first use. ThreadPool threads use
+        QTF_EXTERNAL_LIFECYCLE so they don't block QoreProgramHelper shutdown;
+        the pool is stopped during controller stop/destruction.
+
+        @param task the task code (referenced by caller)
+        @param cancel optional cancel code (referenced by caller, or nullptr)
+        @param xsink for exception handling
+        @return 0 on success, -1 on error
+    */
+    DLLLOCAL int submitTask(ResolvedCallReferenceNode* task, ResolvedCallReferenceNode* cancel,
+        ExceptionSink* xsink);
 
     //! Custom deref with ExceptionSink
     DLLLOCAL virtual void deref(ExceptionSink* xsink);
@@ -477,6 +492,21 @@ private:
 
     //! Shared call dispatcher for Qore-language continuePoll() overrides (lazily created)
     QoreCallDispatcher* call_dispatcher = nullptr;
+
+    //! Thread pool for dispatching callbacks off the I/O thread (lazily created)
+    /** Stopped during stop()/stopClear()/destructor. ThreadPool threads use
+        QTF_EXTERNAL_LIFECYCLE so they don't block QoreProgramHelper shutdown.
+    */
+    ThreadPool* thread_pool = nullptr;
+
+    //! Mutex for thread-safe lazy initialization of the thread pool
+    QoreThreadLock pool_mutex;
+
+    //! Flag indicating the pool has been stopped; prevents recreation after shutdown
+    bool pool_stopped = false;
+
+    //! Stop the thread pool if it exists (caller must NOT hold pool_mutex)
+    DLLLOCAL void stopThreadPool(ExceptionSink* xsink);
 
     //! Spawn a dedicated I/O thread for an operation
     /** @param dti the DedicatedThreadInfo (takes ownership)

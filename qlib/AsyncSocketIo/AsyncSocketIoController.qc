@@ -79,20 +79,6 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         #! C++ async I/O controller
         Qore::AsyncIoController ctrl;
 
-        #! Thread pool for dispatching callbacks off the I/O thread
-        /** @since AsyncSocketIo 1.0
-        */
-        *ThreadPool pool;
-
-        #! Mutex for thread-safe lazy initialization of the thread pool
-        /** @since AsyncSocketIo 1.0
-        */
-        Mutex pool_mutex();
-
-        #! Flag indicating the pool has been stopped; prevents recreation after shutdown
-        /** @since AsyncSocketIo 1.0
-        */
-        bool pool_stopped = False;
     }
 
     #! Creates the object
@@ -114,13 +100,6 @@ public class AsyncSocketIoController inherits LoggerWrapper {
     #! Stops the monitoring thread and destroys the object
     destructor() {
         ctrl.stop();
-        {
-            AutoLock al(pool_mutex);
-            pool_stopped = True;
-            if (pool) {
-                pool.stopWait();
-            }
-        }
     }
 
     #! Returns information about the object
@@ -159,27 +138,11 @@ public class AsyncSocketIoController inherits LoggerWrapper {
     #! Stops monitoring
     stop() {
         ctrl.stop();
-        {
-            AutoLock al(pool_mutex);
-            pool_stopped = True;
-            if (pool) {
-                pool.stopWait();
-                delete pool;
-            }
-        }
     }
 
     #! Stops monitoring and clears all connections
     stopClear() {
         ctrl.stopClear();
-        {
-            AutoLock al(pool_mutex);
-            pool_stopped = True;
-            if (pool) {
-                pool.stopWait();
-                delete pool;
-            }
-        }
     }
 
     #! Waits for the monitoring thread to stop if it's running
@@ -349,40 +312,17 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         ctrl.setLogger(logger);
     }
 
-    #! Returns the thread pool, creating it lazily if needed
-    /** The thread pool is used for dispatching callbacks off the I/O thread, ensuring
-        that slow callbacks don't block I/O processing for other connections.
-
-        The pool is created with reasonable defaults on first access:
-        - \c max: 0 (unlimited)
-        - \c min_idle: 0 (no pre-allocated threads; threads created on demand)
-        - \c max_idle: 8 (excess threads released after 5s idle)
-
-        @return the shared ThreadPool
-
-        @since AsyncSocketIo 1.0
-    */
-    ThreadPool getThreadPool() {
-        AutoLock al(pool_mutex);
-        if (pool_stopped) {
-            throw "CONTROLLER-STOPPED", "cannot create thread pool: controller has been stopped";
-        }
-        if (!pool) {
-            pool = new ThreadPool(0, 0, 8, 5s);
-        }
-        return pool;
-    }
-
     #! Submits a task to the controller's thread pool
-    /** This is a convenience method for dispatching callback work off the I/O thread.
+    /** Delegates to the C++ AsyncIoController::submitTask() which manages a ThreadPool
+        with proper lifecycle (stopped during controller destruction/module unload).
 
         @param task the closure or call reference to execute
         @param cancel optional closure executed if the pool stops before the task runs
 
         @since AsyncSocketIo 1.0
     */
-    submitTask(code task, *code cancel) {
-        getThreadPool().submit(task, cancel);
+    submitTask(code<nothing()> task, *code<nothing()> cancel) {
+        ctrl.submitTask(task, cancel);
     }
 
 }

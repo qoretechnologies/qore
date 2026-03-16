@@ -57,6 +57,7 @@
 #include <queue>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 class QoreDatagramDispatcher;
@@ -222,6 +223,15 @@ public:
         clients that may experience multiple network transitions).
     */
     static constexpr uint64_t QUIC_ACTIVE_CONNECTION_ID_LIMIT = 8;
+
+    //! Maximum bytes per writePacketsLocked() call to prevent UDP receive
+    //! buffer overflow.  On Linux, SO_RCVBUF is capped by net.core.rmem_max
+    //! (default ~208KB on Alpine/Docker).  Bursts exceeding the peer's buffer
+    //! cause silent packet loss, requiring PTO-based recovery that can take
+    //! tens of seconds on slow platforms.  128KB stays well within the minimum
+    //! common buffer size while maintaining high throughput (~128MB/s at 1ms
+    //! per continuePoll cycle).
+    static constexpr size_t QUIC_MAX_WRITE_BURST_BYTES = 128 * 1024;
 
     //! Maximum buffered data before HTTP/3 layer is initialized
     static constexpr size_t QUIC_MAX_PRE_H3_BUFFER = 65536;
@@ -453,6 +463,30 @@ public:
         @return true if body_complete or stream not found (treat as complete)
     */
     DLLLOCAL bool isStreamComplete(int64_t stream_id) const;
+
+    //! Check if a stream has been fully closed by ngtcp2 (all data ACKed by peer)
+    /** The ngtcp2 stream_close callback fires only after ALL stream data (including
+        the FIN) has been acknowledged by the remote peer.  This method checks whether
+        that callback has fired for the given stream_id.
+
+        @param stream_id the HTTP/3 stream ID
+        @return true if the stream close callback has been received for this stream
+    */
+    DLLLOCAL bool isStreamFullyAcked(int64_t stream_id) const;
+
+    //! Remove a stream from the closed-streams set (cleanup after poll completes)
+    /** @param stream_id the HTTP/3 stream ID
+    */
+    DLLLOCAL void removeClosedStream(int64_t stream_id);
+
+    //! Get the number of bytes in unacknowledged sent packets
+    /** Uses ngtcp2_conn_get_conn_info() to read the connection-level
+        bytes_in_flight counter.  A non-zero value means some packets have not
+        yet been acknowledged by the peer.
+
+        @return bytes in flight (0 if all sent data has been ACKed)
+    */
+    DLLLOCAL uint64_t getBytesInFlight() const;
 
     //! Remove a dispatched stream from the session map
     /** Called after the handler has finished processing all body data.
@@ -1145,6 +1179,13 @@ private:
 
     //! Per-stream notifiers for targeted wakeup of handler threads (protected by mtx_)
     std::unordered_map<int64_t, std::shared_ptr<StreamNotifier>> stream_notifiers_;
+
+    //! Streams fully closed by ngtcp2 (all data ACKed by peer)
+    /** Populated by streamCloseCallback(); checked by isStreamFullyAcked();
+        cleaned up by removeClosedStream() after the poll operation transitions
+        to SENT.  Protected by mtx_.
+    */
+    std::unordered_set<int64_t> closed_streams_;
 
     //! Queue of completed stream IDs
     std::queue<int64_t> completed_streams_;

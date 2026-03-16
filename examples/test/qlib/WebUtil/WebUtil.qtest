@@ -10,6 +10,7 @@
 %requires ../../../../qlib/HttpServerAsyncIo
 %requires ../../../../qlib/HttpServer.qm
 %requires ../../../../qlib/WebUtil.qm
+%requires ../../../../qlib/FsUtil.qm
 %requires ../../../../qlib/QUnit.qm
 
 %exec-class WebUtilTest
@@ -35,6 +36,7 @@ public class WebUtilTest inherits QUnit::Test {
     constructor() : Test("WebUtilTest", "1.0") {
         addTestCase("StaticTemplateManager test", \staticTemplateManagerTest());
         addTestCase("FileHandler test", \fileHandlerTest());
+        addTestCase("FileHandler directory index Content-Length test", \fileHandlerDirectoryIndexContentLengthTest());
         addTestCase("StaticTemplateManager parse options test", \staticTemplateManagerParseOptionsTest());
         set_return_value(main());
     }
@@ -101,5 +103,54 @@ public class WebUtilTest inherits QUnit::Test {
         respHdr."content-type" =~ s/;.*//;
         assertEq(MimeTypeText, respHdr."content-type");
         assertTrue(respHdr.hasKey("Cache-Control") || respHdr.hasKey("cache-control"));
+    }
+
+    #! Verify that Content-Length reflects the index file's size, not the directory's inode size (4096)
+    /** Regression test for: when a directory request resolves to an index file (e.g. index.html),
+        the stat hash must be updated from the directory stat to the file stat before computing
+        Content-Length, otherwise Safari (which strictly enforces Content-Length) shows
+        "An error occurred trying to load the resource." while Chrome silently ignores the mismatch.
+    */
+    fileHandlerDirectoryIndexContentLengthTest() {
+        # create a temporary directory structure: tmpdir/subdir/index.html
+        string tmpdir = tmp_location() + DirSep + "webutil_test_" + getpid();
+        string subdir = tmpdir + DirSep + "subdir";
+        mkdir(tmpdir);
+        on_exit FsUtil::remove_tree(tmpdir);
+        mkdir(subdir);
+
+        # write a known payload into index.html; make it > 4096 bytes so the bug is unambiguous
+        string payload = strmul("x", 8192);
+        File f();
+        f.open2(subdir + DirSep + "index.html", O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(payload);
+        f.close();
+        int expected_size = payload.size();
+
+        Logger logger("test", LoggerLevel::getLevelInfo());
+        hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        };
+        HttpServer server(http_opts);
+        TestFileHandler fh(tmpdir, "/", {"IndexFile": "index.html"});
+        server.setHandler("fh", "/", MimeTypeHtml, fh);
+        server.setDefaultHandler("fh", fh);
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        on_exit delete server;
+
+        HTTPClient client({"url": "http://localhost:" + port});
+        client.connect();
+        on_exit client.disconnect();
+
+        hash<auto> info;
+        # request the directory (no trailing slash) — resolves to subdir/index.html
+        string body = client.get("/subdir", NOTHING, \info);
+        on_error printf("info: %N\n", info);
+
+        # Content-Length must equal the actual index.html size, not the directory inode size (typically 4096)
+        *string cl = info."response-headers"."Content-Length" ?? info."response-headers"."content-length";
+        assertEq(string(expected_size), cl, "Content-Length must match index.html size, not directory inode size");
+        assertEq(expected_size, body.size(), "received body size matches Content-Length");
     }
 }

@@ -2007,6 +2007,182 @@ public class DpqlTest inherits QUnit::Test {
                 "unknown function with default expressions gets warning");
             assertEq("DPQL-W001", warnings[0].code);
         }
+
+        # Function with trailing default_value args — omitting them should produce no warning
+        {
+            hash<string, hash<DataProviderExpressionInfo>> expmap = DataProviderGenericExpressions + {
+                "starts-with": <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": "starts-with",
+                    "display_name": "Starts With",
+                    "short_desc": "True if a string starts with a given substring",
+                    "desc": "True if a string starts with a given substring",
+                    "symbol": "startsWith",
+                    "args": (
+                        <DataProviderSignatureTypeInfo>{"type": AbstractDataProviderType::get(StringType)},
+                        <DataProviderSignatureTypeInfo>{"type": AbstractDataProviderType::get(StringType)},
+                        <DataProviderSignatureTypeInfo>{"type": AbstractDataProviderType::get(BoolType)},
+                    ),
+                    "arg_info": (
+                        <DataProviderArgInfo>{
+                            "display_name": "String",
+                            "desc": "The string to check",
+                        },
+                        <DataProviderArgInfo>{
+                            "display_name": "Prefix",
+                            "desc": "The prefix to check for",
+                        },
+                        <DataProviderArgInfo>{
+                            "display_name": "Ignore Case?",
+                            "desc": "Ignore case",
+                            "default_value": True,
+                        },
+                    ),
+                    "return_type": AbstractDataProviderType::get(BoolType),
+                },
+            };
+            # 2 of 3 args provided — 3rd has default_value, so no warning expected
+            hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo(
+                'starts-with(@name, "foo")', expmap);
+            assertTrue(result.success, "function with default args should parse successfully");
+            list<hash<DpqlDiagnostic>> warnings = select result.diagnostics,
+                $1.severity == "warning";
+            assertEq(0, warnings.size(),
+                "omitting args with default_value should not produce warnings");
+        }
+
+        # Function with trailing default_value args — providing all args should produce no warning
+        {
+            hash<string, hash<DataProviderExpressionInfo>> expmap = DataProviderGenericExpressions + {
+                "starts-with": <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": "starts-with",
+                    "display_name": "Starts With",
+                    "short_desc": "True if a string starts with a given substring",
+                    "desc": "True if a string starts with a given substring",
+                    "symbol": "startsWith",
+                    "args": (
+                        <DataProviderSignatureTypeInfo>{"type": AbstractDataProviderType::get(StringType)},
+                        <DataProviderSignatureTypeInfo>{"type": AbstractDataProviderType::get(StringType)},
+                        <DataProviderSignatureTypeInfo>{"type": AbstractDataProviderType::get(BoolType)},
+                    ),
+                    "arg_info": (
+                        <DataProviderArgInfo>{
+                            "display_name": "String",
+                            "desc": "The string to check",
+                        },
+                        <DataProviderArgInfo>{
+                            "display_name": "Prefix",
+                            "desc": "The prefix to check for",
+                        },
+                        <DataProviderArgInfo>{
+                            "display_name": "Ignore Case?",
+                            "desc": "Ignore case",
+                            "default_value": True,
+                        },
+                    ),
+                    "return_type": AbstractDataProviderType::get(BoolType),
+                },
+            };
+            # All 3 args provided — no warning expected
+            hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo(
+                'starts-with(@name, "foo", false)', expmap);
+            assertTrue(result.success, "function with all args should parse successfully");
+            list<hash<DpqlDiagnostic>> warnings = select result.diagnostics,
+                $1.severity == "warning";
+            assertEq(0, warnings.size(),
+                "providing all args including those with defaults should not produce warnings");
+        }
+
+        # Function with trailing default_value args — too few required args should still warn
+        {
+            hash<string, hash<DataProviderExpressionInfo>> expmap = DataProviderGenericExpressions + {
+                "starts-with": <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": "starts-with",
+                    "display_name": "Starts With",
+                    "short_desc": "True if a string starts with a given substring",
+                    "desc": "True if a string starts with a given substring",
+                    "symbol": "startsWith",
+                    "args": (
+                        <DataProviderSignatureTypeInfo>{"type": AbstractDataProviderType::get(StringType)},
+                        <DataProviderSignatureTypeInfo>{"type": AbstractDataProviderType::get(StringType)},
+                        <DataProviderSignatureTypeInfo>{"type": AbstractDataProviderType::get(BoolType)},
+                    ),
+                    "arg_info": (
+                        <DataProviderArgInfo>{
+                            "display_name": "String",
+                            "desc": "The string to check",
+                        },
+                        <DataProviderArgInfo>{
+                            "display_name": "Prefix",
+                            "desc": "The prefix to check for",
+                        },
+                        <DataProviderArgInfo>{
+                            "display_name": "Ignore Case?",
+                            "desc": "Ignore case",
+                            "default_value": True,
+                        },
+                    ),
+                    "return_type": AbstractDataProviderType::get(BoolType),
+                },
+            };
+            # Only 1 arg — should still warn (2 required, 1 optional)
+            hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo(
+                'starts-with(@name)', expmap);
+            assertTrue(result.success, "too few args is a warning, not an error");
+            list<hash<DpqlDiagnostic>> warnings = select result.diagnostics,
+                $1.severity == "warning";
+            assertTrue(warnings.size() > 0, "should have warning for too few required args");
+            assertEq("DPQL-W002", warnings[0].code);
+            assertTrue(warnings[0].message.find("at least") >= 0,
+                "warning should say 'at least' when there are optional args");
+        }
+
+        # Function with trailing default_value args — too many args should warn
+        {
+            hash<string, hash<DataProviderExpressionInfo>> expmap = DataProviderGenericExpressions + {
+                "starts-with": <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": "starts-with",
+                    "display_name": "Starts With",
+                    "short_desc": "True if a string starts with a given substring",
+                    "desc": "True if a string starts with a given substring",
+                    "symbol": "startsWith",
+                    "args": (
+                        <DataProviderSignatureTypeInfo>{"type": AbstractDataProviderType::get(StringType)},
+                        <DataProviderSignatureTypeInfo>{"type": AbstractDataProviderType::get(StringType)},
+                        <DataProviderSignatureTypeInfo>{"type": AbstractDataProviderType::get(BoolType)},
+                    ),
+                    "arg_info": (
+                        <DataProviderArgInfo>{
+                            "display_name": "String",
+                            "desc": "The string to check",
+                        },
+                        <DataProviderArgInfo>{
+                            "display_name": "Prefix",
+                            "desc": "The prefix to check for",
+                        },
+                        <DataProviderArgInfo>{
+                            "display_name": "Ignore Case?",
+                            "desc": "Ignore case",
+                            "default_value": True,
+                        },
+                    ),
+                    "return_type": AbstractDataProviderType::get(BoolType),
+                },
+            };
+            # 4 args — too many, should warn
+            hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo(
+                'starts-with(@name, "foo", false, "extra")', expmap);
+            assertTrue(result.success, "too many args is a warning, not an error");
+            list<hash<DpqlDiagnostic>> warnings = select result.diagnostics,
+                $1.severity == "warning";
+            assertTrue(warnings.size() > 0, "should have warning for too many args");
+            assertEq("DPQL-W002", warnings[0].code);
+            assertTrue(warnings[0].message.find("at most") >= 0,
+                "warning should say 'at most' when too many args provided");
+        }
     }
 
     argumentTypeValidationTests() {
@@ -3584,9 +3760,31 @@ public class DpqlTest inherits QUnit::Test {
             assertFalse(exists result);
         }
 
-        # Test index on non-list throws INVALID-OPERATION
+        # Test index on string returns character
         {
-            hash<auto> rec = {"items": "not a list"};
+            hash<auto> rec = {"items": "hello"};
+            hash<DataProviderExpression> exp = <DataProviderExpression>{
+                "exp": DP_FUNC_INDEX,
+                "args": (<DataProviderFieldReference>{"field": "items"}, 0),
+            };
+            assertEq("h", AbstractDataProvider::evalGenericExpression(rec, exp));
+            # negative index
+            exp = <DataProviderExpression>{
+                "exp": DP_FUNC_INDEX,
+                "args": (<DataProviderFieldReference>{"field": "items"}, -1),
+            };
+            assertEq("o", AbstractDataProvider::evalGenericExpression(rec, exp));
+            # out of range returns NOTHING
+            exp = <DataProviderExpression>{
+                "exp": DP_FUNC_INDEX,
+                "args": (<DataProviderFieldReference>{"field": "items"}, 10),
+            };
+            assertNothing(AbstractDataProvider::evalGenericExpression(rec, exp));
+        }
+
+        # Test index on non-list/non-string throws INVALID-OPERATION
+        {
+            hash<auto> rec = {"items": 42};
             hash<DataProviderExpression> exp = <DataProviderExpression>{
                 "exp": DP_FUNC_INDEX,
                 "args": (<DataProviderFieldReference>{"field": "items"}, 0),
@@ -3597,7 +3795,7 @@ public class DpqlTest inherits QUnit::Test {
             } catch (hash<ExceptionInfo> ex) {
                 caught = True;
                 assertEq("INVALID-OPERATION", ex.err);
-                assertTrue(ex.desc =~ /non-list/);
+                assertTrue(ex.desc =~ /expected list or string/);
             }
             assertTrue(caught);
         }

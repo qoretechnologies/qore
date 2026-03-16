@@ -1686,8 +1686,9 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     "role": ER_All,
                     "name": DP_FUNC_INDEX,
                     "display_name": "index",
-                    "short_desc": "Returns a single element from a list by index",
-                    "desc": "Returns a single element from a list by index; supports negative indices",
+                    "short_desc": "Returns a single element from a list or string by index",
+                    "desc": "Returns a single element from a list or a single character from a string by "
+                        "index; supports negative indices",
                     "symbol": "index()",
                     "args": (DataProviderSignatureAnyType, DataProviderSignatureIntType),
                     "return_type": AbstractDataProviderTypeMap."any",
@@ -1695,9 +1696,17 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                 "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> template_context) {
                     auto value = AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0], template_context);
                     int index = AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[1], template_context);
+                    if (value.typeCode() == NT_STRING) {
+                        int len = value.length();
+                        int idx = index >= 0 ? index : len + index;
+                        if (idx < 0 || idx >= len) {
+                            return NOTHING;
+                        }
+                        return substr(value, idx, 1);
+                    }
                     if (value.typeCode() != NT_LIST) {
-                        throw "INVALID-OPERATION", sprintf("index accessor [%d] applied to non-list value of "
-                            "type %y", index, value.fullType());
+                        throw "INVALID-OPERATION", sprintf("index accessor [%d] applied to value of "
+                            "type %y; expected list or string", index, value.fullType());
                     }
                     int len = value.size();
                     int idx = index >= 0 ? index : len + index;
@@ -5109,8 +5118,15 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     static auto evalGenericExpression(hash<auto> rec, hash<DataProviderExpression> exp,
             *hash<auto> template_context) {
-        *hash<auto> expinfo = AbstractDataProvider::GenericExpressionImplementations{exp.exp}
-            ?? AbstractDataProvider::GenericExpressionImplementations{OperatorAliasMap{exp.exp}};
+        # Check the application registry first; custom expressions override built-in ones
+        *hash<auto> expinfo;
+        if (*hash<auto> custom_map = get_app_registry("dp-custom-expressions")) {
+            expinfo = custom_map{exp.exp};
+        }
+        if (!expinfo) {
+            expinfo = AbstractDataProvider::GenericExpressionImplementations{exp.exp}
+                ?? AbstractDataProvider::GenericExpressionImplementations{OperatorAliasMap{exp.exp}};
+        }
         if (!expinfo) {
             throw "INVALID-OPERATION", sprintf("operator %y is unknown; supported "
                 "operators: %y", exp.exp, keys GenericExpressionImplementations);

@@ -222,6 +222,12 @@
 #define QORE_CONST_HAVE_THREAD_NAME 0
 #endif
 
+#ifdef QORE_HAVE_ALLOC_TRACKING
+#define QORE_CONST_HAVE_ALLOC_TRACKING 1
+#else
+#define QORE_CONST_HAVE_ALLOC_TRACKING 0
+#endif
+
 
 /** @defgroup option_constants Option Constants
     Option constants
@@ -405,4 +411,13 @@ const HAVE_HTTP2 = bool(true);
     @since %Qore 2.3
 */
 const HAVE_HTTP3 = bool(true);
+
+//! Indicates if memory allocation tracking is available (start_alloc_tracking(), stop_alloc_tracking())
+/** This feature is only available when the %Qore library has been built with
+    \c -DENABLE_ALLOC_TRACKING=ON. It interposes malloc/free to track allocation sites with
+    backtraces, which adds overhead to every allocation — use only for debugging.
+
+    @since %Qore 2.3
+*/
+const HAVE_ALLOC_TRACKING = bool(QORE_CONST_HAVE_ALLOC_TRACKING);
 ///@}

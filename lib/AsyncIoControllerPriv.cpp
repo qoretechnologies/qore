@@ -244,6 +244,7 @@ AsyncIoControllerPriv::~AsyncIoControllerPriv() {
 void AsyncIoControllerPriv::deref(ExceptionSink* xsink) {
     if (ROdereference()) {
         stop(xsink);
+        stopThreadPool(xsink);
         if (call_dispatcher) {
             call_dispatcher->stop(xsink);
             delete call_dispatcher;
@@ -267,6 +268,44 @@ void AsyncIoControllerPriv::deref(ExceptionSink* xsink) {
         }
         timer_info_map.clear();
         delete this;
+    }
+}
+
+int AsyncIoControllerPriv::submitTask(ResolvedCallReferenceNode* task, ResolvedCallReferenceNode* cancel,
+        ExceptionSink* xsink) {
+    ThreadPool* tp;
+    {
+        AutoLocker al(pool_mutex);
+        if (pool_stopped) {
+            xsink->raiseException("ASYNC-IO-ERROR", "cannot submit task: controller thread pool has been stopped");
+            return -1;
+        }
+        if (!thread_pool) {
+            thread_pool = new ThreadPool(xsink, 0, 0, 8, 5000);
+            if (*xsink) {
+                delete thread_pool;
+                thread_pool = nullptr;
+                return -1;
+            }
+        }
+        tp = thread_pool;
+    }
+    // Safe to use tp outside the lock: stopThreadPool() is only called from deref() when
+    // ROdereference() returns true (last reference), so no concurrent submitTask() is possible
+    return tp->submit(task, cancel, xsink);
+}
+
+void AsyncIoControllerPriv::stopThreadPool(ExceptionSink* xsink) {
+    ThreadPool* tp = nullptr;
+    {
+        AutoLocker al(pool_mutex);
+        pool_stopped = true;
+        tp = thread_pool;
+        thread_pool = nullptr;
+    }
+    if (tp) {
+        tp->stopWait(xsink);
+        tp->deref(xsink);
     }
 }
 
@@ -719,7 +758,10 @@ bool AsyncIoControllerPriv::cancelByKey(const QoreStringNode* key, ExceptionSink
         notifier->notify();
     }
 
-    if (stopped) {
+    if (stopped && !on_async_io_thread) {
+        // Do NOT waitStop from the I/O thread — it would deadlock waiting for
+        // itself to exit.  The Quit command has been enqueued; the I/O thread
+        // main loop will process it after returning from the current callback.
         waitStop(xsink);
     }
 
@@ -851,7 +893,10 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
         notifier->notify();
     }
 
-    if (stopped) {
+    if (stopped && !on_async_io_thread) {
+        // Do NOT waitStop from the I/O thread — it would deadlock waiting for
+        // itself to exit.  The Quit command has been enqueued; the I/O thread
+        // main loop will process it after returning from the current callback.
         waitStop(xsink);
     }
 

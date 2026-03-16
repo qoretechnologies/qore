@@ -1474,6 +1474,16 @@ public:
 private:
     std::shared_ptr<QuicSession> quic_session;
     QCS qcs_state = QCS::NONE;
+    int64_t stream_id_ = -1;  //!< HTTP/3 stream ID (for ACK tracking in FLUSHING state)
+
+    //! Migration generation snapshot from when SENDING state began.
+    /** Compared against the session's current migration_gen_ to detect whether
+        a connection migration occurred during this response.  When migration is
+        detected, FLUSHING waits for the stream to be fully acknowledged (via
+        stream_close callback) before transitioning to SENT, so that ngtcp2 can
+        retransmit data lost on the old path.
+    */
+    uint64_t send_migration_gen_ = 0;
 
     //! Stored remote peer address for sendto()
     struct sockaddr_storage peer_addr_{};

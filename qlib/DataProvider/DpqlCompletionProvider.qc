@@ -1196,10 +1196,20 @@ public class DpqlCompletionProvider {
                         "label": label,
                         "kind": "template",
                         "insert_text": label,
+                        "detail": ctx.needs_arg ? "requires argument" : NOTHING,
                         "documentation": ctx.description ?? sprintf("Template context: %s", ctx.name),
+                        # Sort alphabetically by context name
                         "sort_priority": ctx.sort_priority ?? 10,
                     };
                 }
+            }
+            # Sort alphabetically by label
+            items = sort(items, int sub (hash<DpqlCompletionItem> a, hash<DpqlCompletionItem> b) {
+                return a.label <=> b.label;
+            });
+            # Assign sequential sort priorities so the alphabetic order is preserved in the UI
+            for (int i = 0; i < items.size(); i++) {
+                items[i].sort_priority = i + 1;
             }
             return items;
         }

@@ -1082,11 +1082,13 @@ public class FileHandler inherits public HttpServer::AbstractUrlHandler, private
             bool found = False;
             foreach string idx in (indexes) {
                 string p = path + DirSep + idx;
-                if (hstat(p).type == "REGULAR") {
+                *hash<StatInfo> idx_stat = hstat(p);
+                if (idx_stat.type == "REGULAR") {
                     # set resource path
                     cx.resource_path += "/" + idx;
                     found = True;
                     path = p;
+                    stat_hash = idx_stat;
                     break;
                 }
             }

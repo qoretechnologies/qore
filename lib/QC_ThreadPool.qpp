@@ -30,15 +30,17 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/ThreadPool.h"
+#include "qore/intern/QoreThreadList.h"
 
 static void tpt_start_thread(ExceptionSink* xsink, ThreadPoolThread* tpt) {
    tpt->worker(xsink);
 }
 
 ThreadPoolThread::ThreadPoolThread(ThreadPool& n_tp, ExceptionSink* xsink) : tp(n_tp) {
-    id = q_start_thread(xsink, (q_thread_t)tpt_start_thread, this);
-    if (id > 0)
+    id = q_start_thread(xsink, (q_thread_t)tpt_start_thread, this, QTF_EXTERNAL_LIFECYCLE);
+    if (id > 0) {
         tp.ref();
+    }
 }
 
 void ThreadPoolThread::worker(ExceptionSink* xsink) {
@@ -48,20 +50,29 @@ void ThreadPoolThread::worker(ExceptionSink* xsink) {
         if (!task) {
             //printd(5, "ThreadPoolThread::worker() id %d about to wait stopflag: %d task: %p\n", id, stopflag, task);
             c.wait(m);
-            if (stopflag && !task)
+            if (stopflag && !task) {
                 break;
+            }
         }
 
         assert(task);
 
         sl.unlock();
         task->run(xsink).discard(xsink);
+        // Handle any exceptions from the task so they don't leak into the next task
+        // on this thread.  Without this, a failed task leaves xsink dirty, and the
+        // next ThreadTask::run() sees *xsink == true in the program-context check
+        // and silently skips execution.
+        xsink->handleExceptions();
         sl.lock();
         task->del(xsink);
         task = 0;
+        // Task complete — decrement thread_counter that was incremented at submit time
+        thread_counter.dec();
 
-        if (stopflag || tp.done(this))
+        if (stopflag || tp.done(this)) {
             break;
+        }
     }
 
     //printd(5, "ThreadPoolThread::worker() stopping id %d: %s\n", id, stopCond ? "wait" : "after detach");
@@ -93,7 +104,7 @@ ThreadPool::ThreadPool(ExceptionSink* xsink, int n_max, int n_minidle, int n_max
         minidle = 0;
     if (maxidle <= 0)
         maxidle = minidle;
-    if (q_start_thread(xsink, (q_thread_t)tp_start_thread, this) == -1) {
+    if (q_start_thread(xsink, (q_thread_t)tp_start_thread, this, QTF_EXTERNAL_LIFECYCLE) == -1) {
         assert(*xsink);
         stopped = true;
     }
@@ -190,10 +201,12 @@ void ThreadPool::worker(ExceptionSink* xsink) {
 
     sl.unlock();
 
-    // cancel tasks if any
+    // cancel tasks if any; decrement thread_counter for each cancelled task
+    // (it was incremented at submit time)
     for (auto& i : q_copy) {
         i->cancel(xsink);
         i->del(xsink);
+        thread_counter.dec();
     }
 }
 
