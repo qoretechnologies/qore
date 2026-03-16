@@ -1581,6 +1581,34 @@ static void writeFunctionsSection(QoreAOTBinaryWriter& writer, const AOTSerializ
     writer.endSection(sec_idx);
 }
 
+//! Build a reverse map from constant value node pointers to names for a specific class
+//! Includes the class's own constants and parent namespace constants
+static AOTConstantReverseMap buildClassConstantReverseMap(const QoreClass* qc) {
+    AOTConstantReverseMap crm;
+    if (!qc) {
+        return crm;
+    }
+
+    const qore_class_private* cls_priv = qore_class_private::get(*qc);
+    std::string class_prefix = std::string(qc->getPath() + 2) + "::";  // strip leading "::"
+
+    // Add class constants
+    ConstConstantListIterator cci(cls_priv->constlist);
+    while (cci.next()) {
+        QoreValue v = cci.getValue();
+        if (!v.hasNode()) {
+            continue;
+        }
+        const AbstractQoreNode* node = v.getInternalNode();
+        if (node) {
+            std::string fqn = class_prefix + cci.getName();
+            crm.emplace(node, std::move(fqn));
+        }
+    }
+
+    return crm;
+}
+
 //! Write METHODS section
 static void writeMethodsSection(QoreAOTBinaryWriter& writer, const AOTSerializeState& state) {
     uint32_t sec_idx = writer.beginSection(QoreAOTSectionType::METHODS);
@@ -1672,6 +1700,9 @@ static void writeMethodsSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
                                 }
                             }
 
+                            // Build reverse map for class constants (Phase 2: BCA serialization fix)
+                            AOTConstantReverseMap bca_crm = buildClassConstantReverseMap(mi.method->getClass());
+
                             for (const BCANode* bca : *bcal) {
                                 // Write base class path for runtime resolution
                                 const QoreClass* base_cls = nullptr;
@@ -1694,7 +1725,7 @@ static void writeMethodsSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
                                 for (uint16_t ai = 0; ai < num_args; ++ai) {
                                     QoreValue arg_val = args->retrieveEntry(ai);
                                     std::vector<uint8_t> blob;
-                                    if (serializeExprTreeToBlob(arg_val, bca_slots, blob, debug)) {
+                                    if (serializeExprTreeToBlob(arg_val, bca_slots, blob, debug, &bca_crm)) {
                                         writer.writeU32(static_cast<uint32_t>(blob.size()));
                                         if (!blob.empty()) {
                                             writer.writeBytes(blob.data(),
