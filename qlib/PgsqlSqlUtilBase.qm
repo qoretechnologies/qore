@@ -523,7 +523,7 @@ public class PgsqlColumn inherits SqlUtil::AbstractColumn {
     }
 
     #! creates the column from the supplied arguments
-    constructor(string n, string nt, *string qt, int sz, bool nul, *string dv, *string cm, softint bs, *int scale)
+    constructor(string n, string nt, *string qt, int sz, bool nul, *string dv, *string cm, *softint bs, *int scale)
             : AbstractColumn(n, nt, qt, sz, nul, dv, cm, scale) {
         byte_size = bs;
     }
@@ -657,8 +657,8 @@ string str = col.getRenameSql(t, "new_name");
 #! represents a PostgreSQL-specific numeric column
 public class PgsqlNumericColumn inherits PgsqlColumn {
     #! creates the column from the supplied arguments
-    constructor(string n, string nt, *string qt, int sz, bool nul, *string dv, *string cm, softint bs,
-            softint scale) : PgsqlColumn(n, nt, qt, sz, nul, dv, cm, bs, scale) {
+    constructor(string n, string nt, *string qt, int sz, bool nul, *string dv, *string cm, *softint bs,
+            *softint scale) : PgsqlColumn(n, nt, qt, sz, nul, dv, cm, bs, scale) {
     }
 
     #! returns a string giving the native type of the column
