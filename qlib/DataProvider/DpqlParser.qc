@@ -1612,10 +1612,27 @@ public class DpqlParser {
                         "DPQL-W002", name_tok);
                 }
             } else if (expected > 0 && actual != expected) {
-                addWarning(
-                    sprintf("Function '%s' expects %d argument%s, got %d",
-                        token_name, expected, expected == 1 ? "" : "s", actual),
-                    "DPQL-W002", name_tok);
+                # calculate minimum required args by excluding trailing args with default values
+                int min_required = expected;
+                if (info.arg_info) {
+                    while (min_required > 0
+                            && exists info.arg_info[min_required - 1].default_value) {
+                        --min_required;
+                    }
+                }
+                if (actual < min_required) {
+                    addWarning(
+                        sprintf("Function '%s' expects %s%d argument%s, got %d",
+                            token_name,
+                            min_required != expected ? "at least " : "",
+                            min_required, min_required == 1 ? "" : "s", actual),
+                        "DPQL-W002", name_tok);
+                } else if (actual > expected) {
+                    addWarning(
+                        sprintf("Function '%s' expects at most %d argument%s, got %d",
+                            token_name, expected, expected == 1 ? "" : "s", actual),
+                        "DPQL-W002", name_tok);
+                }
             }
 
             # Type-aware argument validation
