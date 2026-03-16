@@ -2288,6 +2288,26 @@ bool QuicSession::isStreamComplete(int64_t stream_id) const {
     return it->second->body_complete;
 }
 
+bool QuicSession::isStreamFullyAcked(int64_t stream_id) const {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    return closed_streams_.count(stream_id) > 0;
+}
+
+void QuicSession::removeClosedStream(int64_t stream_id) {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    closed_streams_.erase(stream_id);
+}
+
+uint64_t QuicSession::getBytesInFlight() const {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    if (!conn_) {
+        return 0;
+    }
+    ngtcp2_conn_info cinfo;
+    ngtcp2_conn_get_conn_info(conn_, &cinfo);
+    return cinfo.bytes_in_flight;
+}
+
 void QuicSession::cleanupStream(int64_t stream_id) {
     std::lock_guard<std::recursive_mutex> lock(mtx_);
     auto it = streams_.find(stream_id);
@@ -2691,6 +2711,12 @@ int QuicSession::streamCloseCallback(ngtcp2_conn* /* conn */, uint32_t flags,
                 return NGTCP2_ERR_CALLBACK_FAILURE;
             }
         }
+
+        // Record that this stream is fully closed (all data ACKed by peer).
+        // Poll operations check this via isStreamFullyAcked() to avoid
+        // transitioning to SENT before retransmission can recover data
+        // lost during connection migration.
+        session->closed_streams_.insert(stream_id);
 
         // Clean up body data
         session->body_data_.erase(stream_id);

@@ -731,7 +731,12 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                     cached_stream = quic_session->takeCompletedStream();
                     qcs_state = QCS::RESPONSE_READY;
                     // Flush pending writes (ACKs) before signaling goal reached
-                    flushAndReturnPollInfo(xsink);
+                    {
+                        QoreHashNode* flush_info = flushAndReturnPollInfo(xsink);
+                        if (flush_info) {
+                            flush_info->deref(xsink);
+                        }
+                    }
                     return nullptr;  // goal reached
                 }
 
@@ -751,7 +756,12 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                         cached_stream = quic_session->takeCompletedStream();
                         qcs_state = QCS::RESPONSE_READY;
                         // Flush pending writes (ACKs) before signaling goal reached
-                        flushAndReturnPollInfo(xsink);
+                        {
+                            QoreHashNode* flush_info = flushAndReturnPollInfo(xsink);
+                            if (flush_info) {
+                                flush_info->deref(xsink);
+                            }
+                        }
                         return nullptr;  // goal reached
                     }
                 }
@@ -1809,6 +1819,13 @@ SocketQuicSendResponsePollOperation::SocketQuicSendResponsePollOperation(
             errno, strerror(errno));
     }
 
+    // Save stream_id for ACK tracking in FLUSHING state
+    stream_id_ = stream_id;
+
+    // Snapshot migration generation before sending — used in FLUSHING to detect
+    // whether a path migration occurred during this response.
+    send_migration_gen_ = quic_session->getMigrationGen();
+
     // Submit the response to the HTTP/3 layer
     int rv = quic_session->submitResponse(stream_id, status_code, hdr_map, body_ptr, body_len, xsink);
     if (*xsink) {
@@ -1996,7 +2013,34 @@ QoreHashNode* SocketQuicSendResponsePollOperation::continuePoll(ExceptionSink* x
                     return poll_info;
                 }
 
-                // All done
+                // If a connection migration occurred during this response, data
+                // may have been sent to the OLD client address (fire-and-forget
+                // UDP) and never received.  ngtcp2's retransmission will recover
+                // it on the new path, but only if we keep the poll loop running.
+                // Check both bytes_in_flight (connection-level retransmission
+                // tracking) and isStreamFullyAcked (definitive stream-close signal)
+                // to decide when it's safe to exit.
+                if (quic_session->getMigrationGen() != send_migration_gen_) {
+                    // Migration detected — wait until either:
+                    // (a) stream_close callback has fired (all data ACKed), or
+                    // (b) bytes_in_flight drops to 0 (all retransmissions complete)
+                    if (!quic_session->isStreamFullyAcked(stream_id_)
+                        && quic_session->getBytesInFlight() > 0) {
+                        printd(5, "SocketQuicSendResponsePollOperation::continuePoll() "
+                            "FLUSHING stream_id=" QLLD " migration detected, "
+                            "waiting for ACKs (bytes_in_flight=%" PRIu64 ")\n",
+                            stream_id_, quic_session->getBytesInFlight());
+                        QoreHashNode* poll_info = getSocketPollInfoHash(xsink, SOCK_POLLIN);
+                        if (poll_info) {
+                            setPollTimeoutFromExpiry(poll_info, next_expiry, xsink);
+                        }
+                        return poll_info;
+                    }
+                    // Clean up the closed_streams_ entry if stream_close fired
+                    quic_session->removeClosedStream(stream_id_);
+                }
+
+                // All data delivered —
                 qcs_state = QCS::SENT;
                 sock->priv->socket->priv->set_non_blocking(false, xsink);
                 sock->priv->clearNonBlock();

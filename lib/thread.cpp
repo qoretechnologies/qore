@@ -2934,8 +2934,12 @@ namespace {
         }
 
         pthread_cleanup_pop((int)1);
-        // Free OpenSSL per-thread state before thread exit
-        OPENSSL_thread_stop();
+        // NOTE: do not call OPENSSL_thread_stop() here — returning from the
+        // thread function (instead of calling pthread_exit()) already triggers
+        // TLS destructors registered by OpenSSL via pthread_key_create(),
+        // which handles per-thread state cleanup automatically.  Explicit
+        // OPENSSL_thread_stop() acquires OpenSSL's global lock and can cause
+        // contention with concurrent TLS handshakes (e.g. QUIC/ngtcp2).
         if (ta_flags & QTF_EXTERNAL_LIFECYCLE) {
             tp_thread_counter.dec();
         } else {
@@ -3018,11 +3022,9 @@ namespace {
         }
 
         pthread_cleanup_pop(1);
-        // Free OpenSSL per-thread state before thread exit
-        OPENSSL_thread_stop();
+        // NOTE: do not call OPENSSL_thread_stop() here — returning from the
+        // thread function triggers TLS destructors automatically (see above).
         thread_counter.dec();
-        // Return from thread function instead of calling pthread_exit() to allow
-        // glibc to properly run TLS destructors and reduce stack/TLS caching
         return nullptr;
     }
 }

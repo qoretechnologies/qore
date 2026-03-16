@@ -125,7 +125,6 @@ class MyWsConnection inherits WebSocketConnection {
     }
 
     gotMessage(string msg) {
-        #printf("msg: %y\n", msg);
         switch (msg) {
             case "STOP":
                 stop();

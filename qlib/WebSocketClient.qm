@@ -2563,8 +2563,9 @@ ws.setEventQueue();
         int rsv_bits = (h.rsv1 ? WS_RSV1 : 0) | (h.rsv2 ? WS_RSV2 : 0) | (h.rsv3 ? WS_RSV3 : 0);
         if (rsv_bits) {
             if (!active_extensions) {
-                logError("RSV bits set but no extensions are active: rsv1=%y rsv2=%y rsv3=%y",
-                    h.rsv1, h.rsv2, h.rsv3);
+                logError("RSV bits set but no extensions are active: rsv1=%y rsv2=%y rsv3=%y op=%s (%d) "
+                    "msg_size=%d masked=%y fin=%y",
+                    h.rsv1, h.rsv2, h.rsv3, WSOPMap{h.op} ?? "unknown", h.op, h.msg.size(), h.masked, h.fin);
                 sendClose(WSCC_ProtocolError);
                 return WSEDC_BREAK;
             }
@@ -4270,11 +4271,6 @@ public class WebSocketClientDataProviderBase inherits DataProvider::AbstractData
         try {
             if (!client.isOpen()) {
                 error_msg = "SOCKET-NOT-OPEN: socket is closed";
-                @debug {
-                    if (logger) {
-                        logger.debug("skipping WebSocket send: %s", error_msg);
-                    }
-                }
                 return;
             }
             switch (message_id) {
@@ -4760,6 +4756,14 @@ public class WebSocketClientPollOperation inherits Qore::AbstractPollOperation {
             @since WebSocketClient 2.4
         */
         *code on_poll_complete;
+
+        #! Counter for messages queued to recv_channel during processReceivedFrames()
+        /** Only written by the I/O thread (in handleParsedFrame), so no lock needed.
+            Reset before processReceivedFrames() and checked after to determine whether
+            notifyPollComplete() should fire.  Unlike recv_channel.size(), this is not
+            subject to races with the concurrent delivery thread.
+        */
+        int frames_queued = 0;
     }
 
     #! Creates the poll operation for an established WebSocket connection
@@ -4854,7 +4858,7 @@ public class WebSocketClientPollOperation inherits Qore::AbstractPollOperation {
         }
 
         # Process complete frames from the receive buffer
-        int channel_count_before = recv_channel.size();
+        frames_queued = 0;
         try {
             processReceivedFrames();
         } catch (hash<ExceptionInfo> ex) {
@@ -4871,8 +4875,11 @@ public class WebSocketClientPollOperation inherits Qore::AbstractPollOperation {
             return NOTHING;
         }
 
-        # Notify delivery only if processReceivedFrames() actually put messages on the channel
-        if (recv_channel.size() > channel_count_before) {
+        # Notify delivery only if processReceivedFrames() actually queued messages.
+        # Uses the I/O-thread-local frames_queued counter (incremented by
+        # handleParsedFrame) instead of recv_channel.size(), which races with the
+        # concurrent delivery thread.
+        if (frames_queued > 0) {
             notifyPollComplete();
         }
 
@@ -5185,6 +5192,7 @@ public class WebSocketClientPollOperation inherits Qore::AbstractPollOperation {
             }
 
             recv_channel.send({"type": "close", "msg": h, "code": code, "reason": reason});
+            ++frames_queued;
 
             if (!we_initiated) {
                 # Server initiated close - echo the close frame back
@@ -5227,6 +5235,7 @@ public class WebSocketClientPollOperation inherits Qore::AbstractPollOperation {
                 state = STATE_CLOSED;
                 recv_channel.send({"type": "closed", "code": WSCC_NormalClosure,
                     "reason": "raw callback requested break"});
+                ++frames_queued;
                 return;
             }
         }
@@ -5237,12 +5246,14 @@ public class WebSocketClientPollOperation inherits Qore::AbstractPollOperation {
                 "data": ws_encode_message(h.msg ?? "heartbeat", WSOP_Pong, True),
             });
             recv_channel.send({"type": "ping", "msg": h, "data": h.msg});
+            ++frames_queued;
             return;
         }
 
         # Handle pong
         if (h.op == WSOP_Pong) {
             recv_channel.send({"type": "pong", "msg": h, "data": h.msg});
+            ++frames_queued;
             return;
         }
 
@@ -5297,6 +5308,7 @@ public class WebSocketClientPollOperation inherits Qore::AbstractPollOperation {
             data processed = applyIncomingExtensions(remove frag_buf, ext_h);
             string msg_type = ext_h.op == WSOP_Text ? "text" : "binary";
             recv_channel.send({"type": msg_type, "msg": ext_h, "data": processed});
+            ++frames_queued;
             return;
         }
 
@@ -5305,6 +5317,7 @@ public class WebSocketClientPollOperation inherits Qore::AbstractPollOperation {
             data processed = applyIncomingExtensions(h.msg, h);
             string msg_type = h.op == WSOP_Text ? "text" : "binary";
             recv_channel.send({"type": msg_type, "msg": h, "data": processed});
+            ++frames_queued;
             return;
         }
 
