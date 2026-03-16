@@ -59,6 +59,11 @@ void ThreadPoolThread::worker(ExceptionSink* xsink) {
 
         sl.unlock();
         task->run(xsink).discard(xsink);
+        // Handle any exceptions from the task so they don't leak into the next task
+        // on this thread.  Without this, a failed task leaves xsink dirty, and the
+        // next ThreadTask::run() sees *xsink == true in the program-context check
+        // and silently skips execution.
+        xsink->handleExceptions();
         sl.lock();
         task->del(xsink);
         task = 0;

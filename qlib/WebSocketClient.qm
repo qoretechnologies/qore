@@ -2563,8 +2563,9 @@ ws.setEventQueue();
         int rsv_bits = (h.rsv1 ? WS_RSV1 : 0) | (h.rsv2 ? WS_RSV2 : 0) | (h.rsv3 ? WS_RSV3 : 0);
         if (rsv_bits) {
             if (!active_extensions) {
-                logError("RSV bits set but no extensions are active: rsv1=%y rsv2=%y rsv3=%y",
-                    h.rsv1, h.rsv2, h.rsv3);
+                logError("RSV bits set but no extensions are active: rsv1=%y rsv2=%y rsv3=%y op=%s (%d) "
+                    "msg_size=%d masked=%y fin=%y",
+                    h.rsv1, h.rsv2, h.rsv3, WSOPMap{h.op} ?? "unknown", h.op, h.msg.size(), h.masked, h.fin);
                 sendClose(WSCC_ProtocolError);
                 return WSEDC_BREAK;
             }
@@ -4270,11 +4271,6 @@ public class WebSocketClientDataProviderBase inherits DataProvider::AbstractData
         try {
             if (!client.isOpen()) {
                 error_msg = "SOCKET-NOT-OPEN: socket is closed";
-                @debug {
-                    if (logger) {
-                        logger.debug("skipping WebSocket send: %s", error_msg);
-                    }
-                }
                 return;
             }
             switch (message_id) {
