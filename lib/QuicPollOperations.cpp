@@ -731,7 +731,12 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                     cached_stream = quic_session->takeCompletedStream();
                     qcs_state = QCS::RESPONSE_READY;
                     // Flush pending writes (ACKs) before signaling goal reached
-                    flushAndReturnPollInfo(xsink);
+                    {
+                        QoreHashNode* flush_info = flushAndReturnPollInfo(xsink);
+                        if (flush_info) {
+                            flush_info->deref(xsink);
+                        }
+                    }
                     return nullptr;  // goal reached
                 }
 
@@ -751,7 +756,12 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                         cached_stream = quic_session->takeCompletedStream();
                         qcs_state = QCS::RESPONSE_READY;
                         // Flush pending writes (ACKs) before signaling goal reached
-                        flushAndReturnPollInfo(xsink);
+                        {
+                            QoreHashNode* flush_info = flushAndReturnPollInfo(xsink);
+                            if (flush_info) {
+                                flush_info->deref(xsink);
+                            }
+                        }
                         return nullptr;  // goal reached
                     }
                 }
