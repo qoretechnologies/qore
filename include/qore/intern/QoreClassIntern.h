@@ -1193,14 +1193,19 @@ public:
 
     DLLLOCAL void init() {
         val.set(getTypeInfo());
+        const QoreTypeInfo* ti = getTypeInfo();
         // Initialize the actual node value for complex types that need a default container
         // (hashes, lists, etc.) instead of leaving it as NOTHING/nullptr
-        if (QoreTypeInfo::isHashType(getTypeInfo())) {
-            val.assignInitial(new QoreHashNode());
+        if (QoreTypeInfo::isHashType(ti)) {
+            // getReturnComplexHashOrNothing() extracts element type T from hash<string,T>
+            // QoreHashNode(valueType) sets complexTypeInfo via qore_get_complex_hash_type()
+            val.assignInitial(new QoreHashNode(QoreTypeInfo::getReturnComplexHashOrNothing(ti)));
         }
         // Check if the typeInfo is for a list type and create empty list
-        else if (QoreTypeInfo::isListType(getTypeInfo())) {
-            val.assignInitial(new QoreListNode());
+        else if (QoreTypeInfo::isListType(ti)) {
+            // getReturnComplexListOrNothing() extracts element type T from list<T>
+            // QoreListNode(valueType) sets complexTypeInfo via qore_get_complex_list_type()
+            val.assignInitial(new QoreListNode(QoreTypeInfo::getReturnComplexListOrNothing(ti)));
         }
         // For other types (primitives, objects), the default is NOTHING
         // which is correct for uninitialized references
