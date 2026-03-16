@@ -29,6 +29,7 @@ include/qore/intern/svn-revision.h
 include/qore/intern/unix-config.h
 include/qore/intern/unix-config.h.in
 include/qore/intern/git-revision.h
+include/qore/intern/ql_alloc_tracking.h
 
 # lib/
 lib/qpp
