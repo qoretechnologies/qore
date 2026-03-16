@@ -2818,7 +2818,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             } else {
                 c = new PgsqlColumn(row.column_name, row.data_type, th.qore, exists size ? size : 0,
                     row.is_nullable == "YES", defval, row.description ? row.description : NOTHING,
-                    row.character_octet_length);
+                    row.character_octet_length, NOTHING);
             }
             rv{row.column_name} = c;
         }
