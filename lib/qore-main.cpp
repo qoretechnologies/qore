@@ -366,6 +366,9 @@ void qore_cleanup() {
     // issue #3045: clear module options
     qore_delete_module_options();
 
+    // clear application registry
+    qore_delete_app_registry();
+
     // NOTE: cleanupAllPrograms removed - programs should be cleaned up by module deletion
     // Forcing cleanup here causes crashes due to interdependencies between programs
 

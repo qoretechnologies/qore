@@ -3260,6 +3260,55 @@ nothing set_module_option(string module, string option, auto value) [dom=PROCESS
     qore_set_module_option(mod_str->c_str(), opt_str->c_str(), value.refSelf());
 }
 
+//! sets a value in the application registry
+/** The application registry is a simple key-value store for sharing data between
+    privileged and unprivileged code.  Writing requires the \c PROCESS functional
+    domain; reading via @ref get_app_registry() has no domain restriction.
+
+    @par Example:
+    @code
+set_app_registry("custom-expressions", expression_map);
+    @endcode
+
+    @param key the registry key
+    @param value the value to store; @ref nothing removes the key
+
+    @see get_app_registry()
+
+    @since %Qore 2.2
+ */
+nothing set_app_registry(string key, auto value) [dom=PROCESS] {
+    TempEncodingHelper key_str(key, QCS_DEFAULT, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    qore_set_app_registry(key_str->c_str(), value.refSelf());
+}
+
+//! gets a value from the application registry
+/** @par Example:
+    @code
+*hash<auto> expr_map = get_app_registry("custom-expressions");
+    @endcode
+
+    @param key the registry key
+
+    @return the value stored under the given key, or @ref nothing if not set
+
+    @see set_app_registry()
+
+    @since %Qore 2.2
+ */
+auto get_app_registry(string key) [flags=RET_VALUE_ONLY] {
+    TempEncodingHelper key_str(key, QCS_DEFAULT, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    return qore_get_app_registry(key_str->c_str());
+}
+
 //! resolve the string as a call reference
 /** @param identifier the string to resolve; function or static class method, can include namespace path
 

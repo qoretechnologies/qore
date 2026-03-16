@@ -114,6 +114,11 @@ typedef std::map<std::string, QoreValue> mod_opt_val_map_t;
 typedef std::map<std::string, mod_opt_val_map_t> mod_opt_map_t;
 DLLLOCAL mod_opt_map_t mod_opt_map;
 
+// application registry: write requires QDOM_PROCESS, read is unrestricted
+DLLLOCAL QoreThreadLock app_reg_lock;
+typedef std::map<std::string, QoreValue> app_reg_map_t;
+DLLLOCAL app_reg_map_t app_reg_map;
+
 #ifndef HAVE_LOCALTIME_R
 DLLLOCAL QoreThreadLock lck_localtime;
 #endif
@@ -3101,6 +3106,16 @@ void qore_delete_module_options() {
     }
 }
 
+void qore_delete_app_registry() {
+    if (app_reg_map.empty()) {
+        return;
+    }
+    ExceptionSink xsink;
+    for (auto& i : app_reg_map) {
+        i.second.discard(&xsink);
+    }
+}
+
 void qore_set_module_option(std::string mod, std::string opt, QoreValue val) {
     AutoLocker al(mod_opt_lock);
     mod_opt_val_map_t::iterator vi;
@@ -3141,6 +3156,30 @@ QoreValue qore_get_module_option(std::string mod, std::string opt) {
     }
     mod_opt_val_map_t::const_iterator vi = i->second.find(opt);
     return vi == i->second.end() ? QoreValue() : vi->second.refSelf();
+}
+
+void qore_set_app_registry(std::string key, QoreValue val) {
+    AutoLocker al(app_reg_lock);
+    app_reg_map_t::iterator i = app_reg_map.lower_bound(key);
+    if (i == app_reg_map.end() || i->first != key) {
+        if (val) {
+            app_reg_map.insert(i, app_reg_map_t::value_type(std::move(key), val));
+        }
+    } else {
+        ExceptionSink xsink;
+        i->second.discard(&xsink);
+        if (!val) {
+            app_reg_map.erase(i);
+        } else {
+            i->second = val;
+        }
+    }
+}
+
+QoreValue qore_get_app_registry(std::string key) {
+    AutoLocker al(app_reg_lock);
+    app_reg_map_t::const_iterator i = app_reg_map.find(key);
+    return i == app_reg_map.end() ? QoreValue() : i->second.refSelf();
 }
 
 const QoreTypeInfo* qore_get_type_from_string(const char* str, ExceptionSink& xsink) {
