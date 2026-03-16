@@ -285,10 +285,12 @@ public:
     DLLLOCAL ThreadPool(ExceptionSink* xsink, int n_max = 0, int n_minidle = 0, int m_maxidle = 0, int n_release_ms = QTP_DEFAULT_RELEASE_MS);
 
     DLLLOCAL ~ThreadPool() {
+        if (!stopped) {
+            stop();
+        }
         assert(q.empty());
         assert(ah.empty());
         assert(fh.empty());
-        assert(stopped);
     }
 
     DLLLOCAL void toString(QoreString& str) {
@@ -353,11 +355,18 @@ public:
         ThreadTaskHolder task(new ThreadTask(c, cc), xsink);
 
         AutoLocker al(m);
-        if (checkStopUnlocked("submit", xsink))
+        if (checkStopUnlocked("submit", xsink)) {
             return -1;
+        }
 
-        if (q.empty())
+        // Increment thread_counter at submit time (on the calling thread) so that
+        // QoreProgramHelper::~QoreProgramHelper() waits for queued tasks before
+        // program destruction. Decremented when the task completes or is cancelled.
+        thread_counter.inc();
+
+        if (q.empty()) {
             cond.signal();
+        }
         q.push_back(task.release());
 
         return 0;

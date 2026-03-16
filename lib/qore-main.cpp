@@ -333,8 +333,15 @@ void qore_cleanup() {
         purge_thread_resources(&xsink);
     }
 
-    // first delete all user modules
+    // first delete all user modules (runs module del handlers, stops ThreadPools)
     QMM.delUser();
+
+    // wait for ThreadPool threads (QTF_EXTERNAL_LIFECYCLE) to fully exit after
+    // being stopped during module cleanup above
+    {
+        ExceptionSink xsink;
+        tp_thread_counter.waitForZero(&xsink);
+    }
 
 #ifdef _Q_WINDOWS
     // do windows socket cleanup
