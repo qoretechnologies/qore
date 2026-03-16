@@ -130,6 +130,26 @@ Doxyfile.???*
 tools/render-version-art/node_modules/
 tools/render-version-art/package-lock.json
 
+# Autotools artifacts (removed; should not reappear)
+/Makefile.in
+/aclocal.m4
+/autom4te.cache/
+/compile
+/config.guess
+/config.sub
+/configure
+/depcomp
+/install-sh
+/ltmain.sh
+/m4/
+/missing
+/test-driver
+/ylwrap
+lib/.deps/
+lib/Makefile.in
+modules/*/Makefile.in
+modules/*/src/Makefile.in
+
 # ignore cmake build directories
 build*/
 
