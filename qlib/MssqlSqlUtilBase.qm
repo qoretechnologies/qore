@@ -275,7 +275,7 @@ public class MssqlColumn inherits SqlUtil::AbstractColumn {
     }
 
     #! creates the column from the supplied arguments
-    constructor(string n, string nt, *string qt, int sz, bool nul, *string dv, *string cm, *softint bs, *int scale)
+    constructor(string n, string nt, *string qt, int sz, bool nul, *string dv, *string cm, softint bs = 0, int scale = 0)
             : AbstractColumn(n, nt, qt, sz, nul, dv, cm, scale) {
         byte_size = bs;
     }
@@ -369,8 +369,8 @@ string str = col.getRenameSql(t, "new_name");
 #! represents a Mssql-specific numeric column
 public class MssqlNumericColumn inherits MssqlColumn {
     #! creates the column from the supplied arguments
-    constructor(string n, string nt, *string qt, int sz, bool nul, *string dv, *string cm, *softint bs,
-            *softint scale) : MssqlColumn(n, nt, qt, sz, nul, dv, cm, bs, scale) {
+    constructor(string n, string nt, *string qt, int sz, bool nul, *string dv, *string cm, softint bs = 0,
+            softint scale = 0) : MssqlColumn(n, nt, qt, sz, nul, dv, cm, bs, scale) {
     }
 }
 

@@ -391,8 +391,8 @@ string str = col.getRenameSql(t, "new_name");
             };
         }
 
-        constructor(string n, string nt, *string qt, int sz, bool nul, *string dv, *string cm, *softint bs,
-                *softint scale, bool n_unsigned = False, bool n_auto_increment = False, bool n_pk = False)
+        constructor(string n, string nt, *string qt, int sz, bool nul, *string dv, *string cm, softint bs = 0,
+                softint scale = 0, bool n_unsigned = False, bool n_auto_increment = False, bool n_pk = False)
                 : MysqlColumn(n, nt, qt, sz, nul, dv, cm, bs, scale) {
             unsigned = n_unsigned;
             auto_increment = n_auto_increment;
