@@ -198,7 +198,9 @@ static const QoreTypeInfo* getExprTypeInfo(const QoreValue& val) {
         }
         if (auto* rt_const = dynamic_cast<const RuntimeConstantRefNode*>(node)) {
             // RuntimeConstantRefNode holds the type of the constant (e.g., list<string>)
-            return rt_const->getConstantEntry()->typeInfo;
+            if (auto* ce = rt_const->getConstantEntry()) {
+                return ce->typeInfo;
+            }
         }
     }
     return val.getTypeInfo();
