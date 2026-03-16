@@ -1686,8 +1686,9 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     "role": ER_All,
                     "name": DP_FUNC_INDEX,
                     "display_name": "index",
-                    "short_desc": "Returns a single element from a list by index",
-                    "desc": "Returns a single element from a list by index; supports negative indices",
+                    "short_desc": "Returns a single element from a list or string by index",
+                    "desc": "Returns a single element from a list or a single character from a string by "
+                        "index; supports negative indices",
                     "symbol": "index()",
                     "args": (DataProviderSignatureAnyType, DataProviderSignatureIntType),
                     "return_type": AbstractDataProviderTypeMap."any",

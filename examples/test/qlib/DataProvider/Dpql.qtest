@@ -3584,9 +3584,31 @@ public class DpqlTest inherits QUnit::Test {
             assertFalse(exists result);
         }
 
-        # Test index on non-list throws INVALID-OPERATION
+        # Test index on string returns character
         {
-            hash<auto> rec = {"items": "not a list"};
+            hash<auto> rec = {"items": "hello"};
+            hash<DataProviderExpression> exp = <DataProviderExpression>{
+                "exp": DP_FUNC_INDEX,
+                "args": (<DataProviderFieldReference>{"field": "items"}, 0),
+            };
+            assertEq("h", AbstractDataProvider::evalGenericExpression(rec, exp));
+            # negative index
+            exp = <DataProviderExpression>{
+                "exp": DP_FUNC_INDEX,
+                "args": (<DataProviderFieldReference>{"field": "items"}, -1),
+            };
+            assertEq("o", AbstractDataProvider::evalGenericExpression(rec, exp));
+            # out of range returns NOTHING
+            exp = <DataProviderExpression>{
+                "exp": DP_FUNC_INDEX,
+                "args": (<DataProviderFieldReference>{"field": "items"}, 10),
+            };
+            assertNothing(AbstractDataProvider::evalGenericExpression(rec, exp));
+        }
+
+        # Test index on non-list/non-string throws INVALID-OPERATION
+        {
+            hash<auto> rec = {"items": 42};
             hash<DataProviderExpression> exp = <DataProviderExpression>{
                 "exp": DP_FUNC_INDEX,
                 "args": (<DataProviderFieldReference>{"field": "items"}, 0),
@@ -3597,7 +3619,7 @@ public class DpqlTest inherits QUnit::Test {
             } catch (hash<ExceptionInfo> ex) {
                 caught = True;
                 assertEq("INVALID-OPERATION", ex.err);
-                assertTrue(ex.desc =~ /non-list/);
+                assertTrue(ex.desc =~ /expected list or string/);
             }
             assertTrue(caught);
         }
