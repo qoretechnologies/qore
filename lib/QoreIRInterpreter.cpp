@@ -5729,7 +5729,11 @@ load_local_done:
                         if (uvb) {
                             const QoreIRFunction* callee_ir = uvb->getCachedIR();
                             const UserSignature* sig = uvb->getUserSignature();
-                            if (callee_ir && callee_ir->direct_params_eligible
+                            // Don't cache inline IR calls to functions from different programs/modules
+                            // to avoid stale pointers when modules are unloaded (especially dynamically-loaded ones)
+                            // Only inline if caller and callee are in the same program
+                            bool same_program = (uvb->pgm == direct_inst->pgm);
+                            if (same_program && callee_ir && callee_ir->direct_params_eligible
                                     && !uvb->hasCachedFunction()
                                     && !direct_inst->has_ref_args
                                     && callee_ir->ast_visible_body_locals.empty()
