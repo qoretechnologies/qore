@@ -146,6 +146,9 @@ public:
         if (!h2_session) {
             return false;
         }
+        if (cached_stream) {
+            return cached_stream->headers_complete && cached_stream->body_complete;
+        }
         Http2StreamInfo* stream = h2_session->getStream(stream_id);
         return stream && stream->headers_complete && stream->body_complete;
     }
@@ -154,6 +157,12 @@ public:
     DLLLOCAL QoreHashNode* getResponseHeaders() const {
         if (!h2_session) {
             return nullptr;
+        }
+        if (cached_stream) {
+            if (cached_stream->headers.empty()) {
+                return nullptr;
+            }
+            return httpMultiHeadersToQoreHash(cached_stream->headers);
         }
         Http2StreamInfo* stream = h2_session->getStream(stream_id);
         if (!stream || stream->headers.empty()) {
@@ -167,6 +176,9 @@ public:
         if (!h2_session) {
             return -1;
         }
+        if (cached_stream) {
+            return cached_stream->status_code;
+        }
         Http2StreamInfo* stream = h2_session->getStream(stream_id);
         return stream ? stream->status_code : -1;
     }
@@ -175,6 +187,15 @@ public:
     DLLLOCAL BinaryNode* getResponseBody(ExceptionSink* xsink) const {
         if (!h2_session) {
             return nullptr;
+        }
+        if (cached_stream) {
+            if (cached_stream->body.empty()) {
+                return nullptr;
+            }
+            BinaryNode* rv = new BinaryNode();
+            rv->append(cached_stream->body.data(), cached_stream->body.size());
+            cached_stream->body.clear();
+            return rv;
         }
         // Take all available stream data
         return h2_session->takeStreamData(stream_id, 0, xsink);
@@ -194,8 +215,7 @@ public:
         }
 
         // Check if we're done
-        Http2StreamInfo* stream = h2_session->getStream(stream_id);
-        if (stream && stream->headers_complete && stream->body_complete) {
+        if (checkComplete()) {
             return 0;  // Done
         }
 
@@ -224,8 +244,7 @@ public:
             }
             if (rv == 1) {
                 // EOF - connection closed by peer
-                stream = h2_session->getStream(stream_id);
-                if (!stream || !(stream->headers_complete && stream->body_complete)) {
+                if (!checkComplete()) {
                     xsink->raiseException("HTTP2-ERROR", "connection closed before response was complete");
                     return -1;
                 }
@@ -234,8 +253,7 @@ public:
         }
 
         // Check again if we're done after receiving
-        stream = h2_session->getStream(stream_id);
-        if (stream && stream->headers_complete && stream->body_complete) {
+        if (checkComplete()) {
             return 0;  // Done
         }
 
@@ -253,9 +271,29 @@ public:
     }
 
 private:
+    //! Check if the response is complete, checking cached_stream or the session
+    DLLLOCAL bool checkComplete() {
+        if (cached_stream) {
+            return cached_stream->headers_complete && cached_stream->body_complete;
+        }
+        Http2StreamInfo* stream = h2_session->getStream(stream_id);
+        if (stream && stream->headers_complete && stream->body_complete) {
+            return true;
+        }
+        // Stream may have been moved to completed_streams by markStreamComplete()
+        if (h2_session->hasCompletedStreams()) {
+            cached_stream = h2_session->takeCompletedStream();
+            if (cached_stream && cached_stream->stream_id == stream_id) {
+                return cached_stream->headers_complete && cached_stream->body_complete;
+            }
+        }
+        return false;
+    }
+
     qore_socket_private* sock;
     Http2SessionPtr h2_session;
     int32_t stream_id = -1;
+    std::unique_ptr<Http2StreamInfo> cached_stream;  //!< Locally cached stream after completion
 };
 
 //! Poll state for HTTP/3 client operations
