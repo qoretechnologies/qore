@@ -1984,7 +1984,7 @@ public:
         parse_resolve_class_members : 1,  // class members resolved
         parse_resolve_abstract : 1,       // abstract methods resolved
         has_transient_member : 1,         // has at least one transient member
-        parseCommitRuntimeInitDone : 1    // has parseCommitRuntimeInit() been called?
+        parseCommitRuntimeInitDone : 1 = 0    // has parseCommitRuntimeInit() been called?
         ;
 
     int64 domain;                    // capabilities of builtin class to use in the context of parse restrictions
