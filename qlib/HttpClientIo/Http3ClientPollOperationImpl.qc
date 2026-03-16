@@ -62,6 +62,10 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
 
         #! True when a GOAWAY has been received from the server
         bool goaway_received = False;
+
+        #! Set by migrate() on the app thread; consumed by continuePoll() on
+        #! the I/O thread so the fd swap happens on the thread that owns epoll
+        bool migration_pending = False;
     }
 
     #! Creates the poll operation for a new QUIC connection
@@ -344,9 +348,12 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
             throw "HTTP3-STATE-ERROR", sprintf("cannot migrate in state: %y", current_state);
         }
 
-        log(LoggerLevel::DEBUG, "initiating QUIC connection migration");
-        current_op.migrateQuicConnection();
-        log(LoggerLevel::DEBUG, "QUIC connection migration initiated successfully");
+        # Set flag for the I/O thread to perform the migration on the next
+        # continuePoll() cycle.  This ensures the fd swap happens on the same
+        # thread that owns the epoll registration, avoiding races where the
+        # old fd is closed while epoll is still using it.
+        log(LoggerLevel::DEBUG, "requesting QUIC connection migration");
+        migration_pending = True;
     }
 
     #! Aborts the operation and closes the connection
@@ -414,6 +421,17 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
         if (!current_op) {
             setError("HTTP3-READ-ERROR", "read operation not initialized");
             return NOTHING;
+        }
+
+        # Perform deferred migration on the I/O thread (set by migrate())
+        if (migration_pending) {
+            migration_pending = False;
+            try {
+                current_op.migrateQuicConnection();
+                log(LoggerLevel::DEBUG, "QUIC migration completed on I/O thread");
+            } catch (hash<ExceptionInfo> ex) {
+                log(LoggerLevel::ERROR, "QUIC migration failed: %s: %s", ex.err, ex.desc);
+            }
         }
 
         try {

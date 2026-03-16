@@ -331,8 +331,9 @@ l50Xb2GWQesIt9k5jF5IOw==
             assertTrue(conn.migrate(), "migration during streaming succeeds");
         }
 
-        # Controller drives I/O — wait for completion
-        int rc = cnt.waitForZero(60s);
+        # Controller drives I/O — wait for completion; on localhost, QUIC
+        # retransmission PTO is well under 1s so 5s is generous
+        int rc = cnt.waitForZero(5s);
         if (rc) {
             throw "TIMEOUT", "streaming request timed out after migration";
         }

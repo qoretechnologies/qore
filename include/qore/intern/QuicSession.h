@@ -224,6 +224,15 @@ public:
     */
     static constexpr uint64_t QUIC_ACTIVE_CONNECTION_ID_LIMIT = 8;
 
+    //! Maximum bytes per writePacketsLocked() call to prevent UDP receive
+    //! buffer overflow.  On Linux, SO_RCVBUF is capped by net.core.rmem_max
+    //! (default ~208KB on Alpine/Docker).  Bursts exceeding the peer's buffer
+    //! cause silent packet loss, requiring PTO-based recovery that can take
+    //! tens of seconds on slow platforms.  128KB stays well within the minimum
+    //! common buffer size while maintaining high throughput (~128MB/s at 1ms
+    //! per continuePoll cycle).
+    static constexpr size_t QUIC_MAX_WRITE_BURST_BYTES = 128 * 1024;
+
     //! Maximum buffered data before HTTP/3 layer is initialized
     static constexpr size_t QUIC_MAX_PRE_H3_BUFFER = 65536;
     //! Maximum buffered entries before HTTP/3 layer is initialized

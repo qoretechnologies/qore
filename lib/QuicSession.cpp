@@ -1093,6 +1093,7 @@ int QuicSession::writePacketsLocked(QuicPacketBatch& packets, ExceptionSink* xsi
     ngtcp2_path_storage_zero(&ps);
     ngtcp2_pkt_info pi{};
     int total_packets = 0;
+    size_t total_bytes = 0;
 
     // Safety limit: prevent unbounded looping if ngtcp2 never returns nwrite==0.
     // 4096 iterations is generous (covers large initial windows and GSO batches)
@@ -1106,6 +1107,19 @@ int QuicSession::writePacketsLocked(QuicPacketBatch& packets, ExceptionSink* xsi
                 "writePackets() exceeded %d iteration safety limit; "
                 "possible infinite loop in ngtcp2 write cycle", MAX_WRITE_ITERATIONS);
             return -1;
+        }
+
+        // Burst cap: limit per-call output to prevent overflowing the peer's
+        // UDP receive buffer.  On Linux, SO_RCVBUF is capped by
+        // net.core.rmem_max (default ~208KB); sending a burst larger than this
+        // causes silent packet loss on localhost, forcing PTO-based recovery
+        // that can take 30+ seconds on slow platforms (QEMU, constrained CI).
+        // 128KB leaves headroom for in-flight data already in the buffer.
+        // Remaining data is sent in the next continuePoll() cycle — since
+        // packets are now in-flight, ngtcp2 sets a PTO timer that bounds the
+        // poll() wait, guaranteeing forward progress.
+        if (total_bytes >= QUIC_MAX_WRITE_BURST_BYTES) {
+            break;
         }
         int64_t stream_id = -1;
         int fin = 0;
@@ -1246,6 +1260,7 @@ int QuicSession::writePacketsLocked(QuicPacketBatch& packets, ExceptionSink* xsi
         // that must be sent as its own UDP datagram
         packets.addPacket(pkt_buf_, static_cast<size_t>(nwrite));
         ++total_packets;
+        total_bytes += static_cast<size_t>(nwrite);
         printd(5, "writePacketsLocked() packet #%d: %d bytes, stream_id=" QLLD " ndatalen=%d\n",
             total_packets, (int)nwrite, stream_id, (int)ndatalen);
 

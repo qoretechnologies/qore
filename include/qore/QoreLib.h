@@ -798,6 +798,29 @@ DLLEXPORT void qore_set_module_option(std::string mod, std::string opt, QoreValu
 */
 DLLEXPORT QoreValue qore_get_module_option(std::string mod, std::string opt);
 
+//! sets a value in the application registry (requires QDOM_PROCESS)
+/** The application registry is a simple key-value store that allows privileged code to publish data
+    (such as expression maps) that can be read by any code, including sandboxed modules.
+
+    Writing requires the PROCESS functional domain; reading via qore_get_app_registry() has no
+    domain restriction, making it safe for use by library modules executed in sandboxed contexts.
+
+    @param key the registry key
+    @param val the value to store; must be already referenced for the assignment; NOTHING removes the key
+
+    @since %Qore 2.2
+*/
+DLLEXPORT void qore_set_app_registry(std::string key, QoreValue val);
+
+//! gets a value from the application registry (no domain restriction)
+/** @param key the registry key
+
+    @return the referenced value; if a value is returned here, it must be dereferenced
+
+    @since %Qore 2.2
+*/
+DLLEXPORT QoreValue qore_get_app_registry(std::string key);
+
 // try to remove noise in insignificant digits from a number string
 /** finds the decimal point and attempts to remove noise and round the number if found
 

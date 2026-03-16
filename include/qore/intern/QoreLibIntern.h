@@ -1231,6 +1231,7 @@ DLLLOCAL size_t qore_get_in_len(struct sockaddr *sa);
 DLLLOCAL QoreHashNode* get_source_location(const QoreProgramLocation* loc);
 
 DLLLOCAL void qore_delete_module_options();
+DLLLOCAL void qore_delete_app_registry();
 
 DLLLOCAL const QoreTypeInfo* qore_get_type_from_string_intern(const char* str);
 

@@ -319,16 +319,21 @@ public class DpqlParser {
         bool is_server_op = server_expressions.hasKey(exp.exp);
 
         if (is_server_op) {
-            # DPQL-E044: Server operator — first arg should be a field reference
-            if (exp.args.size() > 0 && !(exp.args[0] instanceof hash<DataProviderFieldReference>)) {
-                # Check if the operator expects a field ref (most comparison ops do)
-                # Only check for comparison-style operators, not functions
-                if (isComparisonOp(exp.exp)) {
+            # DPQL-E044: Server operator — at least one arg must be a field reference
+            if (exp.args.size() > 0 && isComparisonOp(exp.exp)) {
+                bool has_field_ref = False;
+                foreach auto arg in (exp.args) {
+                    if (arg instanceof hash<DataProviderFieldReference>) {
+                        has_field_ref = True;
+                        break;
+                    }
+                }
+                if (!has_field_ref) {
                     string op_sym = getOpSymbol(exp.exp);
                     diags += <DpqlDiagnostic>{
                         "severity": "error",
-                        "message": sprintf("Server operator '%s' expects a record field as its first "
-                            "argument (e.g., `@field_name %s value`). The server needs to know which "
+                        "message": sprintf("Server operator '%s' requires a record field reference "
+                            "(e.g., `@field_name %s value`). The server needs to know which "
                             "field to compare.", op_sym, op_sym),
                         "code": "DPQL-E044",
                         "line": 1,

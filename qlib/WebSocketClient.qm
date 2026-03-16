@@ -5768,8 +5768,7 @@ const WebSocketsLogoLight = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone
    d=\"m 445.886,268.502 c 0,-34.436 -27.957,-62.393 -62.393,-62.393 H 182.735 c -34.436,0 -62.393,27.957 -62.393,62.393 V 457.2 c 0,34.435 27.957,62.393 62.393,62.393 h 200.758 c 34.436,0 62.393,-27.958 62.393,-62.393 z\"
    style=\"fill:#b3d9ff;stroke:#ffffff;stroke-width:2.31px\" />
             <rect
-   id=\"rect2\"} # namespace WebSocketClient
-
+   id=\"rect2\"
    x=\"186.959\"
    y=\"280.08301\"
    width=\"33.727001\"
