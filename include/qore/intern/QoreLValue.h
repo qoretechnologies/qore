@@ -568,6 +568,10 @@ public:
             set(QV_Float);
         else if (typeInfo == boolTypeInfo || typeInfo == softBoolTypeInfo)
             set(QV_Bool);
+        // For complex types (hash, list, objects), check using QoreTypeInfo API functions
+        // since pointers may not match for wrapped types
+        else if (QoreTypeInfo::isHashType(typeInfo) || QoreTypeInfo::isListType(typeInfo))
+            set(QV_Node);
         else
             set(QV_Node);
     }

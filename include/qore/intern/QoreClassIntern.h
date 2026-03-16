@@ -1193,6 +1193,17 @@ public:
 
     DLLLOCAL void init() {
         val.set(getTypeInfo());
+        // Initialize the actual node value for complex types that need a default container
+        // (hashes, lists, etc.) instead of leaving it as NOTHING/nullptr
+        if (QoreTypeInfo::isHashType(getTypeInfo())) {
+            val.assignInitial(new QoreHashNode());
+        }
+        // Check if the typeInfo is for a list type and create empty list
+        else if (QoreTypeInfo::isListType(getTypeInfo())) {
+            val.assignInitial(new QoreListNode());
+        }
+        // For other types (primitives, objects), the default is NOTHING
+        // which is correct for uninitialized references
     }
 
     // can be called during parse initialization, in which case the variable must be initialized first
