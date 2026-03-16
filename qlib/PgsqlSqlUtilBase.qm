@@ -2786,9 +2786,12 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         hash<auto> rv;
         foreach hash<auto> row in (qh.contextIterator()) {
             *hash<auto> th = PgsqlTypeMap.(row.data_type);
-            softint size = row.character_maximum_length ? row.character_maximum_length : row.numeric_precision;
+            *softint size = row.character_maximum_length ? row.character_maximum_length : row.numeric_precision;
             if (!size) {
                 size = row.datetime_precision;
+            }
+            if (!exists size) {
+                size = 0;
             }
             # use short names in descriptions
             *string an = PgsqlNameMap{row.data_type};

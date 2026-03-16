@@ -1690,7 +1690,10 @@ so.name = %v", name);
         foreach hash<auto> row in (qh.contextIterator()) {
             row.column_name = row.column_name.lwr();
             *hash th = MssqlTypeMap.(row.data_type);
-            softint size = row.length;
+            *softint size = row.length;
+            if (!exists size) {
+                size = 0;
+            }
             switch (th.qore) {
                 case Type::Int:
                 case Type::Float: {
@@ -1728,7 +1731,10 @@ so.name = %v", name);
         foreach hash<auto> row in (qh.contextIterator()) {
             row.column_name = row.column_name.lwr();
             *hash th = MssqlTypeMap.(row.data_type);
-            softint size = row.character_maximum_length ? row.character_maximum_length : row.numeric_precision;
+            *softint size = row.character_maximum_length ? row.character_maximum_length : row.numeric_precision;
+            if (!exists size) {
+                size = 0;
+            }
             switch (th.qore) {
                 case Type::Int:
                 case Type::Float: {
