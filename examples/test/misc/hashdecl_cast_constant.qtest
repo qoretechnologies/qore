@@ -1,0 +1,77 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%new-style
+%enable-all-warnings
+
+%requires QUnit
+
+public namespace hashdecl_cast_constant_test;
+
+hashdecl ExprInfo {
+    string name;
+    string symbol;
+}
+
+# This pattern reproduces the DataProvider issue:
+# A map + cast of hashdecl-typed values at parse time (const initialization)
+const SourceMap = {
+    "&&": {
+        "exp": <ExprInfo>{"name": "and", "symbol": "&&"},
+        "impl": NOTHING,
+    },
+    "||": {
+        "exp": <ExprInfo>{"name": "or", "symbol": "||"},
+        "impl": NOTHING,
+    },
+    "==": {
+        "exp": <ExprInfo>{"name": "equal", "symbol": "=="},
+        "impl": NOTHING,
+    },
+    "!=": {
+        "exp": <ExprInfo>{"name": "not equal", "symbol": "!="},
+        "impl": NOTHING,
+    },
+};
+
+# The problematic const: cast of a map over hashdecl values
+public const ExpressionMap = cast<hash<string, hash<ExprInfo>>>(
+    map {$1.key: $1.value."exp"}, SourceMap.pairIterator()
+);
+
+class HashdeclCastConstantTest inherits QUnit::Test {
+    public {
+        const TEST_NAME = "Hashdecl Cast Constant Test";
+        const TEST_VERSION = "1.0";
+    }
+
+    setUp() {
+    }
+
+    testAccessWithSpecialKeys() {
+        # Test accessing the constant with special operator symbols as keys
+        # This should work after the fix
+        assertEq("&&", ExpressionMap{"&&"}{"symbol"});
+        assertEq("||", ExpressionMap{"||"}{"symbol"});
+        assertEq("==", ExpressionMap{"=="}{"symbol"});
+        assertEq("!=", ExpressionMap{"!="}{"symbol"});
+    }
+
+    testAccessByName() {
+        # Test accessing with string values
+        assertEq("and", ExpressionMap{"&&"}{"name"});
+        assertEq("or", ExpressionMap{"||"}{"name"});
+        assertEq("equal", ExpressionMap{"=="}{"name"});
+        assertEq("not equal", ExpressionMap{"!="}{"name"});
+    }
+
+    testIterateKeys() {
+        # Test iterating over all keys
+        list<string> keylist = ExpressionMap.keys();
+        assertEq(4, keylist.size());
+        assertTrue(keylist.contains("=="));
+        assertTrue(keylist.contains("!="));
+        assertTrue(keylist.contains("&&"));
+        assertTrue(keylist.contains("||"));
+    }
+}
