@@ -97,13 +97,59 @@ public class Http3ClientConnection inherits HttpClientConnection {
         return poll_op.getSessionId();
     }
 
-    #! Sets the controller reference for wake notifications
-    /** Also notifies the poll operation that an async controller drives I/O,
-        so the STREAM_ID_BLOCKED retry loop does not call continuePoll().
+    #! Returns True if the connection can accept a new stream (advisory, no side effects)
+    /** Extends the base class check with the discovered QUIC stream limit and
+        QUIC session health.
     */
-    setControllerRef(object controller) {
-        HttpClientConnection::setControllerRef(controller);
-        poll_op.setControllerDriven();
+    bool canAcceptStream() {
+        AutoLock al(lock);
+        if (state != HttpClientConnectionState::Ready
+                && state != HttpClientConnectionState::Connecting) {
+            return False;
+        }
+        # Check if the underlying QUIC session is still alive
+        if (!poll_op.isQuicSessionOpen()) {
+            return False;
+        }
+        int total = poll_op.getActiveStreamCount() + pending_stream_count;
+        if (max_concurrent_streams && total >= max_concurrent_streams) {
+            return False;
+        }
+        int quic_limit = poll_op.getQuicStreamLimit();
+        if (quic_limit && total >= quic_limit) {
+            return False;
+        }
+        return True;
+    }
+
+    #! Atomically checks capacity and reserves a stream slot (QUIC-specific)
+    /** Extends the base class with QUIC session health and stream limit checks.
+    */
+    bool tryReserveStream() {
+        AutoLock al(lock);
+        if (state != HttpClientConnectionState::Ready
+                && state != HttpClientConnectionState::Connecting) {
+            return False;
+        }
+        if (!poll_op.isQuicSessionOpen()) {
+            return False;
+        }
+        int total = poll_op.getActiveStreamCount() + pending_stream_count;
+        if (max_concurrent_streams && total >= max_concurrent_streams) {
+            return False;
+        }
+        int quic_limit = poll_op.getQuicStreamLimit();
+        if (quic_limit && total >= quic_limit) {
+            return False;
+        }
+        # Cap pending reservations on Connecting connections to limit
+        # blast radius of a handshake failure
+        if (state == HttpClientConnectionState::Connecting
+                && pending_stream_count >= DefaultMaxPendingPerConnection) {
+            return False;
+        }
+        ++pending_stream_count;
+        return True;
     }
 
     #! Submits a request on this connection (protocol-specific)

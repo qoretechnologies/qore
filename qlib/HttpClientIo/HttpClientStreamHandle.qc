@@ -137,6 +137,11 @@ public class HttpClientStreamHandle {
         return error_info;
     }
 
+    #! Returns True if a request has been submitted on this stream
+    bool isSubmitted() {
+        return exists stream_id;
+    }
+
     #! Returns the underlying connection
     HttpClientConnection getConnection() {
         return conn;
@@ -196,6 +201,13 @@ public class HttpClientStreamHandle {
             }
             if (ex.err == "HTTPCLIENT-CANCELLED") {
                 throw "HTTPCLIENT-CANCELLED", "request was cancelled";
+            }
+            # Let QUIC/HTTP3 connection errors propagate unwrapped so the
+            # connection manager can detect, evict dead connections, and retry
+            if (ex.err == "QUIC-HTTP3-ERROR" || ex.err == "QUIC-READ-ERROR"
+                    || ex.err == "QUIC-RECV-ERROR" || ex.err == "HTTP3-CONNECT-ERROR"
+                    || ex.err == "HTTP3-STATE-ERROR" || ex.err == "HTTP3-ABORT") {
+                rethrow;
             }
             throw "HTTPCLIENT-REQUEST-ERROR", sprintf("%s: %s", ex.err, ex.desc);
         }

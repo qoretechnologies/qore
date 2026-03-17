@@ -1,0 +1,1004 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# RestClientPoolPerf.qtest - Integration and scalability tests for RestClientPool and
+# RestClientIoPool against a real nginx server running in podman.
+#
+# Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+#
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+
+%modern
+
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/RestSchemaValidator.qm
+%requires ../../../../qlib/Swagger.qm
+%requires ../../../../qlib/OpenApi3.qm
+%requires ../../../../qlib/RestClient.qm
+%requires ../../../../qlib/AsyncSocketIo
+%requires ../../../../qlib/HttpClientIo
+%requires ../../../../qlib/RestClientIo.qm
+%requires ../../../../qlib/FsUtil.qm
+
+%try-module json >= 1.5
+%define NoJson
+%endtry
+
+%exec-class RestClientPoolPerfTest
+
+class RestClientPoolPerfTest inherits QUnit::Test {
+    public {
+        #! Thread counts for scalability tests
+        const ThreadCounts = (1, 5, 10, 25, 50);
+
+        #! Requests per thread in throughput tests
+        const RequestsPerThread = 20;
+    }
+
+    private {
+        #! Container name for podman
+        string container_name;
+
+        #! Host port mapped to nginx HTTPS
+        int nginx_port;
+
+        #! Base URL for REST requests
+        string base_url;
+
+        #! Temp dir for nginx config and certs
+        TmpDir tmp_dir();
+
+        #! True if podman is available and container started
+        bool container_running = False;
+    }
+
+    constructor() : Test("RestClientPoolPerfTest", "1.0") {
+        addTestCase("RestClientPool sequential correctness", \testRestClientPoolSequential());
+        addTestCase("RestClientIoPool sequential correctness", \testRestClientIoPoolSequential());
+        addTestCase("RestClientPool concurrent correctness", \testRestClientPoolConcurrent());
+        addTestCase("RestClientIoPool concurrent correctness", \testRestClientIoPoolConcurrent());
+        addTestCase("RestClientPool scalability", \testRestClientPoolScalability());
+        addTestCase("RestClientIoPool scalability", \testRestClientIoPoolScalability());
+        addTestCase("RestClientIoPool shared manager scalability", \testRestClientIoPoolSharedMgrScalability());
+        addTestCase("RestClientIoPool shared manager H3 scalability", \testRestClientIoPoolSharedMgrH3Scalability());
+        addTestCase("RestClientPool H3 scalability", \testRestClientPoolH3Scalability());
+        addTestCase("RestClientIoPool H3 scalability", \testRestClientIoPoolH3Scalability());
+        addTestCase("pool comparison", \testPoolComparison());
+
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        container_name = sprintf("qore-rest-pool-test-%d", getpid());
+
+        # Generate self-signed cert
+        string cert_path = tmp_dir.path + "/server.crt";
+        string key_path = tmp_dir.path + "/server.key";
+        int sys_rc = system(sprintf(
+            "openssl req -x509 -newkey rsa:2048 -keyout %s -out %s"
+            + " -days 1 -nodes -subj '/CN=localhost' 2>/dev/null",
+            key_path, cert_path));
+        if (sys_rc) {
+            testSkip("openssl not available for cert generation");
+            return;
+        }
+
+        # Find a free port by binding to port 0 and reading the assigned port
+        Socket sock();
+        sock.bind("127.0.0.1:0");
+        nginx_port = sock.getSocketInfo().port;
+        delete sock;
+
+        # Write nginx config with HTTP/2 and HTTP/3 (QUIC) enabled
+        string nginx_conf = tmp_dir.path + "/nginx.conf";
+        {
+            File f();
+            f.open(nginx_conf, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write("worker_processes 4;
+events {
+    worker_connections 1024;
+}
+http {
+    access_log off;
+    server {
+        listen 8443 ssl;
+        http2 on;
+        listen 8443 quic reuseport;
+        ssl_certificate /etc/nginx/ssl/server.crt;
+        ssl_certificate_key /etc/nginx/ssl/server.key;
+        add_header Alt-Svc 'h3=\":8443\"; ma=86400' always;
+
+        location /api/echo {
+            default_type application/json;
+            return 200 '{\"status\":\"ok\",\"method\":\"$request_method\",\"uri\":\"$request_uri\"}';
+        }
+
+        location /api/delay {
+            default_type application/json;
+            return 200 '{\"status\":\"ok\",\"delayed\":false}';
+        }
+
+        location /api/large {
+            default_type application/json;
+            # Return ~4KB payload
+            return 200 '{\"status\":\"ok\",\"data\":\"" + strmul("X", 4000) + "\"}';
+        }
+
+        location /health {
+            default_type text/plain;
+            return 200 'ok';
+        }
+    }
+}
+");
+        }
+
+        # Start nginx in podman with both TCP and UDP on the same port (UDP for QUIC/HTTP3)
+        string cmd = sprintf(
+            "podman run -d --name %s"
+            + " -v %s:/etc/nginx/nginx.conf:ro"
+            + " -v %s:/etc/nginx/ssl/server.crt:ro"
+            + " -v %s:/etc/nginx/ssl/server.key:ro"
+            + " -p %d:8443/tcp"
+            + " -p %d:8443/udp"
+            + " docker.io/library/nginx:alpine 2>&1",
+            container_name, nginx_conf, cert_path, key_path, nginx_port, nginx_port);
+        string output = backquote(cmd);
+        if (output == "") {
+            testSkip("failed to start nginx container");
+            return;
+        }
+        base_url = sprintf("https://127.0.0.1:%d", nginx_port);
+
+        # Wait for nginx to be ready
+        bool ready = False;
+        for (int i = 0; i < 30; ++i) {
+            try {
+                RestClient rc({"url": base_url, "accept_all_certs": True, "timeout": 2s});
+                hash<auto> resp = rc.get("/health");
+                if (resp.status_code == 200) {
+                    ready = True;
+                    break;
+                }
+            } catch () {
+                # ignore — server not ready yet
+            }
+            usleep(200ms);
+        }
+
+        if (!ready) {
+            testSkip("nginx container did not become ready in time");
+            return;
+        }
+
+        container_running = True;
+
+        if (m_options.verbose > 2) {
+            printf("nginx container %s ready on port %d\n", container_name, nginx_port);
+        }
+    }
+
+    globalTearDown() {
+        # Stop and remove container
+        system(sprintf("podman rm -f %s >/dev/null 2>&1", container_name));
+    }
+
+    #! Compute elapsed milliseconds from a start timestamp
+    private float elapsedMs(date start) {
+        return (now_us() - start).durationMicroseconds() / 1000.0;
+    }
+
+    #! Print latency statistics if verbose
+    private printLatencyStats(string label, list<float> latencies) {
+        if (m_options.verbose < 3 || !latencies) {
+            return;
+        }
+
+        list<float> sorted = sort(latencies);
+        float sum = 0.0;
+        foreach float lat in (sorted) {
+            sum += lat;
+        }
+        float avg = sum / sorted.size();
+        int p50_idx = max(0, (sorted.size() * 50 / 100) - 1);
+        int p95_idx = max(0, (sorted.size() * 95 / 100) - 1);
+        int p99_idx = max(0, (sorted.size() * 99 / 100) - 1);
+
+        printf("  %s: n=%d, avg=%.2fms, p50=%.2fms, p95=%.2fms, p99=%.2fms, min=%.2fms, max=%.2fms\n",
+            label, sorted.size(), avg, sorted[p50_idx], sorted[p95_idx], sorted[p99_idx],
+            sorted[0], sorted[sorted.size() - 1]);
+    }
+
+    #! Print throughput summary if verbose
+    private printThroughput(string label, int requests, float total_ms) {
+        if (m_options.verbose > 2) {
+            float throughput = requests * 1000.0 / total_ms;
+            printf("  %s: %d requests in %.1fms = %.1f req/s\n",
+                label, requests, total_ms, throughput);
+        }
+    }
+
+    # ── RestClientPool tests ────────────────────────────────────────────
+
+    testRestClientPoolSequential() {
+%ifndef NoJson
+        if (!container_running) {
+            testSkip("nginx container not available");
+            return;
+        }
+
+        RestClient::RestClientPool pool(
+            {"url": base_url, "data": "json", "accept_all_certs": True},
+            <Qore::Thread::ConnectionPoolOptions>{"min": 1, "max": 5});
+        on_exit pool.shutdown();
+
+        # Run N sequential requests; verify each response
+        int count = 50;
+        list<float> latencies();
+        date start = now_us();
+        for (int i = 0; i < count; ++i) {
+            RestClient rc = cast<RestClient>(pool.acquire());
+            on_exit pool.release();
+
+            date req_start = now_us();
+            hash<auto> resp = rc.get("/api/echo?seq=" + string(i));
+            latencies += elapsedMs(req_start);
+
+            assertEq(200, resp.status_code, sprintf("sequential request %d", i));
+            assertEq("ok", resp.body.status, sprintf("sequential request %d body", i));
+        }
+        float total_ms = elapsedMs(start);
+
+        printLatencyStats("RestClientPool sequential", latencies);
+        printThroughput("RestClientPool sequential", count, total_ms);
+%endif
+    }
+
+    testRestClientIoPoolSequential() {
+%ifndef NoJson
+        if (!container_running) {
+            testSkip("nginx container not available");
+            return;
+        }
+
+        RestClientIo::RestClientIoPool pool(
+            {"url": base_url, "data": "json", "error_passthru": True,
+             "accept_all_certs": True, "protocol": "h2"},
+            <Qore::Thread::ConnectionPoolOptions>{"min": 1, "max": 5});
+        on_exit pool.shutdown();
+
+        int count = 50;
+        list<float> latencies();
+        date start = now_us();
+        for (int i = 0; i < count; ++i) {
+            RestClientIo::RestClientIo rc = pool.acquire();
+            on_exit pool.release();
+
+            date req_start = now_us();
+            hash<RestClient::RestResponseInfo> resp = rc.restGet("/api/echo?seq=" + string(i));
+            latencies += elapsedMs(req_start);
+
+            assertEq(200, resp.status_code, sprintf("sequential request %d", i));
+            assertEq("ok", resp.body.status, sprintf("sequential request %d body", i));
+        }
+        float total_ms = elapsedMs(start);
+
+        printLatencyStats("RestClientIoPool sequential", latencies);
+        printThroughput("RestClientIoPool sequential", count, total_ms);
+%endif
+    }
+
+    # ── Concurrent correctness ─────────────────────────────────────────
+
+    testRestClientPoolConcurrent() {
+%ifndef NoJson
+        if (!container_running) {
+            testSkip("nginx container not available");
+            return;
+        }
+
+        RestClient::RestClientPool pool(
+            {"url": base_url, "data": "json", "accept_all_certs": True},
+            <Qore::Thread::ConnectionPoolOptions>{"min": 2, "max": 20});
+        on_exit pool.shutdown();
+
+        int thread_count = 20;
+        int per_thread = RequestsPerThread;
+        int total = thread_count * per_thread;
+
+        Counter done(thread_count);
+        Mutex mtx();
+        int success_count = 0;
+        int error_count = 0;
+
+        date start = now_us();
+        for (int t = 0; t < thread_count; ++t) {
+            background sub () {
+                on_exit done.dec();
+                for (int i = 0; i < per_thread; ++i) {
+                    try {
+                        RestClient rc = cast<RestClient>(pool.acquire());
+                        on_exit pool.release();
+                        hash<auto> resp = rc.get(sprintf("/api/echo?t=%d&i=%d", t, i));
+                        if (resp.status_code == 200) {
+                            mtx.lock();
+                            on_exit mtx.unlock();
+                            ++success_count;
+                        }
+                    } catch () {
+                        mtx.lock();
+                        on_exit mtx.unlock();
+                        ++error_count;
+                    }
+                }
+            }();
+        }
+        int remaining = done.waitForZero(120s);
+        float total_ms = elapsedMs(start);
+
+        assertEq(0, remaining, "all threads should complete");
+        assertEq(total, success_count + error_count, "all requests accounted for");
+        # Allow up to 5% failure rate under heavy concurrency
+        assertGe(total * 95 / 100, success_count,
+            sprintf("at least 95%% success (got %d/%d)", success_count, total));
+
+        printThroughput(sprintf("RestClientPool %d threads", thread_count), success_count, total_ms);
+%endif
+    }
+
+    testRestClientIoPoolConcurrent() {
+%ifndef NoJson
+        if (!container_running) {
+            testSkip("nginx container not available");
+            return;
+        }
+
+        RestClientIo::RestClientIoPool pool(
+            {"url": base_url, "data": "json", "error_passthru": True,
+             "accept_all_certs": True, "protocol": "h2"},
+            <Qore::Thread::ConnectionPoolOptions>{"min": 2, "max": 20});
+        on_exit pool.shutdown();
+
+        int thread_count = 20;
+        int per_thread = RequestsPerThread;
+        int total = thread_count * per_thread;
+
+        Counter done(thread_count);
+        Mutex mtx();
+        int success_count = 0;
+        int error_count = 0;
+
+        date start = now_us();
+        for (int t = 0; t < thread_count; ++t) {
+            background sub () {
+                on_exit done.dec();
+                for (int i = 0; i < per_thread; ++i) {
+                    try {
+                        RestClientIo::RestClientIo rc = pool.acquire();
+                        on_exit pool.release();
+                        hash<RestClient::RestResponseInfo> resp =
+                            rc.restGet(sprintf("/api/echo?t=%d&i=%d", t, i));
+                        if (resp.status_code == 200) {
+                            mtx.lock();
+                            on_exit mtx.unlock();
+                            ++success_count;
+                        }
+                    } catch () {
+                        mtx.lock();
+                        on_exit mtx.unlock();
+                        ++error_count;
+                    }
+                }
+            }();
+        }
+        int remaining = done.waitForZero(120s);
+        float total_ms = elapsedMs(start);
+
+        assertEq(0, remaining, "all threads should complete");
+        assertEq(total, success_count + error_count, "all requests accounted for");
+        assertGe(total * 95 / 100, success_count,
+            sprintf("at least 95%% success (got %d/%d)", success_count, total));
+
+        printThroughput(sprintf("RestClientIoPool %d threads", thread_count), success_count, total_ms);
+%endif
+    }
+
+    # ── Scalability: increasing thread counts ──────────────────────────
+
+    testRestClientPoolScalability() {
+%ifndef NoJson
+        if (!container_running) {
+            testSkip("nginx container not available");
+            return;
+        }
+
+        if (m_options.verbose > 2) {
+            printf("\n  RestClientPool scalability (blocking I/O):\n");
+        }
+
+        foreach int threads in (ThreadCounts) {
+            RestClient::RestClientPool pool(
+                {"url": base_url, "data": "json", "accept_all_certs": True},
+                <Qore::Thread::ConnectionPoolOptions>{"min": min(threads, 5), "max": threads + 5});
+            on_exit pool.shutdown();
+
+            int per_thread = RequestsPerThread;
+            int total = threads * per_thread;
+            Counter done(threads);
+            Mutex mtx();
+            int success_count = 0;
+
+            date start = now_us();
+            for (int t = 0; t < threads; ++t) {
+                background sub () {
+                    on_exit done.dec();
+                    for (int i = 0; i < per_thread; ++i) {
+                        try {
+                            RestClient rc = cast<RestClient>(pool.acquire());
+                            on_exit pool.release();
+                            hash<auto> resp = rc.get("/api/echo");
+                            if (resp.status_code == 200) {
+                                mtx.lock();
+                                on_exit mtx.unlock();
+                                ++success_count;
+                            }
+                        } catch () {
+                            # count failure silently
+                        }
+                    }
+                }();
+            }
+            int remaining = done.waitForZero(120s);
+            float total_ms = elapsedMs(start);
+
+            assertEq(0, remaining, sprintf("%d-thread: all threads should complete", threads));
+            assertGe(total * 90 / 100, success_count,
+                sprintf("%d-thread: at least 90%% success (got %d/%d)", threads, success_count, total));
+
+            if (m_options.verbose > 2) {
+                float throughput = success_count * 1000.0 / total_ms;
+                printf("    %3d threads: %4d/%4d OK in %7.1fms = %7.1f req/s\n",
+                    threads, success_count, total, total_ms, throughput);
+            }
+        }
+%endif
+    }
+
+    testRestClientIoPoolScalability() {
+%ifndef NoJson
+        if (!container_running) {
+            testSkip("nginx container not available");
+            return;
+        }
+
+        if (m_options.verbose > 2) {
+            printf("\n  RestClientIoPool scalability (async multiplexed I/O):\n");
+        }
+
+        foreach int threads in (ThreadCounts) {
+            RestClientIo::RestClientIoPool pool(
+                {"url": base_url, "data": "json", "error_passthru": True,
+                 "accept_all_certs": True, "protocol": "h2"},
+                <Qore::Thread::ConnectionPoolOptions>{"min": min(threads, 5), "max": threads + 5});
+            on_exit pool.shutdown();
+
+            int per_thread = RequestsPerThread;
+            int total = threads * per_thread;
+            Counter done(threads);
+            Mutex mtx();
+            int success_count = 0;
+
+            date start = now_us();
+            for (int t = 0; t < threads; ++t) {
+                background sub () {
+                    on_exit done.dec();
+                    for (int i = 0; i < per_thread; ++i) {
+                        try {
+                            RestClientIo::RestClientIo rc = pool.acquire();
+                            on_exit pool.release();
+                            hash<RestClient::RestResponseInfo> resp = rc.restGet("/api/echo");
+                            if (resp.status_code == 200) {
+                                mtx.lock();
+                                on_exit mtx.unlock();
+                                ++success_count;
+                            }
+                        } catch () {
+                            # count failure silently
+                        }
+                    }
+                }();
+            }
+            int remaining = done.waitForZero(120s);
+            float total_ms = elapsedMs(start);
+
+            assertEq(0, remaining, sprintf("%d-thread: all threads should complete", threads));
+            assertGe(total * 90 / 100, success_count,
+                sprintf("%d-thread: at least 90%% success (got %d/%d)", threads, success_count, total));
+
+            if (m_options.verbose > 2) {
+                float throughput = success_count * 1000.0 / total_ms;
+                printf("    %3d threads: %4d/%4d OK in %7.1fms = %7.1f req/s\n",
+                    threads, success_count, total, total_ms, throughput);
+            }
+        }
+%endif
+    }
+
+    testRestClientIoPoolSharedMgrScalability() {
+%ifndef NoJson
+        if (!container_running) {
+            testSkip("nginx container not available");
+            return;
+        }
+
+        if (m_options.verbose > 2) {
+            printf("\n  RestClientIoPool + shared manager scalability:\n");
+        }
+
+        # Single shared connection manager for all pooled instances
+        HttpClientIo::HttpClientConnectionManager shared_mgr(
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "accept_all_certs": True,
+                "protocol": "h2",
+            }
+        );
+
+        foreach int threads in (ThreadCounts) {
+            RestClientIo::RestClientIoPool pool(
+                {"url": base_url, "data": "json", "error_passthru": True,
+                 "accept_all_certs": True, "protocol": "h2"},
+                <Qore::Thread::ConnectionPoolOptions>{"min": min(threads, 5), "max": threads + 5},
+                shared_mgr);
+            on_exit pool.shutdown();
+
+            int per_thread = RequestsPerThread;
+            int total = threads * per_thread;
+            Counter done(threads);
+            Mutex mtx();
+            int success_count = 0;
+
+            date start = now_us();
+            for (int t = 0; t < threads; ++t) {
+                background sub () {
+                    on_exit done.dec();
+                    for (int i = 0; i < per_thread; ++i) {
+                        try {
+                            RestClientIo::RestClientIo rc = pool.acquire();
+                            on_exit pool.release();
+                            hash<RestClient::RestResponseInfo> resp = rc.restGet("/api/echo");
+                            if (resp.status_code == 200) {
+                                mtx.lock();
+                                on_exit mtx.unlock();
+                                ++success_count;
+                            }
+                        } catch () {
+                            # count failure silently
+                        }
+                    }
+                }();
+            }
+            int remaining = done.waitForZero(120s);
+            float total_ms = elapsedMs(start);
+
+            assertEq(0, remaining, sprintf("%d-thread: all threads should complete", threads));
+            # Shared manager funnels all streams through fewer connections, so under heavy
+            # concurrency HTTP/2 stream limits can cause some failures — use 80% threshold
+            assertGe(total * 80 / 100, success_count,
+                sprintf("%d-thread: at least 80%% success (got %d/%d)", threads, success_count, total));
+
+            if (m_options.verbose > 2) {
+                float throughput = success_count * 1000.0 / total_ms;
+                printf("    %3d threads: %4d/%4d OK in %7.1fms = %7.1f req/s\n",
+                    threads, success_count, total, total_ms, throughput);
+            }
+        }
+%endif
+    }
+
+    testRestClientIoPoolSharedMgrH3Scalability() {
+%ifndef NoJson
+        if (!container_running) {
+            testSkip("nginx container not available");
+            return;
+        }
+
+        if (m_options.verbose > 2) {
+            printf("\n  RestClientIoPool + shared manager H3 scalability:\n");
+        }
+
+        # Single shared connection manager persists across all thread-count
+        # iterations — exercises dead-connection detection and eviction
+        # between bursts when QUIC sessions are recycled by the server.
+        HttpClientIo::HttpClientConnectionManager shared_mgr(
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "accept_all_certs": True,
+                "protocol": "h3",
+            }
+        );
+
+        foreach int threads in (ThreadCounts) {
+            RestClientIo::RestClientIoPool pool(
+                {"url": base_url, "data": "json", "error_passthru": True,
+                 "accept_all_certs": True, "protocol": "h3"},
+                <Qore::Thread::ConnectionPoolOptions>{"min": min(threads, 5), "max": threads + 5},
+                shared_mgr);
+            on_exit pool.shutdown();
+
+            int per_thread = RequestsPerThread;
+            int total = threads * per_thread;
+            Counter done(threads);
+            Mutex mtx();
+            int success_count = 0;
+            hash<string, int> errors();
+
+            date start = now_us();
+            for (int t = 0; t < threads; ++t) {
+                background sub () {
+                    on_exit done.dec();
+                    for (int i = 0; i < per_thread; ++i) {
+                        try {
+                            RestClientIo::RestClientIo rc = pool.acquire();
+                            on_exit pool.release();
+                            hash<RestClient::RestResponseInfo> resp = rc.restGet("/api/echo");
+                            if (resp.status_code == 200) {
+                                mtx.lock();
+                                on_exit mtx.unlock();
+                                ++success_count;
+                            }
+                        } catch (hash<ExceptionInfo> ex) {
+                            mtx.lock();
+                            on_exit mtx.unlock();
+                            errors{ex.err} = (errors{ex.err} ?? 0) + 1;
+                        }
+                    }
+                }();
+            }
+            int remaining = done.waitForZero(120s);
+            float total_ms = elapsedMs(start);
+
+            assertEq(0, remaining, sprintf("%d-thread: all threads should complete", threads));
+            assertGe(total * 90 / 100, success_count,
+                sprintf("%d-thread: at least 90%% success (got %d/%d, errors: %y)",
+                    threads, success_count, total, errors));
+
+            if (m_options.verbose > 2) {
+                float throughput = success_count * 1000.0 / total_ms;
+                printf("    %3d threads: %4d/%4d OK in %7.1fms = %7.1f req/s",
+                    threads, success_count, total, total_ms, throughput);
+                if (errors) {
+                    printf(" errors: %y", errors);
+                }
+                printf("\n");
+            }
+        }
+%endif
+    }
+
+    # ── HTTP/3 scalability ─────────────────────────────────────────────
+
+    testRestClientPoolH3Scalability() {
+%ifndef NoJson
+        if (!container_running) {
+            testSkip("nginx container not available");
+            return;
+        }
+
+        if (m_options.verbose > 2) {
+            printf("\n  RestClientPool H3 scalability (blocking I/O, HTTP/3 QUIC):\n");
+        }
+
+        foreach int threads in (ThreadCounts) {
+            RestClient::RestClientPool pool(
+                {"url": base_url, "data": "json", "accept_all_certs": True,
+                 "http_version": "3.0"},
+                <Qore::Thread::ConnectionPoolOptions>{"min": min(threads, 5), "max": threads + 5});
+            on_exit pool.shutdown();
+
+            int per_thread = RequestsPerThread;
+            int total = threads * per_thread;
+            Counter done(threads);
+            Mutex mtx();
+            int success_count = 0;
+
+            date start = now_us();
+            for (int t = 0; t < threads; ++t) {
+                background sub () {
+                    on_exit done.dec();
+                    for (int i = 0; i < per_thread; ++i) {
+                        try {
+                            RestClient rc = cast<RestClient>(pool.acquire());
+                            on_exit pool.release();
+                            hash<auto> resp = rc.get("/api/echo");
+                            if (resp.status_code == 200) {
+                                mtx.lock();
+                                on_exit mtx.unlock();
+                                ++success_count;
+                            }
+                        } catch () {
+                            # count failure silently
+                        }
+                    }
+                }();
+            }
+            int remaining = done.waitForZero(120s);
+            float total_ms = elapsedMs(start);
+
+            assertEq(0, remaining, sprintf("%d-thread: all threads should complete", threads));
+            assertGe(total * 90 / 100, success_count,
+                sprintf("%d-thread: at least 90%% success (got %d/%d)", threads, success_count, total));
+
+            if (m_options.verbose > 2) {
+                float throughput = success_count * 1000.0 / total_ms;
+                printf("    %3d threads: %4d/%4d OK in %7.1fms = %7.1f req/s\n",
+                    threads, success_count, total, total_ms, throughput);
+            }
+        }
+%endif
+    }
+
+    testRestClientIoPoolH3Scalability() {
+%ifndef NoJson
+        if (!container_running) {
+            testSkip("nginx container not available");
+            return;
+        }
+
+        if (m_options.verbose > 2) {
+            printf("\n  RestClientIoPool H3 scalability (async multiplexed I/O, HTTP/3 QUIC):\n");
+        }
+
+        foreach int threads in (ThreadCounts) {
+            RestClientIo::RestClientIoPool pool(
+                {"url": base_url, "data": "json", "error_passthru": True,
+                 "accept_all_certs": True, "protocol": "h3"},
+                <Qore::Thread::ConnectionPoolOptions>{"min": min(threads, 5), "max": threads + 5});
+            on_exit pool.shutdown();
+
+            int per_thread = RequestsPerThread;
+            int total = threads * per_thread;
+            Counter done(threads);
+            Mutex mtx();
+            int success_count = 0;
+
+            date start = now_us();
+            for (int t = 0; t < threads; ++t) {
+                background sub () {
+                    on_exit done.dec();
+                    for (int i = 0; i < per_thread; ++i) {
+                        try {
+                            RestClientIo::RestClientIo rc = pool.acquire();
+                            on_exit pool.release();
+                            hash<RestClient::RestResponseInfo> resp = rc.restGet("/api/echo");
+                            if (resp.status_code == 200) {
+                                mtx.lock();
+                                on_exit mtx.unlock();
+                                ++success_count;
+                            }
+                        } catch () {
+                            # count failure silently
+                        }
+                    }
+                }();
+            }
+            int remaining = done.waitForZero(120s);
+            float total_ms = elapsedMs(start);
+
+            assertEq(0, remaining, sprintf("%d-thread: all threads should complete", threads));
+            assertGe(total * 90 / 100, success_count,
+                sprintf("%d-thread: at least 90%% success (got %d/%d)", threads, success_count, total));
+
+            if (m_options.verbose > 2) {
+                float throughput = success_count * 1000.0 / total_ms;
+                printf("    %3d threads: %4d/%4d OK in %7.1fms = %7.1f req/s\n",
+                    threads, success_count, total, total_ms, throughput);
+            }
+        }
+%endif
+    }
+
+    # ── Head-to-head comparison ────────────────────────────────────────
+
+    testPoolComparison() {
+%ifndef NoJson
+        if (!container_running) {
+            testSkip("nginx container not available");
+            return;
+        }
+
+        int threads = 25;
+        int per_thread = RequestsPerThread;
+        int total = threads * per_thread;
+
+        # --- RestClientPool (blocking) ---
+        float blocking_ms;
+        int blocking_success;
+        {
+            RestClient::RestClientPool pool(
+                {"url": base_url, "data": "json", "accept_all_certs": True},
+                <Qore::Thread::ConnectionPoolOptions>{"min": 5, "max": threads + 5});
+            on_exit pool.shutdown();
+
+            Counter done(threads);
+            Mutex mtx();
+            blocking_success = 0;
+
+            date start = now_us();
+            for (int t = 0; t < threads; ++t) {
+                background sub () {
+                    on_exit done.dec();
+                    for (int i = 0; i < per_thread; ++i) {
+                        try {
+                            RestClient rc = cast<RestClient>(pool.acquire());
+                            on_exit pool.release();
+                            hash<auto> resp = rc.get("/api/echo");
+                            if (resp.status_code == 200) {
+                                mtx.lock();
+                                on_exit mtx.unlock();
+                                ++blocking_success;
+                            }
+                        } catch () {}
+                    }
+                }();
+            }
+            done.waitForZero(120s);
+            blocking_ms = elapsedMs(start);
+        }
+
+        # --- RestClientIoPool H2 (async multiplexed) ---
+        float async_h2_ms;
+        int async_h2_success;
+        {
+            RestClientIo::RestClientIoPool pool(
+                {"url": base_url, "data": "json", "error_passthru": True,
+                 "accept_all_certs": True, "protocol": "h2"},
+                <Qore::Thread::ConnectionPoolOptions>{"min": 5, "max": threads + 5});
+            on_exit pool.shutdown();
+
+            Counter done(threads);
+            Mutex mtx();
+            async_h2_success = 0;
+
+            date start = now_us();
+            for (int t = 0; t < threads; ++t) {
+                background sub () {
+                    on_exit done.dec();
+                    for (int i = 0; i < per_thread; ++i) {
+                        try {
+                            RestClientIo::RestClientIo rc = pool.acquire();
+                            on_exit pool.release();
+                            hash<RestClient::RestResponseInfo> resp = rc.restGet("/api/echo");
+                            if (resp.status_code == 200) {
+                                mtx.lock();
+                                on_exit mtx.unlock();
+                                ++async_h2_success;
+                            }
+                        } catch () {}
+                    }
+                }();
+            }
+            done.waitForZero(120s);
+            async_h2_ms = elapsedMs(start);
+        }
+
+        # --- RestClientPool H3 (blocking, QUIC) ---
+        float blocking_h3_ms;
+        int blocking_h3_success;
+        {
+            RestClient::RestClientPool pool(
+                {"url": base_url, "data": "json", "accept_all_certs": True,
+                 "http_version": "3.0"},
+                <Qore::Thread::ConnectionPoolOptions>{"min": 5, "max": threads + 5});
+            on_exit pool.shutdown();
+
+            Counter done(threads);
+            Mutex mtx();
+            blocking_h3_success = 0;
+
+            date start = now_us();
+            for (int t = 0; t < threads; ++t) {
+                background sub () {
+                    on_exit done.dec();
+                    for (int i = 0; i < per_thread; ++i) {
+                        try {
+                            RestClient rc = cast<RestClient>(pool.acquire());
+                            on_exit pool.release();
+                            hash<auto> resp = rc.get("/api/echo");
+                            if (resp.status_code == 200) {
+                                mtx.lock();
+                                on_exit mtx.unlock();
+                                ++blocking_h3_success;
+                            }
+                        } catch () {}
+                    }
+                }();
+            }
+            done.waitForZero(120s);
+            blocking_h3_ms = elapsedMs(start);
+        }
+
+        # --- RestClientIoPool H3 (async multiplexed, QUIC) ---
+        float async_h3_ms;
+        int async_h3_success;
+        {
+            RestClientIo::RestClientIoPool pool(
+                {"url": base_url, "data": "json", "error_passthru": True,
+                 "accept_all_certs": True, "protocol": "h3"},
+                <Qore::Thread::ConnectionPoolOptions>{"min": 5, "max": threads + 5});
+            on_exit pool.shutdown();
+
+            Counter done(threads);
+            Mutex mtx();
+            async_h3_success = 0;
+
+            date start = now_us();
+            for (int t = 0; t < threads; ++t) {
+                background sub () {
+                    on_exit done.dec();
+                    for (int i = 0; i < per_thread; ++i) {
+                        try {
+                            RestClientIo::RestClientIo rc = pool.acquire();
+                            on_exit pool.release();
+                            hash<RestClient::RestResponseInfo> resp = rc.restGet("/api/echo");
+                            if (resp.status_code == 200) {
+                                mtx.lock();
+                                on_exit mtx.unlock();
+                                ++async_h3_success;
+                            }
+                        } catch () {}
+                    }
+                }();
+            }
+            done.waitForZero(120s);
+            async_h3_ms = elapsedMs(start);
+        }
+
+        # All variants should succeed
+        assertGe(total * 90 / 100, blocking_success,
+            sprintf("blocking H2: at least 90%% success (got %d/%d)", blocking_success, total));
+        assertGe(total * 90 / 100, async_h2_success,
+            sprintf("async H2: at least 90%% success (got %d/%d)", async_h2_success, total));
+        assertGe(total * 90 / 100, blocking_h3_success,
+            sprintf("blocking H3: at least 90%% success (got %d/%d)", blocking_h3_success, total));
+        assertGe(total * 90 / 100, async_h3_success,
+            sprintf("async H3: at least 90%% success (got %d/%d)", async_h3_success, total));
+
+        if (m_options.verbose > 2) {
+            float blocking_rps = blocking_success * 1000.0 / blocking_ms;
+            float async_h2_rps = async_h2_success * 1000.0 / async_h2_ms;
+            float blocking_h3_rps = blocking_h3_success * 1000.0 / blocking_h3_ms;
+            float async_h3_rps = async_h3_success * 1000.0 / async_h3_ms;
+            printf("\n  Head-to-head comparison (%d threads x %d requests):\n", threads, per_thread);
+            printf("    RestClientPool     (H2 blocking): %d/%d OK in %7.1fms = %7.1f req/s\n",
+                blocking_success, total, blocking_ms, blocking_rps);
+            printf("    RestClientIoPool   (H2 async)   : %d/%d OK in %7.1fms = %7.1f req/s\n",
+                async_h2_success, total, async_h2_ms, async_h2_rps);
+            printf("    RestClientPool     (H3 blocking): %d/%d OK in %7.1fms = %7.1f req/s\n",
+                blocking_h3_success, total, blocking_h3_ms, blocking_h3_rps);
+            printf("    RestClientIoPool   (H3 async)   : %d/%d OK in %7.1fms = %7.1f req/s\n",
+                async_h3_success, total, async_h3_ms, async_h3_rps);
+        }
+%endif
+    }
+}

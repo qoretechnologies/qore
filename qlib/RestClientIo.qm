@@ -91,6 +91,22 @@ hash<RestResponseInfo> resp1 = f1.get(30s);
 hash<RestResponseInfo> resp2 = f2.get(30s);
     @endcode
 
+    @section restclientio_pool Connection Pooling
+
+    The @ref RestClientIoPool class provides thread-safe connection pooling for
+    @ref RestClientIo instances, built on @ref Qore::Thread::AbstractConnectionPool.
+
+    @par Pool Example
+    @code{.py}
+%requires RestClientIo
+
+RestClientIoPool pool(sub () { return new RestClientIo({"url": "https://api.example.com", "data": "json"}); },
+    {"min": 2, "max": 10});
+RestClientIo rc = pool.acquire();
+on_exit pool.release();
+hash<RestResponseInfo> resp = rc.restGet("/api/data");
+    @endcode
+
     @section restclientio_relnotes Release Notes
 
     @subsection restclientio_v1_0 Version 1.0
@@ -102,6 +118,9 @@ hash<RestResponseInfo> resp2 = f2.get(30s);
     - Opt-in shared @ref HttpClientIo::HttpClientConnectionManager for connection sharing across
       multiple RestClientIo instances
     - Async API: \c restGetAsync(), \c restPostAsync(), etc. returning Future for non-blocking calls
+    - @ref RestClientIoPool for thread-safe connection pooling; options-based constructor
+      automatically creates a shared @ref HttpClientIo::HttpClientConnectionManager so all
+      pooled instances multiplex over the same connections
 */
 
 #! Main namespace for the RestClientIo module
@@ -299,34 +318,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 mgr = shared_mgr;
                 owns_mgr = False;
             } else {
-                # Build HttpClientConnectionManager options
-                hash<HttpClientIo::HttpClientConnectionManagerOptions> mgr_opts();
-                if (opts.connect_timeout) {
-                    mgr_opts.connect_timeout = opts.connect_timeout;
-                }
-                if (opts.timeout) {
-                    mgr_opts.request_timeout = opts.timeout;
-                }
-                if (opts.protocol) {
-                    mgr_opts.protocol = opts.protocol;
-                }
-                if (exists opts.max_connections_per_host) {
-                    mgr_opts.max_connections_per_host = opts.max_connections_per_host;
-                }
-                if (exists opts.max_streams_per_connection) {
-                    mgr_opts.max_streams_per_connection = opts.max_streams_per_connection;
-                }
-                if (exists opts.ssl_verify_mode) {
-                    mgr_opts.ssl_verify_mode = opts.ssl_verify_mode;
-                }
-                if (opts.accept_all_certs) {
-                    mgr_opts.accept_all_certs = opts.accept_all_certs.toBool();
-                }
-                if (logger) {
-                    mgr_opts.logger = logger;
-                }
-
-                mgr = new HttpClientIo::HttpClientConnectionManager(mgr_opts);
+                mgr = buildConnectionManager(opts);
             }
         }
 
@@ -704,6 +696,172 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             if (logger) {
                 call_function_args(\logger.log(), (level, "RestClientIo: " + fmt) + argv);
             }
+        }
+
+        #! Builds a HttpClientConnectionManager from RestClientIo client options
+        /** Extracts connection-manager-relevant options from the client options hash
+            and creates a new manager.  Used internally by @ref RestClientIoPool to
+            create a shared manager automatically.
+
+            @param opts the same options hash accepted by the constructor
+            @return a new HttpClientConnectionManager configured from the options
+        */
+        static HttpClientIo::HttpClientConnectionManager buildConnectionManager(hash<auto> opts) {
+            hash<HttpClientIo::HttpClientConnectionManagerOptions> mgr_opts();
+            if (opts.connect_timeout) {
+                mgr_opts.connect_timeout = opts.connect_timeout;
+            }
+            if (opts.timeout) {
+                mgr_opts.request_timeout = opts.timeout;
+            }
+            if (opts.protocol) {
+                mgr_opts.protocol = opts.protocol;
+            }
+            if (exists opts.max_connections_per_host) {
+                mgr_opts.max_connections_per_host = opts.max_connections_per_host;
+            }
+            if (exists opts.max_streams_per_connection) {
+                mgr_opts.max_streams_per_connection = opts.max_streams_per_connection;
+            }
+            if (exists opts.ssl_verify_mode) {
+                mgr_opts.ssl_verify_mode = opts.ssl_verify_mode;
+            }
+            if (opts.accept_all_certs) {
+                mgr_opts.accept_all_certs = opts.accept_all_certs.toBool();
+            }
+            if (opts.logger instanceof LoggerInterface) {
+                mgr_opts.logger = cast<LoggerInterface>(opts.logger);
+            }
+            return new HttpClientIo::HttpClientConnectionManager(mgr_opts);
+        }
+    }
+
+    #! Thread-safe connection pool for @ref RestClientIo instances
+    /** Provides pooled access to @ref RestClientIo instances using
+        @ref Qore::Thread::AbstractConnectionPool.
+
+        A factory callback or a client options hash creates new @ref RestClientIo instances on
+        demand; the pool manages their lifecycle and reuse across threads.
+
+        @par Connection Sharing
+        When using the options-based constructor, the pool automatically creates a shared
+        @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager" that all
+        pooled instances share.  This means all pooled @ref RestClientIo instances multiplex
+        their requests over the same set of H2/H3 connections, which is significantly more
+        efficient than each instance maintaining its own connections.
+
+        An external shared manager can also be provided to the constructor — in that case,
+        the caller retains ownership.
+
+        @par Factory Example
+        @code{.py}
+RestClientIoPool pool(sub () { return new RestClientIo({"url": "https://api.example.com", "data": "json"}); },
+    {"min": 2, "max": 10});
+RestClientIo rc = pool.acquire();
+on_exit pool.release();
+hash<RestResponseInfo> resp = rc.restGet("/api/data");
+        @endcode
+
+        @par Options Example
+        @code{.py}
+RestClientIoPool pool({"url": "https://api.example.com", "data": "json"},
+    {"min": 2, "max": 10});
+RestClientIo rc = pool.acquire();
+on_exit pool.release();
+hash<RestResponseInfo> resp = rc.restGet("/api/data");
+        @endcode
+
+        @par External Shared Connection Manager Example
+        @code{.py}
+HttpClientIo::HttpClientConnectionManager shared_mgr();
+RestClientIoPool pool({"url": "https://api.example.com", "data": "json"},
+    {"min": 2, "max": 10}, shared_mgr);
+RestClientIo rc = pool.acquire();
+on_exit pool.release();
+hash<RestResponseInfo> resp = rc.restGet("/api/data");
+        @endcode
+
+        @since RestClientIo 1.0
+    */
+    public class RestClientIoPool inherits Qore::Thread::AbstractConnectionPool {
+        private {
+            #! Factory callback that creates RestClientIo instances
+            code<RestClientIo()> factory;
+
+            #! Shared connection manager owned by this pool (created automatically
+            #! when using the options-based constructor without an external manager)
+            *HttpClientIo::HttpClientConnectionManager owned_mgr;
+        }
+
+        #! Creates a new pool with the given factory and options
+        /** @param factory a callback that returns a new @ref RestClientIo instance
+            @param pool_opts pool configuration options
+
+            @note When using the factory constructor, connection sharing depends on the
+                factory implementation.  For automatic connection sharing, use the
+                options-based constructor instead.
+        */
+        constructor(code<RestClientIo()> factory,
+                *hash<Qore::Thread::ConnectionPoolOptions> pool_opts)
+                : AbstractConnectionPool(pool_opts) {
+            self.factory = factory;
+            # Pre-create min resources now that factory is assigned
+            cast<Qore::Thread::AbstractConnectionPool>(self).init();
+        }
+
+        #! Creates a new pool that creates @ref RestClientIo instances with the given options
+        /** @param client_opts options passed to each @ref RestClientIo::constructor()
+                "RestClientIo constructor"
+            @param pool_opts pool configuration options
+            @param shared_mgr an optional external shared
+                @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager";
+                when provided, the caller retains ownership.  When omitted, the pool
+                creates and owns a shared manager automatically.
+        */
+        constructor(hash<auto> client_opts,
+                *hash<Qore::Thread::ConnectionPoolOptions> pool_opts,
+                *HttpClientIo::HttpClientConnectionManager shared_mgr)
+                : AbstractConnectionPool(pool_opts) {
+            if (!shared_mgr) {
+                # Create a shared manager from client options — all pooled
+                # instances will multiplex over the same set of connections
+                shared_mgr = RestClientIo::buildConnectionManager(client_opts);
+                owned_mgr = shared_mgr;
+            }
+            self.factory = RestClientIo sub () {
+                return new RestClientIo(client_opts, shared_mgr);
+            };
+            # Pre-create min resources now that factory is assigned
+            cast<Qore::Thread::AbstractConnectionPool>(self).init();
+        }
+
+        #! Shuts down the pool and closes the owned connection manager
+        /** Calls the base class destructor first to destroy all pooled resources,
+            then closes the owned connection manager (if any).
+        */
+        destructor() {
+            if (owned_mgr) {
+                owned_mgr.closeAll();
+            }
+        }
+
+        #! Creates a new pooled REST client
+        Qore::Thread::AbstractPoolableResource createResource() {
+            return factory();
+        }
+
+        #! Acquires a pooled REST client for the current thread
+        /** @return a pooled @ref RestClientIo instance for the current thread
+        */
+        RestClientIo acquire() {
+            return cast<RestClientIo>(AbstractConnectionPool::acquire());
+        }
+
+        #! Returns the shared connection manager (if using options-based constructor)
+        /** @return the shared connection manager, or @ref nothing if using the factory constructor
+        */
+        *HttpClientIo::HttpClientConnectionManager getConnectionManager() {
+            return owned_mgr;
         }
     }
 }

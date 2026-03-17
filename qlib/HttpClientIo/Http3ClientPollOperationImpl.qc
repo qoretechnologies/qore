@@ -54,11 +54,16 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
         #! Number of threads waiting on stream_capacity_cond (STREAM_ID_BLOCKED retry)
         int stream_blocked_waiters = 0;
 
+        #! Discovered QUIC stream limit (set when STREAM_ID_BLOCKED is hit);
+        #! 0 means unknown/unlimited.  Used by canAcceptStream() via
+        #! getQuicStreamLimit() to steer subsequent callers to new connections.
+        int quic_stream_limit = 0;
+
+        #! Maximum STREAM_ID_BLOCKED retries before signaling capacity error
+        const MaxStreamBlockedRetries = 3;
+
         #! QUIC session ID (set when connection becomes ready)
         int session_id = 0;
-
-        #! True when an async controller drives the I/O loop
-        bool controller_driven = False;
 
         #! True when a GOAWAY has been received from the server
         bool goaway_received = False;
@@ -153,11 +158,6 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
         return goaway_received;
     }
 
-    #! Marks this operation as driven by an async controller
-    setControllerDriven(bool flag = True) {
-        controller_driven = flag;
-    }
-
     #! Returns the QUIC session ID (0 if not yet connected)
     int getSessionId() {
         return session_id;
@@ -172,6 +172,30 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
     */
     int getActiveStreamCount() {
         return active_stream_count;
+    }
+
+    #! Returns the discovered QUIC stream limit (0 = unknown/unlimited)
+    /** Set when STREAM_ID_BLOCKED is encountered.  Used by the connection
+        to override \c canAcceptStream() and steer new requests to fresh
+        QUIC connections.
+    */
+    int getQuicStreamLimit() {
+        return quic_stream_limit;
+    }
+
+    #! Returns True if the underlying QUIC session is still alive
+    /** Checks the C++ poll operation state.  When the ngtcp2 session enters
+        closing/draining or is destroyed, this returns False.
+    */
+    bool isQuicSessionOpen() {
+        if (!current_op) {
+            return False;
+        }
+        try {
+            return current_op.getState() != "closed";
+        } catch () {
+            return False;
+        }
     }
 
     #! Submits a new HTTP/3 request on this connection
@@ -210,7 +234,12 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
                 : sprintf("%s:%d", url_info.host, url_info.port);
         }
 
-        # Submit with STREAM_ID_BLOCKED retry
+        # Submit with STREAM_ID_BLOCKED retry.  With the shared event loop
+        # and packet budget, the I/O thread fairly services all connections,
+        # so MAX_STREAMS frames are processed promptly.  Short retries with
+        # condition-variable waits handle the common case; if retries are
+        # exhausted, HTTP3-CAPACITY-ERROR signals the connection manager to
+        # open a new QUIC connection.
         int stream_id;
         {
             AutoLock al(stream_lock);
@@ -226,29 +255,16 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
                     break;
                 } catch (hash<ExceptionInfo> ex) {
                     if (ex.err == "QUIC-ERROR" && ex.desc =~ /STREAM_ID_BLOCKED/
-                            && retries < 10) {
+                            && retries < MaxStreamBlockedRetries) {
                         ++retries;
+                        # Backoff: 1ms, 2ms, 4ms
                         int backoff_val = 1 << (retries - 1);
                         timeout backoff_ms = backoff_val * 1ms;
-                        log(LoggerLevel::DEBUG, "STREAM_ID_BLOCKED retry %d/10 (backoff %dms)",
-                            retries, backoff_val);
-                        delete al;
-                        if (!controller_driven) {
-                            # Pump I/O at the C++ level to process incoming QUIC
-                            # packets (e.g., MAX_STREAMS frames) that may free
-                            # stream IDs.  We must NOT call continuePoll() here
-                            # because it dispatches callbacks which could re-enter
-                            # submitRequest() and deadlock on stream_lock.
-                            string retry_state = state;
-                            if (retry_state == STATE_READING
-                                    || retry_state == STATE_WAIT_READ) {
-                                try {
-                                    current_op.continuePoll();
-                                } catch () {
-                                }
-                            }
-                        }
-                        al = new AutoLock(stream_lock);
+                        log(LoggerLevel::DEBUG,
+                            "STREAM_ID_BLOCKED retry %d/%d (backoff %dms)",
+                            retries, MaxStreamBlockedRetries, backoff_val);
+                        # Wait on condition — signaled when continuePoll()
+                        # drains completed streams and frees stream slots
                         ++stream_blocked_waiters;
                         stream_capacity_cond.wait(stream_lock, backoff_ms);
                         --stream_blocked_waiters;
@@ -260,6 +276,35 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
                                     "retry (state: %y)", current_state);
                         }
                         continue;
+                    }
+                    if (ex.err == "QUIC-ERROR" && ex.desc =~ /STREAM_ID_BLOCKED/) {
+                        # Retries exhausted — record the limit so
+                        # canAcceptStream() steers subsequent callers
+                        # to a new QUIC connection
+                        if (!max_streams || active_stream_count < max_streams) {
+                            quic_stream_limit = active_stream_count;
+                        }
+                        log(LoggerLevel::DEBUG,
+                            "STREAM_ID_BLOCKED after %d retries — signaling "
+                            "capacity error (active: %d, quic_limit: %d)",
+                            MaxStreamBlockedRetries, active_stream_count,
+                            quic_stream_limit);
+                        throw "HTTP3-CAPACITY-ERROR",
+                            sprintf("QUIC stream limit reached on connection"
+                                " (active_streams: %d)", active_stream_count);
+                    }
+                    # Connection death errors — mark as closed immediately
+                    # so isClosed()/hasError() steer other callers away.
+                    # Cannot call setError() here (stream_lock is held),
+                    # so set state/error_info directly; the I/O thread will
+                    # notify remaining pending streams on its next cycle.
+                    if (ex.err == "QUIC-HTTP3-ERROR" || ex.err == "QUIC-READ-ERROR"
+                            || ex.err == "QUIC-RECV-ERROR") {
+                        error_info = {"err": ex.err, "desc": ex.desc};
+                        state = STATE_CLOSED;
+                        if (stream_blocked_waiters > 0) {
+                            stream_capacity_cond.broadcast();
+                        }
                     }
                     rethrow;
                 }

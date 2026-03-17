@@ -4996,9 +4996,18 @@ public class RestRequestPollOperation inherits Qore::AbstractPollOperation {
     Since @ref AbstractRestClient inherits @ref Qore::Thread::AbstractPoolableResource "AbstractPoolableResource",
     REST clients can be pooled directly without adapter objects.
 
-    @par Example
+    @par Factory Example
     @code{.py}
 RestClientPool pool(sub () { return new RestClient({"url": "https://api.example.com"}); },
+    {"min": 2, "max": 10});
+AbstractRestClient rc = pool.acquire();
+on_exit pool.release();
+hash<RestResponseInfo> resp = rc.restGet("/api/data");
+    @endcode
+
+    @par Options Example
+    @code{.py}
+RestClientPool pool({"url": "https://api.example.com", "data": "json"},
     {"min": 2, "max": 10});
 AbstractRestClient rc = pool.acquire();
 on_exit pool.release();
@@ -5021,6 +5030,21 @@ public class RestClientPool inherits Qore::Thread::AbstractConnectionPool {
             *hash<Qore::Thread::ConnectionPoolOptions> pool_opts)
             : AbstractConnectionPool(pool_opts) {
         self.factory = factory;
+        # Pre-create min resources now that factory is assigned
+        cast<Qore::Thread::AbstractConnectionPool>(self).init();
+    }
+
+    #! Creates a new pool that creates @ref RestClient instances with the given options
+    /** @param client_opts options passed to each @ref RestClient::constructor() "RestClient constructor";
+            the \c do_not_connect parameter is set to \c True so that connections are made on demand
+        @param pool_opts pool configuration options
+    */
+    constructor(hash<auto> client_opts,
+            *hash<Qore::Thread::ConnectionPoolOptions> pool_opts)
+            : AbstractConnectionPool(pool_opts) {
+        self.factory = AbstractRestClient sub () {
+            return new RestClient(client_opts, True);
+        };
         # Pre-create min resources now that factory is assigned
         cast<Qore::Thread::AbstractConnectionPool>(self).init();
     }

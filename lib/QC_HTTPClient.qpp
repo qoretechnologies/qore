@@ -223,6 +223,34 @@ static void HTTPClient_deserializer(QoreObject& self, const QoreHashNode* sdata,
 
     @since %Qore 2.3
 
+    @section httpclient_async_io Multiplexed I/O and Connection Pooling
+
+    For new code that requires multiplexed connections, connection pooling, or high-concurrency HTTP,
+    consider using the @ref httpclientiointro "HttpClientIo" module and the
+    @ref restclientio_intro "RestClientIo" module instead. These modules are built on the
+    @ref asyncsocketiointro "AsyncSocketIo" event loop and provide:
+
+    - True HTTP/2 and HTTP/3 multiplexing: multiple concurrent streams on a single connection without
+      head-of-line blocking
+    - Unified connection pooling via
+      @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager" with automatic
+      protocol selection, dead connection eviction, and stream reservation tracking
+    - Async and sync APIs: non-blocking Future-based calls alongside blocking request() calls, all
+      driven by a shared epoll/kqueue event loop
+    - Thread-safe connection pools via
+      @ref RestClientIo::RestClientIoPool "RestClientIoPool" and
+      @ref RestClient::RestClientPool "RestClientPool"
+
+    The %HTTPClient class remains the right choice for simple single-connection use cases, HTTP/1.1
+    compatibility, and code that does not require multiplexing or connection pooling.
+
+    @see
+    - @ref httpclientiointro "HttpClientIo module"
+    - @ref restclientio_intro "RestClientIo module"
+    - @ref asyncsocketiointro "AsyncSocketIo module"
+
+    @since %Qore 2.3
+
     @section httpclient_get_with_body HTTP GET Requests With a Message Body
 
     The %Qore HTTPClient class allows \c GET requests to be made with a message body, however please note

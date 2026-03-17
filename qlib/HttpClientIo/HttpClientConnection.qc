@@ -74,6 +74,9 @@ public class HttpClientConnection {
 
         #! Reference to AsyncSocketIoController for wake notifications
         *object controller_ref;
+
+        #! Number of pending stream reservations (threads assigned but not yet submitted)
+        int pending_stream_count = 0;
     }
 
     #! Returns the protocol identifier: "h2" or "h3"
@@ -128,17 +131,66 @@ public class HttpClientConnection {
         return state == HttpClientConnectionState::Draining;
     }
 
-    #! Returns True if the connection can accept a new stream
+    #! Returns True if the connection can accept a new stream (advisory, no side effects)
     /** Allows both Ready and Connecting connections to accept streams, since
         the stream handle's request() method will wait for the connection to
         become ready before submitting the request.
+
+        @note This is a pure query — it does not reserve a slot. Use
+        \c tryReserveStream() for atomic check-and-reserve in connection
+        selection paths where multiple threads compete.
     */
     bool canAcceptStream() {
         AutoLock al(lock);
         return (state == HttpClientConnectionState::Ready
                 || state == HttpClientConnectionState::Connecting)
             && (!max_concurrent_streams
-                || getPollOperation().getActiveStreamCount() < max_concurrent_streams);
+                || (getPollOperation().getActiveStreamCount() + pending_stream_count)
+                    < max_concurrent_streams);
+    }
+
+    #! Atomically checks capacity and reserves a stream slot
+    /** Returns True if a reservation was made, False if the connection is at
+        capacity or not in a usable state.
+
+        @note The caller MUST call \c releaseStreamReservation() when the
+        stream is submitted (converted to an active stream) or abandoned.
+
+        @par Thread Safety
+        The check and reservation happen under \c lock in one critical section,
+        eliminating the TOCTOU gap that exists with separate
+        \c canAcceptStream() + manual reservation.
+    */
+    bool tryReserveStream() {
+        AutoLock al(lock);
+        if (state != HttpClientConnectionState::Ready
+                && state != HttpClientConnectionState::Connecting) {
+            return False;
+        }
+        int total = getPollOperation().getActiveStreamCount() + pending_stream_count;
+        if (max_concurrent_streams && total >= max_concurrent_streams) {
+            return False;
+        }
+        # For Connecting connections, cap pending reservations to limit the
+        # blast radius if the handshake fails — remaining threads will create
+        # new connections rather than all waiting on one handshake
+        if (state == HttpClientConnectionState::Connecting
+                && pending_stream_count >= DefaultMaxPendingPerConnection) {
+            return False;
+        }
+        ++pending_stream_count;
+        return True;
+    }
+
+    #! Releases a pending stream reservation
+    /** Called when a reserved stream is submitted (reservation converts to
+        active stream) or when the request is abandoned before submission.
+    */
+    releaseStreamReservation() {
+        AutoLock al(lock);
+        if (pending_stream_count > 0) {
+            --pending_stream_count;
+        }
     }
 
     #! Returns the number of active streams
@@ -221,6 +273,16 @@ public class HttpClientConnection {
         log(LoggerLevel::DEBUG, "submitting request: %s %s", method, path);
         int stream_id = submitRequestImpl(method, path, headers, body, callback, ctx);
         @assert(stream_id >= 0);
+
+        # Release the pending reservation AFTER successful submit —
+        # active_stream_count was incremented inside submitRequestImpl().
+        # If submitRequestImpl() throws, the caller releases the reservation.
+        {
+            AutoLock al(lock);
+            if (pending_stream_count > 0) {
+                --pending_stream_count;
+            }
+        }
 
         if (!suppress_wake && ctl) {
             ctl.wake();

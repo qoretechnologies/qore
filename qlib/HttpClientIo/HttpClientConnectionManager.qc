@@ -183,12 +183,18 @@ public class HttpClientConnectionManager {
 
         HttpClientConnection conn = getConnection(url_info);
 
-        # Create protocol-appropriate stream handle
-        if (conn instanceof Http2ClientConnection) {
-            return new Http2ClientStreamHandle(cast<Http2ClientConnection>(conn),
-                opts.request_timeout, logger);
-        } else {
-            return new Http3ClientStreamHandle(conn, opts.request_timeout, logger);
+        # Create protocol-appropriate stream handle; release the reservation
+        # if the constructor throws to avoid leaking a pending slot
+        try {
+            if (conn instanceof Http2ClientConnection) {
+                return new Http2ClientStreamHandle(cast<Http2ClientConnection>(conn),
+                    opts.request_timeout, logger);
+            } else {
+                return new Http3ClientStreamHandle(conn, opts.request_timeout, logger);
+            }
+        } catch () {
+            conn.releaseStreamReservation();
+            rethrow;
         }
     }
 
@@ -204,9 +210,32 @@ public class HttpClientConnectionManager {
     */
     HttpClientStreamHandle submitRequestAsync(string url, string method, string path,
             *hash<auto> headers, *data body, HttpResponseCallback callback) {
-        HttpClientStreamHandle stream = acquireStream(url);
-        stream.submitAsync(method, path, headers, body, callback);
-        return stream;
+        int retries = 0;
+        while (True) {
+            *HttpClientStreamHandle stream;
+            try {
+                stream = acquireStream(url);
+                stream.submitAsync(method, path, headers, body, callback);
+                return stream;
+            } catch (hash<ExceptionInfo> ex) {
+                # Release reservation if the stream was acquired but not submitted
+                if (stream && !stream.isSubmitted()) {
+                    stream.getConnection().releaseStreamReservation();
+                }
+                if ((ex.err == "HTTP3-CAPACITY-ERROR" || isConnectionError(ex.err))
+                        && ++retries <= 3) {
+                    if (isConnectionError(ex.err)) {
+                        log(LoggerLevel::DEBUG, "connection error %s, evicting and retrying (%d/3)",
+                            ex.err, retries);
+                        evictDeadConnections(url);
+                    } else {
+                        log(LoggerLevel::DEBUG, "H3 capacity error (retry %d/3)", retries);
+                    }
+                    continue;
+                }
+                rethrow;
+            }
+        }
     }
 
     #! Performs a synchronous request
@@ -221,8 +250,31 @@ public class HttpClientConnectionManager {
     */
     hash<auto> request(string url, string method, string path, *hash<auto> headers,
             *data body, *timeout timeout_ms) {
-        HttpClientStreamHandle stream = acquireStream(url);
-        return stream.request(method, path, headers, body, timeout_ms);
+        int retries = 0;
+        while (True) {
+            *HttpClientStreamHandle stream;
+            try {
+                stream = acquireStream(url);
+                return stream.request(method, path, headers, body, timeout_ms);
+            } catch (hash<ExceptionInfo> ex) {
+                # Release reservation if the stream was acquired but not submitted
+                if (stream && !stream.isSubmitted()) {
+                    stream.getConnection().releaseStreamReservation();
+                }
+                if ((ex.err == "HTTP3-CAPACITY-ERROR" || isConnectionError(ex.err))
+                        && ++retries <= 3) {
+                    if (isConnectionError(ex.err)) {
+                        log(LoggerLevel::DEBUG, "connection error %s, evicting and retrying (%d/3)",
+                            ex.err, retries);
+                        evictDeadConnections(url);
+                    } else {
+                        log(LoggerLevel::DEBUG, "H3 capacity error (retry %d/3)", retries);
+                    }
+                    continue;
+                }
+                rethrow;
+            }
+        }
     }
 
     #! Returns connection pool statistics
@@ -425,7 +477,7 @@ public class HttpClientConnectionManager {
                 }
                 if (pool.hasKey(key)) {
                     foreach HttpClientConnection conn in (pool{key}) {
-                        if (!conn.isClosed() && !conn.isDraining() && conn.canAcceptStream()) {
+                        if (!conn.isClosed() && !conn.isDraining() && conn.tryReserveStream()) {
                             log(LoggerLevel::DEBUG, "reusing %s connection %d to %s",
                                 conn.getProtocol(), conn.getConnectionId(), key);
                             return conn;
@@ -437,12 +489,13 @@ public class HttpClientConnectionManager {
             # Serialize connection creation per key to avoid redundant QUIC handshakes.
             # Without this, N threads all finding no reusable connection would each create
             # their own, flooding the server with N handshakes when 1 suffices.
+            # The wait is bounded by connect_timeout to prevent indefinite blocking
+            # when the creating thread's connection setup stalls (e.g., QUIC handshake
+            # timeout or DNS resolution hang).
             {
                 AutoLock al(create_mutex);
                 if (creating{key}) {
-                    # Another thread is already creating a connection for this key; wait
-                    # and then re-check the pool
-                    create_cond.wait(create_mutex);
+                    create_cond.wait(create_mutex, opts.connect_timeout);
                     continue;
                 }
                 creating{key} = True;
@@ -478,7 +531,7 @@ public class HttpClientConnectionManager {
                                 conn.getConnectionId(), key);
                         } else {
                             push live, conn;
-                            if (!reusable && !conn.isDraining() && conn.canAcceptStream()) {
+                            if (!reusable && !conn.isDraining() && conn.tryReserveStream()) {
                                 reusable = conn;
                             }
                         }
@@ -516,7 +569,7 @@ public class HttpClientConnectionManager {
                         HttpClientConnection best = candidates.size() == 1
                             ? candidates[0]
                             : candidates[rand() % candidates.size()];
-                        if (best.canAcceptStream()) {
+                        if (best.tryReserveStream()) {
                             log(LoggerLevel::DEBUG, "using %s connection %d with %d streams "
                                 "to %s (at connection limit)", best.getProtocol(),
                                 best.getConnectionId(), min_streams, key);
@@ -605,7 +658,6 @@ public class HttpClientConnectionManager {
             "callback": sub (hash<SocketPollResultInfo> result) {
                 handleConnectionResult(key, conn, result);
             },
-            "dedicated_thread": conn.getProtocol() == "h3",
         };
 
         controller.submit(info);
@@ -637,6 +689,10 @@ public class HttpClientConnectionManager {
         HttpClientPollOperation op = conn.getPollOperation();
         if (op.isClosed() || op.hasError()) {
             log(LoggerLevel::DEBUG, "connection %d closed", conn.getConnectionId());
+            # Close the connection to notify pending streams — their
+            # callbacks fire with an error so threads in f.get() wake up
+            # instead of waiting until request_timeout
+            try { conn.close(); } catch () {}
             removeConnectionFromPool(key, conn);
             return;
         }
@@ -650,6 +706,7 @@ public class HttpClientConnectionManager {
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::ERROR, "connection %d continueReading error: %s: %s",
                 conn.getConnectionId(), ex.err, ex.desc);
+            try { conn.close(); } catch () {}
             removeConnectionFromPool(key, conn);
             return;
         }
@@ -673,6 +730,51 @@ public class HttpClientConnectionManager {
             pool{key} = keep;
         } else {
             remove pool{key};
+        }
+    }
+
+    #! Internal: checks if an error indicates a dead QUIC/HTTP3 connection
+    private bool isConnectionError(string err) {
+        return err == "QUIC-HTTP3-ERROR"
+            || err == "QUIC-READ-ERROR"
+            || err == "QUIC-RECV-ERROR"
+            || err == "HTTP3-CONNECT-ERROR"
+            || err == "HTTP3-STATE-ERROR"
+            || err == "HTTP3-ABORT"
+            || err == "HTTPCLIENT-STATE-ERROR"
+            || err == "HTTPCLIENT-CONNECT-ERROR";
+    }
+
+    #! Internal: evicts dead connections for the given URL
+    private evictDeadConnections(string url) {
+        hash<UrlInfo> url_info = parse_url(url);
+        string key = sprintf("%s:%d", url_info.host, url_info.port);
+
+        list<HttpClientConnection> to_close = ();
+        {
+            AutoWriteLock al(pool_lock);
+            if (!pool.hasKey(key)) {
+                return;
+            }
+            list<HttpClientConnection> live = ();
+            foreach HttpClientConnection conn in (pool{key}) {
+                if (conn.isClosed() || (conn.getProtocol() == "h3"
+                        && !conn.canAcceptStream())) {
+                    push to_close, conn;
+                } else {
+                    push live, conn;
+                }
+            }
+            if (live) {
+                pool{key} = live;
+            } else {
+                remove pool{key};
+            }
+        }
+        foreach HttpClientConnection conn in (to_close) {
+            log(LoggerLevel::DEBUG, "evicting dead %s connection %d",
+                conn.getProtocol(), conn.getConnectionId());
+            try { conn.close(); } catch () {}
         }
     }
 
