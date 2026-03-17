@@ -1,0 +1,76 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore CustomerIoDataProvider module definition
+
+/*  CustomerIoEmailClickedEventDataProvider.qc Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+#! Contains all public definitions in the CustomerIoDataProvider module
+public namespace CustomerIoDataProvider {
+
+#! Customer.io email clicked event data provider - triggers when a link in an email is clicked
+public class CustomerIoEmailClickedEventDataProvider inherits CustomerIoBaseEventDataProvider {
+    public {
+        #! Provider info
+        const ProviderInfo = <DataProviderInfo>{
+            "name": EVENT_EMAIL_CLICKED,
+            "desc": "Customer.io email clicked event - triggers when a link in an email is clicked",
+            "type": "CustomerIoEmailClickedEventDataProvider",
+            "supports_observable": True,
+        };
+    }
+
+    #! Creates the object with a REST client
+    constructor(CustomerIoRestClient::CustomerIoRestClient rest)
+            : CustomerIoBaseEventDataProvider(rest) {
+    }
+
+    #! Returns the data provider name
+    string getName() {
+        return EVENT_EMAIL_CLICKED;
+    }
+
+    #! Returns the data provider description
+    *string getDesc() {
+        return ProviderInfo.desc;
+    }
+
+    #! Returns the event type
+    string getEventType() {
+        return EVENT_EMAIL_CLICKED;
+    }
+
+    #! Returns the Customer.io webhook metric name
+    string getMetricName() {
+        return "email_clicked";
+    }
+
+    #! Returns the event data type
+    AbstractDataProviderType getEventDataType() {
+        return new CustomerIoWebhookEventDataType();
+    }
+
+    #! Returns data provider static info
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return ProviderInfo;
+    }
+}
+
+} # namespace CustomerIoDataProvider
