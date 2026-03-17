@@ -168,6 +168,7 @@ public class DataProvider {
             "lemlist": "LemlistDataProvider",
             "shippo": "ShippoDataProvider",
             "shipstation": "ShipStationDataProvider",
+            "customerio": "CustomerIoDataProvider",
             "instantly": "InstantlyDataProvider",
             "keap": "KeapDataProvider",
             "kit": "KitDataProvider",
