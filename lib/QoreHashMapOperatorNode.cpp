@@ -218,7 +218,12 @@ QoreValue QoreHashMapOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xs
     //printd(5, "QoreHashMapOperatorNode::mapIterator() vcommon: %d valueType: %p '%s'\n", vcommon, valueType,
     //  QoreTypeInfo::getName(valueType));
     if (ref_rv && vcommon) {
-        qore_hash_private::get(**ret_val)->complexTypeInfo = qore_get_complex_hash_type(valueType);
+        qore_hash_private* hp = qore_hash_private::get(**ret_val);
+        hp->complexTypeInfo = qore_get_complex_hash_type(valueType);
+        // Clear any hashdecl binding - the outer hash should use complexTypeInfo, not hashdecl
+        if (hp->hashdecl) {
+            hp->setHashDecl(nullptr);
+        }
     }
 
     return ret_val.release();
@@ -288,7 +293,12 @@ QoreValue QoreHashMapOperatorNode::mapIterator(AbstractIteratorHelper& h, Except
     //printd(5, "QoreHashMapOperatorNode::mapIterator() vcommon: %d valueType: %p '%s'\n", vcommon, valueType,
     //  QoreTypeInfo::getName(valueType));
     if (ref_rv && vcommon) {
-        qore_hash_private::get(**rv)->complexTypeInfo = qore_get_complex_hash_type(valueType);
+        qore_hash_private* hp = qore_hash_private::get(**rv);
+        hp->complexTypeInfo = qore_get_complex_hash_type(valueType);
+        // Clear any hashdecl binding - the outer hash should use complexTypeInfo, not hashdecl
+        if (hp->hashdecl) {
+            hp->setHashDecl(nullptr);
+        }
     }
 
     return rv.release();
