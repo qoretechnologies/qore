@@ -1897,7 +1897,7 @@ qore_user_module("qlib/Pop3Client.qm" "ConnectionProvider;MailMessage;Mime")
 qore_user_module("qlib/RestSchemaValidator.qm" "HttpServerUtil;Logger")
 qore_user_module("qlib/SewioWebSocketClient.qm" "ConnectionProvider;Util;WebSocketUtil;WebSocketClient")
 qore_user_module("qlib/SmtpClient.qm" "ConnectionProvider;MailMessage;Mime")
-qore_user_module("qlib/WebSocketHandler.qm" "HttpServerUtil;WebSocketUtil")
+qore_user_module("qlib/WebSocketHandler.qm" "AsyncSocketIo;HttpServerUtil;WebSocketUtil")
 qore_user_module("qlib/WebUtil.qm" "HttpServerUtil;Mime;Util")
 
 # base 5 modules

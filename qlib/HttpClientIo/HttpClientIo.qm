@@ -188,7 +188,7 @@ public namespace HttpClientIo {
 
         @since HttpClientIo 1.0
     */
-    public typedef HttpResponseCallback = code<nothing(hash<auto> response, *hash<auto> error)>;
+    public typedef HttpResponseCallback = code<nothing(hash<auto>, *hash<auto>)>;
 
     #! Connection state enum
     public enum HttpClientConnectionState {

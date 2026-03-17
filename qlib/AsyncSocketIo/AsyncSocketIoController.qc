@@ -53,8 +53,8 @@ public enum IoCommand : string {
     operations on a different controller. The global controller is created during
     module initialization with \c autostop=True.
 
-    All higher-level components (@ref HttpServerAsyncIo::HttpAsyncSocketIoController,
-    @ref HttpClientIo::HttpClientConnectionManager) use the global controller by
+    All higher-level components (\c HttpServerAsyncIo::HttpAsyncSocketIoController,
+    \c HttpClientIo::HttpClientConnectionManager) use the global controller by
     default.
 
     @since AsyncSocketIo 1.0
@@ -293,7 +293,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
     #! Cancels all operations belonging to a specific owner
     /** @param owner the owner identifier (typically from uniqueHash()) to cancel operations for
 
-        Operations are matched by checking the \c owner field in the @ref SocketPollOperationInfo hash.
+        Operations are matched by checking the \c owner field in the \c SocketPollOperationInfo hash.
 
         @return the number of operations canceled
 

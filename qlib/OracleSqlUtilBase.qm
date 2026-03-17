@@ -3457,7 +3457,7 @@ where i.owner = %v and i.table_name = %v", schema.upr(), name.upr());
     }
 
     #! Returns a closure for performing upserts
-    /** If the \a upsert_strategy argument is @ref UpsertInsertFirst or @ref UpsertUpdateFirst, then this argument is
+    /** If the \a upsert_strategy argument is \c UpsertInsertFirst or \c UpsertUpdateFirst, then this argument is
         ignored and a closure using an Oracle merge statement is returned
     */
     code getUpsertClosure(hash<auto> row, int upsert_strategy = UpsertAuto, *hash<auto> opt) {

@@ -145,7 +145,7 @@ BillwerkRestClient billwerk(
 {"additional_methods": {"PROPFIND": True, "MKCOL": True}};
             @endcode
         - \c connect_timeout: The timeout value in milliseconds for establishing a new socket connection (also can be a relative date-time value for clarity, ex: \c 20s)
-        - \c content_encoding: for possible values, see \c EncodingSupport; this sets the send encoding (if the \c "send_encoding" option is not set) and the requested response encoding (note that the @ref RestClient::RestClient "RestClient" class will only compress outgoing message bodies over @ref RestClient::RestClient::CompressionThreshold "CompressionThreshold" bytes in size)
+        - \c content_encoding: for possible values, see \c EncodingSupport; this sets the send encoding (if the \c "send_encoding" option is not set) and the requested response encoding (note that the @ref RestClient::RestClient "RestClient" class will only compress outgoing message bodies over \c CompressionThreshold bytes in size)
         - \c data: a \c DataSerializationOptions "data serialization option"; if not present defaults to \c "auto"
         - \c default_path: The default path to use for new connections if a path is not otherwise specified in the connection URL
         - \c default_port: The default port number to connect to if none is given in the URL
@@ -156,8 +156,8 @@ BillwerkRestClient billwerk(
         - \c http_version: Either '1.0' or '1.1' for the claimed HTTP protocol version compliancy in outgoing message headers
         - \c max_redirects: The maximum number of redirects before throwing an exception (the default is 5)
         - \c proxy: The proxy URL for connecting through a proxy
-        - \c send_encoding: a \c EncodingSupport "send data encoding option" or the value \c "auto" which means to use automatic encoding; if not present defaults to no content-encoding on sent message bodies (note that the @ref RestClient::RestClient "RestClient" class will only compress outgoing message bodies over @ref RestClient::RestClient::CompressionThreshold "CompressionThreshold" bytes in size)
-        - \c swagger: the path to a <a href="https://swagger.io/">Swagger 2.0</a> REST schema file for API validation; only used if \a validator not provided (see the @ref swaggerintro "Swagger" module)
+        - \c send_encoding: a \c EncodingSupport "send data encoding option" or the value \c "auto" which means to use automatic encoding; if not present defaults to no content-encoding on sent message bodies (note that the @ref RestClient::RestClient "RestClient" class will only compress outgoing message bodies over \c CompressionThreshold bytes in size)
+        - \c swagger: the path to a <a href="https://swagger.io/">Swagger 2.0</a> REST schema file for API validation; only used if \a validator not provided (see the \c Swagger module)
         - \c timeout: The timeout value in milliseconds (also can be a relative date-time value for clarity, ex: \c 30s)
         - \c url: A string giving the URL to connect to; if not given then the target URL will be taken from any \c validator option, if given by calling \c RestSchemaValidator::AbstractRestSchemaValidator::getTargetUrl() "AbstractRestSchemaValidator::getTargetUrl()"
         - \c validator: an \c RestSchemaValidator::AbstractRestSchemaValidator "AbstractRestSchemaValidator" object to validate request and response messages; overrides \a swagger

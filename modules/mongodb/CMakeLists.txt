@@ -127,6 +127,9 @@ set(MODULE_DOX_INPUT ${CMAKE_BINARY_DIR}/modules/mongodb/mainpage.dox ${_dox_src
 qore_binary_module_qore(${mongodb_module_name} "${VERSION}" "/${VERSION}")
 
 if (DOXYGEN_FOUND)
+    # Add MongoDB logo SVG to the module docs (reuse the logo from MongoDbDataProvider)
+    file(APPEND ${CMAKE_BINARY_DIR}/modules/mongodb/Doxyfile
+        "\nHTML_EXTRA_FILES       += \"${CMAKE_SOURCE_DIR}/qlib/MongoDbDataProvider/mongodb-logo.svg\"\n")
     qore_wrap_dox(QORE_DOX_MONGODB_SRC ${QORE_DOX_MONGODB_TMPL_SRC})
     add_custom_target(QORE_MONGODB_MOD_DOX_FILES DEPENDS ${QORE_DOX_MONGODB_SRC})
     add_dependencies(docs-mongodb QORE_MONGODB_MOD_DOX_FILES)

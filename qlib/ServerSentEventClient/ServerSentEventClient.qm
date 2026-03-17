@@ -102,12 +102,12 @@ module ServerSentEventClient {
     @section serversenteventclient_relnotes ServerSentEventClient Release History
 
     @subsection serversenteventclient_v1_1 Version 1.1
-    - added @ref ServerSentEventClient::SseConnectPollOperation "SseConnectPollOperation" for async connect
+    - added \c SseConnectPollOperation for async connect
       support
-    - added @ref ServerSentEventClient::ServerSentEventConnection::supportsPollingApi()
-      "ServerSentEventConnection::supportsPollingApi()" and
-      @ref ServerSentEventClient::ServerSentEventConnection::startPollConnect()
-      "ServerSentEventConnection::startPollConnect()" for connection monitoring
+    - added \c ServerSentEventConnection::supportsPollingApi()
+      and
+      \c ServerSentEventConnection::startPollConnect()
+      for connection monitoring
 
     @subsection serversenteventclient_v1_0 Version 1.0
     - the initial version of the ServerSentEventClient module

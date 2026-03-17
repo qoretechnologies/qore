@@ -865,7 +865,7 @@ public class DpqlCompletionProvider {
     #! Gets infix comparison operators from the expression map (e.g. "like")
     /** Returns completions for provider-specific operators that have \c groups containing
         "Comparison", \c type = DET_Operator, and exactly 2 args. These are rendered as
-        infix operators in DPQL (e.g. \c @field \c like \c "pattern") rather than function
+        infix operators in DPQL (e.g. \c \@field \c like \c "pattern") rather than function
         calls.
 
         @param prefix the current prefix to filter by

@@ -5156,7 +5156,7 @@ nothing Socket::submitHttp2StreamingResponseHeaders(int stream_id, int status_co
 
     The C++ vtable is the sole authority on I/O thread eligibility. If the stream's C++
     @ref InputStream::isIoThreadSafe() "isIoThreadSafe()" returns @ref False, this method
-    returns @ref 1 without submitting headers, so the caller can fall back to handler-thread
+    returns \c 1 without submitting headers, so the caller can fall back to handler-thread
     streaming.
 
     @param stream_id the HTTP/2 stream ID
@@ -5263,7 +5263,7 @@ AbstractPollOperation Socket::startPollHttp2Flush() {
     @throw SOCKET-NOT-OPEN The socket is not connected
     @throw HTTP2-ERROR if HTTP/2 session initialization failed
 
-    @note This operation is designed for use with @ref Http2ClientConnectionManager which handles
+    @note This operation is designed for use with \c Http2ClientConnectionManager which handles
     stream callback registration and request submission.
 
     @since %Qore 2.3
@@ -5290,6 +5290,7 @@ AbstractPollOperation Socket::startPollHttp2ClientMultiplex() {
 
     @param headers HTTP/2 pseudo-headers and regular headers (must include :method, :path, :scheme, :authority)
     @param body optional request body
+    @param streaming if @ref True "True", the request body will be sent in streaming mode
 
     @return the stream ID assigned to this request
 
@@ -5974,7 +5975,7 @@ int Socket::submitQuicStreamData(int session_id, int stream_id, *data body,
 
     The C++ vtable is the sole authority on I/O thread eligibility. If the stream's C++
     @ref InputStream::isIoThreadSafe() "isIoThreadSafe()" returns @ref False, this method
-    returns @ref 1 without submitting headers, so the caller can fall back to handler-thread
+    returns \c 1 without submitting headers, so the caller can fall back to handler-thread
     streaming.
 
     @param session_id the QUIC session ID
@@ -6233,7 +6234,7 @@ nothing Socket::submitQuicConnectResponse(int session_id, int stream_id, int sta
 
     @see @ref cleanupQuicStream()
     @see @ref isQuicStreamComplete()
-    @see @ref wantsBodyStreaming()
+    @see \c wantsBodyStreaming()
 
     @since %Qore 2.3
 */
@@ -6293,7 +6294,7 @@ bool Socket::isQuicStreamComplete(int session_id, int stream_id) [flags=CONSTANT
     @par When to Call
     Call this method after @ref readQuicStreamDataBlock() returns @ref nothing
     (stream complete) or when the handler decides to stop reading (early return).
-    If using the @ref HttpServer "HttpServer" framework with @ref wantsBodyStreaming(),
+    If using the @ref HttpServer "HttpServer" framework with \c wantsBodyStreaming(),
     cleanup is handled automatically by the framework's \c on_exit handler — you do
     @b not need to call this manually.
 

@@ -714,6 +714,7 @@ hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@name == "
     #! Parses a DPQL expression with full diagnostic information
     /** @param text the DPQL expression to parse
         @param expressions optional map of expression names to their info for validation
+        @param fields optional map of field names to field definitions for validation
 
         @return a DpqlParseResult containing the expression, diagnostics, and tokens
 
@@ -894,10 +895,10 @@ hash<auto> json = DataProvider::serializeExpressionToJson(exp);
 
     #! Serializes an expression argument to JSON/YAML transport format
     /** Handles all argument types:
-        - @ref DataProviderFieldReference: \c {"field": name}
-        - @ref DataProviderTemplateReference: \c {"tmpl_context": ..., "tmpl_value": ..., "raw": ...}
-        - @ref DataProviderRangeSpec: \c {"start": ..., "end": ...}
-        - @ref DataProviderExpression: recursively serialized
+        - @ref DataProviderFieldReference "DataProviderFieldReference": \c {"field": name}
+        - @ref DataProviderTemplateReference "DataProviderTemplateReference": \c {"tmpl_context": ..., "tmpl_value": ..., "raw": ...}
+        - @ref DataProviderRangeSpec "DataProviderRangeSpec": \c {"start": ..., "end": ...}
+        - @ref DataProviderExpression "DataProviderExpression": recursively serialized
         - Plain value: wrapped in \c {"value": val}
 
         @param arg the argument to serialize
@@ -1053,6 +1054,8 @@ list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@na', 3
     /** @param text the DPQL expression to validate
         @param fields available fields
         @param expressions optional map of expression names to their info
+        @param server_expressions optional map of server-side expression names to their info for search
+        expression validation
 
         @return a list of diagnostic messages for any validation errors
 

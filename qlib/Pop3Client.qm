@@ -190,17 +190,17 @@ public const DefaultConnectTimeout = 30s;
 
     Encrypted connections to POP3 servers are also supported in the following ways:
     - to connect immediately with a TLS/SSL connection, use the \c "pop3s" protocol (URI scheme) in the URL, or set
-      the TLS/SSL flag manually by calling @ref Pop3Client::Pop3Client::tls(bool) "Pop3Client::tls(bool)".
+      the TLS/SSL flag manually by calling \c Pop3Client::tls(bool).
     - to connect with an unencrypted connection and then upgrade to an encrypted connection using the \c "STLS"
       command, set the \c "starttls" flag by calling
-      @ref Pop3Client::Pop3Client::starttls(bool) "Pop3Client::starttls(bool)"
+      \c Pop3Client::starttls(bool)
 
     This class will not mark messages for deletion automatically; to mark messages for deletion, call the
     @ref Pop3Client::Pop3Client::del() "Pop3Client::del()" method with the message ID to delete or a list of message
     IDs.  Note that some POP3 servers (for example gmail), will mark the messages as read anyway and make them
     unavailable on the next request after disconnecting even if the messages were not marked for deletion manually.
     To avoid this, set the \c "noquit" flag by calling
-    @ref Pop3Client::Pop3Client::noquit(bool) "Pop3Client::noquit(bool)".  This will suppress the \c "QUIT" message
+    \c Pop3Client::noquit(bool).  This will suppress the \c "QUIT" message
     when disconnecting which should keep any compiant POP3 server from committing any changes related to the current
     POP3 session.
 */
@@ -277,7 +277,7 @@ public class Pop3Client inherits Logger::LoggerWrapper, ConnectionProvider::Opti
         - \c "pop3s": encrypted POP3 connections
         .
         If no protocol (URI scheme) is given in the URL (ex: \c "pop.gmail.com") then \c "pop3" is assumed; if no port
-        is given, then either @ref POP3Port (for \c "pop3") or @ref POP3SPort (for \c "pop3s") is as the default port
+        is given, then either @ref Pop3Client::Pop3Client::POP3Port "POP3Port" (for \c "pop3") or @ref Pop3Client::Pop3Client::POP3SPort "POP3SPort" (for \c "pop3s") is as the default port
         number depending on the protocol.
 
         @param opts options for the object; supported options:

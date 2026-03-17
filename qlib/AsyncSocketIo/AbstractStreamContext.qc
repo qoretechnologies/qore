@@ -66,11 +66,7 @@ public class AbstractStreamContext {
     abstract sendData(binary data, bool end_stream = False);
 
     #! Read data from the stream
-    /** @param max_bytes the maximum number of bytes to read; if 0, the implementation decides
-        how much data to return. HTTP/2 uses this parameter; HTTP/3 ignores it and returns all
-        buffered data.
-
-        @return binary data if available, or @ref nothing if no data is buffered
+    /** @return binary data if available, or @ref nothing if no data is buffered
     */
     abstract *binary readData(int max_bytes = 0);
 

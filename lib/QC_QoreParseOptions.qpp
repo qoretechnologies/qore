@@ -34,7 +34,7 @@
 
 //! Opaque parse option container supporting extended options beyond 64 bits
 /** The ParseOptions class encapsulates parse option flags in an opaque container that supports
-    more than 64 option bits, overcoming the limitation of the legacy @ref PO_constants "PO_*" integer constants.
+    more than 64 option bits, overcoming the limitation of the legacy @ref parse_options "PO_*" integer constants.
 
     Parse options can be specified by name (string), by integer constant (PO_* values for bits 0-63),
     or by combining other ParseOptions objects.

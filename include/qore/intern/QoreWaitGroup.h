@@ -71,6 +71,7 @@ public:
 
     //! Blocks until the counter reaches 0
     /** @param timeout_ms timeout in milliseconds; 0 = infinite
+        @param xsink exception sink for error reporting
         @return 0 on success, -1 on timeout
     */
     DLLLOCAL int wait(int64 timeout_ms, ExceptionSink* xsink) {

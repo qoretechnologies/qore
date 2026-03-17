@@ -500,7 +500,7 @@ public hashdecl DbVendorInfo {
 #! Registers a per-vendor database application with individual connection fields
 /** Checks which DBI drivers are installed for the vendor, builds connection options
     (driver, host, port, db, user, pass, charset, min, max, plus optional JDBC classpath),
-    and registers the app with @ref DataProviderActionCatalog plus standard DB actions.
+    and registers the app with \c DataProviderActionCatalog plus standard DB actions.
 
     Silently skips registration if no usable driver is installed.
 

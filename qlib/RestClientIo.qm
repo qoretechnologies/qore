@@ -173,7 +173,7 @@ hash<RestResponseInfo> resp = f.get(30s);
         @par Constructor Options
         - \c url (required): the target URL (e.g., \c "https://api.example.com")
         - \c data: data serialization format (default: \c "auto"); see
-          @ref RestClient::RestClient::DataSerializationOptions "DataSerializationOptions"
+          \c DataSerializationOptions
         - \c send_encoding: send encoding (compression) format (e.g., \c "gzip")
         - \c headers: default headers to send with each request
         - \c token: authentication token

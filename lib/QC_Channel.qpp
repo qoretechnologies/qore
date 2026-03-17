@@ -48,7 +48,7 @@
     still be received. After all values are drained, @ref recv() returns @ref NOTHING.
 
     Channels support iteration via @ref Qore::Thread::ChannelIterator "ChannelIterator",
-    enabling use with @ref foreach:
+    enabling use with @ref foreach :
     @code{.py}
 foreach auto val in (channel.iterator()) {
     printf("got: %y\n", val);

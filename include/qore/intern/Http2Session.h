@@ -205,6 +205,7 @@ public:
         @param body Request body (can be nullptr)
         @param body_len Length of request body
         @param xsink Exception sink for error reporting
+        @param streaming if true, the request body will be sent in streaming mode
         @return stream ID on success, -1 on error
     */
     DLLLOCAL int32_t submitRequest(const char* method, const char* path,

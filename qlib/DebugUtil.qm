@@ -47,9 +47,9 @@ module DebugUtil {
     The %DebugUtil module provides common functionality for implementing debugger utilities
 
     @subsection du_v0_2 v0.2
-    - added string enums: @ref DebugResponseType, @ref DebugRunStateName, @ref DebugFlowName,
-      @ref DebugPolicyName, @ref DebugEventCmd for type-safe debug protocol constants
-    - added @ref ResponseSync class for thread-safe single-response synchronization
+    - added string enums: @ref DebugUtil::DebugResponseType, @ref DebugUtil::DebugRunStateName, @ref DebugUtil::DebugFlowName,
+      @ref DebugUtil::DebugPolicyName, @ref DebugUtil::DebugEventCmd for type-safe debug protocol constants
+    - added @ref DebugUtil::ResponseSync class for thread-safe single-response synchronization
     - updated mapping constants to use enum keys
 
     @subsection du_v0_1_1 v0.1.1
