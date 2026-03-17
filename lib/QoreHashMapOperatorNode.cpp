@@ -59,6 +59,10 @@ const QoreTypeInfo* QoreHashMapOperatorNode::setReturnTypeInfo(const QoreTypeInf
         : false;
     if (QoreTypeInfo::hasType(expTypeInfo2)) {
         returnTypeInfo = qore_get_complex_hash_type(expTypeInfo2);
+        if (strstr(QoreTypeInfo::getName(expTypeInfo2), "DataProvider")) {
+            fprintf(stderr, "DEBUG MAP: expTypeInfo2=%s, returnTypeInfo=%s\n",
+                QoreTypeInfo::getName(expTypeInfo2), QoreTypeInfo::getName(returnTypeInfo));
+        }
 
         if (or_nothing) {
             typeInfo = qore_get_complex_hash_or_nothing_type(expTypeInfo2);
@@ -220,8 +224,17 @@ QoreValue QoreHashMapOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xs
     if (ref_rv && vcommon) {
         qore_hash_private* hp = qore_hash_private::get(**ret_val);
         hp->complexTypeInfo = qore_get_complex_hash_type(valueType);
+        if (strstr(QoreTypeInfo::getName(valueType), "DataProvider")) {
+            fprintf(stderr, "DEBUG mapIterator: valueType=%s, setting complexTypeInfo=%s, hashdecl=%s\n",
+                QoreTypeInfo::getName(valueType),
+                QoreTypeInfo::getName(hp->complexTypeInfo),
+                hp->hashdecl ? hp->hashdecl->getName() : "NULL");
+        }
         // Clear any hashdecl binding - the outer hash should use complexTypeInfo, not hashdecl
         if (hp->hashdecl) {
+            if (strstr(QoreTypeInfo::getName(valueType), "DataProvider")) {
+                fprintf(stderr, "DEBUG mapIterator: clearing hashdecl %s\n", hp->hashdecl->getName());
+            }
             hp->setHashDecl(nullptr);
         }
     }

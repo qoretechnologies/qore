@@ -392,15 +392,33 @@ QoreHashNode* qore_hash_private::newComplexHashFromHash(const QoreTypeInfo* type
     // mark new hash with new type
     assert(init->is_unique());
     init->priv->complexTypeInfo = typeInfo;
+    if (strstr(QoreTypeInfo::getName(typeInfo), "DataProvider")) {
+        fprintf(stderr, "DEBUG newComplexHashFromHash: typeInfo=%s, hashdecl before clear=%s\n",
+            QoreTypeInfo::getName(typeInfo),
+            init->priv->hashdecl ? "yes" : "no");
+    }
     // Clear any hashdecl binding - complex hash types use complexTypeInfo, not hashdecl
     if (init->priv->hashdecl) {
+        if (strstr(QoreTypeInfo::getName(typeInfo), "DataProvider")) {
+            fprintf(stderr, "DEBUG newComplexHashFromHash: clearing hashdecl %s\n",
+                init->priv->hashdecl->getName());
+        }
         init->priv->setHashDecl(nullptr);
+    }
+    if (strstr(QoreTypeInfo::getName(typeInfo), "DataProvider")) {
+        fprintf(stderr, "DEBUG newComplexHashFromHash: hashdecl after clear=%s\n",
+            init->priv->hashdecl ? "yes" : "no");
     }
     return init.release();
 }
 
 int qore_hash_private::checkKey(const char* key, ExceptionSink* xsink) const {
     if (hashdecl && !typed_hash_decl_private::get(*hashdecl)->findMember(key)) {
+        if (strstr(hashdecl->getName(), "DataProvider")) {
+            fprintf(stderr, "DEBUG checkKey ERROR: hashdecl=%s, key=%s, complexTypeInfo=%s\n",
+                hashdecl->getName(), key,
+                complexTypeInfo ? QoreTypeInfo::getName(complexTypeInfo) : "NULL");
+        }
         xsink->raiseException("INVALID-MEMBER", "error accessing unknown member '%s' of hashdecl '%s'", key,
             hashdecl->getName());
         return -1;

@@ -41,3 +41,22 @@ Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
 
 Thread 1 "qore/1" received signal SIGSEGV, Segmentation fault.
 0x00007fffb885f692 in ?? ()
+Function "qore_hash_private::checkKey" not defined.
+Make breakpoint pending on future shared library load? (y or [n]) [answered N; input not from terminal]
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+[New Thread 0x7fffed0d16c0 (LWP 3628750)]
+[New Thread 0x7fffe55ff6c0 (LWP 3628810)]
+[New Thread 0x7fffd2dff6c0 (LWP 3628846)]
+[New Thread 0x7fffd21c96c0 (LWP 3628847)]
+[New Thread 0x7fffd15936c0 (LWP 3628848)]
+[New Thread 0x7fffcbfff6c0 (LWP 3628849)]
+[New Thread 0x7fffcb3c96c0 (LWP 3628850)]
+
+Thread 1 "qore/1" received signal SIGSEGV, Segmentation fault.
+0x00007fffb885f692 in ?? ()
+#0  0x00007fffb885f692 in ?? ()
+#1  0x0000000000000206 in ?? ()
+#2  0x0000000000000000 in ?? ()
+No symbol "hashdecl" in current context.
+'key' has unknown type; cast it to its declared type
