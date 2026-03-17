@@ -1,0 +1,214 @@
+# Inventory Management Schema
+# Example .ysm (YAML Schema Module) file demonstrating the pure data schema
+# definition format for the Qore Schema module.
+#
+# Usage:
+#   qschema validate inventory.ysm
+#   qschema info inventory.ysm
+#   qschema align -d pgsql:user/pass@host/db inventory.ysm
+
+schema:
+  name: InventorySchema
+  version: "1.1.0"
+  version_table: schema_info
+  version_column: version
+  version_where:
+    name: InventorySchema
+
+tables:
+  schema_info:
+    columns:
+      name:
+        type: varchar
+        size: 240
+        notnull: true
+      version:
+        type: varchar
+        size: 50
+        notnull: true
+      created:
+        type: timestamp
+      modified:
+        type: timestamp
+    primary_key:
+      name: pk_schema_info
+      columns: [name]
+    auto_triggers:
+      created: true
+      modified: true
+
+  categories:
+    columns:
+      id:
+        type: int
+        notnull: true
+      name:
+        type: varchar
+        size: 100
+        notnull: true
+      description:
+        type: varchar
+        size: 500
+      created:
+        type: timestamp
+      modified:
+        type: timestamp
+    primary_key:
+      name: pk_categories
+      columns: [id]
+    indexes:
+      idx_categories_name:
+        columns: [name]
+        unique: true
+    auto_triggers:
+      created: true
+      modified: true
+      sequence_columns:
+        id: seq_categories
+
+  products:
+    columns:
+      id:
+        type: int
+        notnull: true
+      sku:
+        type: varchar
+        size: 50
+        notnull: true
+      name:
+        type: varchar
+        size: 240
+        notnull: true
+      description:
+        type: clob
+      category_id:
+        type: int
+        notnull: true
+      price:
+        type: number
+        size: 12
+        scale: 2
+        notnull: true
+      quantity:
+        type: int
+        notnull: true
+        default_value: 0
+      status:
+        type: char
+        size: 1
+        notnull: true
+        default_value: "A"
+        comment: "A=Active, D=Discontinued, O=Out of Stock"
+      created:
+        type: timestamp
+      modified:
+        type: timestamp
+    primary_key:
+      name: pk_products
+      columns: [id]
+    indexes:
+      idx_products_sku:
+        columns: [sku]
+        unique: true
+      idx_products_category:
+        columns: [category_id]
+      idx_products_status:
+        columns: [status]
+    foreign_constraints:
+      fk_products_category:
+        columns: [category_id]
+        table: categories
+        target_columns: [id]
+    auto_triggers:
+      created: true
+      modified: true
+      sequence_columns:
+        id: seq_products
+
+  inventory_log:
+    columns:
+      id:
+        type: int
+        notnull: true
+      product_id:
+        type: int
+        notnull: true
+      change_type:
+        type: varchar
+        size: 20
+        notnull: true
+        comment: "RESTOCK, SALE, ADJUSTMENT, RETURN"
+      quantity_change:
+        type: int
+        notnull: true
+      notes:
+        type: varchar
+        size: 500
+      created:
+        type: timestamp
+    primary_key:
+      name: pk_inventory_log
+      columns: [id]
+    indexes:
+      idx_invlog_product:
+        columns: [product_id]
+      idx_invlog_created:
+        columns: [created]
+    foreign_constraints:
+      fk_invlog_product:
+        columns: [product_id]
+        table: products
+        target_columns: [id]
+    auto_triggers:
+      created: true
+      sequence_columns:
+        id: seq_inventory_log
+
+sequences:
+  seq_categories: {}
+  seq_products: {}
+  seq_inventory_log: {}
+
+reference_data:
+  # Strict: only these rows allowed (others are deleted)
+  strict:
+    schema_info:
+      columns: [name, version, modified]
+      rows:
+        - [InventorySchema, "1.1.0", {exp: "now"}]
+
+  # Normal: these rows must exist (others are OK)
+  normal:
+    categories:
+      columns: [id, name, description]
+      rows:
+        - [1, Electronics, "Electronic devices and components"]
+        - [2, Clothing, "Apparel and accessories"]
+        - [3, Books, "Books and publications"]
+        - [4, Food, "Food and beverages"]
+
+  create_only: {}
+  insert_only: {}
+
+# Version-based migrations
+migrations:
+  - version: "1.1.0"
+    description: "Add inventory_log table and product status"
+    post_align:
+      # Step dependencies: set_defaults runs first, then populate_status uses it
+      - id: set_defaults
+        action: update
+        table: products
+        set:
+          status: "A"
+        where:
+          status: null
+
+      - id: populate_status
+        depends_on: [set_defaults]
+        action: update
+        table: products
+        set:
+          quantity: 0
+        where:
+          quantity: null

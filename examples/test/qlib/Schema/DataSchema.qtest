@@ -1,0 +1,524 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/Schema
+%requires ../../../../qlib/SqlUtil
+
+%requires QUnit
+
+%exec-class DataSchemaTest
+
+class DataSchemaTest inherits QUnit::Test {
+    constructor() : Test("DataSchema", "1.0") {
+        addTestCase("meta-schema structure", \metaSchemaTests());
+        addTestCase("meta-schema migration action fields", \metaSchemaMigrationFieldTests());
+        addTestCase("column normalization", \columnNormalizationTests());
+        addTestCase("table normalization", \tableNormalizationTests());
+        addTestCase("reference data normalization", \referenceDataTests());
+        addTestCase("auto-trigger expansion", \autoTriggerExpansionTests());
+        addTestCase("DPQL expression evaluation in reference data", \dpqlExpressionTests());
+        addTestCase("full schema normalization", \fullNormalizationTests());
+        addTestCase("validation tests", \validationTests());
+        addTestCase("loader error paths", \loaderErrorPathTests());
+        addTestCase("DPQL expression error paths", \dpqlErrorPathTests());
+        addTestCase("loadHash tests", \loadHashTests());
+        addTestCase("DataSchema class tests", \dataSchemaClassTests());
+        set_return_value(main());
+    }
+
+    private hash<auto> getSampleSchema() {
+        return {
+            "schema": {
+                "name": "TestAppSchema",
+                "version": "1.2.0",
+                "version_table": "app_version",
+                "version_column": "ver",
+                "version_where": {"app": "TestApp"},
+            },
+            "tables": {
+                "users": {
+                    "columns": {
+                        "id": {"type": "int", "notnull": True},
+                        "name": {"type": "varchar", "size": 240, "notnull": True},
+                        "email": {"type": "varchar", "size": 500},
+                        "balance": {"type": "number", "size": 12, "scale": 2},
+                        "created": {"type": "timestamp"},
+                        "modified": {"type": "timestamp"},
+                    },
+                    "primary_key": {"name": "pk_users", "columns": ("id",)},
+                    "indexes": {
+                        "idx_users_email": {"columns": ("email",), "unique": True},
+                    },
+                    "auto_triggers": {
+                        "created": True,
+                        "modified": True,
+                        "sequence_columns": {"id": "seq_users"},
+                    },
+                },
+                "roles": {
+                    "columns": {
+                        "id": {"type": "int", "notnull": True},
+                        "name": {"type": "varchar", "size": 100, "notnull": True},
+                    },
+                    "primary_key": {"name": "pk_roles", "columns": ("id",)},
+                },
+            },
+            "sequences": {
+                "seq_users": {},
+            },
+            "reference_data": {
+                "strict": {
+                    "roles": {
+                        "columns": ("id", "name"),
+                        "rows": (
+                            (1, "admin"),
+                            (2, "user"),
+                        ),
+                    },
+                },
+                "normal": {
+                    "app_version": {
+                        "columns": ("app", "ver"),
+                        "rows": (
+                            ("TestApp", "1.2.0"),
+                        ),
+                    },
+                },
+            },
+        };
+    }
+
+    metaSchemaTests() {
+        hash<auto> ms = Schema::DataSchemaJsonSchema;
+
+        # Verify top-level structure
+        assertEq("https://json-schema.org/draft/2020-12/schema", ms."$schema");
+        assertEq("object", ms.type);
+        assertTrue(ms.required.contains("schema"));
+
+        # Verify properties
+        assertTrue(ms.properties.hasKey("schema"));
+        assertTrue(ms.properties.hasKey("tables"));
+        assertTrue(ms.properties.hasKey("sequences"));
+        assertTrue(ms.properties.hasKey("reference_data"));
+        assertTrue(ms.properties.hasKey("migrations"));
+
+        # Verify $defs
+        assertTrue(ms."$defs".hasKey("columnDefinition"));
+        assertTrue(ms."$defs".hasKey("tableDefinition"));
+        assertTrue(ms."$defs".hasKey("migration"));
+        assertTrue(ms."$defs".hasKey("migrationAction"));
+        assertTrue(ms."$defs".hasKey("autoTriggerConfig"));
+        assertTrue(ms."$defs".hasKey("referenceData"));
+    }
+
+    columnNormalizationTests() {
+        # int
+        hash<auto> col = Schema::DataSchemaLoader::normalizeColumn("t", "c", {"type": "int"});
+        assertEq(Type::Int, col.qore_type);
+        assertFalse(col.hasKey("notnull"));
+
+        # int with notnull
+        col = Schema::DataSchemaLoader::normalizeColumn("t", "c", {"type": "int", "notnull": True});
+        assertEq(Type::Int, col.qore_type);
+        assertTrue(col.notnull);
+
+        # varchar with size
+        col = Schema::DataSchemaLoader::normalizeColumn("t", "c",
+            {"type": "varchar", "size": 240, "comment": "test"});
+        assertEq(SqlUtil::VARCHAR, col.qore_type);
+        assertEq(240, col.size);
+        assertEq("test", col.comment);
+
+        # number with size and scale
+        col = Schema::DataSchemaLoader::normalizeColumn("t", "c",
+            {"type": "number", "size": 12, "scale": 2});
+        assertEq(SqlUtil::NUMERIC, col.qore_type);
+        assertEq(12, col.size);
+        assertEq(2, col.scale);
+
+        # date (should have driver-specific native_type)
+        col = Schema::DataSchemaLoader::normalizeColumn("t", "c", {"type": "date"});
+        assertEq(Type::Date, col.qore_type);
+        assertTrue(col.hasKey("driver"));
+        assertEq("date", col.driver.oracle.native_type);
+
+        # timestamp (no driver override)
+        col = Schema::DataSchemaLoader::normalizeColumn("t", "c", {"type": "timestamp"});
+        assertEq(Type::Date, col.qore_type);
+        assertFalse(col.hasKey("driver"));
+
+        # blob
+        col = Schema::DataSchemaLoader::normalizeColumn("t", "c", {"type": "blob"});
+        assertEq(SqlUtil::BLOB, col.qore_type);
+
+        # clob
+        col = Schema::DataSchemaLoader::normalizeColumn("t", "c", {"type": "clob"});
+        assertEq(SqlUtil::CLOB, col.qore_type);
+
+        # default value
+        col = Schema::DataSchemaLoader::normalizeColumn("t", "c",
+            {"type": "char", "size": 1, "default_value": "A"});
+        assertEq("A", col.default_value);
+
+        # unknown type
+        assertThrows("DATA-SCHEMA-ERROR", sub () {
+            Schema::DataSchemaLoader::normalizeColumn("t", "c", {"type": "bogus"});
+        });
+    }
+
+    tableNormalizationTests() {
+        hash<auto> table_def = {
+            "columns": {
+                "id": {"type": "int", "notnull": True},
+                "name": {"type": "varchar", "size": 100},
+            },
+            "primary_key": {"name": "pk_test", "columns": ("id",)},
+            "indexes": {"idx_name": {"columns": ("name",)}},
+            "foreign_constraints": {
+                "fk_role": {"columns": ("role_id",), "table": "roles"},
+            },
+            "auto_triggers": {"created": True},
+        };
+
+        hash<auto> result = Schema::DataSchemaLoader::normalizeTable("test", table_def);
+
+        # Columns normalized
+        assertEq(Type::Int, result.columns.id.qore_type);
+        assertEq(SqlUtil::VARCHAR, result.columns.name.qore_type);
+
+        # Structural definitions preserved
+        assertEq("pk_test", result.primary_key.name);
+        assertTrue(result.indexes.hasKey("idx_name"));
+        assertTrue(result.foreign_constraints.hasKey("fk_role"));
+        assertEq("roles", result.foreign_constraints.fk_role.table);
+
+        # Auto triggers preserved (expanded later)
+        assertTrue(result.auto_triggers.created);
+    }
+
+    referenceDataTests() {
+        hash<auto> ref = {
+            "strict": {
+                "roles": {
+                    "columns": ("id", "name"),
+                    "rows": ((1, "admin"), (2, "user")),
+                },
+            },
+            "normal": {
+                "settings": {
+                    "columns": ("key", "value"),
+                    "rows": (("app.name", "MyApp"),),
+                },
+            },
+        };
+
+        hash<auto> result = Schema::DataSchemaLoader::normalizeReferenceData(ref);
+
+        # Strict: converted to list-of-lists
+        assertEq(3, result.strict.roles.size());  # header + 2 rows
+        assertEq(("id", "name"), result.strict.roles[0]);
+        assertEq((1, "admin"), result.strict.roles[1]);
+
+        # Normal
+        assertEq(2, result.normal.settings.size());
+        assertEq(("key", "value"), result.normal.settings[0]);
+    }
+
+    autoTriggerExpansionTests() {
+        hash<auto> tables = {
+            "my_table": {
+                "columns": {
+                    "id": {"qore_type": Type::Int},
+                    "created": {"qore_type": Type::Date},
+                    "modified": {"qore_type": Type::Date},
+                },
+                "auto_triggers": {
+                    "created": True,
+                    "modified": True,
+                    "sequence_columns": {"id": "seq_my_table"},
+                },
+            },
+        };
+
+        # PostgreSQL
+        hash<auto> pgsql = Schema::DataSchemaLoader::expandAutoTriggers(tables, "pgsql");
+        assertTrue(pgsql.my_table.triggers.hasKey("trig_my_table"));
+        assertTrue(pgsql.my_table.driver.pgsql.functions.hasKey("trig_my_table()"));
+        assertFalse(pgsql.my_table.hasKey("auto_triggers"));
+
+        # Oracle
+        hash<auto> oracle = Schema::DataSchemaLoader::expandAutoTriggers(tables, "oracle");
+        assertTrue(oracle.my_table.triggers.hasKey("trig_my_table"));
+        assertTrue(oracle.my_table.triggers.trig_my_table.contains("BEFORE INSERT OR UPDATE"));
+
+        # MySQL
+        hash<auto> mysql = Schema::DataSchemaLoader::expandAutoTriggers(tables, "mysql");
+        assertTrue(mysql.my_table.triggers.hasKey("trig_my_table_insert"));
+        assertTrue(mysql.my_table.triggers.hasKey("trig_my_table_update"));
+
+        # Table without auto_triggers passes through unchanged
+        hash<auto> no_trigger = {
+            "plain": {
+                "columns": {"id": {"qore_type": Type::Int}},
+            },
+        };
+        hash<auto> result = Schema::DataSchemaLoader::expandAutoTriggers(no_trigger, "pgsql");
+        assertFalse(result.plain.hasKey("triggers"));
+    }
+
+    dpqlExpressionTests() {
+        # Test now() expression
+        list<auto> data();
+        push data, ("id", "name", "created");
+        push data, (1, "admin", {"exp": "now"});
+        push data, (2, "user", {"exp": "now"});
+
+        list<auto> result = Schema::DataSchemaLoader::evalReferenceDataExpressions(data);
+        assertEq(3, result.size());
+        assertEq(("id", "name", "created"), result[0]);  # headers unchanged
+        assertEq(1, result[1][0]);
+        assertEq("admin", result[1][1]);
+        assertEq("date", result[1][2].type());  # now() returns date
+
+        # Test with non-expression values (pass through)
+        list<auto> plain();
+        push plain, ("a", "b");
+        push plain, ("x", "y");
+        list<auto> plain_result = Schema::DataSchemaLoader::evalReferenceDataExpressions(plain);
+        assertEq(2, plain_result.size());
+        assertEq("x", plain_result[1][0]);
+
+        # Test with arithmetic expression
+        list<auto> arith();
+        push arith, ("val",);
+        push arith, ({"exp": "+", "args": (10, 20)},);
+        list<auto> arith_result = Schema::DataSchemaLoader::evalReferenceDataExpressions(arith);
+        assertEq(30, arith_result[1][0]);
+
+        # Empty data passes through
+        list<auto> empty = (("a",),);
+        assertEq(1, Schema::DataSchemaLoader::evalReferenceDataExpressions(empty).size());
+    }
+
+    fullNormalizationTests() {
+        hash<auto> raw = getSampleSchema();
+        hash<auto> result = Schema::DataSchemaLoader::normalize(raw);
+
+        # Schema metadata preserved
+        assertEq("TestAppSchema", result.schema.name);
+        assertEq("1.2.0", result.schema.version);
+
+        # Tables normalized
+        assertTrue(result.tables.hasKey("users"));
+        assertTrue(result.tables.hasKey("roles"));
+        assertEq(Type::Int, result.tables.users.columns.id.qore_type);
+        assertEq(SqlUtil::VARCHAR, result.tables.users.columns.name.qore_type);
+        assertEq(240, result.tables.users.columns.name.size);
+        assertEq(12, result.tables.users.columns.balance.size);
+        assertEq(2, result.tables.users.columns.balance.scale);
+
+        # Auto triggers preserved
+        assertTrue(result.tables.users.auto_triggers.created);
+
+        # Sequences preserved
+        assertTrue(result.sequences.hasKey("seq_users"));
+
+        # Reference data normalized to list-of-lists
+        assertEq(3, result.reference_data.strict.roles.size());
+        assertEq(2, result.reference_data.normal.app_version.size());
+    }
+
+    validationTests() {
+        # Valid schema passes
+        Schema::DataSchemaLoader::validate(getSampleSchema());
+
+        # Missing schema key
+        assertThrows("DATA-SCHEMA-VALIDATION-ERROR", sub () {
+            Schema::DataSchemaLoader::validate({"tables": {}});
+        });
+
+        # Missing schema.name
+        assertThrows("DATA-SCHEMA-VALIDATION-ERROR", sub () {
+            Schema::DataSchemaLoader::validate({"schema": {"version": "1.0"}});
+        });
+
+        # Missing schema.version
+        assertThrows("DATA-SCHEMA-VALIDATION-ERROR", sub () {
+            Schema::DataSchemaLoader::validate({"schema": {"name": "Test"}});
+        });
+
+        # Table without columns
+        assertThrows("DATA-SCHEMA-VALIDATION-ERROR", sub () {
+            Schema::DataSchemaLoader::validate({
+                "schema": {"name": "Test", "version": "1.0"},
+                "tables": {"bad_table": {"indexes": {}}},
+            });
+        });
+    }
+
+    loadHashTests() {
+        hash<auto> raw = getSampleSchema();
+
+        # loadHash with validation
+        hash<auto> result = Schema::DataSchemaLoader::loadHash(raw);
+        assertEq("TestAppSchema", result.schema.name);
+        assertEq(Type::Int, result.tables.users.columns.id.qore_type);
+
+        # loadHash without validation
+        result = Schema::DataSchemaLoader::loadHash(raw, False);
+        assertEq("TestAppSchema", result.schema.name);
+    }
+
+    metaSchemaMigrationFieldTests() {
+        hash<auto> ms = Schema::DataSchemaJsonSchema;
+        hash<auto> action_def = ms."$defs".migrationAction;
+
+        # Verify new migration action fields exist
+        assertTrue(action_def.properties.hasKey("source"),
+            "migrationAction should have 'source' field for add_trigger");
+        assertTrue(action_def.properties.hasKey("constraint_type"),
+            "migrationAction should have 'constraint_type' field for add_constraint");
+        assertTrue(action_def.properties.hasKey("target_table"),
+            "migrationAction should have 'target_table' field for FK constraints");
+        assertTrue(action_def.properties.hasKey("target_columns"),
+            "migrationAction should have 'target_columns' field for FK constraints");
+        assertTrue(action_def.properties.hasKey("expression"),
+            "migrationAction should have 'expression' field for check constraints");
+
+        # Verify constraint_type enum values
+        list<auto> ct_enum = action_def.properties.constraint_type."enum";
+        assertTrue(ct_enum.contains("unique"));
+        assertTrue(ct_enum.contains("foreign"));
+        assertTrue(ct_enum.contains("check"));
+        assertEq(3, ct_enum.size());
+
+        # Verify action enum includes all migration actions
+        list<auto> action_enum = action_def.properties.action."enum";
+        assertTrue(action_enum.contains("rename_table"));
+        assertTrue(action_enum.contains("add_trigger"));
+        assertTrue(action_enum.contains("drop_trigger"));
+        assertTrue(action_enum.contains("add_constraint"));
+        assertTrue(action_enum.contains("sql"));
+        assertTrue(action_enum.contains("script"));
+        assertEq(17, action_enum.size());  # 15 unrestricted + 2 restricted
+    }
+
+    loaderErrorPathTests() {
+        # loadFile with unsupported extension
+        assertThrows("DATA-SCHEMA-ERROR", "unsupported file extension",
+            \Schema::DataSchemaLoader::loadFile(), ("schema.txt",));
+
+        # loadFile with nonexistent file
+        assertThrows("FILE-OPEN2-ERROR", sub () {
+            Schema::DataSchemaLoader::loadFile("/nonexistent/path/schema.ysm");
+        });
+
+        # loadHash with completely empty hash
+        assertThrows("DATA-SCHEMA-VALIDATION-ERROR", sub () {
+            Schema::DataSchemaLoader::loadHash({});
+        });
+
+        # loadHash with schema but no tables (should pass - tables are optional)
+        hash<auto> minimal = {"schema": {"name": "Minimal", "version": "1.0.0"}};
+        hash<auto> result = Schema::DataSchemaLoader::loadHash(minimal);
+        assertEq("Minimal", result.schema.name);
+
+        # normalizeColumn with all valid types
+        foreach string col_type in (("int", "varchar", "char", "timestamp", "date",
+                "number", "blob", "clob", "binary")) {
+            hash<auto!> def();
+            def.type = col_type;
+            if (col_type == "varchar" || col_type == "char") {
+                def.size = 10;
+            }
+            # Should not throw
+            Schema::DataSchemaLoader::normalizeColumn("t", "c", def);
+        }
+
+        # normalizeColumn with invalid type
+        assertThrows("DATA-SCHEMA-ERROR", "unknown type", sub () {
+            Schema::DataSchemaLoader::normalizeColumn("t", "c", {"type": "xml"});
+        });
+
+        # Verify error message includes valid types
+        try {
+            Schema::DataSchemaLoader::normalizeColumn("t", "c", {"type": "badtype"});
+            assertTrue(False, "should have thrown");
+        } catch (hash<ExceptionInfo> ex) {
+            assertTrue(ex.desc.contains("int"), "error should list valid types");
+            assertTrue(ex.desc.contains("varchar"), "error should list valid types");
+        }
+    }
+
+    dpqlErrorPathTests() {
+        # Unknown DPQL expression
+        list<auto> data();
+        push data, ("val",);
+        push data, ({"exp": "nonexistent_expression"},);
+        assertThrows("INVALID-OPERATION", sub () {
+            Schema::DataSchemaLoader::evalReferenceDataExpressions(data);
+        });
+
+        # Expression with wrong argument types (division by zero)
+        list<auto> div_zero();
+        push div_zero, ("val",);
+        push div_zero, ({"exp": "/", "args": (10, 0)},);
+        assertThrows("DIVISION-BY-ZERO", sub () {
+            Schema::DataSchemaLoader::evalReferenceDataExpressions(div_zero);
+        });
+
+        # Mixed expressions: some valid, some using exp hash
+        list<auto> mixed();
+        push mixed, ("a", "b");
+        push mixed, ("plain_val", {"exp": "upr", "args": ("hello",)});
+        list<auto> mixed_result = Schema::DataSchemaLoader::evalReferenceDataExpressions(mixed);
+        assertEq("plain_val", mixed_result[1][0]);
+        assertEq("HELLO", mixed_result[1][1]);
+    }
+
+    dataSchemaClassTests() {
+        # Test DataSchema with pre-loaded hash (no DB needed for basic tests)
+        hash<auto> raw = getSampleSchema();
+        hash<auto> normalized = Schema::DataSchemaLoader::loadHash(raw);
+
+        # Verify access level constants
+        assertEq("untrusted", Schema::AL_UNTRUSTED);
+        assertEq("trusted", Schema::AL_TRUSTED);
+        assertEq("admin", Schema::AL_ADMIN);
+
+        # Verify schema data is accessible
+        assertEq("TestAppSchema", normalized.schema.name);
+        assertEq("1.2.0", normalized.schema.version);
+        assertEq("app_version", normalized.schema.version_table);
+        assertEq("ver", normalized.schema.version_column);
+        assertEq({"app": "TestApp"}, normalized.schema.version_where);
+
+        # Verify migration list (none in sample)
+        assertEq(NOTHING, normalized.migrations);
+
+        # Test schema with migrations
+        hash<auto> with_migrations = raw + {
+            "migrations": (
+                {
+                    "version": "1.1.0",
+                    "description": "Add email column",
+                    "post_align": (
+                        {
+                            "action": "update",
+                            "table": "users",
+                            "set": {"email": "unknown@example.com"},
+                            "where": {"email": NOTHING},
+                        },
+                    ),
+                },
+            ),
+        };
+        hash<auto> norm2 = Schema::DataSchemaLoader::loadHash(with_migrations);
+        assertEq(1, norm2.migrations.size());
+        assertEq("1.1.0", norm2.migrations[0].version);
+        assertEq("update", norm2.migrations[0].post_align[0].action);
+    }
+}

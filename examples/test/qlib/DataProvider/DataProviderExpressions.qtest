@@ -1,0 +1,376 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/DataProvider
+
+%requires QUnit
+
+%exec-class DataProviderExpressionsTest
+
+#! Evaluates a DPQL expression with an optional record hash
+auto sub eval_expr(string exp_name, softlist<auto> args, *hash<auto> rec) {
+    return AbstractDataProvider::evalGenericExpression(rec ?? {},
+        <DataProvider::DataProviderExpression>{"exp": exp_name, "args": args});
+}
+
+class DataProviderExpressionsTest inherits QUnit::Test {
+    constructor() : Test("DataProviderExpressions", "1.0") {
+        addTestCase("arithmetic tests", \arithmeticTests());
+        addTestCase("comparison tests", \comparisonTests());
+        addTestCase("string operation tests", \stringOperationTests());
+        addTestCase("type conversion tests", \typeConversionTests());
+        addTestCase("encoding tests", \encodingTests());
+        addTestCase("format tests", \formatTests());
+        addTestCase("size/length tests", \sizeLengthTests());
+        addTestCase("regex tests", \regexTests());
+        addTestCase("crypto tests", \cryptoTests());
+        addTestCase("ternary tests", \ternaryTests());
+        addTestCase("now() tests", \nowTests());
+        addTestCase("list/collection tests", \listCollectionTests());
+        addTestCase("split tests", \splitTests());
+        addTestCase("serialization tests", \serializationTests());
+        addTestCase("field reference tests", \fieldReferenceTests());
+        addTestCase("negative tests", \negativeTests());
+        addTestCase("alias tests", \aliasTests());
+        set_return_value(main());
+    }
+
+    arithmeticTests() {
+        # addition
+        assertEq(6, eval_expr("+", (1, 2, 3)));
+        assertEq(10.5, eval_expr("+", (3.5, 7.0)));
+        assertEq("hello world", eval_expr("+", ("hello ", "world")));
+        list<int> la = (1, 2);
+        list<int> lb = (3, 4);
+        assertEq((1, 2, 3, 4), eval_expr("+", (la, lb)));
+
+        # subtraction
+        assertEq(5, eval_expr("-", (10, 5)));
+        assertEq(-1.5, eval_expr("-", (1.0, 2.5)));
+
+        # multiplication
+        assertEq(24, eval_expr("*", (2, 3, 4)));
+        assertEq(6.0, eval_expr("*", (2.0, 3.0)));
+
+        # division
+        assertEq(5, eval_expr("/", (10, 2)));
+        assertEq(2.5, eval_expr("/", (5.0, 2.0)));
+
+        # division by zero
+        assertThrows("DIVISION-BY-ZERO", sub () { eval_expr("/", (1, 0)); });
+    }
+
+    comparisonTests() {
+        # absolute equality
+        assertTrue(eval_expr("===", (42, 42)));
+        assertFalse(eval_expr("===", (42, "42")));  # different types
+        assertFalse(eval_expr("===", (42, 42.0)));   # int vs float
+
+        # absolute not-equal
+        assertTrue(eval_expr("!==", (42, "42")));    # different types
+        assertFalse(eval_expr("!==", (42, 42)));     # same
+
+        # in range (>= lower, < upper)
+        assertTrue(eval_expr("inRange", (5, 1, 10)));
+        assertTrue(eval_expr("inRange", (1, 1, 10)));   # lower inclusive
+        assertFalse(eval_expr("inRange", (10, 1, 10))); # upper exclusive
+        assertFalse(eval_expr("inRange", (0, 1, 10)));
+
+        # has value
+        assertTrue(eval_expr("has-value", ("hello")));
+        assertTrue(eval_expr("has-value", (1)));
+        assertFalse(eval_expr("has-value", (0)));
+        assertFalse(eval_expr("has-value", ("")));
+    }
+
+    stringOperationTests() {
+        # starts with (case insensitive by default)
+        assertTrue(eval_expr("starts-with", ("Hello World", "hello", True)));
+        assertFalse(eval_expr("starts-with", ("Hello World", "hello", False)));
+        assertTrue(eval_expr("starts-with", ("Hello World", "Hello", False)));
+
+        # ends with
+        assertTrue(eval_expr("ends-with", ("Hello World", "WORLD", True)));
+        assertFalse(eval_expr("ends-with", ("Hello World", "WORLD", False)));
+
+        # contains
+        assertTrue(eval_expr("contains", ("Hello World", "lo wo", True)));
+        assertFalse(eval_expr("contains", ("Hello World", "xyz", True)));
+
+        # to lower / to upper
+        assertEq("hello", eval_expr("lwr", ("HELLO")));
+        assertEq("HELLO", eval_expr("upr", ("hello")));
+
+        # unaccent
+        assertEq("cafe", eval_expr("unaccent", ("café")));
+
+        # replace
+        assertEq("hello world", eval_expr("replace", ("hello earth", "earth", "world")));
+
+        # join
+        assertEq("a,b,c", eval_expr("join", (("a", "b", "c"), ",")));
+        assertEq("hello", eval_expr("join", (("hello",), ",")));
+
+        # substr
+        assertEq("llo", eval_expr("substr", ("hello", 2)));
+        assertEq("el", eval_expr("substr", ("hello", 1, 2)));
+        assertEq("lo", eval_expr("substr", ("hello", -2)));
+
+        # char width
+        assertEq(5, eval_expr("width", ("hello")));
+
+        # encoding
+        assertEq("UTF-8", eval_expr("encoding", ("hello")));
+    }
+
+    typeConversionTests() {
+        # toString
+        assertEq("42", eval_expr("toString", (42)));
+        assertEq("1", eval_expr("toString", (True)));
+
+        # toInt
+        assertEq(42, eval_expr("toInt", ("42")));
+        assertEq(3, eval_expr("toInt", (3.7)));
+
+        # toFloat
+        assertEq(3.14, eval_expr("toFloat", ("3.14")));
+
+        # toNumber
+        assertEq(42n, eval_expr("toNumber", ("42")));
+
+        # toBool
+        assertTrue(eval_expr("toBool", (1)));
+        assertFalse(eval_expr("toBool", (0)));
+        assertTrue(eval_expr("toBool", ("true")));
+
+        # toDate
+        date d = eval_expr("toDate", ("2025-01-15"));
+        assertEq(2025, get_years(d));
+        assertEq(1, get_months(d));
+        assertEq(15, get_days(d));
+
+        # toDate with mask
+        d = eval_expr("toDate", ("15/01/2025", "DD/MM/YYYY"));
+        assertEq(2025, get_years(d));
+        assertEq(1, get_months(d));
+        assertEq(15, get_days(d));
+
+        # toDate negative - hash input
+        assertThrows("DATE-INPUT-ERROR", sub () { eval_expr("toDate", ({"a": 1},)); });
+    }
+
+    encodingTests() {
+        # to hex / parse hex
+        assertEq("68656c6c6f", eval_expr("to-hex", ("hello")));
+        assertEq("hello", binary_to_string(parse_hex_string("68656c6c6f"), "ASCII"));
+
+        # to base64 / parse base64
+        string b64 = eval_expr("to-base64", ("hello"));
+        assertEq("aGVsbG8=", b64);
+        binary decoded = eval_expr("parse_base64", (b64));
+        assertEq("hello", decoded.toString("UTF-8"));
+
+        # parse base64 to string
+        assertEq("hello", eval_expr("parse_base64_to_string", ("aGVsbG8=")));
+
+        # to base64 url / parse base64 url
+        string b64url = eval_expr("to-base64-url", ("hello"));
+        binary decoded2 = eval_expr("parse_base64_url", (b64url));
+        assertEq("hello", decoded2.toString("UTF-8"));
+
+        # parse base64 url to string
+        assertEq("hello", eval_expr("parse_base64_url_to_string", (b64url)));
+
+        # parse hex
+        binary hex_decoded = eval_expr("parse_hex", ("48454c4c4f"));
+        assertEq("HELLO", hex_decoded.toString("ASCII"));
+
+        # encode url / decode url
+        string encoded = eval_expr("encode_url", ("hello world"));
+        assertEq("hello%20world", encoded);
+        assertEq("hello world", eval_expr("decode_url", (encoded)));
+    }
+
+    formatTests() {
+        # format date
+        date d = 2025-03-15T10:30:45;
+        string formatted = eval_expr("format_date", (d, "YYYY-MM-DD HH:mm:SS"));
+        assertEq("2025-03-15 10:30:45", formatted);
+
+        # format number
+        assertEq("1,234.56", eval_expr("format_number", (1234.56, ",", ".", 2)));
+        assertEq("1234", eval_expr("format_number", (1234, NOTHING, ".", 0)));
+    }
+
+    sizeLengthTests() {
+        # size - byte size for strings
+        assertEq(5, eval_expr("size", ("hello",)));
+        list<int> l = (1, 2, 3);
+        assertEq(3, eval_expr("size", (l,)));
+        assertEq(2, eval_expr("size", ({"a": 1, "b": 2},)));
+
+        # length - character count for strings
+        assertEq(5, eval_expr("length", ("hello",)));
+        assertEq(3, eval_expr("length", (l,)));
+    }
+
+    regexTests() {
+        # regex match
+        assertTrue(eval_expr("regex-match", ("hello123", "^[a-z]+[0-9]+$")));
+        assertFalse(eval_expr("regex-match", ("HELLO123", "^[a-z]+[0-9]+$")));
+
+        # regex match with options (case insensitive)
+        assertTrue(eval_expr("regex-match", ("HELLO123", "^[a-z]+[0-9]+$", ("RE_Caseless",))));
+
+        # regex non-match
+        assertTrue(eval_expr("regex-nmatch", ("hello", "^[0-9]+$")));
+        assertFalse(eval_expr("regex-nmatch", ("123", "^[0-9]+$")));
+
+        # regex substitution
+        assertEq("hello universe", eval_expr("regex-subst", ("hello world", "world", "universe")));
+        assertEq("h-ll-", eval_expr("regex-subst", ("hello", "[aeiou]", "-", ("RE_Global",))));
+    }
+
+    cryptoTests() {
+        # digest
+        string sha256 = eval_expr("digest", ("hello", "sha256"));
+        assertEq(64, sha256.length()); # SHA-256 hex = 64 chars
+        # Known SHA-256 of "hello"
+        assertEq("2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824", sha256);
+
+        # hmac
+        string hmac_val = eval_expr("hmac", ("hello", "sha256", "secret"));
+        assertEq(64, hmac_val.length());
+
+        # encrypt / decrypt round trip
+        string encrypted = eval_expr("encrypt", ("hello", "blowfish", "secret_key12345!"));
+        assertGt(0, encrypted.length());
+
+        binary decrypted = eval_expr("decrypt", (parse_hex_string(encrypted), "blowfish", "secret_key12345!"));
+        assertEq("hello", decrypted.toString("UTF-8"));
+    }
+
+    ternaryTests() {
+        assertEq("yes", eval_expr("ternary", (True, "yes", "no")));
+        assertEq("no", eval_expr("ternary", (False, "yes", "no")));
+        assertEq(42, eval_expr("ternary", (True, 42, 0)));
+        assertEq(0, eval_expr("ternary", (False, 42, 0)));
+    }
+
+    nowTests() {
+        date before = now_us();
+        date result = eval_expr("now", ());
+        date after = now_us();
+
+        assertEq("date", result.type());
+        assertTrue(result >= before);
+        assertTrue(result <= after);
+    }
+
+    listCollectionTests() {
+        # list contains
+        assertTrue(eval_expr("listContains", ((1, 2, 3), 2)));
+        assertFalse(eval_expr("listContains", ((1, 2, 3), 4)));
+
+        # contains any (string)
+        assertTrue(eval_expr("contains-any", ("hello world", ("world", "foo"), True)));
+        assertFalse(eval_expr("contains-any", ("hello world", ("foo", "bar"), True)));
+
+        # list contains any
+        assertTrue(eval_expr("listContainsAny", ((1, 2, 3), (3, 4, 5))));
+        assertFalse(eval_expr("listContainsAny", ((1, 2, 3), (4, 5, 6))));
+
+        # find in
+        assertEq("b", eval_expr("findIn", ("b", ("a", "b", "c"))));
+        assertEq(NOTHING, eval_expr("findIn", ("z", ("a", "b", "c"))));
+
+        # find in with dot path
+        list<hash<auto>> data = ({"id": 1, "name": "alice"}, {"id": 2, "name": "bob"});
+        assertEq(2, eval_expr("findIn", (2, data, "id")));
+        assertEq(NOTHING, eval_expr("findIn", (99, data, "id")));
+    }
+
+    splitTests() {
+        # split regex
+        assertEq(("hello", "world"), eval_expr("split_regex", ("hello world", "\\s+")));
+
+        # split quoted
+        assertEq(("a", "b,c", "d"), eval_expr("split_quoted", ("a,\"b,c\",d", ",", "\"")));
+    }
+
+    serializationTests() {
+        # YAML
+        string yaml = eval_expr("make_yaml", ({"key": "value"}));
+        assertTrue(yaml.val());
+        hash<auto> parsed = eval_expr("parse_yaml", (yaml));
+        assertEq("value", parsed.key);
+
+        # JSON
+        string json = eval_expr("make_json", ({"key": "value"}));
+        assertTrue(json.val());
+        parsed = eval_expr("parse_json", (json));
+        assertEq("value", parsed.key);
+
+        # XML
+        string xml = eval_expr("make_xml", ({"root": {"key": "value"}}));
+        assertTrue(xml.val());
+        hash<auto> xml_parsed = eval_expr("parse_xml", (xml));
+        assertEq("value", xml_parsed.root.key);
+    }
+
+    fieldReferenceTests() {
+        hash<auto> rec = {"name": "Alice", "age": 30, "score": 95.5};
+
+        # use field reference with operators
+        auto result = AbstractDataProvider::evalGenericExpression(rec,
+            <DataProvider::DataProviderExpression>{
+                "exp": "lwr",
+                "args": (<DataProvider::DataProviderFieldReference>{"field": "name"},),
+            });
+        assertEq("alice", result);
+
+        # arithmetic with field references
+        result = AbstractDataProvider::evalGenericExpression(rec,
+            <DataProvider::DataProviderExpression>{
+                "exp": "+",
+                "args": (
+                    <DataProvider::DataProviderFieldReference>{"field": "age"},
+                    10,
+                ),
+            });
+        assertEq(40, result);
+
+        # nested expression: toInt(toString(@score))
+        result = AbstractDataProvider::evalGenericExpression(rec,
+            <DataProvider::DataProviderExpression>{
+                "exp": "toInt",
+                "args": (
+                    <DataProvider::DataProviderExpression>{
+                        "exp": "toString",
+                        "args": (<DataProvider::DataProviderFieldReference>{"field": "score"},),
+                    },
+                ),
+            });
+        assertEq(95, result);
+    }
+
+    negativeTests() {
+        # unknown operator
+        assertThrows("INVALID-OPERATION", sub () { eval_expr("nonexistent_op", (1)); });
+
+        # toDate with invalid input type
+        list<int> bad_input = (1, 2, 3);
+        assertThrows("DATE-INPUT-ERROR", sub () { eval_expr("toDate", (bad_input,)); });
+    }
+
+    aliasTests() {
+        # test that aliases work
+        assertEq(6, eval_expr("PLUS", (1, 2, 3)));
+        assertEq("hello", eval_expr("TO-LOWER", ("HELLO")));
+        assertEq("llo", eval_expr("SUBSTR", ("hello", 2)));
+        assertTrue(eval_expr("HAS-VALUE", ("test")));
+        assertTrue(eval_expr("STARTS-WITH", ("hello", "HELLO", True)));
+    }
+}

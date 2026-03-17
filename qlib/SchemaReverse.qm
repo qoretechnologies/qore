@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file SchemaReverse.qm Qore user module for reverse engineering of database SQL schemas
 
-/*  SchemaReverse.qm Copyright 2016 - 2024 Qore Technologies, s.r.o.
+/*  SchemaReverse.qm Copyright 2016 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -36,10 +36,18 @@
 
 %requires Schema
 
+%try-module yaml
+%define NoYaml
+%endtry
+
+%try-module json
+%define NoJson
+%endtry
+
 %modern
 
 module SchemaReverse {
-    version = "1.1";
+    version = "1.2";
     desc = "user module for reverse engineering of database SQL schemas";
     author = "Petr Vanek <petr@yarpen.cz>";
     url = "http://qore.org";
@@ -132,6 +140,52 @@ The output will be:
             ),
         )
 @endcode
+
+    @par Example: Exporting to YAML format
+    @code{.py}
+    %modern
+    %requires SchemaReverse
+
+    Datasource ds("pgsql:user/pass@host/db");
+    on_exit ds.commit();
+
+    SchemaReverse rev(ds, "MySchema");
+    string yaml = rev.toYaml();
+    printf("%s\n", yaml);
+    @endcode
+
+    @par Example: Exporting to JSON format
+    @code{.py}
+    SchemaReverse rev(ds, "MySchema");
+    string json = rev.toJson();
+    printf("%s\n", json);
+    @endcode
+
+    @par Example: Getting a Qore hash for programmatic use
+    @code{.py}
+    SchemaReverse rev(ds, "MySchema");
+    hash<auto> schema_data = rev.toQore();
+    printf("Tables: %y\n", keys schema_data.tables);
+    printf("Sequences: %y\n", keys schema_data.sequences);
+    @endcode
+
+    @section schemareverse_relnotes SchemaReverse Module Release History
+
+    @subsection schemareverse_v1_2 SchemaReverse Module v1.2
+    - fixed numeric scale bug: scale is now correctly extracted from column metadata
+    - fixed trigger accumulation bug: triggers are accumulated into a hash instead of overwriting
+    - added foreign key constraint extraction via \c getForeignConstraints()
+    - added @ref SchemaReverse::AbstractReverseObject::toYaml() "AbstractReverseObject::toYaml()"
+      method for YAML export (requires the \c yaml module)
+    - added @ref SchemaReverse::AbstractReverseObject::toJson() "AbstractReverseObject::toJson()"
+      method for JSON export (requires the \c json module)
+    - added @ref SchemaReverse::SchemaReverse::toQore() "SchemaReverse::toQore()" method for
+      structured hash output suitable for use with @ref Schema::DataSchema "DataSchema"
+    - added @ref SchemaReverse::SchemaReverse::toYaml() "SchemaReverse::toYaml()" and
+      @ref SchemaReverse::SchemaReverse::toJson() "SchemaReverse::toJson()" for full schema export
+
+    @subsection schemareverse_v1_1 SchemaReverse Module v1.1
+    - initial release
 
 */
 
@@ -324,6 +378,36 @@ class <X_SCHEMA_NAME> inherits AbstractSchema {
             }
             return ret;
         }
+
+        #! Returns the schema data as a YAML string
+        /** @return a YAML string representation of the schema data
+
+            @throw SCHEMA-REVERSE-ERROR if the yaml module is not available
+
+            @since SchemaReverse 1.2
+        */
+        string toYaml() {
+%ifndef NoYaml
+            return make_yaml(toQore(), BlockStyle);
+%else
+            throw "SCHEMA-REVERSE-ERROR", "the yaml module is required for YAML output but is not available";
+%endif
+        }
+
+        #! Returns the schema data as a JSON string
+        /** @return a JSON string representation of the schema data
+
+            @throw SCHEMA-REVERSE-ERROR if the json module is not available
+
+            @since SchemaReverse 1.2
+        */
+        string toJson() {
+%ifndef NoJson
+            return make_json(toQore(), JGF_ADD_FORMATTING);
+%else
+            throw "SCHEMA-REVERSE-ERROR", "the json module is required for JSON output but is not available";
+%endif
+        }
     } # class AbstractReverseObject
 
     #! Structure dump of a sequence
@@ -454,10 +538,26 @@ class <X_SCHEMA_NAME> inherits AbstractSchema {
 
             # Triggers
             if (!t.getTriggers().empty()) {
+                hash<auto> trig_hash;
                 HashIterator it = t.getTriggers().iterator();
                 while (it.next()) {
-                    ret.triggers = ( it.getValue().name : it.getValue().src);
+                    trig_hash{it.getValue().name} = it.getValue().src;
                 }
+                ret.triggers = trig_hash;
+            }
+
+            # Foreign key constraints
+            ForeignConstraints fks = t.getForeignConstraints();
+            if (!fks.empty()) {
+                hash<auto> fk_hash;
+                foreach AbstractForeignConstraint fk in (fks.iterator()) {
+                    fk_hash{fk.getName()} = {
+                        "columns": fk.keys(),
+                        "table": fk.target.table,
+                        "target_columns": fk.target.columns.keys(),
+                    };
+                }
+                ret.foreign_constraints = fk_hash;
             }
 
             return ret;
@@ -483,7 +583,7 @@ class <X_SCHEMA_NAME> inherits AbstractSchema {
                     break;
                 case "number":
                 case "numeric":
-                    ret = c_number(c.size, /* c.scale */ 0, !c.nullable, c.comment); # TODO/FIXME: scale
+                    ret = c_number(c.size, c.scale ?? 0, !c.nullable, c.comment);
                     break;
                 case "clob":
                     ret =  ("qore_type": SQL::CLOB, "comment": c.comment, "notnull" : !c.nullable);
@@ -813,6 +913,94 @@ class <X_SCHEMA_NAME> inherits AbstractSchema {
             }
 
             return ret;
+        }
+
+        #! Returns a hash with all schema objects suitable for YAML/JSON serialization
+        /** @return a hash with keys: \c schema, \c tables, \c sequences, \c types, \c functions,
+            \c procedures, \c packages, \c materialized_views
+
+            @since SchemaReverse 1.2
+        */
+        hash<auto> toQore() {
+            hash<auto> result = {
+                "schema": {
+                    "name": m_class_name,
+                    "version": "1.0",
+                },
+                "tables": new TablesReverse(m_ds).toQore(),
+                "sequences": new SequencesReverse(m_ds).toQore(),
+            };
+
+            # Add types if supported
+            if (new Database(m_ds).supportsTypes()) {
+                result.types = new TypesReverse(m_ds).toQore();
+            }
+
+            # Add driver-specific objects
+            string drv = m_ds.getDriverName();
+            hash<auto> functions = new FunctionsReverse(m_ds).toQore();
+            if (functions) {
+                if (SqlUtil::AbstractDatabase::SchemaDescriptionOptions.hasKey("functions")) {
+                    result.functions = functions;
+                } else {
+                    result.functions = {"driver": {drv: functions}};
+                }
+            }
+
+            hash<auto> procedures = new ProceduresReverse(m_ds).toQore();
+            if (procedures) {
+                if (SqlUtil::AbstractDatabase::SchemaDescriptionOptions.hasKey("procedures")) {
+                    result.procedures = procedures;
+                } else {
+                    result.procedures = {"driver": {drv: procedures}};
+                }
+            }
+
+            hash<auto> mviews = new MViewsReverse(m_ds).toQore();
+            if (mviews) {
+                result.materialized_views = mviews;
+            }
+
+            hash<auto> packages = new PackagesReverse(m_ds).toQore();
+            if (packages) {
+                if (SqlUtil::AbstractDatabase::SchemaDescriptionOptions.hasKey("packages")) {
+                    result.packages = packages;
+                } else {
+                    result.packages = {"driver": {drv: packages}};
+                }
+            }
+
+            return result;
+        }
+
+        #! Returns the complete schema as a YAML string
+        /** @return a YAML string representation of the schema
+
+            @throw SCHEMA-REVERSE-ERROR if the yaml module is not available
+
+            @since SchemaReverse 1.2
+        */
+        string toYaml() {
+%ifndef NoYaml
+            return make_yaml(toQore(), BlockStyle);
+%else
+            throw "SCHEMA-REVERSE-ERROR", "the yaml module is required for YAML output but is not available";
+%endif
+        }
+
+        #! Returns the complete schema as a JSON string
+        /** @return a JSON string representation of the schema
+
+            @throw SCHEMA-REVERSE-ERROR if the json module is not available
+
+            @since SchemaReverse 1.2
+        */
+        string toJson() {
+%ifndef NoJson
+            return make_json(toQore(), JGF_ADD_FORMATTING);
+%else
+            throw "SCHEMA-REVERSE-ERROR", "the json module is required for JSON output but is not available";
+%endif
         }
 
     } # class SchemaReverse

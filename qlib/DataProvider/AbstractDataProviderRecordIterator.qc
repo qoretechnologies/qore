@@ -97,6 +97,124 @@ public const DP_SEARCH_OP_IN = "in";
 public const DP_SEARCH_OP_NOT = "!";
 #/@}
 
+/** @defgroup dataprovider_extended_ops DataProvider Extended Operators
+    These are extended operators for data manipulation, comparison, and conversion in DPQL expressions
+
+    @since DataProvider 3.3
+*/
+#/@{
+#! Absolute equality operator (===): returns True if both type and value are equal
+public const DP_OP_ABSOLUTE_EQ = "===";
+
+#! Absolute not-equal operator (!==): returns True if type or value differ
+public const DP_OP_ABSOLUTE_NE = "!==";
+
+#! Addition operator (+): adds values (numbers, strings, dates, lists)
+public const DP_OP_PLUS = "+";
+
+#! Subtraction operator (-): subtracts the second value from the first
+public const DP_OP_MINUS = "-";
+
+#! Multiplication operator (*): multiplies numeric values
+public const DP_OP_MULT = "*";
+
+#! Division operator (/): divides the first numeric value by the second
+public const DP_OP_DIV = "/";
+
+#! String starts-with operator
+public const DP_OP_STARTS_WITH = "starts-with";
+
+#! String ends-with operator
+public const DP_OP_ENDS_WITH = "ends-with";
+
+#! String contains operator
+public const DP_OP_CONTAINS = "contains";
+
+#! List contains element operator
+public const DP_OP_LIST_CONTAINS = "listContains";
+
+#! String contains any of a list of substrings
+public const DP_OP_CONTAINS_ANY = "contains-any";
+
+#! List contains any of a list of values
+public const DP_OP_LIST_CONTAINS_ANY = "listContainsAny";
+
+#! Find value in hash/list by dot-notation path
+public const DP_OP_FIND_IN = "findIn";
+
+#! Has a "true" value (non-null, non-empty)
+public const DP_OP_HAS_VALUE = "has-value";
+
+#! In range: >= lower bound and < upper bound
+public const DP_OP_RANGE = "inRange";
+
+#! Regex match operator (=~)
+public const DP_OP_REGEX_MATCH = "regex-match";
+
+#! Regex non-match operator (!~)
+public const DP_OP_REGEX_NMATCH = "regex-nmatch";
+
+#! Regex substitution operator
+public const DP_OP_REGEX_SUBST = "regex-subst";
+
+#! Simple string replacement
+public const DP_OP_REPLACE = "replace";
+
+#! Get byte size (or element count for hashes/lists)
+public const DP_OP_SIZE = "size";
+
+#! Get character length (or element count for hashes/lists)
+public const DP_OP_LENGTH = "length";
+
+#! Get display character width of a string
+public const DP_OP_CHAR_WIDTH = "width";
+
+#! Get character encoding name of a string
+public const DP_OP_CHAR_ENCODING = "encoding";
+
+#! Remove accents from a string
+public const DP_OP_UNACCENT = "unaccent";
+
+#! Convert string to lower case
+public const DP_OP_TO_LOWER = "lwr";
+
+#! Convert string to upper case
+public const DP_OP_TO_UPPER = "upr";
+
+#! Join list elements with a separator string
+public const DP_OP_JOIN = "join";
+
+#! Convert string/binary to hex string
+public const DP_OP_TO_HEX = "to-hex";
+
+#! Convert string/binary to base64 string
+public const DP_OP_TO_BASE64 = "to-base64";
+
+#! Convert string/binary to base64-URL string (RFC 4648)
+public const DP_OP_TO_BASE64_URL = "to-base64-url";
+
+#! Convert value to string
+public const DP_OP_TO_STRING = "toString";
+
+#! Convert value to integer
+public const DP_OP_TO_INT = "toInt";
+
+#! Convert value to boolean
+public const DP_OP_TO_BOOL = "toBool";
+
+#! Convert value to float
+public const DP_OP_TO_FLOAT = "toFloat";
+
+#! Convert value to arbitrary-precision number
+public const DP_OP_TO_NUMBER = "toNumber";
+
+#! Convert value to date
+public const DP_OP_TO_DATE = "toDate";
+
+#! Ternary conditional operator (condition ? true_val : false_val)
+public const DP_OP_TERNARY = "ternary";
+#/@}
+
 /** @defgroup dpql_function_ops DPQL Function Operator Constants
     These constants define function operators for accessing data elements in DPQL expressions
 */
@@ -109,6 +227,82 @@ public const DP_FUNC_SLICE = "slice";
 
 #! Key function: access hash values by key (e.g., \c key(\@record, "name"))
 public const DP_FUNC_KEY = "key";
+#/@}
+
+/** @defgroup dpql_extended_function_ops DPQL Extended Function Operator Constants
+    These constants define extended function operators for DPQL expressions
+
+    @since DataProvider 3.3
+*/
+#/@{
+#! Substring extraction function
+public const DP_FUNC_SUBSTR = "substr";
+
+#! Format date as string
+public const DP_FUNC_FORMAT_DATE = "format_date";
+
+#! Format number as string
+public const DP_FUNC_FORMAT_NUMBER = "format_number";
+
+#! Split string by regular expression
+public const DP_FUNC_SPLIT_REGEX = "split_regex";
+
+#! Split string by separator, optionally respecting quotes
+public const DP_FUNC_SPLIT_QUOTED = "split_quoted";
+
+#! Parse hex string to binary
+public const DP_FUNC_PARSE_HEX = "parse_hex";
+
+#! Parse base64 string to binary
+public const DP_FUNC_PARSE_BASE64 = "parse_base64";
+
+#! Parse base64-URL string (RFC 4648) to binary
+public const DP_FUNC_PARSE_BASE64_URL = "parse_base64_url";
+
+#! Parse base64 string to string with optional encoding
+public const DP_FUNC_PARSE_BASE64_TO_STRING = "parse_base64_to_string";
+
+#! Parse base64-URL string (RFC 4648) to string with optional encoding
+public const DP_FUNC_PARSE_BASE64_URL_TO_STRING = "parse_base64_url_to_string";
+
+#! Compute cryptographic digest (returns hex string)
+public const DP_FUNC_DIGEST = "digest";
+
+#! Compute HMAC (returns hex string)
+public const DP_FUNC_HMAC = "hmac";
+
+#! Encrypt data
+public const DP_FUNC_ENCRYPT = "encrypt";
+
+#! Decrypt data
+public const DP_FUNC_DECRYPT = "decrypt";
+
+#! URL-encode a string
+public const DP_FUNC_ENCODE_URL = "encode_url";
+
+#! URL-decode a string
+public const DP_FUNC_DECODE_URL = "decode_url";
+
+#! Returns the current date/time with microsecond precision
+public const DP_FUNC_NOW = "now";
+
+#! Serialize value to YAML string
+public const DP_FUNC_MAKE_YAML = "make_yaml";
+
+#! Deserialize YAML string to data
+public const DP_FUNC_PARSE_YAML = "parse_yaml";
+
+#! Serialize value to JSON string
+public const DP_FUNC_MAKE_JSON = "make_json";
+
+#! Deserialize JSON string to data
+public const DP_FUNC_PARSE_JSON = "parse_json";
+
+#! Serialize value to XML string
+public const DP_FUNC_MAKE_XML = "make_xml";
+
+#! Deserialize XML string to data
+public const DP_FUNC_PARSE_XML = "parse_xml";
 #/@}
 
 /** @defgroup dpql_expression_types DPQL Expression Type Constants
@@ -165,6 +359,72 @@ public const OperatorAliasMap = {
     "ge": DP_SEARCH_OP_GE,
     "BETWEEN": DP_SEARCH_OP_BETWEEN,
     "IN": DP_SEARCH_OP_IN,
+    # Extended operator aliases (since DataProvider 3.3)
+    "EQUALS": DP_SEARCH_OP_EQ,
+    "ABSOLUTE-EQUALS": DP_OP_ABSOLUTE_EQ,
+    "NOT-EQUALS": DP_SEARCH_OP_NE,
+    "ABSOLUTE-NOT-EQUALS": DP_OP_ABSOLUTE_NE,
+    "LESS-THAN": DP_SEARCH_OP_LT,
+    "LESS-THAN-OR-EQUALS": DP_SEARCH_OP_LE,
+    "GREATER-THAN": DP_SEARCH_OP_GT,
+    "GREATER-THAN-OR-EQUALS": DP_SEARCH_OP_GE,
+    "PLUS": DP_OP_PLUS,
+    "MINUS": DP_OP_MINUS,
+    "MULTIPLY": DP_OP_MULT,
+    "DIVIDE": DP_OP_DIV,
+    "FORMAT-DATE": DP_FUNC_FORMAT_DATE,
+    "FORMAT-NUMBER": DP_FUNC_FORMAT_NUMBER,
+    "STARTS-WITH": DP_OP_STARTS_WITH,
+    "ENDS-WITH": DP_OP_ENDS_WITH,
+    "CONTAINS": DP_OP_CONTAINS,
+    "LIST-CONTAINS": DP_OP_LIST_CONTAINS,
+    "CONTAINS-ANY": DP_OP_CONTAINS_ANY,
+    "LIST-CONTAINS-ANY": DP_OP_LIST_CONTAINS_ANY,
+    "FIND-IN": DP_OP_FIND_IN,
+    "HAS-VALUE": DP_OP_HAS_VALUE,
+    "REGEX-MATCH": DP_OP_REGEX_MATCH,
+    "REGEX-NMATCH": DP_OP_REGEX_NMATCH,
+    "REGEX-SUBST": DP_OP_REGEX_SUBST,
+    "REPLACE": DP_OP_REPLACE,
+    "SUBSTR": DP_FUNC_SUBSTR,
+    "IN-RANGE": DP_OP_RANGE,
+    "SIZE": DP_OP_SIZE,
+    "LENGTH": DP_OP_LENGTH,
+    "WIDTH": DP_OP_CHAR_WIDTH,
+    "ENCODING": DP_OP_CHAR_ENCODING,
+    "UNACCENT": DP_OP_UNACCENT,
+    "TO-LOWER": DP_OP_TO_LOWER,
+    "TO-UPPER": DP_OP_TO_UPPER,
+    "SPLIT-REGEX": DP_FUNC_SPLIT_REGEX,
+    "SPLIT-QUOTED": DP_FUNC_SPLIT_QUOTED,
+    "JOIN": DP_OP_JOIN,
+    "TO-HEX": DP_OP_TO_HEX,
+    "TO-BASE64": DP_OP_TO_BASE64,
+    "TO-BASE64-URL": DP_OP_TO_BASE64_URL,
+    "PARSE-HEX": DP_FUNC_PARSE_HEX,
+    "PARSE-BASE64": DP_FUNC_PARSE_BASE64,
+    "PARSE-BASE64-URL": DP_FUNC_PARSE_BASE64_URL,
+    "PARSE-BASE64-TO-STRING": DP_FUNC_PARSE_BASE64_TO_STRING,
+    "PARSE-BASE64-URL-TO-STRING": DP_FUNC_PARSE_BASE64_URL_TO_STRING,
+    "DIGEST": DP_FUNC_DIGEST,
+    "HMAC": DP_FUNC_HMAC,
+    "ENCRYPT": DP_FUNC_ENCRYPT,
+    "DECRYPT": DP_FUNC_DECRYPT,
+    "TO-STRING": DP_OP_TO_STRING,
+    "TO-INT": DP_OP_TO_INT,
+    "TO-BOOL": DP_OP_TO_BOOL,
+    "TO-FLOAT": DP_OP_TO_FLOAT,
+    "TO-NUMBER": DP_OP_TO_NUMBER,
+    "TO-DATE": DP_OP_TO_DATE,
+    "MAKE-YAML": DP_FUNC_MAKE_YAML,
+    "PARSE-YAML": DP_FUNC_PARSE_YAML,
+    "MAKE-JSON": DP_FUNC_MAKE_JSON,
+    "PARSE-JSON": DP_FUNC_PARSE_JSON,
+    "MAKE-XML": DP_FUNC_MAKE_XML,
+    "PARSE-XML": DP_FUNC_PARSE_XML,
+    "ENCODE-URL": DP_FUNC_ENCODE_URL,
+    "DECODE-URL": DP_FUNC_DECODE_URL,
+    "TERNARY": DP_OP_TERNARY,
 };
 
 #! Generic operator info hash as returned by generic dp_op_* helper functions
