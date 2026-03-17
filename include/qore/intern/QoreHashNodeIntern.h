@@ -364,8 +364,19 @@ public:
         QoreHashNode* h = new QoreHashNode;
         if (hashdecl) {
             h->priv->setHashDecl(hashdecl);
+            if (strstr(hashdecl->getName(), "DataProvider")) {
+                fprintf(stderr, "PHASE1: getCopy: created ptr=%p, set hashdecl=%s, complexTypeInfo=%s\n",
+                    (void*)h,
+                    hashdecl->getName(),
+                    complexTypeInfo ? QoreTypeInfo::getName(complexTypeInfo) : "NULL");
+            }
         } else if (complexTypeInfo) {
             h->priv->complexTypeInfo = complexTypeInfo;
+            if (strstr(QoreTypeInfo::getName(complexTypeInfo), "DataProvider")) {
+                fprintf(stderr, "PHASE1: getCopy: created ptr=%p, set complexTypeInfo=%s\n",
+                    (void*)h,
+                    QoreTypeInfo::getName(complexTypeInfo));
+            }
         }
         return h;
     }
@@ -374,8 +385,19 @@ public:
         QoreHashNode* h = newHash(!is_value);
         if (hashdecl) {
             h->priv->setHashDecl(hashdecl);
+            if (strstr(hashdecl->getName(), "DataProvider")) {
+                fprintf(stderr, "PHASE1: getEmptyCopy: created ptr=%p, set hashdecl=%s, complexTypeInfo=%s\n",
+                    (void*)h,
+                    hashdecl->getName(),
+                    complexTypeInfo ? QoreTypeInfo::getName(complexTypeInfo) : "NULL");
+            }
         } else if (complexTypeInfo) {
             h->priv->complexTypeInfo = complexTypeInfo;
+            if (strstr(QoreTypeInfo::getName(complexTypeInfo), "DataProvider")) {
+                fprintf(stderr, "PHASE1: getEmptyCopy: created ptr=%p, set complexTypeInfo=%s\n",
+                    (void*)h,
+                    QoreTypeInfo::getName(complexTypeInfo));
+            }
         }
         return h;
     }

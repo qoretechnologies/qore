@@ -59,6 +59,12 @@ qore_hash_private::~qore_hash_private() {
 }
 
 void qore_hash_private::setHashDecl(const TypedHashDecl* hd) {
+    // PHASE1 instrumentation: log all hashdecl sets
+    if (hd) {
+        const char* hdname = hd->getName();
+        fprintf(stderr, "DEBUG1: setHashDecl called with %s\n", hdname);
+        fflush(stderr);
+    }
     if (complexTypeInfo) {
         complexTypeInfo = nullptr;
     }
@@ -368,6 +374,12 @@ QoreHashNode* qore_hash_private::newComplexHash(const QoreTypeInfo* typeInfo, co
 
 QoreHashNode* qore_hash_private::newComplexHashFromHash(const QoreTypeInfo* typeInfo, QoreHashNode* init_hash,
         ExceptionSink* xsink) {
+    // Always log for all DataProvider-related hashes
+    const char* tname = QoreTypeInfo::getName(typeInfo);
+    if (tname && strstr(tname, "DataProvider")) {
+        fprintf(stderr, "PHASE1: newComplexHashFromHash ENTRY: input_ptr=%p, typeInfo=%s\n",
+            (void*)init_hash, tname);
+    }
     ReferenceHolder<QoreHashNode> init(init_hash, xsink);
 
     // check member types
@@ -393,22 +405,22 @@ QoreHashNode* qore_hash_private::newComplexHashFromHash(const QoreTypeInfo* type
     assert(init->is_unique());
     init->priv->complexTypeInfo = typeInfo;
     if (strstr(QoreTypeInfo::getName(typeInfo), "DataProvider")) {
-        fprintf(stderr, "DEBUG newComplexHashFromHash: ptr=%p, typeInfo=%s, hashdecl before clear=%s\n",
-            init.operator->(),
+        fprintf(stderr, "PHASE1: newComplexHashFromHash after setting complexTypeInfo: ptr=%p, complexTypeInfo=%s, hashdecl=%s\n",
+            (void*)init.operator->(),
             QoreTypeInfo::getName(typeInfo),
-            init->priv->hashdecl ? "yes" : "no");
+            init->priv->hashdecl ? init->priv->hashdecl->getName() : "NULL");
     }
     // Clear any hashdecl binding - complex hash types use complexTypeInfo, not hashdecl
     if (init->priv->hashdecl) {
         if (strstr(QoreTypeInfo::getName(typeInfo), "DataProvider")) {
-            fprintf(stderr, "DEBUG newComplexHashFromHash: clearing hashdecl %s\n",
+            fprintf(stderr, "PHASE1: newComplexHashFromHash clearing hashdecl %s\n",
                 init->priv->hashdecl->getName());
         }
         init->priv->setHashDecl(nullptr);
     }
     if (strstr(QoreTypeInfo::getName(typeInfo), "DataProvider")) {
-        fprintf(stderr, "DEBUG newComplexHashFromHash RETURN: ptr=%p, complexTypeInfo=%s, hashdecl=%s\n",
-            init.operator->(),
+        fprintf(stderr, "PHASE1: newComplexHashFromHash RETURN: ptr=%p, complexTypeInfo=%s, hashdecl=%s\n",
+            (void*)init.operator->(),
             QoreTypeInfo::getName(init->priv->complexTypeInfo),
             init->priv->hashdecl ? "yes" : "no");
     }
@@ -416,10 +428,21 @@ QoreHashNode* qore_hash_private::newComplexHashFromHash(const QoreTypeInfo* type
 }
 
 int qore_hash_private::checkKey(const char* key, ExceptionSink* xsink) const {
+    // Log all DataProvider-related checkKey calls
+    if (hashdecl) {
+        const char* hname = hashdecl->getName();
+        if (hname && strstr(hname, "DataProvider")) {
+            fprintf(stderr, "PHASE1: checkKey: hashdecl=%s, key=%s, complexTypeInfo=%s\n",
+                hname, key,
+                complexTypeInfo ? QoreTypeInfo::getName(complexTypeInfo) : "NULL");
+        }
+    }
     if (hashdecl && !typed_hash_decl_private::get(*hashdecl)->findMember(key)) {
-        if (strstr(hashdecl->getName(), "DataProvider")) {
-            fprintf(stderr, "DEBUG checkKey ERROR: hashdecl=%s, key=%s, complexTypeInfo=%s\n",
-                hashdecl->getName(), key,
+        // Always log DataProvider-related key check errors
+        const char* hname = hashdecl->getName();
+        if (hname && strstr(hname, "DataProvider")) {
+            fprintf(stderr, "PHASE1: checkKey ERROR: hashdecl=%s, key=%s, complexTypeInfo=%s\n",
+                hname, key,
                 complexTypeInfo ? QoreTypeInfo::getName(complexTypeInfo) : "NULL");
         }
         xsink->raiseException("INVALID-MEMBER", "error accessing unknown member '%s' of hashdecl '%s'", key,

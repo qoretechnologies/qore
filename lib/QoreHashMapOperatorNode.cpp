@@ -116,8 +116,20 @@ int QoreHashMapOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
 }
 
 QoreHashNode* QoreHashMapOperatorNode::getNewHash() const {
+    fprintf(stderr, "PHASE1: getNewHash called, returnTypeInfo=%s\n",
+        returnTypeInfo ? QoreTypeInfo::getName(returnTypeInfo) : "NULL");
     const QoreTypeInfo* typeInfo = QoreTypeInfo::getUniqueReturnComplexHash(returnTypeInfo);
-    return new QoreHashNode(typeInfo ? typeInfo : autoTypeInfo);
+    if (returnTypeInfo && strstr(QoreTypeInfo::getName(returnTypeInfo), "DataProvider")) {
+        fprintf(stderr, "PHASE1: getNewHash: returnTypeInfo=%s, extracted typeInfo=%s\n",
+            QoreTypeInfo::getName(returnTypeInfo),
+            typeInfo ? QoreTypeInfo::getName(typeInfo) : "NULL");
+    }
+    QoreHashNode* h = new QoreHashNode(typeInfo ? typeInfo : autoTypeInfo);
+    if (returnTypeInfo && strstr(QoreTypeInfo::getName(returnTypeInfo), "DataProvider")) {
+        fprintf(stderr, "PHASE1: getNewHash: created hash with typeInfo=%s\n",
+            typeInfo ? QoreTypeInfo::getName(typeInfo) : "NULL");
+    }
+    return h;
 }
 
 QoreValue QoreHashMapOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {

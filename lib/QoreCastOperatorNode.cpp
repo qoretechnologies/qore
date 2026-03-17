@@ -547,10 +547,11 @@ QoreValue QoreComplexHashCastOperatorNode::evalImpl(bool& needs_deref, Exception
 
 QoreValue QoreComplexHashCastOperatorNode::castValue(QoreValue inner, ExceptionSink* xsink) const {
     if (strstr(QoreTypeInfo::getName(typeInfo), "DataProvider")) {
-        fprintf(stderr, "DEBUG castValue COMPLEX: typeInfo=%s, inner.fullType=%s, match=%d\n",
+        QoreHashNode* input_hash = inner.hasNode() ? const_cast<QoreHashNode*>(inner.get<const QoreHashNode>()) : nullptr;
+        fprintf(stderr, "PHASE1: castValue COMPLEX ENTRY: ptr=%p, typeInfo=%s, inner.fullType=%s\n",
+            (void*)input_hash,
             QoreTypeInfo::getName(typeInfo),
-            QoreTypeInfo::getName(inner.getFullTypeInfo()),
-            typeInfo == inner.getFullTypeInfo() ? 1 : 0);
+            QoreTypeInfo::getName(inner.getFullTypeInfo()));
     }
 
     if (QoreComplexHashCastOperatorNode::checkValue(xsink, inner, false)) {
@@ -567,16 +568,23 @@ QoreValue QoreComplexHashCastOperatorNode::castValue(QoreValue inner, ExceptionS
     // if we already have the expected cast, then there's nothing to do
     if (typeInfo == inner.getFullTypeInfo()) {
         if (strstr(QoreTypeInfo::getName(typeInfo), "DataProvider")) {
-            fprintf(stderr, "DEBUG castValue COMPLEX: types match, returning as-is\n");
+            fprintf(stderr, "PHASE1: castValue COMPLEX: types match, returning as-is\n");
         }
         return inner.hasNode() ? inner.refSelf() : inner;
     }
 
     // do the runtime cast
     if (strstr(QoreTypeInfo::getName(typeInfo), "DataProvider")) {
-        fprintf(stderr, "DEBUG castValue COMPLEX: types don't match, calling newComplexHashFromHash\n");
+        fprintf(stderr, "PHASE1: castValue COMPLEX: calling newComplexHashFromHash\n");
     }
-    return qore_hash_private::newComplexHashFromHash(typeInfo, inner.get<QoreHashNode>()->hashRefSelf(), xsink);
+    QoreValue result = qore_hash_private::newComplexHashFromHash(typeInfo, inner.get<QoreHashNode>()->hashRefSelf(), xsink);
+    if (strstr(QoreTypeInfo::getName(typeInfo), "DataProvider")) {
+        QoreHashNode* result_hash = result.hasNode() ? const_cast<QoreHashNode*>(result.get<const QoreHashNode>()) : nullptr;
+        fprintf(stderr, "PHASE1: castValue COMPLEX RETURN: ptr=%p, result.fullType=%s\n",
+            (void*)result_hash,
+            QoreTypeInfo::getName(result.getFullTypeInfo()));
+    }
+    return result;
 }
 
 // checks if the value matches the expected type
