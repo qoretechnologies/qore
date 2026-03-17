@@ -1,0 +1,1955 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore WooCommerceDataProvider module definition
+
+/*  WooCommerceDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%modern
+# require type definitions everywhere
+# strict argument handling
+# enable all warnings
+
+%requires(reexport) DataProvider
+%requires(reexport) WooCommerceRestClient
+%try-module json
+%define NoJson
+%endtry
+
+module WooCommerceDataProvider {
+    version = "1.0";
+    desc = "User module providing a data provider API for WooCommerce e-commerce services";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # Register the data provider factory
+        DataProvider::registerFactory(new WooCommerceDataProviderFactory());
+
+        # Register the application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": WooCommerceDataProvider::AppName,
+            "display_name": "WooCommerce",
+            "short_desc": "WooCommerce e-commerce platform",
+            "desc": "WooCommerce is the most popular open-source e-commerce platform built on WordPress. "
+                "This integration enables managing orders, products, customers, coupons, webhooks, reports, "
+                "shipping, taxes, and store settings via the WooCommerce REST API v3.\n\n"
+                "**Features:**\n"
+                "- Order management (CRUD, notes, refunds, status updates)\n"
+                "- Product management (CRUD, variations, categories, tags, stock)\n"
+                "- Customer management (CRUD, search, filter)\n"
+                "- Coupon management (CRUD with discount types)\n"
+                "- Webhook management for real-time triggers\n"
+                "- Reports (sales, top sellers, totals)\n"
+                "- Shipping zones and methods\n"
+                "- Tax rate management\n"
+                "- Store settings and system status",
+            "scheme": "woocommerce",
+            "logo": WooCommerceLogo,
+            "logo_file_name": "woocommerce-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::Ecommerce,),
+        });
+
+        # ==========================================
+        # ORDER ACTIONS (11)
+        # ==========================================
+
+        # 1. list-orders (DPAT_FIND)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/orders",
+            "action": "list-orders",
+            "groups": "Orders",
+            "display_name": "List Orders",
+            "short_desc": "List and search orders",
+            "desc": "Retrieve a list of orders with optional filtering by status, customer, date range, "
+                "and more.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": WooCommerceOrdersDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("OrderList", new WooCommerceOrderDataType(), True);
+            },
+            "options": {
+                "status": <ActionOptionInfo>{
+                    "display_name": "Status",
+                    "short_desc": "Filter by order status",
+                    "desc": "Filter orders by their status",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                    "allowed_values": OrderStatusAllowedValues,
+                },
+                "customer": <ActionOptionInfo>{
+                    "display_name": "Customer",
+                    "short_desc": "Filter by customer ID",
+                    "desc": "Filter orders by customer ID",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "customers",
+                },
+                "product": <ActionOptionInfo>{
+                    "display_name": "Product",
+                    "short_desc": "Filter by product ID",
+                    "desc": "Filter orders that contain a specific product ID",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "after": <ActionOptionInfo>{
+                    "display_name": "After",
+                    "short_desc": "Filter by date (after)",
+                    "desc": "Limit response to orders placed after a given ISO8601 date string",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "before": <ActionOptionInfo>{
+                    "display_name": "Before",
+                    "short_desc": "Filter by date (before)",
+                    "desc": "Limit response to orders placed before a given ISO8601 date string",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "search": <ActionOptionInfo>{
+                    "display_name": "Search",
+                    "short_desc": "Search orders",
+                    "desc": "Limit results to those matching a search string",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "per_page": <ActionOptionInfo>{
+                    "display_name": "Per Page",
+                    "short_desc": "Results per page",
+                    "desc": "Maximum number of items to return per page (max 100)",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "page": <ActionOptionInfo>{
+                    "display_name": "Page",
+                    "short_desc": "Page number",
+                    "desc": "Current page of the collection (starting at 1)",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "order": <ActionOptionInfo>{
+                    "display_name": "Order",
+                    "short_desc": "Sort order",
+                    "desc": "Sort ascending or descending",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "asc", "desc": "Ascending"},
+                        <AllowedValueInfo>{"value": "desc", "desc": "Descending"},
+                    ),
+                },
+                "orderby": <ActionOptionInfo>{
+                    "display_name": "Order By",
+                    "short_desc": "Sort by field",
+                    "desc": "Sort collection by the given attribute",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "date", "desc": "Date created"},
+                        <AllowedValueInfo>{"value": "id", "desc": "Order ID"},
+                        <AllowedValueInfo>{"value": "include", "desc": "Include"},
+                        <AllowedValueInfo>{"value": "title", "desc": "Title"},
+                        <AllowedValueInfo>{"value": "slug", "desc": "Slug"},
+                    ),
+                },
+            },
+        });
+
+        # 2. get-order (DPAT_FIND_SINGLE)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/orders",
+            "action": "get-order",
+            "groups": "Orders",
+            "display_name": "Get Order",
+            "short_desc": "Get an order by ID",
+            "desc": "Retrieve a single order by its ID.",
+            "action_code": DPAT_FIND_SINGLE,
+            "data_provider_info": WooCommerceOrdersDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new WooCommerceOrderDataType(); },
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Order ID",
+                    "short_desc": "The order ID",
+                    "desc": "The unique identifier of the order to retrieve",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "preselected": True,
+                },
+            },
+        });
+
+        # 3. create-order (DPAT_API)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/create-order",
+            "action": "create-order",
+            "groups": "Orders",
+            "display_name": "Create Order",
+            "short_desc": "Create a new order",
+            "desc": "Create a new order in WooCommerce.",
+            "action_code": DPAT_API,
+            "data_provider_info": WooCommerceCreateOrderDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return WooCommerceCreateOrderDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(WooCommerceCreateOrderRequestDataType::Fields),
+        });
+
+        # 4. update-order (DPAT_API)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/update-order",
+            "action": "update-order",
+            "groups": "Orders",
+            "display_name": "Update Order",
+            "short_desc": "Update an existing order",
+            "desc": "Update an existing order in WooCommerce.",
+            "action_code": DPAT_API,
+            "data_provider_info": WooCommerceUpdateOrderDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return WooCommerceUpdateOrderDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(WooCommerceUpdateOrderRequestDataType::Fields),
+        });
+
+        # 5. delete-order (DPAT_API)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/delete-order",
+            "action": "delete-order",
+            "groups": "Orders",
+            "display_name": "Delete Order",
+            "short_desc": "Delete an order",
+            "desc": "Delete an order in WooCommerce. By default the order is moved to trash; set `force` to "
+                "`True` to permanently delete.",
+            "action_code": DPAT_API,
+            "data_provider_info": WooCommerceDeleteOrderDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return WooCommerceDeleteOrderDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(WooCommerceDeleteOrderRequestDataType::Fields),
+        });
+
+        # 6. update-order-status (DPAT_API)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/update-order-status",
+            "action": "update-order-status",
+            "groups": "Orders",
+            "display_name": "Update Order Status",
+            "short_desc": "Update an order's status",
+            "desc": "Update the status of an existing order in WooCommerce.",
+            "action_code": DPAT_API,
+            "data_provider_info": WooCommerceUpdateOrderStatusDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return WooCommerceUpdateOrderStatusDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(WooCommerceUpdateOrderStatusRequestDataType::Fields) + {
+                "status": <ActionOptionInfo>{
+                    "display_name": "Status",
+                    "short_desc": "New order status",
+                    "desc": "The new status for the order",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "allowed_values": OrderStatusAllowedValues,
+                },
+            },
+        });
+
+        # 7. create-order-note (DPAT_API)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/create-order-note",
+            "action": "create-order-note",
+            "groups": "Orders",
+            "display_name": "Create Order Note",
+            "short_desc": "Add a note to an order",
+            "desc": "Add a note to an existing order in WooCommerce.",
+            "action_code": DPAT_API,
+            "data_provider_info": WooCommerceCreateOrderNoteDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return WooCommerceCreateOrderNoteDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(WooCommerceCreateOrderNoteRequestDataType::Fields),
+        });
+
+        # 8. list-order-notes (DPAT_API)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/list-order-notes",
+            "action": "list-order-notes",
+            "groups": "Orders",
+            "display_name": "List Order Notes",
+            "short_desc": "List notes for an order",
+            "desc": "Retrieve all notes for a specific order in WooCommerce.",
+            "action_code": DPAT_API,
+            "data_provider_info": WooCommerceListOrderNotesDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return WooCommerceListOrderNotesDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(WooCommerceListOrderNotesRequestDataType::Fields),
+        });
+
+        # 9. delete-order-note (DPAT_API)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/delete-order-note",
+            "action": "delete-order-note",
+            "groups": "Orders",
+            "display_name": "Delete Order Note",
+            "short_desc": "Delete a note from an order",
+            "desc": "Delete a specific note from an order in WooCommerce.",
+            "action_code": DPAT_API,
+            "data_provider_info": WooCommerceDeleteOrderNoteDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return WooCommerceDeleteOrderNoteDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(WooCommerceDeleteOrderNoteRequestDataType::Fields),
+        });
+
+        # 10. create-refund (DPAT_API)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/create-refund",
+            "action": "create-refund",
+            "groups": "Orders",
+            "display_name": "Create Refund",
+            "short_desc": "Create a refund for an order",
+            "desc": "Create a refund for an existing order in WooCommerce.",
+            "action_code": DPAT_API,
+            "data_provider_info": WooCommerceCreateRefundDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return WooCommerceCreateRefundDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(WooCommerceCreateRefundRequestDataType::Fields),
+        });
+
+        # 11. list-refunds (DPAT_API)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/list-refunds",
+            "action": "list-refunds",
+            "groups": "Orders",
+            "display_name": "List Refunds",
+            "short_desc": "List refunds for an order",
+            "desc": "Retrieve all refunds for a specific order in WooCommerce.",
+            "action_code": DPAT_API,
+            "data_provider_info": WooCommerceListRefundsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return WooCommerceListRefundsDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(WooCommerceListRefundsRequestDataType::Fields),
+        });
+
+        # ==========================================
+        # PRODUCT ACTIONS (14)
+        # ==========================================
+
+        # 12. list-products (DPAT_FIND)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/products",
+            "action": "list-products",
+            "groups": "Products",
+            "display_name": "List Products",
+            "short_desc": "List and search products",
+            "desc": "Retrieve a list of products with optional filtering by status, category, tag, price, "
+                "stock status, and more.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": WooCommerceProductsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("ProductList", new WooCommerceProductDataType(), True);
+            },
+            "options": {
+                "status": <ActionOptionInfo>{
+                    "display_name": "Status",
+                    "short_desc": "Filter by product status",
+                    "desc": "Filter products by their status",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                    "allowed_values": ProductStatusAllowedValues,
+                },
+                "category": <ActionOptionInfo>{
+                    "display_name": "Category",
+                    "short_desc": "Filter by category ID",
+                    "desc": "Filter products by category ID",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                    "ref_data": "categories",
+                },
+                "tag": <ActionOptionInfo>{
+                    "display_name": "Tag",
+                    "short_desc": "Filter by tag ID",
+                    "desc": "Filter products by tag ID",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "tags",
+                },
+                "sku": <ActionOptionInfo>{
+                    "display_name": "SKU",
+                    "short_desc": "Filter by SKU",
+                    "desc": "Filter products by SKU",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "search": <ActionOptionInfo>{
+                    "display_name": "Search",
+                    "short_desc": "Search products",
+                    "desc": "Limit results to those matching a search string",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "min_price": <ActionOptionInfo>{
+                    "display_name": "Min Price",
+                    "short_desc": "Minimum price filter",
+                    "desc": "Filter products with a price greater than or equal to this value",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "max_price": <ActionOptionInfo>{
+                    "display_name": "Max Price",
+                    "short_desc": "Maximum price filter",
+                    "desc": "Filter products with a price less than or equal to this value",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "stock_status": <ActionOptionInfo>{
+                    "display_name": "Stock Status",
+                    "short_desc": "Filter by stock status",
+                    "desc": "Filter products by stock status",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": StockStatusAllowedValues,
+                },
+                "type": <ActionOptionInfo>{
+                    "display_name": "Type",
+                    "short_desc": "Filter by product type",
+                    "desc": "Filter products by type",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": ProductTypeAllowedValues,
+                },
+                "featured": <ActionOptionInfo>{
+                    "display_name": "Featured",
+                    "short_desc": "Filter by featured status",
+                    "desc": "Filter featured products",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                },
+                "per_page": <ActionOptionInfo>{
+                    "display_name": "Per Page",
+                    "short_desc": "Results per page",
+                    "desc": "Maximum number of items to return per page (max 100)",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "page": <ActionOptionInfo>{
+                    "display_name": "Page",
+                    "short_desc": "Page number",
+                    "desc": "Current page of the collection (starting at 1)",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "order": <ActionOptionInfo>{
+                    "display_name": "Order",
+                    "short_desc": "Sort order",
+                    "desc": "Sort ascending or descending",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "asc", "desc": "Ascending"},
+                        <AllowedValueInfo>{"value": "desc", "desc": "Descending"},
+                    ),
+                },
+                "orderby": <ActionOptionInfo>{
+                    "display_name": "Order By",
+                    "short_desc": "Sort by field",
+                    "desc": "Sort collection by the given attribute",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "date", "desc": "Date created"},
+                        <AllowedValueInfo>{"value": "id", "desc": "ID"},
+                        <AllowedValueInfo>{"value": "include", "desc": "Include"},
+                        <AllowedValueInfo>{"value": "title", "desc": "Title"},
+                        <AllowedValueInfo>{"value": "slug", "desc": "Slug"},
+                    ),
+                },
+            },
+        });
+
+        # 13. get-product (DPAT_FIND_SINGLE)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/products",
+            "action": "get-product",
+            "groups": "Products",
+            "display_name": "Get Product",
+            "short_desc": "Get a product by ID",
+            "desc": "Retrieve a single product by its ID.",
+            "action_code": DPAT_FIND_SINGLE,
+            "data_provider_info": WooCommerceProductsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new WooCommerceProductDataType(); },
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Product ID",
+                    "short_desc": "The product ID",
+                    "desc": "The unique identifier of the product to retrieve",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "preselected": True,
+                },
+            },
+        });
+
+        # 14. create-product (DPAT_API)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/create-product",
+            "action": "create-product",
+            "groups": "Products",
+            "display_name": "Create Product",
+            "short_desc": "Create a new product",
+            "desc": "Create a new product in WooCommerce.",
+            "action_code": DPAT_API,
+            "data_provider_info": WooCommerceCreateProductDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return WooCommerceCreateProductDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(WooCommerceCreateProductRequestDataType::Fields),
+        });
+
+        # 15. update-product (DPAT_API)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/update-product",
+            "action": "update-product",
+            "groups": "Products",
+            "display_name": "Update Product",
+            "short_desc": "Update an existing product",
+            "desc": "Update an existing product in WooCommerce.",
+            "action_code": DPAT_API,
+            "data_provider_info": WooCommerceUpdateProductDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return WooCommerceUpdateProductDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(WooCommerceUpdateProductRequestDataType::Fields),
+        });
+
+        # 16. delete-product (DPAT_API)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/delete-product",
+            "action": "delete-product",
+            "groups": "Products",
+            "display_name": "Delete Product",
+            "short_desc": "Delete a product",
+            "desc": "Delete a product in WooCommerce. By default the product is moved to trash; set `force` "
+                "to `True` to permanently delete.",
+            "action_code": DPAT_API,
+            "data_provider_info": WooCommerceDeleteProductDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return WooCommerceDeleteProductDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(WooCommerceDeleteProductRequestDataType::Fields),
+        });
+
+        # 17. update-stock-quantity (DPAT_API)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/update-stock-quantity",
+            "action": "update-stock-quantity",
+            "groups": "Products",
+            "display_name": "Update Stock Quantity",
+            "short_desc": "Update a product's stock quantity",
+            "desc": "Update the stock quantity for a product in WooCommerce.",
+            "action_code": DPAT_API,
+            "data_provider_info": WooCommerceUpdateStockQuantityDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return WooCommerceUpdateStockQuantityDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(WooCommerceUpdateStockQuantityRequestDataType::Fields),
+        });
+
+        # 18. create-variation (DPAT_API)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/create-variation",
+            "action": "create-variation",
+            "groups": "Products",
+            "display_name": "Create Variation",
+            "short_desc": "Create a product variation",
+            "desc": "Create a new variation for a variable product in WooCommerce.",
+            "action_code": DPAT_API,
+            "data_provider_info": WooCommerceCreateVariationDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return WooCommerceCreateVariationDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(WooCommerceCreateVariationRequestDataType::Fields) + {
+                "product_id": <ActionOptionInfo>{
+                    "display_name": "Product",
+                    "short_desc": "The parent product",
+                    "desc": "Select the parent variable product for this variation",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "ref_data": "products",
+                },
+            },
+        });
+
+        # 19. update-variation (DPAT_API)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/update-variation",
+            "action": "update-variation",
+            "groups": "Products",
+            "display_name": "Update Variation",
+            "short_desc": "Update a product variation",
+            "desc": "Update an existing variation for a variable product in WooCommerce.",
+            "action_code": DPAT_API,
+            "data_provider_info": WooCommerceUpdateVariationDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return WooCommerceUpdateVariationDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(WooCommerceUpdateVariationRequestDataType::Fields) + {
+                "product_id": <ActionOptionInfo>{
+                    "display_name": "Product",
+                    "short_desc": "The parent product",
+                    "desc": "Select the parent variable product",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "ref_data": "products",
+                },
+            },
+        });
+
+        # 20. list-variations (DPAT_API)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/list-variations",
+            "action": "list-variations",
+            "groups": "Products",
+            "display_name": "List Variations",
+            "short_desc": "List variations for a product",
+            "desc": "Retrieve all variations for a specific variable product in WooCommerce.",
+            "action_code": DPAT_API,
+            "data_provider_info": WooCommerceListVariationsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return WooCommerceListVariationsDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(WooCommerceListVariationsRequestDataType::Fields) + {
+                "product_id": <ActionOptionInfo>{
+                    "display_name": "Product",
+                    "short_desc": "The parent product",
+                    "desc": "Select the parent variable product to list variations for",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "ref_data": "products",
+                },
+            },
+        });
+
+        # 21. create-category (DPAT_API)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/create-category",
+            "action": "create-category",
+            "groups": "Products",
+            "display_name": "Create Category",
+            "short_desc": "Create a product category",
+            "desc": "Create a new product category in WooCommerce.",
+            "action_code": DPAT_API,
+            "data_provider_info": WooCommerceCreateCategoryDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return WooCommerceCreateCategoryDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(WooCommerceCreateCategoryRequestDataType::Fields),
+        });
+
+        # 22. update-category (DPAT_API)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/update-category",
+            "action": "update-category",
+            "groups": "Products",
+            "display_name": "Update Category",
+            "short_desc": "Update a product category",
+            "desc": "Update an existing product category in WooCommerce.",
+            "action_code": DPAT_API,
+            "data_provider_info": WooCommerceUpdateCategoryDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return WooCommerceUpdateCategoryDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(WooCommerceUpdateCategoryRequestDataType::Fields),
+        });
+
+        # 23. list-categories (DPAT_FIND)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/categories",
+            "action": "list-categories",
+            "groups": "Products",
+            "display_name": "List Categories",
+            "short_desc": "List and search product categories",
+            "desc": "Retrieve a list of product categories with optional filtering.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": WooCommerceCategoriesDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("CategoryList", new WooCommerceCategoryDataType(), True);
+            },
+            "options": {
+                "search": <ActionOptionInfo>{
+                    "display_name": "Search",
+                    "short_desc": "Search categories",
+                    "desc": "Limit results to those matching a search string",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "parent": <ActionOptionInfo>{
+                    "display_name": "Parent",
+                    "short_desc": "Filter by parent category ID",
+                    "desc": "Filter categories by parent category ID",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+                "hide_empty": <ActionOptionInfo>{
+                    "display_name": "Hide Empty",
+                    "short_desc": "Hide empty categories",
+                    "desc": "If `True`, hide categories with no products",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                },
+                "per_page": <ActionOptionInfo>{
+                    "display_name": "Per Page",
+                    "short_desc": "Results per page",
+                    "desc": "Maximum number of items to return per page (max 100)",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "page": <ActionOptionInfo>{
+                    "display_name": "Page",
+                    "short_desc": "Page number",
+                    "desc": "Current page of the collection (starting at 1)",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "order": <ActionOptionInfo>{
+                    "display_name": "Order",
+                    "short_desc": "Sort order",
+                    "desc": "Sort ascending or descending",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "asc", "desc": "Ascending"},
+                        <AllowedValueInfo>{"value": "desc", "desc": "Descending"},
+                    ),
+                },
+                "orderby": <ActionOptionInfo>{
+                    "display_name": "Order By",
+                    "short_desc": "Sort by field",
+                    "desc": "Sort collection by the given attribute",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "id", "desc": "ID"},
+                        <AllowedValueInfo>{"value": "include", "desc": "Include"},
+                        <AllowedValueInfo>{"value": "name", "desc": "Name"},
+                        <AllowedValueInfo>{"value": "slug", "desc": "Slug"},
+                        <AllowedValueInfo>{"value": "term_group", "desc": "Term group"},
+                        <AllowedValueInfo>{"value": "description", "desc": "Description"},
+                        <AllowedValueInfo>{"value": "count", "desc": "Product count"},
+                    ),
+                },
+            },
+        });
+
+        # 24. create-tag (DPAT_API)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/create-tag",
+            "action": "create-tag",
+            "groups": "Products",
+            "display_name": "Create Tag",
+            "short_desc": "Create a product tag",
+            "desc": "Create a new product tag in WooCommerce.",
+            "action_code": DPAT_API,
+            "data_provider_info": WooCommerceCreateTagDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return WooCommerceCreateTagDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(WooCommerceCreateTagRequestDataType::Fields),
+        });
+
+        # 25. list-tags (DPAT_FIND)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/tags",
+            "action": "list-tags",
+            "groups": "Products",
+            "display_name": "List Tags",
+            "short_desc": "List and search product tags",
+            "desc": "Retrieve a list of product tags with optional filtering.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": WooCommerceTagsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("TagList", new WooCommerceTagDataType(), True);
+            },
+            "options": {
+                "search": <ActionOptionInfo>{
+                    "display_name": "Search",
+                    "short_desc": "Search tags",
+                    "desc": "Limit results to those matching a search string",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "hide_empty": <ActionOptionInfo>{
+                    "display_name": "Hide Empty",
+                    "short_desc": "Hide empty tags",
+                    "desc": "If `True`, hide tags with no products",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                },
+                "per_page": <ActionOptionInfo>{
+                    "display_name": "Per Page",
+                    "short_desc": "Results per page",
+                    "desc": "Maximum number of items to return per page (max 100)",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "page": <ActionOptionInfo>{
+                    "display_name": "Page",
+                    "short_desc": "Page number",
+                    "desc": "Current page of the collection (starting at 1)",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "order": <ActionOptionInfo>{
+                    "display_name": "Order",
+                    "short_desc": "Sort order",
+                    "desc": "Sort ascending or descending",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "asc", "desc": "Ascending"},
+                        <AllowedValueInfo>{"value": "desc", "desc": "Descending"},
+                    ),
+                },
+                "orderby": <ActionOptionInfo>{
+                    "display_name": "Order By",
+                    "short_desc": "Sort by field",
+                    "desc": "Sort collection by the given attribute",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "id", "desc": "ID"},
+                        <AllowedValueInfo>{"value": "include", "desc": "Include"},
+                        <AllowedValueInfo>{"value": "name", "desc": "Name"},
+                        <AllowedValueInfo>{"value": "slug", "desc": "Slug"},
+                        <AllowedValueInfo>{"value": "term_group", "desc": "Term group"},
+                        <AllowedValueInfo>{"value": "description", "desc": "Description"},
+                        <AllowedValueInfo>{"value": "count", "desc": "Product count"},
+                    ),
+                },
+            },
+        });
+
+        # ==========================================
+        # CUSTOMER ACTIONS (5)
+        # ==========================================
+
+        # 26. list-customers (DPAT_FIND)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/customers",
+            "action": "list-customers",
+            "groups": "Customers",
+            "display_name": "List Customers",
+            "short_desc": "List and search customers",
+            "desc": "Retrieve a list of customers with optional filtering by email, role, and more.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": WooCommerceCustomersDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("CustomerList", new WooCommerceCustomerDataType(), True);
+            },
+            "options": {
+                "email": <ActionOptionInfo>{
+                    "display_name": "Email",
+                    "short_desc": "Filter by email",
+                    "desc": "Filter customers by email address",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "role": <ActionOptionInfo>{
+                    "display_name": "Role",
+                    "short_desc": "Filter by role",
+                    "desc": "Filter customers by WordPress role (default: `customer`)",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "search": <ActionOptionInfo>{
+                    "display_name": "Search",
+                    "short_desc": "Search customers",
+                    "desc": "Limit results to those matching a search string",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "per_page": <ActionOptionInfo>{
+                    "display_name": "Per Page",
+                    "short_desc": "Results per page",
+                    "desc": "Maximum number of items to return per page (max 100)",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "page": <ActionOptionInfo>{
+                    "display_name": "Page",
+                    "short_desc": "Page number",
+                    "desc": "Current page of the collection (starting at 1)",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "order": <ActionOptionInfo>{
+                    "display_name": "Order",
+                    "short_desc": "Sort order",
+                    "desc": "Sort ascending or descending",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "asc", "desc": "Ascending"},
+                        <AllowedValueInfo>{"value": "desc", "desc": "Descending"},
+                    ),
+                },
+                "orderby": <ActionOptionInfo>{
+                    "display_name": "Order By",
+                    "short_desc": "Sort by field",
+                    "desc": "Sort collection by the given attribute",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "date", "desc": "Date created"},
+                        <AllowedValueInfo>{"value": "id", "desc": "ID"},
+                        <AllowedValueInfo>{"value": "include", "desc": "Include"},
+                        <AllowedValueInfo>{"value": "title", "desc": "Title"},
+                        <AllowedValueInfo>{"value": "slug", "desc": "Slug"},
+                    ),
+                },
+            },
+        });
+
+        # 27. get-customer (DPAT_FIND_SINGLE)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/customers",
+            "action": "get-customer",
+            "groups": "Customers",
+            "display_name": "Get Customer",
+            "short_desc": "Get a customer by ID",
+            "desc": "Retrieve a single customer by their ID.",
+            "action_code": DPAT_FIND_SINGLE,
+            "data_provider_info": WooCommerceCustomersDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new WooCommerceCustomerDataType(); },
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Customer ID",
+                    "short_desc": "The customer ID",
+                    "desc": "The unique identifier of the customer to retrieve",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "preselected": True,
+                },
+            },
+        });
+
+        # 28. create-customer (DPAT_API)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/create-customer",
+            "action": "create-customer",
+            "groups": "Customers",
+            "display_name": "Create Customer",
+            "short_desc": "Create a new customer",
+            "desc": "Create a new customer in WooCommerce.",
+            "action_code": DPAT_API,
+            "data_provider_info": WooCommerceCreateCustomerDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return WooCommerceCreateCustomerDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(WooCommerceCreateCustomerRequestDataType::Fields),
+        });
+
+        # 29. update-customer (DPAT_API)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/update-customer",
+            "action": "update-customer",
+            "groups": "Customers",
+            "display_name": "Update Customer",
+            "short_desc": "Update an existing customer",
+            "desc": "Update an existing customer in WooCommerce.",
+            "action_code": DPAT_API,
+            "data_provider_info": WooCommerceUpdateCustomerDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return WooCommerceUpdateCustomerDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(WooCommerceUpdateCustomerRequestDataType::Fields),
+        });
+
+        # 30. delete-customer (DPAT_API)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/delete-customer",
+            "action": "delete-customer",
+            "groups": "Customers",
+            "display_name": "Delete Customer",
+            "short_desc": "Delete a customer",
+            "desc": "Delete a customer in WooCommerce. Requires the `force` parameter to be `True` as "
+                "WooCommerce does not support trashing customers.",
+            "action_code": DPAT_API,
+            "data_provider_info": WooCommerceDeleteCustomerDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return WooCommerceDeleteCustomerDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(WooCommerceDeleteCustomerRequestDataType::Fields),
+        });
+
+        # ==========================================
+        # COUPON ACTIONS (5)
+        # ==========================================
+
+        # 31. list-coupons (DPAT_FIND)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/coupons",
+            "action": "list-coupons",
+            "groups": "Coupons",
+            "display_name": "List Coupons",
+            "short_desc": "List and search coupons",
+            "desc": "Retrieve a list of coupons with optional filtering by code, date range, and more.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": WooCommerceCouponsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("CouponList", new WooCommerceCouponDataType(), True);
+            },
+            "options": {
+                "code": <ActionOptionInfo>{
+                    "display_name": "Code",
+                    "short_desc": "Filter by coupon code",
+                    "desc": "Filter coupons by coupon code",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "search": <ActionOptionInfo>{
+                    "display_name": "Search",
+                    "short_desc": "Search coupons",
+                    "desc": "Limit results to those matching a search string",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "after": <ActionOptionInfo>{
+                    "display_name": "After",
+                    "short_desc": "Filter by date (after)",
+                    "desc": "Limit response to coupons created after a given ISO8601 date string",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "before": <ActionOptionInfo>{
+                    "display_name": "Before",
+                    "short_desc": "Filter by date (before)",
+                    "desc": "Limit response to coupons created before a given ISO8601 date string",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "per_page": <ActionOptionInfo>{
+                    "display_name": "Per Page",
+                    "short_desc": "Results per page",
+                    "desc": "Maximum number of items to return per page (max 100)",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "page": <ActionOptionInfo>{
+                    "display_name": "Page",
+                    "short_desc": "Page number",
+                    "desc": "Current page of the collection (starting at 1)",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "order": <ActionOptionInfo>{
+                    "display_name": "Order",
+                    "short_desc": "Sort order",
+                    "desc": "Sort ascending or descending",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "asc", "desc": "Ascending"},
+                        <AllowedValueInfo>{"value": "desc", "desc": "Descending"},
+                    ),
+                },
+                "orderby": <ActionOptionInfo>{
+                    "display_name": "Order By",
+                    "short_desc": "Sort by field",
+                    "desc": "Sort collection by the given attribute",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "date", "desc": "Date created"},
+                        <AllowedValueInfo>{"value": "id", "desc": "ID"},
+                        <AllowedValueInfo>{"value": "include", "desc": "Include"},
+                        <AllowedValueInfo>{"value": "title", "desc": "Title"},
+                        <AllowedValueInfo>{"value": "slug", "desc": "Slug"},
+                    ),
+                },
+            },
+        });
+
+        # 32. get-coupon (DPAT_FIND_SINGLE)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/coupons",
+            "action": "get-coupon",
+            "groups": "Coupons",
+            "display_name": "Get Coupon",
+            "short_desc": "Get a coupon by ID",
+            "desc": "Retrieve a single coupon by its ID.",
+            "action_code": DPAT_FIND_SINGLE,
+            "data_provider_info": WooCommerceCouponsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new WooCommerceCouponDataType(); },
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Coupon ID",
+                    "short_desc": "The coupon ID",
+                    "desc": "The unique identifier of the coupon to retrieve",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "preselected": True,
+                },
+            },
+        });
+
+        # 33. create-coupon (DPAT_API)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/create-coupon",
+            "action": "create-coupon",
+            "groups": "Coupons",
+            "display_name": "Create Coupon",
+            "short_desc": "Create a new coupon",
+            "desc": "Create a new coupon in WooCommerce.",
+            "action_code": DPAT_API,
+            "data_provider_info": WooCommerceCreateCouponDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return WooCommerceCreateCouponDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(WooCommerceCreateCouponRequestDataType::Fields),
+        });
+
+        # 34. update-coupon (DPAT_API)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/update-coupon",
+            "action": "update-coupon",
+            "groups": "Coupons",
+            "display_name": "Update Coupon",
+            "short_desc": "Update an existing coupon",
+            "desc": "Update an existing coupon in WooCommerce.",
+            "action_code": DPAT_API,
+            "data_provider_info": WooCommerceUpdateCouponDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return WooCommerceUpdateCouponDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(WooCommerceUpdateCouponRequestDataType::Fields),
+        });
+
+        # 35. delete-coupon (DPAT_API)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/delete-coupon",
+            "action": "delete-coupon",
+            "groups": "Coupons",
+            "display_name": "Delete Coupon",
+            "short_desc": "Delete a coupon",
+            "desc": "Delete a coupon in WooCommerce. By default the coupon is moved to trash; set `force` "
+                "to `True` to permanently delete.",
+            "action_code": DPAT_API,
+            "data_provider_info": WooCommerceDeleteCouponDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return WooCommerceDeleteCouponDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(WooCommerceDeleteCouponRequestDataType::Fields),
+        });
+
+        # ==========================================
+        # WEBHOOK ACTIONS (4)
+        # ==========================================
+
+        # 36. list-webhooks (DPAT_FIND)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/webhooks",
+            "action": "list-webhooks",
+            "groups": "Webhooks",
+            "display_name": "List Webhooks",
+            "short_desc": "List webhooks",
+            "desc": "Retrieve a list of webhooks with optional filtering by status.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": WooCommerceWebhooksDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("WebhookList", new WooCommerceWebhookDataType(), True);
+            },
+            "options": {
+                "status": <ActionOptionInfo>{
+                    "display_name": "Status",
+                    "short_desc": "Filter by webhook status",
+                    "desc": "Filter webhooks by status",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": WebhookStatusAllowedValues,
+                },
+                "per_page": <ActionOptionInfo>{
+                    "display_name": "Per Page",
+                    "short_desc": "Results per page",
+                    "desc": "Maximum number of items to return per page (max 100)",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "page": <ActionOptionInfo>{
+                    "display_name": "Page",
+                    "short_desc": "Page number",
+                    "desc": "Current page of the collection (starting at 1)",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+            },
+        });
+
+        # 37. create-webhook (DPAT_API)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/create-webhook",
+            "action": "create-webhook",
+            "groups": "Webhooks",
+            "display_name": "Create Webhook",
+            "short_desc": "Create a new webhook",
+            "desc": "Create a new webhook in WooCommerce.",
+            "action_code": DPAT_API,
+            "data_provider_info": WooCommerceCreateWebhookDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return WooCommerceCreateWebhookDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(WooCommerceCreateWebhookRequestDataType::Fields),
+        });
+
+        # 38. update-webhook (DPAT_API)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/update-webhook",
+            "action": "update-webhook",
+            "groups": "Webhooks",
+            "display_name": "Update Webhook",
+            "short_desc": "Update an existing webhook",
+            "desc": "Update an existing webhook in WooCommerce.",
+            "action_code": DPAT_API,
+            "data_provider_info": WooCommerceUpdateWebhookDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return WooCommerceUpdateWebhookDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(WooCommerceUpdateWebhookRequestDataType::Fields),
+        });
+
+        # 39. delete-webhook (DPAT_API)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/delete-webhook",
+            "action": "delete-webhook",
+            "groups": "Webhooks",
+            "display_name": "Delete Webhook",
+            "short_desc": "Delete a webhook",
+            "desc": "Delete a webhook in WooCommerce.",
+            "action_code": DPAT_API,
+            "data_provider_info": WooCommerceDeleteWebhookDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return WooCommerceDeleteWebhookDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(WooCommerceDeleteWebhookRequestDataType::Fields),
+        });
+
+        # ==========================================
+        # REPORT ACTIONS (5)
+        # ==========================================
+
+        # 40. sales-report (DPAT_API)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/sales-report",
+            "action": "sales-report",
+            "groups": "Reports",
+            "display_name": "Sales Report",
+            "short_desc": "Get a sales report",
+            "desc": "Retrieve a sales report from WooCommerce with optional date filtering.",
+            "action_code": DPAT_API,
+            "data_provider_info": WooCommerceSalesReportDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return WooCommerceSalesReportDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(WooCommerceSalesReportRequestDataType::Fields),
+        });
+
+        # 41. top-sellers-report (DPAT_API)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/top-sellers-report",
+            "action": "top-sellers-report",
+            "groups": "Reports",
+            "display_name": "Top Sellers Report",
+            "short_desc": "Get a top sellers report",
+            "desc": "Retrieve a top sellers report from WooCommerce.",
+            "action_code": DPAT_API,
+            "data_provider_info": WooCommerceTopSellersReportDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return WooCommerceTopSellersReportDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(WooCommerceTopSellersReportRequestDataType::Fields),
+        });
+
+        # 42. orders-totals (DPAT_API)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/orders-totals",
+            "action": "orders-totals",
+            "groups": "Reports",
+            "display_name": "Orders Totals",
+            "short_desc": "Get orders totals",
+            "desc": "Retrieve order count totals grouped by status from WooCommerce.",
+            "action_code": DPAT_API,
+            "data_provider_info": WooCommerceOrdersTotalsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return WooCommerceOrdersTotalsDataProvider::ResponseType; },
+        });
+
+        # 43. products-totals (DPAT_API)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/products-totals",
+            "action": "products-totals",
+            "groups": "Reports",
+            "display_name": "Products Totals",
+            "short_desc": "Get products totals",
+            "desc": "Retrieve product count totals grouped by type from WooCommerce.",
+            "action_code": DPAT_API,
+            "data_provider_info": WooCommerceProductsTotalsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return WooCommerceProductsTotalsDataProvider::ResponseType; },
+        });
+
+        # 44. customers-totals (DPAT_API)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/customers-totals",
+            "action": "customers-totals",
+            "groups": "Reports",
+            "display_name": "Customers Totals",
+            "short_desc": "Get customers totals",
+            "desc": "Retrieve customer count totals grouped by role from WooCommerce.",
+            "action_code": DPAT_API,
+            "data_provider_info": WooCommerceCustomersTotalsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return WooCommerceCustomersTotalsDataProvider::ResponseType; },
+        });
+
+        # ==========================================
+        # SHIPPING/TAX/SETTINGS/SYSTEM ACTIONS (7)
+        # ==========================================
+
+        # 45. list-shipping-zones (DPAT_API)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/list-shipping-zones",
+            "action": "list-shipping-zones",
+            "groups": "Shipping",
+            "display_name": "List Shipping Zones",
+            "short_desc": "List shipping zones",
+            "desc": "Retrieve all shipping zones configured in WooCommerce.",
+            "action_code": DPAT_API,
+            "data_provider_info": WooCommerceListShippingZonesDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return WooCommerceListShippingZonesDataProvider::ResponseType; },
+        });
+
+        # 46. list-shipping-methods (DPAT_API)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/list-shipping-methods",
+            "action": "list-shipping-methods",
+            "groups": "Shipping",
+            "display_name": "List Shipping Methods",
+            "short_desc": "List shipping methods",
+            "desc": "Retrieve all available shipping methods in WooCommerce.",
+            "action_code": DPAT_API,
+            "data_provider_info": WooCommerceListShippingMethodsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return WooCommerceListShippingMethodsDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(WooCommerceListShippingMethodsRequestDataType::Fields),
+        });
+
+        # 47. create-tax-rate (DPAT_API)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/create-tax-rate",
+            "action": "create-tax-rate",
+            "groups": "Tax",
+            "display_name": "Create Tax Rate",
+            "short_desc": "Create a new tax rate",
+            "desc": "Create a new tax rate in WooCommerce.",
+            "action_code": DPAT_API,
+            "data_provider_info": WooCommerceCreateTaxRateDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return WooCommerceCreateTaxRateDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(WooCommerceCreateTaxRateRequestDataType::Fields),
+        });
+
+        # 48. list-tax-rates (DPAT_FIND)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/tax-rates",
+            "action": "list-tax-rates",
+            "groups": "Tax",
+            "display_name": "List Tax Rates",
+            "short_desc": "List tax rates",
+            "desc": "Retrieve a list of tax rates with optional filtering.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": WooCommerceTaxRatesDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("TaxRateList", new WooCommerceTaxRateDataType(), True);
+            },
+            "options": {
+                "class": <ActionOptionInfo>{
+                    "display_name": "Tax Class",
+                    "short_desc": "Filter by tax class",
+                    "desc": "Filter tax rates by tax class",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "per_page": <ActionOptionInfo>{
+                    "display_name": "Per Page",
+                    "short_desc": "Results per page",
+                    "desc": "Maximum number of items to return per page (max 100)",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "page": <ActionOptionInfo>{
+                    "display_name": "Page",
+                    "short_desc": "Page number",
+                    "desc": "Current page of the collection (starting at 1)",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "order": <ActionOptionInfo>{
+                    "display_name": "Order",
+                    "short_desc": "Sort order",
+                    "desc": "Sort ascending or descending",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "asc", "desc": "Ascending"},
+                        <AllowedValueInfo>{"value": "desc", "desc": "Descending"},
+                    ),
+                },
+                "orderby": <ActionOptionInfo>{
+                    "display_name": "Order By",
+                    "short_desc": "Sort by field",
+                    "desc": "Sort collection by the given attribute",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "id", "desc": "Tax rate ID"},
+                        <AllowedValueInfo>{"value": "order", "desc": "Display order"},
+                    ),
+                },
+            },
+        });
+
+        # 49. get-setting (DPAT_API)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/get-setting",
+            "action": "get-setting",
+            "groups": "Settings",
+            "display_name": "Get Setting",
+            "short_desc": "Get a store setting",
+            "desc": "Retrieve a specific WooCommerce store setting by group and setting ID.",
+            "action_code": DPAT_API,
+            "data_provider_info": WooCommerceGetSettingDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return WooCommerceGetSettingDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(WooCommerceGetSettingRequestDataType::Fields),
+        });
+
+        # 50. update-setting (DPAT_API)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/update-setting",
+            "action": "update-setting",
+            "groups": "Settings",
+            "display_name": "Update Setting",
+            "short_desc": "Update a store setting",
+            "desc": "Update a specific WooCommerce store setting value.",
+            "action_code": DPAT_API,
+            "data_provider_info": WooCommerceUpdateSettingDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return WooCommerceUpdateSettingDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(WooCommerceUpdateSettingRequestDataType::Fields),
+        });
+
+        # 51. system-status (DPAT_API)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/system-status",
+            "action": "system-status",
+            "groups": "System",
+            "display_name": "System Status",
+            "short_desc": "Get system status",
+            "desc": "Retrieve WooCommerce system status information including environment, database, "
+                "active plugins, theme, and settings.",
+            "action_code": DPAT_API,
+            "data_provider_info": WooCommerceSystemStatusDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return WooCommerceSystemStatusDataProvider::ResponseType; },
+        });
+
+        # ==========================================
+        # TRIGGER REGISTRATIONS (26 - all DPAT_EVENT)
+        # ==========================================
+
+        # ---- Built-in Webhook Triggers (15) ----
+
+        # order-created
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/events/order-created",
+            "action": EVENT_ORDER_CREATED,
+            "groups": "Triggers",
+            "display_name": "Order Created",
+            "short_desc": "Trigger when an order is created",
+            "desc": "Fires when a new order is created in WooCommerce. The full order data is included in "
+                "the payload. **Note:** This also fires for orders with failed payments.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_ORDER_CREATED,
+            "data_provider_info": WooCommerceOrderCreatedEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new WooCommerceOrderEventDataType(); },
+        });
+
+        # order-updated
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/events/order-updated",
+            "action": EVENT_ORDER_UPDATED,
+            "groups": "Triggers",
+            "display_name": "Order Updated",
+            "short_desc": "Trigger when an order is updated",
+            "desc": "Fires when an order is updated in WooCommerce. **Note:** This may fire multiple times "
+                "per user action; deduplicate on the receiver side.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_ORDER_UPDATED,
+            "data_provider_info": WooCommerceOrderUpdatedEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new WooCommerceOrderEventDataType(); },
+        });
+
+        # order-deleted
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/events/order-deleted",
+            "action": EVENT_ORDER_DELETED,
+            "groups": "Triggers",
+            "display_name": "Order Deleted",
+            "short_desc": "Trigger when an order is deleted",
+            "desc": "Fires when an order is deleted in WooCommerce. **Note:** The payload may only contain "
+                "minimal data (order ID only), as the order data has been removed.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_ORDER_DELETED,
+            "data_provider_info": WooCommerceOrderDeletedEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new WooCommerceOrderEventDataType(); },
+        });
+
+        # order-restored
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/events/order-restored",
+            "action": EVENT_ORDER_RESTORED,
+            "groups": "Triggers",
+            "display_name": "Order Restored",
+            "short_desc": "Trigger when an order is restored from trash",
+            "desc": "Fires when an order is restored from the trash in WooCommerce.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_ORDER_RESTORED,
+            "data_provider_info": WooCommerceOrderRestoredEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new WooCommerceOrderEventDataType(); },
+        });
+
+        # product-created
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/events/product-created",
+            "action": EVENT_PRODUCT_CREATED,
+            "groups": "Triggers",
+            "display_name": "Product Created",
+            "short_desc": "Trigger when a product is created",
+            "desc": "Fires when a new product is created in WooCommerce.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_PRODUCT_CREATED,
+            "data_provider_info": WooCommerceProductCreatedEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new WooCommerceProductEventDataType(); },
+        });
+
+        # product-updated
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/events/product-updated",
+            "action": EVENT_PRODUCT_UPDATED,
+            "groups": "Triggers",
+            "display_name": "Product Updated",
+            "short_desc": "Trigger when a product is updated",
+            "desc": "Fires when a product is updated in WooCommerce.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_PRODUCT_UPDATED,
+            "data_provider_info": WooCommerceProductUpdatedEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new WooCommerceProductEventDataType(); },
+        });
+
+        # product-deleted
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/events/product-deleted",
+            "action": EVENT_PRODUCT_DELETED,
+            "groups": "Triggers",
+            "display_name": "Product Deleted",
+            "short_desc": "Trigger when a product is deleted",
+            "desc": "Fires when a product is deleted in WooCommerce.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_PRODUCT_DELETED,
+            "data_provider_info": WooCommerceProductDeletedEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new WooCommerceProductEventDataType(); },
+        });
+
+        # product-restored
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/events/product-restored",
+            "action": EVENT_PRODUCT_RESTORED,
+            "groups": "Triggers",
+            "display_name": "Product Restored",
+            "short_desc": "Trigger when a product is restored from trash",
+            "desc": "Fires when a product is restored from the trash in WooCommerce.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_PRODUCT_RESTORED,
+            "data_provider_info": WooCommerceProductRestoredEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new WooCommerceProductEventDataType(); },
+        });
+
+        # customer-created
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/events/customer-created",
+            "action": EVENT_CUSTOMER_CREATED,
+            "groups": "Triggers",
+            "display_name": "Customer Created",
+            "short_desc": "Trigger when a customer is created",
+            "desc": "Fires when a new customer is created in WooCommerce.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_CUSTOMER_CREATED,
+            "data_provider_info": WooCommerceCustomerCreatedEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new WooCommerceCustomerEventDataType(); },
+        });
+
+        # customer-updated
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/events/customer-updated",
+            "action": EVENT_CUSTOMER_UPDATED,
+            "groups": "Triggers",
+            "display_name": "Customer Updated",
+            "short_desc": "Trigger when a customer is updated",
+            "desc": "Fires when a customer is updated in WooCommerce.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_CUSTOMER_UPDATED,
+            "data_provider_info": WooCommerceCustomerUpdatedEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new WooCommerceCustomerEventDataType(); },
+        });
+
+        # customer-deleted
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/events/customer-deleted",
+            "action": EVENT_CUSTOMER_DELETED,
+            "groups": "Triggers",
+            "display_name": "Customer Deleted",
+            "short_desc": "Trigger when a customer is deleted",
+            "desc": "Fires when a customer is deleted in WooCommerce.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_CUSTOMER_DELETED,
+            "data_provider_info": WooCommerceCustomerDeletedEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new WooCommerceCustomerEventDataType(); },
+        });
+
+        # coupon-created
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/events/coupon-created",
+            "action": EVENT_COUPON_CREATED,
+            "groups": "Triggers",
+            "display_name": "Coupon Created",
+            "short_desc": "Trigger when a coupon is created",
+            "desc": "Fires when a new coupon is created in WooCommerce.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_COUPON_CREATED,
+            "data_provider_info": WooCommerceCouponCreatedEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new WooCommerceCouponEventDataType(); },
+        });
+
+        # coupon-updated
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/events/coupon-updated",
+            "action": EVENT_COUPON_UPDATED,
+            "groups": "Triggers",
+            "display_name": "Coupon Updated",
+            "short_desc": "Trigger when a coupon is updated",
+            "desc": "Fires when a coupon is updated in WooCommerce.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_COUPON_UPDATED,
+            "data_provider_info": WooCommerceCouponUpdatedEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new WooCommerceCouponEventDataType(); },
+        });
+
+        # coupon-deleted
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/events/coupon-deleted",
+            "action": EVENT_COUPON_DELETED,
+            "groups": "Triggers",
+            "display_name": "Coupon Deleted",
+            "short_desc": "Trigger when a coupon is deleted",
+            "desc": "Fires when a coupon is deleted in WooCommerce.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_COUPON_DELETED,
+            "data_provider_info": WooCommerceCouponDeletedEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new WooCommerceCouponEventDataType(); },
+        });
+
+        # coupon-restored
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/events/coupon-restored",
+            "action": EVENT_COUPON_RESTORED,
+            "groups": "Triggers",
+            "display_name": "Coupon Restored",
+            "short_desc": "Trigger when a coupon is restored from trash",
+            "desc": "Fires when a coupon is restored from the trash in WooCommerce.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_COUPON_RESTORED,
+            "data_provider_info": WooCommerceCouponRestoredEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new WooCommerceCouponEventDataType(); },
+        });
+
+        # ---- Custom Action Triggers (11) ----
+
+        # payment-complete
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/events/payment-complete",
+            "action": EVENT_PAYMENT_COMPLETE,
+            "groups": "Triggers",
+            "display_name": "Payment Complete",
+            "short_desc": "Trigger when a payment is completed",
+            "desc": "Fires when an order payment is completed. Only fires for orders previously in "
+                "`pending`, `on-hold`, `failed`, or `cancelled` status.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_PAYMENT_COMPLETE,
+            "data_provider_info": WooCommercePaymentCompleteEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new WooCommerceOrderEventDataType(); },
+        });
+
+        # order-status-pending
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/events/order-status-pending",
+            "action": EVENT_ORDER_STATUS_PENDING,
+            "groups": "Triggers",
+            "display_name": "Order Status: Pending",
+            "short_desc": "Trigger when order status changes to pending",
+            "desc": "Fires when an order status changes to `pending` in WooCommerce.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_ORDER_STATUS_PENDING,
+            "data_provider_info": WooCommerceOrderStatusPendingEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new WooCommerceOrderEventDataType(); },
+        });
+
+        # order-status-processing
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/events/order-status-processing",
+            "action": EVENT_ORDER_STATUS_PROCESSING,
+            "groups": "Triggers",
+            "display_name": "Order Status: Processing",
+            "short_desc": "Trigger when order status changes to processing",
+            "desc": "Fires when an order status changes to `processing` in WooCommerce.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_ORDER_STATUS_PROCESSING,
+            "data_provider_info": WooCommerceOrderStatusProcessingEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new WooCommerceOrderEventDataType(); },
+        });
+
+        # order-status-completed
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/events/order-status-completed",
+            "action": EVENT_ORDER_STATUS_COMPLETED,
+            "groups": "Triggers",
+            "display_name": "Order Status: Completed",
+            "short_desc": "Trigger when order status changes to completed",
+            "desc": "Fires when an order status changes to `completed` in WooCommerce.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_ORDER_STATUS_COMPLETED,
+            "data_provider_info": WooCommerceOrderStatusCompletedEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new WooCommerceOrderEventDataType(); },
+        });
+
+        # order-status-on-hold
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/events/order-status-on-hold",
+            "action": EVENT_ORDER_STATUS_ON_HOLD,
+            "groups": "Triggers",
+            "display_name": "Order Status: On Hold",
+            "short_desc": "Trigger when order status changes to on-hold",
+            "desc": "Fires when an order status changes to `on-hold` in WooCommerce.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_ORDER_STATUS_ON_HOLD,
+            "data_provider_info": WooCommerceOrderStatusOnHoldEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new WooCommerceOrderEventDataType(); },
+        });
+
+        # order-status-refunded
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/events/order-status-refunded",
+            "action": EVENT_ORDER_STATUS_REFUNDED,
+            "groups": "Triggers",
+            "display_name": "Order Status: Refunded",
+            "short_desc": "Trigger when order status changes to refunded",
+            "desc": "Fires when an order status changes to `refunded` in WooCommerce.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_ORDER_STATUS_REFUNDED,
+            "data_provider_info": WooCommerceOrderStatusRefundedEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new WooCommerceOrderEventDataType(); },
+        });
+
+        # order-status-failed
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/events/order-status-failed",
+            "action": EVENT_ORDER_STATUS_FAILED,
+            "groups": "Triggers",
+            "display_name": "Order Status: Failed",
+            "short_desc": "Trigger when order status changes to failed",
+            "desc": "Fires when an order status changes to `failed` in WooCommerce.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_ORDER_STATUS_FAILED,
+            "data_provider_info": WooCommerceOrderStatusFailedEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new WooCommerceOrderEventDataType(); },
+        });
+
+        # order-status-cancelled
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/events/order-status-cancelled",
+            "action": EVENT_ORDER_STATUS_CANCELLED,
+            "groups": "Triggers",
+            "display_name": "Order Status: Cancelled",
+            "short_desc": "Trigger when order status changes to cancelled",
+            "desc": "Fires when an order status changes to `cancelled` in WooCommerce.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_ORDER_STATUS_CANCELLED,
+            "data_provider_info": WooCommerceOrderStatusCancelledEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new WooCommerceOrderEventDataType(); },
+        });
+
+        # add-to-cart
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/events/add-to-cart",
+            "action": EVENT_ADD_TO_CART,
+            "groups": "Triggers",
+            "display_name": "Product Added to Cart",
+            "short_desc": "Trigger when a product is added to cart",
+            "desc": "Fires when a product is added to a customer's cart. Payload only contains `action` "
+                "and `arg` (cart item key).",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_ADD_TO_CART,
+            "data_provider_info": WooCommerceAddToCartEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new WooCommerceAddToCartEventDataType(); },
+        });
+
+        # low-stock
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/events/low-stock",
+            "action": EVENT_LOW_STOCK,
+            "groups": "Triggers",
+            "display_name": "Product Low Stock",
+            "short_desc": "Trigger when a product reaches low stock",
+            "desc": "Fires when a product's stock quantity reaches the low stock threshold configured in "
+                "WooCommerce.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_LOW_STOCK,
+            "data_provider_info": WooCommerceLowStockEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new WooCommerceProductEventDataType(); },
+        });
+
+        # no-stock
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WooCommerceDataProvider::AppName,
+            "path": "/events/no-stock",
+            "action": EVENT_NO_STOCK,
+            "groups": "Triggers",
+            "display_name": "Product Out of Stock",
+            "short_desc": "Trigger when a product goes out of stock",
+            "desc": "Fires when a product's stock quantity reaches zero.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NO_STOCK,
+            "data_provider_info": WooCommerceNoStockEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new WooCommerceProductEventDataType(); },
+        });
+    };
+}
+
+/** @mainpage WooCommerceDataProvider Module
+
+    @tableofcontents
+
+    @section woocommercedataproviderintro WooCommerceDataProvider Introduction
+
+    The %WooCommerceDataProvider module provides a data provider API for WooCommerce e-commerce services.
+
+    To use this module, use \c "%requires WooCommerceDataProvider" in your code.
+
+    All the public symbols in the module are defined in the WooCommerceDataProvider namespace.
+
+    The following classes are provided by this module:
+    - @ref WooCommerceDataProvider::WooCommerceDataProvider "WooCommerceDataProvider"
+    - @ref WooCommerceDataProvider::WooCommerceDataProviderFactory "WooCommerceDataProviderFactory"
+
+    @section woocommercedataprovideractions WooCommerceDataProvider Actions
+
+    The following actions are provided:
+
+    <b>Orders:</b>
+    |!Action|!Type|!Description
+    |list-orders|DPAT_FIND|List and search orders with filtering
+    |get-order|DPAT_FIND_SINGLE|Get an order by ID
+    |create-order|DPAT_API|Create a new order
+    |update-order|DPAT_API|Update an existing order
+    |delete-order|DPAT_API|Delete an order
+    |update-order-status|DPAT_API|Update an order's status
+    |create-order-note|DPAT_API|Add a note to an order
+    |list-order-notes|DPAT_API|List notes for an order
+    |delete-order-note|DPAT_API|Delete a note from an order
+    |create-refund|DPAT_API|Create a refund for an order
+    |list-refunds|DPAT_API|List refunds for an order
+
+    <b>Products:</b>
+    |!Action|!Type|!Description
+    |list-products|DPAT_FIND|List and search products with filtering
+    |get-product|DPAT_FIND_SINGLE|Get a product by ID
+    |create-product|DPAT_API|Create a new product
+    |update-product|DPAT_API|Update an existing product
+    |delete-product|DPAT_API|Delete a product
+    |update-stock-quantity|DPAT_API|Update a product's stock quantity
+    |create-variation|DPAT_API|Create a product variation
+    |update-variation|DPAT_API|Update a product variation
+    |list-variations|DPAT_API|List variations for a product
+    |create-category|DPAT_API|Create a product category
+    |update-category|DPAT_API|Update a product category
+    |list-categories|DPAT_FIND|List product categories
+    |create-tag|DPAT_API|Create a product tag
+    |list-tags|DPAT_FIND|List product tags
+
+    <b>Customers:</b>
+    |!Action|!Type|!Description
+    |list-customers|DPAT_FIND|List and search customers
+    |get-customer|DPAT_FIND_SINGLE|Get a customer by ID
+    |create-customer|DPAT_API|Create a new customer
+    |update-customer|DPAT_API|Update an existing customer
+    |delete-customer|DPAT_API|Delete a customer
+
+    <b>Coupons:</b>
+    |!Action|!Type|!Description
+    |list-coupons|DPAT_FIND|List and search coupons
+    |get-coupon|DPAT_FIND_SINGLE|Get a coupon by ID
+    |create-coupon|DPAT_API|Create a new coupon
+    |update-coupon|DPAT_API|Update an existing coupon
+    |delete-coupon|DPAT_API|Delete a coupon
+
+    <b>Webhooks:</b>
+    |!Action|!Type|!Description
+    |list-webhooks|DPAT_FIND|List webhooks
+    |create-webhook|DPAT_API|Create a new webhook
+    |update-webhook|DPAT_API|Update an existing webhook
+    |delete-webhook|DPAT_API|Delete a webhook
+
+    <b>Reports:</b>
+    |!Action|!Type|!Description
+    |sales-report|DPAT_API|Get a sales report
+    |top-sellers-report|DPAT_API|Get a top sellers report
+    |orders-totals|DPAT_API|Get orders totals by status
+    |products-totals|DPAT_API|Get products totals by type
+    |customers-totals|DPAT_API|Get customers totals by role
+
+    <b>Shipping/Tax/Settings/System:</b>
+    |!Action|!Type|!Description
+    |list-shipping-zones|DPAT_API|List shipping zones
+    |list-shipping-methods|DPAT_API|List shipping methods
+    |create-tax-rate|DPAT_API|Create a new tax rate
+    |list-tax-rates|DPAT_FIND|List tax rates
+    |get-setting|DPAT_API|Get a store setting
+    |update-setting|DPAT_API|Update a store setting
+    |system-status|DPAT_API|Get system status
+
+    @section woocommercedataprovidertriggers WooCommerceDataProvider Triggers
+
+    The following event triggers are provided:
+
+    |!Trigger|!Description
+    |order-created|Fires when a new order is created
+    |order-updated|Fires when an order is updated
+    |order-deleted|Fires when an order is deleted
+    |order-restored|Fires when an order is restored from trash
+    |product-created|Fires when a new product is created
+    |product-updated|Fires when a product is updated
+    |product-deleted|Fires when a product is deleted
+    |product-restored|Fires when a product is restored from trash
+    |customer-created|Fires when a new customer is created
+    |customer-updated|Fires when a customer is updated
+    |customer-deleted|Fires when a customer is deleted
+    |coupon-created|Fires when a new coupon is created
+    |coupon-updated|Fires when a coupon is updated
+    |coupon-deleted|Fires when a coupon is deleted
+    |coupon-restored|Fires when a coupon is restored from trash
+    |payment-complete|Fires when an order payment is completed
+    |order-status-pending|Fires when order status changes to pending
+    |order-status-processing|Fires when order status changes to processing
+    |order-status-completed|Fires when order status changes to completed
+    |order-status-on-hold|Fires when order status changes to on-hold
+    |order-status-refunded|Fires when order status changes to refunded
+    |order-status-failed|Fires when order status changes to failed
+    |order-status-cancelled|Fires when order status changes to cancelled
+    |add-to-cart|Fires when a product is added to cart
+    |low-stock|Fires when a product reaches low stock
+    |no-stock|Fires when a product goes out of stock
+
+    @section woocommercedataproviderrelnotes Release Notes
+
+    @subsection woocommercedataproviderv1_0 WooCommerceDataProvider v1.0
+    - the initial version of the %WooCommerceDataProvider module
+*/

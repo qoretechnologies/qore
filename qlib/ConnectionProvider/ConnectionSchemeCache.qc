@@ -247,6 +247,7 @@ public class ConnectionSchemeCache {
             "unleashed": "UnleashedRestClient",
 
             "wave": "WaveRestClient",
+            "woocommerce": "WooCommerceRestClient",
 
             "zohobooks": "ZohoBooksRestClient",
             "zohoinventory": "ZohoInventoryRestClient",
