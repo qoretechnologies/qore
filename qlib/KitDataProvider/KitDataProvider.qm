@@ -1,0 +1,909 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore KitDataProvider module definition
+
+/*  KitDataProvider.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%modern
+
+%requires(reexport) DataProvider
+%requires(reexport) KitRestClient
+
+module KitDataProvider {
+    version = "1.0";
+    desc = "User module providing a data provider API for Kit email marketing";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # Register the data provider factory
+        DataProvider::registerFactory(new KitDataProviderFactory());
+
+        # Register the application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": KitDataProvider::AppName,
+            "display_name": "Kit",
+            "short_desc": "Kit email marketing platform for creators",
+            "desc": "Kit (formerly ConvertKit) is an email marketing platform for creators "
+                "supporting subscribers, tags, custom fields, broadcasts, forms, sequences, "
+                "and purchases.\n\n"
+                "This integration supports full CRUD operations on core resources "
+                "and event-based triggers.",
+            "scheme": "kitrest",
+            "logo": KitLogo,
+            "logo_file_name": "kit-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::Email, DataProvider::AppGroup::Marketing),
+        });
+
+        # ========== SUBSCRIBER ACTIONS ==========
+
+        # Create a Subscriber
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KitDataProvider::AppName,
+            "path": "/subscribers/create",
+            "action": "create-subscriber",
+            "groups": "Subscribers",
+            "display_name": "Create a Subscriber",
+            "short_desc": "Create or update a subscriber",
+            "desc": "Create a new subscriber in Kit (upsert behavior — updates if email already exists)",
+            "action_code": DPAT_API,
+            "data_provider_info": KitCreateSubscriberDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new KitSubscriberDataType(); },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KitCreateSubscriberRequestDataType::Fields),
+        });
+
+        # Update a Subscriber
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KitDataProvider::AppName,
+            "path": "/subscribers/update",
+            "action": "update-subscriber",
+            "groups": "Subscribers",
+            "display_name": "Update a Subscriber",
+            "short_desc": "Update an existing subscriber",
+            "desc": "Update an existing subscriber in Kit",
+            "action_code": DPAT_API,
+            "data_provider_info": KitUpdateSubscriberDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new KitSubscriberDataType(); },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KitUpdateSubscriberRequestDataType::Fields),
+        });
+
+        # Unsubscribe a Subscriber
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KitDataProvider::AppName,
+            "path": "/subscribers/unsubscribe",
+            "action": "unsubscribe-subscriber",
+            "groups": "Subscribers",
+            "display_name": "Unsubscribe a Subscriber",
+            "short_desc": "Unsubscribe a subscriber",
+            "desc": "Unsubscribe a subscriber from Kit",
+            "action_code": DPAT_API,
+            "data_provider_info": KitUnsubscribeDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new KitSubscriberDataType(); },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KitUnsubscribeRequestDataType::Fields),
+        });
+
+        # Bulk Create Subscribers
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KitDataProvider::AppName,
+            "path": "/subscribers/bulk-create",
+            "action": "bulk-create-subscribers",
+            "groups": "Subscribers",
+            "display_name": "Bulk Create Subscribers",
+            "short_desc": "Create multiple subscribers at once",
+            "desc": "Bulk create subscribers in Kit (async processing)",
+            "action_code": DPAT_API,
+            "data_provider_info": KitBulkCreateSubscribersDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new HashDataType(); },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KitBulkCreateSubscribersRequestDataType::Fields),
+        });
+
+        # List Subscribers
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KitDataProvider::AppName,
+            "path": "/subscribers",
+            "action": "list-subscribers",
+            "groups": "Subscribers",
+            "display_name": "List Subscribers",
+            "short_desc": "List all subscribers",
+            "desc": "List subscribers in Kit with optional filtering",
+            "action_code": DPAT_FIND,
+            "options": {
+                "subscriber_id": <ActionOptionInfo>{
+                    "display_name": "Subscriber ID",
+                    "short_desc": "Filter by subscriber ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "subscribers",
+                },
+                "email_address": <ActionOptionInfo>{
+                    "display_name": "Email Address",
+                    "short_desc": "Filter by email",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "state": <ActionOptionInfo>{
+                    "display_name": "State",
+                    "short_desc": "Filter by state",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "active"},
+                        <AllowedValueInfo>{"value": "inactive"},
+                        <AllowedValueInfo>{"value": "bounced"},
+                        <AllowedValueInfo>{"value": "complained"},
+                        <AllowedValueInfo>{"value": "cancelled"},
+                    ),
+                },
+                "tag_id": <ActionOptionInfo>{
+                    "display_name": "Tag ID",
+                    "short_desc": "Filter by tag",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "tags",
+                },
+                "created_after": <ActionOptionInfo>{
+                    "display_name": "Created After",
+                    "short_desc": "Filter by creation date",
+                    "type": AbstractDataProviderTypeMap."*date",
+                },
+                "created_before": <ActionOptionInfo>{
+                    "display_name": "Created Before",
+                    "short_desc": "Filter by creation date",
+                    "type": AbstractDataProviderTypeMap."*date",
+                },
+                "updated_after": <ActionOptionInfo>{
+                    "display_name": "Updated After",
+                    "short_desc": "Filter by update date",
+                    "type": AbstractDataProviderTypeMap."*date",
+                },
+                "updated_before": <ActionOptionInfo>{
+                    "display_name": "Updated Before",
+                    "short_desc": "Filter by update date",
+                    "type": AbstractDataProviderTypeMap."*date",
+                },
+                "sort_field": <ActionOptionInfo>{
+                    "display_name": "Sort Field",
+                    "short_desc": "Field to sort by",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "created_at"},
+                        <AllowedValueInfo>{"value": "updated_at"},
+                    ),
+                },
+                "sort_order": <ActionOptionInfo>{
+                    "display_name": "Sort Order",
+                    "short_desc": "Sort direction",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "asc"},
+                        <AllowedValueInfo>{"value": "desc"},
+                    ),
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Get a Subscriber
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KitDataProvider::AppName,
+            "path": "/subscribers",
+            "action": "get-subscriber",
+            "groups": "Subscribers",
+            "display_name": "Get a Subscriber",
+            "short_desc": "Get a single subscriber by ID",
+            "desc": "Retrieve a single subscriber by ID from Kit",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "subscriber_id": <ActionOptionInfo>{
+                    "display_name": "Subscriber ID",
+                    "short_desc": "The subscriber ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "subscribers",
+                },
+            },
+        });
+
+        # ========== TAG ACTIONS ==========
+
+        # Create a Tag
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KitDataProvider::AppName,
+            "path": "/tags/create",
+            "action": "create-tag",
+            "groups": "Tags",
+            "display_name": "Create a Tag",
+            "short_desc": "Create a new tag",
+            "desc": "Create a new tag in Kit",
+            "action_code": DPAT_API,
+            "data_provider_info": KitCreateTagDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new KitTagDataType(); },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KitCreateTagRequestDataType::Fields),
+        });
+
+        # Update a Tag
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KitDataProvider::AppName,
+            "path": "/tags/update",
+            "action": "update-tag",
+            "groups": "Tags",
+            "display_name": "Update a Tag",
+            "short_desc": "Update a tag name",
+            "desc": "Update the name of an existing tag in Kit",
+            "action_code": DPAT_API,
+            "data_provider_info": KitUpdateTagDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new KitTagDataType(); },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KitUpdateTagRequestDataType::Fields),
+        });
+
+        # Tag a Subscriber
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KitDataProvider::AppName,
+            "path": "/tags/tag-subscriber",
+            "action": "tag-subscriber",
+            "groups": "Tags",
+            "display_name": "Tag a Subscriber",
+            "short_desc": "Apply a tag to a subscriber",
+            "desc": "Apply a tag to a subscriber in Kit by email address",
+            "action_code": DPAT_API,
+            "data_provider_info": KitTagSubscriberDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new KitSubscriberDataType(); },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KitTagSubscriberRequestDataType::Fields),
+        });
+
+        # Untag a Subscriber
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KitDataProvider::AppName,
+            "path": "/tags/untag-subscriber",
+            "action": "untag-subscriber",
+            "groups": "Tags",
+            "display_name": "Untag a Subscriber",
+            "short_desc": "Remove a tag from a subscriber",
+            "desc": "Remove a tag from a subscriber in Kit",
+            "action_code": DPAT_API,
+            "data_provider_info": KitUntagSubscriberDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new HashDataType(); },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KitUntagSubscriberRequestDataType::Fields),
+        });
+
+        # Bulk Tag Subscribers
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KitDataProvider::AppName,
+            "path": "/tags/bulk-tag",
+            "action": "bulk-tag-subscribers",
+            "groups": "Tags",
+            "display_name": "Bulk Tag Subscribers",
+            "short_desc": "Apply a tag to multiple subscribers",
+            "desc": "Apply a tag to multiple subscribers in Kit at once",
+            "action_code": DPAT_API,
+            "data_provider_info": KitBulkTagSubscribersDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new HashDataType(); },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KitBulkTagSubscribersRequestDataType::Fields),
+        });
+
+        # List Tags
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KitDataProvider::AppName,
+            "path": "/tags",
+            "action": "list-tags",
+            "groups": "Tags",
+            "display_name": "List Tags",
+            "short_desc": "List all tags",
+            "desc": "List tags in Kit with optional filtering",
+            "action_code": DPAT_FIND,
+            "options": {
+                "tag_id": <ActionOptionInfo>{
+                    "display_name": "Tag ID",
+                    "short_desc": "Filter by tag ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "tags",
+                },
+                "name": <ActionOptionInfo>{
+                    "display_name": "Name",
+                    "short_desc": "Filter by name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+            },
+        });
+
+        # List Tag Subscribers
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KitDataProvider::AppName,
+            "path": "/tags/tag-subscribers",
+            "action": "list-tag-subscribers",
+            "groups": "Tags",
+            "display_name": "List Tag Subscribers",
+            "short_desc": "List subscribers for a tag",
+            "desc": "List all subscribers that have a specific tag applied in Kit",
+            "action_code": DPAT_FIND,
+            "options": {
+                "tag_id": <ActionOptionInfo>{
+                    "display_name": "Tag ID",
+                    "short_desc": "The tag to list subscribers for",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "tags",
+                },
+                "subscriber_state": <ActionOptionInfo>{
+                    "display_name": "Subscriber State",
+                    "short_desc": "Filter by subscriber state",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "active"},
+                        <AllowedValueInfo>{"value": "inactive"},
+                    ),
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+            },
+        });
+
+        # ========== CUSTOM FIELD ACTIONS ==========
+
+        # Create a Custom Field
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KitDataProvider::AppName,
+            "path": "/custom-fields/create",
+            "action": "create-custom-field",
+            "groups": "Custom Fields",
+            "display_name": "Create a Custom Field",
+            "short_desc": "Create a new custom field",
+            "desc": "Create a new custom field in Kit",
+            "action_code": DPAT_API,
+            "data_provider_info": KitCreateCustomFieldDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new KitCustomFieldDataType(); },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KitCreateCustomFieldRequestDataType::Fields),
+        });
+
+        # Update a Custom Field
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KitDataProvider::AppName,
+            "path": "/custom-fields/update",
+            "action": "update-custom-field",
+            "groups": "Custom Fields",
+            "display_name": "Update a Custom Field",
+            "short_desc": "Update a custom field label",
+            "desc": "Update the label of an existing custom field in Kit",
+            "action_code": DPAT_API,
+            "data_provider_info": KitUpdateCustomFieldDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new KitCustomFieldDataType(); },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KitUpdateCustomFieldRequestDataType::Fields),
+        });
+
+        # Delete a Custom Field
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KitDataProvider::AppName,
+            "path": "/custom-fields/delete",
+            "action": "delete-custom-field",
+            "groups": "Custom Fields",
+            "display_name": "Delete a Custom Field",
+            "short_desc": "Delete a custom field",
+            "desc": "Delete a custom field from Kit",
+            "action_code": DPAT_API,
+            "data_provider_info": KitDeleteCustomFieldDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new HashDataType(); },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KitDeleteCustomFieldRequestDataType::Fields),
+        });
+
+        # List Custom Fields
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KitDataProvider::AppName,
+            "path": "/custom-fields",
+            "action": "list-custom-fields",
+            "groups": "Custom Fields",
+            "display_name": "List Custom Fields",
+            "short_desc": "List all custom fields",
+            "desc": "List all custom fields in Kit",
+            "action_code": DPAT_FIND,
+            "options": {
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # ========== BROADCAST ACTIONS ==========
+
+        # Create a Broadcast
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KitDataProvider::AppName,
+            "path": "/broadcasts/create",
+            "action": "create-broadcast",
+            "groups": "Broadcasts",
+            "display_name": "Create a Broadcast",
+            "short_desc": "Create a new broadcast or draft",
+            "desc": "Create a new broadcast in Kit. Set `send_at` to schedule, or leave empty for a draft",
+            "action_code": DPAT_API,
+            "data_provider_info": KitCreateBroadcastDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new KitBroadcastDataType(); },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KitCreateBroadcastRequestDataType::Fields),
+        });
+
+        # Update a Broadcast
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KitDataProvider::AppName,
+            "path": "/broadcasts/update",
+            "action": "update-broadcast",
+            "groups": "Broadcasts",
+            "display_name": "Update a Broadcast",
+            "short_desc": "Update an existing broadcast",
+            "desc": "Update an existing broadcast in Kit",
+            "action_code": DPAT_API,
+            "data_provider_info": KitUpdateBroadcastDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new KitBroadcastDataType(); },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KitUpdateBroadcastRequestDataType::Fields),
+        });
+
+        # Delete a Broadcast
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KitDataProvider::AppName,
+            "path": "/broadcasts/delete",
+            "action": "delete-broadcast",
+            "groups": "Broadcasts",
+            "display_name": "Delete a Broadcast",
+            "short_desc": "Delete a broadcast",
+            "desc": "Delete a broadcast from Kit (only before sending)",
+            "action_code": DPAT_API,
+            "data_provider_info": KitDeleteBroadcastDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new HashDataType(); },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KitDeleteBroadcastRequestDataType::Fields),
+        });
+
+        # Get Broadcast Stats
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KitDataProvider::AppName,
+            "path": "/broadcasts/stats",
+            "action": "get-broadcast-stats",
+            "groups": "Broadcasts",
+            "display_name": "Get Broadcast Stats",
+            "short_desc": "Get statistics for a broadcast",
+            "desc": "Get statistics for a specific broadcast in Kit",
+            "action_code": DPAT_API,
+            "data_provider_info": KitGetBroadcastStatsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new KitBroadcastStatsDataType(); },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KitGetBroadcastStatsRequestDataType::Fields),
+        });
+
+        # List Broadcasts
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KitDataProvider::AppName,
+            "path": "/broadcasts",
+            "action": "list-broadcasts",
+            "groups": "Broadcasts",
+            "display_name": "List Broadcasts",
+            "short_desc": "List all broadcasts",
+            "desc": "List broadcasts in Kit",
+            "action_code": DPAT_FIND,
+            "options": {
+                "broadcast_id": <ActionOptionInfo>{
+                    "display_name": "Broadcast ID",
+                    "short_desc": "Filter by broadcast ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "broadcasts",
+                    "preselected": True,
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Get a Broadcast
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KitDataProvider::AppName,
+            "path": "/broadcasts",
+            "action": "get-broadcast",
+            "groups": "Broadcasts",
+            "display_name": "Get a Broadcast",
+            "short_desc": "Get a single broadcast by ID",
+            "desc": "Retrieve a single broadcast by ID from Kit",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "broadcast_id": <ActionOptionInfo>{
+                    "display_name": "Broadcast ID",
+                    "short_desc": "The broadcast ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "broadcasts",
+                },
+            },
+        });
+
+        # ========== FORM ACTIONS ==========
+
+        # Add Subscriber to Form
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KitDataProvider::AppName,
+            "path": "/forms/add-subscriber",
+            "action": "add-subscriber-to-form",
+            "groups": "Forms",
+            "display_name": "Add Subscriber to Form",
+            "short_desc": "Add a subscriber to a form",
+            "desc": "Add a subscriber to a form in Kit by email address",
+            "action_code": DPAT_API,
+            "data_provider_info": KitAddSubscriberToFormDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new KitSubscriberDataType(); },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KitAddSubscriberToFormRequestDataType::Fields),
+        });
+
+        # List Forms
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KitDataProvider::AppName,
+            "path": "/forms",
+            "action": "list-forms",
+            "groups": "Forms",
+            "display_name": "List Forms",
+            "short_desc": "List all forms",
+            "desc": "List forms in Kit with optional status filter",
+            "action_code": DPAT_FIND,
+            "options": {
+                "form_id": <ActionOptionInfo>{
+                    "display_name": "Form ID",
+                    "short_desc": "Filter by form ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "forms",
+                },
+                "status": <ActionOptionInfo>{
+                    "display_name": "Status",
+                    "short_desc": "Filter by form status",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "active"},
+                        <AllowedValueInfo>{"value": "archived"},
+                        <AllowedValueInfo>{"value": "trashed"},
+                        <AllowedValueInfo>{"value": "all"},
+                    ),
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # List Form Subscribers
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KitDataProvider::AppName,
+            "path": "/forms/form-subscribers",
+            "action": "list-form-subscribers",
+            "groups": "Forms",
+            "display_name": "List Form Subscribers",
+            "short_desc": "List subscribers for a form",
+            "desc": "List all subscribers that subscribed through a specific form in Kit",
+            "action_code": DPAT_FIND,
+            "options": {
+                "form_id": <ActionOptionInfo>{
+                    "display_name": "Form ID",
+                    "short_desc": "The form to list subscribers for",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "forms",
+                },
+                "subscriber_state": <ActionOptionInfo>{
+                    "display_name": "Subscriber State",
+                    "short_desc": "Filter by subscriber state",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "active"},
+                        <AllowedValueInfo>{"value": "inactive"},
+                    ),
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+            },
+        });
+
+        # ========== SEQUENCE ACTIONS ==========
+
+        # Add Subscriber to Sequence
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KitDataProvider::AppName,
+            "path": "/sequences/add-subscriber",
+            "action": "add-subscriber-to-sequence",
+            "groups": "Sequences",
+            "display_name": "Add Subscriber to Sequence",
+            "short_desc": "Add a subscriber to a sequence",
+            "desc": "Add a subscriber to an email sequence in Kit",
+            "action_code": DPAT_API,
+            "data_provider_info": KitAddSubscriberToSequenceDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new KitSubscriberDataType(); },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KitAddSubscriberToSequenceRequestDataType::Fields),
+        });
+
+        # List Sequences
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KitDataProvider::AppName,
+            "path": "/sequences",
+            "action": "list-sequences",
+            "groups": "Sequences",
+            "display_name": "List Sequences",
+            "short_desc": "List all sequences",
+            "desc": "List email sequences in Kit",
+            "action_code": DPAT_FIND,
+            "options": {
+                "sequence_id": <ActionOptionInfo>{
+                    "display_name": "Sequence ID",
+                    "short_desc": "Filter by sequence ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "sequences",
+                    "preselected": True,
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # List Sequence Subscribers
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KitDataProvider::AppName,
+            "path": "/sequences/sequence-subscribers",
+            "action": "list-sequence-subscribers",
+            "groups": "Sequences",
+            "display_name": "List Sequence Subscribers",
+            "short_desc": "List subscribers for a sequence",
+            "desc": "List all subscribers in a specific email sequence in Kit",
+            "action_code": DPAT_FIND,
+            "options": {
+                "sequence_id": <ActionOptionInfo>{
+                    "display_name": "Sequence ID",
+                    "short_desc": "The sequence to list subscribers for",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "sequences",
+                },
+                "subscriber_state": <ActionOptionInfo>{
+                    "display_name": "Subscriber State",
+                    "short_desc": "Filter by subscriber state",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "active"},
+                        <AllowedValueInfo>{"value": "inactive"},
+                    ),
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+            },
+        });
+
+        # ========== PURCHASE ACTIONS ==========
+
+        # Create a Purchase
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KitDataProvider::AppName,
+            "path": "/purchases/create",
+            "action": "create-purchase",
+            "groups": "Purchases",
+            "display_name": "Create a Purchase",
+            "short_desc": "Create a new purchase record",
+            "desc": "Create a new purchase record in Kit for e-commerce tracking",
+            "action_code": DPAT_API,
+            "data_provider_info": KitCreatePurchaseDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new KitPurchaseDataType(); },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KitCreatePurchaseRequestDataType::Fields),
+        });
+
+        # List Purchases
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KitDataProvider::AppName,
+            "path": "/purchases",
+            "action": "list-purchases",
+            "groups": "Purchases",
+            "display_name": "List Purchases",
+            "short_desc": "List all purchases",
+            "desc": "List purchase records in Kit",
+            "action_code": DPAT_FIND,
+            "options": {
+                "purchase_id": <ActionOptionInfo>{
+                    "display_name": "Purchase ID",
+                    "short_desc": "Filter by purchase ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "purchases",
+                    "preselected": True,
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Get a Purchase
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KitDataProvider::AppName,
+            "path": "/purchases",
+            "action": "get-purchase",
+            "groups": "Purchases",
+            "display_name": "Get a Purchase",
+            "short_desc": "Get a single purchase by ID",
+            "desc": "Retrieve a single purchase record by ID from Kit",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "purchase_id": <ActionOptionInfo>{
+                    "display_name": "Purchase ID",
+                    "short_desc": "The purchase ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "purchases",
+                },
+            },
+        });
+
+        # ========== EVENT ACTIONS ==========
+
+        # Subscriber Activate
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KitDataProvider::AppName,
+            "path": "/events/subscriber-activate",
+            "action": "subscriber-activate",
+            "groups": "Events",
+            "display_name": "Subscriber Activated",
+            "short_desc": "Watch for new subscriber activations",
+            "desc": "Triggers when a subscriber is activated in Kit",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_SUBSCRIBER_ACTIVATE,
+        });
+
+        # Subscriber Unsubscribe
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KitDataProvider::AppName,
+            "path": "/events/subscriber-unsubscribe",
+            "action": "subscriber-unsubscribe",
+            "groups": "Events",
+            "display_name": "Subscriber Unsubscribed",
+            "short_desc": "Watch for subscriber unsubscribes",
+            "desc": "Triggers when a subscriber unsubscribes in Kit",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_SUBSCRIBER_UNSUBSCRIBE,
+        });
+
+        # Subscriber Bounce
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KitDataProvider::AppName,
+            "path": "/events/subscriber-bounce",
+            "action": "subscriber-bounce",
+            "groups": "Events",
+            "display_name": "Subscriber Bounced",
+            "short_desc": "Watch for subscriber bounces",
+            "desc": "Triggers when a subscriber's email bounces in Kit",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_SUBSCRIBER_BOUNCE,
+        });
+
+        # Subscriber Complain
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KitDataProvider::AppName,
+            "path": "/events/subscriber-complain",
+            "action": "subscriber-complain",
+            "groups": "Events",
+            "display_name": "Subscriber Complained",
+            "short_desc": "Watch for subscriber complaints",
+            "desc": "Triggers when a subscriber marks an email as spam in Kit",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_SUBSCRIBER_COMPLAIN,
+        });
+
+        # Form Subscribe
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KitDataProvider::AppName,
+            "path": "/events/form-subscribe",
+            "action": "form-subscribe",
+            "groups": "Events",
+            "display_name": "Form Subscription",
+            "short_desc": "Watch for form subscriptions",
+            "desc": "Triggers when a subscriber signs up through a form in Kit",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_FORM_SUBSCRIBE,
+        });
+
+        # Course Subscribe
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KitDataProvider::AppName,
+            "path": "/events/course-subscribe",
+            "action": "course-subscribe",
+            "groups": "Events",
+            "display_name": "Course Subscription",
+            "short_desc": "Watch for course subscriptions",
+            "desc": "Triggers when a subscriber enrolls in a course in Kit",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_COURSE_SUBSCRIBE,
+        });
+    };
+}
+
+/** @mainpage KitDataProvider Module
+
+    @tableofcontents
+
+    @section kitdataproviderintro KitDataProvider Introduction
+
+    The %KitDataProvider module provides a data provider API for Kit email marketing.
+
+    To use this module, use \c "%requires KitDataProvider" in your code.
+
+    All the public symbols in the module are defined in the KitDataProvider namespace.
+
+    The main classes are:
+    - @ref KitDataProvider::KitDataProvider "KitDataProvider":
+      the main data provider class for Kit
+    - @ref KitDataProvider::KitDataProviderFactory "KitDataProviderFactory":
+      the factory class for creating Kit data providers
+
+    @section kitdataproviderrelnotes Release Notes
+
+    @subsection kitdataproviderv1_0 KitDataProvider v1.0
+    - the initial version of the %KitDataProvider module
+*/
