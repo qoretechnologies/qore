@@ -3774,6 +3774,10 @@ load_local_done:
                     if (!needs_deref && out.hasNode()) {
                         out = out.refSelf();
                     }
+                    // Set exception location to the constant location if an exception occurred
+                    if (xsink && *xsink && lc_inst->node && lc_inst->node->loc) {
+                        xsink->setLastLocation(*lc_inst->node->loc);
+                    }
                 } else {
                     // AOT mode: node is null; expr holds the resolved constant value directly
                     // (set by readOneExpr via resolveExprSlot for RUNTIME_CONST_REF)

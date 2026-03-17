@@ -123,6 +123,12 @@ void ExceptionSink::overrideLocation(const QoreProgramLocation& loc) {
     }
 }
 
+void ExceptionSink::setLastLocation(const QoreProgramLocation& loc) {
+    if (priv->tail) {
+        priv->tail->set(loc);
+    }
+}
+
 QoreException* ExceptionSink::catchException() {
     QoreException* e = priv->head;
     priv->head = priv->tail = nullptr;
