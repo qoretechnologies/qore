@@ -2714,10 +2714,16 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveRuntimeSubtype() const {
 const QoreTypeInfo* QoreParseTypeInfo::resolveRuntimeClass(const NamedScope& cscope, bool or_nothing) {
     // resolve class
     const QoreClass* qc = qore_root_ns_private::get(*getRootNS())->runtimeFindScopedClass(cscope);
-    if (!qc)
-        return nullptr;
+    if (qc)
+        return or_nothing ? qc->getOrNothingTypeInfo() : qc->getTypeInfo();
 
-    return or_nothing ? qc->getOrNothingTypeInfo() : qc->getTypeInfo();
+    // check for hashdecl (must be checked after class lookup)
+    const qore_ns_private* ns;
+    const TypedHashDecl* hd = qore_root_ns_private::get(*getRootNS())->runtimeFindHashDeclIntern(cscope, ns);
+    if (hd)
+        return hd->getTypeInfo(or_nothing);
+
+    return nullptr;
 }
 
 const QoreTypeInfo* QoreParseTypeInfo::resolveSubtype(const QoreProgramLocation* loc, int& err) const {
@@ -2730,9 +2736,10 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveSubtype(const QoreProgramLocation*
             // resolve hashdecl
             const TypedHashDecl* hd = qore_root_ns_private::get(*getRootNS())->parseFindHashDecl(loc,
                 *subtypes[0]->cscope);
-            //printd(5, "QoreParseTypeInfo::resolveSubtype() this: %p '%s' hd: %p '%s' type: %p (pgm: %p)\n", this,
-            //  getName(), hd, hd ? hd->getName() : "n/a", hd ? hd->getTypeInfo(false) : nullptr, getProgram());
-            return hd ? hd->getTypeInfo(or_nothing) : hashTypeInfo;
+            if (hd) {
+                return hd->getTypeInfo(or_nothing);
+            }
+            return hashTypeInfo;
         }
         if (subtypes.size() == 2) {
             if (strcmp(subtypes[0]->cscope->ostr, "string")) {
@@ -3150,6 +3157,12 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveClass(const QoreProgramLocation* l
     const QoreEnumDecl* ed = qore_root_ns_private::get(*getRootNS())->parseTryFindEnum(cscope);
     if (ed) {
         return ed->getTypeInfo(or_nothing);
+    }
+
+    // check for hashdecl (must be checked after class/enum lookup)
+    const TypedHashDecl* hd = qore_root_ns_private::get(*getRootNS())->parseFindHashDecl(loc, cscope);
+    if (hd) {
+        return hd->getTypeInfo(or_nothing);
     }
 
     // type not found - raise error
