@@ -243,6 +243,7 @@ static bool requiresResult(QoreIROpcode op) {
         case QoreIROpcode::CastAny:
         case QoreIROpcode::CastList:
         case QoreIROpcode::CastHash:
+        case QoreIROpcode::CastComplexHash:
         case QoreIROpcode::CastObject:
         case QoreIROpcode::CastEnum:
         case QoreIROpcode::ExtractAny:
@@ -545,6 +546,7 @@ static int expectedOperands(QoreIROpcode op) {
         case QoreIROpcode::CastAny:
         case QoreIROpcode::CastList:
         case QoreIROpcode::CastHash:
+        case QoreIROpcode::CastComplexHash:
         case QoreIROpcode::CastObject:
         case QoreIROpcode::CastEnum:
             return 1;
@@ -1520,6 +1522,7 @@ static const QoreValue* getInstructionExpr(const QoreIRInstruction* inst) {
         case QoreIROpcode::CastAny:
         case QoreIROpcode::CastList:
         case QoreIROpcode::CastHash:
+        case QoreIROpcode::CastComplexHash:
         case QoreIROpcode::CastObject:
         case QoreIROpcode::CastEnum:
         case QoreIROpcode::InvokeSimError:

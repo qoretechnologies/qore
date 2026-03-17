@@ -370,169 +370,170 @@ enum class QoreIROpcode : uint16_t {
     RangeSliceInt       = 250,
     RangeSliceFloat     = 251,
 
-    // Cast operations (252-256)
+    // Cast operations (252-257)
     CastAny             = 252,
     CastList            = 253,
-    CastHash            = 254,
+    CastHash            = 254,  // Cast to bare hashdecl type or plain hash
     CastObject          = 255,
     CastEnum            = 256,
+    CastComplexHash     = 257,  // Cast to complex hash type (hash<KeyType, ValueType>)
 
-    // Control flow (257-262)
-    Br                  = 257,
-    BrIf                = 258,
-    SwitchInt           = 259,  // Integer switch with LLVM switch instruction
-    SwitchString        = 260,  // String switch with hash-table lookup
-    Return              = 261,
-    ReturnNothing       = 262,
+    // Control flow (258-263)
+    Br                  = 258,
+    BrIf                = 259,
+    SwitchInt           = 260,  // Integer switch with LLVM switch instruction
+    SwitchString        = 261,  // String switch with hash-table lookup
+    Return              = 262,
+    ReturnNothing       = 263,
 
-    // Variable access (263-272)
-    LoadLocal           = 263,
-    StoreLocal          = 264,
-    UninstantiateLocal  = 265,  // Uninstantiate a local variable at block scope exit
-    LoadArg             = 266,
-    LoadClosure         = 267,
-    StoreClosure        = 268,
-    LoadGlobal          = 269,
-    StoreGlobal         = 270,
-    LoadThreadLocal     = 271,
-    StoreThreadLocal    = 272,
+    // Variable access (264-273)
+    LoadLocal           = 264,
+    StoreLocal          = 265,
+    UninstantiateLocal  = 266,  // Uninstantiate a local variable at block scope exit
+    LoadArg             = 267,
+    LoadClosure         = 268,
+    StoreClosure        = 269,
+    LoadGlobal          = 270,
+    StoreGlobal         = 271,
+    LoadThreadLocal     = 272,
+    StoreThreadLocal    = 273,
 
-    // Implicit argument opcodes (273-280)
-    LoadImplicitArg     = 273,  // Load $1, $2, etc. by offset (0 for $1, 1 for $2, etc.)
-    LoadImplicitArgv    = 274,  // Load entire $argv list
-    LoadImplicitElement = 275,  // Load $# (current element index in map/select)
+    // Implicit argument opcodes (274-281)
+    LoadImplicitArg     = 274,  // Load $1, $2, etc. by offset (0 for $1, 1 for $2, etc.)
+    LoadImplicitArgv    = 275,  // Load entire $argv list
+    LoadImplicitElement = 276,  // Load $# (current element index in map/select)
     // Context setup/teardown for functional operators (map, select, foldl, etc.)
-    PushImplicitArg     = 276,  // Push value as $1, result = old context for restoration
-    SetImplicitArgv     = 277,  // Set list directly as implicit args (for foldl $1/$2)
-    PopImplicitArg      = 278,  // Restore previous $1 context (operand = old context)
-    PushImplicitElement = 279,  // Push index as $#, result = old element for restoration
-    PopImplicitElement  = 280,  // Restore previous $# context (operand = old element)
+    PushImplicitArg     = 277,  // Push value as $1, result = old context for restoration
+    SetImplicitArgv     = 278,  // Set list directly as implicit args (for foldl $1/$2)
+    PopImplicitArg      = 279,  // Restore previous $1 context (operand = old context)
+    PushImplicitElement = 280,  // Push index as $#, result = old element for restoration
+    PopImplicitElement  = 281,  // Restore previous $# context (operand = old element)
 
-    // Direct access opcodes (281-284)
-    HashKeyAccess       = 281,  // Load hash.key - direct hash member access
-    HashKeyAccessInt    = 282,  // Load hash.key as native int64 (known int value type)
-    LoadSelfMember      = 283,  // Load self.member_name - accesses current object's member
-    LoadStaticVar       = 284,  // Load static class variable - accesses QoreVarInfo directly
+    // Direct access opcodes (282-285)
+    HashKeyAccess       = 282,  // Load hash.key - direct hash member access
+    HashKeyAccessInt    = 283,  // Load hash.key as native int64 (known int value type)
+    LoadSelfMember      = 284,  // Load self.member_name - accesses current object's member
+    LoadStaticVar       = 285,  // Load static class variable - accesses QoreVarInfo directly
 
-    // Object instantiation (285)
-    NewObject           = 285,  // Create new object - calls QoreClass::execConstructor directly
+    // Object instantiation (286)
+    NewObject           = 286,  // Create new object - calls QoreClass::execConstructor directly
 
-    // Constant and closure creation (286-290)
-    LoadConstant        = 286,  // Load runtime constant - accesses ConstantEntry::saved_val
-    CreateClosure       = 287,  // Create closure/lambda
-    CreateCallRef       = 288,  // Create call reference - function/static method references
-    CreateMethodRef     = 289,  // Create method reference - object method references
-    CreateParseRef      = 290,  // Create parse reference - \var lvalue references
+    // Constant and closure creation (287-291)
+    LoadConstant        = 287,  // Load runtime constant - accesses ConstantEntry::saved_val
+    CreateClosure       = 288,  // Create closure/lambda
+    CreateCallRef       = 289,  // Create call reference - function/static method references
+    CreateMethodRef     = 290,  // Create method reference - object method references
+    CreateParseRef      = 291,  // Create parse reference - \var lvalue references
 
-    // Typed container construction (291-294)
-    NewHashDecl         = 291,  // Create new hashdecl instance
-    NewComplexHash      = 292,  // Create new typed hash
-    NewComplexList      = 293,  // Create new typed list
-    VrnConstruct        = 294,  // Construct value for VarRefNewObjectNode (non-object types)
+    // Typed container construction (292-295)
+    NewHashDecl         = 292,  // Create new hashdecl instance
+    NewComplexHash      = 293,  // Create new typed hash
+    NewComplexList      = 294,  // Create new typed list
+    VrnConstruct        = 295,  // Construct value for VarRefNewObjectNode (non-object types)
 
-    // Hash building (295)
-    HashSetKeyValue     = 295,  // Set key-value pair in hash (for hash map loops)
+    // Hash building (296)
+    HashSetKeyValue     = 296,  // Set key-value pair in hash (for hash map loops)
 
-    // Reverse iteration (296)
-    IteratorCreateReverse = 296, // Create reverse iterator from list/iterable (for foldr)
+    // Reverse iteration (297)
+    IteratorCreateReverse = 297, // Create reverse iterator from list/iterable (for foldr)
 
-    // Function/method calls (297-308)
-    Call                = 297,
-    CallDirect          = 298,  // Direct function call - resolved at parse time
-    CallIndirect        = 299,
-    CallMethod          = 300,
-    CallMethodDirect    = 301,  // Direct method call - no dispatch needed
-    InvokeMethodDirect  = 302,  // Direct method call with exception handling
-    CallStatic          = 303,
-    CallStaticDirect    = 304,  // Direct static method call - pre-evaluated args
-    DotEvalMethodDirect = 305,  // Direct dot-eval method call - pre-evaluated base+args
-    InvokeDotEvalMethodDirect = 306, // Direct dot-eval with exception handling
-    CallClosureDirect   = 307,  // Direct closure/callref call
-    Invoke              = 308,
+    // Function/method calls (298-309)
+    Call                = 298,
+    CallDirect          = 299,  // Direct function call - resolved at parse time
+    CallIndirect        = 300,
+    CallMethod          = 301,
+    CallMethodDirect    = 302,  // Direct method call - no dispatch needed
+    InvokeMethodDirect  = 303,  // Direct method call with exception handling
+    CallStatic          = 304,
+    CallStaticDirect    = 305,  // Direct static method call - pre-evaluated args
+    DotEvalMethodDirect = 306,  // Direct dot-eval method call - pre-evaluated base+args
+    InvokeDotEvalMethodDirect = 307, // Direct dot-eval with exception handling
+    CallClosureDirect   = 308,  // Direct closure/callref call
+    Invoke              = 309,
 
-    // Type guards (309-313)
-    GuardInt            = 309,
-    GetObjectClass      = 310,  // Get runtime class pointer from object value
-    GuardFloat          = 311,
-    GuardType           = 312,
-    GuardNotNothing     = 313,
+    // Type guards (310-314)
+    GuardInt            = 310,
+    GetObjectClass      = 311,  // Get runtime class pointer from object value
+    GuardFloat          = 312,
+    GuardType           = 313,
+    GuardNotNothing     = 314,
 
-    // Exception handling (314-319)
-    LandingPad          = 314,
-    CatchException      = 315,
-    CatchCleanup        = 316,
-    Rethrow             = 317,
-    Throw               = 318,
-    InvokeSimError      = 319,
+    // Exception handling (315-320)
+    LandingPad          = 315,
+    CatchException      = 316,
+    CatchCleanup        = 317,
+    Rethrow             = 318,
+    Throw               = 319,
+    InvokeSimError      = 320,
 
-    // Reference management (320-322)
-    Incref              = 320,
-    Decref              = 321,
-    DecrefNoThrow       = 322,
+    // Reference management (321-323)
+    Incref              = 321,
+    Decref              = 322,
+    DecrefNoThrow       = 323,
 
-    // Regex switch (323)
-    SwitchRegexMatch    = 323,  // Test switch regex case: (switch_val, regex_case_ptr) -> bool
+    // Regex switch (324)
+    SwitchRegexMatch    = 324,  // Test switch regex case: (switch_val, regex_case_ptr) -> bool
 
-    // Native list push (324)
-    ListPush            = 324,  // Native list push: (list, value) -> list (in-place push)
+    // Native list push (325)
+    ListPush            = 325,  // Native list push: (list, value) -> list (in-place push)
 
-    // Reference foreach opcodes (325-330)
-    RefForeachInit      = 325,  // Init ref foreach state from ParseReferenceNode expr -> state handle
-    RefForeachSize      = 326,  // Get iteration count from state handle -> int64
-    RefForeachGetEntry  = 327,  // Get element at index: (state, index) -> value
-    RefForeachRecord    = 328,  // Record modified value: (state, value) -> void
-    RefForeachFinalize  = 329,  // Write back to reference and cleanup: (state) -> void
-    RefForeachCleanup   = 330,  // Cleanup without write-back: (state) -> void
+    // Reference foreach opcodes (326-331)
+    RefForeachInit      = 326,  // Init ref foreach state from ParseReferenceNode expr -> state handle
+    RefForeachSize      = 327,  // Get iteration count from state handle -> int64
+    RefForeachGetEntry  = 328,  // Get element at index: (state, index) -> value
+    RefForeachRecord    = 329,  // Record modified value: (state, value) -> void
+    RefForeachFinalize  = 330,  // Write back to reference and cleanup: (state) -> void
+    RefForeachCleanup   = 331,  // Cleanup without write-back: (state) -> void
 
-    // Number arithmetic (331-334) — typed QoreNumberNode operations
+    // Number arithmetic (332-335) — typed QoreNumberNode operations
     // Both operands guaranteed NT_NUMBER; no tag-check branches needed.
     // Compile to direct qore_rt_number_* helper calls.
-    AddNumber           = 331,
-    SubNumber           = 332,
-    MulNumber           = 333,
-    DivNumber           = 334,
+    AddNumber           = 332,
+    SubNumber           = 333,
+    MulNumber           = 334,
+    DivNumber           = 335,
 
-    // Hash element store (335) — write value to hash{const_key} with COW support
+    // Hash element store (336) — write value to hash{const_key} with COW support
     // operands[0] = hash container, operands[1] = value to store
-    HashKeyStore        = 335,
+    HashKeyStore        = 336,
 
-    // List element access (336) — load list[index] directly (no AST delegation)
+    // List element access (337) — load list[index] directly (no AST delegation)
     // operands[0] = list container, operands[1] = index
-    ListIndexAccess     = 336,
+    ListIndexAccess     = 337,
 
-    // List element store (337) — write value to list[index] with COW support
+    // List element store (338) — write value to list[index] with COW support
     // operands[0] = list container, operands[1] = value to store, operands[2] = index
-    ListIndexStore      = 337,
+    ListIndexStore      = 338,
 
-    // Fused local int operations (338-340) — reduce dispatch overhead for tight loops
+    // Fused local int operations (339-341) — reduce dispatch overhead for tight loops
     // These fuse multiple instructions (load+op+store) into single opcodes.
-    AddAssignLocalInt   = 338,  // target_local += source_local (both typed int)
-    IncrementLocalInt   = 339,  // local += delta (typed int local, constant delta)
-    BranchIfLtLocalInt  = 340,  // if (lhs_local < rhs_local) goto true else goto false
-    ConstEnum           = 341,  // TAG_ENUM constant from QoreEnumMember*
+    AddAssignLocalInt   = 339,  // target_local += source_local (both typed int)
+    IncrementLocalInt   = 340,  // local += delta (typed int local, constant delta)
+    BranchIfLtLocalInt  = 341,  // if (lhs_local < rhs_local) goto true else goto false
+    ConstEnum           = 342,  // TAG_ENUM constant from QoreEnumMember*
 
-    // Read-only list element access (342) — borrowed reference, no refSelf
+    // Read-only list element access (343) — borrowed reference, no refSelf
     // operands[0] = list container, operands[1] = index
     // Safe when the list outlives the use of the returned element (e.g., map/select loops)
-    ListGetValueNoRef   = 342,
+    ListGetValueNoRef   = 343,
 
-    // Switch case match with enum unwrapping (343)
+    // Switch case match with enum unwrapping (344)
     // operands[0] = switch expression value
     // Uses CaseNode::matches() which unwraps TAG_ENUM before hard comparison
-    SwitchCaseMatch     = 343,
+    SwitchCaseMatch     = 344,
 
-    // Runtime type check (344) — returns native bool (1 if value is NT_LIST or NT_OBJECT, 0 otherwise)
+    // Runtime type check (345) — returns native bool (1 if value is NT_LIST or NT_OBJECT, 0 otherwise)
     // Used by select to determine if the result should be returned as a list or unwrapped to a scalar
-    IsCollectionType    = 344,
+    IsCollectionType    = 345,
 
     //! Make a hash from constant string keys and value operands (avoids key boxing/conversion)
-    MakeHashConstKeys   = 345,
+    MakeHashConstKeys   = 346,
 
     //! Convert any value to string (replaces builtin string() function call)
-    ToString            = 346,
+    ToString            = 347,
 
     //! Format a list as sprintf(fmt, args...) — used by assert failure messages
-    Sprintf             = 347,
+    Sprintf             = 348,
 
     // NOTE: When adding new opcodes, assign the next sequential ID (348, 349, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
@@ -543,7 +544,7 @@ enum class QoreIROpcode : uint16_t {
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
 constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::Sprintf);
-static_assert(QORE_IR_MAX_OPCODE == 347, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+static_assert(QORE_IR_MAX_OPCODE == 348, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! Returns true if the opcode is a unary computation op (used by Invoke dispatch)

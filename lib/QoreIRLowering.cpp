@@ -6504,8 +6504,9 @@ QoreIRValue QoreIRLowering::lowerCast(const QoreValue& expr, std::string& error)
     if (cast) {
         if (dynamic_cast<const QoreComplexListCastOperatorNode*>(node)) {
             opcode = QoreIROpcode::CastList;
-        } else if (dynamic_cast<const QoreComplexHashCastOperatorNode*>(node)
-                || dynamic_cast<const QoreHashDeclCastOperatorNode*>(node)) {
+        } else if (dynamic_cast<const QoreComplexHashCastOperatorNode*>(node)) {
+            opcode = QoreIROpcode::CastComplexHash;
+        } else if (dynamic_cast<const QoreHashDeclCastOperatorNode*>(node)) {
             opcode = QoreIROpcode::CastHash;
         } else if (dynamic_cast<const QoreEnumCastOperatorNode*>(node)) {
             opcode = QoreIROpcode::CastEnum;

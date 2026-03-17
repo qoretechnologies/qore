@@ -37,7 +37,7 @@
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 347,
+static_assert(QORE_IR_MAX_OPCODE == 348,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 #include "qore/intern/QoreLibIntern.h"
@@ -8832,6 +8832,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         // Cast operations: native cast with pre-evaluated inner value (operand[0])
         case QoreIROpcode::CastList:
         case QoreIROpcode::CastHash:
+        case QoreIROpcode::CastComplexHash:
         case QoreIROpcode::CastObject:
         case QoreIROpcode::CastEnum:
         case QoreIROpcode::CastAny: {

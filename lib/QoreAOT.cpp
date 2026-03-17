@@ -354,6 +354,7 @@ static uint64_t opcodeToFeatureFlag(QoreIROpcode op) {
         case QoreIROpcode::CastAny:
         case QoreIROpcode::CastList:
         case QoreIROpcode::CastHash:
+        case QoreIROpcode::CastComplexHash:
         case QoreIROpcode::CastObject:
         case QoreIROpcode::CastEnum:           return QORE_AOT_FEAT_NATIVE_CAST;
         case QoreIROpcode::OnBlockExit:        return QORE_AOT_FEAT_BLOCK_EXIT;

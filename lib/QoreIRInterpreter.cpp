@@ -62,7 +62,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 347,
+static_assert(QORE_IR_MAX_OPCODE == 348,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -505,6 +505,7 @@ QoreValue QoreIRInterpreter::evalExpr(QoreIROpcode op, const QoreValue& expr, Ex
         // using operand[0] — they should not reach evalExpr
         case QoreIROpcode::CastList:
         case QoreIROpcode::CastHash:
+        case QoreIROpcode::CastComplexHash:
         case QoreIROpcode::CastObject:
         case QoreIROpcode::CastEnum:
         case QoreIROpcode::CastAny:
@@ -1337,6 +1338,7 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
         // Cast opcodes: native cast with pre-evaluated inner value (operand[0])
         case QoreIROpcode::CastList:
         case QoreIROpcode::CastHash:
+        case QoreIROpcode::CastComplexHash:
         case QoreIROpcode::CastObject:
         case QoreIROpcode::CastEnum:
         case QoreIROpcode::CastAny: {
@@ -6796,6 +6798,7 @@ load_local_done:
         case QoreIROpcode::CastAny:
         case QoreIROpcode::CastList:
         case QoreIROpcode::CastHash:
+        case QoreIROpcode::CastComplexHash:
         case QoreIROpcode::CastObject:
         case QoreIROpcode::CastEnum: {
                 auto* expr_inst = static_cast<QoreIRExprInstruction*>(inst);
