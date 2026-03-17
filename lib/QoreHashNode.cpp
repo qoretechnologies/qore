@@ -393,7 +393,8 @@ QoreHashNode* qore_hash_private::newComplexHashFromHash(const QoreTypeInfo* type
     assert(init->is_unique());
     init->priv->complexTypeInfo = typeInfo;
     if (strstr(QoreTypeInfo::getName(typeInfo), "DataProvider")) {
-        fprintf(stderr, "DEBUG newComplexHashFromHash: typeInfo=%s, hashdecl before clear=%s\n",
+        fprintf(stderr, "DEBUG newComplexHashFromHash: ptr=%p, typeInfo=%s, hashdecl before clear=%s\n",
+            init.operator->(),
             QoreTypeInfo::getName(typeInfo),
             init->priv->hashdecl ? "yes" : "no");
     }
@@ -406,7 +407,9 @@ QoreHashNode* qore_hash_private::newComplexHashFromHash(const QoreTypeInfo* type
         init->priv->setHashDecl(nullptr);
     }
     if (strstr(QoreTypeInfo::getName(typeInfo), "DataProvider")) {
-        fprintf(stderr, "DEBUG newComplexHashFromHash: hashdecl after clear=%s\n",
+        fprintf(stderr, "DEBUG newComplexHashFromHash RETURN: ptr=%p, complexTypeInfo=%s, hashdecl=%s\n",
+            init.operator->(),
+            QoreTypeInfo::getName(init->priv->complexTypeInfo),
             init->priv->hashdecl ? "yes" : "no");
     }
     return init.release();
