@@ -156,14 +156,14 @@ Values in reference data rows can use DPQL expressions (from `DataProvider::Gene
 rows:
   - [MyApp, "1.0.0", {exp: "now"}]                        # Current timestamp
   - [total, {exp: "+", args: [10, 20]}]                    # Arithmetic: 30
-  - [greeting, {exp: "upper", args: ["hello"]}]            # String: "HELLO"
+  - [greeting, {exp: "upr", args: ["hello"]}]             # String: "HELLO"
   - [code, {exp: "substr", args: ["ABCDEF", 0, 3]}]       # String: "ABC"
-  - [encoded, {exp: "to_base64", args: ["data"]}]          # Base64 encoding
-  - [flag, {exp: "if", args: [true, "yes", "no"]}]        # Ternary: "yes"
+  - [encoded, {exp: "to-base64", args: ["data"]}]          # Base64 encoding
+  - [flag, {exp: "ternary", args: [true, "yes", "no"]}]   # Ternary: "yes"
 ```
 
-Common expressions: `now`, `+`, `-`, `*`, `/`, `upper`, `lower`, `trim`, `substr`, `length`,
-`to_int`, `to_string`, `to_number`, `to_base64`, `from_base64`, `if` (ternary).
+Common expressions: `now`, `+`, `-`, `*`, `/`, `upr`, `lwr`, `substr`, `length`,
+`toInt`, `toString`, `toNumber`, `to-base64`, `parse_base64`, `ternary`.
 
 See `DataProvider::GenericExpressionImplementations` for the full list of available expressions.
 

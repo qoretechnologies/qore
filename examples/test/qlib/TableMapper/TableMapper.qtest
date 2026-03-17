@@ -13,7 +13,7 @@
 %requires ../../../../qlib/PgsqlSqlUtil.qm
 %requires ../../../../qlib/MysqlSqlUtil.qm
 %requires ../../../../qlib/FreetdsSqlUtil.qm
-%requires ../../../../qlib/Schema.qm
+%requires ../../../../qlib/Schema
 %requires ../../../../qlib/Mapper.qm
 %requires ../../../../qlib/TableMapper.qm
 

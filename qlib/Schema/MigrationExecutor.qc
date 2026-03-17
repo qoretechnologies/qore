@@ -490,6 +490,12 @@ public class MigrationExecutor {
             stmts = step.statements;
         }
 
+        if (!stmts) {
+            throw "MIGRATION-ERROR", sprintf("migration step %y action 'sql' has no SQL statements "
+                "for driver %y and no default 'statements' list",
+                step.id ?? "unknown", drv);
+        }
+
         foreach string stmt in (stmts) {
             logMsg(sprintf("    SQL: %s", stmt));
             ds.execRaw(stmt);

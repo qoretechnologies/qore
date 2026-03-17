@@ -5,7 +5,7 @@
 # Usage:
 #   qschema validate inventory.ysm
 #   qschema info inventory.ysm
-#   qschema align -d pgsql:user/pass@host/db inventory.ysm
+#   qschema align pgsql:user/pass@host/db inventory.ysm
 
 schema:
   name: InventorySchema
