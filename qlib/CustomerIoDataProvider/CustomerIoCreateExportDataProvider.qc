@@ -124,11 +124,11 @@ public class CustomerIoCreateExportDataProvider inherits CustomerIoDataProviderB
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         string export_type = req.export_type;
-        *hash<auto> body;
+        hash<auto> body;
         if (exists req.filters) {
             body.filters = req.filters;
         }
-        return doPost(sprintf("/exports/%s", export_type), body);
+        return doPost(sprintf("/exports/%s", export_type), body ? body : NOTHING);
     }
 
     #! Returns the request type

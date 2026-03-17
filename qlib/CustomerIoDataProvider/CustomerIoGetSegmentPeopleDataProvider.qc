@@ -93,11 +93,11 @@ public class CustomerIoGetSegmentPeopleDataProvider inherits CustomerIoDataProvi
 
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        *hash<auto> params;
+        hash<auto> params;
         if (exists req.page) {
             params.page = req.page;
         }
-        return doGet(sprintf("/segments/%d/membership", req.segment_id), params);
+        return doGet(sprintf("/segments/%d/membership", req.segment_id), params ? params : NOTHING);
     }
 
     #! Returns the request type
