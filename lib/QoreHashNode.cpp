@@ -439,6 +439,13 @@ int qore_hash_private::checkKey(const char* key, ExceptionSink* xsink) const {
                 complexTypeInfo ? QoreTypeInfo::getName(complexTypeInfo) : "NULL");
         }
     }
+
+    // Log unusual keys like operator names
+    if (key && (strcmp(key, "==") == 0 || strcmp(key, "===") == 0 || strcmp(key, "!=") == 0)) {
+        fprintf(stderr, "PHASE3: checkKey with operator key: key=%s, hashdecl=%s\n",
+            key, hashdecl ? hashdecl->getName() : "NULL");
+    }
+
     if (hashdecl && !typed_hash_decl_private::get(*hashdecl)->findMember(key)) {
         // Always log DataProvider-related key check errors
         const char* hname = hashdecl->getName();
