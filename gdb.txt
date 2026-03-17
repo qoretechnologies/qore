@@ -21,3 +21,23 @@ A debugging session is active.
 	Inferior 1 [process 1995817] will be killed.
 
 Quit anyway? (y or n) [answered Y; input not from terminal]
+
+This GDB supports auto-downloading debuginfo from the following URLs:
+  <https://debuginfod.ubuntu.com>
+Enable debuginfod for this session? (y or [n]) [answered N; input not from terminal]
+Debuginfod has been disabled.
+To make this setting permanent, add 'set debuginfod enabled off' to .gdbinit.
+Function "qore_hash_private::checkKey" not defined.
+Make breakpoint pending on future shared library load? (y or [n]) [answered N; input not from terminal]
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+[New Thread 0x7fffed0d16c0 (LWP 3531279)]
+[New Thread 0x7fffe55ff6c0 (LWP 3531321)]
+[New Thread 0x7fffd2dff6c0 (LWP 3531383)]
+[New Thread 0x7fffd21c96c0 (LWP 3531384)]
+[New Thread 0x7fffd15936c0 (LWP 3531385)]
+[New Thread 0x7fffcbfff6c0 (LWP 3531386)]
+[New Thread 0x7fffcb3c96c0 (LWP 3531387)]
+
+Thread 1 "qore/1" received signal SIGSEGV, Segmentation fault.
+0x00007fffb885f692 in ?? ()

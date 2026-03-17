@@ -513,16 +513,21 @@ QoreValue QoreComplexHashCastOperatorNode::evalImpl(bool& needs_deref, Exception
 
     assert(rv->getType() == NT_HASH);
 
-    // if we already have the expected cast, then there's nothing to do
-    if (typeInfo == rv->getFullTypeInfo()) {
-        return rv.takeValue(needs_deref);
-    }
-
-    // do the runtime cast
+    // For complex hash types, always call newComplexHashFromHash to ensure:
+    // 1. complexTypeInfo is properly set
+    // 2. hashdecl bindings are cleared (important for hashes created by map operators)
+    // This is necessary even if types match, because hashdecl values might still have bindings
     return qore_hash_private::newComplexHashFromHash(typeInfo, rv.takeReferencedNode<QoreHashNode>(), xsink);
 }
 
 QoreValue QoreComplexHashCastOperatorNode::castValue(QoreValue inner, ExceptionSink* xsink) const {
+    if (strstr(QoreTypeInfo::getName(typeInfo), "DataProvider")) {
+        fprintf(stderr, "DEBUG castValue COMPLEX: typeInfo=%s, inner.fullType=%s, match=%d\n",
+            QoreTypeInfo::getName(typeInfo),
+            QoreTypeInfo::getName(inner.getFullTypeInfo()),
+            typeInfo == inner.getFullTypeInfo() ? 1 : 0);
+    }
+
     if (QoreComplexHashCastOperatorNode::checkValue(xsink, inner, false)) {
         return QoreValue();
     }
@@ -536,10 +541,16 @@ QoreValue QoreComplexHashCastOperatorNode::castValue(QoreValue inner, ExceptionS
 
     // if we already have the expected cast, then there's nothing to do
     if (typeInfo == inner.getFullTypeInfo()) {
+        if (strstr(QoreTypeInfo::getName(typeInfo), "DataProvider")) {
+            fprintf(stderr, "DEBUG castValue COMPLEX: types match, returning as-is\n");
+        }
         return inner.hasNode() ? inner.refSelf() : inner;
     }
 
     // do the runtime cast
+    if (strstr(QoreTypeInfo::getName(typeInfo), "DataProvider")) {
+        fprintf(stderr, "DEBUG castValue COMPLEX: types don't match, calling newComplexHashFromHash\n");
+    }
     return qore_hash_private::newComplexHashFromHash(typeInfo, inner.get<QoreHashNode>()->hashRefSelf(), xsink);
 }
 
