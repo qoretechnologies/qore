@@ -59,10 +59,12 @@ qore_hash_private::~qore_hash_private() {
 }
 
 void qore_hash_private::setHashDecl(const TypedHashDecl* hd) {
-    // PHASE1 instrumentation: log all hashdecl sets
-    if (hd) {
-        const char* hdname = hd->getName();
-        fprintf(stderr, "DEBUG1: setHashDecl called with %s\n", hdname);
+    // PHASE2 instrumentation: log all hashdecl sets with pointer tracking
+    if (hd && (strstr(hd->getName(), "DataProvider") || strstr(hashdecl ? hashdecl->getName() : "", "DataProvider"))) {
+        fprintf(stderr, "PHASE2: setHashDecl: this=%p, old_hd=%s, new_hd=%s\n",
+            (void*)this,
+            hashdecl ? hashdecl->getName() : "NULL",
+            hd->getName());
         fflush(stderr);
     }
     if (complexTypeInfo) {

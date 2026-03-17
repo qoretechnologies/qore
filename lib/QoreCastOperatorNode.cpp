@@ -228,6 +228,10 @@ int QoreParseCastOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
                 parse_context.typeInfo = hd->getTypeInfo();
                 if (exp) {
                     ReferenceHolder<> holder(this, nullptr);
+                    if (strstr(hd->getName(), "DataProvider")) {
+                        fprintf(stderr, "PHASE2: Creating QoreHashDeclCastOperatorNode: hd=%s\n",
+                            hd->getName());
+                    }
                     val = new QoreHashDeclCastOperatorNode(loc, hd, takeExp(), or_nothing);
                     set_cast_analysis();
                     return err;
@@ -265,6 +269,10 @@ int QoreParseCastOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
 
             if (exp) {
                 ReferenceHolder<> holder(this, nullptr);
+                if (strstr(QoreTypeInfo::getName(parse_context.typeInfo), "DataProvider")) {
+                    fprintf(stderr, "PHASE2: Creating QoreComplexHashCastOperatorNode: typeInfo=%s\n",
+                        QoreTypeInfo::getName(parse_context.typeInfo));
+                }
                 val = new QoreComplexHashCastOperatorNode(loc, parse_context.typeInfo, takeExp(), or_nothing);
                 set_cast_analysis();
                 return err;
@@ -427,6 +435,10 @@ int QoreHashDeclCastOperatorNode::checkValue(ExceptionSink* xsink, const QoreVal
 }
 
 QoreValue QoreHashDeclCastOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    if (hd && strstr(typed_hash_decl_private::get(*hd)->getName(), "DataProvider")) {
+        fprintf(stderr, "PHASE2: QoreHashDeclCastOperatorNode::evalImpl: hd=%s\n",
+            typed_hash_decl_private::get(*hd)->getName());
+    }
     ValueEvalOptimizedRefHolder rv(exp, xsink);
     if (*xsink) {
         return QoreValue();
@@ -456,6 +468,11 @@ QoreValue QoreHashDeclCastOperatorNode::evalImpl(bool& needs_deref, ExceptionSin
         return rv.takeValue(needs_deref);
 
     // do the runtime cast
+    if (hd && strstr(typed_hash_decl_private::get(*hd)->getName(), "DataProvider")) {
+        fprintf(stderr, "PHASE2: QoreHashDeclCastOperatorNode::evalImpl calling newHash for %s, input has complexTypeInfo=%s\n",
+            typed_hash_decl_private::get(*hd)->getName(),
+            h->getValueTypeInfo() ? QoreTypeInfo::getName(h->getValueTypeInfo()) : "NULL");
+    }
     return typed_hash_decl_private::get(*hd)->newHash(h, true, xsink);
 }
 
@@ -521,6 +538,10 @@ int QoreComplexHashCastOperatorNode::checkValue(ExceptionSink* xsink, const Qore
 
 QoreValue QoreComplexHashCastOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     assert(needs_deref);
+    if (strstr(QoreTypeInfo::getName(typeInfo), "DataProvider")) {
+        fprintf(stderr, "PHASE2: QoreComplexHashCastOperatorNode::evalImpl: typeInfo=%s\n",
+            QoreTypeInfo::getName(typeInfo));
+    }
     ValueEvalOptimizedRefHolder rv(exp, xsink);
     if (*xsink) {
         return QoreValue();
