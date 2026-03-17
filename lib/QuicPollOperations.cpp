@@ -52,17 +52,16 @@ constexpr int QUIC_MAX_RECV_BATCH = 16;
 #include "qore/intern/QuicCommon.h"
 
 //! Maximum poll timeout (ms) when no QUIC timer is pending.
-/** When the only in-flight packets are ACK-only (not tracked for PTO per RFC 9002),
-    ngtcp2_conn_get_expiry() returns UINT64_MAX.  Without a bounded default, the
-    I/O thread's poll() falls back to the full operation timeout (e.g. 30s), stalling
-    the connection while the peer's PTO-driven retransmissions arrive unseen.
-    1 second is short enough to ensure prompt reaction to incoming data while avoiding
-    excessive wakeups during idle periods.
+/** Fallback poll timeout (ms) when ngtcp2 reports no timer pending
+    (ngtcp2_conn_get_expiry() == UINT64_MAX).  Per RFC 9002, ACK-only packets
+    are not loss-detected, so the peer's retransmission timer drives recovery.
+    1 second is a reasonable fallback for this rare edge case.
 */
 static constexpr int64_t QUIC_NO_TIMER_POLL_MS = 1000;
 
 //! Set the "poll_timeout_ms" key on a poll info hash based on the next QUIC timer expiry.
-/** Clamps the poll timeout so that retransmission/PTO timers fire promptly.
+/** Translates the ngtcp2 timer expiry into a poll timeout hint so the I/O
+    thread's poll() wakes when the QUIC retransmission/PTO timer fires.
     @param poll_info the poll info hash to update (must not be nullptr)
     @param expiry the next timer expiry (UINT64_MAX if no timer pending)
     @param xsink for exception handling
@@ -585,7 +584,11 @@ QoreHashNode* SocketQuicClientPollOperation::trySetupEarlyHttp3(ExceptionSink* x
     }
     if (srv == SOCK_POLLOUT) {
         // Partial send — caller should yield for write readiness
-        return getSocketPollInfoHash(xsink, SOCK_POLLOUT);
+        QoreHashNode* poll_info = getSocketPollInfoHash(xsink, SOCK_POLLOUT);
+        if (poll_info) {
+            setPollTimeoutFromExpiry(poll_info, h3_expiry, xsink);
+        }
+        return poll_info;
     }
     return nullptr;
 }
@@ -634,7 +637,11 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                     return nullptr;
                 }
                 if (rv == SOCK_POLLOUT) {
-                    return getSocketPollInfoHash(xsink, SOCK_POLLOUT);
+                    QoreHashNode* poll_info = getSocketPollInfoHash(xsink, SOCK_POLLOUT);
+                    if (poll_info) {
+                        setPollTimeoutFromExpiry(poll_info, next_expiry, xsink);
+                    }
+                    return poll_info;
                 }
 
                 // 0-RTT: set up HTTP/3 early when 0-RTT TX key is installed
@@ -721,19 +728,29 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
 
                 // Send any pending frames (HTTP/3 control + QPACK streams)
                 // Coalesced: timer + write
+                ngtcp2_tstamp setup_expiry;
                 {
-                    ngtcp2_tstamp next_expiry;
-                    int rv = sendPendingPackets(next_expiry, xsink);
+                    int rv = sendPendingPackets(setup_expiry, xsink);
                     if (*xsink) {
                         return nullptr;
                     }
                     if (rv == SOCK_POLLOUT) {
-                        return getSocketPollInfoHash(xsink, SOCK_POLLOUT);
+                        QoreHashNode* poll_info = getSocketPollInfoHash(xsink, SOCK_POLLOUT);
+                        if (poll_info) {
+                            setPollTimeoutFromExpiry(poll_info, setup_expiry, xsink);
+                        }
+                        return poll_info;
                     }
                 }
 
                 qcs_state = QCS::READING;
-                return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+                {
+                    QoreHashNode* poll_info = getSocketPollInfoHash(xsink, SOCK_POLLIN);
+                    if (poll_info) {
+                        setPollTimeoutFromExpiry(poll_info, setup_expiry, xsink);
+                    }
+                    return poll_info;
+                }
             }
 
             case QCS::READING: {
