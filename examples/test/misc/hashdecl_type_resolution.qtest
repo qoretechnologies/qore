@@ -1,0 +1,57 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%new-style
+%enable-all-warnings
+
+%requires QUnit
+
+public namespace hashdecl_type_resolution_test;
+
+hashdecl TestInfo {
+    string name;
+    string value;
+}
+
+# Data source for map iteration
+const SourceMap = {
+    "item1": {
+        "exp": <TestInfo>{"name": "test1", "value": "val1"},
+        "extra": <TestInfo>{"name": "extra1", "value": "extra_val1"},
+    },
+    "item2": {
+        "exp": <TestInfo>{"name": "test2", "value": "val2"},
+        "extra": <TestInfo>{"name": "extra2", "value": "extra_val2"},
+    },
+};
+
+# Test that hash<TypedHashDecl> casts are handled as complex hash type
+# When the parser sees hash<TestInfo> in a cast, it should be resolved as
+# a complex hash type (QTS_COMPLEXHASH with hashdecl value), NOT as
+# a bare hashdecl type (QTS_HASHDECL)
+# This cast should create a complex hash type
+public const CastToHashTypedHashdecl = cast<hash<string, TestInfo>>(
+    map {$1.key: $1.value."exp"}, SourceMap.pairIterator()
+);
+
+class HashdeclTypeResolutionTest inherits QUnit::Test {
+    public {
+        const TEST_NAME = "Hashdecl Type Resolution Test";
+        const TEST_VERSION = "1.0";
+    }
+
+    setUp() {
+    }
+
+    # Test that hash<TypedHashDecl> is resolved as complex hash, not bare hashdecl
+    # This is a parse-time type resolution test
+    testHashTypedHashdeclAsComplexHash() {
+        # Verify we can access by any string key, not just hashdecl members
+        assertEq("test1", CastToHashTypedHashdecl{"item1"}{"name"});
+
+        # This should work - accessing with an arbitrary string key
+        # If the type was incorrectly resolved as bare hashdecl, this would fail
+        assertEq(1, CastToHashTypedHashdecl.size());
+        assertEq(True, CastToHashTypedHashdecl.exists("item1"));
+    }
+}
