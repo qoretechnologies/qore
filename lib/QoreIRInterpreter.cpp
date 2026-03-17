@@ -1342,15 +1342,12 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
         case QoreIROpcode::CastObject:
         case QoreIROpcode::CastEnum:
         case QoreIROpcode::CastAny: {
-            fprintf(stderr, "PHASE1: IR opcode handler: CastComplexHash executed\n");
             QoreValue inner = inv->operands.empty() ? QoreValue() : getIRValue(values, inv->operands[0]);
             auto* cast_node = dynamic_cast<const QoreCastOperatorNode*>(inv->expr.getInternalNode());
             if (cast_node) {
-                fprintf(stderr, "PHASE1: IR CastComplexHash: calling castValue\n");
                 return cast_node->castValue(inner, xsink);
             }
             // Fallback for unresolved CastAny
-            fprintf(stderr, "PHASE1: IR CastComplexHash: fallback to evalAndRef\n");
             return evalAndRef(inv->expr, xsink);
         }
 
