@@ -773,19 +773,23 @@ WebSocketClient ws(\event(), {
             reconnect = False;
         }
         disconnectIntern(WSCC_GoingAway, True);
-        # Wait for the delivery thread to fully exit before members are destroyed.
-        # Skip the wait if we ARE the delivery thread (self-deadlock case: a user callback
-        # on the delivery thread dropped the last reference and triggered this destructor).
-        # In that case, the delivery thread handles cleanup via !self checks after the
-        # destructor returns, and its on_exit cnt.dec() uses a local Counter reference.
-        bool wait_for_delivery;
+        # Wait for any pending delivery tasks to fully exit before members are destroyed.
+        # This covers the race where scheduleDelivery() has incremented the counter and
+        # submitted a ThreadPool task, but the task hasn't started yet (delivery_thread_id
+        # is still 0).  Without this wait the object would be destroyed before the task
+        # runs, causing OBJECT-ALREADY-DELETED in the ThreadPool worker.
+        #
+        # Skip the wait only in the self-deadlock case: a user callback on the delivery
+        # thread dropped the last reference and triggered this destructor.  In that case,
+        # the delivery thread handles cleanup via !self checks after the destructor
+        # returns, and its on_exit cnt.dec() uses a local Counter reference.
         {
             AutoLock al(delivery_mutex);
-            wait_for_delivery = (delivery_thread_id != 0 && delivery_thread_id != gettid());
+            if (delivery_thread_id != 0 && delivery_thread_id == gettid()) {
+                return;
+            }
         }
-        if (wait_for_delivery) {
-            delivery_thread_counter.waitForZero();
-        }
+        delivery_thread_counter.waitForZero();
     }
 
     #! returns the URL given in the constructor
