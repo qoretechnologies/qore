@@ -473,7 +473,14 @@ QoreValue QoreHashDeclCastOperatorNode::evalImpl(bool& needs_deref, ExceptionSin
             typed_hash_decl_private::get(*hd)->getName(),
             h->getValueTypeInfo() ? QoreTypeInfo::getName(h->getValueTypeInfo()) : "NULL");
     }
-    return typed_hash_decl_private::get(*hd)->newHash(h, true, xsink);
+    QoreValue result = typed_hash_decl_private::get(*hd)->newHash(h, true, xsink);
+    if (hd && strstr(typed_hash_decl_private::get(*hd)->getName(), "DataProvider") && result.getType() == NT_HASH) {
+        const QoreHashNode* result_hash = result.get<const QoreHashNode>();
+        fprintf(stderr, "PHASE2: QoreHashDeclCastOperatorNode::evalImpl RETURN: ptr=%p, hashdecl=%s\n",
+            (void*)result_hash,
+            qore_hash_private::get(*result_hash)->getHashDecl() ? qore_hash_private::get(*result_hash)->getHashDecl()->getName() : "NULL");
+    }
+    return result;
 }
 
 QoreValue QoreHashDeclCastOperatorNode::castValue(QoreValue inner, ExceptionSink* xsink) const {
