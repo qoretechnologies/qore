@@ -616,6 +616,9 @@ public class HttpClientConnectionManager {
                 conn.setControllerRef(controller);
                 submitConnectionToController(key, conn);
 
+                # Reserve a stream slot for the creator thread — same as
+                # the pool-scan path which calls tryReserveStream()
+                conn.tryReserveStream();
                 return conn;
             }
         }

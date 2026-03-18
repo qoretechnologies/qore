@@ -92,9 +92,7 @@ public class HttpClientStreamHandle {
 
     #! Releases any unreleased stream reservation
     destructor() {
-        if (reservation_held) {
-            conn.releaseStreamReservation();
-        }
+        releaseReservationIfHeld();
     }
 
     #! Protocol-specific async request submission (subclasses must implement)
@@ -155,8 +153,8 @@ public class HttpClientStreamHandle {
     #! Marks that a pending stream reservation is held on the connection
     /** Called by @ref HttpClientConnectionManager::acquireStream() after
         @ref HttpClientConnection::tryReserveStream() succeeds.  The
-        reservation is released automatically when the stream is submitted
-        (via @ref HttpClientConnection::submitRequest()) or when this
+        reservation is released automatically when the stream is submitted,
+        when a pre-submit failure occurs (timeout, cancel), or when this
         handle is destroyed without submitting.
     */
     markReservationHeld() {
@@ -166,6 +164,18 @@ public class HttpClientStreamHandle {
     #! Clears the reservation-held flag (caller already released manually)
     markReservationReleased() {
         reservation_held = False;
+    }
+
+    #! Releases the stream reservation if one is held
+    /** Centralizes reservation cleanup for all pre-submit failure paths
+        (timeout, cancel, error) so \c pending_stream_count is freed promptly
+        even if the handle is retained by the caller.
+    */
+    private releaseReservationIfHeld() {
+        if (reservation_held) {
+            reservation_held = False;
+            conn.releaseStreamReservation();
+        }
     }
 
     #! Returns the underlying connection
@@ -310,6 +320,7 @@ public class HttpClientStreamHandle {
                         state = HttpClientStreamState::Pending;
                     }
                 }
+                releaseReservationIfHeld();
                 throw "HTTPCLIENT-TIMEOUT", "connection establishment timed out";
             }
         }
@@ -318,6 +329,7 @@ public class HttpClientStreamHandle {
         {
             AutoLock al(lock);
             if (state != HttpClientStreamState::Open) {
+                releaseReservationIfHeld();
                 throw "HTTPCLIENT-CANCELLED", "stream was cancelled during connection setup";
             }
         }
@@ -327,21 +339,16 @@ public class HttpClientStreamHandle {
         try {
             stream_id = submitAsyncImpl(method, path, headers, body, callback);
             @assert(stream_id >= 0);
-            # Reservation converted to active stream — clear the flag so
-            # the destructor doesn't release again
+            # Reservation converted to active stream
             reservation_held = False;
         } catch (hash<ExceptionInfo> ex) {
             {
                 AutoLock al(lock);
-                # Only reset to Pending if still Open — cancel() may have set Cancelled.
-                # Note: if submitAsyncImpl() throws, the poll operation's
-                # submitRequest() is atomic — the callback was never registered
-                # and active_stream_count was never incremented, so no cleanup
-                # of the poll operation is needed here.
                 if (state == HttpClientStreamState::Open) {
                     state = HttpClientStreamState::Pending;
                 }
             }
+            releaseReservationIfHeld();
             rethrow;
         }
 
@@ -390,6 +397,7 @@ public class HttpClientStreamHandle {
                         state = HttpClientStreamState::Pending;
                     }
                 }
+                releaseReservationIfHeld();
                 throw "HTTPCLIENT-TIMEOUT", "connection establishment timed out";
             }
         }
@@ -398,6 +406,7 @@ public class HttpClientStreamHandle {
         {
             AutoLock al(lock);
             if (state != HttpClientStreamState::Open) {
+                releaseReservationIfHeld();
                 throw "HTTPCLIENT-CANCELLED", "stream was cancelled during connection setup";
             }
         }
@@ -408,6 +417,8 @@ public class HttpClientStreamHandle {
             stream_id = submitAsyncWithDatagramImpl(method, path, headers, body,
                 callback, datagram);
             @assert(stream_id >= 0);
+            # Reservation converted to active stream
+            reservation_held = False;
         } catch (hash<ExceptionInfo> ex) {
             {
                 AutoLock al(lock);
@@ -415,6 +426,7 @@ public class HttpClientStreamHandle {
                     state = HttpClientStreamState::Pending;
                 }
             }
+            releaseReservationIfHeld();
             rethrow;
         }
 
@@ -460,7 +472,10 @@ public class HttpClientStreamHandle {
             p = request_promise;
         }
 
-        if (exists sid) {
+        # Release reservation if the stream was never submitted
+        if (!exists sid) {
+            releaseReservationIfHeld();
+        } else {
             log(LoggerLevel::DEBUG, "cancelling stream %d", sid);
             try {
                 conn.cancelRequest(sid);
