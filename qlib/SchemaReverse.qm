@@ -677,7 +677,7 @@ class <X_SCHEMA_NAME> inherits AbstractSchema {
         }
 
         hash toQore() {
-            if (database().hasCallableMethod(m_function_name)) {
+            if (!database().hasCallableMethod(m_function_name)) {
                 return hash();
             }
 
@@ -727,7 +727,7 @@ class <X_SCHEMA_NAME> inherits AbstractSchema {
         }
 
         hash toQore() {
-            if (database().hasCallableMethod(m_function_name)) {
+            if (!database().hasCallableMethod(m_function_name)) {
                 return hash();
             }
 
