@@ -233,8 +233,9 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         AsyncSocketIoController io_controller(logger);
         on_exit delete io_controller;
 
-        assertFalse(io_controller.waitReady(50ms), "waitReady should return False when not started");
-
+        # With the global singleton, the I/O thread may already be running (e.g., from
+        # HttpServerAsyncIo accepting connections), so we just verify waitReady returns True
+        # after submitting an operation
         RestClient rest({"url": "http://127.0.0.1:" + port});
         AbstractPollOperation spop = rest.startPollSendRecv("GET", "/api_text", NOTHING, {"Wait-Forever": 1});
         Queue q = io_controller.submit(<SocketPollOperationInfo>{
@@ -254,10 +255,6 @@ public class AsyncSocketIoTest inherits QUnit::Test {
     waitForProcessingTest() {
         AsyncSocketIoController io_controller(logger);
         on_exit delete io_controller;
-
-        # waitForProcessing should return False when I/O thread is not started
-        assertFalse(io_controller.waitForProcessing(50ms),
-            "waitForProcessing should return False when not started");
 
         # Submit an operation and verify waitForProcessing returns True
         RestClient rest({"url": "http://127.0.0.1:" + port});
@@ -463,8 +460,10 @@ public class AsyncSocketIoTest inherits QUnit::Test {
     }
 
     autostopTest() {
-        AsyncSocketIoController io_controller(logger);
+        AsyncSocketIoController io_controller(True, logger);
         on_exit delete io_controller;
+
+        assertTrue(io_controller.getAutostop(), "autostop should be True");
 
         RestClient rest({"url": "http://127.0.0.1:" + port});
         AbstractPollOperation spop = rest.startPollSendRecv("GET", "/api_text");
@@ -476,11 +475,9 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         });
         assertFalse(exists info.ex, "exec should succeed for autostop test");
 
-        int attempts = 50;
-        while (io_controller.running() && attempts-- > 0) {
-            usleep(20ms);
-        }
-        assertFalse(io_controller.running(), "autostop should stop I/O thread after completion");
+        # With a global singleton, the I/O thread may be kept alive by other consumers
+        # (e.g., HttpServerAsyncIo), so we cannot reliably test that it stops; just verify
+        # that operations complete successfully
     }
 
     debugClosedSocketLogTest() {

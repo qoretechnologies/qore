@@ -38,14 +38,13 @@ module AsyncSocketIo {
     url     = "http://qore.org";
     license = "MIT";
     init = sub () {
-        # Pre-initialize the global controller singleton
+        # Pre-initialize the global controller singleton (uses AsyncIoController::get() internally)
         AsyncSocketIo::globalController = new AsyncSocketIo::AsyncSocketIoController(True);
     };
     del = sub () {
-        # Stop the global controller and its ThreadPool during module unload
-        # to prevent idle ThreadPool threads from blocking program exit
+        # Stop the Qore wrapper; the underlying C++ singleton is cleaned up in qore_cleanup()
         if (AsyncSocketIo::globalController) {
-            AsyncSocketIo::globalController.stopClear();
+            AsyncSocketIo::globalController.stop();
             delete AsyncSocketIo::globalController;
         }
     };

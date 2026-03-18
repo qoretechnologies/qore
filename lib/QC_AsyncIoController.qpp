@@ -147,45 +147,87 @@ hashdecl Qore::SocketPollResultInfo {
 
     @since %Qore 2.3
 */
-qclass AsyncIoController [dom=NETWORK; arg=AsyncIoControllerPriv* ctrl; ns=Qore];
+qclass AsyncIoController [dom=NETWORK,PROCESS; arg=AsyncIoControllerPriv* ctrl; ns=Qore];
 
 //! Creates a new AsyncIoController
 /** @par Example:
     @code{.py}
-    AsyncIoController ctrl(True);
+    auto ctrl = AsyncIoController::get();
     @endcode
 
     @param autostop if @ref True "True" (default), the I/O thread will automatically exit when
     all operations have completed; if @ref False "False", the I/O thread will keep running
     until explicitly stopped
 
-    @throw EVENT-LOOP-ERROR failed to create the event loop or event notifier
+    @throw ASYNCIOCONTROLLER-CONSTRUCTOR-ERROR cannot be instantiated directly; use
+    AsyncIoController::get() to obtain the process-wide singleton
+
+    @note In debug builds, set the \c QORE_ASYNCIO_TEST_MODE environment variable to \c "1"
+    to allow direct construction for testing purposes
 */
 AsyncIoController::constructor(bool autostop = True) {
+#ifdef DEBUG
+    if (!getenv("QORE_ASYNCIO_TEST_MODE")) {
+        xsink->raiseException("ASYNCIOCONTROLLER-CONSTRUCTOR-ERROR",
+            "cannot be instantiated directly; use AsyncIoController::get() "
+            "(set QORE_ASYNCIO_TEST_MODE=1 for testing)");
+        return;
+    }
+    // create independent instance for testing
     ReferenceHolder<AsyncIoControllerPriv> holder(new AsyncIoControllerPriv(autostop, xsink), xsink);
     if (*xsink) {
         return;
     }
     self->setPrivate(CID_ASYNCIOCONTROLLER, holder.release());
+#else
+    xsink->raiseException("ASYNCIOCONTROLLER-CONSTRUCTOR-ERROR",
+        "cannot be instantiated directly; use AsyncIoController::get()");
+#endif
 }
 
 //! Destroys the AsyncIoController
-/** Stops the I/O thread and cancels all pending operations
+/** Stops the I/O thread and cancels all pending operations.
+
+    @note If this is the global singleton (created via get()), the destructor is a no-op;
+    the singleton is cleaned up during qore_cleanup().
 */
 AsyncIoController::destructor() {
-    ctrl->stop(xsink);
+    if (!qore_is_async_io_controller_singleton(ctrl)) {
+        ctrl->stop(xsink);
+    }
     ctrl->deref(xsink);
 }
 
 //! Creates a copy of the AsyncIoController
-/** @note The copy creates a new independent controller with no shared state
+/** @throw ASYNCIOCONTROLLER-COPY-ERROR AsyncIoController cannot be copied; use
+    AsyncIoController::get() to obtain the singleton
 */
 AsyncIoController::copy() {
-    ReferenceHolder<AsyncIoControllerPriv> holder(new AsyncIoControllerPriv(ctrl->getAutostop(), xsink), xsink);
-    if (*xsink) {
-        return;
+    xsink->raiseException("ASYNCIOCONTROLLER-COPY-ERROR",
+        "AsyncIoController cannot be copied; use AsyncIoController::get()");
+}
+
+//! Returns the process-wide AsyncIoController singleton
+/** The singleton is lazily created on first call with \c autostop=True and cleaned up
+    during qore_cleanup().
+
+    @par Example:
+    @code{.py}
+    auto ctrl = AsyncIoController::get();
+    @endcode
+
+    @return the global AsyncIoController singleton
+
+    @throw EVENT-LOOP-ERROR failed to create the event loop or event notifier (first call only)
+
+    @since %Qore 2.3
+*/
+static AsyncIoController AsyncIoController::get() [dom=NETWORK,PROCESS] {
+    QoreObject* obj = qore_get_async_io_controller_obj(xsink);
+    if (!obj) {
+        return QoreValue();
     }
-    self->setPrivate(CID_ASYNCIOCONTROLLER, holder.release());
+    return obj;
 }
 
 //! Submits an async I/O operation

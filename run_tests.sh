@@ -318,11 +318,17 @@ for test in $TESTS; do
         echo "-------------------------------------"
     fi
 
+    # Set QORE_ASYNCIO_TEST_MODE for AsyncIoController tests (requires debug build)
+    TEST_ENV=""
+    case "$test" in
+        */AsyncIoController/*.qtest) TEST_ENV="QORE_ASYNCIO_TEST_MODE=1" ;;
+    esac
+
     # Run single test.
     if [ $MEASURE_TIME -eq 1 ]; then
-        eval $TIME_CMD $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
+        eval $TEST_ENV $TIME_CMD $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
     else
-        $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
+        eval $TEST_ENV $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
     fi
 
     TEST_EXIT=$?

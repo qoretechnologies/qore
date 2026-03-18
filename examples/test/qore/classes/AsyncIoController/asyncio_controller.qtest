@@ -15,45 +15,52 @@ class AsyncIoControllerTest inherits QUnit::Test {
     }
 
     constructor() : Test("AsyncIoControllerTest", "1.0") {
-        addTestCase("basic construction and state", \testConstruction());
-        addTestCase("autostop flag", \testAutostop());
-        addTestCase("start/stop lifecycle", \testStartStop());
-        addTestCase("submit with queue result", \testSubmitQueue());
-        addTestCase("submit with callback", \testSubmitCallback());
-        addTestCase("submit with shared queue", \testSubmitSharedQueue());
-        addTestCase("exec synchronous", \testExec());
-        addTestCase("cancel by socket", \testCancelBySocket());
-        addTestCase("cancel by key", \testCancelByKey());
-        addTestCase("cancel by owner", \testCancelByOwner());
-        addTestCase("submit with replace", \testSubmitReplace());
-        addTestCase("submit with custom key", \testSubmitCustomKey());
-        addTestCase("autostop behavior", \testAutostopBehavior());
-        addTestCase("autostop disabled", \testAutostopDisabled());
-        addTestCase("multiple concurrent operations", \testMultipleConcurrent());
-        addTestCase("getInfo", \testGetInfo());
-        addTestCase("waitReady", \testWaitReady());
-        addTestCase("other data passthrough", \testOtherData());
-        addTestCase("duplicate key error", \testDuplicateKeyError());
-        addTestCase("submit after stop error", \testSubmitAfterStop());
-        addTestCase("wake", \testWake());
-        addTestCase("operation timeout", \testOperationTimeout());
-        addTestCase("copy constructor", \testCopy());
-        addTestCase("actual timeout expiry", \testActualTimeout());
-        addTestCase("direct cancel when I/O thread not running", \testDirectCancel());
-        addTestCase("setLogger validation", \testSetLoggerValidation());
-        addTestCase("continuePoll exception", \testContinuePollException());
-        addTestCase("controller timer callback fires", \testControllerTimer());
-        addTestCase("controller timer cancel", \testControllerTimerCancel());
-        addTestCase("controller timer cleanup on stop", \testControllerTimerCleanupOnStop());
-        addTestCase("controller timer with I/O", \testControllerTimerWithIo());
+        # Tests using the constructor require a debug build + QORE_ASYNCIO_TEST_MODE=1
+        if (Option::HAVE_LIBRARY_DEBUGGING && ENV.QORE_ASYNCIO_TEST_MODE) {
+            addTestCase("basic construction and state", \testConstruction());
+            addTestCase("autostop flag", \testAutostop());
+            addTestCase("start/stop lifecycle", \testStartStop());
+            addTestCase("submit with queue result", \testSubmitQueue());
+            addTestCase("submit with callback", \testSubmitCallback());
+            addTestCase("submit with shared queue", \testSubmitSharedQueue());
+            addTestCase("exec synchronous", \testExec());
+            addTestCase("cancel by socket", \testCancelBySocket());
+            addTestCase("cancel by key", \testCancelByKey());
+            addTestCase("cancel by owner", \testCancelByOwner());
+            addTestCase("submit with replace", \testSubmitReplace());
+            addTestCase("submit with custom key", \testSubmitCustomKey());
+            addTestCase("autostop behavior", \testAutostopBehavior());
+            addTestCase("autostop disabled", \testAutostopDisabled());
+            addTestCase("multiple concurrent operations", \testMultipleConcurrent());
+            addTestCase("getInfo", \testGetInfo());
+            addTestCase("waitReady", \testWaitReady());
+            addTestCase("other data passthrough", \testOtherData());
+            addTestCase("duplicate key error", \testDuplicateKeyError());
+            addTestCase("submit after stop error", \testSubmitAfterStop());
+            addTestCase("wake", \testWake());
+            addTestCase("operation timeout", \testOperationTimeout());
+            addTestCase("actual timeout expiry", \testActualTimeout());
+            addTestCase("direct cancel when I/O thread not running", \testDirectCancel());
+            addTestCase("setLogger validation", \testSetLoggerValidation());
+            addTestCase("continuePoll exception", \testContinuePollException());
+            addTestCase("controller timer callback fires", \testControllerTimer());
+            addTestCase("controller timer cancel", \testControllerTimerCancel());
+            addTestCase("controller timer cleanup on stop", \testControllerTimerCleanupOnStop());
+            addTestCase("controller timer with I/O", \testControllerTimerWithIo());
 
-        # Dedicated thread tests
-        addTestCase("dedicated thread with C++ continuePoll", \testDedicatedThreadCpp());
-        addTestCase("dedicated thread with Qore continuePoll", \testDedicatedThreadQore());
-        addTestCase("dedicated thread cancel", \testDedicatedThreadCancel());
-        addTestCase("dedicated thread error propagation", \testDedicatedThreadError());
-        addTestCase("dedicated thread cancel by owner", \testDedicatedThreadCancelByOwner());
-        addTestCase("dedicated thread reuse after cancel", \testDedicatedThreadReuse());
+            # Dedicated thread tests
+            addTestCase("dedicated thread with C++ continuePoll", \testDedicatedThreadCpp());
+            addTestCase("dedicated thread with Qore continuePoll", \testDedicatedThreadQore());
+            addTestCase("dedicated thread cancel", \testDedicatedThreadCancel());
+            addTestCase("dedicated thread error propagation", \testDedicatedThreadError());
+            addTestCase("dedicated thread cancel by owner", \testDedicatedThreadCancelByOwner());
+            addTestCase("dedicated thread reuse after cancel", \testDedicatedThreadReuse());
+        }
+
+        # These tests always work (use get() singleton, not constructor)
+        addTestCase("copy constructor error", \testCopy());
+        addTestCase("static get() singleton", \testGetSingleton());
+
         set_return_value(main());
     }
 
@@ -738,18 +745,18 @@ class AsyncIoControllerTest inherits QUnit::Test {
     }
 
     testCopy() {
-        AsyncIoController ctrl(False);
-        AsyncIoController ctrl_copy = ctrl.copy();
+        auto ctrl = AsyncIoController::get();
+        # Copy should raise an error (singleton enforcement)
+        assertThrows("ASYNCIOCONTROLLER-COPY-ERROR", sub () { ctrl.copy(); });
+    }
 
-        # Copy should be independent
-        assertFalse(ctrl_copy.getAutostop());
-        assertFalse(ctrl_copy.running());
-        assertEq(0, ctrl_copy.getCacheSize());
-
-        # Modifying original should not affect copy
-        ctrl.setAutostop(True);
-        assertTrue(ctrl.getAutostop());
-        assertFalse(ctrl_copy.getAutostop());
+    testGetSingleton() {
+        # get() returns the same object every time
+        auto c1 = AsyncIoController::get();
+        auto c2 = AsyncIoController::get();
+        assertTrue(c1 === c2);
+        # Default autostop is True
+        assertTrue(c1.getAutostop());
     }
 
     testActualTimeout() {

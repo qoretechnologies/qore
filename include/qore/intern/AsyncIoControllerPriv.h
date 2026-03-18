@@ -532,4 +532,13 @@ private:
     DLLLOCAL QoreHashNode* callContinuePollDedicated(DedicatedThreadInfo* dti, ExceptionSink* xsink);
 };
 
+//! Returns the global AsyncIoController singleton QoreObject (ref'd for caller); lazy-creates on first call
+DLLLOCAL QoreObject* qore_get_async_io_controller_obj(ExceptionSink* xsink);
+
+//! Cleans up the global AsyncIoController singleton (called from qore_cleanup())
+DLLLOCAL void qore_async_io_controller_cleanup();
+
+//! Returns true if the given controller is the global singleton
+DLLLOCAL bool qore_is_async_io_controller_singleton(AsyncIoControllerPriv* ctrl);
+
 #endif // _QORE_ASYNCIOCONTROLLERPRIV_H

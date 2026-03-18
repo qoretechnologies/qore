@@ -218,6 +218,15 @@ class AsyncIoStressTest inherits QUnit::Test {
     }
 
     constructor() : Test("AsyncIoStressTest", "1.0") {
+        # All stress tests use the constructor directly, requiring debug build + env var
+        if (!Option::HAVE_LIBRARY_DEBUGGING || !ENV.QORE_ASYNCIO_TEST_MODE) {
+            addTestCase("skip notice", sub () {
+                testSkip("stress tests require debug build + QORE_ASYNCIO_TEST_MODE=1");
+            });
+            set_return_value(main());
+            return;
+        }
+
         # Category 1: Multiplexing (HTTP/2 pattern)
         addTestCase("multiplex same socket custom keys", \testMultiplexSameSocketCustomKeys());
         addTestCase("multiplex cancel by key partial", \testMultiplexCancelByKeyPartial());

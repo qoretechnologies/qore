@@ -83,7 +83,8 @@ public class AsyncSocketIoController inherits LoggerWrapper {
 
     #! Creates the object
     constructor(bool autostop, *LoggerInterface logger) : LoggerWrapper(logger) {
-        ctrl = new Qore::AsyncIoController(autostop);
+        ctrl = Qore::AsyncIoController::get();
+        ctrl.setAutostop(autostop);
         if (logger) {
             ctrl.setLogger(logger);
         }
@@ -91,7 +92,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
 
     #! Creates the object
     constructor(*LoggerInterface logger) : LoggerWrapper(logger) {
-        ctrl = new Qore::AsyncIoController(True);
+        ctrl = Qore::AsyncIoController::get();
         if (logger) {
             ctrl.setLogger(logger);
         }

@@ -44,6 +44,58 @@
 extern qore_classid_t CID_QUEUE;
 extern QoreClass* QC_QUEUE;
 
+extern qore_classid_t CID_ASYNCIOCONTROLLER;
+extern QoreClass* QC_ASYNCIOCONTROLLER;
+
+// --- Global singleton state ---
+static QoreThreadLock aio_singleton_lock;
+static AsyncIoControllerPriv* aio_singleton = nullptr;
+static QoreObject* aio_singleton_obj = nullptr;
+
+QoreObject* qore_get_async_io_controller_obj(ExceptionSink* xsink) {
+    AutoLocker al(aio_singleton_lock);
+    if (aio_singleton_obj) {
+        aio_singleton_obj->ref();
+        return aio_singleton_obj;
+    }
+    // Lazy-create singleton with autostop=True
+    ReferenceHolder<AsyncIoControllerPriv> holder(new AsyncIoControllerPriv(true, xsink), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    aio_singleton = *holder;
+    QoreObject* obj = new QoreObject(QC_ASYNCIOCONTROLLER, nullptr, holder.release());
+    aio_singleton_obj = obj;
+    // Return an extra ref for the caller
+    obj->ref();
+    return obj;
+}
+
+void qore_async_io_controller_cleanup() {
+    QoreObject* obj;
+    AsyncIoControllerPriv* priv;
+    {
+        AutoLocker al(aio_singleton_lock);
+        obj = aio_singleton_obj;
+        priv = aio_singleton;
+        aio_singleton_obj = nullptr;
+        aio_singleton = nullptr;
+    }
+    if (priv) {
+        ExceptionSink xsink;
+        priv->stopClear(&xsink);
+    }
+    if (obj) {
+        ExceptionSink xsink;
+        obj->deref(&xsink);
+    }
+}
+
+bool qore_is_async_io_controller_singleton(AsyncIoControllerPriv* ctrl) {
+    AutoLocker al(aio_singleton_lock);
+    return ctrl == aio_singleton;
+}
+
 //! Thread-local flag: true when running on any async I/O thread (main or dedicated).
 //! Used to detect re-entrant calls from Qore object destructors triggered during
 //! callback cleanup on I/O threads.  These threads were not designed to run Qore code,
