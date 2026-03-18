@@ -1093,6 +1093,12 @@ public:
         if (ti == autoHashTypeInfo || ti == autoHashOrNothingTypeInfo) {
             return autoTypeInfo;
         }
+        // Handle or_nothing types which have 2 return specs (actual type + NOTHING)
+        if (ti->return_vec.size() > 1) {
+            if (ti->return_vec.size() != 2 || (ti->return_vec[1].spec.match(NT_NOTHING) != QTI_IDENT)) {
+                return nullptr;
+            }
+        }
         return ti->return_vec[0].spec.getComplexHash();
     }
 
@@ -1104,6 +1110,12 @@ public:
         assert(!ti->return_vec.empty());
         if (ti == autoListTypeInfo || ti == autoListOrNothingTypeInfo) {
             return autoTypeInfo;
+        }
+        // Handle or_nothing types which have 2 return specs (actual type + NOTHING)
+        if (ti->return_vec.size() > 1) {
+            if (ti->return_vec.size() != 2 || (ti->return_vec[1].spec.match(NT_NOTHING) != QTI_IDENT)) {
+                return nullptr;
+            }
         }
         return ti->return_vec[0].spec.getComplexList();
     }
