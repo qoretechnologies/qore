@@ -1219,6 +1219,43 @@ public:
 
     DLLLOCAL void acceptInputIntern(ExceptionSink* xsink, const char* arg_type, bool obj, int param_num,
             const char* param_name, QoreValue& n, LValueHelper* lvhelper = nullptr) const {
+        // CRITICAL FIX Phase 2: Prioritize complex hash/list handlers for optional types
+        // For optional types (return_vec.size() > 1), we need to ensure complex hash/list
+        // handlers are tried BEFORE hashdecl handlers to prevent incorrect routing.
+        // This prevents inner hashdecls from being extracted and applied to outer containers.
+
+        if (return_vec.size() > 1 && return_vec[1].spec.match(NT_NOTHING) == QTI_IDENT) {
+            // This is a proper optional type. For optional complex hashes/lists, try those first.
+            // Check if return_vec[0] indicates a complex hash or list
+            q_typespec_t base_typespec = return_vec[0].spec.getTypeSpec();
+            if (base_typespec == QTS_COMPLEXHASH || base_typespec == QTS_COMPLEXLIST ||
+                base_typespec == QTS_COMPLEXSOFTLIST) {
+                // Try complex hash/list specs first
+                for (auto& t : accept_vec) {
+                    q_typespec_t spec_type = t.spec.getTypeSpec();
+                    if (spec_type == QTS_COMPLEXHASH || spec_type == QTS_COMPLEXLIST ||
+                        spec_type == QTS_COMPLEXSOFTLIST) {
+                        if (t.spec.acceptInput(xsink, *this, t.map, arg_type, obj, param_num, param_name, n, lvhelper)) {
+                            return;
+                        }
+                    }
+                }
+                // If complex handlers didn't work, try hashdecl/other handlers
+                for (auto& t : accept_vec) {
+                    q_typespec_t spec_type = t.spec.getTypeSpec();
+                    if (spec_type != QTS_COMPLEXHASH && spec_type != QTS_COMPLEXLIST &&
+                        spec_type != QTS_COMPLEXSOFTLIST) {
+                        if (t.spec.acceptInput(xsink, *this, t.map, arg_type, obj, param_num, param_name, n, lvhelper)) {
+                            return;
+                        }
+                    }
+                }
+                doAcceptError(false, arg_type, obj, param_num, param_name, n, xsink);
+                return;
+            }
+        }
+
+        // Normal routing for non-optional or non-complex types
         for (auto& t : accept_vec) {
             if (t.spec.acceptInput(xsink, *this, t.map, arg_type, obj, param_num, param_name, n, lvhelper)) {
                 return;
