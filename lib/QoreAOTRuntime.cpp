@@ -1585,19 +1585,26 @@ class ExprTreeDeserializer {
                     return QoreValue(new QoreClassCastOperatorNode(&loc_builtin, qc, operand,
                         or_nothing != 0));
                 }
+                // Check complex hash/list types BEFORE hashdecl, since hash<HashdeclType> has both
+                qore_type_t bt = QoreTypeInfo::getBaseType(ti);
+                if (bt == NT_HASH) {
+                    const QoreTypeInfo* ch = QoreTypeInfo::getUniqueReturnComplexHash(ti);
+                    if (ch) {
+                        return QoreValue(new QoreComplexHashCastOperatorNode(&loc_builtin, ti, operand,
+                            or_nothing != 0));
+                    }
+                }
+                if (bt == NT_LIST) {
+                    const QoreTypeInfo* cl = QoreTypeInfo::getUniqueReturnComplexList(ti);
+                    if (cl) {
+                        return QoreValue(new QoreComplexListCastOperatorNode(&loc_builtin, ti, operand,
+                            or_nothing != 0));
+                    }
+                }
+                // Try hashdecl
                 const TypedHashDecl* hd = QoreTypeInfo::getUniqueReturnHashDecl(ti);
                 if (hd) {
                     return QoreValue(new QoreHashDeclCastOperatorNode(&loc_builtin, hd, operand,
-                        or_nothing != 0));
-                }
-                // Complex hash or list types
-                qore_type_t bt = QoreTypeInfo::getBaseType(ti);
-                if (bt == NT_HASH) {
-                    return QoreValue(new QoreComplexHashCastOperatorNode(&loc_builtin, ti, operand,
-                        or_nothing != 0));
-                }
-                if (bt == NT_LIST) {
-                    return QoreValue(new QoreComplexListCastOperatorNode(&loc_builtin, ti, operand,
                         or_nothing != 0));
                 }
                 // Fallback — try as class cast with null class (for basic types)

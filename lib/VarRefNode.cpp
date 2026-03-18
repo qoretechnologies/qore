@@ -475,26 +475,27 @@ int VarRefNewObjectNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_c
         err = parseInitConstructorCall(loc, parse_context, qc);
         vrn_type = VRN_OBJECT;
     } else {
-        const TypedHashDecl* hd = QoreTypeInfo::getUniqueReturnHashDecl(typeInfo);
-        if (hd) {
-            err = parseInitHashDeclInitialization(loc, parse_context, hd);
-            vrn_type = VRN_HASHDECL;
+        // Check complex hash/list BEFORE hashdecl, since hash<HashdeclType> has both
+        const QoreTypeInfo* ti = typeInfo == autoHashTypeInfo
+            ? autoTypeInfo
+            : QoreTypeInfo::getUniqueReturnComplexHash(typeInfo);
+        //printd(5, "VarRefNewObjectNode::parseInitImpl() ti: %p type: '%s' ti: %p '%s'\n", typeInfo,
+        //  QoreTypeInfo::getName(typeInfo), ti, QoreTypeInfo::getName(ti));
+        if (ti) {
+            parse_context.typeInfo = ti;
+            err = parseInitComplexHashInitialization(loc, parse_context);
+            vrn_type = VRN_COMPLEXHASH;
         } else {
-            const QoreTypeInfo* ti = typeInfo == autoHashTypeInfo
-                ? autoTypeInfo
-                : QoreTypeInfo::getUniqueReturnComplexHash(typeInfo);
-            //printd(5, "VarRefNewObjectNode::parseInitImpl() ti: %p type: '%s' ti: %p '%s'\n", typeInfo,
-            //  QoreTypeInfo::getName(typeInfo), ti, QoreTypeInfo::getName(ti));
+            ti = typeInfo == autoListTypeInfo ? autoTypeInfo : QoreTypeInfo::getUniqueReturnComplexList(typeInfo);
             if (ti) {
                 parse_context.typeInfo = ti;
-                err = parseInitComplexHashInitialization(loc, parse_context);
-                vrn_type = VRN_COMPLEXHASH;
+                err = parseInitComplexListInitialization(loc, parse_context);
+                vrn_type = VRN_COMPLEXLIST;
             } else {
-                ti = typeInfo == autoListTypeInfo ? autoTypeInfo : QoreTypeInfo::getUniqueReturnComplexList(typeInfo);
-                if (ti) {
-                    parse_context.typeInfo = ti;
-                    err = parseInitComplexListInitialization(loc, parse_context);
-                    vrn_type = VRN_COMPLEXLIST;
+                const TypedHashDecl* hd = QoreTypeInfo::getUniqueReturnHashDecl(typeInfo);
+                if (hd) {
+                    err = parseInitHashDeclInitialization(loc, parse_context, hd);
+                    vrn_type = VRN_HASHDECL;
                 } else {
                     parse_error(*loc, "type '%s' does not support implied constructor instantiation",
                         QoreTypeInfo::getName(typeInfo));

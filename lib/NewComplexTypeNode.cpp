@@ -53,6 +53,21 @@ int ParseNewComplexTypeNode::parseInitImpl(QoreValue& val, QoreParseContext& par
         }
     }
     {
+        // Check complex hash BEFORE hashdecl, since hash<HashdeclType> has both
+        const QoreTypeInfo* ti = QoreTypeInfo::getUniqueReturnComplexHash(parse_context.typeInfo);
+        if (ti) {
+            ReferenceHolder<> holder(this, nullptr);
+            const QoreTypeInfo* returnTypeInfo = parse_context.typeInfo;
+            parse_context.typeInfo = ti;
+            if (qore_hash_private::parseInitComplexHashInitialization(loc, parse_context, args) && !err) {
+                err = -1;
+            }
+            parse_context.typeInfo = returnTypeInfo;
+            val = new NewComplexHashNode(loc, parse_context.typeInfo, takeArgs());
+            return err;
+        }
+    }
+    {
         const TypedHashDecl* hd = QoreTypeInfo::getUniqueReturnHashDecl(parse_context.typeInfo);
         if (hd) {
             ReferenceHolder<> holder(this, nullptr);
@@ -64,20 +79,6 @@ int ParseNewComplexTypeNode::parseInitImpl(QoreValue& val, QoreParseContext& par
             }
             parse_context.typeInfo = returnTypeInfo;
             val = new NewHashDeclNode(loc, hd, takeArgs(), runtime_check);
-            return err;
-        }
-    }
-    {
-        const QoreTypeInfo* ti = QoreTypeInfo::getUniqueReturnComplexHash(parse_context.typeInfo);
-        if (ti) {
-            ReferenceHolder<> holder(this, nullptr);
-            const QoreTypeInfo* returnTypeInfo = parse_context.typeInfo;
-            parse_context.typeInfo = ti;
-            if (qore_hash_private::parseInitComplexHashInitialization(loc, parse_context, args) && !err) {
-                err = -1;
-            }
-            parse_context.typeInfo = returnTypeInfo;
-            val = new NewComplexHashNode(loc, parse_context.typeInfo, takeArgs());
             return err;
         }
     }

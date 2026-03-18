@@ -5941,17 +5941,18 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
             id.constructor_args = vrn->getArgs();
             return id;
         }
+        // Complex hash construction (e.g., hash<string, int> h())
+        // Check complex hash BEFORE hashdecl, since hash<HashdeclType> has both
+        if (QoreTypeInfo::getUniqueReturnComplexHash(vrn->getTypeInfo())) {
+            id.kind = AOTExprKind::COMPLEX_HASH_NEW;
+            id.ref1 = QoreTypeInfo::getPath(vrn->getTypeInfo());
+            return id;
+        }
         // Hashdecl construction (e.g., MyHashDecl h())
         const TypedHashDecl* hd = QoreTypeInfo::getUniqueReturnHashDecl(vrn->getTypeInfo());
         if (hd) {
             id.kind = AOTExprKind::HASHDECL_NEW;
             id.ref1 = hd->getNamespacePath();
-            return id;
-        }
-        // Complex hash construction (e.g., hash<string, int> h())
-        if (QoreTypeInfo::getUniqueReturnComplexHash(vrn->getTypeInfo())) {
-            id.kind = AOTExprKind::COMPLEX_HASH_NEW;
-            id.ref1 = QoreTypeInfo::getPath(vrn->getTypeInfo());
             return id;
         }
         // Complex list construction (e.g., list<string> l())
