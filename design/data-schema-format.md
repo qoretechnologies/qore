@@ -193,9 +193,9 @@ migrations:
 
 | Action | Required Fields | Description |
 |--------|----------------|-------------|
-| `update` | `table`, `set`, `where` | Update rows |
+| `update` | `table`, `set`, `where` or `where_all` | Update rows (`where_all: true` to update all) |
 | `insert` | `table`, `row` or `rows` | Insert rows |
-| `delete` | `table`, `where` | Delete rows |
+| `delete` | `table`, `where` or `where_all` | Delete rows (`where_all: true` to delete all) |
 | `insert_from_select` | `table`, `columns`, `source_table`, `select` | Copy data between tables |
 | `add_column` | `table`, `column`, `type` | Add a column |
 | `drop_column` | `table`, `column` | Drop a column |

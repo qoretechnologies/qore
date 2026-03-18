@@ -328,6 +328,10 @@ public const DataSchemaJsonSchema = {
                 "type": {},
                 "set": {"type": "object"},
                 "where": {},
+                "where_all": {
+                    "type": "boolean",
+                    "description": "Set to true to allow update/delete without a where clause (affects all rows)",
+                },
                 "row": {"type": "object"},
                 "rows": {"type": "array"},
                 "columns": {

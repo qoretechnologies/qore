@@ -306,6 +306,11 @@ public class MigrationExecutor {
     private executeUpdate(hash<auto> step, *SqlUtil::Tables table_cache) {
         validateStepField(step, "table");
         validateStepField(step, "set");
+        if (!step.hasKey("where") && !step.where_all) {
+            throw "MIGRATION-ERROR", sprintf("migration step %y action 'update' requires a 'where' "
+                "clause or 'where_all: true' to update all rows",
+                step.id ?? "unknown");
+        }
         AbstractTable table = getTable(step.table, table_cache);
         table.update(step.set, step.where);
     }
@@ -333,6 +338,11 @@ public class MigrationExecutor {
     */
     private executeDelete(hash<auto> step, *SqlUtil::Tables table_cache) {
         validateStepField(step, "table");
+        if (!step.hasKey("where") && !step.where_all) {
+            throw "MIGRATION-ERROR", sprintf("migration step %y action 'delete' requires a 'where' "
+                "clause or 'where_all: true' to delete all rows",
+                step.id ?? "unknown");
+        }
         AbstractTable table = getTable(step.table, table_cache);
         table.del(step.where);
     }
