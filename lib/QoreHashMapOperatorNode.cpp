@@ -192,9 +192,6 @@ QoreValue QoreHashMapOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xs
 
                 if (ref_rv) {
                     const QoreTypeInfo* vtype = val->getFullTypeInfo();
-                    printd(5, "QoreHashMapOperatorNode::evalImpl() i: %d vcommon: %d vtype: %p '%s' valueType: %p '%s'\n",
-                        li.index(), vcommon, vtype, QoreTypeInfo::getName(vtype), valueType,
-                        QoreTypeInfo::getName(valueType));
                     if (!li.index()) {
                         if (vtype && vtype != anyTypeInfo) {
                             valueType = vtype;
@@ -271,9 +268,6 @@ QoreValue QoreHashMapOperatorNode::mapIterator(AbstractIteratorHelper& h, Except
 
             if (ref_rv) {
                 const QoreTypeInfo* vtype = val->getFullTypeInfo();
-                printd(5, "QoreHashMapOperatorNode::mapIterator() i: %d vcommon: %d vtype: %p '%s' valueType: %p " \
-                    "'%s'\n", i, vcommon, vtype, QoreTypeInfo::getName(vtype), valueType,
-                    QoreTypeInfo::getName(valueType));
                 if (i == 1) {
                     if (vtype && vtype != anyTypeInfo) {
                         valueType = vtype;
