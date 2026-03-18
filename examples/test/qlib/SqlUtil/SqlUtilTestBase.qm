@@ -20,7 +20,7 @@ module SqlUtilTestBase {
 %requires(reexport) ../../../../qlib/DataProvider
 %requires(reexport) ../../../../qlib/SqlUtil
 %requires(reexport) ../../../../qlib/BulkSqlUtil
-%requires(reexport) ../../../../qlib/Schema.qm
+%requires(reexport) ../../../../qlib/Schema
 %requires(reexport) ../../../../qlib/DbDataProvider
 %requires(reexport) ../../../../qlib/Mapper.qm
 

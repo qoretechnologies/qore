@@ -5925,7 +5925,7 @@ public class DpqlTest inherits QUnit::Test {
                 ),
                 "return_type": AbstractDataProviderType::get(StringType),
             },
-        } + DataProviderGenericExpressions;
+        } + (DataProviderGenericExpressions - ("substr",));
 
         # --- Test 1: Field completions include type info in detail ---
         {

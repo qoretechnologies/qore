@@ -328,6 +328,7 @@ set(QORE_BIN_FILES
     bin/qdp
     bin/qget
     bin/rest
+    bin/qschema
     bin/schema-reverse
     bin/sfrest
     bin/saprest
@@ -1886,7 +1887,7 @@ qore_user_module("qlib/FixedLengthUtil" "Util;DataProvider")
 qore_user_module("qlib/Mapper.qm" "MapperUtil;DataProvider")
 qore_user_module("qlib/FtpPollerUtil.qm" "DataProvider")
 qore_user_module("qlib/BulkSqlUtil" "SqlUtil")
-qore_user_module("qlib/Schema.qm" "SqlUtil;Util")
+qore_user_module("qlib/Schema" "SqlUtil;Util;DataProvider")
 qore_user_module("qlib/TelnetClient.qm" "ConnectionProvider")
 qore_user_module("qlib/DebugCmdLine.qm" "ConnectionProvider;DebugUtil;DebugProgramControl")
 qore_user_module("qlib/DiscordWebSocketClient.qm" "ConnectionProvider;Util;WebSocketUtil;WebSocketClient")

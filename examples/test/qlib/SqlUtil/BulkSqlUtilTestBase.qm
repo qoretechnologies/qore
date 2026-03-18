@@ -18,7 +18,7 @@ module BulkSqlUtilTestBase {
 %requires ../../../../qlib/DataProvider
 %requires ../../../../qlib/SqlUtil
 %requires ../../../../qlib/BulkSqlUtil
-%requires ../../../../qlib/Schema.qm
+%requires ../../../../qlib/Schema
 
 public class SqlUtilTestSchema inherits AbstractSchema {
     constructor(AbstractDatasource ds, *string dts, *string its) : AbstractSchema(ds, dts, its) {

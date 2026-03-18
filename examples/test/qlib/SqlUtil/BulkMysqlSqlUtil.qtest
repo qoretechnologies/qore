@@ -9,7 +9,7 @@
 %requires ../../../../qlib/SqlUtil
 %requires ../../../../qlib/BulkSqlUtil
 %requires ../../../../qlib/MysqlSqlUtil.qm
-%requires ../../../../qlib/Schema.qm
+%requires ../../../../qlib/Schema
 
 %requires ./BulkSqlUtilTestBase.qm
 #/;

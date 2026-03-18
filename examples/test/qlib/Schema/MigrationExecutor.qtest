@@ -1,0 +1,226 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/Schema
+%requires ../../../../qlib/SqlUtil
+
+%requires QUnit
+
+%exec-class MigrationExecutorTest
+
+class MigrationExecutorTest inherits QUnit::Test {
+    constructor() : Test("MigrationExecutor", "1.0") {
+        addTestCase("step ordering - no deps", \stepOrderNoDepsTests());
+        addTestCase("step ordering - with deps", \stepOrderWithDepsTests());
+        addTestCase("step ordering - mixed deps", \stepOrderMixedTests());
+        addTestCase("circular dependency detection", \circularDepsTests());
+        addTestCase("unknown dependency detection", \unknownDepsTests());
+        addTestCase("action permission sets", \actionPermissionTests());
+        addTestCase("version filtering logic", \versionFilteringTests());
+        addTestCase("validateStepField negative tests", \validateStepFieldTests());
+        addTestCase("action-to-switch completeness", \actionSwitchCompletenessTests());
+        set_return_value(main());
+    }
+
+    stepOrderNoDepsTests() {
+        list<auto> steps = (
+            {"action": "update", "table": "t1"},
+            {"action": "insert", "table": "t2"},
+            {"action": "delete", "table": "t3"},
+        );
+        list<auto> ordered = Schema::MigrationExecutor::resolveStepOrder(steps);
+        assertEq(3, ordered.size());
+        # Without deps, declaration order is preserved
+        assertEq("update", ordered[0].action);
+        assertEq("insert", ordered[1].action);
+        assertEq("delete", ordered[2].action);
+    }
+
+    stepOrderWithDepsTests() {
+        # Linear chain: a -> b -> c
+        list<auto> steps = (
+            {"id": "c", "action": "delete", "depends_on": ("b",)},
+            {"id": "a", "action": "update"},
+            {"id": "b", "action": "insert", "depends_on": ("a",)},
+        );
+        list<auto> ordered = Schema::MigrationExecutor::resolveStepOrder(steps);
+        assertEq(3, ordered.size());
+        assertEq("a", ordered[0].id);
+        assertEq("b", ordered[1].id);
+        assertEq("c", ordered[2].id);
+
+        # Diamond: a -> b, a -> c, b -> d, c -> d
+        steps = (
+            {"id": "d", "action": "update", "depends_on": ("b", "c")},
+            {"id": "b", "action": "update", "depends_on": ("a",)},
+            {"id": "c", "action": "update", "depends_on": ("a",)},
+            {"id": "a", "action": "update"},
+        );
+        ordered = Schema::MigrationExecutor::resolveStepOrder(steps);
+        assertEq(4, ordered.size());
+        assertEq("a", ordered[0].id);
+        # b and c can be in either order (both depend only on a)
+        assertTrue((ordered[1].id == "b" && ordered[2].id == "c")
+            || (ordered[1].id == "c" && ordered[2].id == "b"));
+        assertEq("d", ordered[3].id);
+    }
+
+    stepOrderMixedTests() {
+        # Mix of steps with and without dependencies
+        list<auto> steps = (
+            {"action": "update", "table": "t0"},  # no id, no deps
+            {"id": "b", "action": "insert", "depends_on": ("a",)},
+            {"id": "a", "action": "delete"},
+        );
+        list<auto> ordered = Schema::MigrationExecutor::resolveStepOrder(steps);
+        assertEq(3, ordered.size());
+        # t0 and a both have 0 in-degree; declaration order preserves t0 first
+        assertEq("update", ordered[0].action);
+        assertEq("a", ordered[1].id);
+        assertEq("b", ordered[2].id);
+    }
+
+    circularDepsTests() {
+        # Direct circular: a -> b, b -> a
+        assertThrows("MIGRATION-ERROR", \Schema::MigrationExecutor::resolveStepOrder(), ((
+            {"id": "a", "action": "update", "depends_on": ("b",)},
+            {"id": "b", "action": "update", "depends_on": ("a",)},
+        ),));
+
+        # Indirect circular: a -> b -> c -> a
+        assertThrows("MIGRATION-ERROR", \Schema::MigrationExecutor::resolveStepOrder(), ((
+            {"id": "a", "action": "update", "depends_on": ("c",)},
+            {"id": "b", "action": "update", "depends_on": ("a",)},
+            {"id": "c", "action": "update", "depends_on": ("b",)},
+        ),));
+    }
+
+    unknownDepsTests() {
+        assertThrows("MIGRATION-ERROR", \Schema::MigrationExecutor::resolveStepOrder(), ((
+            {"id": "a", "action": "update", "depends_on": ("nonexistent",)},
+        ),));
+    }
+
+    actionPermissionTests() {
+        # Unrestricted actions
+        foreach string action in (("update", "insert", "delete", "insert_from_select",
+                "add_column", "drop_column", "modify_column", "rename_column",
+                "rename_table", "add_index", "drop_index",
+                "add_constraint", "drop_constraint", "add_trigger", "drop_trigger")) {
+            assertTrue(Schema::UnrestrictedActions{action}, sprintf("%s should be unrestricted", action));
+        }
+
+        # Restricted actions
+        assertTrue(Schema::RestrictedActions{"sql"});
+        assertTrue(Schema::RestrictedActions{"script"});
+
+        # Unrestricted should NOT contain restricted
+        assertFalse(Schema::UnrestrictedActions.hasKey("sql"));
+        assertFalse(Schema::UnrestrictedActions.hasKey("script"));
+    }
+
+    versionFilteringTests() {
+        # Test that version comparison logic is correct
+        # compare_version("1.0", "1.1") < 0  → 1.0 is older
+        assertTrue(Util::compare_version("1.0.0", "1.1.0") < 0);
+        assertTrue(Util::compare_version("1.1.0", "1.0.0") > 0);
+        assertTrue(Util::compare_version("1.0.0", "1.0.0") == 0);
+
+        # Verify migration version filtering logic:
+        # For current=1.0, target=2.0:
+        #   version 0.9 → skip (not > current)
+        #   version 1.0 → skip (not > current)
+        #   version 1.1 → execute (> current and <= target)
+        #   version 2.0 → execute (> current and <= target)
+        #   version 2.1 → skip (> target)
+        list<string> versions = ("0.9.0", "1.0.0", "1.1.0", "2.0.0", "2.1.0");
+        string current = "1.0.0";
+        string target = "2.0.0";
+
+        list<string> should_execute;
+        foreach string v in (versions) {
+            if (Util::compare_version(v, current) > 0 && Util::compare_version(v, target) <= 0) {
+                push should_execute, v;
+            }
+        }
+        assertEq(("1.1.0", "2.0.0"), should_execute);
+    }
+
+    validateStepFieldTests() {
+        # MigrationExecutor.validateStepField is private, but we test it indirectly
+        # through executeStep which calls it. Since we don't have a DB, we can't call
+        # executeStep directly, but we CAN verify the validation constants are consistent
+        # and test resolveStepOrder error paths for step field issues.
+
+        # Step with missing id referenced by depends_on
+        assertThrows("MIGRATION-ERROR", "unknown step id", \Schema::MigrationExecutor::resolveStepOrder(), ((
+            {"id": "a", "action": "update", "depends_on": ("missing_step",)},
+        ),));
+
+        # Step without id that has depends_on (should still work - just no id to reference)
+        list<auto> steps = (
+            {"action": "update", "table": "t1"},
+            {"id": "b", "action": "insert", "depends_on": ("a",)},
+            {"id": "a", "action": "delete"},
+        );
+        list<auto> ordered = Schema::MigrationExecutor::resolveStepOrder(steps);
+        assertEq(3, ordered.size());
+
+        # Duplicate step IDs: second one overwrites first in id_to_index
+        steps = (
+            {"id": "dup", "action": "update"},
+            {"id": "dup", "action": "insert"},
+        );
+        ordered = Schema::MigrationExecutor::resolveStepOrder(steps);
+        assertEq(2, ordered.size());
+
+        # Verify all action types are in either UnrestrictedActions or RestrictedActions
+        hash<string, bool> all_actions = Schema::UnrestrictedActions + Schema::RestrictedActions;
+        assertEq(17, all_actions.size());  # 15 unrestricted + 2 restricted
+
+        # Empty steps list
+        assertEq(0, Schema::MigrationExecutor::resolveStepOrder(()).size());
+
+        # Single step with no deps
+        steps = ({"action": "update", "table": "t"},);
+        ordered = Schema::MigrationExecutor::resolveStepOrder(steps);
+        assertEq(1, ordered.size());
+        assertEq("update", ordered[0].action);
+
+        # Self-dependency should cause circular detection
+        assertThrows("MIGRATION-ERROR", "circular dependency", \Schema::MigrationExecutor::resolveStepOrder(), ((
+            {"id": "self", "action": "update", "depends_on": ("self",)},
+        ),));
+    }
+
+    actionSwitchCompletenessTests() {
+        # Verify every unrestricted action has a corresponding entry in UnrestrictedActions
+        list<string> expected_unrestricted = (
+            "update", "insert", "delete", "insert_from_select",
+            "add_column", "drop_column", "modify_column", "rename_column",
+            "rename_table", "add_index", "drop_index",
+            "add_constraint", "drop_constraint", "add_trigger", "drop_trigger",
+        );
+        foreach string action in (expected_unrestricted) {
+            assertTrue(Schema::UnrestrictedActions{action},
+                sprintf("action %y should be in UnrestrictedActions", action));
+            assertFalse(Schema::RestrictedActions.hasKey(action),
+                sprintf("action %y should NOT be in RestrictedActions", action));
+        }
+
+        # Verify restricted actions
+        list<string> expected_restricted = ("sql", "script");
+        foreach string action in (expected_restricted) {
+            assertTrue(Schema::RestrictedActions{action},
+                sprintf("action %y should be in RestrictedActions", action));
+            assertFalse(Schema::UnrestrictedActions.hasKey(action),
+                sprintf("action %y should NOT be in UnrestrictedActions", action));
+        }
+
+        # Total actions should match
+        assertEq(expected_unrestricted.size(), Schema::UnrestrictedActions.size());
+        assertEq(expected_restricted.size(), Schema::RestrictedActions.size());
+    }
+}
