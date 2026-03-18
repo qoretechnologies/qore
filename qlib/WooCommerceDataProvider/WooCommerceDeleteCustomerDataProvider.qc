@@ -105,7 +105,7 @@ public class WooCommerceDeleteCustomerDataProvider inherits WooCommerceDataProvi
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         hash<auto> params = {"force": req.force ?? True ? "true" : "false"};
-        if (req.reassign) {
+        if (exists req.reassign) {
             params.reassign = req.reassign;
         }
         return doDelete(sprintf("customers/%d", req.id), params);

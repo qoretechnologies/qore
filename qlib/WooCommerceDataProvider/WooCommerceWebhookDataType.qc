@@ -77,6 +77,7 @@ public class WooCommerceWebhookDataType inherits HashDataType {
                 "short_desc": "Webhook secret",
                 "type": StringOrNothingType,
                 "desc": "The secret used to generate the webhook delivery signature",
+                "sensitive": True,
             },
             "date_created": {
                 "display_name": "Date Created",

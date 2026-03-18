@@ -44,7 +44,7 @@ public class WooCommerceBaseEventDataProvider inherits WooCommerceDataProviderBa
         #! WooCommerce webhook ID (returned when creating the webhook)
         *int webhook_id;
 
-        #! Webhook secret for verifying deliveries
+        #! Webhook secret sent to WooCommerce for delivery signing
         string webhook_secret;
     }
 
