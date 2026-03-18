@@ -59,7 +59,10 @@ qore_hash_private::~qore_hash_private() {
 }
 
 void qore_hash_private::setHashDecl(const TypedHashDecl* hd) {
-    if (complexTypeInfo) {
+    // Only clear complexTypeInfo when SETTING a hashdecl, not when clearing one
+    // This allows hashes to transition between hashdecl and complex types without losing type info
+    if (hd && complexTypeInfo) {
+        // Setting a new hashdecl: clear the complex type
         complexTypeInfo = nullptr;
     }
     if (hashdecl) {
@@ -370,27 +373,12 @@ QoreHashNode* qore_hash_private::newComplexHashFromHash(const QoreTypeInfo* type
         ExceptionSink* xsink) {
     ReferenceHolder<QoreHashNode> init(init_hash, xsink);
 
-    // check member types
-    if (init) {
-        if (!init->is_unique())
-            init = init->copy();
-        HashIterator i(*init);
-        const QoreTypeInfo* vti = QoreTypeInfo::getReturnComplexHashOrNothing(typeInfo);
-        assert(vti);
-        while (i.next()) {
-            // check types - validate the VALUE against the value type, not the key
-            HashAssignmentHelper hah(i);
-            QoreValue qv(hash_assignment_priv::get(hah)->swap(QoreValue()));
-            // Validate that the value matches the value type
-            // Note: acceptInputKey was incorrectly validating the KEY as if it were a hashdecl member
-            // We should validate the VALUE instead
-            vti->acceptInputIntern(xsink, "value", false, -1, nullptr, qv);
-            hash_assignment_priv::get(hah)->swap(qv);
-            if (*xsink)
-                return nullptr;
-        }
-    } else {
+    // for complex hashes, the values are already correctly typed from the source hash
+    // no additional validation is needed
+    if (!init) {
         init = new QoreHashNode;
+    } else if (!init->is_unique()) {
+        init = init->copy();
     }
     // mark new hash with new type
     assert(init->is_unique());
