@@ -320,7 +320,7 @@ for test in $TESTS; do
 
     # Run single test.
     if [ $MEASURE_TIME -eq 1 ]; then
-        $TIME_CMD $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
+        eval $TIME_CMD $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
     else
         $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
     fi
