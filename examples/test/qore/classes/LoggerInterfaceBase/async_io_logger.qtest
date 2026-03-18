@@ -52,10 +52,13 @@ class AsyncIoLoggerTest inherits QUnit::Test {
         addTestCase("clear logger", \testClearLogger());
         addTestCase("replace logger", \testReplaceLogger());
         addTestCase("set_async_io_logger validation", \testSetAsyncIoLoggerValidation());
-        addTestCase("AsyncIoController global fallback", \testControllerGlobalFallback());
-        addTestCase("AsyncIoController per-controller priority", \testControllerPriority());
-        addTestCase("log level filtering", \testLogLevelFiltering());
-        addTestCase("thread safety", \testThreadSafety());
+        # Tests using AsyncIoController constructor require debug build + env var
+        if (Option::HAVE_LIBRARY_DEBUGGING && ENV.QORE_ASYNCIO_TEST_MODE) {
+            addTestCase("AsyncIoController global fallback", \testControllerGlobalFallback());
+            addTestCase("AsyncIoController per-controller priority", \testControllerPriority());
+            addTestCase("log level filtering", \testLogLevelFiltering());
+            addTestCase("thread safety", \testThreadSafety());
+        }
         set_return_value(main());
     }
 

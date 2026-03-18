@@ -1306,9 +1306,11 @@ void AsyncIoControllerPriv::startIntern(ExceptionSink* xsink) {
     ready_flag = false;
     io_exiting = false;
 
-    // Start I/O thread
+    // Start I/O thread; singleton uses QTF_EXTERNAL_LIFECYCLE so it doesn't
+    // block QoreProgramHelper shutdown — it's stopped by qore_async_io_controller_cleanup()
     ref();  // Reference for the I/O thread
-    tid = q_start_thread(xsink, ioThreadEntry, this);
+    int thread_flags = qore_is_async_io_controller_singleton(this) ? QTF_EXTERNAL_LIFECYCLE : 0;
+    tid = q_start_thread(xsink, ioThreadEntry, this, thread_flags);
     if (tid == -1) {
         tid = 0;
         // Cannot call deref() here because the caller holds the lock;
@@ -2575,10 +2577,12 @@ void AsyncIoControllerPriv::spawnDedicatedThread(DedicatedThreadInfo* dti, Excep
         dedicated_threads[dti->key] = dti;
     }
 
-    // Reference the controller for the dedicated thread
+    // Reference the controller for the dedicated thread; singleton uses
+    // QTF_EXTERNAL_LIFECYCLE so it doesn't block QoreProgramHelper shutdown
     ref();
+    int dt_flags = qore_is_async_io_controller_singleton(this) ? QTF_EXTERNAL_LIFECYCLE : 0;
 
-    int new_tid = q_start_thread(xsink, dedicatedThreadEntry, dti, DEDICATED_THREAD_STACK_SIZE);
+    int new_tid = q_start_thread(xsink, dedicatedThreadEntry, dti, DEDICATED_THREAD_STACK_SIZE, dt_flags);
     if (new_tid == -1) {
         ROdereference();  // Undo the ref() — caller holds a ref, so this is safe
         AutoLocker al(m);

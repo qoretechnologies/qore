@@ -204,9 +204,11 @@ public class HttpClientStreamHandle {
         if (!conn.isReady()) {
             date remaining = end_time - now_us();
             if (remaining <= 0us) {
+                releaseReservationIfHeld();
                 throw "HTTPCLIENT-TIMEOUT", "connection establishment timed out";
             }
             if (!conn.waitForReady(remaining)) {
+                releaseReservationIfHeld();
                 throw "HTTPCLIENT-TIMEOUT", "connection establishment timed out";
             }
         }
@@ -271,6 +273,7 @@ public class HttpClientStreamHandle {
         # Wait for connection to become ready
         if (!conn.isReady()) {
             if (!conn.waitForReady(request_timeout)) {
+                releaseReservationIfHeld();
                 throw "HTTPCLIENT-TIMEOUT", "connection establishment timed out";
             }
         }

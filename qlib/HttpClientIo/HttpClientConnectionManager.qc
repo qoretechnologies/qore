@@ -221,12 +221,10 @@ public class HttpClientConnectionManager {
                 stream.submitAsync(method, path, headers, body, callback);
                 return stream;
             } catch (hash<ExceptionInfo> ex) {
-                # Release reservation if the stream was acquired but not submitted;
-                # clear reservation_held so the destructor doesn't double-release
-                if (stream && !stream.isSubmitted()) {
-                    stream.getConnection().releaseStreamReservation();
-                    stream.markReservationReleased();
-                }
+                # NOTE: no manual reservation release needed here — submitAsync()
+                # calls releaseReservationIfHeld() on all pre-submit failure paths
+                # (waitForReady timeout, cancel, submitAsyncImpl exception), and
+                # the destructor is a final safety net
                 if ((ex.err == "HTTP3-CAPACITY-ERROR" || isConnectionError(ex.err))
                         && ++retries <= 3) {
                     if (isConnectionError(ex.err)) {
@@ -262,12 +260,8 @@ public class HttpClientConnectionManager {
                 stream = acquireStream(url);
                 return stream.request(method, path, headers, body, timeout_ms);
             } catch (hash<ExceptionInfo> ex) {
-                # Release reservation if the stream was acquired but not submitted;
-                # clear reservation_held so the destructor doesn't double-release
-                if (stream && !stream.isSubmitted()) {
-                    stream.getConnection().releaseStreamReservation();
-                    stream.markReservationReleased();
-                }
+                # NOTE: no manual reservation release needed — request() calls
+                # submitAsync() internally which releases on all failure paths
                 if ((ex.err == "HTTP3-CAPACITY-ERROR" || isConnectionError(ex.err))
                         && ++retries <= 3) {
                     if (isConnectionError(ex.err)) {

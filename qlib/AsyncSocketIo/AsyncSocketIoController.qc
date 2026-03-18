@@ -98,9 +98,13 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         }
     }
 
-    #! Stops the monitoring thread and destroys the object
+    #! No-op — the underlying C++ singleton is cleaned up during module unload and qore_cleanup()
+    /** Stopping the global singleton from a wrapper destructor would cancel unrelated
+        in-flight operations (e.g., HttpServer accept loops) from other components sharing
+        the same controller. The singleton's I/O thread is stopped by the module \c del
+        handler and by \c qore_async_io_controller_cleanup() during process shutdown.
+    */
     destructor() {
-        ctrl.stop();
     }
 
     #! Returns information about the object
@@ -136,14 +140,18 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         ctrl.start();
     }
 
-    #! Stops monitoring
+    #! No-op — stopping the global singleton is unsafe
+    /** Use @ref cancelByOwner() to cancel specific operations instead.
+        The singleton is stopped during module unload and \c qore_cleanup().
+    */
     stop() {
-        ctrl.stop();
     }
 
-    #! Stops monitoring and clears all connections
+    #! No-op — stopping the global singleton is unsafe
+    /** Use @ref cancelByOwner() to cancel specific operations instead.
+        The singleton is stopped during module unload and \c qore_cleanup().
+    */
     stopClear() {
-        ctrl.stopClear();
     }
 
     #! Waits for the monitoring thread to stop if it's running

@@ -42,9 +42,10 @@ module AsyncSocketIo {
         AsyncSocketIo::globalController = new AsyncSocketIo::AsyncSocketIoController(True);
     };
     del = sub () {
-        # Stop the Qore wrapper; the underlying C++ singleton is cleaned up in qore_cleanup()
+        # Just delete the Qore wrapper; the C++ singleton is stopped by
+        # qore_async_io_controller_cleanup() in qore_cleanup() after all
+        # modules have been unloaded
         if (AsyncSocketIo::globalController) {
-            AsyncSocketIo::globalController.stop();
             delete AsyncSocketIo::globalController;
         }
     };

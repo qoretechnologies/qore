@@ -318,20 +318,32 @@ for test in $TESTS; do
         echo "-------------------------------------"
     fi
 
-    # Set QORE_ASYNCIO_TEST_MODE for AsyncIoController tests (requires debug build)
-    TEST_ENV=""
+    # Set QORE_ASYNCIO_TEST_MODE for tests that use AsyncIoController constructor
+    # (requires debug build; release builds skip constructor tests automatically)
+    UNSET_ASYNCIO_TEST_MODE=0
     case "$test" in
-        */AsyncIoController/*.qtest) TEST_ENV="QORE_ASYNCIO_TEST_MODE=1" ;;
+        */AsyncIoController/*.qtest|*async_io_logger*|*udp_poll_test*)
+            if [ -z "$QORE_ASYNCIO_TEST_MODE" ]; then
+                export QORE_ASYNCIO_TEST_MODE=1
+                UNSET_ASYNCIO_TEST_MODE=1
+            fi
+            ;;
     esac
 
     # Run single test.
     if [ $MEASURE_TIME -eq 1 ]; then
-        eval $TEST_ENV $TIME_CMD $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
+        $TIME_CMD $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
     else
-        eval $TEST_ENV $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
+        $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
     fi
 
     TEST_EXIT=$?
+
+    # Unset QORE_ASYNCIO_TEST_MODE if we set it for this test
+    if [ $UNSET_ASYNCIO_TEST_MODE -eq 1 ]; then
+        unset QORE_ASYNCIO_TEST_MODE
+    fi
+
     if [ $TEST_EXIT -eq 0 ]; then
         PASSED_TEST_COUNT=`expr $PASSED_TEST_COUNT + 1`
     else

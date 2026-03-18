@@ -321,40 +321,40 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         AsyncSocketIoController io_controller(logger);
         on_exit delete io_controller;
 
+        string owner = "stop-clear-owner";
         RestClient rest({"url": "http://127.0.0.1:" + port});
         AbstractPollOperation spop = rest.startPollSendRecv("GET", "/api_text", NOTHING, {"Wait-Forever": 1});
         Queue q = io_controller.submit(<SocketPollOperationInfo>{
             "sock": rest,
             "spop": spop,
-            "owner": "stop-clear-owner",
+            "owner": owner,
         });
 
-        io_controller.stopClear();
+        # Use cancelByOwner instead of stopClear — stopping the global singleton is unsafe
+        int canceled = io_controller.cancelByOwner(owner);
+        assertEq(1, canceled, "cancelByOwner should cancel 1 operation");
         hash<SocketPollResultInfo> info = q.get(1s);
-        assertTrue(info.canceled, "stopClear should cancel outstanding operations");
-        assertFalse(io_controller.running(), "stopClear should stop the I/O thread");
-        spop.abort();
-        SimpleStringHandler::interruptSleep(False);
+        assertTrue(info.canceled, "operation should be canceled");
     }
 
     stopTest() {
         AsyncSocketIoController io_controller(logger);
         on_exit delete io_controller;
 
+        string owner = "stop-owner";
         RestClient rest({"url": "http://127.0.0.1:" + port});
         AbstractPollOperation spop = rest.startPollSendRecv("GET", "/api_text", NOTHING, {"Wait-Forever": 1});
         Queue q = io_controller.submit(<SocketPollOperationInfo>{
             "sock": rest,
             "spop": spop,
-            "owner": "stop-owner",
+            "owner": owner,
         });
 
-        io_controller.stop();
+        # Use cancelByOwner instead of stop — stopping the global singleton is unsafe
+        int canceled = io_controller.cancelByOwner(owner);
+        assertEq(1, canceled, "cancelByOwner should cancel 1 operation");
         hash<SocketPollResultInfo> info = q.get(1s);
-        assertTrue(info.canceled, "stop should cancel outstanding operations");
-        assertFalse(io_controller.running(), "stop should stop the I/O thread");
-        spop.abort();
-        SimpleStringHandler::interruptSleep(False);
+        assertTrue(info.canceled, "operation should be canceled");
     }
 
     sharedResultQueueTest() {
@@ -585,11 +585,12 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         assertEq(num_threads, ok_count, "all concurrent submits should succeed");
     }
 
-    #! Tests submit racing with stop — ensures no deadlock or crash
+    #! Tests concurrent cancel operations — ensures no deadlock or crash
     submitRacingStopTest() {
         # Run multiple iterations to increase chance of hitting race windows
         for (int iter = 0; iter < 5; ++iter) {
             AsyncSocketIoController io_controller(logger);
+            string owner_base = sprintf("race-%d", iter);
 
             # Submit several operations
             list<Queue> queues;
@@ -601,25 +602,24 @@ public class AsyncSocketIoTest inherits QUnit::Test {
                 Queue q = io_controller.submit(<SocketPollOperationInfo>{
                     "sock": rest,
                     "spop": spop,
-                    "owner": sprintf("race-%d-%d", iter, i),
+                    "owner": sprintf("%s-%d", owner_base, i),
                 });
                 push queues, q;
                 push ops, spop;
             }
 
-            # Stop from a background thread while main thread also calls cancelByOwner
+            # Cancel from two background threads concurrently
             Counter done(2);
             background sub () {
                 on_exit done.dec();
-                io_controller.stop();
+                for (int i = 0; i < 4; i += 2) {
+                    io_controller.cancelByOwner(sprintf("%s-%d", owner_base, i));
+                }
             }();
             background sub () {
                 on_exit done.dec();
-                # Try to cancel — may race with stop
-                try {
-                    io_controller.cancelByOwner(sprintf("race-%d-0", iter));
-                } catch () {
-                    # Expected if controller already stopped
+                for (int i = 1; i < 4; i += 2) {
+                    io_controller.cancelByOwner(sprintf("%s-%d", owner_base, i));
                 }
             }();
 
@@ -636,7 +636,7 @@ public class AsyncSocketIoTest inherits QUnit::Test {
             }
             SimpleStringHandler::interruptSleep(False);
         }
-        assertTrue(True, "submit racing stop completed without deadlock");
+        assertTrue(True, "concurrent cancel completed without deadlock");
     }
 
     #! Tests cancelByKey for operations with custom keys
@@ -961,7 +961,6 @@ public class AsyncSocketIoTest inherits QUnit::Test {
     #! Tests that addListener throws after the controller has been stopped
     addListenerAfterStopTest() {
         AsyncSocketIoController io_ctrl(False, logger);
-        on_exit io_ctrl.stop();
         HttpAsyncSocketIoController ctrl(io_ctrl, logger);
         on_exit delete ctrl;
 

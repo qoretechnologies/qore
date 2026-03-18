@@ -744,12 +744,10 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
         }
     }
 
-    #! Thread-safe connection pool for @ref RestClientIo instances
-    /** Provides pooled access to @ref RestClientIo instances using
-        @ref Qore::Thread::AbstractConnectionPool.
-
-        A factory callback or a client options hash creates new @ref RestClientIo instances on
-        demand; the pool manages their lifecycle and reuse across threads.
+    #! Thread-safe multiplexing REST client with connection pool API compatibility
+    /** The pool IS the client — \c acquire() returns \c self and \c release() is a no-op.
+        All requests are multiplexed over a shared set of H2/H3 connections via an
+        @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager".
 
         @par Connection Sharing
         When using the options-based constructor, the pool automatically creates a shared

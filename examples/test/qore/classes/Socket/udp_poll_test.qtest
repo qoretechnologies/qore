@@ -12,7 +12,10 @@ class UdpPollTest inherits QUnit::Test {
     constructor() : Test("UdpPollTest", "1.0") {
         addTestCase("basic sendto/recvfrom", \testBasicSendRecv());
         addTestCase("sendto/recvfrom via EventLoop", \testEventLoopIntegration());
-        addTestCase("sendto/recvfrom via AsyncIoController", \testAsyncIoControllerIntegration());
+        # AsyncIoController constructor requires debug build + env var
+        if (Option::HAVE_LIBRARY_DEBUGGING && ENV.QORE_ASYNCIO_TEST_MODE) {
+            addTestCase("sendto/recvfrom via AsyncIoController", \testAsyncIoControllerIntegration());
+        }
         addTestCase("multiple datagrams", \testMultipleDatagrams());
         addTestCase("large datagram", \testLargeDatagram());
         addTestCase("recvfrom timeout", \testRecvFromTimeout());
