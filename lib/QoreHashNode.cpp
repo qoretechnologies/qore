@@ -72,6 +72,7 @@ void qore_hash_private::setHashDecl(const TypedHashDecl* hd) {
         typed_hash_decl_private::get(*hd)->ref();
     }
     hashdecl = hd;
+
 }
 
 QoreValue qore_hash_private::takeKeyValueIntern(const char* key, qore_object_private* obj) {
