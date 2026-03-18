@@ -308,8 +308,20 @@ cargo install tree-sitter-cli@0.26.5
       - service segment filtering option to skip envelope segments during iteration
       - DataProvider integration for use in data pipelines and integration workflows
     - @ref asyncsocketiointro "AsyncSocketIo" module
-      - new \c Http3StreamContext class for HTTP/3 stream context management
-      - new \c AbstractStreamContext base class for protocol-agnostic stream handling
+      - high-performance event loop for asynchronous socket I/O using epoll (Linux) / kqueue (macOS/BSD)
+      - new @ref AsyncSocketIo::AsyncSocketIoController "AsyncSocketIoController" class providing a dedicated I/O
+        thread with three-phase polling cycle for managing multiple concurrent socket operations
+      - process-wide global singleton via @ref AsyncSocketIo::getGlobalAsyncIoController()
+        "getGlobalAsyncIoController()" with auto-start/stop behavior
+      - new \c Http2StreamContext class for HTTP/2 sockets with direct I/O mode
+      - new \c Http3StreamContext class for HTTP/3 QUIC streams with backpressure handling
+      - new \c AbstractStreamContext abstract base class for protocol-agnostic stream I/O
+      - shared @ref Qore::Thread::ThreadPool "ThreadPool" for dispatching callbacks off the I/O thread
+      - support for WebSocket over HTTP/2 (RFC 8441) and HTTP/3 (RFC 9220)
+      - this module is the foundation for the future of socket I/O in %Qore, providing the event-loop
+        infrastructure used by @ref httpclientiointro "HttpClientIo",
+        @ref restclientio_intro "RestClientIo", and
+        @ref httpserverasynciointro "HttpServerAsyncIo"
     - @ref connectionproviderintro "ConnectionProvider" module
       - added the \c ConnectionProvider::RestartableIoHelper class
       - new \c http_version option in \c ConnectionProvider::HttpConnection for HTTP version control ("auto", "1.0", "1.1", "2.0", "3.0")
@@ -420,6 +432,23 @@ cargo install tree-sitter-cli@0.26.5
       - new @ref HttpClientIo::Http3ClientConnection "Http3ClientConnection" class for HTTP/3 connections
       - new @ref HttpClientIo::Http2ClientStreamHandle "Http2ClientStreamHandle" class with HTTP/2 streaming support
       - new @ref HttpClientIo::Http3ClientStreamHandle "Http3ClientStreamHandle" class for HTTP/3 stream handles
+      - dead connection detection and eviction with QUIC session health checks
+      - pending stream reservation tracking to limit blast radius of handshake failures
+      - all I/O driven by the @ref asyncsocketiointro "AsyncSocketIo" event loop
+    - @ref restclientio_intro "RestClientIo" module
+      - new module providing a REST client API over multiplexed HTTP/2 and HTTP/3 connections
+      - implements the @ref RestClient::AbstractRestClient "AbstractRestClient" interface for drop-in compatibility
+      - async API with Future-returning methods (@ref RestClientIo::RestClientIo::restGetAsync() "restGetAsync()",
+        @ref RestClientIo::RestClientIo::restPostAsync() "restPostAsync()", etc.)
+      - supports shared @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager" for
+        connection sharing across multiple @ref RestClientIo::RestClientIo "RestClientIo" instances
+      - data serialization/deserialization for JSON, YAML, XML, CBOR, URL-encoded, text, and binary formats
+      - new @ref RestClientIo::RestClientIoPool "RestClientIoPool" class providing thread-safe connection pooling
+        built on @ref Qore::Thread::AbstractConnectionPool "AbstractConnectionPool"
+    - @ref restclientintro "RestClient" module
+      - new @ref RestClient::RestClientPool "RestClientPool" class providing thread-safe connection pooling
+        for @ref RestClient::RestClient "RestClient" instances, built on
+        @ref Qore::Thread::AbstractConnectionPool "AbstractConnectionPool"
     - @ref httpserverutilintro "HttpServerUtil" module
       - added functionality to support setting cookies
       - refactored authentication methods to provide a more extensible and clear design
@@ -1573,6 +1602,8 @@ hash<ExtendedInfo> ext = <ExtendedInfo>{"name": "test", "id": 1, "created": now(
       now resolves static methods in a manner similar to other programming languages based on the context of the call
     - New Modules
       - <a href="../../modules/AsyncSocketIo/html/index.html#asyncsocketiointro">AsyncSocketIo</a>
+      - <a href="../../modules/HttpClientIo/html/index.html#httpclientiointro">HttpClientIo</a>
+      - <a href="../../modules/RestClientIo/html/index.html#restclientio_intro">RestClientIo</a>
       - <a href="../../modules/DiscordDataProvider/html/index.html#discorddataproviderintro">DiscordDataProvider</a>
       - <a href="../../modules/DiscordRestClient/html/index.html#discordrestclientintro">DiscordRestClient</a>
       - <a href="../../modules/DiscordWebSocketClient/html/index.html#discordwebsocketclientintro">DiscordWebSocketClient</a>

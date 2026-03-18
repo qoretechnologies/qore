@@ -39,6 +39,7 @@
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QuicSessionTicketCache.h"
 #include "qore/intern/QoreAsyncIoLogger.h"
+#include "qore/intern/AsyncIoControllerPriv.h"
 
 #include <atomic>
 #include <cerrno>
@@ -336,8 +337,13 @@ void qore_cleanup() {
     // first delete all user modules (runs module del handlers, stops ThreadPools)
     QMM.delUser();
 
+    // stop the global async I/O controller after modules are done using it;
+    // must happen before waitForZero() because the controller's ThreadPool
+    // threads (QTF_EXTERNAL_LIFECYCLE) won't exit until the controller stops
+    qore_async_io_controller_cleanup();
+
     // wait for ThreadPool threads (QTF_EXTERNAL_LIFECYCLE) to fully exit after
-    // being stopped during module cleanup above
+    // being stopped during module cleanup above and controller cleanup
     {
         ExceptionSink xsink;
         tp_thread_counter.waitForZero(&xsink);

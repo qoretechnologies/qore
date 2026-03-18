@@ -32,6 +32,7 @@
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/ql_debug.h"
 #include "qore/intern/ql_type.h"
+#include "qore/intern/AsyncIoControllerPriv.h"
 
 #include <set>
 
@@ -202,9 +203,224 @@ static QoreValue f_dbg_global_vars(const QoreListNode* params, RuntimeConfig& rc
     return getProgram()->getVarList();
 }
 
+// --- C++ unit tests for AsyncIoControllerPriv (debug builds only) ---
+
+struct UnitTestCounters {
+    int test_count = 0;
+    int pass_count = 0;
+    int fail_count = 0;
+};
+
+#define UT_ASSERT(counters, cond, msg) do { \
+    ++(counters).test_count; \
+    if (cond) { \
+        ++(counters).pass_count; \
+    } else { \
+        ++(counters).fail_count; \
+        printf("  FAIL: %s (line %d)\n", msg, __LINE__); \
+    } \
+} while (0)
+
+#define UT_ASSERT_EQ(counters, expected, actual, msg) do { \
+    ++(counters).test_count; \
+    if ((expected) == (actual)) { \
+        ++(counters).pass_count; \
+    } else { \
+        ++(counters).fail_count; \
+        printf("  FAIL: %s (expected %lld, got %lld, line %d)\n", msg, \
+            (long long)(expected), (long long)(actual), __LINE__); \
+    } \
+} while (0)
+
+static void ut_asyncio_construction(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    AsyncIoControllerPriv* ctrl = new AsyncIoControllerPriv(true, &xsink);
+    UT_ASSERT(c, !xsink, "construction succeeds without exception");
+    UT_ASSERT(c, !ctrl->running(), "not running after construction");
+    UT_ASSERT_EQ(c, 0, ctrl->getCacheSize(), "cache size is 0 after construction");
+    UT_ASSERT(c, ctrl->getAutostop(), "autostop defaults to true");
+    ctrl->deref(&xsink);
+    UT_ASSERT(c, !xsink, "cleanup succeeds without exception");
+}
+
+static void ut_asyncio_autostop(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    AsyncIoControllerPriv* ctrl = new AsyncIoControllerPriv(true, &xsink);
+    UT_ASSERT(c, !xsink, "construction succeeds");
+    UT_ASSERT(c, ctrl->getAutostop(), "autostop initially true");
+    ctrl->setAutostop(false);
+    UT_ASSERT(c, !ctrl->getAutostop(), "autostop false after setAutostop(false)");
+    ctrl->setAutostop(true);
+    UT_ASSERT(c, ctrl->getAutostop(), "autostop true after setAutostop(true)");
+    ctrl->deref(&xsink);
+    UT_ASSERT(c, !xsink, "cleanup succeeds");
+}
+
+static void ut_asyncio_start_stop(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    AsyncIoControllerPriv* ctrl = new AsyncIoControllerPriv(false, &xsink);
+    UT_ASSERT(c, !xsink, "construction succeeds");
+    UT_ASSERT(c, !ctrl->running(), "not running initially");
+    ctrl->start(&xsink);
+    UT_ASSERT(c, !xsink, "start succeeds");
+    bool ready = ctrl->waitReady(10000, &xsink);
+    UT_ASSERT(c, !xsink, "waitReady succeeds");
+    UT_ASSERT(c, ready, "I/O thread is ready");
+    UT_ASSERT(c, ctrl->running(), "running after start");
+    ctrl->stop(&xsink);
+    UT_ASSERT(c, !xsink, "stop succeeds");
+    UT_ASSERT(c, !ctrl->running(), "not running after stop");
+    ctrl->deref(&xsink);
+    UT_ASSERT(c, !xsink, "cleanup succeeds");
+}
+
+static void ut_asyncio_get_info(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    AsyncIoControllerPriv* ctrl = new AsyncIoControllerPriv(true, &xsink);
+    UT_ASSERT(c, !xsink, "construction succeeds");
+    QoreHashNode* info = ctrl->getInfo(&xsink);
+    UT_ASSERT(c, !xsink, "getInfo succeeds");
+    UT_ASSERT(c, info != nullptr, "getInfo returns non-null hash");
+    if (info) {
+        UT_ASSERT(c, !info->getKeyValue("running").getAsBool(), "info.running is false initially");
+        UT_ASSERT_EQ(c, 0, info->getKeyValue("cache_size").getAsBigInt(), "info.cache_size is 0");
+        UT_ASSERT(c, info->getKeyValue("autostop").getAsBool(), "info.autostop is true");
+        info->deref(&xsink);
+    }
+    ctrl->deref(&xsink);
+    UT_ASSERT(c, !xsink, "cleanup succeeds");
+}
+
+static void ut_asyncio_timers(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    AsyncIoControllerPriv* ctrl = new AsyncIoControllerPriv(false, &xsink);
+    UT_ASSERT(c, !xsink, "construction succeeds");
+    ctrl->start(&xsink);
+    UT_ASSERT(c, !xsink, "start succeeds");
+    ctrl->waitReady(10000, &xsink);
+    DateTimeNode* deadline = DateTimeNode::makeRelative(0, 0, 0, 1, 0, 0);
+    int64_t timer_id = ctrl->addTimer(deadline, QoreValue(), &xsink);
+    UT_ASSERT(c, !xsink, "addTimer succeeds");
+    UT_ASSERT(c, timer_id > 0, "timer_id is positive");
+    deadline->deref();
+    bool canceled = ctrl->cancelTimer(timer_id, &xsink);
+    UT_ASSERT(c, !xsink, "cancelTimer succeeds");
+    UT_ASSERT(c, canceled, "timer was canceled");
+    bool canceled2 = ctrl->cancelTimer(timer_id, &xsink);
+    UT_ASSERT(c, !xsink, "cancelTimer of non-existent timer succeeds");
+    UT_ASSERT(c, !canceled2, "already-canceled timer returns false");
+    ctrl->stop(&xsink);
+    UT_ASSERT(c, !xsink, "stop succeeds");
+    ctrl->deref(&xsink);
+    UT_ASSERT(c, !xsink, "cleanup succeeds");
+}
+
+static void ut_asyncio_restart(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    AsyncIoControllerPriv* ctrl = new AsyncIoControllerPriv(false, &xsink);
+    UT_ASSERT(c, !xsink, "construction succeeds");
+    for (int i = 0; i < 3; ++i) {
+        ctrl->start(&xsink);
+        UT_ASSERT(c, !xsink, "start succeeds");
+        ctrl->waitReady(10000, &xsink);
+        UT_ASSERT(c, ctrl->running(), "running after start");
+        ctrl->stop(&xsink);
+        UT_ASSERT(c, !xsink, "stop succeeds");
+        UT_ASSERT(c, !ctrl->running(), "not running after stop");
+    }
+    ctrl->deref(&xsink);
+    UT_ASSERT(c, !xsink, "cleanup succeeds");
+}
+
+static void ut_asyncio_concurrent_lifecycle(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    static constexpr int NUM_INSTANCES = 4;
+    AsyncIoControllerPriv* controllers[NUM_INSTANCES];
+    for (int i = 0; i < NUM_INSTANCES; ++i) {
+        controllers[i] = new AsyncIoControllerPriv(false, &xsink);
+        UT_ASSERT(c, !xsink, "construction succeeds");
+    }
+    for (int i = 0; i < NUM_INSTANCES; ++i) {
+        controllers[i]->start(&xsink);
+        UT_ASSERT(c, !xsink, "start succeeds");
+    }
+    for (int i = 0; i < NUM_INSTANCES; ++i) {
+        controllers[i]->waitReady(10000, &xsink);
+        UT_ASSERT(c, !xsink, "waitReady succeeds");
+        UT_ASSERT(c, controllers[i]->running(), "controller is running");
+    }
+    for (int i = 0; i < NUM_INSTANCES; ++i) {
+        controllers[i]->stop(&xsink);
+        UT_ASSERT(c, !xsink, "stop succeeds");
+        controllers[i]->deref(&xsink);
+        UT_ASSERT(c, !xsink, "cleanup succeeds");
+    }
+}
+
+static void ut_asyncio_logger(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    AsyncIoControllerPriv* ctrl = new AsyncIoControllerPriv(true, &xsink);
+    UT_ASSERT(c, !xsink, "construction succeeds");
+    ctrl->setLogger(nullptr, &xsink);
+    UT_ASSERT(c, !xsink, "setLogger(nullptr) succeeds");
+    ctrl->deref(&xsink);
+    UT_ASSERT(c, !xsink, "cleanup succeeds");
+}
+
+static void ut_asyncio_wait_for_processing_empty(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    AsyncIoControllerPriv* ctrl = new AsyncIoControllerPriv(false, &xsink);
+    UT_ASSERT(c, !xsink, "construction succeeds");
+    ctrl->start(&xsink);
+    UT_ASSERT(c, !xsink, "start succeeds");
+    ctrl->waitReady(10000, &xsink);
+    bool processed = ctrl->waitForProcessing(5000, &xsink);
+    UT_ASSERT(c, !xsink, "waitForProcessing succeeds");
+    UT_ASSERT(c, processed, "waitForProcessing returns true when empty");
+    ctrl->stop(&xsink);
+    ctrl->deref(&xsink);
+    UT_ASSERT(c, !xsink, "cleanup succeeds");
+}
+
+static void ut_asyncio_stop_clear(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    AsyncIoControllerPriv* ctrl = new AsyncIoControllerPriv(false, &xsink);
+    UT_ASSERT(c, !xsink, "construction succeeds");
+    ctrl->start(&xsink);
+    UT_ASSERT(c, !xsink, "start succeeds");
+    ctrl->waitReady(10000, &xsink);
+    ctrl->stopClear(&xsink);
+    UT_ASSERT(c, !xsink, "stopClear succeeds");
+    UT_ASSERT(c, !ctrl->running(), "not running after stopClear");
+    ctrl->deref(&xsink);
+    UT_ASSERT(c, !xsink, "cleanup succeeds");
+}
+
+static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    UnitTestCounters c;
+
+    ut_asyncio_construction(c);
+    ut_asyncio_autostop(c);
+    ut_asyncio_start_stop(c);
+    ut_asyncio_get_info(c);
+    ut_asyncio_timers(c);
+    ut_asyncio_restart(c);
+    ut_asyncio_concurrent_lifecycle(c);
+    ut_asyncio_logger(c);
+    ut_asyncio_wait_for_processing_empty(c);
+    ut_asyncio_stop_clear(c);
+
+    QoreHashNode* result = new QoreHashNode(autoTypeInfo);
+    result->setKeyValue("test_count", c.test_count, xsink);
+    result->setKeyValue("pass_count", c.pass_count, xsink);
+    result->setKeyValue("fail_count", c.fail_count, xsink);
+    return result;
+}
+
 void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_node_info", f_dbg_node_info, QCF_NO_FLAGS, QDOM_DEFAULT, stringTypeInfo, 2,
         autoTypeInfo, QORE_PARAM_NO_ARG, "node", softBoolOrNothingTypeInfo, QORE_PARAM_NO_ARG, "shallow");
     qns.addBuiltinVariant("dbg_global_vars", f_dbg_global_vars, QCF_NO_FLAGS, QDOM_DEFAULT, listTypeInfo);
     qns.addBuiltinVariant("dbg_get_ns_info", f_dbg_get_ns_info, QCF_NO_FLAGS, QDOM_DEFAULT, hashTypeInfo);
+    qns.addBuiltinVariant("run_unit_tests", f_run_unit_tests, QCF_NO_FLAGS, QDOM_DEFAULT, hashTypeInfo);
 }

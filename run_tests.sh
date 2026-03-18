@@ -326,6 +326,7 @@ for test in $TESTS; do
     fi
 
     TEST_EXIT=$?
+
     if [ $TEST_EXIT -eq 0 ]; then
         PASSED_TEST_COUNT=`expr $PASSED_TEST_COUNT + 1`
     else

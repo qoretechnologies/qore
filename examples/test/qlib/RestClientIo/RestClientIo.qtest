@@ -170,6 +170,10 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         addTestCase("restPostAsync", \testRestPostAsync());
         addTestCase("async concurrent", \testAsyncConcurrent());
         addTestCase("async error", \testAsyncError());
+        addTestCase("pool basic", \testPoolBasic());
+        addTestCase("pool with options", \testPoolWithOptions());
+        addTestCase("pool with shared manager", \testPoolWithSharedManager());
+        addTestCase("pool concurrent", \testPoolConcurrent());
 
         set_return_value(main());
     }
@@ -537,6 +541,143 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
         RestClientIo::RestFuture f2 = rest_strict.restGetAsync("/error");
         assertThrows("REST-RESPONSE-ERROR", \f2.get(), (30s,));
+%endif
+    }
+
+    testPoolBasic() {
+%ifndef NoJson
+        hash<auto> client_opts = {
+            "url": sprintf("https://127.0.0.1:%d", port),
+            "data": "json",
+            "error_passthru": True,
+            "accept_all_certs": True,
+            "protocol": "h2",
+        };
+        RestClientIo::RestClientIoPool pool(client_opts);
+        on_exit pool.shutdown();
+
+        # Acquire and use — acquire() returns self since the pool IS the client
+        RestClientIo::RestClientIo rc = pool.acquire();
+        on_exit pool.release();
+
+        hash<RestClient::RestResponseInfo> resp = rc.restGet("/api/test");
+        assertEq(200, resp.status_code);
+        assertEq("GET", resp.body.method);
+        assertRegex("api/test", resp.body.path);
+
+        # Verify the acquired object is a RestClientIo (and a RestClientIoPool)
+        assertTrue(rc instanceof RestClientIo::RestClientIo);
+%endif
+    }
+
+    testPoolWithOptions() {
+%ifndef NoJson
+        # Use the options-based constructor — no factory closure needed
+        hash<auto> client_opts = {
+            "url": sprintf("https://127.0.0.1:%d", port),
+            "data": "json",
+            "error_passthru": True,
+            "accept_all_certs": True,
+            "protocol": "h2",
+        };
+        RestClientIo::RestClientIoPool pool(client_opts,
+            <Qore::Thread::ConnectionPoolOptions>{"min": 1, "max": 3});
+        on_exit pool.shutdown();
+
+        RestClientIo::RestClientIo rc = pool.acquire();
+        on_exit pool.release();
+
+        hash<RestClient::RestResponseInfo> resp = rc.restGet("/api/test");
+        assertEq(200, resp.status_code);
+        assertEq("GET", resp.body.method);
+        assertRegex("api/test", resp.body.path);
+        assertTrue(rc instanceof RestClientIo::RestClientIo);
+%endif
+    }
+
+    testPoolWithSharedManager() {
+%ifndef NoJson
+        # Use the options-based constructor with a shared connection manager
+        hash<auto> client_opts = {
+            "url": sprintf("https://127.0.0.1:%d", port),
+            "data": "json",
+            "error_passthru": True,
+            "accept_all_certs": True,
+            "protocol": "h2",
+        };
+        HttpClientIo::HttpClientConnectionManager shared_mgr(
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "accept_all_certs": True,
+                "protocol": "h2",
+            }
+        );
+        RestClientIo::RestClientIoPool pool(client_opts,
+            <Qore::Thread::ConnectionPoolOptions>{"min": 1, "max": 3}, shared_mgr);
+        on_exit pool.shutdown();
+
+        # Acquire two clients and verify they both work (sharing the manager)
+        {
+            RestClientIo::RestClientIo rc1 = pool.acquire();
+            on_exit pool.release();
+            hash<RestClient::RestResponseInfo> resp1 = rc1.restGet("/api/test");
+            assertEq(200, resp1.status_code);
+        }
+        {
+            RestClientIo::RestClientIo rc2 = pool.acquire();
+            on_exit pool.release();
+            hash<RestClient::RestResponseInfo> resp2 = rc2.restGet("/api/test");
+            assertEq(200, resp2.status_code);
+        }
+
+        # Shared manager should still be usable after pool shutdown
+        pool.shutdown();
+        RestClientIo::RestClientIo direct({
+            "url": sprintf("https://127.0.0.1:%d", port),
+            "data": "json",
+            "error_passthru": True,
+        }, shared_mgr);
+        on_exit direct.close();
+        hash<RestClient::RestResponseInfo> resp3 = direct.restGet("/api/test");
+        assertEq(200, resp3.status_code);
+%endif
+    }
+
+    testPoolConcurrent() {
+%ifndef NoJson
+        hash<auto> client_opts = {
+            "url": sprintf("https://127.0.0.1:%d", port),
+            "data": "json",
+            "error_passthru": True,
+            "accept_all_certs": True,
+            "protocol": "h2",
+        };
+        RestClientIo::RestClientIoPool pool(client_opts);
+        on_exit pool.shutdown();
+
+        # Run concurrent requests from multiple threads
+        Counter cnt(5);
+        list<hash<RestClient::RestResponseInfo>> results = ();
+        Mutex mtx();
+        for (int i = 0; i < 5; ++i) {
+            int idx = i;
+            background sub () {
+                on_exit cnt.dec();
+                RestClientIo::RestClientIo rc = pool.acquire();
+                on_exit pool.release();
+                hash<RestClient::RestResponseInfo> resp = rc.restGet(sprintf("/api/item/%d", idx));
+                {
+                    AutoLock al(mtx);
+                    push results, resp;
+                }
+            }();
+        }
+        cnt.waitForZero();
+
+        assertEq(5, results.size());
+        for (int i = 0; i < 5; ++i) {
+            assertEq(200, results[i].status_code,
+                sprintf("pool concurrent request %d status", i));
+        }
 %endif
     }
 }

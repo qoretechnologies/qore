@@ -30,7 +30,7 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/ConnectionPool.h"
-#include "qore/intern/QC_ConnectionPool.h"
+#include "qore/intern/QC_AbstractConnectionPool.h"
 
 #include <algorithm>
 

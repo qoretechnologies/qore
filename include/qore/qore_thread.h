@@ -287,12 +287,14 @@ int q_start_thread(ExceptionSink* xsink, q_thread_t f, void* arg = nullptr);
     @param f the function to start in the new thread
     @param arg the argument to the function
     @param stack_size the stack size for the new thread in bytes
+    @param flags optional thread flags (e.g. QTF_EXTERNAL_LIFECYCLE); QTF_NO_STACK_GUARD is
+    always set for custom-stack-size threads
 
     @return the new TID or -1 if an error occurred
 
     @since %Qore 2.3
  */
-int q_start_thread(ExceptionSink* xsink, q_thread_t f, void* arg, size_t stack_size);
+int q_start_thread(ExceptionSink* xsink, q_thread_t f, void* arg, size_t stack_size, int flags = 0);
 
 //! starts a new thread with lifecycle flags
 /** Threads started with QTF_EXTERNAL_LIFECYCLE are counted in tp_thread_counter instead of

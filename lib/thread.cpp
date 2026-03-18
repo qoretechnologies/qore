@@ -66,7 +66,7 @@
 #include "qore/intern/QC_AutoWriteLock.h"
 #include "qore/intern/QC_AbstractSmartLock.h"
 #include "qore/intern/QC_AbstractThreadResource.h"
-#include "qore/intern/QC_ConnectionPool.h"
+#include "qore/intern/QC_AbstractConnectionPool.h"
 
 #include <string.h>
 
@@ -3082,7 +3082,7 @@ int q_start_thread(ExceptionSink* xsink, q_thread_t f, void* arg) {
     return tid;
 }
 
-int q_start_thread(ExceptionSink* xsink, q_thread_t f, void* arg, size_t stack_size) {
+int q_start_thread(ExceptionSink* xsink, q_thread_t f, void* arg, size_t stack_size, int flags) {
     int tid = get_thread_entry();
 
     if (tid == -1) {
@@ -3091,7 +3091,7 @@ int q_start_thread(ExceptionSink* xsink, q_thread_t f, void* arg, size_t stack_s
     }
 
     // QTF_NO_STACK_GUARD: lightweight threads with custom stack sizes bypass the Qore stack guard
-    ThreadArg* ta = new ThreadArg(f, arg, tid, QTF_NO_STACK_GUARD);
+    ThreadArg* ta = new ThreadArg(f, arg, tid, flags | QTF_NO_STACK_GUARD);
 
     // Create a local pthread attr with the requested stack size
     QorePThreadAttr local_attr;
@@ -3105,10 +3105,18 @@ int q_start_thread(ExceptionSink* xsink, q_thread_t f, void* arg, size_t stack_s
     }
 
     pthread_t ptid;
-    thread_counter.inc();
+    if (flags & QTF_EXTERNAL_LIFECYCLE) {
+        tp_thread_counter.inc();
+    } else {
+        thread_counter.inc();
+    }
     if ((rc = pthread_create(&ptid, local_attr.get_ptr(), q_run_thread, ta))) {
         delete ta;
-        thread_counter.dec();
+        if (flags & QTF_EXTERNAL_LIFECYCLE) {
+            tp_thread_counter.dec();
+        } else {
+            thread_counter.dec();
+        }
         deregister_thread(tid);
         xsink->raiseErrnoException("THREAD-CREATION-FAILURE", rc, "could not create thread");
         return -1;

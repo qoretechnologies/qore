@@ -596,6 +596,19 @@ const SOCK_RAW = SOCK_RAW;
     on the parameters required for these methods). Then Socket::acceptSSL() should be called after the socket is in a
     listening state to accept client connections and negotiate a TLS/SSL connection.
 
+    @par Async I/O and the Event Loop
+
+    The Socket class provides low-level poll operations (Socket::startPollConnect(),
+    Socket::startPollHttp2Connect(), Socket::startPollQuicConnect(), etc.) that return
+    @ref Qore::AbstractPollOperation "AbstractPollOperation" objects for non-blocking I/O.  These are
+    the building blocks for the @ref asyncsocketiointro "AsyncSocketIo" module, which provides a
+    high-level event loop (@ref AsyncSocketIo::AsyncSocketIoController "AsyncSocketIoController") for
+    managing multiple concurrent socket operations using epoll (Linux) / kqueue (macOS/BSD).
+
+    For application-level HTTP multiplexing and connection pooling, see the
+    @ref httpclientiointro "HttpClientIo" and @ref restclientio_intro "RestClientIo" modules built
+    on top of the @ref asyncsocketiointro "AsyncSocketIo" event loop.
+
     This class supports posting events to a @ref Qore::Thread::Queue "Queue". See @ref event_handling for more
     information.
 

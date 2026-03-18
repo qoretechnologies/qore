@@ -116,7 +116,7 @@ class UdpPollTest inherits QUnit::Test {
         assertEq("127.0.0.1", output.address);
     }
 
-    #! Test UDP with AsyncIoController
+    #! Test UDP with AsyncIoController static API (singleton)
     testAsyncIoControllerIntegration() {
         hash<auto> recv_info = createBoundUdpSocket();
         Socket recv_sock = recv_info.sock;
@@ -125,31 +125,24 @@ class UdpPollTest inherits QUnit::Test {
         hash<auto> send_info = createBoundUdpSocket();
         Socket send_sock = send_info.sock;
 
-        # Create controller
-        AsyncIoController ctrl(True);
-        ctrl.start();
-        on_exit ctrl.stop();
-
-        # Submit send operation
+        # Submit send operation via static API
         binary msg = binary("AsyncIoController UDP test");
         AbstractPollOperation send_op = send_sock.startPollSendTo("127.0.0.1", recv_port, msg);
-        hash<SocketPollOperationInfo> send_info_h({
+        Queue send_q = AsyncIoController::submit(<SocketPollOperationInfo>{
             "sock": send_sock,
             "spop": send_op,
             "owner": "test-send",
         });
-        Queue send_q = ctrl.submit(send_info_h);
         hash<auto> send_result = send_q.get(10s);
         assertNothing(send_result.ex);
 
-        # Submit recv operation
+        # Submit recv operation via static API
         AbstractPollOperation recv_op = recv_sock.startPollRecvFrom();
-        hash<SocketPollOperationInfo> recv_info_h({
+        Queue recv_q = AsyncIoController::submit(<SocketPollOperationInfo>{
             "sock": recv_sock,
             "spop": recv_op,
             "owner": "test-recv",
         });
-        Queue recv_q = ctrl.submit(recv_info_h);
         hash<auto> recv_result = recv_q.get(10s);
         assertNothing(recv_result.ex);
 

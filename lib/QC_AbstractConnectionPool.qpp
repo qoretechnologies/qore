@@ -1,5 +1,5 @@
 /* -*- mode: c++; indent-tabs-mode: nil -*- */
-/** @file QC_ConnectionPool.qpp AbstractPoolableResource, AbstractConnectionPool classes and pool hashdecls */
+/** @file QC_AbstractConnectionPool.qpp AbstractPoolableResource, AbstractConnectionPool classes and pool hashdecls */
 /*
     Qore Programming Language
 
@@ -29,7 +29,7 @@
 */
 
 #include <qore/Qore.h>
-#include "qore/intern/QC_ConnectionPool.h"
+#include "qore/intern/QC_AbstractConnectionPool.h"
 #include "qore/intern/ConnectionPool.h"
 
 static QoreHashNode* AbstractPoolableResource_serializer(const QoreObject& self,

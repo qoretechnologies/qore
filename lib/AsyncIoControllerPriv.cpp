@@ -44,6 +44,80 @@
 extern qore_classid_t CID_QUEUE;
 extern QoreClass* QC_QUEUE;
 
+extern qore_classid_t CID_ASYNCIOCONTROLLER;
+extern QoreClass* QC_ASYNCIOCONTROLLER;
+
+// --- Global singleton state ---
+static QoreThreadLock aio_singleton_lock;
+static AsyncIoControllerPriv* aio_singleton = nullptr;
+static QoreObject* aio_singleton_obj = nullptr;
+
+//! Program cleanup callback: cancel all async I/O operations belonging to the program being destroyed
+/** Called from qore_program_private::waitForTerminationAndClear() BEFORE clearNamespaceData(),
+    so type info is still valid and callbacks can execute safely.
+*/
+static void aio_program_cleanup(QoreProgram* pgm) {
+    AsyncIoControllerPriv* ctrl;
+    {
+        AutoLocker al(aio_singleton_lock);
+        ctrl = aio_singleton;
+        if (ctrl) {
+            ctrl->ref();
+        }
+    }
+    if (ctrl) {
+        ExceptionSink xsink;
+        ctrl->cancelByProgram(pgm, &xsink);
+        ctrl->deref(&xsink);
+    }
+}
+
+QoreObject* qore_get_async_io_controller_obj(ExceptionSink* xsink) {
+    AutoLocker al(aio_singleton_lock);
+    if (aio_singleton_obj) {
+        aio_singleton_obj->ref();
+        return aio_singleton_obj;
+    }
+    // Lazy-create singleton with autostop=True
+    ReferenceHolder<AsyncIoControllerPriv> holder(new AsyncIoControllerPriv(true, xsink), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    aio_singleton = *holder;
+    QoreObject* obj = new QoreObject(QC_ASYNCIOCONTROLLER, nullptr, holder.release());
+    aio_singleton_obj = obj;
+    // Register cleanup callback to cancel operations when QorePrograms are destroyed
+    qore_register_program_cleanup_callback(aio_program_cleanup);
+    // Return an extra ref for the caller
+    obj->ref();
+    return obj;
+}
+
+void qore_async_io_controller_cleanup() {
+    QoreObject* obj;
+    AsyncIoControllerPriv* priv;
+    {
+        AutoLocker al(aio_singleton_lock);
+        obj = aio_singleton_obj;
+        priv = aio_singleton;
+        aio_singleton_obj = nullptr;
+        aio_singleton = nullptr;
+    }
+    if (priv) {
+        ExceptionSink xsink;
+        priv->stopClear(&xsink);
+    }
+    if (obj) {
+        ExceptionSink xsink;
+        obj->deref(&xsink);
+    }
+}
+
+bool qore_is_async_io_controller_singleton(AsyncIoControllerPriv* ctrl) {
+    AutoLocker al(aio_singleton_lock);
+    return ctrl == aio_singleton;
+}
+
 //! Thread-local flag: true when running on any async I/O thread (main or dedicated).
 //! Used to detect re-entrant calls from Qore object destructors triggered during
 //! callback cleanup on I/O threads.  These threads were not designed to run Qore code,
@@ -903,6 +977,59 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
     return count;
 }
 
+void AsyncIoControllerPriv::cancelByProgram(QoreProgram* pgm, ExceptionSink* xsink) {
+    // Cancel dedicated threads whose callbacks belong to this program
+    std::vector<std::string> dedicated_keys;
+    {
+        AutoLocker al(m);
+        for (auto& [key, dti] : dedicated_threads) {
+            if (dti->pinfo.callback && dti->pinfo.callback->getProgram() == pgm) {
+                dedicated_keys.push_back(key);
+            }
+        }
+    }
+    for (auto& key : dedicated_keys) {
+        cancelDedicatedThread(key, xsink);
+    }
+
+    // Cancel cache operations whose callbacks belong to this program
+    // This runs on the program's cleanup thread, so we use the direct cancel path
+    // (same as cancelByOwner when I/O thread is not running or we're on the I/O thread)
+    std::vector<PollInfo> cancel_pinfos;
+    bool do_signal = false;
+    {
+        AutoLocker al(m);
+        std::vector<std::string> keys;
+        for (auto& [key, pinfo] : cache) {
+            if (pinfo.callback && pinfo.callback->getProgram() == pgm) {
+                keys.push_back(key);
+            }
+        }
+        for (auto& key : keys) {
+            auto it = cache.find(key);
+            if (it != cache.end()) {
+                if (tid && !io_exiting) {
+                    // Unregister from EventLoop via the I/O thread command queue
+                    do_signal = enqueueCmdLocked(IoCommand::Cancel, key);
+                }
+                cancel_pinfos.push_back(it->second);
+                it->second = PollInfo();
+                cache.erase(it);
+            }
+        }
+    }
+
+    if (do_signal) {
+        notifier->notify();
+    }
+
+    // Deliver cancel results while program type info is still valid
+    for (auto& pinfo : cancel_pinfos) {
+        doCancelIntern(pinfo, xsink);
+        pinfo.cleanup(xsink);
+    }
+}
+
 void AsyncIoControllerPriv::wake() {
     bool do_signal = false;
     // Stack buffer for dedicated thread notifiers (avoids heap allocation)
@@ -1254,9 +1381,11 @@ void AsyncIoControllerPriv::startIntern(ExceptionSink* xsink) {
     ready_flag = false;
     io_exiting = false;
 
-    // Start I/O thread
+    // Start I/O thread; singleton uses QTF_EXTERNAL_LIFECYCLE so it doesn't
+    // block QoreProgramHelper shutdown — it's stopped by qore_async_io_controller_cleanup()
     ref();  // Reference for the I/O thread
-    tid = q_start_thread(xsink, ioThreadEntry, this);
+    int thread_flags = qore_is_async_io_controller_singleton(this) ? QTF_EXTERNAL_LIFECYCLE : 0;
+    tid = q_start_thread(xsink, ioThreadEntry, this, thread_flags);
     if (tid == -1) {
         tid = 0;
         // Cannot call deref() here because the caller holds the lock;
@@ -2523,10 +2652,12 @@ void AsyncIoControllerPriv::spawnDedicatedThread(DedicatedThreadInfo* dti, Excep
         dedicated_threads[dti->key] = dti;
     }
 
-    // Reference the controller for the dedicated thread
+    // Reference the controller for the dedicated thread; singleton uses
+    // QTF_EXTERNAL_LIFECYCLE so it doesn't block QoreProgramHelper shutdown
     ref();
+    int dt_flags = qore_is_async_io_controller_singleton(this) ? QTF_EXTERNAL_LIFECYCLE : 0;
 
-    int new_tid = q_start_thread(xsink, dedicatedThreadEntry, dti, DEDICATED_THREAD_STACK_SIZE);
+    int new_tid = q_start_thread(xsink, dedicatedThreadEntry, dti, DEDICATED_THREAD_STACK_SIZE, dt_flags);
     if (new_tid == -1) {
         ROdereference();  // Undo the ref() — caller holds a ref, so this is safe
         AutoLocker al(m);
