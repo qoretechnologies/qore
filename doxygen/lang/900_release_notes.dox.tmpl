@@ -900,6 +900,22 @@ cargo install tree-sitter-cli@0.26.5
       - webhook-based event triggers for order and shipment notifications
       - action catalog integration with 36 actions and 4 triggers
       - connection support with \c shipstation:// URL scheme
+    - @ref customeriorestclientintro "CustomerIoRestClient" module
+      - new module providing a REST client for Customer.io's App API and Track API
+      - supports dual authentication: Bearer token (App API) and HTTP Basic Auth (Track API)
+      - regional endpoint support for US and EU data centers
+      - provides CustomerIoRestConnection for connection management with \c customerio:// URL scheme
+    - @ref customeriodataproviderintro "CustomerIoDataProvider" module
+      - new module providing a data provider API for Customer.io marketing automation services
+      - customer management (create, update, delete, suppress, merge)
+      - campaign, broadcast, segment, and newsletter management
+      - transactional email and push notification sending
+      - event tracking, page view tracking, and device management
+      - object and relationship management
+      - collection and snippet management for message personalization
+      - webhook-based event triggers for email, SMS, push, Slack, and subscription events
+      - action catalog integration with 46 actions and 21 triggers
+      - connection support with \c customerio:// URL scheme
     - @ref instantlyrestclientintro "InstantlyRestClient" module
       - new module providing a REST client for Instantly's email outreach API v2
       - supports Bearer token (API key) authentication
