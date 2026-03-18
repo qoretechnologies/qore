@@ -1170,6 +1170,21 @@ cargo install tree-sitter-cli@0.26.5
       - polling-based event triggers for new contacts, appointments, and messages
       - action catalog integration with 20 actions and 3 triggers
       - connection support with \c gohighlevelres:// URL scheme
+    - @ref redditrestclientintro "RedditRestClient" module
+      - new module providing a REST client for Reddit's API
+      - supports OAuth2 authentication with bearer tokens
+      - provides RedditRestConnection for connection management with \c redditrest:// URL scheme
+    - @ref redditdataproviderintro "RedditDataProvider" module
+      - new module providing a data provider API for Reddit
+      - post management (list, create, edit, delete, search)
+      - comment management (list, create, edit, delete)
+      - subreddit management (list, search, subscribe/unsubscribe)
+      - messaging (inbox, sent, unread, compose, mark read, delete)
+      - voting (upvote, downvote, unvote)
+      - flair management (list templates, set flair)
+      - moderation actions (approve, remove, distinguish, lock, sticky, NSFW, spoiler)
+      - polling-based triggers for new posts, comments, and messages
+      - connection support with \c redditrest:// URL scheme
     - @ref squarerestclientintro "SquareRestClient" module
       - new module providing a REST client for Square's payments and commerce API
       - supports OAuth2 authentication with bearer tokens

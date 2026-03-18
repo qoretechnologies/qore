@@ -1,0 +1,198 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires QUnit
+%requires RedditRestClient
+%requires RedditDataProvider
+
+%exec-class RedditDataProviderTest
+
+class RedditDataProviderTest inherits QUnit::Test {
+    public {
+        const MyOpts = Opts + {
+            "client_id": "I,client-id=s",
+            "client_secret": "S,client-secret=s",
+            "token": "t,token=s",
+            "refresh_token": "R,refresh-token=s",
+            "test_subreddit": "s,subreddit=s",
+        };
+    }
+
+    private {
+        *string client_id;
+        *string client_secret;
+        *string token;
+        *string refresh_token;
+        *string test_subreddit;
+
+        RedditRestClient rest;
+    }
+
+    constructor() : Test("RedditDataProvider", "1.0", \ARGV, MyOpts) {
+        client_id = m_options.client_id ?? ENV.REDDIT_CLIENT_ID;
+        client_secret = m_options.client_secret ?? ENV.REDDIT_CLIENT_SECRET;
+        token = m_options.token ?? ENV.REDDIT_TOKEN;
+        refresh_token = m_options.refresh_token ?? ENV.REDDIT_REFRESH_TOKEN;
+        test_subreddit = m_options.test_subreddit ?? ENV.REDDIT_TEST_SUBREDDIT;
+
+        addTestCase("factory test", \factoryTest());
+        addTestCase("data type test", \dataTypeTest());
+
+        if (canRunIntegrationTests()) {
+            addTestCase("connection test", \connectionTest());
+            addTestCase("account test", \accountTest());
+            addTestCase("subreddit test", \subredditTest());
+            addTestCase("post lifecycle test", \postLifecycleTest());
+        }
+
+        set_return_value(main());
+    }
+
+    private bool canRunIntegrationTests() {
+        if (!client_id && !token) {
+            if (m_options.verbose > 0) {
+                printf("Skipping integration tests: no credentials provided\n");
+                printf("Set REDDIT_CLIENT_ID + REDDIT_CLIENT_SECRET + REDDIT_REFRESH_TOKEN "
+                    "or REDDIT_TOKEN to enable\n");
+            }
+            return False;
+        }
+        return True;
+    }
+
+    private RedditRestClient getRestClient() {
+        hash<auto> opts;
+        if (token) {
+            opts.token = token;
+        } else {
+            opts.oauth2_client_id = client_id;
+            opts.oauth2_client_secret = client_secret;
+            opts.oauth2_refresh_token = refresh_token;
+        }
+        return new RedditRestClient(opts);
+    }
+
+    factoryTest() {
+        RedditDataProviderFactory factory();
+        hash<DataProviderFactoryInfo> info = factory.getInfo();
+        assertEq("reddit", info.name);
+        assertTrue(info.children_can_support_apis);
+        assertTrue(info.children_can_support_records);
+        assertTrue(info.children_can_support_observers);
+    }
+
+    dataTypeTest() {
+        # Test all data types can be instantiated
+        RedditAccountDataType account_type();
+        assertTrue(account_type.hasField("name"));
+        assertTrue(account_type.hasField("id"));
+
+        RedditPostDataType post_type();
+        assertTrue(post_type.hasField("title"));
+        assertTrue(post_type.hasField("subreddit"));
+
+        RedditCommentDataType comment_type();
+        assertTrue(comment_type.hasField("body"));
+        assertTrue(comment_type.hasField("author"));
+
+        RedditSubredditDataType sub_type();
+        assertTrue(sub_type.hasField("display_name"));
+        assertTrue(sub_type.hasField("subscribers"));
+
+        RedditMessageDataType msg_type();
+        assertTrue(msg_type.hasField("subject"));
+        assertTrue(msg_type.hasField("dest"));
+
+        RedditFlairDataType flair_type();
+        assertTrue(flair_type.hasField("text"));
+
+        RedditKarmaDataType karma_type();
+        assertTrue(karma_type.hasField("sr"));
+
+        RedditTrophyDataType trophy_type();
+        assertTrue(trophy_type.hasField("name"));
+    }
+
+    connectionTest() {
+        RedditRestClient rest = getRestClient();
+        # Test ping (GET /api/v1/me)
+        hash<auto> result = rest.get("api/v1/me");
+        assertEq(200, result.status_code);
+        assertTrue(result.body.name.val());
+        if (m_options.verbose > 0) {
+            printf("Authenticated as: %s\n", result.body.name);
+        }
+    }
+
+    accountTest() {
+        RedditRestClient rest = getRestClient();
+        RedditDataProvider provider(rest);
+
+        # Test account provider
+        AbstractDataProvider account = provider.getChildProvider("account");
+        assertEq("account", account.getName());
+
+        # Get current user
+        AbstractDataProviderRecordIterator iter = account.searchRecords();
+        assertTrue(iter.next());
+        hash<auto> record = iter.getValue();
+        assertTrue(record.name.val());
+        if (m_options.verbose > 0) {
+            printf("Account: %s (link karma: %d, comment karma: %d)\n",
+                record.name, record.link_karma, record.comment_karma);
+        }
+    }
+
+    subredditTest() {
+        RedditRestClient rest = getRestClient();
+        RedditDataProvider provider(rest);
+
+        # Test subreddit search
+        AbstractDataProvider subs = provider.getChildProvider("subreddits");
+        AbstractDataProviderRecordIterator iter = subs.searchRecords(NOTHING, {
+            "q": "programming",
+            "limit": 5,
+        });
+        int count = 0;
+        while (iter.next()) {
+            hash<auto> record = iter.getValue();
+            assertTrue(record.display_name.val());
+            ++count;
+        }
+        assertTrue(count > 0);
+        if (m_options.verbose > 0) {
+            printf("Found %d subreddits matching 'programming'\n", count);
+        }
+    }
+
+    postLifecycleTest() {
+        if (!test_subreddit) {
+            if (m_options.verbose > 0) {
+                printf("Skipping post lifecycle test: no test subreddit provided\n");
+            }
+            return;
+        }
+
+        RedditRestClient rest = getRestClient();
+        RedditDataProvider provider(rest);
+
+        # List posts from test subreddit
+        AbstractDataProvider posts = provider.getChildProvider("posts");
+        AbstractDataProviderRecordIterator iter = posts.searchRecords(NOTHING, {
+            "subreddit": test_subreddit,
+            "sort": "new",
+            "limit": 5,
+        });
+        int count = 0;
+        while (iter.next()) {
+            hash<auto> record = iter.getValue();
+            assertTrue(record.title.val());
+            ++count;
+        }
+        if (m_options.verbose > 0) {
+            printf("Found %d posts in r/%s\n", count, test_subreddit);
+        }
+    }
+}

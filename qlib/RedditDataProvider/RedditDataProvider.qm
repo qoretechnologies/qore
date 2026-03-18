@@ -1,0 +1,994 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore RedditDataProvider module definition
+
+/*  RedditDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%modern
+
+%requires(reexport) DataProvider
+%requires(reexport) RedditRestClient
+%try-module json
+%define NoJson
+%endtry
+
+module RedditDataProvider {
+    version = "1.0";
+    desc = "User module providing a data provider API for Reddit";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # Register the data provider factory
+        DataProvider::registerFactory(new RedditDataProviderFactory());
+
+        # Register the application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": RedditDataProvider::AppName,
+            "display_name": "Reddit",
+            "short_desc": "Reddit social media platform",
+            "desc": "Reddit is a social news aggregation and discussion platform.\n\n"
+                "This integration supports posts, comments, subreddits, messages, voting, "
+                "flair, moderation, and user management.",
+            "scheme": "redditrest",
+            "logo": RedditLogo,
+            "logo_file_name": "reddit-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::SocialMedia,),
+        });
+
+        # ========== ACCOUNT ACTIONS ==========
+
+        # Get Current User
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": RedditDataProvider::AppName,
+            "path": "/account",
+            "action": "get-me",
+            "groups": "Account",
+            "display_name": "Get Current User",
+            "short_desc": "Get the authenticated user's info",
+            "desc": "Get the authenticated user's account information",
+            "action_code": DPAT_FIND_SINGLE,
+            "get_output_type": AbstractDataProviderType sub () { return new RedditAccountDataType(); },
+        });
+
+        # Get Karma
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": RedditDataProvider::AppName,
+            "path": "/account/get-karma",
+            "action": "get-karma",
+            "groups": "Account",
+            "display_name": "Get Karma Breakdown",
+            "short_desc": "Get karma breakdown by subreddit",
+            "desc": "Get the authenticated user's karma breakdown by subreddit",
+            "action_code": DPAT_API,
+            "options": {},
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+        });
+
+        # Get Trophies
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": RedditDataProvider::AppName,
+            "path": "/account/get-trophies",
+            "action": "get-trophies",
+            "groups": "Account",
+            "display_name": "Get Trophies",
+            "short_desc": "Get the user's trophies",
+            "desc": "Get the authenticated user's trophies and awards",
+            "action_code": DPAT_API,
+            "options": {},
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+        });
+
+        # Update Preferences
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": RedditDataProvider::AppName,
+            "path": "/account/update-prefs",
+            "action": "update-prefs",
+            "groups": "Account",
+            "display_name": "Update Preferences",
+            "short_desc": "Update user preferences",
+            "desc": "Update the authenticated user's account preferences",
+            "action_code": DPAT_API,
+            "options": {
+                "over_18": <ActionOptionInfo>{
+                    "display_name": "Over 18",
+                    "short_desc": "Show NSFW content",
+                    "type": AbstractDataProviderTypeMap."*softbool",
+                },
+                "email_messages": <ActionOptionInfo>{
+                    "display_name": "Email Messages",
+                    "short_desc": "Send email notifications",
+                    "type": AbstractDataProviderTypeMap."*softbool",
+                },
+                "default_comment_sort": <ActionOptionInfo>{
+                    "display_name": "Default Comment Sort",
+                    "short_desc": "Default comment sort order",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "best", "desc": "Best"},
+                        <AllowedValueInfo>{"value": "top", "desc": "Top"},
+                        <AllowedValueInfo>{"value": "new", "desc": "New"},
+                        <AllowedValueInfo>{"value": "controversial", "desc": "Controversial"},
+                        <AllowedValueInfo>{"value": "old", "desc": "Old"},
+                        <AllowedValueInfo>{"value": "qa", "desc": "Q&A"},
+                    ),
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+        });
+
+        # ========== SUBREDDIT ACTIONS ==========
+
+        # List/Search Subreddits
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": RedditDataProvider::AppName,
+            "path": "/subreddits",
+            "action": "list-subreddits",
+            "groups": "Subreddits",
+            "display_name": "List Subreddits",
+            "short_desc": "List or search subreddits",
+            "desc": "List subscribed subreddits or search for subreddits",
+            "action_code": DPAT_FIND,
+            "options": {
+                "subreddit": <ActionOptionInfo>{
+                    "display_name": "Subreddit Name",
+                    "short_desc": "Get a specific subreddit",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "subreddits",
+                },
+                "q": <ActionOptionInfo>{
+                    "display_name": "Search Query",
+                    "short_desc": "Search subreddits by query",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "mine": <ActionOptionInfo>{
+                    "display_name": "My Subreddits",
+                    "short_desc": "List subscribed subreddits",
+                    "type": AbstractDataProviderTypeMap."*softbool",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return new RedditSubredditDataType(); },
+        });
+
+        # Subscribe
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": RedditDataProvider::AppName,
+            "path": "/subreddits/subscribe",
+            "action": "subscribe",
+            "groups": "Subreddits",
+            "display_name": "Subscribe/Unsubscribe",
+            "short_desc": "Subscribe to or unsubscribe from a subreddit",
+            "desc": "Subscribe to or unsubscribe from a subreddit",
+            "action_code": DPAT_API,
+            "options": {
+                "action": <ActionOptionInfo>{
+                    "display_name": "Action",
+                    "short_desc": "Subscribe or unsubscribe",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "sub", "desc": "Subscribe"},
+                        <AllowedValueInfo>{"value": "unsub", "desc": "Unsubscribe"},
+                    ),
+                },
+                "sr_name": <ActionOptionInfo>{
+                    "display_name": "Subreddit Name",
+                    "short_desc": "The subreddit",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "subreddits",
+                    "preselected": True,
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+        });
+
+        # ========== POST ACTIONS ==========
+
+        # List Posts
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": RedditDataProvider::AppName,
+            "path": "/posts",
+            "action": "list-posts",
+            "groups": "Posts",
+            "display_name": "List Posts",
+            "short_desc": "List or search posts",
+            "desc": "List posts from a subreddit or search for posts",
+            "action_code": DPAT_FIND,
+            "options": {
+                "subreddit": <ActionOptionInfo>{
+                    "display_name": "Subreddit",
+                    "short_desc": "The subreddit to list posts from",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "subreddits",
+                    "preselected": True,
+                },
+                "sort": <ActionOptionInfo>{
+                    "display_name": "Sort",
+                    "short_desc": "Sort order",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "hot", "desc": "Hot"},
+                        <AllowedValueInfo>{"value": "new", "desc": "New"},
+                        <AllowedValueInfo>{"value": "top", "desc": "Top"},
+                        <AllowedValueInfo>{"value": "rising", "desc": "Rising"},
+                    ),
+                    "preselected": True,
+                },
+                "q": <ActionOptionInfo>{
+                    "display_name": "Search Query",
+                    "short_desc": "Search posts by query",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "t": <ActionOptionInfo>{
+                    "display_name": "Time Range",
+                    "short_desc": "Time range for top/search",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "hour", "desc": "Past hour"},
+                        <AllowedValueInfo>{"value": "day", "desc": "Past 24 hours"},
+                        <AllowedValueInfo>{"value": "week", "desc": "Past week"},
+                        <AllowedValueInfo>{"value": "month", "desc": "Past month"},
+                        <AllowedValueInfo>{"value": "year", "desc": "Past year"},
+                        <AllowedValueInfo>{"value": "all", "desc": "All time"},
+                    ),
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return new RedditPostDataType(); },
+        });
+
+        # Create Post
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": RedditDataProvider::AppName,
+            "path": "/posts/create",
+            "action": "create-post",
+            "groups": "Posts",
+            "display_name": "Create a Post",
+            "short_desc": "Create a new post",
+            "desc": "Create a new post (submission) on Reddit",
+            "action_code": DPAT_API,
+            "options": {
+                "sr": <ActionOptionInfo>{
+                    "display_name": "Subreddit",
+                    "short_desc": "The subreddit to post to",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "subreddits",
+                    "preselected": True,
+                },
+                "title": <ActionOptionInfo>{
+                    "display_name": "Title",
+                    "short_desc": "Post title",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                },
+                "kind": <ActionOptionInfo>{
+                    "display_name": "Post Type",
+                    "short_desc": "Type of post",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "self", "desc": "Text post"},
+                        <AllowedValueInfo>{"value": "link", "desc": "Link post"},
+                    ),
+                },
+                "text": <ActionOptionInfo>{
+                    "display_name": "Body Text",
+                    "short_desc": "Post body (for self posts)",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "url": <ActionOptionInfo>{
+                    "display_name": "URL",
+                    "short_desc": "URL (for link posts)",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "nsfw": <ActionOptionInfo>{
+                    "display_name": "NSFW",
+                    "short_desc": "Mark as NSFW",
+                    "type": AbstractDataProviderTypeMap."*softbool",
+                },
+                "spoiler": <ActionOptionInfo>{
+                    "display_name": "Spoiler",
+                    "short_desc": "Mark as spoiler",
+                    "type": AbstractDataProviderTypeMap."*softbool",
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+        });
+
+        # Edit Post/Comment
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": RedditDataProvider::AppName,
+            "path": "/posts/edit",
+            "action": "edit-text",
+            "groups": "Posts",
+            "display_name": "Edit Text",
+            "short_desc": "Edit a self post or comment",
+            "desc": "Edit the text body of a self post or comment",
+            "action_code": DPAT_API,
+            "options": {
+                "thing_id": <ActionOptionInfo>{
+                    "display_name": "Thing ID",
+                    "short_desc": "The fullname of the thing to edit",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                },
+                "text": <ActionOptionInfo>{
+                    "display_name": "Text",
+                    "short_desc": "The new text content",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+        });
+
+        # Delete Post/Comment
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": RedditDataProvider::AppName,
+            "path": "/posts/delete",
+            "action": "delete-thing",
+            "groups": "Posts",
+            "display_name": "Delete Post/Comment",
+            "short_desc": "Delete a post or comment",
+            "desc": "Delete a post or comment by fullname",
+            "action_code": DPAT_API,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Thing ID",
+                    "short_desc": "The fullname to delete",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+        });
+
+        # ========== COMMENT ACTIONS ==========
+
+        # List Comments
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": RedditDataProvider::AppName,
+            "path": "/comments",
+            "action": "list-comments",
+            "groups": "Comments",
+            "display_name": "List Comments",
+            "short_desc": "List comments on a post",
+            "desc": "List comments on a Reddit post",
+            "action_code": DPAT_FIND,
+            "options": {
+                "article": <ActionOptionInfo>{
+                    "display_name": "Post ID",
+                    "short_desc": "The post ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                },
+                "sort": <ActionOptionInfo>{
+                    "display_name": "Sort",
+                    "short_desc": "Comment sort order",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "best", "desc": "Best"},
+                        <AllowedValueInfo>{"value": "top", "desc": "Top"},
+                        <AllowedValueInfo>{"value": "new", "desc": "New"},
+                        <AllowedValueInfo>{"value": "controversial", "desc": "Controversial"},
+                        <AllowedValueInfo>{"value": "old", "desc": "Old"},
+                        <AllowedValueInfo>{"value": "qa", "desc": "Q&A"},
+                    ),
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return new RedditCommentDataType(); },
+        });
+
+        # Create Comment
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": RedditDataProvider::AppName,
+            "path": "/comments/create",
+            "action": "create-comment",
+            "groups": "Comments",
+            "display_name": "Create a Comment",
+            "short_desc": "Create a new comment",
+            "desc": "Create a new comment on a post or in reply to another comment",
+            "action_code": DPAT_API,
+            "options": {
+                "parent": <ActionOptionInfo>{
+                    "display_name": "Parent",
+                    "short_desc": "The parent fullname",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The fullname of the parent post (t3_) or comment (t1_) to reply to",
+                },
+                "text": <ActionOptionInfo>{
+                    "display_name": "Text",
+                    "short_desc": "Comment text",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return new RedditCommentDataType(); },
+        });
+
+        # ========== VOTING ACTIONS ==========
+
+        # Vote
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": RedditDataProvider::AppName,
+            "path": "/vote",
+            "action": "vote",
+            "groups": "Voting",
+            "display_name": "Vote",
+            "short_desc": "Vote on a post or comment",
+            "desc": "Upvote, downvote, or remove vote on a post or comment",
+            "action_code": DPAT_API,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Thing ID",
+                    "short_desc": "The fullname to vote on",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                },
+                "dir": <ActionOptionInfo>{
+                    "display_name": "Direction",
+                    "short_desc": "Vote direction",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "preselected": True,
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": 1, "desc": "Upvote"},
+                        <AllowedValueInfo>{"value": 0, "desc": "Remove vote"},
+                        <AllowedValueInfo>{"value": -1, "desc": "Downvote"},
+                    ),
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+        });
+
+        # ========== MESSAGE ACTIONS ==========
+
+        # List Messages
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": RedditDataProvider::AppName,
+            "path": "/messages",
+            "action": "list-messages",
+            "groups": "Messages",
+            "display_name": "List Messages",
+            "short_desc": "List messages",
+            "desc": "List messages from inbox, sent, or unread folders",
+            "action_code": DPAT_FIND,
+            "options": {
+                "where": <ActionOptionInfo>{
+                    "display_name": "Folder",
+                    "short_desc": "Message folder",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "inbox", "desc": "Inbox"},
+                        <AllowedValueInfo>{"value": "sent", "desc": "Sent"},
+                        <AllowedValueInfo>{"value": "unread", "desc": "Unread"},
+                    ),
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return new RedditMessageDataType(); },
+        });
+
+        # Compose Message
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": RedditDataProvider::AppName,
+            "path": "/messages/compose",
+            "action": "compose-message",
+            "groups": "Messages",
+            "display_name": "Compose Message",
+            "short_desc": "Send a private message",
+            "desc": "Send a private message to a Reddit user",
+            "action_code": DPAT_API,
+            "options": {
+                "to": <ActionOptionInfo>{
+                    "display_name": "To",
+                    "short_desc": "Recipient username",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                },
+                "subject": <ActionOptionInfo>{
+                    "display_name": "Subject",
+                    "short_desc": "Message subject",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                },
+                "text": <ActionOptionInfo>{
+                    "display_name": "Text",
+                    "short_desc": "Message body",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+        });
+
+        # Mark Read
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": RedditDataProvider::AppName,
+            "path": "/messages/mark-read",
+            "action": "mark-read",
+            "groups": "Messages",
+            "display_name": "Mark as Read",
+            "short_desc": "Mark a message as read",
+            "desc": "Mark a message as read",
+            "action_code": DPAT_API,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Message ID",
+                    "short_desc": "The message fullname",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+        });
+
+        # Delete Message
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": RedditDataProvider::AppName,
+            "path": "/messages/delete",
+            "action": "delete-message",
+            "groups": "Messages",
+            "display_name": "Delete Message",
+            "short_desc": "Delete a message",
+            "desc": "Delete a message from your inbox",
+            "action_code": DPAT_API,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Message ID",
+                    "short_desc": "The message fullname",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+        });
+
+        # ========== USER ACTIONS ==========
+
+        # Get User
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": RedditDataProvider::AppName,
+            "path": "/users",
+            "action": "get-user",
+            "groups": "Users",
+            "display_name": "Get User",
+            "short_desc": "Get user info or content",
+            "desc": "Get user information, posts, or comments",
+            "action_code": DPAT_FIND,
+            "options": {
+                "username": <ActionOptionInfo>{
+                    "display_name": "Username",
+                    "short_desc": "The Reddit username",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                },
+                "type": <ActionOptionInfo>{
+                    "display_name": "Content Type",
+                    "short_desc": "Type of content to retrieve",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "about", "desc": "User info"},
+                        <AllowedValueInfo>{"value": "submitted", "desc": "User's posts"},
+                        <AllowedValueInfo>{"value": "comments", "desc": "User's comments"},
+                    ),
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return new RedditAccountDataType(); },
+        });
+
+        # ========== FLAIR ACTIONS ==========
+
+        # List Flairs
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": RedditDataProvider::AppName,
+            "path": "/flair",
+            "action": "list-flairs",
+            "groups": "Flair",
+            "display_name": "List Flairs",
+            "short_desc": "List flair templates",
+            "desc": "List available flair templates for a subreddit",
+            "action_code": DPAT_FIND,
+            "options": {
+                "subreddit": <ActionOptionInfo>{
+                    "display_name": "Subreddit",
+                    "short_desc": "The subreddit",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "subreddits",
+                    "preselected": True,
+                },
+                "type": <ActionOptionInfo>{
+                    "display_name": "Flair Type",
+                    "short_desc": "Type of flair",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "link", "desc": "Link flair"},
+                        <AllowedValueInfo>{"value": "user", "desc": "User flair"},
+                    ),
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return new RedditFlairDataType(); },
+        });
+
+        # Set Flair
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": RedditDataProvider::AppName,
+            "path": "/flair/set-flair",
+            "action": "set-flair",
+            "groups": "Flair",
+            "display_name": "Set Flair",
+            "short_desc": "Set flair on a post or user",
+            "desc": "Set flair on a post or user in a subreddit",
+            "action_code": DPAT_API,
+            "options": {
+                "subreddit": <ActionOptionInfo>{
+                    "display_name": "Subreddit",
+                    "short_desc": "The subreddit",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "subreddits",
+                    "preselected": True,
+                },
+                "flair_template_id": <ActionOptionInfo>{
+                    "display_name": "Flair Template ID",
+                    "short_desc": "The flair template",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "link": <ActionOptionInfo>{
+                    "display_name": "Post Fullname",
+                    "short_desc": "The post for link flair",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "name": <ActionOptionInfo>{
+                    "display_name": "Username",
+                    "short_desc": "The user for user flair",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "text": <ActionOptionInfo>{
+                    "display_name": "Flair Text",
+                    "short_desc": "Custom flair text",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+        });
+
+        # ========== MODERATION ACTIONS ==========
+
+        # Approve
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": RedditDataProvider::AppName,
+            "path": "/moderation/approve",
+            "action": "approve",
+            "groups": "Moderation",
+            "display_name": "Approve",
+            "short_desc": "Approve a post or comment",
+            "desc": "Approve a post or comment as a moderator",
+            "action_code": DPAT_API,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Thing ID",
+                    "short_desc": "The fullname to approve",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+        });
+
+        # Remove
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": RedditDataProvider::AppName,
+            "path": "/moderation/remove",
+            "action": "remove",
+            "groups": "Moderation",
+            "display_name": "Remove",
+            "short_desc": "Remove a post or comment",
+            "desc": "Remove a post or comment as a moderator",
+            "action_code": DPAT_API,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Thing ID",
+                    "short_desc": "The fullname to remove",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                },
+                "spam": <ActionOptionInfo>{
+                    "display_name": "Spam",
+                    "short_desc": "Mark as spam",
+                    "type": AbstractDataProviderTypeMap."*softbool",
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+        });
+
+        # Lock
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": RedditDataProvider::AppName,
+            "path": "/moderation/lock",
+            "action": "lock",
+            "groups": "Moderation",
+            "display_name": "Lock",
+            "short_desc": "Lock a post",
+            "desc": "Lock a post to prevent new comments",
+            "action_code": DPAT_API,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Post ID",
+                    "short_desc": "The post fullname to lock",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+        });
+
+        # Unlock
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": RedditDataProvider::AppName,
+            "path": "/moderation/unlock",
+            "action": "unlock",
+            "groups": "Moderation",
+            "display_name": "Unlock",
+            "short_desc": "Unlock a post",
+            "desc": "Unlock a post to allow new comments",
+            "action_code": DPAT_API,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Post ID",
+                    "short_desc": "The post fullname to unlock",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+        });
+
+        # Sticky
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": RedditDataProvider::AppName,
+            "path": "/moderation/sticky",
+            "action": "sticky",
+            "groups": "Moderation",
+            "display_name": "Sticky/Unsticky",
+            "short_desc": "Sticky or unsticky a post",
+            "desc": "Sticky or unsticky a post in a subreddit",
+            "action_code": DPAT_API,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Post ID",
+                    "short_desc": "The post fullname",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                },
+                "state": <ActionOptionInfo>{
+                    "display_name": "Sticky State",
+                    "short_desc": "Sticky or unsticky",
+                    "type": AbstractDataProviderTypeMap."softbool",
+                    "required": True,
+                    "preselected": True,
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+        });
+
+        # ========== EXECUTE API CALL ==========
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": RedditDataProvider::AppName,
+            "path": "/execute-api-call",
+            "action": "execute-api-call",
+            "groups": "Other",
+            "display_name": "Execute API Call",
+            "short_desc": "Make a custom API call",
+            "desc": "Make a custom API call to the Reddit API",
+            "action_code": DPAT_API,
+            "options": {
+                "method": <ActionOptionInfo>{
+                    "display_name": "HTTP Method",
+                    "short_desc": "The HTTP method",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "GET", "desc": "GET request"},
+                        <AllowedValueInfo>{"value": "POST", "desc": "POST request"},
+                        <AllowedValueInfo>{"value": "PUT", "desc": "PUT request"},
+                        <AllowedValueInfo>{"value": "PATCH", "desc": "PATCH request"},
+                        <AllowedValueInfo>{"value": "DELETE", "desc": "DELETE request"},
+                    ),
+                },
+                "path": <ActionOptionInfo>{
+                    "display_name": "API Path",
+                    "short_desc": "The API path",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                },
+                "body": <ActionOptionInfo>{
+                    "display_name": "Request Body",
+                    "short_desc": "Optional request body",
+                    "type": AbstractDataProviderTypeMap."*hash",
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+        });
+
+        # ========== TRIGGERS ==========
+
+        # Watch New Posts
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": RedditDataProvider::AppName,
+            "path": "/events/new-post",
+            "action": "new-post",
+            "groups": "Triggers",
+            "display_name": "New Post",
+            "short_desc": "Watch for new posts",
+            "desc": "Watch for new posts in a subreddit via polling",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_POST,
+            "options": {
+                "subreddit": <ActionOptionInfo>{
+                    "display_name": "Subreddit",
+                    "short_desc": "The subreddit to watch",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "subreddits",
+                    "preselected": True,
+                },
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "Seconds between polls",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "How often to poll for new posts (seconds). Default: 60",
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return new RedditPostDataType(); },
+        });
+
+        # Watch New Comments
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": RedditDataProvider::AppName,
+            "path": "/events/new-comment",
+            "action": "new-comment",
+            "groups": "Triggers",
+            "display_name": "New Comment",
+            "short_desc": "Watch for new comments",
+            "desc": "Watch for new comments on a post via polling",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_COMMENT,
+            "options": {
+                "article": <ActionOptionInfo>{
+                    "display_name": "Post ID",
+                    "short_desc": "The post to watch",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                },
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "Seconds between polls",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "How often to poll for new comments (seconds). Default: 60",
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return new RedditCommentDataType(); },
+        });
+
+        # Watch New Messages
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": RedditDataProvider::AppName,
+            "path": "/events/new-message",
+            "action": "new-message",
+            "groups": "Triggers",
+            "display_name": "New Message",
+            "short_desc": "Watch for new messages",
+            "desc": "Watch for new unread messages via polling",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_MESSAGE,
+            "options": {
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "Seconds between polls",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "How often to poll for new messages (seconds). Default: 60",
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return new RedditMessageDataType(); },
+        });
+    };
+}
+
+/** @mainpage RedditDataProvider Module
+
+    @tableofcontents
+
+    @section redditdataproviderintro RedditDataProvider Introduction
+
+    The %RedditDataProvider module provides a data provider API for Reddit.
+
+    The following data provider classes are provided:
+    - @ref RedditDataProvider::RedditDataProvider "RedditDataProvider" - the main Reddit data provider
+
+    @section redditdataproviderrelnotes Release Notes
+
+    @subsection redditdataproviderv1_0 RedditDataProvider v1.0
+    - the initial version of the %RedditDataProvider module
+*/

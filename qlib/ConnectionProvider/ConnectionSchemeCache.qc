@@ -220,6 +220,8 @@ public class ConnectionSchemeCache {
 
             "apollorest": "ApolloRestClient",
 
+            "redditrest": "RedditRestClient",
+
             "squareres": "SquareRestClient",
             "squarespaceres": "SquarespaceRestClient",
 
