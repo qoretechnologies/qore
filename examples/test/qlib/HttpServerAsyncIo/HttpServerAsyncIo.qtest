@@ -260,28 +260,18 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     }
 
     controllerStartStopTest() {
-        # Create controller
+        # Create controller — start/stop are no-ops with the global singleton
         AsyncSocketIoController io_ctrl(False);
-        on_exit io_ctrl.stop();
         HttpAsyncSocketIoController ctrl(io_ctrl);
 
-        # Verify initial state
-        assertFalse(ctrl.running());
-
-        # Start controller
+        # start/stop are no-ops; verify wrapper methods don't throw
         ctrl.start();
-        assertTrue(ctrl.running());
+        ctrl.stop();
 
-        # Get stats
+        # Get stats — should work regardless of I/O thread state
         hash<auto> stats = ctrl.getStats();
         assertEq(0, stats.listeners);
         assertEq(0, stats.connections);
-        assertTrue(stats.running);
-
-        # Stop controller
-        ctrl.stop();
-        io_ctrl.stop();
-        assertFalse(ctrl.running());
     }
 
     acceptPollHttp2ModeTest() {
