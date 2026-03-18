@@ -80,6 +80,12 @@ public class WooCommerceAddToCartEventDataProvider inherits WooCommerceBaseEvent
         return "products";
     }
 
+    #! Returns example event data - always uses fake data since the event schema ({action, arg})
+    #! does not match any fetchable API resource
+    private auto getExampleEventDataImpl(string event_id) {
+        return getFakeExampleData();
+    }
+
     #! Returns fake example data for this event
     hash<auto> getFakeExampleData() {
         return {

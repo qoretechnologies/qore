@@ -53,6 +53,13 @@ public class WooCommerceCustomActionEventDataProvider inherits WooCommerceBaseEv
 
     #! Handle incoming webhook events - enriches custom action payloads with full resource data
     private handleWebhookEvent(hash<auto> payload) {
+        # Ignore WooCommerce ping/verification callbacks
+        if (payload.hasKey("webhook_id") && !payload.hasKey("id")) {
+            log(LoggerLevel::DEBUG, "handleWebhookEvent: ignoring ping for webhook_id %y",
+                payload.webhook_id);
+            return;
+        }
+
         string event_type = getEventType();
         log(LoggerLevel::DEBUG, "handleWebhookEvent: received %s custom action event", event_type);
 
