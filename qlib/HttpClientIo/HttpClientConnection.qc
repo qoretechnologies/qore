@@ -171,13 +171,6 @@ public class HttpClientConnection {
         if (max_concurrent_streams && total >= max_concurrent_streams) {
             return False;
         }
-        # For Connecting connections, cap pending reservations to limit the
-        # blast radius if the handshake fails — remaining threads will create
-        # new connections rather than all waiting on one handshake
-        if (state == HttpClientConnectionState::Connecting
-                && pending_stream_count >= DefaultMaxPendingPerConnection) {
-            return False;
-        }
         ++pending_stream_count;
         return True;
     }

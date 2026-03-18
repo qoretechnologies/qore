@@ -184,8 +184,15 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
     }
 
     #! Returns True if the underlying QUIC session is still alive
-    /** Checks the C++ poll operation state.  When the ngtcp2 session enters
-        closing/draining or is destroyed, this returns False.
+    /** Checks the C++ poll operation state.  Returns False when the poll
+        operation has no C++ operation (never connected), when the C++ state
+        is \c "closed" (session torn down), or when querying the state throws
+        (operation already destroyed).
+
+        @note This does not detect sessions in the QUIC closing/draining
+        period that have not yet been processed by the I/O thread — those
+        will still show state \c "reading" until the next \c continuePoll()
+        cycle.  Submit-time error handling (Phase 3) catches those cases.
     */
     bool isQuicSessionOpen() {
         if (!current_op) {

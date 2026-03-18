@@ -165,9 +165,14 @@ http {
             + " -p %d:8443/udp"
             + " docker.io/library/nginx:alpine 2>&1",
             container_name, nginx_conf, cert_path, key_path, nginx_port, nginx_port);
-        string output = backquote(cmd);
-        if (output == "") {
-            testSkip("failed to start nginx container");
+        try {
+            string output = backquote(cmd);
+            if (output == "") {
+                testSkip("failed to start nginx container");
+                return;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(sprintf("podman not available or container failed to start: %s", ex.desc));
             return;
         }
         base_url = sprintf("https://127.0.0.1:%d", nginx_port);

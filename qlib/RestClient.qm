@@ -5043,7 +5043,9 @@ public class RestClientPool inherits Qore::Thread::AbstractConnectionPool {
             *hash<Qore::Thread::ConnectionPoolOptions> pool_opts)
             : AbstractConnectionPool(pool_opts) {
         self.factory = AbstractRestClient sub () {
-            return new RestClient(client_opts, True);
+            # Copy opts per instance — RestClient::constructor() mutates its
+            # opts hash (removes logger, update_options, etc.)
+            return new RestClient(client_opts + {}, True);
         };
         # Pre-create min resources now that factory is assigned
         cast<Qore::Thread::AbstractConnectionPool>(self).init();

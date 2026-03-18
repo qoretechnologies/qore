@@ -73,6 +73,9 @@ public class HttpClientStreamHandle {
 
         #! Logger
         *LoggerInterface logger;
+
+        #! True if a pending stream reservation is held on the connection
+        bool reservation_held = False;
     }
 
     #! Creates a new stream handle
@@ -85,6 +88,13 @@ public class HttpClientStreamHandle {
         self.conn = conn;
         self.request_timeout = request_timeout;
         self.logger = logger;
+    }
+
+    #! Releases any unreleased stream reservation
+    destructor() {
+        if (reservation_held) {
+            conn.releaseStreamReservation();
+        }
     }
 
     #! Protocol-specific async request submission (subclasses must implement)
@@ -140,6 +150,22 @@ public class HttpClientStreamHandle {
     #! Returns True if a request has been submitted on this stream
     bool isSubmitted() {
         return exists stream_id;
+    }
+
+    #! Marks that a pending stream reservation is held on the connection
+    /** Called by @ref HttpClientConnectionManager::acquireStream() after
+        @ref HttpClientConnection::tryReserveStream() succeeds.  The
+        reservation is released automatically when the stream is submitted
+        (via @ref HttpClientConnection::submitRequest()) or when this
+        handle is destroyed without submitting.
+    */
+    markReservationHeld() {
+        reservation_held = True;
+    }
+
+    #! Clears the reservation-held flag (caller already released manually)
+    markReservationReleased() {
+        reservation_held = False;
     }
 
     #! Returns the underlying connection
@@ -301,6 +327,9 @@ public class HttpClientStreamHandle {
         try {
             stream_id = submitAsyncImpl(method, path, headers, body, callback);
             @assert(stream_id >= 0);
+            # Reservation converted to active stream — clear the flag so
+            # the destructor doesn't release again
+            reservation_held = False;
         } catch (hash<ExceptionInfo> ex) {
             {
                 AutoLock al(lock);

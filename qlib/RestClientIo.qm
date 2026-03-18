@@ -791,6 +791,9 @@ hash<RestResponseInfo> resp = rc.restGet("/api/data");
             #! Shared connection manager owned by this pool (created automatically
             #! when using the options-based constructor without an external manager)
             *HttpClientIo::HttpClientConnectionManager owned_mgr;
+
+            #! Effective connection manager (owned or external)
+            *HttpClientIo::HttpClientConnectionManager mgr;
         }
 
         #! Creates a new pool with the given factory and options
@@ -828,6 +831,7 @@ hash<RestResponseInfo> resp = rc.restGet("/api/data");
                 shared_mgr = RestClientIo::buildConnectionManager(client_opts);
                 owned_mgr = shared_mgr;
             }
+            self.mgr = shared_mgr;
             self.factory = RestClientIo sub () {
                 return new RestClientIo(client_opts, shared_mgr);
             };
@@ -836,10 +840,17 @@ hash<RestResponseInfo> resp = rc.restGet("/api/data");
         }
 
         #! Shuts down the pool and closes the owned connection manager
-        /** Calls the base class destructor first to destroy all pooled resources,
-            then closes the owned connection manager (if any).
+        /** Shuts down the base pool (releasing all pooled resources), then
+            closes the owned connection manager (if any).
+
+            @note Call this method explicitly before the pool goes out of
+                scope to ensure proper cleanup order. The destructor calls
+                this as a safety net, but Qore destructor ordering (derived
+                first, then base) means the base pool resources are destroyed
+                after this method runs in the destructor.
         */
-        destructor() {
+        shutdown() {
+            AbstractConnectionPool::shutdown();
             if (owned_mgr) {
                 owned_mgr.closeAll();
             }
@@ -857,11 +868,12 @@ hash<RestResponseInfo> resp = rc.restGet("/api/data");
             return cast<RestClientIo>(AbstractConnectionPool::acquire());
         }
 
-        #! Returns the shared connection manager (if using options-based constructor)
-        /** @return the shared connection manager, or @ref nothing if using the factory constructor
+        #! Returns the shared connection manager
+        /** @return the effective shared connection manager (owned or external), or
+            @ref nothing if using the factory constructor (which has no manager)
         */
         *HttpClientIo::HttpClientConnectionManager getConnectionManager() {
-            return owned_mgr;
+            return mgr;
         }
     }
 }
