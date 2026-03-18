@@ -1,0 +1,32 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../../qlib/QUnit.qm
+
+%exec-class AsyncIoUnitTests
+
+#! Runs C++ unit tests for AsyncIoControllerPriv via run_unit_tests()
+class AsyncIoUnitTests inherits QUnit::Test {
+    constructor() : Test("AsyncIoUnitTests", "1.0") {
+        if (Option::HAVE_LIBRARY_DEBUGGING) {
+            addTestCase("C++ AsyncIoControllerPriv unit tests", \testCppUnitTests());
+        } else {
+            addTestCase("skip (release build)", \testSkipRelease());
+        }
+        set_return_value(main());
+    }
+
+    testSkipRelease() {
+        testSkip("C++ unit tests require a debug build");
+    }
+
+    testCppUnitTests() {
+        hash<auto> result = call_function("run_unit_tests");
+        assertEq(0, result.fail_count,
+            sprintf("C++ unit tests: %d/%d passed, %d failed",
+                result.pass_count, result.test_count, result.fail_count));
+        assertTrue(result.test_count > 0, sprintf("ran %d tests", result.test_count));
+    }
+}

@@ -1610,6 +1610,7 @@ target_link_libraries(qore libqore)
 set_target_properties(qore PROPERTIES INSTALL_RPATH ${CMAKE_INSTALL_FULL_LIBDIR})
 set_target_properties(qore PROPERTIES BUILD_RPATH ${CMAKE_BINARY_DIR})
 
+
 if (DEFINED LIBJSIG AND APPLE)
     add_custom_command(TARGET qore
         POST_BUILD COMMAND
