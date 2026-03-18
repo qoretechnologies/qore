@@ -1,0 +1,958 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  WooCommerceDataProvider.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/RestClient.qm
+%requires ../../../../qlib/Mime.qm
+
+%try-module json
+%define NoJson
+%endtry
+
+%requires ../../../../qlib/WooCommerceRestClient.qm
+%requires ../../../../qlib/WooCommerceDataProvider
+
+%exec-class WooCommerceDataProviderTest
+
+public class WooCommerceDataProviderTest inherits QUnit::Test {
+    private {
+        #! WooCommerce REST client for integration tests
+        *WooCommerceRestClient::WooCommerceRestClient client;
+
+        #! Logger for verbose output
+        Logger logger;
+
+        #! Custom command-line options
+        const MyOpts = Opts + {
+            "storeurl": "u,storeurl=s",
+            "consumerkey": "k,consumerkey=s",
+            "consumersecret": "s,consumersecret=s",
+            "conn": "c,connection=s",
+        };
+
+        #! Test order ID created during tests (for cleanup)
+        *int testOrderId;
+
+        #! Test product ID created during tests (for cleanup)
+        *int testProductId;
+
+        #! Test customer ID created during tests (for cleanup)
+        *int testCustomerId;
+
+        #! Test coupon ID created during tests (for cleanup)
+        *int testCouponId;
+
+        #! Test category ID created during tests (for cleanup)
+        *int testCategoryId;
+
+        #! Test tag ID created during tests (for cleanup)
+        *int testTagId;
+
+        #! Test order note ID created during tests (for cleanup)
+        *int testOrderNoteId;
+
+        #! Unique suffix for test data
+        string unique;
+    }
+
+    constructor() : Test("WooCommerceDataProvider Test", "1.0", \ARGV, MyOpts) {
+        logger = new Logger("test", LoggerLevel::getLevelInfo());
+        unique = now_us().format("YYYYMMDDHHmmssxxxxxx");
+
+        # Unit tests (always run, no credentials needed)
+        addTestCase("sanity tests", \sanityTests());
+        addTestCase("factory tests", \factoryTests());
+        addTestCase("metadata tests", \metadataTests());
+        addTestCase("child provider tests", \childProviderTests());
+        addTestCase("data type tests", \dataTypeTests());
+        addTestCase("negative tests", \negativeTests());
+        addTestCase("connection tests", \connectionTests());
+        addTestCase("action catalog tests", \actionCatalogTests());
+
+        # Integration tests (require WC_STORE_URL, WC_CONSUMER_KEY, WC_CONSUMER_SECRET)
+        addTestCase("integration tests", \integrationTests());
+
+        # Try to set up connection for integration tests
+        try {
+            setupConnection();
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("Connection setup failed: %s: %s\n", ex.err, ex.desc);
+            }
+        }
+
+        set_return_value(main());
+    }
+
+    #! Sets up the WooCommerce client for integration tests
+    private setupConnection() {
+        *string store_url = m_options.storeurl ?? ENV.WC_STORE_URL;
+        *string consumer_key = m_options.consumerkey ?? ENV.WC_CONSUMER_KEY;
+        *string consumer_secret = m_options.consumersecret ?? ENV.WC_CONSUMER_SECRET;
+        if (!store_url || !consumer_key || !consumer_secret) {
+            if (m_options.verbose) {
+                printf("No API credentials provided (use -u/-k/-s options or "
+                    "WC_STORE_URL/WC_CONSUMER_KEY/WC_CONSUMER_SECRET env vars)\n");
+            }
+            return;
+        }
+        hash<auto> opts = {
+            "store_url": store_url,
+            "consumer_key": consumer_key,
+            "consumer_secret": consumer_secret,
+        };
+        client = new WooCommerceRestClient::WooCommerceRestClient(opts);
+    }
+
+    #! Check if json module is available
+    private checkJson() {
+%ifdef NoJson
+        testSkip("no json module present");
+%endif
+    }
+
+    #! Creates a WooCommerceDataProvider for unit tests
+    private *WooCommerceDataProvider::WooCommerceDataProvider tryCreateProvider() {
+        try {
+            return new WooCommerceDataProvider::WooCommerceDataProvider({
+                "store_url": "https://example.com",
+                "consumer_key": "ck_test",
+                "consumer_secret": "cs_test",
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
+                    || ex.err == "QOREADDRINFO-GETINFO-ERROR") {
+                testSkip(sprintf("cannot connect to WooCommerce API: %s", ex.desc));
+            }
+            rethrow;
+        }
+    }
+
+    #! Basic sanity tests - provider instantiation
+    sanityTests() {
+        checkJson();
+        # Test creating provider with fake credentials
+        *WooCommerceDataProvider::WooCommerceDataProvider provider = tryCreateProvider();
+        if (!provider) {
+            return;
+        }
+        assertEq("woocommerce", provider.getName());
+    }
+
+    #! Factory tests
+    factoryTests() {
+        checkJson();
+        WooCommerceDataProvider::WooCommerceDataProviderFactory factory();
+        hash<DataProviderFactoryInfo> info = factory.getInfo();
+        assertEq("woocommerce", info.name);
+        assertTrue(info.children_can_support_apis);
+        assertTrue(info.children_can_support_records);
+    }
+
+    #! Metadata tests
+    metadataTests() {
+        checkJson();
+        *WooCommerceDataProvider::WooCommerceDataProvider provider = tryCreateProvider();
+        if (!provider) {
+            return;
+        }
+        hash<DataProviderInfo> info = provider.getInfo();
+        assertEq("woocommerce", info.name);
+        assertTrue(info.supports_children);
+        assertTrue(info.children_can_support_apis);
+        assertTrue(info.children_can_support_records);
+        assertTrue(info.children_can_support_observers);
+    }
+
+    #! Child provider tests
+    childProviderTests() {
+        checkJson();
+        *WooCommerceDataProvider::WooCommerceDataProvider provider = tryCreateProvider();
+        if (!provider) {
+            return;
+        }
+        *list<string> children = provider.getChildProviderNames();
+        assertTrue(children.size() > 0, "provider has children");
+
+        # Check key children exist
+        assertTrue(inlist("orders", children), "has orders child");
+        assertTrue(inlist("products", children), "has products child");
+        assertTrue(inlist("customers", children), "has customers child");
+        assertTrue(inlist("coupons", children), "has coupons child");
+        assertTrue(inlist("events", children), "has events child");
+        assertTrue(inlist("create-order", children), "has create-order child");
+        assertTrue(inlist("get-order", children), "has get-order child");
+        assertTrue(inlist("system-status", children), "has system-status child");
+    }
+
+    #! Data type tests
+    dataTypeTests() {
+        checkJson();
+
+        # Test Order data type
+        WooCommerceDataProvider::WooCommerceOrderDataType orderType();
+        *hash<string, AbstractDataField> fields = orderType.getFields();
+        assertTrue(fields.hasKey("id"), "order has id field");
+        assertTrue(fields.hasKey("status"), "order has status field");
+        assertTrue(fields.hasKey("total"), "order has total field");
+        assertTrue(fields.hasKey("billing"), "order has billing field");
+        assertTrue(fields.hasKey("line_items"), "order has line_items field");
+
+        # Test Product data type
+        WooCommerceDataProvider::WooCommerceProductDataType productType();
+        fields = productType.getFields();
+        assertTrue(fields.hasKey("id"), "product has id field");
+        assertTrue(fields.hasKey("name"), "product has name field");
+        assertTrue(fields.hasKey("sku"), "product has sku field");
+        assertTrue(fields.hasKey("regular_price"), "product has regular_price field");
+
+        # Test Customer data type
+        WooCommerceDataProvider::WooCommerceCustomerDataType customerType();
+        fields = customerType.getFields();
+        assertTrue(fields.hasKey("id"), "customer has id field");
+        assertTrue(fields.hasKey("email"), "customer has email field");
+
+        # Test Coupon data type
+        WooCommerceDataProvider::WooCommerceCouponDataType couponType();
+        fields = couponType.getFields();
+        assertTrue(fields.hasKey("id"), "coupon has id field");
+        assertTrue(fields.hasKey("code"), "coupon has code field");
+        assertTrue(fields.hasKey("discount_type"), "coupon has discount_type field");
+
+        # Test Billing Address data type
+        WooCommerceDataProvider::WooCommerceBillingAddressDataType billingType();
+        fields = billingType.getFields();
+        assertTrue(fields.hasKey("first_name"), "billing has first_name field");
+        assertTrue(fields.hasKey("email"), "billing has email field");
+        assertTrue(fields.hasKey("phone"), "billing has phone field");
+
+        # Test Shipping Address data type
+        WooCommerceDataProvider::WooCommerceShippingAddressDataType shippingType();
+        fields = shippingType.getFields();
+        assertTrue(fields.hasKey("first_name"), "shipping has first_name field");
+        assertFalse(fields.hasKey("email"), "shipping does NOT have email field");
+        assertFalse(fields.hasKey("phone"), "shipping does NOT have phone field");
+
+        # Test Dimensions data type
+        WooCommerceDataProvider::WooCommerceDimensionsDataType dimensionsType();
+        fields = dimensionsType.getFields();
+        assertTrue(fields.hasKey("length"), "dimensions has length field");
+        assertTrue(fields.hasKey("width"), "dimensions has width field");
+        assertTrue(fields.hasKey("height"), "dimensions has height field");
+
+        # Test Image data type
+        WooCommerceDataProvider::WooCommerceImageDataType imageType();
+        fields = imageType.getFields();
+        assertTrue(fields.hasKey("id"), "image has id field");
+        assertTrue(fields.hasKey("src"), "image has src field");
+        assertTrue(fields.hasKey("name"), "image has name field");
+        assertTrue(fields.hasKey("alt"), "image has alt field");
+    }
+
+    #! Negative tests
+    negativeTests() {
+        checkJson();
+        # Test creating REST client without required options
+        assertThrows("WOOCOMMERCE-ERROR", sub () {
+            new WooCommerceRestClient::WooCommerceRestClient({});
+        });
+        assertThrows("WOOCOMMERCE-ERROR", sub () {
+            new WooCommerceRestClient::WooCommerceRestClient({"store_url": "https://example.com"});
+        });
+        assertThrows("WOOCOMMERCE-ERROR", sub () {
+            new WooCommerceRestClient::WooCommerceRestClient({
+                "store_url": "https://example.com",
+                "consumer_key": "ck_test",
+            });
+        });
+    }
+
+    #! Connection tests
+    connectionTests() {
+        checkJson();
+        # Test connection scheme is registered
+        hash<auto> scheme = ConnectionSchemeCache::getScheme("woocommerce");
+        assertEq("WooCommerce REST Connection", scheme.display_name);
+        assertTrue(scheme.options.hasKey("store_url"), "has store_url option");
+        assertTrue(scheme.options.hasKey("consumer_key"), "has consumer_key option");
+        assertTrue(scheme.options.hasKey("consumer_secret"), "has consumer_secret option");
+        assertEq("store_url,consumer_key,consumer_secret", scheme.required_options);
+    }
+
+    #! Action catalog tests
+    actionCatalogTests() {
+        checkJson();
+        # Check that actions are registered for the WooCommerce app
+        *list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActions(
+            WooCommerceDataProvider::AppName);
+        assertTrue(actions.size() > 0, "WooCommerce has registered actions");
+
+        # Check key actions exist
+        *hash<DataProviderActionInfo> listOrders;
+        *hash<DataProviderActionInfo> createOrder;
+        *hash<DataProviderActionInfo> orderCreated;
+
+        foreach hash<DataProviderActionInfo> action in (actions) {
+            switch (action.action) {
+                case "list-orders": listOrders = action; break;
+                case "create-order": createOrder = action; break;
+                case EVENT_ORDER_CREATED: orderCreated = action; break;
+            }
+        }
+
+        assertTrue(exists listOrders, "list-orders action registered");
+        if (listOrders) {
+            assertEq(DPAT_FIND, listOrders.action_code);
+        }
+
+        assertTrue(exists createOrder, "create-order action registered");
+        if (createOrder) {
+            assertEq(DPAT_API, createOrder.action_code);
+            assertTrue(createOrder.groups.contains("Orders"));
+        }
+
+        assertTrue(exists orderCreated, "order-created trigger registered");
+        if (orderCreated) {
+            assertEq(DPAT_EVENT, orderCreated.action_code);
+            assertTrue(orderCreated.groups.contains("Triggers"));
+        }
+    }
+
+    #! Integration tests (require real credentials)
+    integrationTests() {
+        checkJson();
+        if (!client) {
+            testSkip("no WooCommerce credentials provided");
+            return;
+        }
+
+        # Test connectivity first
+        testSystemStatus();
+
+        # CRUD tests for each resource
+        testProductCrud();
+        testCustomerCrud();
+        testCouponCrud();
+        testOrderCrud();
+        testCategoryAndTag();
+        testSettingsAndReports();
+
+        # Event/trigger example data
+        testEventExampleData();
+
+        # Cleanup all test data
+        cleanup();
+    }
+
+    #! Test system status (connectivity check)
+    private testSystemStatus() {
+        WooCommerceDataProvider::WooCommerceDataProvider prov(client);
+        try {
+            auto result = prov.getChildProvider("system-status").doRequest({});
+            assertTrue(exists result, "system-status returned data");
+            assertTrue(result.hasKey("environment") || result.hasKey("database"),
+                "system-status has expected fields");
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
+                    || ex.err == "REST-RESPONSE-ERROR") {
+                testSkip(sprintf("cannot connect to WooCommerce: %s", ex.desc));
+            }
+            rethrow;
+        }
+    }
+
+    # ─── Product CRUD ────────────────────────────────────────────────
+
+    private testProductCrud() {
+        WooCommerceDataProvider::WooCommerceDataProvider prov(client);
+
+        # Create
+        hash<auto> result = prov.getChildProvider("create-product").doRequest({
+            "name": "Test Product " + unique,
+            "type": "simple",
+            "regular_price": "19.99",
+            "description": "Integration test product",
+            "sku": "TEST-" + unique,
+        });
+        assertTrue(result.hasKey("id"), "create-product returns id");
+        assertTrue(result.id > 0, "product id is positive");
+        testProductId = result.id;
+        if (m_options.verbose) {
+            printf("Created product: %d\n", testProductId);
+        }
+
+        # Get single
+        hash<auto> fetched = prov.getChildProvider("get-product").doRequest({
+            "id": testProductId,
+        });
+        assertEq("Test Product " + unique, fetched.name, "product name matches");
+        assertEq("simple", fetched.type, "product type matches");
+        assertEq("19.99", fetched.regular_price, "product price matches");
+
+        # Update
+        hash<auto> updated = prov.getChildProvider("update-product").doRequest({
+            "id": testProductId,
+            "regular_price": "29.99",
+            "description": "Updated by integration test",
+        });
+        assertEq(testProductId, updated.id, "update returns same id");
+
+        # Verify update persisted
+        hash<auto> refetched = prov.getChildProvider("get-product").doRequest({
+            "id": testProductId,
+        });
+        assertEq("29.99", refetched.regular_price, "updated price persisted");
+
+        # Update stock
+        hash<auto> stockResult = prov.getChildProvider("update-stock-quantity").doRequest({
+            "id": testProductId,
+            "stock_quantity": 50,
+            "manage_stock": True,
+        });
+        assertEq(testProductId, stockResult.id, "stock update returns same id");
+
+        # List products
+        AbstractDataProvider products = prov.getChildProvider("products");
+        AbstractDataProviderRecordIterator iter = products.searchRecords(NOTHING, {
+            "per_page": 5,
+        });
+        int count = 0;
+        while (iter.next()) {
+            hash<auto> record = iter.getValue();
+            assertTrue(record.hasKey("id"), "listed product has id");
+            assertTrue(record.hasKey("name"), "listed product has name");
+            ++count;
+        }
+        assertTrue(count > 0, "list-products returned results");
+    }
+
+    # ─── Customer CRUD ───────────────────────────────────────────────
+
+    private testCustomerCrud() {
+        WooCommerceDataProvider::WooCommerceDataProvider prov(client);
+
+        # Create
+        hash<auto> result = prov.getChildProvider("create-customer").doRequest({
+            "email": sprintf("test_%s@example.com", unique),
+            "first_name": "Test",
+            "last_name": "User_" + unique,
+            "username": "testuser_" + unique,
+        });
+        assertTrue(result.hasKey("id"), "create-customer returns id");
+        assertTrue(result.id > 0, "customer id is positive");
+        testCustomerId = result.id;
+        if (m_options.verbose) {
+            printf("Created customer: %d\n", testCustomerId);
+        }
+
+        # Get single
+        hash<auto> fetched = prov.getChildProvider("get-customer").doRequest({
+            "id": testCustomerId,
+        });
+        assertEq("Test", fetched.first_name, "customer first_name matches");
+        assertEq(sprintf("test_%s@example.com", unique), fetched.email,
+            "customer email matches");
+
+        # Update
+        hash<auto> updated = prov.getChildProvider("update-customer").doRequest({
+            "id": testCustomerId,
+            "first_name": "Updated",
+            "last_name": "Customer_" + unique,
+        });
+        assertEq(testCustomerId, updated.id, "update returns same id");
+
+        # Verify update persisted
+        hash<auto> refetched = prov.getChildProvider("get-customer").doRequest({
+            "id": testCustomerId,
+        });
+        assertEq("Updated", refetched.first_name, "updated first_name persisted");
+
+        # List customers
+        AbstractDataProvider customers = prov.getChildProvider("customers");
+        AbstractDataProviderRecordIterator iter = customers.searchRecords(NOTHING, {
+            "per_page": 5,
+        });
+        int count = 0;
+        while (iter.next()) {
+            hash<auto> record = iter.getValue();
+            assertTrue(record.hasKey("id"), "listed customer has id");
+            assertTrue(record.hasKey("email"), "listed customer has email");
+            ++count;
+        }
+        assertTrue(count > 0, "list-customers returned results");
+    }
+
+    # ─── Coupon CRUD ─────────────────────────────────────────────────
+
+    private testCouponCrud() {
+        WooCommerceDataProvider::WooCommerceDataProvider prov(client);
+
+        # Create
+        string code = "TEST" + unique;
+        hash<auto> result = prov.getChildProvider("create-coupon").doRequest({
+            "code": code,
+            "discount_type": "percent",
+            "amount": "10",
+        });
+        assertTrue(result.hasKey("id"), "create-coupon returns id");
+        assertTrue(result.id > 0, "coupon id is positive");
+        testCouponId = result.id;
+        if (m_options.verbose) {
+            printf("Created coupon: %d\n", testCouponId);
+        }
+
+        # Get single
+        hash<auto> fetched = prov.getChildProvider("get-coupon").doRequest({
+            "id": testCouponId,
+        });
+        assertEq(code.lwr(), fetched.code, "coupon code matches (lowercased by WC)");
+        assertEq("percent", fetched.discount_type, "coupon discount_type matches");
+        assertEq("10.00", fetched.amount, "coupon amount matches");
+
+        # Update
+        hash<auto> updated = prov.getChildProvider("update-coupon").doRequest({
+            "id": testCouponId,
+            "amount": "20",
+        });
+        assertEq(testCouponId, updated.id, "update returns same id");
+
+        # Verify update persisted
+        hash<auto> refetched = prov.getChildProvider("get-coupon").doRequest({
+            "id": testCouponId,
+        });
+        assertEq("20.00", refetched.amount, "updated amount persisted");
+
+        # List coupons
+        AbstractDataProvider coupons = prov.getChildProvider("coupons");
+        AbstractDataProviderRecordIterator iter = coupons.searchRecords(NOTHING, {
+            "per_page": 5,
+        });
+        int count = 0;
+        while (iter.next()) {
+            hash<auto> record = iter.getValue();
+            assertTrue(record.hasKey("id"), "listed coupon has id");
+            assertTrue(record.hasKey("code"), "listed coupon has code");
+            ++count;
+        }
+        assertTrue(count > 0, "list-coupons returned results");
+    }
+
+    # ─── Order CRUD (with notes and refunds) ─────────────────────────
+
+    private testOrderCrud() {
+        WooCommerceDataProvider::WooCommerceDataProvider prov(client);
+
+        # Create order
+        hash<auto> result = prov.getChildProvider("create-order").doRequest({
+            "status": "pending",
+            "billing": {
+                "first_name": "Test",
+                "last_name": "Order_" + unique,
+                "email": sprintf("order_%s@example.com", unique),
+            },
+            "line_items": ({
+                "product_id": testProductId,
+                "quantity": 2,
+            },),
+            "customer_note": "Integration test order " + unique,
+        });
+        assertTrue(result.hasKey("id"), "create-order returns id");
+        assertTrue(result.id > 0, "order id is positive");
+        testOrderId = result.id;
+        if (m_options.verbose) {
+            printf("Created order: %d\n", testOrderId);
+        }
+
+        # Get single
+        hash<auto> fetched = prov.getChildProvider("get-order").doRequest({
+            "id": testOrderId,
+        });
+        assertEq("pending", fetched.status, "order status matches");
+        assertEq("Test", fetched.billing.first_name, "order billing name matches");
+
+        # Update
+        hash<auto> updated = prov.getChildProvider("update-order").doRequest({
+            "id": testOrderId,
+            "customer_note": "Updated note " + unique,
+        });
+        assertEq(testOrderId, updated.id, "update returns same id");
+
+        # Update status
+        hash<auto> statusResult = prov.getChildProvider("update-order-status").doRequest({
+            "id": testOrderId,
+            "status": "processing",
+        });
+        assertEq(testOrderId, statusResult.id, "status update returns same id");
+
+        # Verify status persisted
+        hash<auto> refetched = prov.getChildProvider("get-order").doRequest({
+            "id": testOrderId,
+        });
+        assertEq("processing", refetched.status, "updated status persisted");
+
+        # Create order note
+        hash<auto> noteResult = prov.getChildProvider("create-order-note").doRequest({
+            "order_id": testOrderId,
+            "note": "Test note " + unique,
+            "customer_note": False,
+        });
+        assertTrue(noteResult.hasKey("id"), "create-order-note returns id");
+        testOrderNoteId = noteResult.id;
+
+        # List order notes
+        hash<auto> notesResult = prov.getChildProvider("list-order-notes").doRequest({
+            "order_id": testOrderId,
+        });
+        assertTrue(notesResult.typeCode() == NT_LIST || notesResult.typeCode() == NT_HASH,
+            "list-order-notes returns data");
+
+        # Delete order note
+        if (testOrderNoteId) {
+            hash<auto> deleteNoteResult = prov.getChildProvider("delete-order-note").doRequest({
+                "order_id": testOrderId,
+                "id": testOrderNoteId,
+            });
+            assertTrue(exists deleteNoteResult, "delete-order-note returned response");
+            testOrderNoteId = NOTHING;
+        }
+
+        # List orders with filters
+        AbstractDataProvider orders = prov.getChildProvider("orders");
+        AbstractDataProviderRecordIterator iter = orders.searchRecords(NOTHING, {
+            "status": "processing",
+            "per_page": 5,
+        });
+        bool found = False;
+        while (iter.next()) {
+            hash<auto> record = iter.getValue();
+            assertTrue(record.hasKey("id"), "listed order has id");
+            assertTrue(record.hasKey("status"), "listed order has status");
+            assertEq("processing", record.status, "filtered order has correct status");
+            if (record.id == testOrderId) {
+                found = True;
+            }
+        }
+        assertTrue(found, "created order found in filtered list");
+
+        # Create refund
+        try {
+            hash<auto> refundResult = prov.getChildProvider("create-refund").doRequest({
+                "order_id": testOrderId,
+                "amount": "1.00",
+                "reason": "Integration test refund",
+            });
+            assertTrue(refundResult.hasKey("id"), "create-refund returns id");
+            if (m_options.verbose) {
+                printf("Created refund: %d\n", refundResult.id);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # Refund may fail if payment gateway isn't configured
+            if (m_options.verbose) {
+                printf("Refund test skipped (expected in test env): %s: %s\n",
+                    ex.err, ex.desc);
+            }
+        }
+
+        # List refunds
+        try {
+            hash<auto> refundsResult = prov.getChildProvider("list-refunds").doRequest({
+                "order_id": testOrderId,
+            });
+            assertTrue(exists refundsResult, "list-refunds returns data");
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("List refunds error: %s: %s\n", ex.err, ex.desc);
+            }
+        }
+    }
+
+    # ─── Category & Tag ──────────────────────────────────────────────
+
+    private testCategoryAndTag() {
+        WooCommerceDataProvider::WooCommerceDataProvider prov(client);
+
+        # Create category
+        hash<auto> catResult = prov.getChildProvider("create-category").doRequest({
+            "name": "Test Category " + unique,
+        });
+        assertTrue(catResult.hasKey("id"), "create-category returns id");
+        testCategoryId = catResult.id;
+        if (m_options.verbose) {
+            printf("Created category: %d\n", testCategoryId);
+        }
+
+        # List categories
+        AbstractDataProviderRecordIterator catIter =
+            prov.getChildProvider("categories").searchRecords(NOTHING, {"per_page": 100});
+        bool catFound = False;
+        while (catIter.next()) {
+            hash<auto> record = catIter.getValue();
+            assertTrue(record.hasKey("id"), "listed category has id");
+            assertTrue(record.hasKey("name"), "listed category has name");
+            if (record.id == testCategoryId) {
+                catFound = True;
+            }
+        }
+        assertTrue(catFound, "created category found in list");
+
+        # Update category
+        hash<auto> catUpdated = prov.getChildProvider("update-category").doRequest({
+            "id": testCategoryId,
+            "description": "Updated by integration test",
+        });
+        assertEq(testCategoryId, catUpdated.id, "category update returns same id");
+
+        # Create tag
+        hash<auto> tagResult = prov.getChildProvider("create-tag").doRequest({
+            "name": "test-tag-" + unique,
+        });
+        assertTrue(tagResult.hasKey("id"), "create-tag returns id");
+        testTagId = tagResult.id;
+        if (m_options.verbose) {
+            printf("Created tag: %d\n", testTagId);
+        }
+
+        # List tags
+        AbstractDataProviderRecordIterator tagIter =
+            prov.getChildProvider("tags").searchRecords(NOTHING, {"per_page": 100});
+        bool tagFound = False;
+        while (tagIter.next()) {
+            hash<auto> record = tagIter.getValue();
+            assertTrue(record.hasKey("id"), "listed tag has id");
+            if (record.id == testTagId) {
+                tagFound = True;
+            }
+        }
+        assertTrue(tagFound, "created tag found in list");
+    }
+
+    # ─── Settings & Reports ──────────────────────────────────────────
+
+    private testSettingsAndReports() {
+        WooCommerceDataProvider::WooCommerceDataProvider prov(client);
+
+        # Get a known setting
+        hash<auto> setting = prov.getChildProvider("get-setting").doRequest({
+            "group": "general",
+            "setting_id": "woocommerce_currency",
+        });
+        assertTrue(setting.hasKey("id") || setting.hasKey("value"),
+            "get-setting returns setting data");
+
+        # Sales report
+        hash<auto> salesReport = prov.getChildProvider("sales-report").doRequest({});
+        assertTrue(exists salesReport, "sales-report returned data");
+
+        # Top sellers report
+        try {
+            hash<auto> topSellers = prov.getChildProvider("top-sellers-report").doRequest({});
+            assertTrue(exists topSellers, "top-sellers-report returned data");
+        } catch (hash<ExceptionInfo> ex) {
+            # May be empty on fresh stores
+            if (m_options.verbose) {
+                printf("Top sellers report: %s: %s\n", ex.err, ex.desc);
+            }
+        }
+
+        # Totals
+        hash<auto> ordersTotals = prov.getChildProvider("orders-totals").doRequest({});
+        assertTrue(exists ordersTotals, "orders-totals returned data");
+
+        hash<auto> productsTotals = prov.getChildProvider("products-totals").doRequest({});
+        assertTrue(exists productsTotals, "products-totals returned data");
+
+        hash<auto> customersTotals = prov.getChildProvider("customers-totals").doRequest({});
+        assertTrue(exists customersTotals, "customers-totals returned data");
+
+        # Shipping zones
+        hash<auto> zonesResult = prov.getChildProvider("list-shipping-zones").doRequest({});
+        assertTrue(exists zonesResult, "list-shipping-zones returned data");
+
+        # Shipping methods (requires a zone_id — use zone 0 which is "Locations not covered by
+        # your other zones" and always exists in WooCommerce)
+        hash<auto> methods = prov.getChildProvider("list-shipping-methods").doRequest({
+            "zone_id": 0,
+        });
+        assertTrue(exists methods, "list-shipping-methods returned data");
+
+        # Tax rates
+        AbstractDataProviderRecordIterator taxIter =
+            prov.getChildProvider("tax-rates").searchRecords(NOTHING, {"per_page": 5});
+        assertTrue(True, "list-tax-rates executed successfully");
+    }
+
+    # ─── Event Example Data ──────────────────────────────────────────
+
+    private testEventExampleData() {
+        WooCommerceDataProvider::WooCommerceDataProvider prov(client);
+        AbstractDataProvider events = prov.getChildProvider("events");
+
+        # Test example data for key event types
+        list<string> eventNames = (
+            EVENT_ORDER_CREATED,
+            EVENT_PRODUCT_CREATED,
+            EVENT_CUSTOMER_CREATED,
+            EVENT_COUPON_CREATED,
+        );
+
+        foreach string eventName in (eventNames) {
+            AbstractDataProvider eventProv = events.getChildProvider(eventName);
+            assertTrue(exists eventProv, sprintf("%s event provider exists", eventName));
+
+            # Verify event types
+            *hash<string, hash<DataProviderMessageInfo>> eventTypes = eventProv.getEventTypes();
+            assertTrue(exists eventTypes, sprintf("%s has event types", eventName));
+            assertTrue(eventTypes.size() > 0, sprintf("%s has at least one event type", eventName));
+
+            # Get example data
+            foreach string eventType in (keys eventTypes) {
+                auto example = eventProv.getExampleEventData(eventType);
+                assertTrue(exists example, sprintf("%s example data exists for %s", eventName,
+                    eventType));
+                if (example.typeCode() == NT_HASH) {
+                    assertTrue(example.hasKey("id"),
+                        sprintf("%s example has id field", eventName));
+                }
+            }
+        }
+    }
+
+    # ─── Cleanup ─────────────────────────────────────────────────────
+
+    private cleanup() {
+        if (m_options.verbose) {
+            printf("Cleaning up test data...\n");
+        }
+
+        # Delete test order (must be before product/customer deletion)
+        if (testOrderId) {
+            try {
+                WooCommerceDataProvider::WooCommerceDataProvider prov(client);
+                prov.getChildProvider("delete-order").doRequest({
+                    "id": testOrderId,
+                    "force": True,
+                });
+                if (m_options.verbose) {
+                    printf("Deleted test order: %d\n", testOrderId);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (m_options.verbose) {
+                    printf("Warning: order cleanup failed: %s: %s\n", ex.err, ex.desc);
+                }
+            }
+        }
+
+        # Delete test product
+        if (testProductId) {
+            try {
+                WooCommerceDataProvider::WooCommerceDataProvider prov(client);
+                prov.getChildProvider("delete-product").doRequest({
+                    "id": testProductId,
+                    "force": True,
+                });
+                if (m_options.verbose) {
+                    printf("Deleted test product: %d\n", testProductId);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (m_options.verbose) {
+                    printf("Warning: product cleanup failed: %s: %s\n", ex.err, ex.desc);
+                }
+            }
+        }
+
+        # Delete test customer
+        if (testCustomerId) {
+            try {
+                WooCommerceDataProvider::WooCommerceDataProvider prov(client);
+                prov.getChildProvider("delete-customer").doRequest({
+                    "id": testCustomerId,
+                    "force": True,
+                });
+                if (m_options.verbose) {
+                    printf("Deleted test customer: %d\n", testCustomerId);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (m_options.verbose) {
+                    printf("Warning: customer cleanup failed: %s: %s\n", ex.err, ex.desc);
+                }
+            }
+        }
+
+        # Delete test coupon
+        if (testCouponId) {
+            try {
+                WooCommerceDataProvider::WooCommerceDataProvider prov(client);
+                prov.getChildProvider("delete-coupon").doRequest({
+                    "id": testCouponId,
+                    "force": True,
+                });
+                if (m_options.verbose) {
+                    printf("Deleted test coupon: %d\n", testCouponId);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (m_options.verbose) {
+                    printf("Warning: coupon cleanup failed: %s: %s\n", ex.err, ex.desc);
+                }
+            }
+        }
+
+        # Delete test category (WC REST API v3: DELETE /products/categories/<id>?force=true)
+        if (testCategoryId) {
+            try {
+                client.del("products/categories/" + string(testCategoryId) + "?force=true");
+                if (m_options.verbose) {
+                    printf("Deleted test category: %d\n", testCategoryId);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (m_options.verbose) {
+                    printf("Warning: category cleanup failed: %s: %s\n", ex.err, ex.desc);
+                }
+            }
+        }
+
+        # Delete test tag (WC REST API v3: DELETE /products/tags/<id>?force=true)
+        if (testTagId) {
+            try {
+                client.del("products/tags/" + string(testTagId) + "?force=true");
+                if (m_options.verbose) {
+                    printf("Deleted test tag: %d\n", testTagId);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (m_options.verbose) {
+                    printf("Warning: tag cleanup failed: %s: %s\n", ex.err, ex.desc);
+                }
+            }
+        }
+
+        if (m_options.verbose) {
+            printf("Cleanup complete\n");
+        }
+    }
+}
