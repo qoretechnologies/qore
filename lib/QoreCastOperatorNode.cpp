@@ -193,6 +193,7 @@ int QoreParseCastOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
         const QoreTypeInfo* complex_hash_val_type = or_nothing
             ? QoreTypeInfo::getComplexHashValueType(parse_context.typeInfo)
             : QoreTypeInfo::getUniqueReturnComplexHash(parse_context.typeInfo);
+
         if (!complex_hash_val_type) {
             const TypedHashDecl* hd = or_nothing
                 ? QoreTypeInfo::getTypedHash(parse_context.typeInfo)
