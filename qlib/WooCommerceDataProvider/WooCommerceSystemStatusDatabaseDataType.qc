@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore WooCommerceDataProvider module definition
 
-/*  WooCommerceTagDataType.qc Copyright 2026 Qore Technologies, s.r.o.
+/*  WooCommerceSystemStatusDatabaseDataType.qc Copyright 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -25,46 +25,51 @@
 #! Contains all public definitions in the WooCommerceDataProvider module
 public namespace WooCommerceDataProvider {
 
-#! WooCommerce product tag data type
-public class WooCommerceTagDataType inherits HashDataType {
+#! WooCommerce system status database data type
+public class WooCommerceSystemStatusDatabaseDataType inherits HashDataType {
     public {
         #! Field definitions
         const Fields = {
-            "id": {
-                "display_name": "ID",
-                "short_desc": "Unique identifier for the tag",
+            "wc_database_version": {
+                "display_name": "WC Database Version",
+                "short_desc": "WooCommerce database version",
+                "type": StringOrNothingType,
+                "desc": "The WooCommerce database version",
+            },
+            "database_prefix": {
+                "display_name": "Database Prefix",
+                "short_desc": "WordPress database table prefix",
+                "type": StringOrNothingType,
+                "desc": "The WordPress database table prefix (e.g., `wp_`)",
+            },
+            "maxdb": {
+                "display_name": "MaxDB",
+                "short_desc": "Max database size",
                 "type": IntOrNothingType,
-                "desc": "The unique identifier for the product tag",
+                "desc": "The maximum database packet size",
             },
-            "name": {
-                "display_name": "Name",
-                "short_desc": "Tag name",
-                "type": StringOrNothingType,
-                "desc": "The tag name",
+            "database_size": {
+                "display_name": "Database Size",
+                "short_desc": "Total database size",
+                "type": AutoHashOrNothingType,
+                "desc": "The total database size including data and index sizes",
             },
-            "slug": {
-                "display_name": "Slug",
-                "short_desc": "Tag slug",
-                "type": StringOrNothingType,
-                "desc": "The tag URL slug",
-            },
-            "description": {
-                "display_name": "Description",
-                "short_desc": "Tag description",
-                "type": StringOrNothingType,
-                "desc": "The tag description",
-            },
-            "count": {
-                "display_name": "Count",
-                "short_desc": "Number of products with this tag",
-                "type": IntOrNothingType,
-                "desc": "The number of products assigned to this tag",
+            "database_tables": {
+                "display_name": "Database Tables",
+                "short_desc": "Database tables information",
+                "type": AutoHashOrNothingType,
+                "desc": "Information about WooCommerce and WordPress database tables",
             },
         };
     }
 
     #! Creates the object
     constructor() {
+        addQoreFields(Fields);
+    }
+
+    #! Creates the object with a specific base type (for optional fields)
+    constructor(Type base_type) : HashDataType(base_type, "WooCommerceSystemStatusDatabase") {
         addQoreFields(Fields);
     }
 }

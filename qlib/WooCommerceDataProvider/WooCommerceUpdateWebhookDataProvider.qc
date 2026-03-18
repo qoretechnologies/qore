@@ -34,21 +34,25 @@ public class WooCommerceUpdateWebhookRequestDataType inherits HashDataType {
                 "type": IntType,
                 "desc": "The unique identifier for the webhook to update",
                 "required": True,
+                "example_value": 142,
             },
             "topic": {
                 "display_name": "Topic",
                 "type": StringOrNothingType,
                 "desc": "The webhook topic",
+                "example_value": "order.updated",
             },
             "delivery_url": {
                 "display_name": "Delivery URL",
                 "type": StringOrNothingType,
                 "desc": "The URL where the webhook payload is delivered",
+                "example_value": "https://example.com/webhooks/woocommerce",
             },
             "name": {
                 "display_name": "Name",
                 "type": StringOrNothingType,
                 "desc": "A friendly name for the webhook",
+                "example_value": "Order Updated Webhook",
             },
             "secret": {
                 "display_name": "Secret",
@@ -65,8 +69,7 @@ public class WooCommerceUpdateWebhookRequestDataType inherits HashDataType {
     }
 
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 

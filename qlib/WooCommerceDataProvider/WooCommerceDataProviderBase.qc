@@ -48,7 +48,6 @@ public class WooCommerceDataProviderBase inherits DataProvider::AbstractDataProv
                 "type": AbstractDataProviderType::get(StringType),
                 "desc": "The WooCommerce store URL (e.g., `https://mystore.com`)",
                 "required": True,
-                "preselected": True,
             },
             "consumer_key": <DataProviderOptionInfo>{
                 "display_name": "Consumer Key",
@@ -57,7 +56,6 @@ public class WooCommerceDataProviderBase inherits DataProvider::AbstractDataProv
                 "desc": "The WooCommerce consumer key for authentication (used as Basic Auth username)",
                 "sensitive": True,
                 "required": True,
-                "preselected": True,
             },
             "consumer_secret": <DataProviderOptionInfo>{
                 "display_name": "Consumer Secret",
@@ -66,7 +64,6 @@ public class WooCommerceDataProviderBase inherits DataProvider::AbstractDataProv
                 "desc": "The WooCommerce consumer secret for authentication (used as Basic Auth password)",
                 "sensitive": True,
                 "required": True,
-                "preselected": True,
             },
         };
     }
@@ -308,7 +305,7 @@ public class WooCommerceDataProviderBase inherits DataProvider::AbstractDataProv
                         "display_name": cat.name ?? sprintf("Category %d", cat.id),
                         "short_desc": cat.slug ?? "",
                         "desc": cat.name ?? sprintf("Category %d", cat.id),
-                        "value": cat.id,
+                        "value": int(cat.id),
                     };
                 }
             }
@@ -329,7 +326,7 @@ public class WooCommerceDataProviderBase inherits DataProvider::AbstractDataProv
                         "display_name": tag.name ?? sprintf("Tag %d", tag.id),
                         "short_desc": tag.slug ?? "",
                         "desc": tag.name ?? sprintf("Tag %d", tag.id),
-                        "value": tag.id,
+                        "value": int(tag.id),
                     };
                 }
             }
@@ -356,7 +353,7 @@ public class WooCommerceDataProviderBase inherits DataProvider::AbstractDataProv
                         "display_name": display_name,
                         "short_desc": customer.email ?? "",
                         "desc": sprintf("%s (%s)", display_name, customer.email ?? "no email"),
-                        "value": customer.id,
+                        "value": int(customer.id),
                     };
                 }
             }
@@ -378,7 +375,7 @@ public class WooCommerceDataProviderBase inherits DataProvider::AbstractDataProv
                         "display_name": display_name,
                         "short_desc": product.sku ?? "",
                         "desc": sprintf("%s (%s)", display_name, product.sku ?? "no SKU"),
-                        "value": product.id,
+                        "value": int(product.id),
                     };
                 }
             }
@@ -399,7 +396,7 @@ public class WooCommerceDataProviderBase inherits DataProvider::AbstractDataProv
                         "display_name": zone.name ?? sprintf("Zone %d", zone.id),
                         "short_desc": "",
                         "desc": zone.name ?? sprintf("Zone %d", zone.id),
-                        "value": zone.id,
+                        "value": int(zone.id),
                     };
                 }
             }

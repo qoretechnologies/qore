@@ -34,38 +34,57 @@ public class WooCommerceUpdateCustomerRequestDataType inherits HashDataType {
                 "type": IntType,
                 "desc": "The unique identifier for the customer to update",
                 "required": True,
+                "example_value": 25,
             },
             "email": {
                 "display_name": "Email",
                 "type": StringOrNothingType,
                 "desc": "The customer's email address",
+                "example_value": "john.doe@example.com",
             },
             "first_name": {
                 "display_name": "First Name",
                 "type": StringOrNothingType,
                 "desc": "The customer's first name",
+                "example_value": "John",
             },
             "last_name": {
                 "display_name": "Last Name",
                 "type": StringOrNothingType,
                 "desc": "The customer's last name",
+                "example_value": "Doe",
             },
             "billing": {
                 "display_name": "Billing",
-                "type": AutoHashOrNothingType,
+                "type": new WooCommerceBillingAddressDataType(AutoHashOrNothingType),
                 "desc": "Billing address data",
             },
             "shipping": {
                 "display_name": "Shipping",
-                "type": AutoHashOrNothingType,
+                "type": new WooCommerceShippingAddressDataType(AutoHashOrNothingType),
                 "desc": "Shipping address data",
+            },
+            "username": {
+                "display_name": "Username",
+                "type": StringOrNothingType,
+                "desc": "The customer's login username",
+                "example_value": "john.doe",
+            },
+            "password": {
+                "display_name": "Password",
+                "type": StringOrNothingType,
+                "desc": "The customer's password",
+            },
+            "meta_data": {
+                "display_name": "Meta Data",
+                "type": SoftListOrNothingType,
+                "desc": "List of metadata key-value pairs",
             },
         };
     }
 
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 

@@ -33,11 +33,13 @@ public class WooCommerceTopSellersReportRequestDataType inherits HashDataType {
                 "display_name": "Date Min",
                 "type": StringOrNothingType,
                 "desc": "Start date for the report in YYYY-MM-DD format",
+                "example_value": "2026-01-01",
             },
             "date_max": {
                 "display_name": "Date Max",
                 "type": StringOrNothingType,
                 "desc": "End date for the report in YYYY-MM-DD format",
+                "example_value": "2026-03-31",
             },
             "period": {
                 "display_name": "Period",
@@ -54,8 +56,7 @@ public class WooCommerceTopSellersReportRequestDataType inherits HashDataType {
     }
 
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 

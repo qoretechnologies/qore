@@ -248,6 +248,7 @@ public class ConnectionSchemeCache {
 
             "wave": "WaveRestClient",
             "woocommerce": "WooCommerceRestClient",
+            "woocommerces": "WooCommerceRestClient",
 
             "zohobooks": "ZohoBooksRestClient",
             "zohoinventory": "ZohoInventoryRestClient",

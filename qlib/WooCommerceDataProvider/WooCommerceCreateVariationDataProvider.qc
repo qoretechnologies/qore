@@ -39,26 +39,31 @@ public class WooCommerceCreateVariationRequestDataType inherits HashDataType {
                 "display_name": "Regular Price",
                 "type": StringOrNothingType,
                 "desc": "The regular price of the variation",
+                "example_value": "24.99",
             },
             "sale_price": {
                 "display_name": "Sale Price",
                 "type": StringOrNothingType,
                 "desc": "The sale price of the variation",
+                "example_value": "19.99",
             },
             "sku": {
                 "display_name": "SKU",
                 "type": StringOrNothingType,
                 "desc": "The unique stock keeping unit identifier",
+                "example_value": "TSHIRT-PREM-001-L",
             },
             "stock_quantity": {
                 "display_name": "Stock Quantity",
                 "type": IntOrNothingType,
                 "desc": "The number of items in stock",
+                "example_value": 50,
             },
             "manage_stock": {
                 "display_name": "Manage Stock",
                 "type": SoftBoolOrNothingType,
                 "desc": "If `True`, stock management is enabled",
+                "example_value": True,
             },
             "attributes": {
                 "display_name": "Attributes",
@@ -69,23 +74,23 @@ public class WooCommerceCreateVariationRequestDataType inherits HashDataType {
                 "display_name": "Weight",
                 "type": StringOrNothingType,
                 "desc": "The variation weight",
+                "example_value": "0.5",
             },
             "dimensions": {
                 "display_name": "Dimensions",
-                "type": AutoHashOrNothingType,
+                "type": new WooCommerceDimensionsDataType(AutoHashOrNothingType),
                 "desc": "Variation dimensions: `length`, `width`, `height`",
             },
             "image": {
                 "display_name": "Image",
-                "type": AutoHashOrNothingType,
-                "desc": "Variation image object (with `src` key)",
+                "type": new WooCommerceImageDataType(AutoHashOrNothingType),
+                "desc": "Variation image object",
             },
         };
     }
 
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 

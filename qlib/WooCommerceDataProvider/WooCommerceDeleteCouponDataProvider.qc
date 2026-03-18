@@ -34,19 +34,20 @@ public class WooCommerceDeleteCouponRequestDataType inherits HashDataType {
                 "type": IntType,
                 "desc": "The unique identifier for the coupon to delete",
                 "required": True,
+                "example_value": 789,
             },
             "force": {
                 "display_name": "Force",
                 "type": SoftBoolOrNothingType,
                 "desc": "If `True`, permanently delete the coupon; otherwise move to trash",
                 "default_value": True,
+                "example_value": True,
             },
         };
     }
 
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 

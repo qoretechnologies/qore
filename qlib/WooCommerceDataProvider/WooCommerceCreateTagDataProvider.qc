@@ -33,24 +33,26 @@ public class WooCommerceCreateTagRequestDataType inherits HashDataType {
                 "display_name": "Name",
                 "type": StringType,
                 "desc": "The tag name",
+                "example_value": "Summer Collection",
                 "required": True,
             },
             "slug": {
                 "display_name": "Slug",
                 "type": StringOrNothingType,
                 "desc": "The tag URL slug",
+                "example_value": "summer-collection",
             },
             "description": {
                 "display_name": "Description",
                 "type": StringOrNothingType,
                 "desc": "The tag description",
+                "example_value": "Products for the summer season",
             },
         };
     }
 
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 

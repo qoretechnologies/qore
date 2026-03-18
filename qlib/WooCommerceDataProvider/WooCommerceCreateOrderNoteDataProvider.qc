@@ -33,25 +33,27 @@ public class WooCommerceCreateOrderNoteRequestDataType inherits HashDataType {
                 "display_name": "Order ID",
                 "type": IntType,
                 "desc": "The unique identifier for the order",
+                "example_value": 1234,
                 "required": True,
             },
             "note": {
                 "display_name": "Note",
                 "type": StringType,
                 "desc": "The order note content",
+                "example_value": "Order confirmed and ready for shipment.",
                 "required": True,
             },
             "customer_note": {
                 "display_name": "Customer Note",
                 "type": SoftBoolOrNothingType,
                 "desc": "If `True`, the note is visible to the customer",
+                "example_value": False,
             },
         };
     }
 
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 

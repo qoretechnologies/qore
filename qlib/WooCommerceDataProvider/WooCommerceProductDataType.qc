@@ -159,7 +159,7 @@ public class WooCommerceProductDataType inherits HashDataType {
             "dimensions": {
                 "display_name": "Dimensions",
                 "short_desc": "Product dimensions",
-                "type": AutoHashOrNothingType,
+                "type": new WooCommerceDimensionsDataType(AutoHashOrNothingType),
                 "desc": "The product dimensions including `length`, `width`, and `height`",
             },
             "categories": {
@@ -221,8 +221,7 @@ public class WooCommerceProductDataType inherits HashDataType {
 
     #! Creates the object
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 

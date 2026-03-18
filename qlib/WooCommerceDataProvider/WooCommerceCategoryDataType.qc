@@ -69,7 +69,7 @@ public class WooCommerceCategoryDataType inherits HashDataType {
             "image": {
                 "display_name": "Image",
                 "short_desc": "Category image",
-                "type": AutoHashOrNothingType,
+                "type": new WooCommerceImageDataType(AutoHashOrNothingType),
                 "desc": "The image data for the category",
             },
             "menu_order": {
@@ -89,8 +89,7 @@ public class WooCommerceCategoryDataType inherits HashDataType {
 
     #! Creates the object
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 

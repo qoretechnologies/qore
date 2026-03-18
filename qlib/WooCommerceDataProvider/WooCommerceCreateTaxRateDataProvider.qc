@@ -33,49 +33,56 @@ public class WooCommerceCreateTaxRateRequestDataType inherits HashDataType {
                 "display_name": "Rate",
                 "type": StringType,
                 "desc": "The tax rate as a percentage",
+                "example_value": "8.5",
                 "required": True,
             },
             "country": {
                 "display_name": "Country",
                 "type": StringOrNothingType,
                 "desc": "The two-letter country code",
+                "example_value": "US",
             },
             "state": {
                 "display_name": "State",
                 "type": StringOrNothingType,
                 "desc": "The state code",
+                "example_value": "CA",
             },
             "name": {
                 "display_name": "Name",
                 "type": StringOrNothingType,
                 "desc": "The tax rate name",
+                "example_value": "State Tax",
             },
             "priority": {
                 "display_name": "Priority",
                 "type": IntOrNothingType,
                 "desc": "The priority of this tax rate",
+                "example_value": 1,
             },
             "compound": {
                 "display_name": "Compound",
                 "type": SoftBoolOrNothingType,
                 "desc": "If `True`, the tax rate is compounded",
+                "example_value": False,
             },
             "shipping": {
                 "display_name": "Shipping",
                 "type": SoftBoolOrNothingType,
                 "desc": "If `True`, the tax rate applies to shipping",
+                "example_value": True,
             },
             "tax_class": {
                 "display_name": "Tax Class",
                 "type": StringOrNothingType,
                 "desc": "The tax class this rate belongs to",
+                "example_value": "standard",
             },
         };
     }
 
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 

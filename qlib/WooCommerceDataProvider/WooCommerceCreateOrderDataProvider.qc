@@ -33,47 +33,57 @@ public class WooCommerceCreateOrderRequestDataType inherits HashDataType {
                 "display_name": "Customer ID",
                 "type": IntOrNothingType,
                 "desc": "The customer ID for the order",
+                "example_value": 1,
+                "ref_data": "customers",
+                "preselected": True,
             },
             "status": {
                 "display_name": "Status",
                 "type": StringOrNothingType,
                 "desc": "Order status",
                 "allowed_values": OrderStatusAllowedValues,
+                "preselected": True,
             },
             "billing": {
                 "display_name": "Billing",
-                "type": AutoHashOrNothingType,
+                "type": new WooCommerceBillingAddressDataType(AutoHashOrNothingType),
                 "desc": "Billing address data",
+                "preselected": True,
             },
             "shipping": {
                 "display_name": "Shipping",
-                "type": AutoHashOrNothingType,
+                "type": new WooCommerceShippingAddressDataType(AutoHashOrNothingType),
                 "desc": "Shipping address data",
             },
             "line_items": {
                 "display_name": "Line Items",
                 "type": SoftListOrNothingType,
                 "desc": "List of line items (products) for the order",
+                "preselected": True,
             },
             "payment_method": {
                 "display_name": "Payment Method",
                 "type": StringOrNothingType,
                 "desc": "Payment method identifier (e.g., `bacs`, `paypal`)",
+                "example_value": "bacs",
             },
             "payment_method_title": {
                 "display_name": "Payment Method Title",
                 "type": StringOrNothingType,
                 "desc": "Human-readable payment method title",
+                "example_value": "Direct Bank Transfer",
             },
             "set_paid": {
                 "display_name": "Set Paid",
                 "type": SoftBoolOrNothingType,
                 "desc": "If `True`, the order is marked as paid",
+                "example_value": False,
             },
             "currency": {
                 "display_name": "Currency",
                 "type": StringOrNothingType,
                 "desc": "Three-letter ISO currency code (e.g., `USD`, `EUR`)",
+                "example_value": "USD",
             },
             "shipping_lines": {
                 "display_name": "Shipping Lines",
@@ -94,6 +104,7 @@ public class WooCommerceCreateOrderRequestDataType inherits HashDataType {
                 "display_name": "Customer Note",
                 "type": StringOrNothingType,
                 "desc": "Note left by the customer during checkout",
+                "example_value": "Please deliver before noon.",
             },
             "meta_data": {
                 "display_name": "Meta Data",
@@ -104,8 +115,7 @@ public class WooCommerceCreateOrderRequestDataType inherits HashDataType {
     }
 
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 

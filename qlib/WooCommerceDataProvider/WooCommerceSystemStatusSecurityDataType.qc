@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore WooCommerceDataProvider module definition
 
-/*  WooCommerceOrderNoteDataType.qc Copyright 2026 Qore Technologies, s.r.o.
+/*  WooCommerceSystemStatusSecurityDataType.qc Copyright 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -25,46 +25,33 @@
 #! Contains all public definitions in the WooCommerceDataProvider module
 public namespace WooCommerceDataProvider {
 
-#! WooCommerce order note data type
-public class WooCommerceOrderNoteDataType inherits HashDataType {
+#! WooCommerce system status security data type
+public class WooCommerceSystemStatusSecurityDataType inherits HashDataType {
     public {
         #! Field definitions
         const Fields = {
-            "id": {
-                "display_name": "ID",
-                "short_desc": "Unique identifier for the order note",
-                "type": IntOrNothingType,
-                "desc": "The unique identifier for the order note",
-            },
-            "author": {
-                "display_name": "Author",
-                "short_desc": "Note author",
-                "type": StringOrNothingType,
-                "desc": "The author of the order note",
-            },
-            "date_created": {
-                "display_name": "Date Created",
-                "short_desc": "Date the note was created",
-                "type": DateOrNothingType,
-                "desc": "The date and time the order note was created",
-            },
-            "note": {
-                "display_name": "Note",
-                "short_desc": "Note content",
-                "type": StringOrNothingType,
-                "desc": "The content of the order note",
-            },
-            "customer_note": {
-                "display_name": "Customer Note",
-                "short_desc": "Whether the note is visible to the customer",
+            "secure_connection": {
+                "display_name": "Secure Connection",
+                "short_desc": "HTTPS connection status",
                 "type": SoftBoolOrNothingType,
-                "desc": "If `True`, the note is visible to the customer",
+                "desc": "If `True`, the store is using a secure HTTPS connection",
+            },
+            "hide_errors": {
+                "display_name": "Hide Errors",
+                "short_desc": "PHP errors hidden from visitors",
+                "type": SoftBoolOrNothingType,
+                "desc": "If `True`, PHP errors are hidden from store visitors",
             },
         };
     }
 
     #! Creates the object
     constructor() {
+        addQoreFields(Fields);
+    }
+
+    #! Creates the object with a specific base type (for optional fields)
+    constructor(Type base_type) : HashDataType(base_type, "WooCommerceSystemStatusSecurity") {
         addQoreFields(Fields);
     }
 }

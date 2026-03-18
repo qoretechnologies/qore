@@ -34,24 +34,26 @@ public class WooCommerceDeleteCustomerRequestDataType inherits HashDataType {
                 "type": IntType,
                 "desc": "The unique identifier for the customer to delete",
                 "required": True,
+                "example_value": 25,
             },
             "force": {
                 "display_name": "Force",
                 "type": SoftBoolOrNothingType,
                 "desc": "If `True`, permanently delete the customer",
                 "default_value": True,
+                "example_value": True,
             },
             "reassign": {
                 "display_name": "Reassign",
                 "type": IntOrNothingType,
                 "desc": "User ID to reassign posts and links to",
+                "example_value": 0,
             },
         };
     }
 
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 

@@ -34,33 +34,37 @@ public class WooCommerceUpdateCategoryRequestDataType inherits HashDataType {
                 "type": IntType,
                 "desc": "The unique identifier for the category to update",
                 "required": True,
+                "example_value": 15,
             },
             "name": {
                 "display_name": "Name",
                 "type": StringOrNothingType,
                 "desc": "The category name",
+                "example_value": "Clothing",
             },
             "slug": {
                 "display_name": "Slug",
                 "type": StringOrNothingType,
                 "desc": "The category URL slug",
+                "example_value": "clothing",
             },
             "parent": {
                 "display_name": "Parent",
                 "type": IntOrNothingType,
                 "desc": "The parent category ID",
+                "example_value": 0,
             },
             "description": {
                 "display_name": "Description",
                 "type": StringOrNothingType,
                 "desc": "The category description",
+                "example_value": "All clothing items",
             },
         };
     }
 
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 

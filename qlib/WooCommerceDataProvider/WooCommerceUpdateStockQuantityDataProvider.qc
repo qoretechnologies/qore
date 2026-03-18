@@ -34,25 +34,27 @@ public class WooCommerceUpdateStockQuantityRequestDataType inherits HashDataType
                 "type": IntType,
                 "desc": "The unique identifier for the product",
                 "required": True,
+                "example_value": 456,
             },
             "stock_quantity": {
                 "display_name": "Stock Quantity",
                 "type": IntType,
                 "desc": "The new stock quantity",
                 "required": True,
+                "example_value": 75,
             },
             "manage_stock": {
                 "display_name": "Manage Stock",
                 "type": SoftBoolOrNothingType,
                 "desc": "If `True`, stock management is enabled (defaults to `True`)",
                 "default_value": True,
+                "example_value": True,
             },
         };
     }
 
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 

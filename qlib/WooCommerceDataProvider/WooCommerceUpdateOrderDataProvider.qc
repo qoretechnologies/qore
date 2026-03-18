@@ -34,11 +34,14 @@ public class WooCommerceUpdateOrderRequestDataType inherits HashDataType {
                 "type": IntType,
                 "desc": "The unique identifier for the order to update",
                 "required": True,
+                "example_value": 1234,
             },
             "customer_id": {
                 "display_name": "Customer ID",
                 "type": IntOrNothingType,
                 "desc": "The customer ID for the order",
+                "ref_data": "customers",
+                "example_value": 1,
             },
             "status": {
                 "display_name": "Status",
@@ -48,12 +51,12 @@ public class WooCommerceUpdateOrderRequestDataType inherits HashDataType {
             },
             "billing": {
                 "display_name": "Billing",
-                "type": AutoHashOrNothingType,
+                "type": new WooCommerceBillingAddressDataType(AutoHashOrNothingType),
                 "desc": "Billing address data",
             },
             "shipping": {
                 "display_name": "Shipping",
-                "type": AutoHashOrNothingType,
+                "type": new WooCommerceShippingAddressDataType(AutoHashOrNothingType),
                 "desc": "Shipping address data",
             },
             "line_items": {
@@ -65,21 +68,25 @@ public class WooCommerceUpdateOrderRequestDataType inherits HashDataType {
                 "display_name": "Payment Method",
                 "type": StringOrNothingType,
                 "desc": "Payment method identifier",
+                "example_value": "bacs",
             },
             "payment_method_title": {
                 "display_name": "Payment Method Title",
                 "type": StringOrNothingType,
                 "desc": "Human-readable payment method title",
+                "example_value": "Direct Bank Transfer",
             },
             "set_paid": {
                 "display_name": "Set Paid",
                 "type": SoftBoolOrNothingType,
                 "desc": "If `True`, the order is marked as paid",
+                "example_value": True,
             },
             "currency": {
                 "display_name": "Currency",
                 "type": StringOrNothingType,
                 "desc": "Three-letter ISO currency code",
+                "example_value": "USD",
             },
             "shipping_lines": {
                 "display_name": "Shipping Lines",
@@ -100,6 +107,7 @@ public class WooCommerceUpdateOrderRequestDataType inherits HashDataType {
                 "display_name": "Customer Note",
                 "type": StringOrNothingType,
                 "desc": "Note left by the customer during checkout",
+                "example_value": "Please deliver before noon.",
             },
             "meta_data": {
                 "display_name": "Meta Data",
@@ -110,8 +118,7 @@ public class WooCommerceUpdateOrderRequestDataType inherits HashDataType {
     }
 
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 

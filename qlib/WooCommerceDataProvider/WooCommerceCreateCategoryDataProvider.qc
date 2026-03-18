@@ -33,34 +33,37 @@ public class WooCommerceCreateCategoryRequestDataType inherits HashDataType {
                 "display_name": "Name",
                 "type": StringType,
                 "desc": "The category name",
+                "example_value": "Clothing",
                 "required": True,
             },
             "slug": {
                 "display_name": "Slug",
                 "type": StringOrNothingType,
                 "desc": "The category URL slug",
+                "example_value": "clothing",
             },
             "parent": {
                 "display_name": "Parent",
                 "type": IntOrNothingType,
                 "desc": "The parent category ID",
+                "example_value": 0,
             },
             "description": {
                 "display_name": "Description",
                 "type": StringOrNothingType,
                 "desc": "The category description",
+                "example_value": "All clothing items",
             },
             "image": {
                 "display_name": "Image",
-                "type": AutoHashOrNothingType,
-                "desc": "Category image object (with `src` key)",
+                "type": new WooCommerceImageDataType(AutoHashOrNothingType),
+                "desc": "Category image object",
             },
         };
     }
 
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 

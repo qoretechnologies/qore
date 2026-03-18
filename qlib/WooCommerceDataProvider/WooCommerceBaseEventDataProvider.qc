@@ -154,8 +154,19 @@ public class WooCommerceBaseEventDataProvider inherits WooCommerceDataProviderBa
     abstract hash<auto> getFakeExampleData();
 
     #! Handle incoming webhook events from WooCommerce
-    /** For built-in topics, the payload IS the full resource JSON */
+    /** For built-in topics, the payload IS the full resource JSON.
+
+        WooCommerce also sends a ping/verification callback with Content-Type
+        application/x-www-form-urlencoded and body "webhook_id=N" — these are
+        ignored.
+    */
     private handleWebhookEvent(hash<auto> payload) {
+        # Ignore WooCommerce ping/verification callbacks
+        if (payload.hasKey("webhook_id") && !payload.hasKey("id")) {
+            log(LoggerLevel::DEBUG, "handleWebhookEvent: ignoring ping for webhook_id %y",
+                payload.webhook_id);
+            return;
+        }
         string event_type = getEventType();
         log(LoggerLevel::DEBUG, "handleWebhookEvent: received %s event", event_type);
         notifyObservers(event_type, payload);

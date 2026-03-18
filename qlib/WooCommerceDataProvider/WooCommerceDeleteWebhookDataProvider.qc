@@ -34,19 +34,20 @@ public class WooCommerceDeleteWebhookRequestDataType inherits HashDataType {
                 "type": IntType,
                 "desc": "The unique identifier for the webhook to delete",
                 "required": True,
+                "example_value": 142,
             },
             "force": {
                 "display_name": "Force",
                 "type": SoftBoolOrNothingType,
                 "desc": "If `True`, permanently delete the webhook",
                 "default_value": True,
+                "example_value": True,
             },
         };
     }
 
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 

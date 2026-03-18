@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore WooCommerceDataProvider module definition
 
-/*  WooCommerceOrderNoteDataType.qc Copyright 2026 Qore Technologies, s.r.o.
+/*  WooCommerceImageDataType.qc Copyright 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -25,46 +25,48 @@
 #! Contains all public definitions in the WooCommerceDataProvider module
 public namespace WooCommerceDataProvider {
 
-#! WooCommerce order note data type
-public class WooCommerceOrderNoteDataType inherits HashDataType {
+#! WooCommerce image data type
+public class WooCommerceImageDataType inherits HashDataType {
     public {
         #! Field definitions
         const Fields = {
             "id": {
                 "display_name": "ID",
-                "short_desc": "Unique identifier for the order note",
+                "short_desc": "Image ID",
                 "type": IntOrNothingType,
-                "desc": "The unique identifier for the order note",
+                "desc": "The image attachment ID",
             },
-            "author": {
-                "display_name": "Author",
-                "short_desc": "Note author",
+            "src": {
+                "display_name": "Source URL",
+                "short_desc": "Image source URL",
                 "type": StringOrNothingType,
-                "desc": "The author of the order note",
+                "desc": "The URL of the image",
+                "example_value": "https://example.com/wp-content/uploads/2026/01/product-image.jpg",
             },
-            "date_created": {
-                "display_name": "Date Created",
-                "short_desc": "Date the note was created",
-                "type": DateOrNothingType,
-                "desc": "The date and time the order note was created",
-            },
-            "note": {
-                "display_name": "Note",
-                "short_desc": "Note content",
+            "name": {
+                "display_name": "Name",
+                "short_desc": "Image name",
                 "type": StringOrNothingType,
-                "desc": "The content of the order note",
+                "desc": "The image name",
+                "example_value": "product-image",
             },
-            "customer_note": {
-                "display_name": "Customer Note",
-                "short_desc": "Whether the note is visible to the customer",
-                "type": SoftBoolOrNothingType,
-                "desc": "If `True`, the note is visible to the customer",
+            "alt": {
+                "display_name": "Alt Text",
+                "short_desc": "Image alt text",
+                "type": StringOrNothingType,
+                "desc": "The alternative text for the image",
+                "example_value": "Premium T-Shirt front view",
             },
         };
     }
 
     #! Creates the object
     constructor() {
+        addQoreFields(Fields);
+    }
+
+    #! Creates the object with a specific base type (for optional fields)
+    constructor(Type base_type) : HashDataType(base_type, "WooCommerceImage") {
         addQoreFields(Fields);
     }
 }

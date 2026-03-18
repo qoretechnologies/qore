@@ -34,6 +34,7 @@ public class WooCommerceUpdateOrderStatusRequestDataType inherits HashDataType {
                 "type": IntType,
                 "desc": "The unique identifier for the order",
                 "required": True,
+                "example_value": 1234,
             },
             "status": {
                 "display_name": "Status",
@@ -46,8 +47,7 @@ public class WooCommerceUpdateOrderStatusRequestDataType inherits HashDataType {
     }
 
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 

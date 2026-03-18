@@ -34,25 +34,27 @@ public class WooCommerceDeleteOrderNoteRequestDataType inherits HashDataType {
                 "type": IntType,
                 "desc": "The unique identifier for the order",
                 "required": True,
+                "example_value": 1234,
             },
             "id": {
                 "display_name": "Note ID",
                 "type": IntType,
                 "desc": "The unique identifier for the note to delete",
                 "required": True,
+                "example_value": 56,
             },
             "force": {
                 "display_name": "Force",
                 "type": SoftBoolOrNothingType,
                 "desc": "If `True`, permanently delete the note",
                 "default_value": True,
+                "example_value": True,
             },
         };
     }
 
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 

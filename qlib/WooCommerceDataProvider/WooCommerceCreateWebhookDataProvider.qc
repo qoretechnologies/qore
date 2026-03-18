@@ -33,18 +33,21 @@ public class WooCommerceCreateWebhookRequestDataType inherits HashDataType {
                 "display_name": "Topic",
                 "type": StringType,
                 "desc": "The webhook topic (e.g., `order.created`, `product.updated`)",
+                "example_value": "order.created",
                 "required": True,
             },
             "delivery_url": {
                 "display_name": "Delivery URL",
                 "type": StringType,
                 "desc": "The URL where the webhook payload is delivered",
+                "example_value": "https://example.com/webhooks/woocommerce",
                 "required": True,
             },
             "name": {
                 "display_name": "Name",
                 "type": StringOrNothingType,
                 "desc": "A friendly name for the webhook",
+                "example_value": "Order Created Webhook",
             },
             "secret": {
                 "display_name": "Secret",
@@ -61,8 +64,7 @@ public class WooCommerceCreateWebhookRequestDataType inherits HashDataType {
     }
 
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 

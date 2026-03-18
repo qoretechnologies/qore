@@ -39,23 +39,25 @@ public class WooCommerceListVariationsRequestDataType inherits HashDataType {
                 "display_name": "Per Page",
                 "type": IntOrNothingType,
                 "desc": "Maximum number of items to return per page (max 100)",
+                "example_value": 10,
             },
             "page": {
                 "display_name": "Page",
                 "type": IntOrNothingType,
                 "desc": "Current page of the collection (starting at 1)",
+                "example_value": 1,
             },
             "search": {
                 "display_name": "Search",
                 "type": StringOrNothingType,
                 "desc": "Limit results to those matching a search string",
+                "example_value": "large",
             },
         };
     }
 
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 

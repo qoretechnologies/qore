@@ -33,22 +33,26 @@ public class WooCommerceCreateCustomerRequestDataType inherits HashDataType {
                 "display_name": "Email",
                 "type": StringType,
                 "desc": "The customer's email address",
+                "example_value": "john.doe@example.com",
                 "required": True,
             },
             "first_name": {
                 "display_name": "First Name",
                 "type": StringOrNothingType,
                 "desc": "The customer's first name",
+                "example_value": "John",
             },
             "last_name": {
                 "display_name": "Last Name",
                 "type": StringOrNothingType,
                 "desc": "The customer's last name",
+                "example_value": "Doe",
             },
             "username": {
                 "display_name": "Username",
                 "type": StringOrNothingType,
                 "desc": "The customer's login username",
+                "example_value": "john.doe",
             },
             "password": {
                 "display_name": "Password",
@@ -57,12 +61,12 @@ public class WooCommerceCreateCustomerRequestDataType inherits HashDataType {
             },
             "billing": {
                 "display_name": "Billing",
-                "type": AutoHashOrNothingType,
+                "type": new WooCommerceBillingAddressDataType(AutoHashOrNothingType),
                 "desc": "Billing address data",
             },
             "shipping": {
                 "display_name": "Shipping",
-                "type": AutoHashOrNothingType,
+                "type": new WooCommerceShippingAddressDataType(AutoHashOrNothingType),
                 "desc": "Shipping address data",
             },
             "meta_data": {
@@ -74,8 +78,7 @@ public class WooCommerceCreateCustomerRequestDataType inherits HashDataType {
     }
 
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 

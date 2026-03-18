@@ -187,7 +187,6 @@ module WooCommerceDataProvider {
                     "desc": "The unique identifier of the order to retrieve",
                     "type": AbstractDataProviderTypeMap."int",
                     "required": True,
-                    "preselected": True,
                 },
             },
         });
@@ -458,6 +457,9 @@ module WooCommerceDataProvider {
                         <AllowedValueInfo>{"value": "include", "desc": "Include"},
                         <AllowedValueInfo>{"value": "title", "desc": "Title"},
                         <AllowedValueInfo>{"value": "slug", "desc": "Slug"},
+                        <AllowedValueInfo>{"value": "price", "desc": "Price"},
+                        <AllowedValueInfo>{"value": "popularity", "desc": "Popularity (total sales)"},
+                        <AllowedValueInfo>{"value": "rating", "desc": "Average rating"},
                     ),
                 },
             },
@@ -482,7 +484,6 @@ module WooCommerceDataProvider {
                     "desc": "The unique identifier of the product to retrieve",
                     "type": AbstractDataProviderTypeMap."int",
                     "required": True,
-                    "preselected": True,
                 },
             },
         });
@@ -904,7 +905,6 @@ module WooCommerceDataProvider {
                     "desc": "The unique identifier of the customer to retrieve",
                     "type": AbstractDataProviderTypeMap."int",
                     "required": True,
-                    "preselected": True,
                 },
             },
         });
@@ -1056,7 +1056,6 @@ module WooCommerceDataProvider {
                     "desc": "The unique identifier of the coupon to retrieve",
                     "type": AbstractDataProviderTypeMap."int",
                     "required": True,
-                    "preselected": True,
                 },
             },
         });
@@ -1132,6 +1131,7 @@ module WooCommerceDataProvider {
                     "desc": "Filter webhooks by status",
                     "type": AbstractDataProviderTypeMap."*string",
                     "allowed_values": WebhookStatusAllowedValues,
+                    "preselected": True,
                 },
                 "per_page": <ActionOptionInfo>{
                     "display_name": "Per Page",
@@ -1337,6 +1337,7 @@ module WooCommerceDataProvider {
                     "short_desc": "Filter by tax class",
                     "desc": "Filter tax rates by tax class",
                     "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
                 },
                 "per_page": <ActionOptionInfo>{
                     "display_name": "Per Page",

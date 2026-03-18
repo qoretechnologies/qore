@@ -69,13 +69,13 @@ public class WooCommerceCustomerDataType inherits HashDataType {
             "billing": {
                 "display_name": "Billing",
                 "short_desc": "Billing address data",
-                "type": AutoHashOrNothingType,
+                "type": new WooCommerceBillingAddressDataType(AutoHashOrNothingType),
                 "desc": "The customer's billing address details",
             },
             "shipping": {
                 "display_name": "Shipping",
                 "short_desc": "Shipping address data",
-                "type": AutoHashOrNothingType,
+                "type": new WooCommerceShippingAddressDataType(AutoHashOrNothingType),
                 "desc": "The customer's shipping address details",
             },
             "is_paying_customer": {
@@ -125,8 +125,7 @@ public class WooCommerceCustomerDataType inherits HashDataType {
 
     #! Creates the object
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 

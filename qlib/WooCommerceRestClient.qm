@@ -235,9 +235,10 @@ public class WooCommerceRestConnection inherits RestClient::RestConnection {
             "auto_url": True,
             "schemes": {
                 "woocommerce": True,
+                "woocommerces": True,
             },
             "base_scheme_map": {
-                "https": "woocommerce",
+                "https": "woocommerces",
             },
             "options": RestConnection::ConnectionScheme.options + {
                 "data": RestConnection::ConnectionScheme.options."data"
@@ -370,13 +371,19 @@ public class WooCommerceRestConnection inherits RestClient::RestConnection {
             }
             # Preserve host, port, and path from store URL
             hash<auto> url_info = parse_url(store_url);
-            string conn_url = "woocommerce://" + url_info.host;
+            # Use woocommerces:// for HTTPS, woocommerce:// for HTTP so that
+            # conn.real_url preserves the correct scheme from store_url
+            string conn_url = (url_info.protocol == "https" ? "woocommerces" : "woocommerce")
+                + "://" + url_info.host;
             if (url_info.port) {
                 conn_url += sprintf(":%d", url_info.port);
             }
             if (url_info.path) {
                 conn_url += url_info.path;
             }
+            # Include the API path in the connection URL so conn.real_url has the
+            # full API base; this matches the pattern used by BigCommerce, Chargebee, etc.
+            conn_url += WooCommerceRestClient::DefaultApiPath;
             config.url = conn_url;
         }
         return config;
@@ -428,7 +435,7 @@ public class WooCommerceRestConnection inherits RestClient::RestConnection {
         @return a @ref WooCommerceRestClient object
     */
     private WooCommerceRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
-        return new WooCommerceRestClient(getConnectionOptions(), !connect);
+        return new WooCommerceRestClient(getConnectionOptions(rtopts), !connect);
     }
 
     #! Returns the ConnectionSchemeInfo hash for this object

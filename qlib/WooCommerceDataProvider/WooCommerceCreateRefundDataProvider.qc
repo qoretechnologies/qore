@@ -33,17 +33,20 @@ public class WooCommerceCreateRefundRequestDataType inherits HashDataType {
                 "display_name": "Order ID",
                 "type": IntType,
                 "desc": "The unique identifier for the order to refund",
+                "example_value": 1234,
                 "required": True,
             },
             "amount": {
                 "display_name": "Amount",
                 "type": StringOrNothingType,
                 "desc": "The refund amount (if omitted, full refund is created)",
+                "example_value": "10.00",
             },
             "reason": {
                 "display_name": "Reason",
                 "type": StringOrNothingType,
                 "desc": "The reason for the refund",
+                "example_value": "Product returned by customer",
             },
             "line_items": {
                 "display_name": "Line Items",
@@ -54,13 +57,13 @@ public class WooCommerceCreateRefundRequestDataType inherits HashDataType {
                 "display_name": "API Refund",
                 "type": SoftBoolOrNothingType,
                 "desc": "If `True`, the refund is processed through the payment gateway",
+                "example_value": True,
             },
         };
     }
 
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 

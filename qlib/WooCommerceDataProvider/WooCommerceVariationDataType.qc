@@ -111,7 +111,7 @@ public class WooCommerceVariationDataType inherits HashDataType {
             "dimensions": {
                 "display_name": "Dimensions",
                 "short_desc": "Variation dimensions",
-                "type": AutoHashOrNothingType,
+                "type": new WooCommerceDimensionsDataType(AutoHashOrNothingType),
                 "desc": "The variation dimensions including `length`, `width`, and `height`",
             },
             "attributes": {
@@ -123,7 +123,7 @@ public class WooCommerceVariationDataType inherits HashDataType {
             "image": {
                 "display_name": "Image",
                 "short_desc": "Variation image",
-                "type": AutoHashOrNothingType,
+                "type": new WooCommerceImageDataType(AutoHashOrNothingType),
                 "desc": "The image data for the variation",
             },
             "meta_data": {
@@ -137,8 +137,7 @@ public class WooCommerceVariationDataType inherits HashDataType {
 
     #! Creates the object
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 

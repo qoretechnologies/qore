@@ -34,25 +34,27 @@ public class WooCommerceUpdateSettingRequestDataType inherits HashDataType {
                 "type": StringType,
                 "desc": "The settings group ID (e.g., `general`, `products`, `tax`)",
                 "required": True,
+                "example_value": "general",
             },
             "setting_id": {
                 "display_name": "Setting ID",
                 "type": StringType,
                 "desc": "The setting identifier within the group",
                 "required": True,
+                "example_value": "woocommerce_currency",
             },
             "value": {
                 "display_name": "Value",
                 "type": AbstractDataProviderType::get(AutoType),
                 "desc": "The new value for the setting",
                 "required": True,
+                "example_value": "USD",
             },
         };
     }
 
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 

@@ -62,12 +62,12 @@ public class WooCommerceOrderEventDataType inherits HashDataType {
             },
             "billing": {
                 "display_name": "Billing",
-                "type": AutoHashOrNothingType,
+                "type": new WooCommerceBillingAddressDataType(AutoHashOrNothingType),
                 "desc": "Billing address",
             },
             "shipping": {
                 "display_name": "Shipping",
-                "type": AutoHashOrNothingType,
+                "type": new WooCommerceShippingAddressDataType(AutoHashOrNothingType),
                 "desc": "Shipping address",
             },
             "line_items": {
@@ -90,7 +90,7 @@ public class WooCommerceOrderEventDataType inherits HashDataType {
 
     #! Creates the type
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type)), Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 
@@ -159,7 +159,7 @@ public class WooCommerceProductEventDataType inherits HashDataType {
 
     #! Creates the type
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type)), Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 
@@ -208,7 +208,7 @@ public class WooCommerceCustomerEventDataType inherits HashDataType {
 
     #! Creates the type
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type)), Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 
@@ -252,7 +252,7 @@ public class WooCommerceCouponEventDataType inherits HashDataType {
 
     #! Creates the type
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type)), Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 
@@ -276,7 +276,7 @@ public class WooCommerceAddToCartEventDataType inherits HashDataType {
 
     #! Creates the type
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type)), Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 

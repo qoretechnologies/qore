@@ -33,14 +33,14 @@ public class WooCommerceSystemStatusDataType inherits HashDataType {
             "environment": {
                 "display_name": "Environment",
                 "short_desc": "Server environment details",
-                "type": AutoHashOrNothingType,
+                "type": new WooCommerceSystemStatusEnvironmentDataType(AutoHashOrNothingType),
                 "desc": "Server environment information including PHP version, WordPress version, and "
                     "server software",
             },
             "database": {
                 "display_name": "Database",
                 "short_desc": "Database information",
-                "type": AutoHashOrNothingType,
+                "type": new WooCommerceSystemStatusDatabaseDataType(AutoHashOrNothingType),
                 "desc": "Database information including version, prefix, and table sizes",
             },
             "active_plugins": {
@@ -58,19 +58,19 @@ public class WooCommerceSystemStatusDataType inherits HashDataType {
             "theme": {
                 "display_name": "Theme",
                 "short_desc": "Active theme information",
-                "type": AutoHashOrNothingType,
+                "type": new WooCommerceSystemStatusThemeDataType(AutoHashOrNothingType),
                 "desc": "Information about the currently active WordPress theme",
             },
             "settings": {
                 "display_name": "Settings",
                 "short_desc": "WooCommerce settings",
-                "type": AutoHashOrNothingType,
+                "type": new WooCommerceSystemStatusSettingsDataType(AutoHashOrNothingType),
                 "desc": "General WooCommerce settings including currency and API status",
             },
             "security": {
                 "display_name": "Security",
                 "short_desc": "Security status",
-                "type": AutoHashOrNothingType,
+                "type": new WooCommerceSystemStatusSecurityDataType(AutoHashOrNothingType),
                 "desc": "Security status information including HTTPS and key checks",
             },
             "pages": {
@@ -84,8 +84,7 @@ public class WooCommerceSystemStatusDataType inherits HashDataType {
 
     #! Creates the object
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 

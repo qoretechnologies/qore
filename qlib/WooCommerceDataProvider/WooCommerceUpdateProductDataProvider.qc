@@ -34,11 +34,13 @@ public class WooCommerceUpdateProductRequestDataType inherits HashDataType {
                 "type": IntType,
                 "desc": "The unique identifier for the product to update",
                 "required": True,
+                "example_value": 456,
             },
             "name": {
                 "display_name": "Name",
                 "type": StringOrNothingType,
                 "desc": "The product name",
+                "example_value": "Premium T-Shirt",
             },
             "type": {
                 "display_name": "Type",
@@ -56,21 +58,25 @@ public class WooCommerceUpdateProductRequestDataType inherits HashDataType {
                 "display_name": "Regular Price",
                 "type": StringOrNothingType,
                 "desc": "The regular price of the product",
+                "example_value": "29.99",
             },
             "description": {
                 "display_name": "Description",
                 "type": StringOrNothingType,
                 "desc": "The full product description",
+                "example_value": "A premium quality cotton t-shirt available in multiple sizes.",
             },
             "short_description": {
                 "display_name": "Short Description",
                 "type": StringOrNothingType,
                 "desc": "The short product description",
+                "example_value": "Premium cotton t-shirt",
             },
             "sku": {
                 "display_name": "SKU",
                 "type": StringOrNothingType,
                 "desc": "The unique stock keeping unit identifier",
+                "example_value": "TSHIRT-PREM-001",
             },
             "categories": {
                 "display_name": "Categories",
@@ -91,31 +97,36 @@ public class WooCommerceUpdateProductRequestDataType inherits HashDataType {
                 "display_name": "Manage Stock",
                 "type": SoftBoolOrNothingType,
                 "desc": "If `True`, stock management is enabled",
+                "example_value": True,
             },
             "stock_quantity": {
                 "display_name": "Stock Quantity",
                 "type": IntOrNothingType,
                 "desc": "The number of items in stock",
+                "example_value": 100,
             },
             "weight": {
                 "display_name": "Weight",
                 "type": StringOrNothingType,
                 "desc": "The product weight",
+                "example_value": "0.5",
             },
             "dimensions": {
                 "display_name": "Dimensions",
-                "type": AutoHashOrNothingType,
+                "type": new WooCommerceDimensionsDataType(AutoHashOrNothingType),
                 "desc": "Product dimensions: `length`, `width`, `height`",
             },
             "virtual": {
                 "display_name": "Virtual",
                 "type": SoftBoolOrNothingType,
                 "desc": "If `True`, the product is virtual",
+                "example_value": False,
             },
             "downloadable": {
                 "display_name": "Downloadable",
                 "type": SoftBoolOrNothingType,
                 "desc": "If `True`, the product is downloadable",
+                "example_value": False,
             },
             "meta_data": {
                 "display_name": "Meta Data",
@@ -126,8 +137,7 @@ public class WooCommerceUpdateProductRequestDataType inherits HashDataType {
     }
 
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 

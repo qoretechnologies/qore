@@ -33,6 +33,7 @@ public class WooCommerceCreateCouponRequestDataType inherits HashDataType {
                 "display_name": "Code",
                 "type": StringType,
                 "desc": "The coupon code",
+                "example_value": "SUMMER2026",
                 "required": True,
             },
             "discount_type": {
@@ -45,11 +46,13 @@ public class WooCommerceCreateCouponRequestDataType inherits HashDataType {
                 "display_name": "Amount",
                 "type": StringOrNothingType,
                 "desc": "The discount amount",
+                "example_value": "10",
             },
             "individual_use": {
                 "display_name": "Individual Use",
                 "type": SoftBoolOrNothingType,
                 "desc": "If `True`, the coupon can only be used individually",
+                "example_value": False,
             },
             "product_ids": {
                 "display_name": "Product IDs",
@@ -65,31 +68,37 @@ public class WooCommerceCreateCouponRequestDataType inherits HashDataType {
                 "display_name": "Usage Limit",
                 "type": IntOrNothingType,
                 "desc": "Maximum number of times the coupon can be used in total",
+                "example_value": 100,
             },
             "usage_limit_per_user": {
                 "display_name": "Usage Limit Per User",
                 "type": IntOrNothingType,
                 "desc": "Maximum number of times the coupon can be used per customer",
+                "example_value": 1,
             },
             "date_expires": {
                 "display_name": "Date Expires",
                 "type": StringOrNothingType,
                 "desc": "The date the coupon expires in ISO8601 format",
+                "example_value": "2026-12-31",
             },
             "free_shipping": {
                 "display_name": "Free Shipping",
                 "type": SoftBoolOrNothingType,
                 "desc": "If `True`, the coupon grants free shipping",
+                "example_value": False,
             },
             "minimum_amount": {
                 "display_name": "Minimum Amount",
                 "type": StringOrNothingType,
                 "desc": "The minimum order amount required to use this coupon",
+                "example_value": "50.00",
             },
             "maximum_amount": {
                 "display_name": "Maximum Amount",
                 "type": StringOrNothingType,
                 "desc": "The maximum order amount allowed to use this coupon",
+                "example_value": "500.00",
             },
             "meta_data": {
                 "display_name": "Meta Data",
@@ -100,8 +109,7 @@ public class WooCommerceCreateCouponRequestDataType inherits HashDataType {
     }
 
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 

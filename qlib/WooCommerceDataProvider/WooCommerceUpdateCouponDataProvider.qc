@@ -34,11 +34,13 @@ public class WooCommerceUpdateCouponRequestDataType inherits HashDataType {
                 "type": IntType,
                 "desc": "The unique identifier for the coupon to update",
                 "required": True,
+                "example_value": 789,
             },
             "code": {
                 "display_name": "Code",
                 "type": StringOrNothingType,
                 "desc": "The coupon code",
+                "example_value": "SUMMER2026",
             },
             "discount_type": {
                 "display_name": "Discount Type",
@@ -50,23 +52,97 @@ public class WooCommerceUpdateCouponRequestDataType inherits HashDataType {
                 "display_name": "Amount",
                 "type": StringOrNothingType,
                 "desc": "The discount amount",
+                "example_value": "15",
             },
             "usage_limit": {
                 "display_name": "Usage Limit",
                 "type": IntOrNothingType,
                 "desc": "Maximum number of times the coupon can be used in total",
+                "example_value": 200,
+            },
+            "description": {
+                "display_name": "Description",
+                "type": StringOrNothingType,
+                "desc": "Coupon description",
+                "example_value": "Summer sale discount coupon",
+            },
+            "individual_use": {
+                "display_name": "Individual Use",
+                "type": SoftBoolOrNothingType,
+                "desc": "If `True`, the coupon can only be used individually",
+                "example_value": False,
+            },
+            "product_ids": {
+                "display_name": "Product IDs",
+                "type": SoftListOrNothingType,
+                "desc": "List of product IDs the coupon can be applied to",
+            },
+            "excluded_product_ids": {
+                "display_name": "Excluded Product IDs",
+                "type": SoftListOrNothingType,
+                "desc": "List of product IDs excluded from the coupon",
+            },
+            "usage_limit_per_user": {
+                "display_name": "Usage Limit Per User",
+                "type": IntOrNothingType,
+                "desc": "Maximum number of times the coupon can be used per customer",
+                "example_value": 2,
             },
             "date_expires": {
                 "display_name": "Date Expires",
                 "type": StringOrNothingType,
                 "desc": "The date the coupon expires in ISO8601 format",
+                "example_value": "2026-12-31",
+            },
+            "free_shipping": {
+                "display_name": "Free Shipping",
+                "type": SoftBoolOrNothingType,
+                "desc": "If `True`, the coupon grants free shipping",
+                "example_value": False,
+            },
+            "product_categories": {
+                "display_name": "Product Categories",
+                "type": SoftListOrNothingType,
+                "desc": "List of category IDs the coupon applies to",
+            },
+            "excluded_product_categories": {
+                "display_name": "Excluded Product Categories",
+                "type": SoftListOrNothingType,
+                "desc": "List of category IDs excluded from the coupon",
+            },
+            "exclude_sale_items": {
+                "display_name": "Exclude Sale Items",
+                "type": SoftBoolOrNothingType,
+                "desc": "If `True`, the coupon will not apply to items on sale",
+                "example_value": False,
+            },
+            "minimum_amount": {
+                "display_name": "Minimum Amount",
+                "type": StringOrNothingType,
+                "desc": "The minimum order amount required to use this coupon",
+                "example_value": "50.00",
+            },
+            "maximum_amount": {
+                "display_name": "Maximum Amount",
+                "type": StringOrNothingType,
+                "desc": "The maximum order amount allowed to use this coupon",
+                "example_value": "500.00",
+            },
+            "email_restrictions": {
+                "display_name": "Email Restrictions",
+                "type": SoftListOrNothingType,
+                "desc": "List of email addresses that can use this coupon",
+            },
+            "meta_data": {
+                "display_name": "Meta Data",
+                "type": SoftListOrNothingType,
+                "desc": "List of metadata key-value pairs",
             },
         };
     }
 
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 
