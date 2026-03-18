@@ -221,7 +221,7 @@ set(LIBQORE_QPP_SRC
     lib/QC_RangeIterator.qpp
     lib/QC_Datasource.qpp
     lib/QC_DatasourcePool.qpp
-    lib/QC_ConnectionPool.qpp
+    lib/QC_AbstractConnectionPool.qpp
     lib/QC_Dir.qpp
     lib/QC_ReadOnlyFile.qpp
     lib/QC_File.qpp
@@ -1447,7 +1447,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_BINARY_DIR}/QC_AbstractSQLStatement.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_Datasource.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_DatasourcePool.cpp\"
-#include \"${CMAKE_BINARY_DIR}/QC_ConnectionPool.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_AbstractConnectionPool.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_SQLStatement.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_Queue.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_Mutex.cpp\"

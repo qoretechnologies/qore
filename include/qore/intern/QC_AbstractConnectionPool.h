@@ -1,6 +1,6 @@
 /* -*- mode: c++; indent-tabs-mode: nil -*- */
 /*
-    QC_ConnectionPool.h
+    QC_AbstractConnectionPool.h
 
     Qore Programming Language
 
@@ -29,8 +29,8 @@
     information.
 */
 
-#ifndef _QORE_INTERN_QC_CONNECTIONPOOL_H
-#define _QORE_INTERN_QC_CONNECTIONPOOL_H
+#ifndef _QORE_INTERN_QC_ABSTRACTCONNECTIONPOOL_H
+#define _QORE_INTERN_QC_ABSTRACTCONNECTIONPOOL_H
 
 #include <qore/Qore.h>
 

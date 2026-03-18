@@ -66,7 +66,7 @@
 #include "qore/intern/QC_AutoWriteLock.h"
 #include "qore/intern/QC_AbstractSmartLock.h"
 #include "qore/intern/QC_AbstractThreadResource.h"
-#include "qore/intern/QC_ConnectionPool.h"
+#include "qore/intern/QC_AbstractConnectionPool.h"
 
 #include <string.h>
 

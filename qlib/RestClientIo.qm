@@ -93,18 +93,26 @@ hash<RestResponseInfo> resp2 = f2.get(30s);
 
     @section restclientio_pool Connection Pooling
 
-    The @ref RestClientIoPool class provides thread-safe connection pooling for
-    @ref RestClientIo instances, built on @ref Qore::Thread::AbstractConnectionPool.
+    The @ref RestClientIoPool class inherits both @ref RestClientIo and
+    @ref Qore::Thread::AbstractConnectionPool "AbstractConnectionPool", so it can be
+    used both as a REST client and as a pool.  Since @ref RestClientIo already multiplexes
+    concurrent requests over shared HTTP/2 and HTTP/3 connections, \c acquire() simply
+    returns the pool object itself and \c release() is a no-op.
 
     @par Pool Example
     @code{.py}
 %requires RestClientIo
 
-RestClientIoPool pool(sub () { return new RestClientIo({"url": "https://api.example.com", "data": "json"}); },
-    {"min": 2, "max": 10});
+# Create — the pool IS the client
+RestClientIoPool pool({"url": "https://api.example.com", "data": "json"});
+
+# Use directly (multiplexing handles concurrency)
+hash<RestResponseInfo> resp = pool.restGet("/api/data");
+
+# Or use the acquire/release pattern for pool-expecting code
 RestClientIo rc = pool.acquire();
 on_exit pool.release();
-hash<RestResponseInfo> resp = rc.restGet("/api/data");
+resp = rc.restGet("/api/data");
     @endcode
 
     @section restclientio_relnotes Release Notes
@@ -753,127 +761,81 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
         An external shared manager can also be provided to the constructor — in that case,
         the caller retains ownership.
 
-        @par Factory Example
+        @par Pool Example
         @code{.py}
-RestClientIoPool pool(sub () { return new RestClientIo({"url": "https://api.example.com", "data": "json"}); },
-    {"min": 2, "max": 10});
-RestClientIo rc = pool.acquire();
-on_exit pool.release();
-hash<RestResponseInfo> resp = rc.restGet("/api/data");
-        @endcode
+# Create with pool options — the pool IS the client
+RestClientIoPool pool({"url": "https://api.example.com", "data": "json"});
 
-        @par Options Example
-        @code{.py}
-RestClientIoPool pool({"url": "https://api.example.com", "data": "json"},
-    {"min": 2, "max": 10});
+# Use directly as a REST client (multiplexing handles concurrency)
+hash<RestResponseInfo> resp = pool.restGet("/api/data");
+
+# Or use the acquire/release pattern for code that expects a pool
 RestClientIo rc = pool.acquire();
 on_exit pool.release();
-hash<RestResponseInfo> resp = rc.restGet("/api/data");
+resp = rc.restGet("/api/data");
         @endcode
 
         @par External Shared Connection Manager Example
         @code{.py}
 HttpClientIo::HttpClientConnectionManager shared_mgr();
 RestClientIoPool pool({"url": "https://api.example.com", "data": "json"},
-    {"min": 2, "max": 10}, shared_mgr);
-RestClientIo rc = pool.acquire();
-on_exit pool.release();
-hash<RestResponseInfo> resp = rc.restGet("/api/data");
+    NOTHING, shared_mgr);
+hash<RestResponseInfo> resp = pool.restGet("/api/data");
         @endcode
 
         @since RestClientIo 1.0
     */
-    public class RestClientIoPool inherits Qore::Thread::AbstractConnectionPool {
-        private {
-            #! Factory callback that creates RestClientIo instances
-            code<RestClientIo()> factory;
-
-            #! Shared connection manager owned by this pool (created automatically
-            #! when using the options-based constructor without an external manager)
-            *HttpClientIo::HttpClientConnectionManager owned_mgr;
-
-            #! Effective connection manager (owned or external)
-            *HttpClientIo::HttpClientConnectionManager mgr;
-        }
-
-        #! Creates a new pool with the given factory and options
-        /** @param factory a callback that returns a new @ref RestClientIo instance
-            @param pool_opts pool configuration options
-
-            @note When using the factory constructor, connection sharing depends on the
-                factory implementation.  For automatic connection sharing, use the
-                options-based constructor instead.
-        */
-        constructor(code<RestClientIo()> factory,
-                *hash<Qore::Thread::ConnectionPoolOptions> pool_opts)
-                : AbstractConnectionPool(pool_opts) {
-            self.factory = factory;
-            # Pre-create min resources now that factory is assigned
-            cast<Qore::Thread::AbstractConnectionPool>(self).init();
-        }
-
-        #! Creates a new pool that creates @ref RestClientIo instances with the given options
-        /** @param client_opts options passed to each @ref RestClientIo::constructor()
+    public class RestClientIoPool inherits RestClientIo, Qore::Thread::AbstractConnectionPool {
+        #! Creates a new pool/client with the given options
+        /** @param client_opts options passed to the @ref RestClientIo::constructor()
                 "RestClientIo constructor"
-            @param pool_opts pool configuration options
+            @param pool_opts pool configuration options (optional; the pool machinery
+                is present for API compatibility but \c acquire() always returns \c self)
             @param shared_mgr an optional external shared
                 @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager";
-                when provided, the caller retains ownership.  When omitted, the pool
-                creates and owns a shared manager automatically.
+                when provided, the caller retains ownership.  When omitted, the client
+                creates and owns a manager automatically.
         */
         constructor(hash<auto> client_opts,
                 *hash<Qore::Thread::ConnectionPoolOptions> pool_opts,
                 *HttpClientIo::HttpClientConnectionManager shared_mgr)
-                : AbstractConnectionPool(pool_opts) {
-            if (!shared_mgr) {
-                # Create a shared manager from client options — all pooled
-                # instances will multiplex over the same set of connections
-                shared_mgr = RestClientIo::buildConnectionManager(client_opts);
-                owned_mgr = shared_mgr;
-            }
-            self.mgr = shared_mgr;
-            self.factory = RestClientIo sub () {
-                return new RestClientIo(client_opts, shared_mgr);
-            };
-            # Pre-create min resources now that factory is assigned
-            cast<Qore::Thread::AbstractConnectionPool>(self).init();
+                : RestClientIo(client_opts, shared_mgr),
+                  AbstractConnectionPool(pool_opts) {
         }
 
-        #! Shuts down the pool and closes the owned connection manager
-        /** Shuts down the base pool (releasing all pooled resources), then
-            closes the owned connection manager (if any).
-
-            @note Call this method explicitly before the pool goes out of
-                scope to ensure proper cleanup order. The destructor calls
-                this as a safety net, but Qore destructor ordering (derived
-                first, then base) means the base pool resources are destroyed
-                after this method runs in the destructor.
-        */
+        #! Shuts down the pool and closes the connection
         shutdown() {
             AbstractConnectionPool::shutdown();
-            if (owned_mgr) {
-                owned_mgr.closeAll();
-            }
+            close();
         }
 
-        #! Creates a new pooled REST client
+        #! Returns self — RestClientIo handles multiplexing natively
+        /** The pool does not create separate resources per thread.  All
+            threads share this single multiplexed client.  Provided for API
+            compatibility with @ref Qore::Thread::AbstractConnectionPool
+            "AbstractConnectionPool".
+        */
         Qore::Thread::AbstractPoolableResource createResource() {
-            return factory();
+            return self;
         }
 
-        #! Acquires a pooled REST client for the current thread
-        /** @return a pooled @ref RestClientIo instance for the current thread
+        #! No-op — the shared client is never destroyed via the pool
+        nothing destroyResource(Qore::Thread::AbstractPoolableResource resource) {
+        }
+
+        #! No-op — no per-request state to reset
+        nothing resetResource(Qore::Thread::AbstractPoolableResource resource) {
+        }
+
+        #! Returns self — RestClientIo supports concurrent access via multiplexing
+        /** @return this pool/client instance
         */
         RestClientIo acquire() {
-            return cast<RestClientIo>(AbstractConnectionPool::acquire());
+            return self;
         }
 
-        #! Returns the shared connection manager
-        /** @return the effective shared connection manager (owned or external), or
-            @ref nothing if using the factory constructor (which has no manager)
-        */
-        *HttpClientIo::HttpClientConnectionManager getConnectionManager() {
-            return mgr;
+        #! No-op — multiplexing eliminates the need for per-thread release
+        nothing release() {
         }
     }
 }
