@@ -1,0 +1,606 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# @file qschema CLI tool for managing database schemas from .ysm/.jsm files
+
+/*  Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires Schema
+%requires SqlUtil
+%requires SchemaReverse
+%requires Util
+%requires DatasourceProvider
+
+%try-module yaml
+%define NoYaml
+%endtry
+
+%try-module json
+%define NoJson
+%endtry
+
+%exec-class QSchemaMain
+
+const VERSION = "1.1";
+
+const Opts = {
+    "data_ts":       "data-ts=s",
+    "index_ts":      "index-ts=s",
+    "access_level":  "access-level=s",
+    "force":         "f,force",
+    "dryrun":        "n,dry-run",
+    "nocolor":       "C,no-color",
+    "verbose":       "v,verbose:i+",
+    "output":        "o,output=s",
+    "format":        "format=s",
+    "help":          "h,help",
+    "version":       "V,version",
+};
+
+#! Commands that require a database connection as the first positional argument
+const DbCommands = {
+    "align": True,
+    "drop": True,
+    "diff": True,
+    "export": True,
+};
+
+#! Commands that operate on a schema file only (no DB required)
+const FileOnlyCommands = {
+    "validate": True,
+    "info": True,
+};
+
+class QSchemaMain {
+    private {
+        hash<auto> opts;
+        *string command;
+        *string connection;
+        *string schema_file;
+        Util::TerminalColor color;
+    }
+
+    constructor() {
+        GetOpt getopt(Opts);
+        opts = getopt.parse3(\ARGV);
+
+        color = new Util::TerminalColor(!opts.nocolor);
+
+        if (opts.help) {
+            doHelp(0);
+        }
+        if (opts.version) {
+            printf("qschema v%s\n", VERSION);
+            exit(0);
+        }
+
+        if (!ARGV) {
+            doHelp();
+        }
+
+        command = shift ARGV;
+
+        if (DbCommands{command}) {
+            # DB commands: qschema <command> <connection> <schema-file>
+            connection = shift ARGV;
+            schema_file = shift ARGV;
+            if (!connection) {
+                printf("%s %s requires a connection argument\n", color.error("ERROR:"), command);
+                printf("\n  Usage: qschema %s <connection> <schema-file>\n", command);
+                exit(1);
+            }
+            if (!schema_file && command != "export") {
+                printf("%s %s requires a schema file argument\n", color.error("ERROR:"), command);
+                printf("\n  Usage: qschema %s <connection> <schema-file>\n", command);
+                exit(1);
+            }
+        } else if (FileOnlyCommands{command}) {
+            # File-only commands: qschema <command> <schema-file>
+            schema_file = shift ARGV;
+            if (!schema_file) {
+                printf("%s %s requires a schema file argument\n", color.error("ERROR:"), command);
+                printf("\n  Usage: qschema %s <schema-file>\n", command);
+                exit(1);
+            }
+        }
+
+        switch (command) {
+            case "align":
+                doAlign();
+                break;
+            case "drop":
+                doDrop();
+                break;
+            case "diff":
+                doDiff();
+                break;
+            case "validate":
+                doValidate();
+                break;
+            case "info":
+                doInfo();
+                break;
+            case "export":
+                doExport();
+                break;
+            default:
+                printf("%s unknown command %y\n\n", color.error("ERROR:"), command);
+                doHelp();
+        }
+    }
+
+    private doHelp(int exit_code = 1) {
+        printf("%s v%s - Qore database schema management tool\n\n", color.bold("qschema"), VERSION);
+
+        printf("%s\n", color.bold("Usage:"));
+        printf("  qschema <command> <connection> <schema-file> [options]  %s\n",
+            color.dim("(DB commands)"));
+        printf("  qschema <command> <schema-file> [options]              %s\n",
+            color.dim("(file-only commands)"));
+
+        printf("\n%s\n", color.bold("DB Commands (require connection):"));
+        printf("  %s      Align database to schema (create/upgrade/downgrade)\n", color.key("align"));
+        printf("  %s       Drop schema from database\n", color.key("drop"));
+        printf("  %s       Compare schema to database and report differences\n", color.key("diff"));
+        printf("  %s     Reverse-engineer database to .ysm/.jsm format\n", color.key("export"));
+
+        printf("\n%s\n", color.bold("File-Only Commands:"));
+        printf("  %s   Validate schema file against meta-schema\n", color.key("validate"));
+        printf("  %s       Show schema metadata and summary\n", color.key("info"));
+
+        printf("\n%s\n", color.bold("Connection:"));
+        printf("  A database connection string or connection name:\n");
+        printf("    %s     Direct connection string\n", color.dim("pgsql:user/pass@host/db"));
+        printf("    %s             Connection name from QORE_DATASOURCE_PROVIDERS\n",
+            color.dim("mydb"));
+
+        printf("\n%s\n", color.bold("Options:"));
+        printf("  %s       Data tablespace name\n", color.key("    --data-ts <name>"));
+        printf("  %s      Index tablespace name\n", color.key("    --index-ts <name>"));
+        printf("  %s %s (default: trusted)\n", color.key("    --access-level <level>"),
+            color.dim("untrusted|trusted|admin"));
+        printf("  %s                Force operation\n", color.key("-f, --force"));
+        printf("  %s              Show SQL without executing (for align/drop)\n", color.key("-n, --dry-run"));
+        printf("  %s             Disable color output\n", color.key("-C, --no-color"));
+        printf("  %s              Increase verbosity (repeatable)\n", color.key("-v, --verbose"));
+        printf("  %s        Output file (for export)\n", color.key("-o, --output <file>"));
+        printf("  %s     Output format for export %s\n", color.key("    --format yaml|json"),
+            color.dim("(default: yaml)"));
+        printf("  %s                 Show this help\n", color.key("-h, --help"));
+        printf("  %s              Show version\n", color.key("-V, --version"));
+
+        printf("\n%s\n", color.bold("Examples:"));
+        printf("  %s\n", color.dim("# Using a connection name:"));
+        printf("  qschema align mydb schema.ysm\n");
+        printf("  qschema diff mydb schema.ysm\n");
+        printf("  qschema align --dry-run mydb schema.ysm\n");
+        printf("  qschema drop mydb schema.ysm --force\n");
+        printf("  qschema export mydb -o exported.ysm\n");
+        printf("\n  %s\n", color.dim("# Using a direct connection string:"));
+        printf("  qschema align pgsql:user/pass@host/db schema.ysm\n");
+        printf("  qschema diff oracle:user/pass@tns schema.ysm -v\n");
+        printf("\n  %s\n", color.dim("# File-only operations (no connection needed):"));
+        printf("  qschema validate schema.ysm\n");
+        printf("  qschema info -v schema.ysm\n");
+        exit(exit_code);
+    }
+
+    private Datasource getDatasource() {
+        return new Datasource(get_ds_string(connection));
+    }
+
+    private Schema::DataSchema getDataSchema(Datasource ds) {
+        return new Schema::DataSchema(ds, schema_file,
+            <Schema::SchemaOptionInfo>{
+                "data_ts": opts.data_ts,
+                "index_ts": opts.index_ts,
+            },
+            opts.access_level ?? Schema::AL_TRUSTED);
+    }
+
+    private doAlign() {
+        Datasource ds = getDatasource();
+
+        Schema::DataSchema schema = getDataSchema(ds);
+        int verbose = opts.verbose ?? 0;
+
+        if (opts.dryrun) {
+            printf("%s %s v%s against %s\n",
+                color.bold("Dry run:"), color.info(schema.getName()), schema.getVersion(),
+                color.type(ds.getDriverName()));
+
+            doDiffIntern(ds, schema);
+            return;
+        }
+
+        on_exit ds.commit();
+
+        printf("%s %s v%s to %s...\n", color.bold("Aligning"),
+            color.info(schema.getName()), schema.getVersion(), color.type(ds.getDriverName()));
+
+        hash<Schema::SchemaAlignmentInfo> info = schema.alignWithInfo(opts.force ?? False, verbose);
+
+        if (info.num_changes) {
+            printf("\n%s: %s change%s made", color.info(schema.getName()),
+                color.number(sprintf("%d", info.num_changes)),
+                info.num_changes == 1 ? "" : "s");
+            if (info.created) {
+                printf(" %s", color.success("(schema created)"));
+            }
+            printf("\n");
+            if (info.change_map) {
+                foreach hash<auto> pair in (info.change_map.pairIterator()) {
+                    printf("  %s: %s\n", color.key(pair.key), color.number(sprintf("%d", pair.value)));
+                }
+            }
+            if (info.data_change_map) {
+                foreach hash<auto> pair in (info.data_change_map.pairIterator()) {
+                    printf("  %s %s: %s\n", color.dim("data"), color.key(pair.key),
+                        color.number(sprintf("%d", pair.value)));
+                }
+            }
+        } else {
+            printf("%s: %s\n", color.info(schema.getName()), color.success("schema is up to date"));
+        }
+    }
+
+    private doDrop() {
+        Datasource ds = getDatasource();
+
+        Schema::DataSchema schema = getDataSchema(ds);
+        int verbose = opts.verbose ?? 0;
+
+        if (opts.dryrun) {
+            printf("%s drop %s from %s\n", color.bold("Dry run:"),
+                color.info(schema.getName()), color.type(ds.getDriverName()));
+
+            SqlUtil::AbstractDatabase db = schema.getDatabase();
+            hash<auto> schema_hash = {
+                "tables": schema.getTables(),
+                "sequences": schema.getSequences(),
+                "types": schema.getTypes(),
+                "functions": schema.getFunctions(),
+                "procedures": schema.getProcedures(),
+                "packages": schema.getPackages(),
+                "materialized_views": schema.getMaterializedViews(),
+            };
+            list<auto> sql_list = db.getDropSchemaSql(schema_hash);
+            if (sql_list) {
+                printf("\n%s\n", color.bold("SQL that would be executed:"));
+                foreach auto item in (sql_list) {
+                    if (item.typeCode() == NT_STRING) {
+                        printf("  %s;\n", color.yellow(item));
+                    }
+                }
+            } else {
+                printf("%s\n", color.success("Nothing to drop"));
+            }
+            return;
+        }
+
+        on_exit ds.commit();
+        printf("%s %s from %s...\n", color.bold("Dropping"),
+            color.info(schema.getName()), color.type(ds.getDriverName()));
+
+        schema.drop(opts.force ?? False, verbose);
+        printf("%s\n", color.success("Schema dropped successfully"));
+    }
+
+    private doDiff() {
+        Datasource ds = getDatasource();
+        on_exit ds.commit();
+
+        Schema::DataSchema schema = getDataSchema(ds);
+
+        printf("%s %s v%s vs %s\n", color.bold("Comparing"),
+            color.info(schema.getName()), schema.getVersion(), color.type(ds.getDriverName()));
+
+        doDiffIntern(ds, schema);
+    }
+
+    private doDiffIntern(Datasource ds, Schema::DataSchema schema) {
+        hash<auto> schema_hash = {
+            "tables": schema.getTables(),
+            "sequences": schema.getSequences(),
+            "types": schema.getTypes(),
+            "functions": schema.getFunctions(),
+            "procedures": schema.getProcedures(),
+            "packages": schema.getPackages(),
+            "materialized_views": schema.getMaterializedViews(),
+        };
+
+        SqlUtil::AbstractDatabase db = schema.getDatabase();
+
+        list<string> sql_statements();
+        list<string> change_descriptions();
+        int create_count = 0;
+        int alter_count = 0;
+        int drop_count = 0;
+        int unchanged_count = 0;
+
+        code info_cb = sub (string str, int ac, *string type, *string name, *string table,
+                *string new_name, *string info) {
+            if (ac == SqlUtil::AbstractDatabase::AC_Unchanged
+                    || ac == SqlUtil::AbstractDatabase::AC_NotFound) {
+                ++unchanged_count;
+            } else if (ac == SqlUtil::AbstractDatabase::AC_Create
+                    || ac == SqlUtil::AbstractDatabase::AC_Add
+                    || ac == SqlUtil::AbstractDatabase::AC_Insert) {
+                ++create_count;
+                push change_descriptions, sprintf("%s %s", color.success("+"), str);
+            } else if (ac == SqlUtil::AbstractDatabase::AC_Drop) {
+                ++drop_count;
+                push change_descriptions, sprintf("%s %s", color.error("-"), str);
+            } else {
+                ++alter_count;
+                push change_descriptions, sprintf("%s %s", color.warning("~"), str);
+            }
+        };
+
+        code sql_cb = sub (string str) {
+            push sql_statements, str;
+        };
+
+        SqlUtil::Tables table_cache();
+        hash<auto> cb_opts = {
+            "info_callback": info_cb,
+            "sql_callback": sql_cb,
+            "sql_callback_executed": False,
+        };
+
+        try {
+            db.getAlignSql(schema_hash, cb_opts + ("force": True), table_cache);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "DBI:PGSQL:ERROR" && ex.err != "DBI:ORACLE:OCI-ERROR"
+                    && ex.err != "DBI:MYSQL:ERROR" && ex.err != "DBI:MSSQL:ERROR") {
+                rethrow;
+            }
+            # Log the DB error as a warning (e.g. table doesn't exist during comparison)
+            if ((opts.verbose ?? 0) > 0) {
+                printf("  %s %s: %s\n", color.warning("WARNING:"), ex.err, ex.desc);
+            }
+        }
+
+        int total_changes = create_count + alter_count + drop_count;
+
+        if (!total_changes) {
+            printf("\n%s\n", color.success("Schema is up to date — no changes needed"));
+            if (unchanged_count) {
+                printf("  %s %d object%s unchanged\n", color.dim("="),
+                    unchanged_count, unchanged_count == 1 ? "" : "s");
+            }
+            return;
+        }
+
+        printf("\n%s\n", color.bold("Changes detected:"));
+        if (create_count) {
+            printf("  %s %s addition%s\n", color.success("+"),
+                color.number(sprintf("%d", create_count)), create_count == 1 ? "" : "s");
+        }
+        if (alter_count) {
+            printf("  %s %s modification%s\n", color.warning("~"),
+                color.number(sprintf("%d", alter_count)), alter_count == 1 ? "" : "s");
+        }
+        if (drop_count) {
+            printf("  %s %s removal%s\n", color.error("-"),
+                color.number(sprintf("%d", drop_count)), drop_count == 1 ? "" : "s");
+        }
+        if (unchanged_count) {
+            printf("  %s %d unchanged\n", color.dim("="), unchanged_count);
+        }
+
+        if ((opts.verbose ?? 0) > 0 && change_descriptions) {
+            printf("\n%s\n", color.bold("Details:"));
+            foreach string desc in (change_descriptions) {
+                printf("  %s\n", desc);
+            }
+        }
+
+        if (sql_statements) {
+            printf("\n%s\n", color.bold("SQL:"));
+            foreach string stmt in (sql_statements) {
+                printf("  %s;\n", color.yellow(stmt));
+            }
+        }
+
+        printf("\n%s %d change%s needed\n", color.bold("Total:"),
+            total_changes, total_changes == 1 ? "" : "s");
+    }
+
+    private doValidate() {
+        try {
+            hash<auto> data = Schema::DataSchemaLoader::loadFile(schema_file);
+            printf("%s %s v%s: %s\n", color.bold("Schema"), color.info(data.schema.name),
+                data.schema.version, color.success("validation PASSED"));
+
+            if ((opts.verbose ?? 0) > 0) {
+                printf("  %s: %s\n", color.key("Tables"),
+                    color.number(sprintf("%d", data.tables ? data.tables.size() : 0)));
+                printf("  %s: %s\n", color.key("Sequences"),
+                    color.number(sprintf("%d", data.sequences ? data.sequences.size() : 0)));
+                if (data.migrations) {
+                    printf("  %s: %s\n", color.key("Migrations"),
+                        color.number(sprintf("%d", data.migrations.size())));
+                }
+                if (data.reference_data) {
+                    int ref_tables = 0;
+                    foreach string cat in (("strict", "normal", "create_only", "insert_only")) {
+                        if (data.reference_data{cat}) {
+                            ref_tables += data.reference_data{cat}.size();
+                        }
+                    }
+                    printf("  %s: %s\n", color.key("Reference data tables"),
+                        color.number(sprintf("%d", ref_tables)));
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            printf("%s %y: %s\n", color.error("FAILED:"), schema_file, ex.desc);
+            exit(1);
+        }
+    }
+
+    private doInfo() {
+        hash<auto> data;
+        try {
+            data = Schema::DataSchemaLoader::loadFile(schema_file, False);
+        } catch (hash<ExceptionInfo> ex) {
+            printf("%s failed to load %y: %s\n", color.error("ERROR:"), schema_file, ex.desc);
+            exit(1);
+        }
+
+        printf("%s %s\n", color.bold("Schema:"), color.info(data.schema.name));
+        printf("%s %s\n", color.bold("Version:"), color.value(data.schema.version));
+
+        if (data.schema.version_table) {
+            printf("%s %s.%s\n", color.bold("Version table:"),
+                color.key(data.schema.version_table),
+                color.key(data.schema.version_column ?? "version"));
+        }
+
+        if (data.tables) {
+            printf("\n%s (%s)\n", color.bold("Tables"),
+                color.number(sprintf("%d", data.tables.size())));
+            foreach hash<auto> pair in (data.tables.pairIterator()) {
+                int col_count = pair.value.columns ? pair.value.columns.size() : 0;
+                *string pk = pair.value.primary_key.name;
+                printf("  %s  %s columns%s\n", color.key(sprintf("%-30s", pair.key)),
+                    color.number(sprintf("%d", col_count)),
+                    pk ? sprintf(", pk: %s", color.dim(pk)) : "");
+
+                if ((opts.verbose ?? 0) > 0) {
+                    foreach hash<auto> col in (pair.value.columns.pairIterator()) {
+                        string type_str = col.value.type ?? col.value.qore_type ?? "?";
+                        if (col.value.size) {
+                            type_str += sprintf("(%d%s)", col.value.size,
+                                col.value.scale ? sprintf(",%d", col.value.scale) : "");
+                        }
+                        printf("    %s %s%s\n", color.dim(sprintf("%-25s", col.key)),
+                            color.type(type_str),
+                            col.value.notnull ? color.warning(" NOT NULL") : "");
+                    }
+                    if (pair.value.auto_triggers) {
+                        list<string> at_parts();
+                        if (pair.value.auto_triggers.created) {
+                            push at_parts, "created";
+                        }
+                        if (pair.value.auto_triggers.modified) {
+                            push at_parts, "modified";
+                        }
+                        if (pair.value.auto_triggers.sequence_columns) {
+                            foreach hash<auto> sc in
+                                    (pair.value.auto_triggers.sequence_columns.pairIterator()) {
+                                push at_parts, sprintf("%s->%s", sc.key, sc.value);
+                            }
+                        }
+                        if (at_parts) {
+                            printf("    %s %s\n", color.dim("auto-triggers:"),
+                                color.green(at_parts.join(", ")));
+                        }
+                    }
+                }
+            }
+        }
+
+        if (data.sequences) {
+            printf("\n%s (%s)\n", color.bold("Sequences"),
+                color.number(sprintf("%d", data.sequences.size())));
+            foreach string name in (data.sequences.keyIterator()) {
+                printf("  %s\n", color.key(name));
+            }
+        }
+
+        if (data.reference_data) {
+            printf("\n%s\n", color.bold("Reference Data:"));
+            foreach string cat in (("strict", "normal", "create_only", "insert_only")) {
+                if (data.reference_data{cat}) {
+                    foreach hash<auto> pair in (data.reference_data{cat}.pairIterator()) {
+                        int rows;
+                        if (pair.value.typeCode() == NT_LIST) {
+                            rows = pair.value.size() > 1 ? pair.value.size() - 1 : 0;
+                        } else {
+                            rows = pair.value.rows ? pair.value.rows.size() : 0;
+                        }
+                        printf("  %s %s  %s row%s\n", color.dim(sprintf("[%-11s]", cat)),
+                            color.key(sprintf("%-25s", pair.key)),
+                            color.number(sprintf("%d", rows)), rows == 1 ? "" : "s");
+                    }
+                }
+            }
+        }
+
+        if (data.migrations) {
+            printf("\n%s (%s)\n", color.bold("Migrations"),
+                color.number(sprintf("%d", data.migrations.size())));
+            foreach hash<auto> m in (data.migrations) {
+                int pre = m.pre_align ? m.pre_align.size() : 0;
+                int post = m.post_align ? m.post_align.size() : 0;
+                printf("  %s  %s  %s\n",
+                    color.value(sprintf("v%-12s", m.version)),
+                    m.description ? color.dim(m.description) : "",
+                    color.dim(sprintf("(pre: %d, post: %d)", pre, post)));
+            }
+        }
+    }
+
+    private doExport() {
+        Datasource ds = getDatasource();
+        on_exit ds.commit();
+
+        string format = opts.format ?? "yaml";
+        if (format != "yaml" && format != "json") {
+            printf("%s --format must be 'yaml' or 'json'\n", color.error("ERROR:"));
+            exit(1);
+        }
+
+        string class_name = "ExportedSchema";
+        SchemaReverse::SchemaReverse rev(ds, class_name);
+
+        string output;
+        if (format == "yaml") {
+%ifndef NoYaml
+            output = rev.toYaml();
+%else
+            printf("%s yaml module is required for YAML export\n", color.error("ERROR:"));
+            exit(1);
+%endif
+        } else {
+%ifndef NoJson
+            output = rev.toJson();
+%else
+            printf("%s json module is required for JSON export\n", color.error("ERROR:"));
+            exit(1);
+%endif
+        }
+
+        if (opts.output) {
+            File f();
+            f.open2(opts.output, O_CREAT | O_TRUNC | O_WRONLY);
+            f.write(output);
+            printf("%s schema to %s (%s format)\n", color.success("Exported"),
+                color.key(opts.output), color.type(format));
+        } else {
+            print(output);
+        }
+    }
+}

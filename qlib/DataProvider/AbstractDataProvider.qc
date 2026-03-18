@@ -549,6 +549,46 @@ public const DataProviderSignatureOptionalDateType = <DataProviderSignatureTypeI
     "type_code": ST_Any,
 };
 
+#! Data provider signature float type
+/** @since DataProvider 3.3
+*/
+public const DataProviderSignatureFloatType = <DataProviderSignatureTypeInfo>{
+    "type": AbstractDataProviderTypeMap."float",
+    "type_code": ST_Any,
+};
+
+#! Data provider signature optional float type
+/** @since DataProvider 3.3
+*/
+public const DataProviderSignatureOptionalFloatType = <DataProviderSignatureTypeInfo>{
+    "type": AbstractDataProviderTypeMap."*float",
+    "type_code": ST_Any,
+};
+
+#! Data provider signature number type (accepts int, float, or number)
+/** @since DataProvider 3.3
+*/
+public const DataProviderSignatureNumberType = <DataProviderSignatureTypeInfo>{
+    "type": AbstractDataProviderTypeMap."any",
+    "type_code": ST_Any,
+};
+
+#! Data provider signature data type (string or binary)
+/** @since DataProvider 3.3
+*/
+public const DataProviderSignatureDataType = <DataProviderSignatureTypeInfo>{
+    "type": AbstractDataProviderTypeMap."any",
+    "type_code": ST_Any,
+};
+
+#! Data provider signature optional data type (*string or *binary)
+/** @since DataProvider 3.3
+*/
+public const DataProviderSignatureOptionalDataType = <DataProviderSignatureTypeInfo>{
+    "type": AbstractDataProviderTypeMap."any",
+    "type_code": ST_Any,
+};
+
 /** @defgroup dataprovider_expression_type_codes DataProvider Expression Type Codes
 
     @since DataProvider 2.3
@@ -1165,6 +1205,24 @@ public const DataProviderGenericExpressions = cast<hash<string, hash<DataProvide
     map {$1.key: $1.value."exp"}, AbstractDataProvider::GenericExpressionImplementations.pairIterator()
 );
 
+#! Returns all available expression metadata including module-conditional expressions
+/** Use this function to get the complete expression map including module-conditional serialization expressions
+    (YAML, JSON, XML) that are registered at module init time.
+
+    @return a hash of expression name to DataProviderExpressionInfo; includes all built-in and extra expressions
+
+    @since DataProvider 3.3
+*/
+public hash<string, hash<DataProviderExpressionInfo>> sub dp_get_all_expression_info() {
+    hash<string, hash<DataProviderExpressionInfo>> rv = DataProviderGenericExpressions;
+    if (*hash<auto> extra = AbstractDataProvider::ExtraExpressionImplementations) {
+        rv += cast<hash<string, hash<DataProviderExpressionInfo>>>(
+            map {$1.key: $1.value."exp"}, extra.pairIterator()
+        );
+    }
+    return rv;
+}
+
 #! Regular expression options
 public const RegexOpts = {
     "RE_Caseless": RE_Caseless,
@@ -1255,8 +1313,13 @@ list<string> sub dp_get_all_typed_hash_member_names(TypedHash th) {
 #! The AbstractDataProvider class
 public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializable, AbstractDataProcessor {
     public {
+        #! Extra expression implementations added at module init time (module-dependent expressions)
+        /** @since DataProvider 3.3
+        */
+        static hash<auto> ExtraExpressionImplementations;
+
         #! Generic expression implementations for data providers without native search functionality
-        const GenericExpressionImplementations = {
+        const GenericExpressionImplementations = ExtendedExpressionImplementations + {
             DP_OP_AND: {
                 "exp": <DataProviderExpressionInfo>{
                     "type": DET_Operator,
@@ -5127,9 +5190,15 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
             expinfo = AbstractDataProvider::GenericExpressionImplementations{exp.exp}
                 ?? AbstractDataProvider::GenericExpressionImplementations{OperatorAliasMap{exp.exp}};
         }
+        # Check module-conditional extra expressions (YAML/JSON/XML)
+        if (!expinfo && ExtraExpressionImplementations) {
+            expinfo = ExtraExpressionImplementations{exp.exp}
+                ?? ExtraExpressionImplementations{OperatorAliasMap{exp.exp}};
+        }
         if (!expinfo) {
             throw "INVALID-OPERATION", sprintf("operator %y is unknown; supported "
-                "operators: %y", exp.exp, keys GenericExpressionImplementations);
+                "operators: %y", exp.exp, keys GenericExpressionImplementations
+                    + (ExtraExpressionImplementations ? keys ExtraExpressionImplementations : ()));
         }
         on_error rethrow $1.err, sprintf("error in return value type %y for %y expression: %s",
             expinfo.exp.return_type.getName(), expinfo.exp.name, $1.desc);

@@ -6,8 +6,16 @@
 %requires ../../../../qlib/QUnit.qm
 %requires ../../../../qlib/Qorize.qm
 %requires ../../../../qlib/SqlUtil
-%requires ../../../../qlib/Schema.qm
+%requires ../../../../qlib/Schema
 %requires ../../../../qlib/SchemaReverse.qm
+
+%try-module yaml
+%define NoYaml
+%endtry
+
+%try-module json
+%define NoJson
+%endtry
 
 %exec-class Main
 
@@ -35,6 +43,9 @@ class Main inherits QUnit::Test {
         addTestCase("schema reverse - tables", \testSchemaReverseTables());
         addTestCase("schema reverse - sequence", \testSchemaReverseSequence());
         addTestCase("schema reverse - sequences", \testSchemaReverseSequences());
+        addTestCase("schema reverse - toYaml", \testSchemaReverseToYaml());
+        addTestCase("schema reverse - toJson", \testSchemaReverseToJson());
+        addTestCase("schema reverse - full toQore", \testSchemaReverseFullToQore());
 
         set_return_value(main());
     }
@@ -127,11 +138,87 @@ class Main inherits QUnit::Test {
     }
 
     testSchemaReverseSequences() {
-        if (!m_ds)
+        if (!m_ds) {
             testSkip("no DB connection");
+        }
 
         SequencesReverse r(m_ds, "schema_reverse_seq");
         hash q = r.toQore();
         assertEq(REF_SCHEMA.sequences, q, "SequencesReverse::toQore()");
+    }
+
+    testSchemaReverseToYaml() {
+%ifdef NoYaml
+        testSkip("yaml module not available");
+%else
+        if (!m_ds) {
+            testSkip("no DB connection");
+        }
+
+        SchemaReverse rev(m_ds, "TestSchema");
+        string yaml_output = rev.toYaml();
+        assertTrue(yaml_output.size() > 0, "toYaml() returns non-empty string");
+        assertTrue(yaml_output.contains("schema_reverse_t1"), "YAML contains table name");
+        assertTrue(yaml_output.contains("schema_reverse_seq"), "YAML contains sequence name");
+
+        # Verify it's parseable YAML
+        auto parsed = parse_yaml(yaml_output);
+        assertEq("hash", parsed.type(), "parsed YAML is a hash");
+        assertTrue(parsed.hasKey("schema"), "parsed YAML has 'schema' key");
+        assertEq("TestSchema", parsed.schema.name, "schema name matches");
+
+        # TableReverse toYaml
+        TableReverse tr(m_ds, "schema_reverse_t1");
+        string table_yaml = tr.toYaml();
+        assertTrue(table_yaml.size() > 0, "TableReverse.toYaml() returns non-empty");
+        auto parsed_table = parse_yaml(table_yaml);
+        assertEq("hash", parsed_table.type(), "parsed table YAML is a hash");
+        assertTrue(parsed_table.hasKey("columns"), "table YAML has columns");
+%endif
+    }
+
+    testSchemaReverseToJson() {
+%ifdef NoJson
+        testSkip("json module not available");
+%else
+        if (!m_ds) {
+            testSkip("no DB connection");
+        }
+
+        SchemaReverse rev(m_ds, "TestSchema");
+        string json_output = rev.toJson();
+        assertTrue(json_output.size() > 0, "toJson() returns non-empty string");
+        assertTrue(json_output.contains("schema_reverse_t1"), "JSON contains table name");
+
+        # Verify it's parseable JSON
+        auto parsed = parse_json(json_output);
+        assertEq("hash", parsed.type(), "parsed JSON is a hash");
+        assertTrue(parsed.hasKey("schema"), "parsed JSON has 'schema' key");
+        assertEq("TestSchema", parsed.schema.name, "schema name matches");
+%endif
+    }
+
+    testSchemaReverseFullToQore() {
+        if (!m_ds) {
+            testSkip("no DB connection");
+        }
+
+        SchemaReverse rev(m_ds, "TestSchema");
+        hash<auto> qore_data = rev.toQore();
+
+        # Verify structure
+        assertTrue(qore_data.hasKey("schema"), "toQore has schema");
+        assertTrue(qore_data.hasKey("tables"), "toQore has tables");
+        assertTrue(qore_data.hasKey("sequences"), "toQore has sequences");
+        assertEq("TestSchema", qore_data.schema.name, "schema name");
+        assertTrue(qore_data.tables.hasKey("schema_reverse_t1"), "tables has test table");
+        assertTrue(qore_data.sequences.hasKey("schema_reverse_seq"), "sequences has test seq");
+
+        # Verify table columns match
+        hash<auto> table_data = qore_data.tables.schema_reverse_t1;
+        assertTrue(table_data.hasKey("columns"), "table has columns");
+        assertTrue(table_data.columns.hasKey("id"), "table has id column");
+        assertTrue(table_data.columns.hasKey("foo"), "table has foo column");
+        assertTrue(table_data.columns.hasKey("bar"), "table has bar column");
     }
 } # class Main

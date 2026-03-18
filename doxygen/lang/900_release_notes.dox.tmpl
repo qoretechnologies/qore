@@ -342,6 +342,32 @@ cargo install tree-sitter-cli@0.26.5
         \c DataProvider::DataProviderActionInfo for context-sensitive action filtering and propagation
       - added \c amqp factory registration to \c DataProvider::FactoryMap for the
         <a href="https://github.com/qoretechnologies/module-amqp">amqp</a> module
+      - added 67 generic DPQL expressions for arithmetic, string, type conversion, encoding,
+        cryptographic, regex, date/time, collection, and serialization operations
+      - added \c now() function returning current timestamp with microsecond precision
+      - added module-conditional expression registration for YAML, JSON, and XML serialization
+        functions (registered when the corresponding modules are available)
+      - added \c dp_get_all_expression_info() public function to retrieve all expression metadata
+    - <a href="../../modules/Schema/html/index.html#schemaintro">Schema</a> module
+      - added \c Schema::DataSchema class for pure data schema definitions from YAML (\c .ysm) or
+        JSON (\c .jsm) files — enables schema management without writing Qore code
+      - added \c Schema::DataSchemaLoader class for loading, validating, and normalizing data schema
+        files against a JSON Schema (Draft 2020-12) meta-schema
+      - added \c Schema::MigrationExecutor class for data-driven migration actions with access level
+        enforcement and dependency-based step ordering (17 action types supported)
+      - added \c qschema CLI tool for schema management: \c align, \c drop, \c diff, \c validate,
+        \c info, \c export commands with colorized output and dry-run support
+      - separated module into individual \c .qc files for maintainability
+    - <a href="../../modules/SchemaReverse/html/index.html#schemareverseintro">SchemaReverse</a> module
+      - added \c toYaml() and \c toJson() methods on \c AbstractReverseObject and \c SchemaReverse
+        for exporting database schemas to \c .ysm/\c .jsm format
+      - added \c SchemaReverse::toQore() for structured hash output compatible with \c DataSchema
+      - fixed numeric scale extraction and trigger accumulation bugs
+      - added foreign key constraint extraction via \c getForeignConstraints()
+    - <a href="../../modules/SqlUtil/html/index.html#sqlutilintro">SqlUtil</a> module
+      - added \c SqlUtil::generate_auto_triggers() for generating standard database triggers
+        (created/modified timestamps, sequence-based ID columns) for PostgreSQL, Oracle, MySQL, and MSSQL
+      - added \c SqlUtil::generate_auto_triggers_all_drivers() for cross-driver trigger definitions
     - @ref openapi3intro "OpenApi3" module
       - new module supporting OpenAPI 3.* schemas for REST API integration
       - new @ref OpenApi3::OpenApi3SchemaGenerator "OpenApi3SchemaGenerator" class for generating OpenAPI 3.0.3 schemas from Qore source code

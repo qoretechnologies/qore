@@ -1412,7 +1412,7 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
     private list<string> listFunctionsImpl() {
         string sql = "select n.nspname as schema, p.proname as name, pg_catalog.pg_get_function_result(p.oid) "
             "as result_type, pg_catalog.pg_get_function_arguments(p.oid) as args,"
-            " case when p.proisagg then 'agg' when p.proiswindow then 'window' when p.prorettype = 'pg_catalog.trigger'::pg_catalog.regtype then 'trigger' else 'normal' end as type"
+            " case when p.prokind = 'a' then 'agg' when p.prokind = 'w' then 'window' when p.prorettype = 'pg_catalog.trigger'::pg_catalog.regtype then 'trigger' else 'normal' end as type"
             " from pg_catalog.pg_proc p left join pg_catalog.pg_namespace n on n.oid = p.pronamespace"
             " where n.nspname ~ '^(public)$' order by 1, 2, 4";
         *hash qh = ds.select(sql);
