@@ -268,6 +268,14 @@ public:
     DLLLOCAL int submitTask(ResolvedCallReferenceNode* task, ResolvedCallReferenceNode* cancel,
         ExceptionSink* xsink);
 
+    //! Cancels all operations whose callbacks belong to the given QoreProgram
+    /** Called from the program cleanup callback before namespace data is freed,
+        so callbacks can safely execute with valid type info.
+        @param pgm the QoreProgram being destroyed
+        @param xsink for exception handling
+    */
+    DLLLOCAL void cancelByProgram(QoreProgram* pgm, ExceptionSink* xsink);
+
     //! Custom deref with ExceptionSink
     DLLLOCAL virtual void deref(ExceptionSink* xsink);
 

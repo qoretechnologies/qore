@@ -52,6 +52,26 @@ static QoreThreadLock aio_singleton_lock;
 static AsyncIoControllerPriv* aio_singleton = nullptr;
 static QoreObject* aio_singleton_obj = nullptr;
 
+//! Program cleanup callback: cancel all async I/O operations belonging to the program being destroyed
+/** Called from qore_program_private::waitForTerminationAndClear() BEFORE clearNamespaceData(),
+    so type info is still valid and callbacks can execute safely.
+*/
+static void aio_program_cleanup(QoreProgram* pgm) {
+    AsyncIoControllerPriv* ctrl;
+    {
+        AutoLocker al(aio_singleton_lock);
+        ctrl = aio_singleton;
+        if (ctrl) {
+            ctrl->ref();
+        }
+    }
+    if (ctrl) {
+        ExceptionSink xsink;
+        ctrl->cancelByProgram(pgm, &xsink);
+        ctrl->deref(&xsink);
+    }
+}
+
 QoreObject* qore_get_async_io_controller_obj(ExceptionSink* xsink) {
     AutoLocker al(aio_singleton_lock);
     if (aio_singleton_obj) {
@@ -66,6 +86,8 @@ QoreObject* qore_get_async_io_controller_obj(ExceptionSink* xsink) {
     aio_singleton = *holder;
     QoreObject* obj = new QoreObject(QC_ASYNCIOCONTROLLER, nullptr, holder.release());
     aio_singleton_obj = obj;
+    // Register cleanup callback to cancel operations when QorePrograms are destroyed
+    qore_register_program_cleanup_callback(aio_program_cleanup);
     // Return an extra ref for the caller
     obj->ref();
     return obj;
@@ -953,6 +975,59 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
     }
 
     return count;
+}
+
+void AsyncIoControllerPriv::cancelByProgram(QoreProgram* pgm, ExceptionSink* xsink) {
+    // Cancel dedicated threads whose callbacks belong to this program
+    std::vector<std::string> dedicated_keys;
+    {
+        AutoLocker al(m);
+        for (auto& [key, dti] : dedicated_threads) {
+            if (dti->pinfo.callback && dti->pinfo.callback->getProgram() == pgm) {
+                dedicated_keys.push_back(key);
+            }
+        }
+    }
+    for (auto& key : dedicated_keys) {
+        cancelDedicatedThread(key, xsink);
+    }
+
+    // Cancel cache operations whose callbacks belong to this program
+    // This runs on the program's cleanup thread, so we use the direct cancel path
+    // (same as cancelByOwner when I/O thread is not running or we're on the I/O thread)
+    std::vector<PollInfo> cancel_pinfos;
+    bool do_signal = false;
+    {
+        AutoLocker al(m);
+        std::vector<std::string> keys;
+        for (auto& [key, pinfo] : cache) {
+            if (pinfo.callback && pinfo.callback->getProgram() == pgm) {
+                keys.push_back(key);
+            }
+        }
+        for (auto& key : keys) {
+            auto it = cache.find(key);
+            if (it != cache.end()) {
+                if (tid && !io_exiting) {
+                    // Unregister from EventLoop via the I/O thread command queue
+                    do_signal = enqueueCmdLocked(IoCommand::Cancel, key);
+                }
+                cancel_pinfos.push_back(it->second);
+                it->second = PollInfo();
+                cache.erase(it);
+            }
+        }
+    }
+
+    if (do_signal) {
+        notifier->notify();
+    }
+
+    // Deliver cancel results while program type info is still valid
+    for (auto& pinfo : cancel_pinfos) {
+        doCancelIntern(pinfo, xsink);
+        pinfo.cleanup(xsink);
+    }
 }
 
 void AsyncIoControllerPriv::wake() {
