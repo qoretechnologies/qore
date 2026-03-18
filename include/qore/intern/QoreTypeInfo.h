@@ -1063,6 +1063,20 @@ public:
             return nullptr;
         }
         assert(!ti->return_vec.empty());
+        // CRITICAL FIX Phase 2: Don't extract hashdecl from optional complex hash types
+        // For optional types like *hash<string, hash<DataProviderExpressionInfo>>,
+        // return_vec has 2 specs: [actual_type, NOTHING].
+        // Only reject if the base type is a complex hash (not a hashdecl itself)
+        if (ti->return_vec.size() > 1) {
+            // For optional types, check if base type is a complex hash by examining typespec
+            if (ti->return_vec[0].spec.getTypeSpec() == QTS_COMPLEXHASH) {
+                // It's an optional complex hash type - don't extract hashdecl from it
+                // This prevents the inner hashdecl from being incorrectly applied to the outer hash
+                return nullptr;
+            }
+            // It's an optional type but not a complex hash (e.g., *hashdecl)
+            // Fall through to extract the hashdecl
+        }
         return ti->return_vec[0].spec.getHashDecl();
     }
 
@@ -1094,8 +1108,11 @@ public:
             return autoTypeInfo;
         }
         // Handle or_nothing types which have 2 return specs (actual type + NOTHING)
+        // CRITICAL FIX: Validate structure for optional types
         if (ti->return_vec.size() > 1) {
+            // Optional type must have exactly 2 specs: [actual_type, NOTHING]
             if (ti->return_vec.size() != 2 || (ti->return_vec[1].spec.match(NT_NOTHING) != QTI_IDENT)) {
+                // Malformed optional type - reject it to prevent type corruption
                 return nullptr;
             }
         }
@@ -1112,8 +1129,11 @@ public:
             return autoTypeInfo;
         }
         // Handle or_nothing types which have 2 return specs (actual type + NOTHING)
+        // CRITICAL FIX: Validate structure for optional types
         if (ti->return_vec.size() > 1) {
+            // Optional type must have exactly 2 specs: [actual_type, NOTHING]
             if (ti->return_vec.size() != 2 || (ti->return_vec[1].spec.match(NT_NOTHING) != QTI_IDENT)) {
+                // Malformed optional type - reject it to prevent type corruption
                 return nullptr;
             }
         }
