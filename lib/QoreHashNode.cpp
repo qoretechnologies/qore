@@ -393,16 +393,9 @@ QoreHashNode* qore_hash_private::newComplexHashFromHash(const QoreTypeInfo* type
 
 int qore_hash_private::checkKey(const char* key, ExceptionSink* xsink) const {
     if (hashdecl && !typed_hash_decl_private::get(*hashdecl)->findMember(key)) {
-        // FIX: If we have a hashdecl but no complexTypeInfo, and the key is not a hashdecl member,
-        // skip the validation. This happens in IR when a hash that should be a complex hash
-        // has been incorrectly bound to a hashdecl (e.g., from a hashdecl constructor).
-        // Without complexTypeInfo, this hash should allow arbitrary string keys.
-        if (complexTypeInfo) {
-            xsink->raiseException("INVALID-MEMBER", "error accessing unknown member '%s' of hashdecl '%s'", key,
-                hashdecl->getName());
-            return -1;
-        }
-        // Skip validation if no complexTypeInfo - the hash is being used as a plain hash
+        xsink->raiseException("INVALID-MEMBER", "error accessing unknown member '%s' of hashdecl '%s'", key,
+            hashdecl->getName());
+        return -1;
     }
 
     return 0;
