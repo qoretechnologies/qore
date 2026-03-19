@@ -557,6 +557,11 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             return url;
         }
 
+        #! Returns the target URL with any password masked for safe display/logging
+        string getSafeUrl() {
+            return regex_subst(url, "://([^:/@]+):([^@]+)@", "://$1:***@");
+        }
+
         #! Returns the underlying connection manager
         HttpClientIo::HttpClientConnectionManager getConnectionManager() {
             return mgr;
@@ -1238,21 +1243,26 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
         hash<auto> getOAuth2Options() {
             AutoReadLock al(config_lock);
             return {
-                "oauth2_grant_type": oauth2_grant_type,
+                "username": username,
+                "password": password,
+                "token": token_val,
+                "token_type": token_type_val,
+                "oauth2_auth_args": oauth2_auth_args,
+                "oauth2_auth_url": oauth2_auth_url,
+                "oauth2_auto_refresh": oauth2_auto_refresh,
                 "oauth2_client_id": oauth2_client_id,
                 "oauth2_client_secret": oauth2_client_secret,
-                "oauth2_token_url": oauth2_token_url,
+                "oauth2_grant_type": oauth2_grant_type,
+                "oauth2_redirect_url": oauth2_redirect_url,
+                "oauth2_refresh_token": refresh_token,
                 "oauth2_scopes": oauth2_scopes,
                 "oauth2_scope_separator_char": oauth2_scope_separator_char,
-                "oauth2_auth_args": oauth2_auth_args,
                 "oauth2_token_args": oauth2_token_args,
-                "oauth2_auth_url": oauth2_auth_url,
-                "oauth2_redirect_url": oauth2_redirect_url,
-                "oauth2_auto_refresh": oauth2_auto_refresh,
-                "oauth2_token_use_basic_auth": oauth2_token_use_basic_auth,
                 "oauth2_token_auth_secret_only": oauth2_token_auth_secret_only,
+                "oauth2_token_expiry": oauth2_token_expiry,
                 "oauth2_token_expiry_hint": oauth2_token_expiry_hint,
-                "username": username,
+                "oauth2_token_url": oauth2_token_url,
+                "oauth2_token_use_basic_auth": oauth2_token_use_basic_auth,
             };
         }
 

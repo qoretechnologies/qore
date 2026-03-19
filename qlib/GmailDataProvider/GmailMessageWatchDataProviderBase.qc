@@ -111,7 +111,7 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
     }
 
     #! Creates the object from a REST connection
-    constructor(GoogleRestClient::GoogleRestClient rest,
+    constructor(GoogleRestClient::GoogleRestClientIo rest,
             hash<string, hash<DataProviderOptionInfo>> constructor_options, *hash<auto> options)
             : GoogleDataProviderBase(rest),
               AbstractWatchDataProviderBase(GmailMessageWatchDataProviderBase::getPollInterval(
@@ -174,7 +174,6 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
     #! Perform one poll
     private *hash<auto> pollOnceIntern(reference<hash<auto>> setup) {
         # check for matching mail
-        hash<auto> info;
         try {
             hash<auto> res;
             string this_uri = setup.uri;
@@ -184,7 +183,7 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
             bool epoch_updated;
             LoggerWrapper::debug("Gmail polling using URI: %y epoch: %y poll_interval: %ds", this_uri, setup.epoch,
                 poll_secs);
-            res = rest.get(this_uri, NOTHING, \info).body;
+            res = rest.restGet(this_uri).body;
             int match;
             foreach hash<auto> minfo in (res.messages) {
                 # check for shutdown between REST calls
@@ -197,7 +196,7 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
                 }
                 # retrieve each email
                 string msguri = sprintf("gmail/v1/users/me/messages/%s", minfo.id);
-                hash<auto> msg = rest.get(msguri, NOTHING, \info).body;
+                hash<auto> msg = rest.restGet(msguri).body;
 
                 # try to decode body as base64 if there is a Content-Transfer-Encoding header
                 # do not allow message bodies to be re-encoded as base64
@@ -229,7 +228,7 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
                             # retrieve attachment
                             string atturi = sprintf("gmail/v1/users/me/messages/%s/attachments/%s", minfo.id,
                                 aid);
-                            hash<auto> att = rest.get(atturi, NOTHING, \info).body;
+                            hash<auto> att = rest.restGet(atturi).body;
                             msg.attachments += getAttachment(att, part.headers);
                         }
                     }
@@ -246,7 +245,7 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
                 messageReceived(msg);
                 if (delete_messages) {
                     string deluri = sprintf("/gmail/v1/users/me/messages/%s", minfo.id);
-                    rest.del(deluri, NOTHING, \info);
+                    rest.restDel(deluri);
                     LoggerWrapper::info("Gmail: deleted matched message %y", minfo.id);
                 }
                 if (epoch_updated) {

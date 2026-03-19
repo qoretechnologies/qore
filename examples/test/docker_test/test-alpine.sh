@@ -37,7 +37,7 @@ if [ -z "${REDIS_URL}" ]; then
     setup_redis_on_host
 fi
 
-find / -path "${QORE_SRC_DIR}/build" -prune -o -name "libqore.so*" -exec rm -f {} \;
+find / -path "${QORE_SRC_DIR}/build" -prune -o -name "libqore.so*" -exec rm -f {} \; 2>/dev/null || true
 
 # build or install Qore
 if [ -d "${QORE_SRC_DIR}/build" ] && [ -f "${QORE_SRC_DIR}/build/CMakeCache.txt" ]; then

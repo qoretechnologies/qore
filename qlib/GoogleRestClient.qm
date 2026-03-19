@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file GoogleRestClient.qm Qore user module for calling Google REST services
 
-/*  GoogleRestClient.qm Copyright (C) 2020 - 2024 Qore Technologies, s.r.o.
+/*  GoogleRestClient.qm Copyright (C) 2020 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -500,7 +500,7 @@ public class GoogleCalendarRestConnection inherits GoogleRestConnection {
         # to avoid circular dependencies, this object loads the GoogleCalendarDataProvider and creates the data provider
         # object dynamically
         load_module("GoogleCalendarDataProvider");
-        return create_object("GoogleCalendarBaseDataProvider", get());
+        return create_object("GoogleCalendarBaseDataProvider", getAsync());
     }
 
     #! Can be called to set or clear a closure or call reference to be called when options are automatically updated
@@ -644,7 +644,7 @@ public class GmailRestConnection inherits GoogleRestConnection {
         # to avoid circular dependencies, this object loads the GmailDataProvider and creates the data provider
         # object dynamically
         load_module("GmailDataProvider");
-        return create_object("GmailBaseDataProvider", get());
+        return create_object("GmailBaseDataProvider", getAsync());
     }
 
     #! Can be called to set or clear a closure or call reference to be called when options are automatically updated

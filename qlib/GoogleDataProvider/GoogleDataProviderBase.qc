@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore GoogleDataProvider module definition
 
-/** GoogleDataProviderBase.qc Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/** GoogleDataProviderBase.qc Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -36,7 +36,7 @@ public class GoogleDataProviderBase inherits DataProvider::AbstractDataProvider 
 
     private {
         #! The REST client object for API calls
-        *RestClient::RestClient rest;
+        *RestClientIo::RestClientIo rest;
 
         #! API -> URL map
         static hash<string, string> api_map;
@@ -63,13 +63,12 @@ public class GoogleDataProviderBase inherits DataProvider::AbstractDataProvider 
     }
 
     #! Creates the object
-    constructor(RestClient::RestClient rest) {
+    constructor(RestClientIo::RestClientIo rest) {
         self.rest = rest;
     }
 
     #! Accepts a LoggerInterface object for logging (or clears it)
     setLogger(*LoggerInterface logger) {
-        rest.setLogger(logger);
         LoggerWrapper::setLogger(logger);
     }
 
@@ -94,21 +93,20 @@ public class GoogleDataProviderBase inherits DataProvider::AbstractDataProvider 
         @param connobj the new connection object itself (ex: RestClient for a "rest" connection)
     */
     updateConnectionObjects(object conn, object connobj) {
-        if (!(connobj instanceof RestClient)) {
-            throw "UPDATE-CONNECTION-ERROR", sprintf("Data provider %y requires a \"RestClient\" object; got "
+        if (!(connobj instanceof RestClientIo::RestClientIo)) {
+            throw "UPDATE-CONNECTION-ERROR", sprintf("Data provider %y requires a \"RestClientIo\" object; got "
                 "%y instead", self.className(), connobj.className());
         }
-        rest = cast<RestClient>(connobj);
+        rest = cast<RestClientIo::RestClientIo>(connobj);
         rest.setConnectionPath("/");
-        rest.setLogger(logger);
     }
 
     #! Override REST client
-    setRestClient(RestClient rest) {
+    setRestClient(RestClientIo::RestClientIo rest) {
         self.rest = rest;
     }
 
-    RestClient getRestClient() {
+    RestClientIo::RestClientIo getRestClient() {
         return rest;
     }
 
@@ -196,9 +194,9 @@ public class GoogleDataProviderBase inherits DataProvider::AbstractDataProvider 
         throw "UNIMPLEMENTED", sprintf("must be overridden in class %y", self.className());
     }
 
-    #! Returns a GoogleRestClient connection from the options
-    static RestClient::RestClient getRestConnection(*hash<auto> options) {
-        GoogleRestClient rest;
+    #! Returns a GoogleRestClientIo connection from the options
+    static RestClientIo::RestClientIo getRestConnection(*hash<auto> options) {
+        GoogleRestClientIo rest;
         if (options.restclient) {
             rest = options.restclient;
         } else {
@@ -222,7 +220,7 @@ public class GoogleDataProviderBase inherits DataProvider::AbstractDataProvider 
                 "token",
                 "oauth2_refresh_token",
             };
-            rest = new GoogleRestClient(opts);
+            rest = new GoogleRestClientIo(opts);
         }
         rest.setConnectionPath("/");
         return rest;
@@ -468,20 +466,19 @@ public class GoogleDataProviderBase inherits DataProvider::AbstractDataProvider 
             return info;
         }
 
-        RestClient rest({
-            "url": DiscoveryUrlBase,
+        string disc_url = GoogleDataProviderBase::getUrlForApi(api);
+        hash<UrlInfo> url_info = parse_url(disc_url);
+        RestClientIo::RestClientIo rest({
+            "url": sprintf("%s://%s", url_info.protocol, url_info.host),
             "timeout": InitTimeout,
             "connect_timeout": InitTimeout,
         });
-        string url = GoogleDataProviderBase::getUrlForApi(api, rest);
-        rest.setURL(url);
 
         # otherwise load it
         hash<auto> api_info;
         {
-            hash<auto> info;
-            on_error rethrow $1.err, sprintf("%s: info: %y", $1.desc, info{"request-uri", "response-uri"});
-            api_info = rest.get("").body;
+            on_error rethrow $1.err, sprintf("%s (url: %y)", $1.desc, disc_url);
+            api_info = rest.restGet(url_info.path).body;
         }
 
         return info_map{api} = api_info;
@@ -639,19 +636,19 @@ public class GoogleDataProviderBase inherits DataProvider::AbstractDataProvider 
     }
 
     #! Returns the URL for the given API
-    static string getUrlForApi(string api, RestClient::RestClient rest) {
+    static string getUrlForApi(string api) {
         *string url;
         if (url = api_map{api}) {
             return url;
         }
 
-        rest.setURL(DiscoveryUrlBase);
-        url = sprintf("?name=%s", api);
-
-        hash<auto> info;
-        on_error rethrow $1.err, sprintf("%s: info: %y", $1.desc, info{"request-uri", "response-uri"});
-        hash<auto> res = rest.get(url, NOTHING, \info);
-        return api_map{api} = rest.get(url).body.items[0].discoveryRestUrl;
+        hash<UrlInfo> url_info = parse_url(DiscoveryUrlBase);
+        RestClientIo::RestClientIo rest({
+            "url": sprintf("%s://%s", url_info.protocol, url_info.host),
+            "timeout": InitTimeout,
+            "connect_timeout": InitTimeout,
+        });
+        return api_map{api} = rest.restGet(url_info.path + sprintf("?name=%s", api)).body.items[0].discoveryRestUrl;
     }
 }
 }
