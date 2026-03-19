@@ -159,8 +159,17 @@ int ConstantEntry::parseInit(ClassNs ptr) {
 
         //printd(5, "ConstantEntry::parseInit() this: %p '%s' about to init val: '%s' class: %p '%s'\n", this,
         //    name.c_str(), val.getFullTypeName(), p, p ? p->name.c_str() : "n/a");
+
         err = parse_init_value(val, parse_context);
         typeInfo = parse_context.typeInfo;
+
+        // Enrich exception with constant name for better debugging
+        if (err) {
+            ExceptionSink* xsink = getProgram()->getParseExceptionSink();
+            if (xsink) {
+                xsink->appendLastDescription(" (while initializing constant '%s')", name.c_str());
+            }
+        }
         assert(!parse_context.lvids);
         pgm = parse_context.pgm;
         assert(pgm == getProgram());
@@ -220,6 +229,8 @@ int ConstantEntry::parseCommitRuntimeInit() {
     }
 
     if (xsink.isEvent()) {
+        // Enrich exception with constant name for better debugging
+        xsink.appendLastDescription(" (while initializing constant '%s')", name.c_str());
         qore_program_private::addParseException(getProgram(), xsink, loc);
         if (!err) {
             err = -1;

@@ -198,6 +198,7 @@ int QoreParseCastOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
             const TypedHashDecl* hd = or_nothing
                 ? QoreTypeInfo::getTypedHash(parse_context.typeInfo)
                 : QoreTypeInfo::getUniqueReturnHashDecl(parse_context.typeInfo);
+
             if (hd) {
             const_cast<typed_hash_decl_private*>(typed_hash_decl_private::get(*hd))->parseInit();
 
