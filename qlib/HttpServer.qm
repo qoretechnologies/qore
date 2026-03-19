@@ -93,6 +93,46 @@ module HttpServer {
     - <a href="http://www.qore.org/manual/modules/xml/current/SoapHandler/html/index.html">SoapHandler</a>: provides
       infrastructure for implementing SOAP server-side services using the HttpServer module
 
+    @section httpserverhttp3 HTTP/3 (QUIC) Support
+
+    When \c async_mode is enabled and a TLS listener is added with \c enable_h3 (or when
+    \c enable_h3 defaults to \c True), the server automatically creates a paired QUIC/UDP
+    listener on the \b same port as the TCP listener.  This follows the standard HTTP/3
+    deployment model where TCP (HTTP/1.1 and HTTP/2) and UDP (HTTP/3 over QUIC) share the
+    same port number; browsers discover HTTP/3 availability via the \c Alt-Svc response header.
+
+    @par Paired Listener Architecture
+    - Each TCP/TLS listener with HTTP/3 enabled gets a paired QUIC listener
+    - The QUIC listener binds to the same port on UDP
+    - Handlers added via @ref HttpServer::addHandlerToListenerID()
+      "addHandlerToListenerID()" are automatically propagated to the paired QUIC listener
+      (with a \c "-h3" suffix on the handler name)
+    - Handler removal via @ref HttpServer::removeHandlerFromListenerID()
+      "removeHandlerFromListenerID()" also removes the propagated handler from the paired
+      QUIC listener
+    - Stopping a TCP listener also stops its paired QUIC listener
+    - The \c Alt-Svc header is set per-listener so each TCP listener only advertises its own
+      QUIC counterpart
+
+    @par Configuration
+    - \c enable_h3: set to \c True in @ref HttpListenerOptionInfo to enable HTTP/3 for a
+      listener (defaults to \c True for TLS listeners in async mode when QUIC support is
+      available)
+    - \c alt_svc_max_age: the \c max-age value for the \c Alt-Svc header in seconds
+      (default: 86400)
+
+    @par Example
+    @code{.py}
+%requires HttpServer
+
+HttpServer server({"async_mode": True});
+server.setDefaultHandler("api", my_handler);
+# HTTPS listener with automatic HTTP/3 — QUIC binds to the same port on UDP
+server.addListener({"service": 8443, "cert": cert, "key": key});
+    @endcode
+
+    @note HTTP/3 requires async I/O mode.  Without \c async_mode, only HTTP/1.x is supported.
+
     @par Example:
     @code{.py}
 #!/usr/bin/env qore
@@ -1589,6 +1629,9 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         @param name handler name
         @param info the handler configuration info to add to the listener
 
+        @note If the listener has a paired QUIC/HTTP3 listener, the handler is automatically
+        propagated to it with a \c "-h3" suffix on the name.
+
         @throw INVALID-LISTENER-ERROR invalid listener id passed
     */
     addHandlerToListenerID(softint id, string name, hash<HttpHandlerConfigInfo> info) {
@@ -1659,8 +1702,9 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         lm.enter();
         on_exit lm.exit();
 
-        if (!listeners.hasKey(id))
+        if (!listeners.hasKey(id)) {
             throw "INVALID-LISTENER-ERROR", sprintf("there is no listener with ID %d", id);
+        }
 
         hash<string, hash<HttpHandlerConfigInfo>> h = {
             name: <HttpHandlerConfigInfo>{
@@ -1681,8 +1725,11 @@ public class HttpServer inherits HttpServer::AbstractLogger {
 
     #! remove request handler from a listener given the listener's id
     /** @param id listener id
-        @param handler_name name of handler to remove;
+        @param handler_name name of handler to remove
         @return whether listener was stopped
+
+        @note If the listener has a paired QUIC/HTTP3 listener, the propagated handler
+        (with \c "-h3" suffix) is also removed from it.
 
         @throw INVALID-LISTENER-ERROR invalid listener id passed
     */
@@ -1694,13 +1741,29 @@ public class HttpServer inherits HttpServer::AbstractLogger {
             throw "INVALID-LISTENER-ERROR", sprintf("there is no listener with ID %d", id);
         }
         listeners{id}.removeHandler(handler_name);
+
+        # also remove the propagated handler from the paired QUIC listener
+        if (*int quic_id = quic_listener_map{id}) {
+            if (listeners.hasKey(quic_id)) {
+                try {
+                    listeners{quic_id}.removeHandler(handler_name + "-h3");
+                } catch () {
+                    # handler may not exist on the QUIC listener (e.g., added before QUIC pairing)
+                }
+                HttpServer::HttpListener::stopIfNoHandlers(listeners{quic_id});
+            }
+        }
+
         return HttpServer::HttpListener::stopIfNoHandlers(listeners{id});
     }
 
     #! remove request handler from a listener given the listener's id
     /** @param id listener id
-        @param handler handler to remove;
+        @param handler handler to remove
         @return whether listener was stopped
+
+        @note If the listener has a paired QUIC/HTTP3 listener, the handler is also removed
+        from it.
 
         @throw INVALID-LISTENER-ERROR invalid listener id passed
     */
@@ -1712,6 +1775,19 @@ public class HttpServer inherits HttpServer::AbstractLogger {
             throw "INVALID-LISTENER-ERROR", sprintf("there is no listener with ID %d", id);
         }
         listeners{id}.removeHandler(handler);
+
+        # also remove the same handler from the paired QUIC listener
+        if (*int quic_id = quic_listener_map{id}) {
+            if (listeners.hasKey(quic_id)) {
+                try {
+                    listeners{quic_id}.removeHandler(handler);
+                } catch () {
+                    # handler may not exist on the QUIC listener
+                }
+                HttpServer::HttpListener::stopIfNoHandlers(listeners{quic_id});
+            }
+        }
+
         return HttpServer::HttpListener::stopIfNoHandlers(listeners{id});
     }
 
