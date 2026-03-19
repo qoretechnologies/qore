@@ -388,21 +388,6 @@ QoreHashNode* qore_hash_private::newComplexHashFromHash(const QoreTypeInfo* type
     if (init->priv->hashdecl) {
         init->priv->setHashDecl(nullptr);
     }
-
-    // Clear hashdecl bindings from inner hash values (values from hashdecl constructors)
-    // Use ConstHashIterator for correct traversal
-    ConstHashIterator hi(*init);
-    while (hi.next()) {
-        QoreValue v = hi.get();
-        if (v.getType() == NT_HASH) {
-            QoreHashNode* vh = const_cast<QoreHashNode*>(v.get<const QoreHashNode>());
-            qore_hash_private* vhp = qore_hash_private::get(*vh);
-            if (vhp->hashdecl && vh->is_unique()) {
-                vhp->setHashDecl(nullptr);
-            }
-        }
-    }
-
     return init.release();
 }
 
