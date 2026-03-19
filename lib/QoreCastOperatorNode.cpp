@@ -535,12 +535,8 @@ QoreValue QoreComplexHashCastOperatorNode::castValue(QoreValue inner, ExceptionS
 
     assert(inner.getType() == NT_HASH);
 
-    // if we already have the expected cast, then there's nothing to do
-    if (typeInfo == inner.getFullTypeInfo()) {
-        return inner.hasNode() ? inner.refSelf() : inner;
-    }
-
-    // do the runtime cast
+    // Always call newComplexHashFromHash to ensure inner value hashdecls are cleared
+    // (this is what evalImpl() does; the previous shortcut skipped necessary work)
     QoreValue result = qore_hash_private::newComplexHashFromHash(typeInfo, inner.get<QoreHashNode>()->hashRefSelf(), xsink);
     return result;
 }
