@@ -820,7 +820,7 @@ bool AsyncIoControllerPriv::cancelByKey(const QoreStringNode* key, ExceptionSink
     // Check autostop
     {
         AutoLocker al(m);
-        if (autostop_flag && rv && cache.empty() && dedicated_threads.empty() && tid) {
+        if (autostop_flag && rv && cache.empty() && dedicated_threads.empty() && timer_info_map.empty() && tid) {
             do_signal = enqueueCmdLocked(IoCommand::Quit);
             stopped = true;
         } else {
@@ -955,7 +955,7 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
     bool stopped = false;
     {
         AutoLocker al(m);
-        if (autostop_flag && count > 0 && cache.empty() && dedicated_threads.empty() && tid) {
+        if (autostop_flag && count > 0 && cache.empty() && dedicated_threads.empty() && timer_info_map.empty() && tid) {
             do_signal = enqueueCmdLocked(IoCommand::Quit);
             stopped = true;
         } else {
@@ -1702,8 +1702,8 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
             }
 
             // Check autostop (only if no deliveries pending — recheck after delivery)
-            if (cache.empty() && dedicated_threads.empty() && autostop_flag && cmdq.empty()
-                    && deferred_deliveries.empty()) {
+            if (cache.empty() && dedicated_threads.empty() && timer_info_map.empty()
+                    && autostop_flag && cmdq.empty() && deferred_deliveries.empty()) {
                 io_exiting = true;
                 if (io_waiting) {
                     io_cond.broadcast();
@@ -1742,7 +1742,8 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
         // Re-check autostop after deliveries (callbacks may have submitted new ops)
         if (!do_autostop && !deferred_deliveries.empty()) {
             AutoLocker al(m);
-            if (cache.empty() && dedicated_threads.empty() && autostop_flag && cmdq.empty()) {
+            if (cache.empty() && dedicated_threads.empty() && timer_info_map.empty()
+                    && autostop_flag && cmdq.empty()) {
                 io_exiting = true;
                 if (io_waiting) {
                     io_cond.broadcast();
@@ -1832,8 +1833,18 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
 
         // Deliver timer events outside lock
         for (auto& te : timer_events) {
-            if (cb_snapshot) {
-                // Build TimerEventInfo hash
+            // If udata is a code reference/closure, call it directly (no Qore-level dispatch needed)
+            if (te.udata.getType() == NT_RUNTIME_CLOSURE || te.udata.getType() == NT_FUNCREF) {
+                ResolvedCallReferenceNode* code_ref = te.udata.get<ResolvedCallReferenceNode>();
+                ExceptionSink cb_xsink;
+                ValueHolder rv(code_ref->execValue(nullptr, &cb_xsink), &cb_xsink);
+                if (cb_xsink) {
+                    log(QORE_LOG_LEVEL_ERROR, "timer code callback exception for timer %lld",
+                        (long long)te.id);
+                    cb_xsink.clear();
+                }
+            } else if (cb_snapshot) {
+                // Fall back to the registered timer callback for non-code udata
                 ReferenceHolder<QoreHashNode> timer_hash(
                     new QoreHashNode(hashdeclTimerEventInfo, xsink), xsink);
                 if (!*xsink) {

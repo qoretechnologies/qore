@@ -445,7 +445,7 @@ static nothing AsyncIoController::setLogger(*object logger) {
     @return the unique timer ID
     @since %Qore 2.3
 */
-static int AsyncIoController::addTimer(date deadline, auto udata) {
+static int AsyncIoController::addTimer(date deadline, auto udata) [dom=NETWORK,PROCESS] {
     QoreObject* obj;
     AsyncIoControllerPriv* ctrl = get_singleton(obj, xsink);
     if (!ctrl) {
@@ -461,7 +461,7 @@ static int AsyncIoController::addTimer(date deadline, auto udata) {
     @return @ref True "True" if the timer was found and canceled
     @since %Qore 2.3
 */
-static bool AsyncIoController::cancelTimer(int timer_id) {
+static bool AsyncIoController::cancelTimer(int timer_id) [dom=NETWORK,PROCESS] {
     QoreObject* obj;
     AsyncIoControllerPriv* ctrl = get_singleton(obj, xsink);
     if (!ctrl) {
@@ -481,7 +481,7 @@ static bool AsyncIoController::cancelTimer(int timer_id) {
 
     @since %Qore 2.3
 */
-static nothing AsyncIoController::setTimerCallback(*code callback) {
+static nothing AsyncIoController::setTimerCallback(*code callback) [dom=NETWORK,PROCESS] {
     QoreObject* obj;
     AsyncIoControllerPriv* ctrl = get_singleton(obj, xsink);
     if (!ctrl) {
