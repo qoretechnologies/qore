@@ -599,6 +599,12 @@ public:
 
     DLLLOCAL static QoreHashNode* newHashDecl(const TypedHashDecl* hd) {
         QoreHashNode* rv = new QoreHashNode;
+        // TRACE: Log creation of hashdecl hashes
+        if (hd && strcmp(hd->getName(), "DataProviderExpressionInfo") == 0) {
+            fprintf(stderr, "TRACE_newHashDecl: hash_id=%p, hashdecl=%s\n",
+                (void*)rv->priv, hd->getName());
+            fflush(stderr);
+        }
         rv->priv->setHashDecl(hd);
         return rv;
     }

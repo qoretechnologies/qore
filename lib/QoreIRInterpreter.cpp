@@ -1693,6 +1693,31 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     if (val.hasNode()) {
                         val.refSelf();
                     }
+
+                    // Apply type filter like JIT path: match instantiateFastCallParams in JITRuntime.cpp
+                    auto lv_it = func.param_local_vars.find(i);
+                    if (lv_it != func.param_local_vars.end()) {
+                        const LocalVar* lv = lv_it->second;
+                        const QoreTypeInfo* paramTypeInfo = lv->getTypeInfo();
+                        if (QoreTypeInfo::mayRequireFilter(paramTypeInfo, val)) {
+                            QoreTypeInfo::acceptInputParam(paramTypeInfo, i, lv->getName(), val, xsink);
+                            if (*xsink) {
+                                // Error in type filtering - cleanup already-instantiated locals
+                                for (int j = i - 1; j >= 0; --j) {
+                                    auto cleanup_it = func.param_slot_ids.find(j);
+                                    if (cleanup_it != func.param_slot_ids.end()) {
+                                        uint32_t cleanup_sid = cleanup_it->second;
+                                        if (cleanup_sid < local_slot_count && locals_instantiated[cleanup_sid]) {
+                                            locals_slot_cache[cleanup_sid].discard(xsink);
+                                            locals_instantiated[cleanup_sid] = false;
+                                        }
+                                    }
+                                }
+                                return false;
+                            }
+                        }
+                    }
+
                     locals_slot_cache[sid] = val;
                     locals_instantiated[sid] = true;
                 }
@@ -5772,21 +5797,61 @@ load_local_done:
                                 direct_inst->func, direct_inst->variant, direct_inst->pgm,
                                 nanboxed_args, nargs, xsink));
                         } else {
-                            // Instantiate argvid (always NOTHING for exact-arity calls)
+                            // Inline IR-to-IR call: must instantiate parameters with type filtering
+                            // before calling execute(), as per instantiateFastCallParams pattern
                             const UserSignature* sig = uvb->getUserSignature();
-                            if (sig->argvid) {
+
+                            // Instantiate parameters with type filtering (matching instantiateFastCallParams)
+                            int param_error = 0;
+                            unsigned num_params = sig->numParams();
+                            for (unsigned i = 0; i < num_params; ++i) {
+                                if (i < (unsigned)nargs) {
+                                    QoreValue val = fromBits(nanboxed_args[i]);
+                                    if (val.hasNode()) {
+                                        val.refSelf();
+                                    }
+
+                                    // Apply type filter like instantiateFastCallParams
+                                    const QoreTypeInfo* paramTypeInfo = sig->getParamTypeInfo(i);
+                                    if (QoreTypeInfo::mayRequireFilter(paramTypeInfo, val)) {
+                                        QoreTypeInfo::acceptInputParam(paramTypeInfo, i, sig->getName(i), val, xsink);
+                                        if (*xsink) {
+                                            param_error = 1;
+                                            break;
+                                        }
+                                    }
+
+                                    sig->lv[i]->instantiate(val);
+                                } else {
+                                    // No argument provided - parameter remains uninstantiated
+                                    // (will use default value if available, or runtime error)
+                                }
+                            }
+
+                            // Instantiate argvid (always NOTHING for exact-arity calls)
+                            if (!param_error && sig->argvid) {
                                 sig->argvid->instantiate(QoreValue());
                             }
-                            IRDirectParams dp{nanboxed_args, nargs};
+
                             QoreValue ir_return_value;
-                            bool ok = QoreIRInterpreter::execute(*callee_ir, ir_return_value, xsink,
-                                nullptr, nullptr, nullptr, callee_ir->cached_pre_instantiated,
-                                nullptr, uvb->getStatementBlock(), uvb->pgm, false, &dp);
+                            int ok = 0;
+                            if (!param_error) {
+                                IRDirectParams dp{nanboxed_args, nargs};
+                                ok = QoreIRInterpreter::execute(*callee_ir, ir_return_value, xsink,
+                                    nullptr, nullptr, nullptr, callee_ir->cached_pre_instantiated,
+                                    nullptr, uvb->getStatementBlock(), uvb->pgm, false, &dp);
+                            }
+
+                            // Cleanup parameters and argvid
+                            for (unsigned i = 0; i < num_params; ++i) {
+                                sig->lv[i]->uninstantiate(xsink);
+                            }
                             if (sig->argvid) {
                                 sig->argvid->uninstantiate(xsink);
                             }
-                            if (!ok && !(xsink && *xsink)) {
-                                // IR deopt: fall through to standard path
+
+                            if (param_error || (!ok && !(xsink && *xsink))) {
+                                // Error in param instantiation or IR deopt: fall through to standard path
                                 direct_inst->inline_ir_state.store(-1, std::memory_order_release);
                                 res = fromBits(qore_rt_call_fast(
                                     direct_inst->func, direct_inst->variant, direct_inst->pgm,

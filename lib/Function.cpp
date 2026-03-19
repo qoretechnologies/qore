@@ -2485,6 +2485,7 @@ void UserVariantBase::attemptIRLowering(const char* name) const {
     func->cached_pre_instantiated = cached_pre_inst;
 
     // Build param_slot_ids: maps param index → slot_id for direct param passing.
+    // Also build param_local_vars for type information access during direct param processing.
     // This allows IR-to-IR calls to bypass TLS entirely by pre-populating
     // the slot cache from caller-provided values.
     bool all_params_ir_only = true;
@@ -2493,6 +2494,7 @@ void UserVariantBase::attemptIRLowering(const char* name) const {
         auto it = func->local_var_slots.find(signature.lv[i]);
         if (it != func->local_var_slots.end()) {
             func->param_slot_ids[static_cast<int>(i)] = it->second;
+            func->param_local_vars[static_cast<int>(i)] = signature.lv[i];
         } else {
             // Param only used in fused instructions — no slot_id, can't pre-populate cache
             all_params_have_slots = false;

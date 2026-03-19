@@ -1837,7 +1837,13 @@ bool QoreTypeSpec::acceptInputComplexHash(ExceptionSink* xsink, const QoreTypeIn
     } else {
         // Use the base complex type, not the optional field type
         const QoreTypeInfo* complex_type = qore_get_complex_hash_type(u.ti);
-        qore_hash_private::get(*h)->complexTypeInfo = complex_type;
+        qore_hash_private* hp = qore_hash_private::get(*h);
+        if (hp->hashdecl && strcmp(hp->hashdecl->getName(), "DataProviderExpressionInfo") == 0) {
+            fprintf(stderr, "TRACE_acceptInputComplexHash: hash_id=%p, setting complexTypeInfo=%p (was %p)\n",
+                (void*)hp, (void*)complex_type, (void*)hp->complexTypeInfo);
+            fflush(stderr);
+        }
+        hp->complexTypeInfo = complex_type;
     }
 
     // now we have to fold the value types into our type

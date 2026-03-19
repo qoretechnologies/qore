@@ -1,0 +1,8 @@
+
+This GDB supports auto-downloading debuginfo from the following URLs:
+  <https://debuginfod.ubuntu.com>
+Enable debuginfod for this session? (y or [n]) [answered N; input not from terminal]
+Debuginfod has been disabled.
+To make this setting permanent, add 'set debuginfod enabled off' to .gdbinit.
+/home/david/src/qore/git/qore/build-asan/qore: error while loading shared libraries: /home/david/src/qore/git/qore/build-asan/libqore.so.20: file too short
+[Inferior 1 (process 3214567) exited with code 0177]

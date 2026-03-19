@@ -1819,6 +1819,10 @@ public:
     // values, bypassing TLS instantiate/eval/uninstantiate round-trip.
     std::unordered_map<int, uint32_t> param_slot_ids;
 
+    // Mapping of param index → LocalVar* (built during IR lowering).
+    // Used to access parameter type information during direct param processing.
+    std::unordered_map<int, const LocalVar*> param_local_vars;
+
     //! True when all params are IR-only (not accessed by AST expression trees,
     //! not closure-captured, not reference-typed) AND no argvid is needed.
     //! When true, callers can use IRDirectParams to skip TLS entirely.
