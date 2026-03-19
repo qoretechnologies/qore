@@ -230,6 +230,11 @@ public class HttpClientStreamHandle {
 
         try {
             date remaining = end_time - now_us();
+            if (remaining <= 0us) {
+                cancel();
+                throw "HTTPCLIENT-TIMEOUT",
+                    sprintf("request timed out after %d ms", wait_timeout);
+            }
             return f.get(remaining) ?? {};
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "FUTURE-TIMEOUT") {
