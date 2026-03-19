@@ -3380,6 +3380,20 @@ static int instantiateFastCallParams(const UserSignature* sig, unsigned num_para
             if (val.hasNode()) {
                 val.refSelf();
             }
+
+            // Apply type filter like the standard path in lib/Function.cpp:404-410
+            const QoreTypeInfo* paramTypeInfo = sig->getParamTypeInfo(i);
+            if (QoreTypeInfo::mayRequireFilter(paramTypeInfo, val)) {
+                QoreTypeInfo::acceptInputParam(paramTypeInfo, i, sig->getName(i), val, xsink);
+                if (*xsink) {
+                    // Uninstantiate already-instantiated params in reverse
+                    for (int j = (int)i - 1; j >= 0; --j) {
+                        sig->lv[j]->uninstantiate(xsink);
+                    }
+                    return -1;
+                }
+            }
+
             sig->lv[i]->instantiate(val);
         } else if (i < defaultArgList.size() && defaultArgList[i]) {
             // Evaluate default argument expression
@@ -3391,6 +3405,20 @@ static int instantiateFastCallParams(const UserSignature* sig, unsigned num_para
                 }
                 return -1;
             }
+
+            // Apply type filter like the standard path in lib/Function.cpp:404-410
+            const QoreTypeInfo* paramTypeInfo = sig->getParamTypeInfo(i);
+            if (QoreTypeInfo::mayRequireFilter(paramTypeInfo, val)) {
+                QoreTypeInfo::acceptInputParam(paramTypeInfo, i, sig->getName(i), val, xsink);
+                if (*xsink) {
+                    // Uninstantiate already-instantiated params in reverse
+                    for (int j = (int)i - 1; j >= 0; --j) {
+                        sig->lv[j]->uninstantiate(xsink);
+                    }
+                    return -1;
+                }
+            }
+
             sig->lv[i]->instantiate(val);
         } else {
             sig->lv[i]->instantiate(QoreValue());
