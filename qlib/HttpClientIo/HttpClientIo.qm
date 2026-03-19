@@ -1,5 +1,5 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
-#! @file HttpClientIo.qm Qore user module providing unified HTTP/2 and HTTP/3 multiplexed client I/O
+#! @file HttpClientIo.qm Qore user module providing unified HTTP/1.1, HTTP/2, and HTTP/3 client I/O
 
 /*  HttpClientIo.qm Copyright 2026 Qore Technologies, s.r.o.
 
@@ -29,7 +29,7 @@
 
 module HttpClientIo {
     version = "1.0";
-    desc = "Unified HTTP/2 and HTTP/3 multiplexed client I/O";
+    desc = "Unified HTTP/1.1, HTTP/2, and HTTP/3 client I/O";
     author = "Qore Technologies, s.r.o.";
     url = "https://qore.org";
     license = "MIT";
@@ -44,13 +44,15 @@ module HttpClientIo {
 
     @section httpclientiointro Introduction
 
-    The %HttpClientIo module provides a unified API for HTTP/2 and HTTP/3 multiplexed client I/O,
-    enabling multiple concurrent streams on a single connection regardless of the underlying
-    transport protocol.
+    The %HttpClientIo module provides a unified API for HTTP/1.1, HTTP/2, and HTTP/3 client I/O,
+    enabling multiple concurrent streams on a single connection (HTTP/2, HTTP/3) or serial
+    request/response exchanges (HTTP/1.1) regardless of the underlying transport protocol.
 
     Features:
     - **Protocol auto-selection**: Try HTTP/3 (QUIC) first, fall back to HTTP/2 (TCP+TLS)
-    - **True multiplexing**: Multiple concurrent streams on a single connection
+    - **HTTP/1.1 support**: Serial request/response with keep-alive; connection manager creates
+      multiple connections for concurrent requests
+    - **True multiplexing**: Multiple concurrent streams on a single connection (HTTP/2, HTTP/3)
     - **Connection pooling**: Shared connections across multiple clients
     - **Async I/O**: All I/O driven by AsyncSocketIoController (epoll/kqueue); sync \c request()
       blocks the caller via Future while the controller event loop handles actual I/O
@@ -62,12 +64,15 @@ module HttpClientIo {
 
     - @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager" - Unified connection pool with protocol auto-selection
     - @ref HttpClientIo::HttpClientConnection "HttpClientConnection" - Abstract base for protocol connections
+    - @ref HttpClientIo::Http1ClientConnection "Http1ClientConnection" - HTTP/1.1 connection (TCP, optionally TLS)
     - @ref HttpClientIo::Http2ClientConnection "Http2ClientConnection" - HTTP/2 connection (TCP + TLS)
     - @ref HttpClientIo::Http3ClientConnection "Http3ClientConnection" - HTTP/3 connection (QUIC)
     - @ref HttpClientIo::HttpClientStreamHandle "HttpClientStreamHandle" - Abstract base for stream handles
+    - @ref HttpClientIo::Http1ClientStreamHandle "Http1ClientStreamHandle" - HTTP/1.1 stream handle
     - @ref HttpClientIo::Http2ClientStreamHandle "Http2ClientStreamHandle" - HTTP/2 stream handle (+ streaming)
     - @ref HttpClientIo::Http3ClientStreamHandle "Http3ClientStreamHandle" - HTTP/3 stream handle
     - @ref HttpClientIo::HttpClientPollOperation "HttpClientPollOperation" - Abstract base for poll operations
+    - @ref HttpClientIo::Http1ClientPollOperation "Http1ClientPollOperation" - HTTP/1.1 poll operation (serial)
     - @ref HttpClientIo::Http2ClientPollOperation "Http2ClientPollOperation" - HTTP/2 poll operation
     - @ref HttpClientIo::Http3ClientPollOperation "Http3ClientPollOperation" - HTTP/3 poll operation
 
@@ -115,6 +120,9 @@ manager.closeAll();
     @code{.py}
 %requires HttpClientIo
 
+# Force HTTP/1.1
+auto mgr_h1 = new HttpClientConnectionManager({"protocol": "h1"});
+
 # Force HTTP/2 only
 auto mgr_h2 = new HttpClientConnectionManager({"protocol": "h2"});
 
@@ -123,6 +131,14 @@ auto mgr_h3 = new HttpClientConnectionManager({"protocol": "h3"});
     @endcode
 
     @section httpclientio_relnotes Release Notes
+
+    @subsection httpclientio_v1_1 Version 1.1
+    - Added HTTP/1.1 support via @ref Http1ClientConnection, @ref Http1ClientPollOperation,
+      and @ref Http1ClientStreamHandle
+    - HTTP/1.1 serial request/response with keep-alive and connection pooling
+    - Supports Content-Length, chunked transfer encoding, and connection-close body types
+    - Protocol selection: \c "h1" forces HTTP/1.1; \c "auto" still prefers H3 then H2
+    - Connection manager creates multiple HTTP/1.1 connections for concurrent requests
 
     @subsection httpclientio_v1_0 Version 1.0
     - Initial release of unified HttpClientIo module
@@ -173,13 +189,16 @@ public namespace HttpClientIo {
         H2 = 1,
         #! Force HTTP/3 (QUIC)
         H3 = 2,
+        #! Force HTTP/1.1
+        H1 = 3,
     }
 
-    #! Maps protocol enum values to string identifiers
+    #! Maps protocol string identifiers to enum values
     public const HttpClientProtocolMap = {
         "auto": HttpClientProtocol::Auto,
         "h2": HttpClientProtocol::H2,
         "h3": HttpClientProtocol::H3,
+        "h1": HttpClientProtocol::H1,
     };
 
     #! Maps protocol enum values to string identifiers (reverse)
@@ -187,6 +206,7 @@ public namespace HttpClientIo {
         HttpClientProtocol::Auto: "auto",
         HttpClientProtocol::H2: "h2",
         HttpClientProtocol::H3: "h3",
+        HttpClientProtocol::H1: "h1",
     };
 
     #! Callback type for async HTTP response handling
@@ -241,10 +261,10 @@ public namespace HttpClientIo {
         #! Stream ID used for this request
         int stream_id;
 
-        #! Protocol used: "h2" or "h3"
+        #! Protocol used: "h1", "h2", or "h3"
         string protocol;
 
-        #! HTTP/2-only: timing info (NOTHING for HTTP/3)
+        #! HTTP/2-only: timing info (NOTHING for HTTP/1.1 and HTTP/3)
         *hash<auto> timing;
     }
 
@@ -283,10 +303,10 @@ public namespace HttpClientIo {
         #! Connection ID
         int connection_id;
 
-        #! Protocol used: "h2" or "h3"
+        #! Protocol used: "h1", "h2", or "h3"
         string protocol;
 
-        #! HTTP/2-only: whether SSL/TLS is used (always True for HTTP/3)
+        #! Whether SSL/TLS is used (always True for HTTP/3; optional for HTTP/1.1 and HTTP/2)
         *bool ssl;
     }
 
@@ -333,7 +353,7 @@ public namespace HttpClientIo {
         #! Logger for connection manager
         *LoggerInterface logger;
 
-        #! Protocol selection: "auto" (default), "h2", or "h3"
+        #! Protocol selection: "auto" (default), "h1", "h2", or "h3"
         /** @see HttpClientProtocol, HttpClientProtocolMap
         */
         string protocol = "auto";

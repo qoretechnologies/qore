@@ -36,6 +36,7 @@
 
 %requires(reexport) Mime >= 1.3
 %requires(reexport) RestClient >= 1.3.1
+%requires(reexport) RestClientIo
 %requires(reexport) ConnectionProvider >= 1.4
 
 module SquareRestClient {
@@ -401,9 +402,29 @@ public class SquareRestConnection inherits RestClient::RestConnection {
         return new SquareRestClient(getConnectionOptions(rtopts), !connect);
     }
 
+    #! Returns an async-I/O-capable connection object
+    /** @since SquareRestClient 1.1
+    */
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new SquareRestClientIo(getConnectionOptions(rtopts));
+    }
+
     #! Returns the ConnectionSchemeInfo hash for this object
     private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
         return ConnectionScheme;
+    }
+}
+
+#! REST client for Square REST API using multiplexed HTTP connections
+/** @see SquareRestClient for more information
+*/
+public class SquareRestClientIo inherits RestClientIo::RestClientIo {
+    #! Creates the object with the given options
+    /** @param opts constructor options
+        @param shared_mgr optional shared connection manager
+    */
+    constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+            : RestClientIo(SquareRestClient::getOptions(opts), shared_mgr) {
     }
 }
 }

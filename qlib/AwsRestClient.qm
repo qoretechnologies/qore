@@ -36,6 +36,7 @@
 
 %requires(reexport) Mime >= 1.3
 %requires(reexport) RestClient >= 1.3.1
+%requires(reexport) RestClientIo
 %requires(reexport) ConnectionProvider >= 1.4
 
 module AwsRestClient {
@@ -614,12 +615,204 @@ public class AwsRestConnection inherits RestClient::RestConnection {
         @return a @ref AwsRestClient::AwsRestClient "AwsRestClient" object
     */
     private AwsRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
-        return new AwsRestClient(getConnectionOptions(), !connect);
+        return new AwsRestClient(getConnectionOptions(rtopts), !connect);
+    }
+
+    #! Returns an async-I/O-capable connection object
+    /** @since AwsRestClient 1.4
+    */
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new AwsRestClientIo(getConnectionOptions(rtopts));
     }
 
     #! Returns the ConnectionSchemeInfo hash for this object
     private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
         return ConnectionScheme;
+    }
+}
+
+#! REST client for AWS REST API services using multiplexed HTTP connections
+/** This class provides AWS Signature V4 signing for requests made via
+    @ref RestClientIo::RestClientIo multiplexed connections.
+
+    @see AwsRestClient for more information
+*/
+public class AwsRestClientIo inherits RestClientIo::RestClientIo {
+    private:internal {
+        #! the AWS access key ID
+        string aws_keyid;
+        #! the AWS secret access key
+        string aws_secret;
+        #! the AWS region
+        string aws_region;
+        #! the AWS service
+        string aws_service;
+        #! is this request for AWS S3?
+        bool aws_s3 = False;
+        #! temporary session token
+        string aws_token;
+        #! credential scope suffix
+        string credential_scope_suffix;
+        #! parsed host from URL
+        string aws_host;
+    }
+
+    #! Creates the object with the given options
+    /** @param opts constructor options (same as AwsRestClient plus HttpClientIo options)
+        @param shared_mgr optional shared connection manager
+    */
+    constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+            : RestClientIo(opts + {"data": "json"}, shared_mgr) {
+        hash<UrlInfo> url_info = parse_url(opts.url);
+        if (url_info{"username", "password"}) {
+            throw "AWSRESTCLIENT-ERROR", sprintf("AWS URL must not contain a username or password; URL: %y",
+                get_safe_url(opts.url));
+        }
+
+        aws_host = url_info.host;
+        if (url_info.port && url_info.port != 443 && url_info.port != 80) {
+            aws_host += ":" + string(url_info.port);
+        }
+
+        # set the region automatically from the URL if not provided
+        *list<string> url_components = (url_info.host =~ x/([^\.]+)/g);
+        if (url_components.size() != 4 || url_components[2] != "amazonaws" || url_components[3] != "com") {
+            url_components = ();
+        }
+        if (!opts.aws_service && url_components) {
+            opts.aws_service = url_components[0];
+        }
+        if (!opts.aws_region && url_components) {
+            opts.aws_region = url_components[1];
+        }
+
+        # check required options
+        foreach string key in (AwsRestClient::RequiredOptions) {
+            auto v = opts{key};
+            if (!exists v || v == "") {
+                throw "AWSRESTCLIENT-ERROR", sprintf("missing required option %y in option argument", key);
+            }
+            if (v.typeCode() != NT_STRING) {
+                throw "AWSRESTCLIENT-ERROR", sprintf("required option %y was passed as a %s (%y); expecting "
+                    "\"string\"", key, v.type(), v);
+            }
+            self{key} = v;
+        }
+
+        credential_scope_suffix = sprintf("%s/%s/%s", aws_region, aws_service, AwsRestClient::AwsTermination);
+
+        if (exists opts.aws_s3 && parse_boolean(opts.aws_s3)) {
+            aws_s3 = True;
+        }
+        if (opts.aws_token) {
+            aws_token = opts.aws_token;
+            addDefaultHeaders({"X-Amz-Security-Token": aws_token});
+        }
+    }
+
+    #! Sends a generic REST request with AWS Signature V4 signing
+    hash<RestClient::RestResponseInfo> restDoRequest(string method, string path, auto body,
+            *hash<auto> hdr) {
+        # Prepare request (serialize body, merge headers)
+        hash<auto> prepared = prepareRequest(method, \path, body, \hdr);
+
+        # Sign the request
+        signRequest(method, path, prepared.serialized_body, \hdr);
+
+        # Make HTTP request via multiplexed connection manager
+        hash<auto> raw = getConnectionManager().request(getUrl(), method, path, hdr,
+            prepared.serialized_body);
+
+        # Deserialize and return
+        return buildResponse(raw, prepared.error_passthru, method, path);
+    }
+
+    #! Internal: adds AWS Signature V4 to the request headers
+    private signRequest(string method, string path, *data body, reference<*hash<auto>> hdr) {
+        date gmtime = Qore::gmtime();
+        string scope = sprintf("%s/%s", gmtime.format("YYYYMMDD"), credential_scope_suffix);
+        string signed_headers;
+
+        # Ensure hdr is not NOTHING
+        if (!hdr) {
+            hdr = {};
+        }
+
+        # Add host header for signing
+        hdr.host = aws_host;
+
+        # Get AWS date value
+        string aws_date = gmtime.format("YYYYMMDDTHHmmSS") + "Z";
+        hdr."x-amz-date" = aws_date;
+
+        # Build canonical signature
+        string csig = getCanonicalSignature(method, path, hdr, body, \signed_headers);
+
+        string msg = AwsRestClient::AwsSignatureAlgorithm + "\n"
+            + aws_date + "\n"
+            + scope + "\n"
+            + csig;
+
+        # Calculate signing key
+        string gmdate = gmtime.format("YYYYMMDD");
+        binary signing_key = hmac(AwsRestClient::QoreDigest, gmdate, "AWS4" + aws_secret);
+        signing_key = hmac(AwsRestClient::QoreDigest, aws_region, signing_key);
+        signing_key = hmac(AwsRestClient::QoreDigest, aws_service, signing_key);
+        signing_key = hmac(AwsRestClient::QoreDigest, AwsRestClient::AwsTermination, signing_key);
+
+        string sig = hmac(AwsRestClient::QoreDigest, msg, signing_key).toHex();
+
+        hdr.authorization = sprintf("%s Credential=%s/%s, SignedHeaders=%s, Signature=%s",
+            AwsRestClient::AwsSignatureAlgorithm, aws_keyid, scope, signed_headers, sig);
+    }
+
+    #! Internal: builds canonical signature for AWS Signature V4
+    private string getCanonicalSignature(string http_method, string path, hash<auto> hdr, *data body,
+            reference<string> signed_headers) {
+        string cstr = http_method + "\n";
+
+        hash<UriQueryInfo> uri_info = parse_uri_query(path);
+        string uri = uri_info.method ?? "/";
+
+        if (!aws_s3) {
+            uri = normalize_dir_unix(uri, "/");
+        }
+        uri = encode_url(uri, False);
+        if (!aws_s3) {
+            uri = encode_url(uri, False);
+        }
+        cstr += uri + "\n";
+
+        if (uri_info.params) {
+            cstr += (
+                foldl $1 + "&" + $2, (
+                    map
+                        sprintf("%s=%s", encode_url($1, True),
+                            uri_info.params{$1} === True ? "" : encode_url(uri_info.params{$1}, True)),
+                        sort(keys uri_info.params)
+                )
+            );
+        }
+        cstr += "\n";
+
+        # Convert header keys to lowercase and sort
+        hdr = map {$1.key.lwr(): $1.value}, hdr.pairIterator();
+        hdr = map {$1: hdr{$1}}, sort(keys hdr);
+
+        cstr += (
+            foldl $1 + $2, (
+                map
+                    sprintf("%s:%s\n", $1, regex_subst(trim(hdr.$1), " +", " ", RE_Global)),
+                    sort(keys hdr)
+            )
+        ) + "\n";
+
+        signed_headers = (foldl $1 + ";" + $2, keys hdr);
+        cstr += signed_headers + "\n";
+
+        cstr += digest(AwsRestClient::QoreDigest, body ?? "").toHex();
+
+        return digest(AwsRestClient::QoreDigest, cstr).toHex();
     }
 }
 }

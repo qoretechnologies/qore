@@ -95,6 +95,10 @@ class RestClientIoTest inherits QUnit::Test {
     private {
         HttpServer server;
         int port;
+        int h1_port;
+        #! HTTP/1.1-only server (no async_mode, no HTTP/2 support)
+        HttpServer h1only_server;
+        int h1only_port;
     }
 
     const CertPem = "-----BEGIN CERTIFICATE-----
@@ -174,11 +178,25 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         addTestCase("pool with options", \testPoolWithOptions());
         addTestCase("pool with shared manager", \testPoolWithSharedManager());
         addTestCase("pool concurrent", \testPoolConcurrent());
+        addTestCase("h1 basic get", \testH1BasicGet());
+        addTestCase("h1 post with body", \testH1PostWithBody());
+        addTestCase("h1 head request", \testH1HeadRequest());
+        addTestCase("h1 delete 204", \testH1Delete204());
+        addTestCase("h1 error passthru", \testH1ErrorPassthru());
+        addTestCase("h1 concurrent requests", \testH1ConcurrentRequests());
+        addTestCase("h1 pool basic", \testH1PoolBasic());
+        addTestCase("h1 ssl", \testH1Ssl());
+        addTestCase("auto plain http fallback to h1", \testAutoPlainHttpFallback());
+        addTestCase("auto plain http fallback caching", \testAutoPlainHttpFallbackCaching());
+        addTestCase("auto plain http concurrent fallback", \testAutoPlainHttpConcurrentFallback());
 
-        set_return_value(main());
-    }
-
-    setUp() {
+        # Create servers once in the constructor — they're shared across all test
+        # cases since the handlers are stateless. This avoids a race condition
+        # where rapid server destroy/recreate cycles in setUp/tearDown can cause
+        # SSL_connect errors: the async HttpServer's HTTPS listener may not be
+        # fully torn down by the time the next test's client connects to the
+        # new server on a different port, and stale I/O events from the
+        # controller's previous poll cycle can interfere.
         Logger logger("test", LoggerLevel::getLevelInfo());
         hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
             "logger": logger,
@@ -194,10 +212,31 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),
         }).port;
+        # Plain HTTP listener for HTTP/1.1 tests
+        h1_port = server.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+        }).port;
         server.waitForAsyncIo();
+
+        # HTTP/1.1-only server (no async_mode → no HTTP/2 support)
+        # Simulates servers like uvicorn, nginx default, etc. that only speak HTTP/1.1
+        Logger h1_logger("h1test", LoggerLevel::getLevelInfo());
+        h1only_server = new HttpServer(<HttpServerOptionInfo>{
+            "logger": h1_logger,
+            "debug": True,
+        });
+        h1only_server.setHandler("/api", "/api", MimeTypeJson, new JsonEchoHandler());
+        h1only_server.setHandler("/error", "/error", MimeTypeJson, new ErrorHandler());
+        h1only_server.setDefaultHandler("/api", new JsonEchoHandler());
+        h1only_port = h1only_server.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+        }).port;
+
+        set_return_value(main());
     }
 
-    tearDown() {
+    destructor() {
+        delete h1only_server;
         delete server;
     }
 
@@ -208,6 +247,16 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             "error_passthru": True,
             "accept_all_certs": True,
             "protocol": "h2",
+        } + extra_opts;
+        return new RestClientIo::RestClientIo(opts);
+    }
+
+    private RestClientIo::RestClientIo createH1Client(*hash<auto> extra_opts) {
+        hash<auto> opts = {
+            "url": sprintf("http://127.0.0.1:%d", h1_port),
+            "data": "json",
+            "error_passthru": True,
+            "protocol": "h1",
         } + extra_opts;
         return new RestClientIo::RestClientIo(opts);
     }
@@ -677,6 +726,231 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         for (int i = 0; i < 5; ++i) {
             assertEq(200, results[i].status_code,
                 sprintf("pool concurrent request %d status", i));
+        }
+%endif
+    }
+
+    # ---- HTTP/1.1 Tests ----
+
+    testH1BasicGet() {
+%ifndef NoJson
+        RestClientIo::RestClientIo rest = createH1Client();
+        on_exit rest.close();
+
+        hash<RestClient::RestResponseInfo> resp = rest.restGet("/api/test");
+        assertEq(200, resp.status_code);
+        assertEq("GET", resp.body.method);
+        assertRegex("api/test", resp.body.path);
+        assertEq(True, resp.headers instanceof hash);
+%endif
+    }
+
+    testH1PostWithBody() {
+%ifndef NoJson
+        RestClientIo::RestClientIo rest = createH1Client();
+        on_exit rest.close();
+
+        hash<auto> body = {"key": "value", "num": 42};
+        hash<RestClient::RestResponseInfo> resp = rest.restPost("/api/test", body);
+        assertEq(200, resp.status_code);
+        assertEq("POST", resp.body.method);
+        assertEq(body, resp.body.body);
+%endif
+    }
+
+    testH1HeadRequest() {
+%ifndef NoJson
+        RestClientIo::RestClientIo rest = createH1Client();
+        on_exit rest.close();
+
+        hash<RestClient::RestResponseInfo> resp = rest.restHead("/api/test");
+        assertEq(200, resp.status_code);
+%endif
+    }
+
+    testH1Delete204() {
+%ifndef NoJson
+        RestClientIo::RestClientIo rest = createH1Client();
+        on_exit rest.close();
+
+        hash<RestClient::RestResponseInfo> resp = rest.restDel("/api/test", NOTHING);
+        assertEq(204, resp.status_code);
+%endif
+    }
+
+    testH1ErrorPassthru() {
+%ifndef NoJson
+        RestClientIo::RestClientIo rest = createH1Client();
+        on_exit rest.close();
+
+        hash<RestClient::RestResponseInfo> resp = rest.restGet("/error");
+        assertEq(500, resp.status_code);
+        assertEq("internal server error", resp.body.error);
+%endif
+    }
+
+    testH1ConcurrentRequests() {
+%ifndef NoJson
+        # HTTP/1.1 concurrent requests — the connection manager creates
+        # multiple TCP connections since H1 is serial
+        RestClientIo::RestClientIo rest = createH1Client();
+        on_exit rest.close();
+
+        Counter cnt(5);
+        list<hash<RestClient::RestResponseInfo>> results = ();
+        *hash<ExceptionInfo> bg_ex;
+        Mutex mtx();
+        for (int i = 0; i < 5; ++i) {
+            int idx = i;
+            background sub () {
+                on_exit cnt.dec();
+                try {
+                    hash<RestClient::RestResponseInfo> resp =
+                        rest.restGet(sprintf("/api/item/%d", idx));
+                    {
+                        AutoLock al(mtx);
+                        push results, resp;
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    AutoLock al(mtx);
+                    if (!bg_ex) {
+                        bg_ex = ex;
+                    }
+                }
+            }();
+        }
+        cnt.waitForZero();
+
+        if (bg_ex) {
+            throw bg_ex.err, bg_ex.desc;
+        }
+        assertEq(5, results.size());
+        for (int i = 0; i < 5; ++i) {
+            assertEq(200, results[i].status_code,
+                sprintf("h1 concurrent request %d status", i));
+        }
+%endif
+    }
+
+    testH1PoolBasic() {
+%ifndef NoJson
+        hash<auto> client_opts = {
+            "url": sprintf("http://127.0.0.1:%d", h1_port),
+            "data": "json",
+            "error_passthru": True,
+            "protocol": "h1",
+        };
+        RestClientIo::RestClientIoPool pool(client_opts);
+        on_exit pool.shutdown();
+
+        RestClientIo::RestClientIo rc = pool.acquire();
+        on_exit pool.release();
+
+        hash<RestClient::RestResponseInfo> resp = rc.restGet("/api/test");
+        assertEq(200, resp.status_code);
+        assertEq("GET", resp.body.method);
+%endif
+    }
+
+    testH1Ssl() {
+%ifndef NoJson
+        # HTTP/1.1 over HTTPS (no ALPN negotiation → server falls back to HTTP/1.1)
+        RestClientIo::RestClientIo rest = new RestClientIo::RestClientIo({
+            "url": sprintf("https://127.0.0.1:%d", port),
+            "data": "json",
+            "error_passthru": True,
+            "accept_all_certs": True,
+            "protocol": "h1",
+        });
+        on_exit rest.close();
+
+        hash<RestClient::RestResponseInfo> resp = rest.restGet("/api/test");
+        assertEq(200, resp.status_code);
+        assertEq("GET", resp.body.method);
+%endif
+    }
+
+    # ---- Auto protocol fallback tests ----
+
+    testAutoPlainHttpFallback() {
+%ifndef NoJson
+        # Connect to HTTP/1.1-only server with auto protocol (should try h2c, fail, fall back to h1)
+        RestClientIo::RestClientIo rest({
+            "url": sprintf("http://127.0.0.1:%d", h1only_port),
+            "data": "json",
+            "error_passthru": True,
+            "timeout": 15s,
+            # "auto" is the default protocol — it will try h2c first
+        });
+        on_exit rest.close();
+
+        hash<RestClient::RestResponseInfo> resp = rest.restGet("/api/test");
+        assertEq(200, resp.status_code);
+        assertEq("GET", resp.body.method);
+        assertRegex("api/test", resp.body.path);
+%endif
+    }
+
+    testAutoPlainHttpFallbackCaching() {
+%ifndef NoJson
+        # Verify that after fallback, subsequent requests reuse h1 without failing
+        RestClientIo::RestClientIo rest({
+            "url": sprintf("http://127.0.0.1:%d", h1only_port),
+            "data": "json",
+            "error_passthru": True,
+            "timeout": 15s,
+        });
+        on_exit rest.close();
+
+        # First request triggers fallback
+        hash<RestClient::RestResponseInfo> resp1 = rest.restGet("/api/first");
+        assertEq(200, resp1.status_code);
+
+        # Second request should use cached h1 directly (no h2c attempt)
+        hash<RestClient::RestResponseInfo> resp2 = rest.restGet("/api/second");
+        assertEq(200, resp2.status_code);
+        assertEq("GET", resp2.body.method);
+
+        # Third request — POST with body
+        hash<RestClient::RestResponseInfo> resp3 = rest.restPost("/api/third", {"key": "value"});
+        assertEq(200, resp3.status_code);
+        assertEq("POST", resp3.body.method);
+        assertEq({"key": "value"}, resp3.body.body);
+%endif
+    }
+
+    testAutoPlainHttpConcurrentFallback() {
+%ifndef NoJson
+        # Concurrent requests to HTTP/1.1-only server with auto protocol
+        RestClientIo::RestClientIo rest({
+            "url": sprintf("http://127.0.0.1:%d", h1only_port),
+            "data": "json",
+            "error_passthru": True,
+            "timeout": 15s,
+        });
+        on_exit rest.close();
+
+        Counter cnt(5);
+        list<hash<RestClient::RestResponseInfo>> results = ();
+        Mutex mtx();
+        for (int i = 0; i < 5; ++i) {
+            int idx = i;
+            background sub () {
+                on_exit cnt.dec();
+                hash<RestClient::RestResponseInfo> resp =
+                    rest.restGet(sprintf("/api/item/%d", idx));
+                {
+                    AutoLock al(mtx);
+                    push results, resp;
+                }
+            }();
+        }
+        cnt.waitForZero();
+
+        assertEq(5, results.size());
+        for (int i = 0; i < 5; ++i) {
+            assertEq(200, results[i].status_code,
+                sprintf("auto h2c→h1 fallback concurrent request %d status", i));
         }
 %endif
     }

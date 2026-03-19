@@ -4272,6 +4272,19 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
         return RestClient rest(getConnectionOptions(rtopts), !connect);
     }
 
+    #! Returns an async-I/O-capable REST client using multiplexed HTTP connections
+    /** @param connect if @ref True "True", the connection is returned already connected
+        @param rtopts runtime options for connection acquisition
+
+        @return a @ref RestClientIo::RestClientIo "RestClientIo" object
+
+        @since %RestClient 2.6
+    */
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        load_module("RestClientIo");
+        return create_object("RestClientIo::RestClientIo", getConnectionOptions(rtopts));
+    }
+
     #! Sets the alt token signer code and header on a RestClient object if applicable
     /** @param rest the RestClient object to set the alt token signer on
         @since %RestClient 2.2

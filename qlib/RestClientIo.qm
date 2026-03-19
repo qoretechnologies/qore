@@ -26,7 +26,7 @@
 
 %requires Logger
 %requires RestClient >= 2.5
-%requires HttpClientIo
+%requires(reexport) HttpClientIo
 %requires(reexport) RestSchemaValidator >= 1.0
 %requires Mime >= 1.7
 
@@ -744,33 +744,43 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
         }
     }
 
-    #! Thread-safe multiplexing REST client with connection pool API compatibility
+    #! Thread-safe REST client with connection pool API compatibility
     /** The pool IS the client — \c acquire() returns \c self and \c release() is a no-op.
-        All requests are multiplexed over a shared set of H2/H3 connections via an
-        @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager".
+        All requests are dispatched via an
+        @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager" which
+        handles connection creation and reuse for all protocols:
+
+        - **HTTP/2 and HTTP/3**: requests are multiplexed over shared connections
+        - **HTTP/1.1**: the connection manager creates separate TCP connections for each
+          concurrent request (\c max_concurrent_streams=1), providing the same thread-safe
+          concurrent access pattern without requiring per-thread RestClientIo instances
 
         @par Connection Sharing
         When using the options-based constructor, the pool automatically creates a shared
-        @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager" that all
-        pooled instances share.  This means all pooled @ref RestClientIo instances multiplex
-        their requests over the same set of H2/H3 connections, which is significantly more
-        efficient than each instance maintaining its own connections.
-
-        An external shared manager can also be provided to the constructor — in that case,
-        the caller retains ownership.
+        @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager" that
+        handles connection pooling for all protocols.  An external shared manager can also
+        be provided to the constructor — in that case, the caller retains ownership.
 
         @par Pool Example
         @code{.py}
 # Create with pool options — the pool IS the client
 RestClientIoPool pool({"url": "https://api.example.com", "data": "json"});
 
-# Use directly as a REST client (multiplexing handles concurrency)
+# Use directly as a REST client (connection manager handles concurrency)
 hash<RestResponseInfo> resp = pool.restGet("/api/data");
 
 # Or use the acquire/release pattern for code that expects a pool
 RestClientIo rc = pool.acquire();
 on_exit pool.release();
 resp = rc.restGet("/api/data");
+        @endcode
+
+        @par HTTP/1.1 Example
+        @code{.py}
+# Force HTTP/1.1 — the connection manager creates multiple TCP connections as needed
+RestClientIoPool pool({"url": "http://legacy-api.example.com", "data": "json",
+    "protocol": "h1"});
+hash<RestResponseInfo> resp = pool.restGet("/api/data");
         @endcode
 
         @par External Shared Connection Manager Example
@@ -784,6 +794,11 @@ hash<RestResponseInfo> resp = pool.restGet("/api/data");
         @since RestClientIo 1.0
     */
     public class RestClientIoPool inherits RestClientIo, Qore::Thread::AbstractConnectionPool {
+        private {
+            #! Saved client options for potential future pool expansion
+            hash<auto> saved_client_opts;
+        }
+
         #! Creates a new pool/client with the given options
         /** @param client_opts options passed to the @ref RestClientIo::constructor()
                 "RestClientIo constructor"
@@ -799,6 +814,7 @@ hash<RestResponseInfo> resp = pool.restGet("/api/data");
                 *HttpClientIo::HttpClientConnectionManager shared_mgr)
                 : RestClientIo(client_opts, shared_mgr),
                   AbstractConnectionPool(pool_opts) {
+            saved_client_opts = client_opts;
         }
 
         #! Shuts down the pool and closes the connection
@@ -807,11 +823,10 @@ hash<RestResponseInfo> resp = pool.restGet("/api/data");
             close();
         }
 
-        #! Returns self — RestClientIo handles multiplexing natively
-        /** The pool does not create separate resources per thread.  All
-            threads share this single multiplexed client.  Provided for API
-            compatibility with @ref Qore::Thread::AbstractConnectionPool
-            "AbstractConnectionPool".
+        #! Returns self — the connection manager handles concurrency for all protocols
+        /** For HTTP/2 and HTTP/3, requests are multiplexed over shared connections.
+            For HTTP/1.1, the connection manager creates separate TCP connections for
+            each concurrent request (max_concurrent_streams=1).
         */
         Qore::Thread::AbstractPoolableResource createResource() {
             return self;
@@ -825,14 +840,14 @@ hash<RestResponseInfo> resp = pool.restGet("/api/data");
         nothing resetResource(Qore::Thread::AbstractPoolableResource resource) {
         }
 
-        #! Returns self — RestClientIo supports concurrent access via multiplexing
+        #! Returns self — the connection manager handles concurrent access for all protocols
         /** @return this pool/client instance
         */
         RestClientIo acquire() {
             return self;
         }
 
-        #! No-op — multiplexing eliminates the need for per-thread release
+        #! No-op — the connection manager handles per-request connection allocation
         nothing release() {
         }
     }

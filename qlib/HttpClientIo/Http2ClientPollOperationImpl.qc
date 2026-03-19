@@ -50,11 +50,25 @@ public class Http2ClientPollOperation inherits HttpClientPollOperation {
 
         #! Maximum completed outputs to drain per continuePoll() call
         const MAX_DRAIN_ITERATIONS = 100;
+
+        #! Maximum empty reads during h2c probe before declaring failure
+        /** Much lower than MAX_EMPTY_READS to quickly detect servers that
+            don't support HTTP/2 prior knowledge on plain HTTP connections.
+        */
+        const H2C_PROBE_MAX_EMPTY_READS = 5;
     }
 
     private {
         #! Whether SSL is required
         bool ssl_required;
+
+        #! Whether the H2 protocol has been confirmed (via ALPN or SETTINGS exchange)
+        /** For HTTPS, H2 is confirmed by ALPN negotiation during the TLS handshake.
+            For plain HTTP (h2c prior knowledge), H2 is only confirmed after the
+            server responds with a valid SETTINGS frame. Until confirmed, the
+            readyCallback is deferred so that waitForReady() blocks.
+        */
+        bool h2_confirmed = False;
     }
 
     #! Creates the poll operation for a new connection
@@ -101,6 +115,14 @@ public class Http2ClientPollOperation inherits HttpClientPollOperation {
     #! Returns the current state
     string getState() {
         return state;
+    }
+
+    #! Hook: for plain HTTP (h2c), requires confirmation that the server supports HTTP/2
+    /** For HTTPS, h2_confirmed is set during startMultiplex() (ALPN confirmed H2).
+        For plain HTTP, h2_confirmed is set when the first valid H2 output is received.
+    */
+    private bool isReadyImpl() {
+        return h2_confirmed;
     }
 
     #! Always returns False; this is a long-running multiplexed operation
@@ -373,7 +395,13 @@ public class Http2ClientPollOperation inherits HttpClientPollOperation {
         current_op = sock.startPollHttp2ClientMultiplex();
         state = STATE_READING;
 
-        fireReadyCallback();
+        if (ssl_required) {
+            # HTTPS: ALPN already confirmed H2 during TLS handshake
+            h2_confirmed = True;
+            fireReadyCallback();
+        }
+        # Plain HTTP (h2c): defer readyCallback until we see valid H2 output
+        # from the server, confirming it supports HTTP/2 prior knowledge
     }
 
     #! Internal: handles reading state
@@ -467,9 +495,14 @@ public class Http2ClientPollOperation inherits HttpClientPollOperation {
             }
 
             ++empty_read_count;
-            if (empty_read_count > MAX_EMPTY_READS) {
+            # Use a much shorter limit during h2c probing — if the server
+            # doesn't respond with valid H2 frames quickly, it likely doesn't
+            # support HTTP/2 prior knowledge
+            int max_reads = h2_confirmed ? MAX_EMPTY_READS : H2C_PROBE_MAX_EMPTY_READS;
+            if (empty_read_count > max_reads) {
                 setError("HTTP2-EMPTY-READ",
-                    sprintf("max consecutive empty reads (%d) exceeded", MAX_EMPTY_READS));
+                    sprintf("max consecutive empty reads (%d) exceeded%s", max_reads,
+                        h2_confirmed ? "" : " (h2c probe failed — server likely doesn't support HTTP/2)"));
                 return NOTHING;
             }
 

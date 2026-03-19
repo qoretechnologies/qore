@@ -26,7 +26,7 @@
 public namespace HttpClientIo {
 
 #! Unified connection pool manager with protocol auto-selection
-/** This class manages a pool of HTTP/2 and HTTP/3 connections, providing:
+/** This class manages a pool of HTTP/1.1, HTTP/2, and HTTP/3 connections, providing:
 
     - **Protocol auto-selection**: Try HTTP/3 first, fall back to HTTP/2
     - **Connection pooling**: Reuse connections across requests
@@ -71,6 +71,14 @@ public class HttpClientConnectionManager {
 
         #! Maximum number of entries in the protocol cache before eviction
         const MAX_PROTOCOL_CACHE_SIZE = 1000;
+
+        #! Timeout for the h2c (HTTP/2 prior knowledge) probe on plain HTTP connections
+        /** The server typically responds within milliseconds — either with a valid
+            HTTP/2 SETTINGS frame or an HTTP/1.1 error response.  The nghttp2 library
+            detects the incompatibility and closes the session, which triggers the
+            fallback.  This timeout is a safety net for servers that don't respond.
+        */
+        const H2C_PROBE_TIMEOUT = 1s;
     }
 
     private {
@@ -187,7 +195,10 @@ public class HttpClientConnectionManager {
         # if the constructor throws to avoid leaking a pending slot
         HttpClientStreamHandle stream;
         try {
-            if (conn instanceof Http2ClientConnection) {
+            if (conn instanceof Http1ClientConnection) {
+                stream = new Http1ClientStreamHandle(cast<Http1ClientConnection>(conn),
+                    opts.request_timeout, logger);
+            } else if (conn instanceof Http2ClientConnection) {
                 stream = new Http2ClientStreamHandle(cast<Http2ClientConnection>(conn),
                     opts.request_timeout, logger);
             } else {
@@ -225,14 +236,16 @@ public class HttpClientConnectionManager {
                 # calls releaseReservationIfHeld() on all pre-submit failure paths
                 # (waitForReady timeout, cancel, submitAsyncImpl exception), and
                 # the destructor is a final safety net
-                if ((ex.err == "HTTP3-CAPACITY-ERROR" || isConnectionError(ex.err))
+                if ((isCapacityError(ex.err) || isConnectionError(ex.err))
                         && ++retries <= 3) {
                     if (isConnectionError(ex.err)) {
                         log(LoggerLevel::DEBUG, "connection error %s, evicting and retrying (%d/3)",
                             ex.err, retries);
                         evictDeadConnections(url);
+                        # h2c failure on plain HTTP → fall back to h1 for this host
+                        handleProtocolFallback(url, ex.err);
                     } else {
-                        log(LoggerLevel::DEBUG, "H3 capacity error (retry %d/3)", retries);
+                        log(LoggerLevel::DEBUG, "capacity error %s (retry %d/3)", ex.err, retries);
                     }
                     continue;
                 }
@@ -262,14 +275,16 @@ public class HttpClientConnectionManager {
             } catch (hash<ExceptionInfo> ex) {
                 # NOTE: no manual reservation release needed — request() calls
                 # submitAsync() internally which releases on all failure paths
-                if ((ex.err == "HTTP3-CAPACITY-ERROR" || isConnectionError(ex.err))
+                if ((isCapacityError(ex.err) || isConnectionError(ex.err))
                         && ++retries <= 3) {
                     if (isConnectionError(ex.err)) {
                         log(LoggerLevel::DEBUG, "connection error %s, evicting and retrying (%d/3)",
                             ex.err, retries);
                         evictDeadConnections(url);
+                        # h2c failure on plain HTTP → fall back to h1 for this host
+                        handleProtocolFallback(url, ex.err);
                     } else {
-                        log(LoggerLevel::DEBUG, "H3 capacity error (retry %d/3)", retries);
+                        log(LoggerLevel::DEBUG, "capacity error %s (retry %d/3)", ex.err, retries);
                     }
                     continue;
                 }
@@ -423,12 +438,19 @@ public class HttpClientConnectionManager {
     }
 
     #! Internal: resolves the protocol to use for a given URL
-    /** @param url_info parsed URL info
+    /** In auto mode: HTTPS tries H3 first (with H2 fallback), plain HTTP tries
+        H2 prior knowledge (h2c) first (with H1 fallback).  The protocol cache
+        stores the result of previous fallbacks to avoid repeated failures.
+
+        @param url_info parsed URL info
         @param key the pool key "host:port"
 
-        @return "h2" or "h3"
+        @return "h1", "h2", or "h3"
     */
     private string resolveProtocol(hash<auto> url_info, string key) {
+        if (opts.protocol == "h1") {
+            return "h1";
+        }
         if (opts.protocol == "h2") {
             return "h2";
         }
@@ -442,6 +464,12 @@ public class HttpClientConnectionManager {
 
         # Auto mode
         if (url_info.protocol != "https") {
+            # For plain HTTP, check cache — a previous h2c failure caches "h1"
+            if (protocol_cache.hasKey(key)) {
+                return protocol_cache{key};
+            }
+            # Try h2c (HTTP/2 prior knowledge) first; createConnection() will
+            # fall back to h1 if the server doesn't support it
             return "h2";
         }
 
@@ -609,6 +637,43 @@ public class HttpClientConnectionManager {
 
                 conn.setControllerRef(controller);
                 submitConnectionToController(key, conn);
+            }
+
+            # For plain HTTP h2c in auto mode: probe whether the server supports
+            # HTTP/2 prior knowledge by waiting for the connection to become ready
+            # with a short timeout.  If it doesn't become ready, the server likely
+            # only supports HTTP/1.1 — close the H2 connection and fall back.
+            if (protocol == "h2" && url_info.protocol != "https" && opts.protocol == "auto") {
+                bool h2c_ok = False;
+                try {
+                    h2c_ok = conn.waitForReady(H2C_PROBE_TIMEOUT);
+                } catch () {
+                    # Connection closed during probe (server rejected h2c)
+                }
+                if (!h2c_ok) {
+                    log(LoggerLevel::DEBUG, "h2c probe failed for %s, falling back to HTTP/1.1", key);
+                    try { conn.close(); } catch () {}
+                    removeConnectionFromPool(key, conn);
+                    {
+                        AutoWriteLock al(pool_lock);
+                        cacheProtocol(key, "h1");
+                    }
+                    # Create H1 connection instead
+                    conn = createConnection(url_info, key, "h1");
+                    {
+                        AutoWriteLock al(pool_lock);
+                        if (!pool.hasKey(key)) {
+                            pool{key} = ();
+                        }
+                        push pool{key}, conn;
+                        conn.setControllerRef(controller);
+                        submitConnectionToController(key, conn);
+                    }
+                }
+            }
+
+            {
+                AutoWriteLock al(pool_lock);
 
                 # Reserve a stream slot for the creator thread — same as
                 # the pool-scan path which calls tryReserveStream()
@@ -622,6 +687,12 @@ public class HttpClientConnectionManager {
     /** In auto mode, tries H3 first; on failure, falls back to H2 and caches.
     */
     private HttpClientConnection createConnection(hash<auto> url_info, string key, string protocol) {
+        if (protocol == "h1") {
+            log(LoggerLevel::DEBUG, "creating new HTTP/1.1 connection to %s", key);
+            return new Http1ClientConnection(url_info, opts.connect_timeout, logger,
+                1, opts.ssl_verify_mode, opts.accept_all_certs);
+        }
+
         if (protocol == "h3") {
             # Record probe time
             h3_probe_times{key} = now_us();
@@ -684,6 +755,13 @@ public class HttpClientConnectionManager {
         if (result.ex) {
             log(LoggerLevel::ERROR, "connection %d error: %s: %s",
                 conn.getConnectionId(), result.ex.err, result.ex.desc);
+            # Detect h2c incompatibility on plain HTTP and cache h1 fallback
+            if (conn.getProtocol() == "h2" && isH2cIncompatible(result.ex.err)) {
+                log(LoggerLevel::DEBUG, "h2c failed for %s (%s), caching h1 fallback",
+                    key, result.ex.err);
+                AutoWriteLock al(pool_lock);
+                cacheProtocol(key, "h1");
+            }
             try {
                 conn.close();
             } catch (hash<ExceptionInfo> ex) {
@@ -698,6 +776,14 @@ public class HttpClientConnectionManager {
 
         HttpClientPollOperation op = conn.getPollOperation();
         if (op.isClosed() || op.hasError()) {
+            # Detect h2c failure and cache h1 fallback
+            *hash<auto> op_err = op.getError();
+            if (op_err && conn.getProtocol() == "h2" && isH2cIncompatible(op_err.err)) {
+                log(LoggerLevel::DEBUG, "h2c failed for %s (%s), caching h1 fallback",
+                    key, op_err.err);
+                AutoWriteLock al(pool_lock);
+                cacheProtocol(key, "h1");
+            }
             log(LoggerLevel::DEBUG, "connection %d closed", conn.getConnectionId());
             # Close the connection to notify pending streams — their
             # callbacks fire with an error so threads in f.get() wake up
@@ -743,7 +829,15 @@ public class HttpClientConnectionManager {
         }
     }
 
-    #! Internal: checks if an error indicates a dead QUIC/HTTP3 connection
+    #! Internal: checks if an error indicates a capacity limit
+    private bool isCapacityError(string err) {
+        return err == "HTTP1-CAPACITY-ERROR"
+            || err == "HTTP2-CAPACITY-ERROR"
+            || err == "HTTP3-CAPACITY-ERROR"
+            || err == "HTTPCLIENT-CAPACITY-ERROR";
+    }
+
+    #! Internal: checks if an error indicates a dead connection
     private bool isConnectionError(string err) {
         return err == "QUIC-HTTP3-ERROR"
             || err == "QUIC-READ-ERROR"
@@ -751,8 +845,63 @@ public class HttpClientConnectionManager {
             || err == "HTTP3-CONNECT-ERROR"
             || err == "HTTP3-STATE-ERROR"
             || err == "HTTP3-ABORT"
+            || err == "HTTP2-EMPTY-READ"
+            || err == "HTTP2-CONNECT-ERROR"
+            || err == "HTTP2-ALPN-ERROR"
+            || err == "HTTP2-ABORT"
+            || err == "HTTP2-ERROR"
+            || err == "HTTP1-CONNECT-ERROR"
+            || err == "HTTP1-SSL-ERROR"
+            || err == "HTTP1-ABORT"
+            || err == "HTTP1-SEND-ERROR"
+            || err == "HTTP1-RECV-ERROR"
             || err == "HTTPCLIENT-STATE-ERROR"
+            || err == "HTTPCLIENT-CONNECT-ERROR"
+            || err == "HTTPCLIENT-REQUEST-ERROR"
+            || err == "HTTPCLIENT-TIMEOUT"
+            || err == "SOCKET-SEND-ERROR";
+    }
+
+    #! Internal: checks if an error indicates an h2c protocol incompatibility
+    /** Returns True if the error suggests the server doesn't support HTTP/2
+        prior knowledge (h2c) on a plain HTTP connection.
+    */
+    private bool isH2cIncompatible(string err) {
+        return err == "HTTP2-EMPTY-READ"
+            || err == "HTTP2-CONNECT-ERROR"
+            || err == "HTTP2-ALPN-ERROR"
+            || err == "HTTP2-ABORT"
+            || err == "HTTP2-ERROR"
+            || err == "SOCKET-SEND-ERROR"
+            || err == "HTTPCLIENT-REQUEST-ERROR"
+            || err == "HTTPCLIENT-TIMEOUT"
             || err == "HTTPCLIENT-CONNECT-ERROR";
+    }
+
+    #! Internal: handles protocol fallback after a connection error
+    /** For plain HTTP connections where h2c fails, caches "h1" so subsequent
+        connections use HTTP/1.1 directly. For HTTPS H3 failures, caches "h2".
+    */
+    private handleProtocolFallback(string url, string err) {
+        hash<UrlInfo> url_info = parse_url(url);
+        if (!url_info.port) {
+            url_info.port = url_info.protocol == "https" ? 443 : 80;
+        }
+        string key = sprintf("%s:%d", url_info.host, url_info.port);
+
+        if (url_info.protocol != "https" && isH2cIncompatible(err)) {
+            # Plain HTTP: h2c failed → server doesn't support HTTP/2 prior knowledge
+            log(LoggerLevel::DEBUG, "h2c failed for %s (%s), falling back to HTTP/1.1", key, err);
+            AutoWriteLock al(pool_lock);
+            cacheProtocol(key, "h1");
+        } else if (url_info.protocol == "https" && (err == "HTTP3-CONNECT-ERROR"
+                || err == "HTTP3-STATE-ERROR" || err == "HTTP3-ABORT"
+                || err == "QUIC-HTTP3-ERROR")) {
+            # HTTPS: H3 failed → fall back to H2
+            log(LoggerLevel::DEBUG, "H3 failed for %s (%s), falling back to HTTP/2", key, err);
+            AutoWriteLock al(pool_lock);
+            cacheProtocol(key, "h2");
+        }
     }
 
     #! Internal: evicts dead connections for the given URL
@@ -771,7 +920,7 @@ public class HttpClientConnectionManager {
                 # Evict only definitively dead connections — not those that
                 # are merely at capacity (which would drop in-flight streams)
                 bool dead = conn.isClosed();
-                if (!dead && conn.getProtocol() == "h3") {
+                if (!dead) {
                     HttpClientPollOperation op = conn.getPollOperation();
                     dead = op.isClosed() || op.hasError();
                 }

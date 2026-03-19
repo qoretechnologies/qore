@@ -27,7 +27,7 @@ public namespace HttpClientIo {
 
 #! Abstract base class for HTTP client connections
 /** This class provides the common interface and shared concrete methods for
-    HTTP/2 and HTTP/3 client connections.
+    HTTP/1.1, HTTP/2, and HTTP/3 client connections.
 
     @par Thread Safety
     This class is thread-safe. All mutable state is protected by \c lock.
@@ -79,7 +79,7 @@ public class HttpClientConnection {
         int pending_stream_count = 0;
     }
 
-    #! Returns the protocol identifier: "h2" or "h3"
+    #! Returns the protocol identifier: "h1", "h2", or "h3"
     abstract string getProtocol();
 
     #! Returns the poll operation for this connection

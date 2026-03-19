@@ -27,6 +27,7 @@
 %modern
 
 %requires(reexport) RestClient >= 2.2.0
+%requires(reexport) RestClientIo
 %requires(reexport) ConnectionProvider >= 2.0
 
 module BillwerkRestClient {
@@ -391,12 +392,30 @@ public class BillwerkRestConnection inherits RestClient::RestConnection {
         @return a @ref BillwerkRestClient::BillwerkRestClient "BillwerkRestClient" object
     */
     private BillwerkRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
-        return new BillwerkRestClient(getConnectionOptions(), !connect);
+        return new BillwerkRestClient(getConnectionOptions(rtopts), !connect);
+    }
+
+    #! Returns an async-I/O-capable connection object
+    /** @since BillwerkRestClient 1.2
+    */
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new BillwerkRestClientIo(getConnectionOptions(rtopts));
     }
 
     #! Returns the ConnectionSchemeInfo hash for this object
     private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
         return ConnectionScheme;
+    }
+}
+
+#! Billwerk REST client for non-blocking I/O
+public class BillwerkRestClientIo inherits RestClientIo::RestClientIo {
+    #! Creates the object with the given options
+    /** @param opts constructor options
+        @param shared_mgr optional shared connection manager
+    */
+    constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+            : RestClientIo(BillwerkRestClient::getOptions(opts), shared_mgr) {
     }
 }
 }

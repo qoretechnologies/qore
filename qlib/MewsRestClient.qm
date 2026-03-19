@@ -36,6 +36,7 @@
 
 %requires(reexport) Mime >= 1.3
 %requires(reexport) RestClient >= 1.3.1
+%requires(reexport) RestClientIo
 %requires(reexport) ConnectionProvider >= 1.4
 %requires Swagger
 
@@ -203,7 +204,7 @@ MewsRestClient rest(opts);
     }
 
     #! returns options for @ref MewsRestClient::MewsRestClient::constructor()
-    private static hash<auto> getOptions(hash<auto> opts) {
+    static hash<auto> getOptions(hash<auto> opts) {
         if (!opts.swagger && !opts.validator) {
             string path = dirname(get_module_hash().MewsRestClient.filename)
                 + "/MewsRestDataProvider/mews-swagger-2.0.yaml";
@@ -417,12 +418,32 @@ public class MewsRestConnection inherits RestClient::RestConnection {
         @return a @ref MewsRestClient object
     */
     private MewsRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
-        return new MewsRestClient(getConnectionOptions(), !connect);
+        return new MewsRestClient(getConnectionOptions(rtopts), !connect);
+    }
+
+    #! Returns an async-I/O-capable connection object
+    /** @since MewsRestClient 1.1
+    */
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new MewsRestClientIo(getConnectionOptions(rtopts));
     }
 
     #! Returns the ConnectionSchemeInfo hash for this object
     private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
         return ConnectionScheme;
+    }
+}
+
+#! REST client for Mews REST API using multiplexed HTTP connections
+/** @see MewsRestClient for more information
+*/
+public class MewsRestClientIo inherits RestClientIo::RestClientIo {
+    #! Creates the object with the given options
+    /** @param opts constructor options
+        @param shared_mgr optional shared connection manager
+    */
+    constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+            : RestClientIo(MewsRestClient::getOptions(opts), shared_mgr) {
     }
 }
 }

@@ -27,6 +27,7 @@
 %modern
 
 %requires(reexport) RestClient >= 2.2.0
+%requires(reexport) RestClientIo
 %requires(reexport) ConnectionProvider >= 2.0
 
 %requires json
@@ -359,12 +360,30 @@ public class ZeyosRestConnection inherits RestClient::RestConnection {
         @return a @ref ZeyosRestClient::ZeyosRestClient "ZeyosRestClient" object
     */
     private ZeyosRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
-        return new ZeyosRestClient(getConnectionOptions(), !connect);
+        return new ZeyosRestClient(getConnectionOptions(rtopts), !connect);
+    }
+
+    #! Returns an async-I/O-capable connection object
+    /** @since ZeyosRestClient 1.2
+    */
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new ZeyosRestClientIo(getConnectionOptions(rtopts));
     }
 
     #! Returns the ConnectionSchemeInfo hash for this object
     private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
         return ConnectionScheme;
+    }
+}
+
+#! Zeyos REST client for non-blocking I/O
+public class ZeyosRestClientIo inherits RestClientIo::RestClientIo {
+    #! Creates the object with the given options
+    /** @param opts constructor options
+        @param shared_mgr optional shared connection manager
+    */
+    constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+            : RestClientIo(ZeyosRestClient::getOptions(opts), shared_mgr) {
     }
 }
 }
