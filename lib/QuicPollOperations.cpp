@@ -630,6 +630,11 @@ QoreHashNode* SocketQuicClientPollOperation::flushAndReturnPollInfo(ExceptionSin
 QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) {
     AutoLocker al(sock->priv->m);
 
+    if (!sock->priv->socket->priv->isOpen()) {
+        xsink->raiseException("QUIC-POLL-ERROR", "socket closed during poll operation");
+        return nullptr;
+    }
+
     // Guard against continuePoll() after abort() has reset quic_session
     if (!quic_session) {
         xsink->raiseException("QUIC-POLL-ERROR", "QUIC client session has been aborted");
@@ -1587,6 +1592,11 @@ void SocketQuicServerPollOperation::cleanupClosedSessions() {
 QoreHashNode* SocketQuicServerPollOperation::continuePoll(ExceptionSink* xsink) {
     AutoLocker al(sock->priv->m);
 
+    if (!sock->priv->socket->priv->isOpen()) {
+        xsink->raiseException("QUIC-POLL-ERROR", "socket closed during poll operation");
+        return nullptr;
+    }
+
     while (true) {
         switch (qcs_state) {
             case QCS::HANDSHAKE_RECV: {
@@ -2014,6 +2024,11 @@ int SocketQuicSendResponsePollOperation::recvAndProcessPackets(ExceptionSink* xs
 QoreHashNode* SocketQuicSendResponsePollOperation::continuePoll(ExceptionSink* xsink) {
     AutoLocker al(sock->priv->m);
 
+    if (!sock->priv->socket->priv->isOpen()) {
+        xsink->raiseException("QUIC-POLL-ERROR", "socket closed during poll operation");
+        return nullptr;
+    }
+
     // Guard against continuePoll() after abort() has reset quic_session
     if (!quic_session) {
         xsink->raiseException("QUIC-POLL-ERROR", "QUIC send-response session has been aborted");
@@ -2331,6 +2346,11 @@ QoreHashNode* SocketQuicSendStreamingResponsePollOperation::continuePoll(Excepti
     }
 
     AutoLocker al(sock->priv->m);
+
+    if (!sock->priv->socket->priv->isOpen()) {
+        xsink->raiseException("QUIC-POLL-ERROR", "socket closed during poll operation");
+        return nullptr;
+    }
 
     // Guard against continuePoll() after abort()
     if (!quic_session) {

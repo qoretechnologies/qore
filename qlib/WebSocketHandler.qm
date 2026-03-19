@@ -2047,26 +2047,34 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                 }
                 throw ex.err, ex.desc, ex.arg;
             }
-            # Submit the send to the I/O controller with a callback — never block
-            # the handler thread on exec(), which creates a dependency on the I/O
-            # thread and can cause thread pool exhaustion deadlocks when the I/O
-            # thread is busy dispatching requests to the same pool.
-            # On send error, stop the connection; the startImpl() loop will notice
-            # stop_flag on its next iteration.
+            # Submit the send to the I/O controller with a callback and wait on a
+            # Counter for completion.  This blocks the handler thread until the send
+            # finishes (same throughput as the old exec() approach) but does NOT
+            # depend on the I/O controller's command queue — only on the poll
+            # operation itself.  This avoids the thread pool exhaustion deadlock
+            # that exec() caused (exec blocked on q->shift() which required the I/O
+            # thread to process commands, but the I/O thread was blocked trying to
+            # dispatch to the full thread pool).
+            Counter done(1);
+            *hash<auto> send_ex;
+            code cb = sub (hash<SocketPollResultInfo> result) {
+                if (result.ex) {
+                    send_ex = result.ex;
+                }
+                done.dec();
+            };
             wsc.getAsyncCtrl().submit(<SocketPollOperationInfo>{
                 "sock": sock,
                 "spop": op,
                 "to": send_timeout,
                 "owner": wsc.getOwnerId(),
                 "other": {"goal": "ws-send"},
-                "callback": sub (hash<SocketPollResultInfo> result) {
-                    if (result.ex) {
-                        logError("async WebSocket send failed: %s: %s",
-                            result.ex.err, result.ex.desc);
-                        wsc.stop();
-                    }
-                },
+                "callback": cb,
             });
+            done.waitForZero();
+            if (send_ex) {
+                throw send_ex.err, send_ex.desc, send_ex.arg;
+            }
             return True;
         }
         sock.send2(frame, send_timeout);

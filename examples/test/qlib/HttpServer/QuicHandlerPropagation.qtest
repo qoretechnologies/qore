@@ -63,8 +63,18 @@ public class QuicHandlerPropagationTest inherits QUnit::Test {
         server.setDefaultHandler("default", new TestApiHandler("default"));
 
         # generate a self-signed cert for testing
-        string pem = backquote("openssl req -x509 -newkey rsa:2048 -keyout /dev/stdout "
-            "-out /dev/stdout -days 1 -nodes -subj /CN=localhost 2>/dev/null");
+        string pem;
+        try {
+            pem = backquote("openssl req -x509 -newkey rsa:2048 -keyout /dev/stdout "
+                "-out /dev/stdout -days 1 -nodes -subj /CN=localhost 2>/dev/null");
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip("openssl not available: " + ex.desc);
+            return;
+        }
+        if (!pem.val()) {
+            testSkip("openssl produced no output");
+            return;
+        }
         string key_pem = (pem =~ x/(-----BEGIN PRIVATE KEY-----[\s\S]+?-----END PRIVATE KEY-----)/)[0];
         string cert_pem = (pem =~ x/(-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----)/)[0];
         key = new SSLPrivateKey(key_pem);
@@ -111,14 +121,14 @@ public class QuicHandlerPropagationTest inherits QUnit::Test {
 
         # 1. Add a handler to the HTTPS listener via addHandlerToListenerID
         hash<auto> listeners = server.getListeners();
-        int https_lid;
+        *int https_lid;
         foreach hash<auto> l in (listeners.pairIterator()) {
             if (l.value.port == https_port && l.value.name !~ /^quic-/) {
                 https_lid = l.value.id;
                 break;
             }
         }
-        @assert(https_lid);
+        @assert(exists https_lid);
 
         server.addHandlerToListenerID(https_lid, "test-api",
             <HttpHandlerConfigInfo>{
@@ -129,14 +139,14 @@ public class QuicHandlerPropagationTest inherits QUnit::Test {
 
         # 2. Verify the handler works via HTTP/2 (TCP/TLS)
         RestClientIo::RestClientIo h2_client({"url": https_url, "data": "auto",
-            "error_passthru": True, "protocol": "h2"});
+            "error_passthru": True, "allow_any_response": True, "protocol": "h2"});
         hash<auto> h2_resp = h2_client.restGet("/test-api");
         assertEq(200, h2_resp.status_code, "HTTP/2 handler responds with 200");
         assertEq("test-api-response", h2_resp.body, "HTTP/2 handler returns correct body");
 
         # 3. Verify the handler also works via HTTP/3 (QUIC)
         RestClientIo::RestClientIo h3_client({"url": https_url, "data": "auto",
-            "error_passthru": True, "protocol": "h3"});
+            "error_passthru": True, "allow_any_response": True, "protocol": "h3"});
         hash<auto> h3_resp = h3_client.restGet("/test-api");
         assertEq(200, h3_resp.status_code, "HTTP/3 handler responds with 200");
         assertEq("test-api-response", h3_resp.body.typeCode() == NT_BINARY ? binary_to_string(h3_resp.body) : h3_resp.body,

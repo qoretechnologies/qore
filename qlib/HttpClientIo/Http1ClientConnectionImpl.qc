@@ -64,8 +64,12 @@ public class Http1ClientConnection inherits HttpClientConnection {
         self.connect_timeout = connect_timeout;
         self.logger = logger;
         self.proxy_info = proxy_info;
-        # HTTP/1.1 is serial — enforce max 1 concurrent stream
-        self.max_concurrent_streams = max_streams > 0 ? max_streams : 1;
+        # HTTP/1.1 is serial — only 1 concurrent stream is supported
+        if (max_streams > 1) {
+            throw "HTTP1-OPTION-ERROR",
+                sprintf("HTTP/1.1 connections support only 1 concurrent stream, got %d", max_streams);
+        }
+        self.max_concurrent_streams = 1;
         self.last_activity = now_us();
         connection_id = allocateConnectionId();
 

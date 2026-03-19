@@ -1909,9 +1909,8 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
         timer_info_map.clear();
 
         // Deliver cancel results to all remaining cache entries so that
-        // exec() callers blocked on q->shift() are unblocked during shutdown.
+        // callers blocked on callback delivery are unblocked during shutdown.
         // Collect entries under lock, deliver outside lock to avoid deadlock.
-        std::vector<PollInfo> exit_cancel_pinfos;
         for (auto& [key, pinfo] : cache) {
             exit_cancel_pinfos.push_back(pinfo);
             pinfo = PollInfo();
