@@ -933,20 +933,31 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         Counter cnt(5);
         list<hash<RestClient::RestResponseInfo>> results = ();
         Mutex mtx();
+        *hash<ExceptionInfo> bg_ex;
         for (int i = 0; i < 5; ++i) {
             int idx = i;
             background sub () {
                 on_exit cnt.dec();
-                hash<RestClient::RestResponseInfo> resp =
-                    rest.restGet(sprintf("/api/item/%d", idx));
-                {
+                try {
+                    hash<RestClient::RestResponseInfo> resp =
+                        rest.restGet(sprintf("/api/item/%d", idx));
+                    {
+                        AutoLock al(mtx);
+                        push results, resp;
+                    }
+                } catch (hash<ExceptionInfo> ex) {
                     AutoLock al(mtx);
-                    push results, resp;
+                    if (!bg_ex) {
+                        bg_ex = ex;
+                    }
                 }
             }();
         }
         cnt.waitForZero();
 
+        if (bg_ex) {
+            throw bg_ex.err, bg_ex.desc;
+        }
         assertEq(5, results.size());
         for (int i = 0; i < 5; ++i) {
             assertEq(200, results[i].status_code,

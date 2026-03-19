@@ -27,6 +27,7 @@
 %modern
 
 %requires RestClient
+%requires RestClientIo
 %requires Swagger
 %requires Util
 %requires Mime
@@ -55,38 +56,27 @@ class RestCmd {
 
         #! program options
         const Opts = {
-            "cert":          "C,cert=s",
             "conn":          "c,connection=s",
-            "client_id":     "client_id=s",
-            "client_secret": "client_secret=s",
             "fullex":        "E,full-exception",
             "sendenc":       "e,send-encoding:s",
             "ping":          "g,ping=s",
             "poll_ping":     "G,poll-ping=s",
-            "grant_type":    "grant-type=s",
             "header":        "H,header=s@",
-            "oauth2":        "O=s@",
             "output":        "o,output=s",
             "ignoreerr":     "i,ignore-errors",
-            "key":           "k,key=s",
-            "keypass":       "K,keypass=s",
-            "lit":           "l,literal:i+",
             "list":          "L,list",
             "proxy":         "P,proxy-url=s",
             "basepath":      "p,base-path=s",
-            "reformat":      "R,reformat",
             "data":          "S,serialization=s",
             "swagger":       "s,swagger=s",
             "to":            "T,timeout=i",
             "token":         "t,token=s",
-            "token_url":     "token_url=s",
             "userpass":      "u,userpass=s",
             "verbose":       "v,verbose:i+",
             "verify_cert":   "V,verify-cert",
             "lax":           "X,lax-parsing",
             "example":       "x,example:s",
             "tokentype":     "y,token-type=s",
-            "httpver":       "A,http-version=s",
 
             "help":          "h,help",
         };
@@ -247,8 +237,9 @@ class RestCmd {
             thread_exit;
         }
 
-        RestClient rest;
+        RestClient::AbstractRestClient rest;
         string request_path;
+        string rest_url;
 
         if (opt.conn) {
             try {
@@ -265,22 +256,8 @@ class RestCmd {
                 request_path = body;
                 body = shift ARGV;
 
-                rest = conn.get(False);
-                # if the request path is a full URL, override the connection URL
-                if (request_path =~ /^http/) {
-                    rest.setURL(request_path);
-                    request_path = "";
-                } else if (request_path[0] == "/") {
-                    # if the path is absolute, then override the connection path
-                    rest.setConnectionPath();
-                }
-
-                if (opt.to) {
-                    rest.setTimeout(opt.to * 1000);
-                }
-                if (opt.httpver) {
-                    rest.setHTTPVersion(opt.httpver);
-                }
+                rest = conn.getAsync(False);
+                rest_url = conn.url;
             } catch (hash<ExceptionInfo> ex) {
                 if (opt.fullex) {
                     stderr.printf("%s\n", get_exception_string(ex));
@@ -297,14 +274,16 @@ class RestCmd {
                 opts.url += sprintf("%s:%s@", url_info.username, url_info.password);
             }
             opts.url += url_info.host;
-            if ((url_info.port != 80 && url_info.protocol == "http")
-                || (url_info.port != 443 && url_info.protocol == "https")) {
+            if (url_info.port
+                    && ((url_info.port != 80 && url_info.protocol == "http")
+                        || (url_info.port != 443 && url_info.protocol == "https"))) {
                 opts.url += sprintf(":%d", url_info.port);
             }
             opts.url += "/";
 
-            if (opt.proxy)
+            if (opt.proxy) {
                 opts.proxy = opt.proxy;
+            }
 
             if (opt.to) {
                 int to = opt.to * 1000;
@@ -314,59 +293,22 @@ class RestCmd {
                 };
             }
 
-            if (opt.cert) {
-                opts.ssl_cert_path = opt.cert;
-                opts.ssl_key_path = opt.key ?? opt.cert;
-                opts.ssl_key_password = opt.keypass;
+            if (opt.verify_cert) {
+                opts.ssl_verify_mode = SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT;
             }
-            if (opt.httpver) {
-                opts.http_version = opt.httpver;
-            }
-            rest = new RestClient(opts);
+
+            rest_url = opts.url;
+            rest = new RestClientIo::RestClientIo(opts);
         }
 
         if (opt.token) {
             rest.setToken(opt.tokentype ?? "Bearer", opt.token);
         } else if (opt.userpass) {
             (*string user, *string pass) = (opt.userpass =~ x/^([^:]+)(?::(.*))?$/);
-            rest.setUserPassword(user, pass ?? "");
-        } else {
-            hash<auto> auth_opts;
-            if (opt.client_id) {
-                auth_opts.oauth2_client_id = opt.client_id;
-            }
-            if (opt.client_secret) {
-                auth_opts.oauth2_client_secret = opt.client_secret;
-            }
-            if (opt.grant_type) {
-                auth_opts.oauth2_grant_type = opt.grant_type;
-            }
-            if (opt.token_url) {
-                auth_opts.oauth2_token_url = opt.token_url;
-            }
-            foreach string val in (opt.oauth2) {
-                string type = extract val, 0, 1;
-                if (val[0] == "=") {
-                    splice val, 0, 1;
-                }
-                switch (type.upr()) {
-                    case "I":
-                        auth_opts.oauth2_client_id = val;
-                        break;
-                    case "S":
-                        auth_opts.oauth2_client_secret = val;
-                        break;
-                    case "G":
-                        auth_opts.oauth2_grant_type = val;
-                        break;
-                    case "T":
-                        auth_opts.oauth2_token_url = val;
-                        break;
-                }
-            }
-            if (auth_opts) {
-                rest.setOAuth2Options(auth_opts);
-            }
+            # encode Basic auth as a header
+            rest.addDefaultHeaders({
+                "Authorization": "Basic " + make_base64_string(user + ":" + (pass ?? "")),
+            });
         }
 
         if (opt.header) {
@@ -414,43 +356,29 @@ class RestCmd {
             rest.setSendEncoding(opt.sendenc);
         }
 
-        rest.setLogger(getLogger());
-
-        hash<auto> info;
-        #printf("body: %y\n", body);
         try {
-            hash<auto> h;
-            on_exit if (opt.lit && info) {
-                showRestRequest(info, body, opt);
-                showRestResponse(info, h.body, opt);
-            }
+            hash<RestResponseInfo> h;
 
-            if (opt.verify_cert) {
-                rest.setSslVerifyMode(SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT);
-                rest.connect();
-            }
-
-            on_error rethrow $1.err, sprintf("%s (using url: %y request path: %y)", $1.desc, rest.getURL(),
+            on_error rethrow $1.err, sprintf("%s (using url: %y request path: %y)", $1.desc, rest_url,
                 request_path ?? "");
-            h = rest.doRequest(meth, request_path ?? "", body, \info);
-            if ((*string fn = (h."content-disposition" =~ x/filename="([^"]+)"/)[0]).val()) {
-                if (!opt.output.val()) {
-                    opt.output = fn;
-                } else {
-                    printf("Overriding filename %y -> %y\n", fn, opt.output);
-                }
-            }
-            if (!opt.lit && !exists opt.output) {
+            h = rest.restDoRequest(meth, request_path ?? "", body);
+            if (!exists opt.output) {
                 printf("%Y\n", h.body);
             }
             if (opt.output) {
-                if (*data output_data = info."response-body-raw") {
+                auto output_data = h.body;
+                if (exists output_data) {
                     File f();
                     f.open2(opt.output, O_CREAT | O_TRUNC | O_WRONLY);
-                    f.write(output_data);
-                    int len = output_data.size();
-                    printf("Saved output to %y; %y; %d byte%s\n", opt.output,
-                        info."response-headers"."content-type", len, len == 1 ? "" : "s");
+                    if (output_data.typeCode() == NT_STRING) {
+                        f.write(output_data);
+                    } else if (output_data.typeCode() == NT_BINARY) {
+                        f.write(output_data);
+                    } else {
+                        f.write(make_json(output_data));
+                    }
+                    printf("Saved output to %y; %d byte%s\n", opt.output,
+                        output_data.size(), output_data.size() == 1 ? "" : "s");
                 } else {
                     stderr.print("No output to save\n");
                 }
@@ -459,28 +387,22 @@ class RestCmd {
             if (opt.fullex) {
                 stderr.printf("%s\n", get_exception_string(ex));
             } else {
-                if (ex.err == "DESERIALIZATION-ERROR"
-                    && info."response-headers"."content-type" == "text/html"
-                    && info."response-body") {
-                    stderr.printf("%s\n%s\n", info."response-uri", html_decode(info."response-body"));
-                } else {
-                    stderr.printf("%s: %s: %s", rest.getURL(), ex.err, ex.desc);
-                    if (ex.arg) {
-                        stderr.print(": ");
-                        if (ex.arg.body.typeCode() == NT_STRING) {
-                            trim ex.arg.body;
-                            stderr.print(ex.arg.body);
+                stderr.printf("%s: %s: %s", rest_url, ex.err, ex.desc);
+                if (ex.arg) {
+                    stderr.print(": ");
+                    if (ex.arg.body.typeCode() == NT_STRING) {
+                        trim ex.arg.body;
+                        stderr.print(ex.arg.body);
+                    } else {
+                        if (ex.arg.typeCode() == NT_STRING) {
+                            trim ex.arg;
+                            stderr.printf("%y", ex.arg);
                         } else {
-                            if (ex.arg.typeCode() == NT_STRING) {
-                                trim ex.arg;
-                                stderr.printf("%y", ex.arg);
-                            } else {
-                                stderr.printf("%y", ex.arg);
-                            }
+                            stderr.printf("%y", ex.arg);
                         }
                     }
-                    stderr.print("\n");
                 }
+                stderr.print("\n");
             }
         }
     }
@@ -552,116 +474,20 @@ class RestCmd {
         return logger;
     }
 
-    private showRestRequest(hash info, any args, *hash opt) {
-        printf("> %s\n", info."request-uri");
-        if (opt.lit > 1)
-            printf("> %Y\n", info.headers);
-        if (info."request-body") {
-            *string str;
-            if (opt.reformat) {
-                switch (info."request-serialization") {
-%ifndef NoXml
-                    case "xml": str = make_xmlrpc_value(args, XGF_ADD_FORMATTING); break;
-                    case "rawxml": str = make_xml(args, XGF_ADD_FORMATTING); break;
-%endif
-%ifndef NoJson
-                    case "json": str = make_json(args, JGF_ADD_FORMATTING); break;
-%endif
-%ifndef NoYaml
-                    case "yaml": str = trim(make_yaml(args, YAML::BlockStyle)); break;
-%endif
-                    case "url": str = mime_get_form_urlencoded_string(args); break;
-                    default: str = getBody(info); break;
-                }
-            }
-            else
-                str = getBody(info);
-            printf("> %s\n", str);
-        }
-    }
-
-    private showRestResponse(hash info, any rv, *hash opt) {
-        if (!info."response-uri")
-            return;
-        printf("< %s\n", info."response-uri");
-        if (opt.lit > 1)
-            printf("< %Y\n", info."response-headers" - "body");
-        if (info."response-body") {
-            if (!exists rv)
-                rv = info."response-body";
-            string str;
-            switch (info."response-serialization") {
-%ifndef NoXml
-                case "xml": str = make_xmlrpc_value(rv, opt.reformat ? XGF_ADD_FORMATTING : NOTHING); break;
-                case "rawxml": str = make_xml(rv, opt.reformat ? XGF_ADD_FORMATTING : NOTHING); break;
-%endif
-%ifndef NoJson
-                case "json": str = make_json(rv, opt.reformat ? JGF_ADD_FORMATTING : NOTHING); break;
-%endif
-%ifndef NoYaml
-                case "yaml": str = trim(make_yaml(rv, opt.reformat ? YAML::BlockStyle : NOTHING)); break;
-%endif
-                case "url": str = mime_get_form_urlencoded_string(rv); break;
-                default:
-                    if (info."response-body".typeCode() == NT_STRING)
-                        str = trim(info."response-body");
-                    else if (info."response-body".typeCode() == NT_BINARY)
-                        str = "<" + info."response-body".toHex() + ">";
-                    break;
-            }
-            printf("< %s\n", str);
-        }
-    }
-
-    private string getBody(hash info) {
-        switch (info.headers."Content-Encoding") {
-            case "deflate":
-            case "x-deflate":
-                info."request-body" = uncompress_to_string(info."request-body");
-                break;
-            case "gzip":
-            case "x-gzip":
-                info."request-body" = gunzip_to_string(info."request-body");
-                break;
-            case "bzip2":
-            case "x-bzip2":
-                info."request-body" = bunzip2_to_string(info."request-body");
-                break;
-            case "identity":
-                info."request-body" = binary_to_string(info."request-body");
-                break;
-            case NOTHING:
-                break;
-            default:
-                throw "UNKNOWN-CONTENT-ENCODING", sprintf("unknown Content-Encoding %y used to send message",
-                    info.headers."Content-Encoding");
-        }
-        return trim(info."request-body");
-    }
-
     static usage() {
         printf("usage: %s [options] get|put|post|delete URL ['qore msg body']
- -A, --http-version=ARG     set HTTP version: auto, 1.0, 1.1, 2.0, 3.0
- -c, --cert=ARG             client X.509 certificate to use
+ -c, --connection=ARG       use the given connection name
  -E, --full-exception       show full exception output
  -e, --send-encoding[=ARG]  set compression in outgoing request
                             [ARG=gzip,deflate,bzip2,identity]
- -G, --poll-ping=ARG        ping the given connection with with I/O polling and exit
+ -G, --poll-ping=ARG        ping the given connection with I/O polling and exit
  -g, --ping=ARG             ping the given connection and exit
  -H, --header=ARG           send header with request
  -i, --ignore-errors        ignore HTTP errors and show the literal response in all cases
- -K, --keypass=ARG          password to use for key for client certificate
- -k, --key=ARG              key to use for client certificate
  -L, --list                 list URI paths and methods supported by the schema
- -l, --literal              show literal API calls (more l's, more info)
  -o, --output=ARG           save output with the given file name
- -OG,--grant-type=ARG       set OAuth2 grant type
- -OI,--client-id=ARG        set OAuth2 client ID
- -OS,--client-secret=ARG    set OAuth2 client secret
- -OT,--token-url=ARG        set OAuth2 token URL
  -P, --proxy-url=ARG        set the proxy URL (ex: http://proxy:port)
  -p, --base-path=ARG        override the base path for Swagger schemas
- -R, --reformat             reformat data with -l+ for better readability
  -S, --serialization=ARG    set REST data serialization type:
                             auto, json, yaml, xml, rawxml, url
  -s, --swagger=ARG          use the given Swagger 2.0 schema for validation
@@ -674,7 +500,11 @@ class RestCmd {
                               q: generate Qore example (default data)
                               r<code>: generate response (default request)
  -y, --token-type=ARG       the type of token (default: Bearer)
+ -v, --verbose              show verbose output (repeat for more detail)
  -h, --help                 this help text
+
+Note: uses RestClientIo for multiplexed HTTP/2, HTTP/3, and HTTP/1.1 connections
+with automatic protocol selection and h2c fallback.
 ", get_script_name());
         exit(1);
     }

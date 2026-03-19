@@ -264,7 +264,16 @@ public class HttpClientConnection {
         }
 
         log(LoggerLevel::DEBUG, "submitting request: %s %s", method, path);
-        int stream_id = submitRequestImpl(method, path, headers, body, callback, ctx);
+        int stream_id;
+        try {
+            stream_id = submitRequestImpl(method, path, headers, body, callback, ctx);
+        } catch () {
+            # Mark connection as closed so it gets evicted from the pool
+            AutoLock al(lock);
+            state = HttpClientConnectionState::Closed;
+            ready_cond.broadcast();
+            rethrow;
+        }
         @assert(stream_id >= 0);
 
         # Release the pending reservation AFTER successful submit —

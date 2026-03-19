@@ -622,28 +622,16 @@ public class HttpClientConnectionManager {
             # operations if done under the lock
             HttpClientConnection conn = createConnection(url_info, key, protocol);
 
-            {
-                AutoWriteLock al(pool_lock);
-                if (shutdown) {
-                    # Manager shut down while we were creating the connection
-                    try { conn.close(); } catch () {}
-                    throw "HTTPCLIENT-SHUTDOWN", "connection manager is shutting down";
-                }
-
-                if (!pool.hasKey(key)) {
-                    pool{key} = ();
-                }
-                push pool{key}, conn;
-
+            # For plain HTTP h2c in auto mode: probe BEFORE adding to the pool
+            # to prevent other threads from acquiring the H2 connection during
+            # the probe window.  The probe connection is submitted to the
+            # controller (for I/O driving) but not exposed in the pool.
+            bool h2c_probed = False;
+            if (protocol == "h2" && url_info.protocol != "https" && opts.protocol == "auto") {
+                h2c_probed = True;
                 conn.setControllerRef(controller);
                 submitConnectionToController(key, conn);
-            }
 
-            # For plain HTTP h2c in auto mode: probe whether the server supports
-            # HTTP/2 prior knowledge by waiting for the connection to become ready
-            # with a short timeout.  If it doesn't become ready, the server likely
-            # only supports HTTP/1.1 — close the H2 connection and fall back.
-            if (protocol == "h2" && url_info.protocol != "https" && opts.protocol == "auto") {
                 bool h2c_ok = False;
                 try {
                     h2c_ok = conn.waitForReady(H2C_PROBE_TIMEOUT);
@@ -653,22 +641,32 @@ public class HttpClientConnectionManager {
                 if (!h2c_ok) {
                     log(LoggerLevel::DEBUG, "h2c probe failed for %s, falling back to HTTP/1.1", key);
                     try { conn.close(); } catch () {}
-                    removeConnectionFromPool(key, conn);
                     {
                         AutoWriteLock al(pool_lock);
                         cacheProtocol(key, "h1");
                     }
-                    # Create H1 connection instead
+                    # Create H1 replacement — this one hasn't been submitted yet
                     conn = createConnection(url_info, key, "h1");
-                    {
-                        AutoWriteLock al(pool_lock);
-                        if (!pool.hasKey(key)) {
-                            pool{key} = ();
-                        }
-                        push pool{key}, conn;
-                        conn.setControllerRef(controller);
-                        submitConnectionToController(key, conn);
-                    }
+                    h2c_probed = False;
+                }
+            }
+
+            {
+                AutoWriteLock al(pool_lock);
+                if (shutdown) {
+                    try { conn.close(); } catch () {}
+                    throw "HTTPCLIENT-SHUTDOWN", "connection manager is shutting down";
+                }
+
+                if (!pool.hasKey(key)) {
+                    pool{key} = ();
+                }
+                push pool{key}, conn;
+
+                # Only submit to controller if not already submitted during h2c probe
+                if (!h2c_probed) {
+                    conn.setControllerRef(controller);
+                    submitConnectionToController(key, conn);
                 }
             }
 
