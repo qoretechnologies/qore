@@ -63,9 +63,6 @@ void qore_hash_private::setHashDecl(const TypedHashDecl* hd) {
     // This allows hashes to transition between hashdecl and complex types without losing type info
     if (hd && complexTypeInfo) {
         // Setting a new hashdecl: clear the complex type
-        fprintf(stderr, "TRACE_setHashDecl: hash_id=%p, setting hashdecl=%s, clearing complexTypeInfo=%p\n",
-            (void*)this, hd->getName(), (void*)complexTypeInfo);
-        fflush(stderr);
         complexTypeInfo = nullptr;
     }
     if (hashdecl) {
@@ -387,13 +384,6 @@ QoreHashNode* qore_hash_private::newComplexHashFromHash(const QoreTypeInfo* type
     // mark new hash with new type
     assert(init->is_unique());
 
-    // TRACE: Log complex hash conversion
-    if (init->priv->hashdecl && strcmp(init->priv->hashdecl->getName(), "DataProviderExpressionInfo") == 0) {
-        fprintf(stderr, "TRACE_newComplexHashFromHash: hash_id=%p, hashdecl=%s, setting complexTypeInfo=%p\n",
-            (void*)init->priv, init->priv->hashdecl->getName(), (void*)typeInfo);
-        fflush(stderr);
-    }
-
     init->priv->complexTypeInfo = typeInfo;
     // Clear any hashdecl binding - complex hash types use complexTypeInfo, not hashdecl
     if (init->priv->hashdecl) {
@@ -404,11 +394,6 @@ QoreHashNode* qore_hash_private::newComplexHashFromHash(const QoreTypeInfo* type
 
 int qore_hash_private::checkKey(const char* key, ExceptionSink* xsink) const {
     if (hashdecl && !typed_hash_decl_private::get(*hashdecl)->findMember(key)) {
-        // Log the hash ID and state for tracing
-        fprintf(stderr, "CORRUPTION_POINT: ERROR HASH STATE: hash_id=%p, hashdecl=%s, complexTypeInfo=%p, key=%s\n",
-            (void*)this, hashdecl->getName(), (void*)complexTypeInfo, key);
-        fflush(stderr);
-
         xsink->raiseException("INVALID-MEMBER", "error accessing unknown member '%s' of hashdecl '%s'", key,
             hashdecl->getName());
         return -1;
@@ -419,12 +404,6 @@ int qore_hash_private::checkKey(const char* key, ExceptionSink* xsink) const {
 
 QoreValue qore_hash_private::getKeyValueExistence(const char* key, bool& exists, ExceptionSink* xsink) const {
     assert(key);
-
-    // Log hash type state when accessing with problematic key "=="
-    if (strcmp(key, "==") == 0 && hashdecl) {
-        fprintf(stderr, "AT_getKeyValueExistence: hash=%p, hashdecl=%s, complexTypeInfo=%p, key=%s\n",
-            (void*)this, hashdecl->getName(), (void*)complexTypeInfo, key);
-    }
 
     if (checkKey(key, xsink)) {
         return QoreValue();
