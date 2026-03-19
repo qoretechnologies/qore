@@ -94,17 +94,8 @@ printf("Lead: %s\n", result.body.data[0].display_name);
 #! the CloseRestClient namespace contains all the objects in the CloseRestClient module
 public namespace CloseRestClient {
 
-#! This class provides the REST client API for communication with Close CRM servers
-/** Close uses a REST API at https://api.close.com/api/v1 with OAuth2 or API key authentication.
-
-    @par Authentication:
-    - OAuth2 with Bearer tokens (preferred)
-    - API key via HTTP Basic Auth (apikey as username, empty password)
-
-    @par API Structure:
-    All endpoints are under /api/v1/ (included in the base URL)
-*/
-public class CloseRestClient inherits RestClient::RestClient {
+#! Common base class for CloseRestClient functionality
+public class CloseRestClientBase {
     public {
         #! Default Close API URL
         const DefaultUrl = "https://api.close.com/api/v1";
@@ -163,29 +154,6 @@ public class CloseRestClient inherits RestClient::RestClient {
         };
     }
 
-    #! creates the object with the given options
-    /**
-        @par Example:
-        @code{.py}
-CloseRestClient close({
-    "oauth2_client_id": "your-client-id",
-    "oauth2_client_secret": "your-client-secret",
-    "oauth2_refresh_token": "your-refresh-token",
-});
-        @endcode
-
-        @param opts valid options are all the options for the @ref RestClient::RestClient "RestClient" class
-
-        @param do_not_connect if \c False (the default), then a connection will be immediately established to the
-        remote server
-
-        @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data serialization, etc
-    */
-    constructor(hash<auto> opts, *softbool do_not_connect)
-            : RestClient(CloseRestClient::getOptions(opts), do_not_connect) {
-        setAssumedEncoding("UTF-8");
-    }
-
     #! returns options for @ref CloseRestClient::CloseRestClient::constructor()
     static hash<auto> getOptions(hash<auto> opts) {
         hash<auto> rv = DefaultOptions + opts;
@@ -212,6 +180,41 @@ CloseRestClient close({
         }
 
         return rv;
+    }
+}
+
+#! This class provides the REST client API for communication with Close CRM servers
+/** Close uses a REST API at https://api.close.com/api/v1 with OAuth2 or API key authentication.
+
+    @par Authentication:
+    - OAuth2 with Bearer tokens (preferred)
+    - API key via HTTP Basic Auth (apikey as username, empty password)
+
+    @par API Structure:
+    All endpoints are under /api/v1/ (included in the base URL)
+*/
+public class CloseRestClient inherits RestClient::RestClient, CloseRestClientBase {
+    #! creates the object with the given options
+    /**
+        @par Example:
+        @code{.py}
+CloseRestClient close({
+    "oauth2_client_id": "your-client-id",
+    "oauth2_client_secret": "your-client-secret",
+    "oauth2_refresh_token": "your-refresh-token",
+});
+        @endcode
+
+        @param opts valid options are all the options for the @ref RestClient::RestClient "RestClient" class
+
+        @param do_not_connect if \c False (the default), then a connection will be immediately established to the
+        remote server
+
+        @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data serialization, etc
+    */
+    constructor(hash<auto> opts, *softbool do_not_connect)
+            : RestClient(CloseRestClientBase::getOptions(opts), do_not_connect) {
+        setAssumedEncoding("UTF-8");
     }
 }
 
@@ -250,35 +253,35 @@ public class CloseRestConnection inherits RestClient::RestConnection {
                 },
                 "data": RestConnection::ConnectionScheme.options."data"
                 + <ConnectionOptionInfo>{
-                    "default_value": CloseRestClient::DefaultData,
+                    "default_value": CloseRestClientBase::DefaultData,
                 },
                 "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
                 + <ConnectionOptionInfo>{
-                    "default_value": CloseRestClient::DefaultPingHeaders,
+                    "default_value": CloseRestClientBase::DefaultPingHeaders,
                 },
                 "ping_method": RestConnection::ConnectionScheme.options."ping_method"
                 + <ConnectionOptionInfo>{
-                    "default_value": CloseRestClient::DefaultPingMethod,
+                    "default_value": CloseRestClientBase::DefaultPingMethod,
                 },
                 "ping_path": RestConnection::ConnectionScheme.options."ping_path"
                 + <ConnectionOptionInfo>{
-                    "default_value": CloseRestClient::DefaultPingPath,
+                    "default_value": CloseRestClientBase::DefaultPingPath,
                 },
                 "oauth2_auth_url": RestConnection::ConnectionScheme.options.oauth2_auth_url
                 + <ConnectionOptionInfo>{
-                    "default_value": CloseRestClient::DefaultAuthUrl,
+                    "default_value": CloseRestClientBase::DefaultAuthUrl,
                 },
                 "oauth2_grant_type": RestConnection::ConnectionScheme.options.oauth2_grant_type
                 + <ConnectionOptionInfo>{
-                    "default_value": CloseRestClient::DefaultGrantType,
+                    "default_value": CloseRestClientBase::DefaultGrantType,
                 },
                 "oauth2_scopes": RestConnection::ConnectionScheme.options.oauth2_scopes
                 + <ConnectionOptionInfo>{
-                    "default_value": CloseRestClient::DefaultScopes,
+                    "default_value": CloseRestClientBase::DefaultScopes,
                 },
                 "oauth2_token_url": RestConnection::ConnectionScheme.options.oauth2_token_url
                 + <ConnectionOptionInfo>{
-                    "default_value": CloseRestClient::DefaultTokenUrl,
+                    "default_value": CloseRestClientBase::DefaultTokenUrl,
                 },
             },
             "required_options": "oauth2_client_id,oauth2_client_secret",
@@ -296,7 +299,7 @@ public class CloseRestConnection inherits RestClient::RestConnection {
 
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option
     */
-    constructor(string name, string description, string url = CloseRestClient::DefaultUrl,
+    constructor(string name, string description, string url = CloseRestClientBase::DefaultUrl,
             hash<auto> attributes = {}, hash<auto> options = {})
             : RestConnection(name, description, url, attributes, options) {
     }
@@ -331,13 +334,13 @@ public class CloseRestConnection inherits RestClient::RestConnection {
     *hash<auto> getConnectionOptions(*hash<auto> rtopts) {
         hash<auto> rv = RestConnection::getConnectionOptions(rtopts);
         # Always set OAuth2 URLs
-        rv.oauth2_auth_url = CloseRestClient::DefaultAuthUrl;
-        rv.oauth2_token_url = CloseRestClient::DefaultTokenUrl;
+        rv.oauth2_auth_url = CloseRestClientBase::DefaultAuthUrl;
+        rv.oauth2_token_url = CloseRestClientBase::DefaultTokenUrl;
         if (!rv.oauth2_grant_type) {
-            rv.oauth2_grant_type = CloseRestClient::DefaultGrantType;
+            rv.oauth2_grant_type = CloseRestClientBase::DefaultGrantType;
         }
         if (!rv.oauth2_scopes) {
-            rv.oauth2_scopes = CloseRestClient::DefaultScopes;
+            rv.oauth2_scopes = CloseRestClientBase::DefaultScopes;
         }
         return rv;
     }
@@ -413,13 +416,13 @@ public class CloseRestConnection inherits RestClient::RestConnection {
 #! REST client for Close CRM REST API using multiplexed HTTP connections
 /** @see CloseRestClient for more information
 */
-public class CloseRestClientIo inherits RestClientIo::RestClientIo {
+public class CloseRestClientIo inherits RestClientIo::RestClientIo, CloseRestClientBase {
     #! Creates the object with the given options
     /** @param opts constructor options
         @param shared_mgr optional shared connection manager
     */
     constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
-            : RestClientIo(CloseRestClient::getOptions(opts), shared_mgr) {
+            : RestClientIo(CloseRestClientBase::getOptions(opts), shared_mgr) {
     }
 }
 }

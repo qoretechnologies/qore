@@ -94,18 +94,8 @@ printf("Merchant: %s\n", result.body.merchant[0].business_name);
 #! the SquareRestClient namespace contains all the objects in the SquareRestClient module
 public namespace SquareRestClient {
 
-#! This class provides the REST client API for communication with Square servers
-/** Square uses a REST API at https://connect.squareup.com/v2 with OAuth2 authentication.
-
-    @par Authentication:
-    - OAuth2 with Bearer tokens
-    - Access tokens expire and are refreshed automatically
-    - Refresh tokens are long-lived
-
-    @par API Structure:
-    All endpoints are under /v2/ (included in the base URL)
-*/
-public class SquareRestClient inherits RestClient::RestClient {
+#! Common base class for SquareRestClient functionality
+public class SquareRestClientBase {
     public {
         #! Default Square API URL
         const DefaultUrl = "https://connect.squareup.com/v2";
@@ -177,6 +167,39 @@ public class SquareRestClient inherits RestClient::RestClient {
         };
     }
 
+    #! returns options for @ref SquareRestClient::SquareRestClient::constructor()
+    static hash<auto> getOptions(hash<auto> opts) {
+        hash<auto> rv = DefaultOptions + opts;
+
+        # Check if token-only mode (token provided without OAuth2 credentials)
+        bool token_only = opts.token && !opts.oauth2_client_id && !opts.oauth2_client_secret
+            && !opts.oauth2_refresh_token;
+
+        if (!token_only && opts.oauth2_client_id) {
+            rv += OAuth2Options;
+        } else if (opts.token) {
+            # Bearer token mode
+            rv.headers.Authorization = "Bearer " + opts.token;
+            # Remove token from opts so RestClient doesn't add another "Bearer" prefix
+            remove rv.token;
+        }
+
+        return rv;
+    }
+}
+
+#! This class provides the REST client API for communication with Square servers
+/** Square uses a REST API at https://connect.squareup.com/v2 with OAuth2 authentication.
+
+    @par Authentication:
+    - OAuth2 with Bearer tokens
+    - Access tokens expire and are refreshed automatically
+    - Refresh tokens are long-lived
+
+    @par API Structure:
+    All endpoints are under /v2/ (included in the base URL)
+*/
+public class SquareRestClient inherits RestClient::RestClient, SquareRestClientBase {
     #! creates the object with the given options
     /**
         @par Example:
@@ -196,28 +219,8 @@ SquareRestClient square({
         @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data serialization, etc
     */
     constructor(hash<auto> opts, *softbool do_not_connect)
-            : RestClient(SquareRestClient::getOptions(opts), do_not_connect) {
+            : RestClient(SquareRestClientBase::getOptions(opts), do_not_connect) {
         setAssumedEncoding("UTF-8");
-    }
-
-    #! returns options for @ref SquareRestClient::SquareRestClient::constructor()
-    static hash<auto> getOptions(hash<auto> opts) {
-        hash<auto> rv = DefaultOptions + opts;
-
-        # Check if token-only mode (token provided without OAuth2 credentials)
-        bool token_only = opts.token && !opts.oauth2_client_id && !opts.oauth2_client_secret
-            && !opts.oauth2_refresh_token;
-
-        if (!token_only && opts.oauth2_client_id) {
-            rv += OAuth2Options;
-        } else if (opts.token) {
-            # Bearer token mode
-            rv.headers.Authorization = "Bearer " + opts.token;
-            # Remove token from opts so RestClient doesn't add another "Bearer" prefix
-            remove rv.token;
-        }
-
-        return rv;
     }
 }
 
@@ -248,39 +251,39 @@ public class SquareRestConnection inherits RestClient::RestConnection {
             "options": RestConnection::ConnectionScheme.options + {
                 "data": RestConnection::ConnectionScheme.options."data"
                 + <ConnectionOptionInfo>{
-                    "default_value": SquareRestClient::DefaultData,
+                    "default_value": SquareRestClientBase::DefaultData,
                 },
                 "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
                 + <ConnectionOptionInfo>{
-                    "default_value": SquareRestClient::DefaultPingHeaders,
+                    "default_value": SquareRestClientBase::DefaultPingHeaders,
                 },
                 "ping_method": RestConnection::ConnectionScheme.options."ping_method"
                 + <ConnectionOptionInfo>{
-                    "default_value": SquareRestClient::DefaultPingMethod,
+                    "default_value": SquareRestClientBase::DefaultPingMethod,
                 },
                 "ping_path": RestConnection::ConnectionScheme.options."ping_path"
                 + <ConnectionOptionInfo>{
-                    "default_value": SquareRestClient::DefaultPingPath,
+                    "default_value": SquareRestClientBase::DefaultPingPath,
                 },
                 "oauth2_auth_args": RestConnection::ConnectionScheme.options.oauth2_auth_args
                 + <ConnectionOptionInfo>{
-                    "default_value": SquareRestClient::DefaultAuthArgs,
+                    "default_value": SquareRestClientBase::DefaultAuthArgs,
                 },
                 "oauth2_auth_url": RestConnection::ConnectionScheme.options.oauth2_auth_url
                 + <ConnectionOptionInfo>{
-                    "default_value": SquareRestClient::DefaultAuthUrl,
+                    "default_value": SquareRestClientBase::DefaultAuthUrl,
                 },
                 "oauth2_grant_type": RestConnection::ConnectionScheme.options.oauth2_grant_type
                 + <ConnectionOptionInfo>{
-                    "default_value": SquareRestClient::DefaultGrantType,
+                    "default_value": SquareRestClientBase::DefaultGrantType,
                 },
                 "oauth2_scopes": RestConnection::ConnectionScheme.options.oauth2_scopes
                 + <ConnectionOptionInfo>{
-                    "default_value": SquareRestClient::DefaultScopes,
+                    "default_value": SquareRestClientBase::DefaultScopes,
                 },
                 "oauth2_token_url": RestConnection::ConnectionScheme.options.oauth2_token_url
                 + <ConnectionOptionInfo>{
-                    "default_value": SquareRestClient::DefaultTokenUrl,
+                    "default_value": SquareRestClientBase::DefaultTokenUrl,
                 },
             },
             "required_options": "oauth2_client_id,oauth2_client_secret",
@@ -298,7 +301,7 @@ public class SquareRestConnection inherits RestClient::RestConnection {
 
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option
     */
-    constructor(string name, string description, string url = SquareRestClient::DefaultUrl,
+    constructor(string name, string description, string url = SquareRestClientBase::DefaultUrl,
             hash<auto> attributes = {}, hash<auto> options = {})
             : RestConnection(name, description, url, attributes, options) {
     }
@@ -333,16 +336,16 @@ public class SquareRestConnection inherits RestClient::RestConnection {
     *hash<auto> getConnectionOptions(*hash<auto> rtopts) {
         hash<auto> rv = RestConnection::getConnectionOptions(rtopts);
         # Always set OAuth2 URLs
-        rv.oauth2_auth_url = SquareRestClient::DefaultAuthUrl;
-        rv.oauth2_token_url = SquareRestClient::DefaultTokenUrl;
+        rv.oauth2_auth_url = SquareRestClientBase::DefaultAuthUrl;
+        rv.oauth2_token_url = SquareRestClientBase::DefaultTokenUrl;
         if (!rv.oauth2_grant_type) {
-            rv.oauth2_grant_type = SquareRestClient::DefaultGrantType;
+            rv.oauth2_grant_type = SquareRestClientBase::DefaultGrantType;
         }
         if (!rv.oauth2_scopes) {
-            rv.oauth2_scopes = SquareRestClient::DefaultScopes;
+            rv.oauth2_scopes = SquareRestClientBase::DefaultScopes;
         }
         if (!rv.oauth2_auth_args) {
-            rv.oauth2_auth_args = SquareRestClient::DefaultAuthArgs;
+            rv.oauth2_auth_args = SquareRestClientBase::DefaultAuthArgs;
         }
         return rv;
     }
@@ -418,13 +421,13 @@ public class SquareRestConnection inherits RestClient::RestConnection {
 #! REST client for Square REST API using multiplexed HTTP connections
 /** @see SquareRestClient for more information
 */
-public class SquareRestClientIo inherits RestClientIo::RestClientIo {
+public class SquareRestClientIo inherits RestClientIo::RestClientIo, SquareRestClientBase {
     #! Creates the object with the given options
     /** @param opts constructor options
         @param shared_mgr optional shared connection manager
     */
     constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
-            : RestClientIo(SquareRestClient::getOptions(opts), shared_mgr) {
+            : RestClientIo(SquareRestClientBase::getOptions(opts), shared_mgr) {
     }
 }
 }

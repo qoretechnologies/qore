@@ -113,23 +113,8 @@ printf("Product count: %d\n", result.body.data.product_count);
 #! the BigCommerceRestClient namespace contains all the objects in the BigCommerceRestClient module
 public namespace BigCommerceRestClient {
 
-#! This class provides the REST client API for communication with BigCommerce servers
-/** BigCommerce uses a REST API at https://api.bigcommerce.com/stores/{store_hash} with
-    X-Auth-Token authentication.
-
-    @par Authentication:
-    - **OAuth2 mode**: uses BigCommerce OAuth2 endpoints (authorization_code grant) to obtain
-      an access token; tokens are applied as \c X-Auth-Token headers (BigCommerce requirement)
-    - **Manual token mode**: accepts a pre-generated API access token from the BigCommerce
-      admin panel and applies it as the \c X-Auth-Token header
-    - BigCommerce OAuth2 tokens are permanent (no refresh flow needed)
-
-    @par API Structure:
-    - V3 endpoints under /v3/ (customers, products, catalog, blog, carts)
-    - V2 endpoints under /v2/ (orders, shipments)
-    - The base URL includes /stores/{store_hash} but no version prefix
-*/
-public class BigCommerceRestClient inherits RestClient::RestClient {
+#! Common base class for BigCommerceRestClient functionality
+public class BigCommerceRestClientBase {
     public {
         #! Default BigCommerce API URL base
         const DefaultApiHost = "https://api.bigcommerce.com";
@@ -197,6 +182,41 @@ public class BigCommerceRestClient inherits RestClient::RestClient {
         };
     }
 
+    #! returns options for @ref BigCommerceRestClient::BigCommerceRestClient::constructor()
+    static hash<auto> getOptions(hash<auto> opts) {
+        hash<auto> rv = DefaultOptions + opts;
+
+        # Build URL from store_hash
+        if (opts.store_hash) {
+            rv.url = sprintf("%s/stores/%s", DefaultApiHost, opts.store_hash);
+            remove rv.store_hash;
+        }
+
+        if (opts.oauth2_client_id) {
+            # OAuth2 mode: merge OAuth2 options
+            rv += OAuth2Options;
+        }
+        return rv;
+    }
+}
+
+#! This class provides the REST client API for communication with BigCommerce servers
+/** BigCommerce uses a REST API at https://api.bigcommerce.com/stores/{store_hash} with
+    X-Auth-Token authentication.
+
+    @par Authentication:
+    - **OAuth2 mode**: uses BigCommerce OAuth2 endpoints (authorization_code grant) to obtain
+      an access token; tokens are applied as \c X-Auth-Token headers (BigCommerce requirement)
+    - **Manual token mode**: accepts a pre-generated API access token from the BigCommerce
+      admin panel and applies it as the \c X-Auth-Token header
+    - BigCommerce OAuth2 tokens are permanent (no refresh flow needed)
+
+    @par API Structure:
+    - V3 endpoints under /v3/ (customers, products, catalog, blog, carts)
+    - V2 endpoints under /v2/ (orders, shipments)
+    - The base URL includes /stores/{store_hash} but no version prefix
+*/
+public class BigCommerceRestClient inherits RestClient::RestClient, BigCommerceRestClientBase {
     #! creates the object with the given options
     /**
         @par Example (OAuth2):
@@ -230,7 +250,7 @@ BigCommerceRestClient bc({
         serialization, etc
     */
     constructor(hash<auto> opts, *softbool do_not_connect)
-            : RestClient(BigCommerceRestClient::getOptions(opts), do_not_connect) {
+            : RestClient(BigCommerceRestClientBase::getOptions(opts), do_not_connect) {
         setAssumedEncoding("UTF-8");
         # Replace Authorization: Bearer with X-Auth-Token (BigCommerce requirement)
         if (token) {
@@ -272,23 +292,6 @@ BigCommerceRestClient bc({
 
         return rv;
     }
-
-    #! returns options for @ref BigCommerceRestClient::BigCommerceRestClient::constructor()
-    static hash<auto> getOptions(hash<auto> opts) {
-        hash<auto> rv = DefaultOptions + opts;
-
-        # Build URL from store_hash
-        if (opts.store_hash) {
-            rv.url = sprintf("%s/stores/%s", DefaultApiHost, opts.store_hash);
-            remove rv.store_hash;
-        }
-
-        if (opts.oauth2_client_id) {
-            # OAuth2 mode: merge OAuth2 options
-            rv += OAuth2Options;
-        }
-        return rv;
-    }
 }
 
 #! Class for BigCommerce REST connections; returns @ref BigCommerceRestClient objects
@@ -319,19 +322,19 @@ public class BigCommerceRestConnection inherits RestClient::RestConnection {
             "options": RestConnection::ConnectionScheme.options + {
                 "data": RestConnection::ConnectionScheme.options."data"
                 + <ConnectionOptionInfo>{
-                    "default_value": BigCommerceRestClient::DefaultData,
+                    "default_value": BigCommerceRestClientBase::DefaultData,
                 },
                 "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
                 + <ConnectionOptionInfo>{
-                    "default_value": BigCommerceRestClient::DefaultPingHeaders,
+                    "default_value": BigCommerceRestClientBase::DefaultPingHeaders,
                 },
                 "ping_method": RestConnection::ConnectionScheme.options."ping_method"
                 + <ConnectionOptionInfo>{
-                    "default_value": BigCommerceRestClient::DefaultPingMethod,
+                    "default_value": BigCommerceRestClientBase::DefaultPingMethod,
                 },
                 "ping_path": RestConnection::ConnectionScheme.options."ping_path"
                 + <ConnectionOptionInfo>{
-                    "default_value": BigCommerceRestClient::DefaultPingPath,
+                    "default_value": BigCommerceRestClientBase::DefaultPingPath,
                 },
                 "store_hash": <ConnectionOptionInfo>{
                     "display_name": "Store Hash",
@@ -345,23 +348,23 @@ public class BigCommerceRestConnection inherits RestClient::RestConnection {
                 },
                 "oauth2_auth_args": RestConnection::ConnectionScheme.options.oauth2_auth_args
                 + <ConnectionOptionInfo>{
-                    "default_value": BigCommerceRestClient::DefaultAuthArgs,
+                    "default_value": BigCommerceRestClientBase::DefaultAuthArgs,
                 },
                 "oauth2_auth_url": RestConnection::ConnectionScheme.options.oauth2_auth_url
                 + <ConnectionOptionInfo>{
-                    "default_value": BigCommerceRestClient::DefaultAuthUrl,
+                    "default_value": BigCommerceRestClientBase::DefaultAuthUrl,
                 },
                 "oauth2_grant_type": RestConnection::ConnectionScheme.options.oauth2_grant_type
                 + <ConnectionOptionInfo>{
-                    "default_value": BigCommerceRestClient::DefaultGrantType,
+                    "default_value": BigCommerceRestClientBase::DefaultGrantType,
                 },
                 "oauth2_scopes": RestConnection::ConnectionScheme.options.oauth2_scopes
                 + <ConnectionOptionInfo>{
-                    "default_value": BigCommerceRestClient::DefaultScopes,
+                    "default_value": BigCommerceRestClientBase::DefaultScopes,
                 },
                 "oauth2_token_url": RestConnection::ConnectionScheme.options.oauth2_token_url
                 + <ConnectionOptionInfo>{
-                    "default_value": BigCommerceRestClient::DefaultTokenUrl,
+                    "default_value": BigCommerceRestClientBase::DefaultTokenUrl,
                 },
             },
             "required_options": "store_hash",
@@ -393,7 +396,7 @@ public class BigCommerceRestConnection inherits RestClient::RestConnection {
 
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option
     */
-    constructor(string name, string description, string url = BigCommerceRestClient::DefaultApiHost,
+    constructor(string name, string description, string url = BigCommerceRestClientBase::DefaultApiHost,
             hash<auto> attributes = {}, hash<auto> options = {})
             : RestConnection(name, description, url, attributes, options) {
     }
@@ -431,16 +434,16 @@ public class BigCommerceRestConnection inherits RestClient::RestConnection {
     *hash<auto> getConnectionOptions(*hash<auto> rtopts) {
         hash<auto> rv = RestConnection::getConnectionOptions(rtopts);
         # Always set OAuth2 URLs (they are fixed for BigCommerce)
-        rv.oauth2_auth_url = BigCommerceRestClient::DefaultAuthUrl;
-        rv.oauth2_token_url = BigCommerceRestClient::DefaultTokenUrl;
+        rv.oauth2_auth_url = BigCommerceRestClientBase::DefaultAuthUrl;
+        rv.oauth2_token_url = BigCommerceRestClientBase::DefaultTokenUrl;
         if (!rv.oauth2_grant_type) {
-            rv.oauth2_grant_type = BigCommerceRestClient::DefaultGrantType;
+            rv.oauth2_grant_type = BigCommerceRestClientBase::DefaultGrantType;
         }
         if (!rv.oauth2_scopes) {
-            rv.oauth2_scopes = BigCommerceRestClient::DefaultScopes;
+            rv.oauth2_scopes = BigCommerceRestClientBase::DefaultScopes;
         }
         if (!rv.oauth2_auth_args) {
-            rv.oauth2_auth_args = BigCommerceRestClient::DefaultAuthArgs;
+            rv.oauth2_auth_args = BigCommerceRestClientBase::DefaultAuthArgs;
         }
         return rv;
     }
@@ -516,12 +519,12 @@ public class BigCommerceRestConnection inherits RestClient::RestConnection {
             }
             # Auto-correct OAuth2 URLs (ensure they always point to BigCommerce)
             if (opts.oauth2_auth_url.val()
-                    && opts.oauth2_auth_url != BigCommerceRestClient::DefaultAuthUrl) {
-                update.oauth2_auth_url = BigCommerceRestClient::DefaultAuthUrl;
+                    && opts.oauth2_auth_url != BigCommerceRestClientBase::DefaultAuthUrl) {
+                update.oauth2_auth_url = BigCommerceRestClientBase::DefaultAuthUrl;
             }
             if (opts.oauth2_token_url.val()
-                    && opts.oauth2_token_url != BigCommerceRestClient::DefaultTokenUrl) {
-                update.oauth2_token_url = BigCommerceRestClient::DefaultTokenUrl;
+                    && opts.oauth2_token_url != BigCommerceRestClientBase::DefaultTokenUrl) {
+                update.oauth2_token_url = BigCommerceRestClientBase::DefaultTokenUrl;
             }
             if (update) {
                 doUpdateOptions(self, update);
@@ -563,13 +566,13 @@ public class BigCommerceRestConnection inherits RestClient::RestConnection {
 }
 
 #! BigCommerce REST client for non-blocking I/O
-public class BigCommerceRestClientIo inherits RestClientIo::RestClientIo {
+public class BigCommerceRestClientIo inherits RestClientIo::RestClientIo, BigCommerceRestClientBase {
     #! Creates the object with the given options
     /** @param opts constructor options
         @param shared_mgr optional shared connection manager
     */
     constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
-            : RestClientIo(BigCommerceRestClient::getOptions(opts), shared_mgr) {
+            : RestClientIo(BigCommerceRestClientBase::getOptions(opts), shared_mgr) {
     }
 }
 }

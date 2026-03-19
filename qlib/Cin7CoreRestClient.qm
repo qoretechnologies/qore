@@ -94,24 +94,8 @@ printf("Customers: %N\n", result.body);
 #! the Cin7CoreRestClient namespace contains all the objects in the Cin7CoreRestClient module
 public namespace Cin7CoreRestClient {
 
-#! This class provides the REST client API for communication with Cin7Core servers
-/** Cin7Core uses a REST API with header-based authentication:
-    - Account ID: api-auth-accountid header
-    - API Key: api-auth-applicationkey header
-
-    @par API Information:
-    - Base URL: https://inventory.dearsystems.com/ExternalApi/v2
-    - JSON format only
-    - Pagination: page and limit query parameters
-
-    @par Authentication:
-    Both Account ID and API Key are required for all API requests.
-    These can be obtained from the Cin7Core application:
-    1. Go to https://inventory.dearsystems.com/ExternalApi
-    2. Create a New Application or select an existing one
-    3. Find the Account ID and Application Key on the Setup tab for the Application
-*/
-public class Cin7CoreRestClient inherits RestClient::RestClient {
+#! Common base class for Cin7CoreRestClient functionality
+public class Cin7CoreRestClientBase {
     public {
         #! Cin7Core API base URL
         const DefaultApiUrl = "https://inventory.dearsystems.com/ExternalApi/v2";
@@ -152,6 +136,48 @@ public class Cin7CoreRestClient inherits RestClient::RestClient {
         };
     }
 
+    #! returns options for @ref Cin7CoreRestClient::Cin7CoreRestClient::constructor()
+    static hash<auto> getOptions(hash<auto> opts) {
+        hash<auto> rv = DefaultOptions + opts;
+
+        # Validate required credentials
+        if (!opts.account_id) {
+            throw "CIN7CORE-AUTH-ERROR", "missing required 'account_id' option";
+        }
+        if (!opts.apikey) {
+            throw "CIN7CORE-AUTH-ERROR", "missing required 'apikey' option";
+        }
+
+        # Add authentication headers
+        rv.headers{AccountIdHeader} = opts.account_id;
+        rv.headers{ApplicationKeyHeader} = opts.apikey;
+
+        # Remove credentials from options (they're in headers now)
+        remove rv.account_id;
+        remove rv.apikey;
+
+        return rv;
+    }
+}
+
+#! This class provides the REST client API for communication with Cin7Core servers
+/** Cin7Core uses a REST API with header-based authentication:
+    - Account ID: api-auth-accountid header
+    - API Key: api-auth-applicationkey header
+
+    @par API Information:
+    - Base URL: https://inventory.dearsystems.com/ExternalApi/v2
+    - JSON format only
+    - Pagination: page and limit query parameters
+
+    @par Authentication:
+    Both Account ID and API Key are required for all API requests.
+    These can be obtained from the Cin7Core application:
+    1. Go to https://inventory.dearsystems.com/ExternalApi
+    2. Create a New Application or select an existing one
+    3. Find the Account ID and Application Key on the Setup tab for the Application
+*/
+public class Cin7CoreRestClient inherits RestClient::RestClient, Cin7CoreRestClientBase {
     #! creates the object with the given options
     /**
         @par Example:
@@ -174,31 +200,8 @@ Cin7CoreRestClient cin7core({
         @throw CIN7CORE-AUTH-ERROR missing required authentication credentials
     */
     constructor(hash<auto> opts, *softbool do_not_connect)
-            : RestClient(Cin7CoreRestClient::getOptions(opts), do_not_connect) {
+            : RestClient(Cin7CoreRestClientBase::getOptions(opts), do_not_connect) {
         setAssumedEncoding("UTF-8");
-    }
-
-    #! returns options for @ref Cin7CoreRestClient::Cin7CoreRestClient::constructor()
-    static hash<auto> getOptions(hash<auto> opts) {
-        hash<auto> rv = DefaultOptions + opts;
-
-        # Validate required credentials
-        if (!opts.account_id) {
-            throw "CIN7CORE-AUTH-ERROR", "missing required 'account_id' option";
-        }
-        if (!opts.apikey) {
-            throw "CIN7CORE-AUTH-ERROR", "missing required 'apikey' option";
-        }
-
-        # Add authentication headers
-        rv.headers{AccountIdHeader} = opts.account_id;
-        rv.headers{ApplicationKeyHeader} = opts.apikey;
-
-        # Remove credentials from options (they're in headers now)
-        remove rv.account_id;
-        remove rv.apikey;
-
-        return rv;
     }
 }
 
@@ -242,7 +245,7 @@ public class Cin7CoreRestConnection inherits RestClient::RestConnection {
             "options": RestConnection::ConnectionScheme.options + {
                 "data": RestConnection::ConnectionScheme.options."data"
                 + <ConnectionOptionInfo>{
-                    "default_value": Cin7CoreRestClient::DefaultData,
+                    "default_value": Cin7CoreRestClientBase::DefaultData,
                 },
                 "account_id": <ConnectionOptionInfo>{
                     "display_name": "Account ID",
@@ -272,15 +275,15 @@ public class Cin7CoreRestConnection inherits RestClient::RestConnection {
                 },
                 "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
                 + <ConnectionOptionInfo>{
-                    "default_value": Cin7CoreRestClient::DefaultPingHeaders,
+                    "default_value": Cin7CoreRestClientBase::DefaultPingHeaders,
                 },
                 "ping_method": RestConnection::ConnectionScheme.options."ping_method"
                 + <ConnectionOptionInfo>{
-                    "default_value": Cin7CoreRestClient::DefaultPingMethod,
+                    "default_value": Cin7CoreRestClientBase::DefaultPingMethod,
                 },
                 "ping_path": RestConnection::ConnectionScheme.options."ping_path"
                 + <ConnectionOptionInfo>{
-                    "default_value": Cin7CoreRestClient::DefaultPingPath,
+                    "default_value": Cin7CoreRestClientBase::DefaultPingPath,
                 },
             },
             "messages": (
@@ -413,13 +416,13 @@ public class Cin7CoreRestConnection inherits RestClient::RestConnection {
 #! REST client for Cin7Core REST API using multiplexed HTTP connections
 /** @see Cin7CoreRestClient for more information
 */
-public class Cin7CoreRestClientIo inherits RestClientIo::RestClientIo {
+public class Cin7CoreRestClientIo inherits RestClientIo::RestClientIo, Cin7CoreRestClientBase {
     #! Creates the object with the given options
     /** @param opts constructor options
         @param shared_mgr optional shared connection manager
     */
     constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
-            : RestClientIo(Cin7CoreRestClient::getOptions(opts), shared_mgr) {
+            : RestClientIo(Cin7CoreRestClientBase::getOptions(opts), shared_mgr) {
     }
 }
 }

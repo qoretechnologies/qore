@@ -86,18 +86,8 @@ printf("Legal Entities: %N\n", result.body);
 #! the DeelRestClient namespace contains all the objects in the DeelRestClient module
 public namespace DeelRestClient {
 
-#! This class provides the REST client API for communication with Deel servers
-/** Deel uses a REST API with Bearer token authentication.
-
-    Authentication is done via an API access token passed as a Bearer token in the
-    Authorization header. Tokens can be personal tokens (linked to a user) or
-    organization tokens (service-level access).
-
-    @par API Information:
-    - Base URL: https://api.letsdeel.com/rest/v2
-    - Generate tokens at: https://app.deel.com/developer-center
-*/
-public class DeelRestClient inherits RestClient::RestClient {
+#! Common base class for DeelRestClient functionality
+public class DeelRestClientBase {
     public {
         #! Deel API base URL
         const DefaultApiUrl = "https://api.letsdeel.com/rest/v2";
@@ -128,29 +118,7 @@ public class DeelRestClient inherits RestClient::RestClient {
         };
     }
 
-    #! creates the object with the given options
-    /**
-        @par Example:
-        @code{.py}
-DeelRestClient deel({"apikey": "your-api-token"});
-        @endcode
-
-        @param opts valid options are all the options for the @ref RestClient::RestClient "RestClient" class
-        plus:
-        - \c apikey: the Deel API access token (required)
-
-        @param do_not_connect if \c False (the default), then a connection will be immediately established to the
-        remote server
-
-        @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data serialization, etc
-        @throw DEEL-ERROR missing required option 'apikey'
-    */
-    constructor(hash<auto> opts, *softbool do_not_connect)
-            : RestClient(DeelRestClient::getOptions(opts), do_not_connect) {
-        setAssumedEncoding("UTF-8");
-    }
-
-    #! returns options for @ref DeelRestClient::DeelRestClient::constructor()
+    #! returns options for DeelRestClient constructors
     static hash<auto> getOptions(hash<auto> opts) {
         hash<auto> rv = DefaultOptions + opts;
 
@@ -171,6 +139,41 @@ DeelRestClient deel({"apikey": "your-api-token"});
         remove rv.apikey;
 
         return rv;
+    }
+}
+
+#! This class provides the REST client API for communication with Deel servers
+/** Deel uses a REST API with Bearer token authentication.
+
+    Authentication is done via an API access token passed as a Bearer token in the
+    Authorization header. Tokens can be personal tokens (linked to a user) or
+    organization tokens (service-level access).
+
+    @par API Information:
+    - Base URL: https://api.letsdeel.com/rest/v2
+    - Generate tokens at: https://app.deel.com/developer-center
+*/
+public class DeelRestClient inherits RestClient::RestClient, DeelRestClientBase {
+    #! creates the object with the given options
+    /**
+        @par Example:
+        @code{.py}
+DeelRestClient deel({"apikey": "your-api-token"});
+        @endcode
+
+        @param opts valid options are all the options for the @ref RestClient::RestClient "RestClient" class
+        plus:
+        - \c apikey: the Deel API access token (required)
+
+        @param do_not_connect if \c False (the default), then a connection will be immediately established to the
+        remote server
+
+        @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data serialization, etc
+        @throw DEEL-ERROR missing required option 'apikey'
+    */
+    constructor(hash<auto> opts, *softbool do_not_connect)
+            : RestClient(DeelRestClientBase::getOptions(opts), do_not_connect) {
+        setAssumedEncoding("UTF-8");
     }
 }
 
@@ -209,7 +212,7 @@ public class DeelRestConnection inherits RestClient::RestConnection {
             "options": RestConnection::ConnectionScheme.options + {
                 "data": RestConnection::ConnectionScheme.options."data"
                 + <ConnectionOptionInfo>{
-                    "default_value": DeelRestClient::DefaultData,
+                    "default_value": DeelRestClientBase::DefaultData,
                 },
                 "apikey": <ConnectionOptionInfo>{
                     "display_name": "API Token",
@@ -237,15 +240,15 @@ public class DeelRestConnection inherits RestClient::RestConnection {
                 },
                 "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
                 + <ConnectionOptionInfo>{
-                    "default_value": DeelRestClient::DefaultPingHeaders,
+                    "default_value": DeelRestClientBase::DefaultPingHeaders,
                 },
                 "ping_method": RestConnection::ConnectionScheme.options."ping_method"
                 + <ConnectionOptionInfo>{
-                    "default_value": DeelRestClient::DefaultPingMethod,
+                    "default_value": DeelRestClientBase::DefaultPingMethod,
                 },
                 "ping_path": RestConnection::ConnectionScheme.options."ping_path"
                 + <ConnectionOptionInfo>{
-                    "default_value": DeelRestClient::DefaultPingPath,
+                    "default_value": DeelRestClientBase::DefaultPingPath,
                 },
             },
             "required_options": "apikey",
@@ -400,13 +403,13 @@ public class DeelRestConnection inherits RestClient::RestConnection {
 #! REST client for Deel REST API using multiplexed HTTP connections
 /** @see DeelRestClient for more information
 */
-public class DeelRestClientIo inherits RestClientIo::RestClientIo {
+public class DeelRestClientIo inherits RestClientIo::RestClientIo, DeelRestClientBase {
     #! Creates the object with the given options
     /** @param opts constructor options
         @param shared_mgr optional shared connection manager
     */
     constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
-            : RestClientIo(DeelRestClient::getOptions(opts), shared_mgr) {
+            : RestClientIo(DeelRestClientBase::getOptions(opts), shared_mgr) {
     }
 }
 }

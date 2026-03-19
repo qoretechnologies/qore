@@ -315,16 +315,8 @@ public const DMT_SUPPRESS_NOTIFICATIONS = 1 << 12;
 public const DMT_IS_VOICE_MESSAGE = 1 << 13;
 #/@}
 
-#! this class provides the REST client API for communication with Discord servers
-/** You must use an OAuth2 token by setting the \c token and \c oauth2_refresh_token options; the following options
-    need to be set as well:
-    - \c oauth2_client_id: the OAuth2 client ID
-    - \c oauth2_client_secret: the OAuth2 client secret
-
-    Then an external program has to guide the user through using the authorization_grant flow to get a token to use;
-    this module does not implement that flow.
-*/
-public class DiscordRestClient inherits RestClient::RestClient {
+#! Common base class for DiscordRestClient functionality
+public class DiscordRestClientBase {
     public {
         #! Default Discord REST API URL
         const DefaultUrl = "https://discord.com/api";
@@ -387,6 +379,22 @@ public class DiscordRestClient inherits RestClient::RestClient {
         };
     }
 
+    #! returns options for DiscordRestClient constructors
+    static hash<auto> getOptions(hash<auto> opts) {
+        return DefaultOptions + opts + {"url": DefaultUrl + "/v" + (opts.api ?? DefaultApi)};
+    }
+}
+
+#! this class provides the REST client API for communication with Discord servers
+/** You must use an OAuth2 token by setting the \c token and \c oauth2_refresh_token options; the following options
+    need to be set as well:
+    - \c oauth2_client_id: the OAuth2 client ID
+    - \c oauth2_client_secret: the OAuth2 client secret
+
+    Then an external program has to guide the user through using the authorization_grant flow to get a token to use;
+    this module does not implement that flow.
+*/
+public class DiscordRestClient inherits RestClient::RestClient, DiscordRestClientBase {
     #! creates the object with the given options
     /**
         @par Example:
@@ -402,7 +410,7 @@ DiscordRestClient rest(opts);
         @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data serialization, etc
     */
     constructor(hash<auto> opts, *softbool do_not_connect)
-            : RestClient(DiscordRestClient::getOptions(opts), False) {
+            : RestClient(DiscordRestClientBase::getOptions(opts), False) {
         setAssumedEncoding("UTF-8");
         if (!do_not_connect) {
             if (token) {
@@ -411,11 +419,6 @@ DiscordRestClient rest(opts);
                 loginIntern();
             }
         }
-    }
-
-    #! returns options for @ref DiscordRestClient::DiscordRestClient::constructor()
-    static hash<auto> getOptions(hash<auto> opts) {
-        return DefaultOptions + opts + {"url": DefaultUrl + "/v" + (opts.api ?? DefaultApi)};
     }
 }
 
@@ -453,43 +456,43 @@ public class DiscordRestConnection inherits RestClient::RestConnection {
                     "short_desc": "The API version to use",
                     "type": "int",
                     "desc": "The default API version to use",
-                    "default_value": DiscordRestClient::DefaultApi,
+                    "default_value": DiscordRestClientBase::DefaultApi,
                 },
                 "data": RestConnection::ConnectionScheme.options."data"
                 + <ConnectionOptionInfo>{
-                    "default_value": DiscordRestClient::DefaultData,
+                    "default_value": DiscordRestClientBase::DefaultData,
                 },
                 "oauth2_auth_args": RestConnection::ConnectionScheme.options.oauth2_auth_args
                 + <ConnectionOptionInfo>{
-                    "default_value": DiscordRestClient::DefaultAuthArgs,
+                    "default_value": DiscordRestClientBase::DefaultAuthArgs,
                 },
                 "oauth2_auth_url": RestConnection::ConnectionScheme.options.oauth2_auth_url
                 + <ConnectionOptionInfo>{
-                    "default_value": DiscordRestClient::DefaultAuthUrl,
+                    "default_value": DiscordRestClientBase::DefaultAuthUrl,
                 },
                 "oauth2_grant_type": RestConnection::ConnectionScheme.options.oauth2_grant_type
                 + <ConnectionOptionInfo>{
-                    "default_value": DiscordRestClient::DefaultGrantType,
+                    "default_value": DiscordRestClientBase::DefaultGrantType,
                 },
                 "oauth2_scopes": RestConnection::ConnectionScheme.options.oauth2_scopes
                 + <ConnectionOptionInfo>{
-                    "default_value": DiscordRestClient::DefaultScopes,
+                    "default_value": DiscordRestClientBase::DefaultScopes,
                 },
                 "oauth2_token_url": RestConnection::ConnectionScheme.options.oauth2_token_url
                 + <ConnectionOptionInfo>{
-                    "default_value": DiscordRestClient::DefaultTokenUrl,
+                    "default_value": DiscordRestClientBase::DefaultTokenUrl,
                 },
                 "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
                 + <ConnectionOptionInfo>{
-                    "default_value": DiscordRestClient::DefaultPingHeaders,
+                    "default_value": DiscordRestClientBase::DefaultPingHeaders,
                 },
                 "ping_method": RestConnection::ConnectionScheme.options."ping_method"
                 + <ConnectionOptionInfo>{
-                    "default_value": DiscordRestClient::DefaultPingMethod,
+                    "default_value": DiscordRestClientBase::DefaultPingMethod,
                 },
                 "ping_path": RestConnection::ConnectionScheme.options."ping_path"
                 + <ConnectionOptionInfo>{
-                    "default_value": DiscordRestClient::DefaultPingPath,
+                    "default_value": DiscordRestClientBase::DefaultPingPath,
                 },
             },
             "required_options": "token|oauth2_auth_url,oauth2_grant_type,oauth2_token_url,"
@@ -525,7 +528,7 @@ public class DiscordRestConnection inherits RestClient::RestConnection {
 
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option
     */
-    constructor(string name, string description, string url = DiscordRestClient::DefaultUrl,
+    constructor(string name, string description, string url = DiscordRestClientBase::DefaultUrl,
             hash<auto> attributes = {}, hash<auto> options = {})
             : RestConnection(name, description, url, attributes, options) {
     }
@@ -686,13 +689,13 @@ public class DiscordRestConnection inherits RestClient::RestConnection {
 #! REST client for Discord REST API using multiplexed HTTP connections
 /** @see DiscordRestClient for more information
 */
-public class DiscordRestClientIo inherits RestClientIo::RestClientIo {
+public class DiscordRestClientIo inherits RestClientIo::RestClientIo, DiscordRestClientBase {
     #! Creates the object with the given options
     /** @param opts constructor options
         @param shared_mgr optional shared connection manager
     */
     constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
-            : RestClientIo(DiscordRestClient::getOptions(opts), shared_mgr) {
+            : RestClientIo(DiscordRestClientBase::getOptions(opts), shared_mgr) {
     }
 }
 }

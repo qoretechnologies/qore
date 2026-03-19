@@ -108,14 +108,8 @@ printf("%N\n", ans.body);
 
 #! the AwsRestClient namespace contains all the objects in the AwsRestClient module
 public namespace AwsRestClient {
-#! this class provides the REST client API for communication with AWS
-/** This class requires the following options:
-    - \c aws_keyid
-    - \c aws_secret
-    - \c aws_region
-    - \c aws_service
-*/
-public class AwsRestClient inherits RestClient::RestClient {
+#! Common base class for AwsRestClient functionality
+public class AwsRestClientBase {
     public {
         #! required options
         const RequiredOptions = (
@@ -135,6 +129,23 @@ public class AwsRestClient inherits RestClient::RestClient {
         const AwsTermination = "aws4_request";
     }
 
+    static private string trimall(string str) {
+        # remove leading and trailing whitespace
+        trim str;
+        # collapse multiple spaces to a single space
+        str =~ s/ +/ /g;
+        return str;
+    }
+}
+
+#! this class provides the REST client API for communication with AWS
+/** This class requires the following options:
+    - \c aws_keyid
+    - \c aws_secret
+    - \c aws_region
+    - \c aws_service
+*/
+public class AwsRestClient inherits RestClient::RestClient, AwsRestClientBase {
     private:internal {
         # the AWS access key ID
         string aws_keyid;
@@ -400,7 +411,7 @@ AwsRestClient rest({
         cstr += (
             foldl $1 + $2, (
                 map
-                    sprintf("%s:%s\n", $1, trimall(hdr.$1)),
+                    sprintf("%s:%s\n", $1, AwsRestClientBase::trimall(hdr.$1)),
                     sort(keys hdr)
             )
         ) + "\n";
@@ -415,14 +426,6 @@ AwsRestClient rest({
         #printf("CSTR:\n%s\n", cstr);
 
         return digest(QoreDigest, cstr).toHex();
-    }
-
-    static private:internal string trimall(string str) {
-        # remove leading and trailing whitespace
-        trim str;
-        # collapse multiple spaces to a single space
-        str =~ s/ +/ /g;
-        return str;
     }
 }
 
@@ -527,7 +530,7 @@ public class AwsRestConnection inherits RestClient::RestConnection {
                     "desc": "A temporary session token from AWS Security Token Service for this HTTP session",
                 },
             },
-            "required_options": foldl $1 + "," + $2, AwsRestClient::RequiredOptions,
+            "required_options": foldl $1 + "," + $2, AwsRestClientBase::RequiredOptions,
         };
     }
 
@@ -637,7 +640,7 @@ public class AwsRestConnection inherits RestClient::RestConnection {
 
     @see AwsRestClient for more information
 */
-public class AwsRestClientIo inherits RestClientIo::RestClientIo {
+public class AwsRestClientIo inherits RestClientIo::RestClientIo, AwsRestClientBase {
     private:internal {
         #! the AWS access key ID
         string aws_keyid;
@@ -687,7 +690,7 @@ public class AwsRestClientIo inherits RestClientIo::RestClientIo {
         }
 
         # check required options
-        foreach string key in (AwsRestClient::RequiredOptions) {
+        foreach string key in (AwsRestClientBase::RequiredOptions) {
             auto v = opts{key};
             if (!exists v || v == "") {
                 throw "AWSRESTCLIENT-ERROR", sprintf("missing required option %y in option argument", key);
@@ -699,7 +702,7 @@ public class AwsRestClientIo inherits RestClientIo::RestClientIo {
             self{key} = v;
         }
 
-        credential_scope_suffix = sprintf("%s/%s/%s", aws_region, aws_service, AwsRestClient::AwsTermination);
+        credential_scope_suffix = sprintf("%s/%s/%s", aws_region, aws_service, AwsRestClientBase::AwsTermination);
 
         if (exists opts.aws_s3 && parse_boolean(opts.aws_s3)) {
             aws_s3 = True;
@@ -748,22 +751,22 @@ public class AwsRestClientIo inherits RestClientIo::RestClientIo {
         # Build canonical signature
         string csig = getCanonicalSignature(method, path, hdr, body, \signed_headers);
 
-        string msg = AwsRestClient::AwsSignatureAlgorithm + "\n"
+        string msg = AwsRestClientBase::AwsSignatureAlgorithm + "\n"
             + aws_date + "\n"
             + scope + "\n"
             + csig;
 
         # Calculate signing key
         string gmdate = gmtime.format("YYYYMMDD");
-        binary signing_key = hmac(AwsRestClient::QoreDigest, gmdate, "AWS4" + aws_secret);
-        signing_key = hmac(AwsRestClient::QoreDigest, aws_region, signing_key);
-        signing_key = hmac(AwsRestClient::QoreDigest, aws_service, signing_key);
-        signing_key = hmac(AwsRestClient::QoreDigest, AwsRestClient::AwsTermination, signing_key);
+        binary signing_key = hmac(AwsRestClientBase::QoreDigest, gmdate, "AWS4" + aws_secret);
+        signing_key = hmac(AwsRestClientBase::QoreDigest, aws_region, signing_key);
+        signing_key = hmac(AwsRestClientBase::QoreDigest, aws_service, signing_key);
+        signing_key = hmac(AwsRestClientBase::QoreDigest, AwsRestClientBase::AwsTermination, signing_key);
 
-        string sig = hmac(AwsRestClient::QoreDigest, msg, signing_key).toHex();
+        string sig = hmac(AwsRestClientBase::QoreDigest, msg, signing_key).toHex();
 
         hdr.authorization = sprintf("%s Credential=%s/%s, SignedHeaders=%s, Signature=%s",
-            AwsRestClient::AwsSignatureAlgorithm, aws_keyid, scope, signed_headers, sig);
+            AwsRestClientBase::AwsSignatureAlgorithm, aws_keyid, scope, signed_headers, sig);
     }
 
     #! Internal: builds canonical signature for AWS Signature V4
@@ -810,9 +813,9 @@ public class AwsRestClientIo inherits RestClientIo::RestClientIo {
         signed_headers = (foldl $1 + ";" + $2, keys hdr);
         cstr += signed_headers + "\n";
 
-        cstr += digest(AwsRestClient::QoreDigest, body ?? "").toHex();
+        cstr += digest(AwsRestClientBase::QoreDigest, body ?? "").toHex();
 
-        return digest(AwsRestClient::QoreDigest, cstr).toHex();
+        return digest(AwsRestClientBase::QoreDigest, cstr).toHex();
     }
 }
 }

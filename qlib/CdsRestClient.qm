@@ -197,18 +197,8 @@ public const ApiProfileMap = {
     "dynamics-business-central": BusinessCentralProfile,
 };
 
-#! this class provides the REST client API for communication with Microsoft Dynamics 365 Common Data Service servers
-/** This class requires the following options for Microsoft Dynamics 365 Common Data Service authentication and
-    authorization to the target server:
-    - \c oauth2_client_id: the OAuth2 client ID
-    - \c oauth2_client_secret: the OAuth2 client secret
-
-    Errors returned from Dynamics will have the following format:
-    - \c err: will be the hex error code from Dynamics (ex: \c 0x8006088a)
-    - \c desc: the exception message (ex: <tt>Resource not found for the segment 'WhoAmi'.</tt>)
-    - \c arg: the error hash from the server plus a \c decoded_body argument with any decoded message body
-*/
-public class CdsRestClient inherits RestClient::RestClient {
+#! Common base class for CdsRestClient functionality
+public class CdsRestClientBase {
     public {
         #! OAuth2 base URL for Microsoft identity platform
         const OAuth2BaseUrl = "https://login.microsoftonline.com/";
@@ -245,6 +235,73 @@ public class CdsRestClient inherits RestClient::RestClient {
             },
         };
     }
+
+    #! throws an exception due to an error
+    static raiseError(string fmt, ...) {
+        throw "CDSRESTCLIENT-ERROR", vsprintf(fmt, argv);
+    }
+
+    #! returns options for the CdsRestClient constructors
+    static hash<auto> getOptions(hash<auto> opts0) {
+        # create an untyped hash to avoid type constraints from the input hash
+        hash<auto> opts += opts0;
+        if (*string prof = opts.api_profile) {
+            *hash<CdsApiProfile> profile = ApiProfileMap{prof};
+            if (profile) {
+                # set ping options from profile if not already set
+                if (!opts.hasKey("ping_method")) {
+                    opts.ping_method = profile.ping_method;
+                }
+                if (!opts.hasKey("ping_path")) {
+                    opts.ping_path = profile.ping_path;
+                }
+                if (!opts.hasKey("ping_headers")) {
+                    opts.ping_headers = profile.ping_headers;
+                }
+                if (!opts.hasKey("oauth2_scopes")) {
+                    opts.oauth2_scopes = profile.oauth2_scopes;
+                }
+
+                # For Business Central, build the full URL with instance_type and API path
+                if (profile.default_base_uri && opts.instance_type) {
+                    string api = opts.api ?? profile.default_api_version;
+                    # Full URL: https://api.businesscentral.dynamics.com/v2.0/{instance_type}/api/v2.0/
+                    opts.url = profile.default_base_uri + api + "/" + opts.instance_type + "/api/" + api + "/";
+                }
+
+                # process scopes; substitute "{url}" with the real URL
+                opts.oauth2_scopes = map replace($1, "{url}", opts.url), opts.oauth2_scopes;
+            } else if (prof != "none") {
+                throw "CDS-RESTCLIENT-ERROR", sprintf("api_profile %y is unknown; known API profiles: %y", prof,
+                    keys ApiProfileMap);
+            }
+        }
+        if (opts.url !~ /\/$/) {
+            opts.url += "/";
+        }
+        return opts + {
+            "data": "json",
+            "oauth2_auth_url": opts.oauth2_auth_url ?? "auto",
+            "oauth2_token_url": opts.oauth2_token_url ?? "auto",
+            "oauth2_grant_type": opts.oauth2_grant_type ?? "authorization_code",
+            "oauth2_client_id": opts.oauth2_client_id,
+            "oauth2_client_secret": opts.oauth2_client_secret,
+        };
+    }
+}
+
+#! this class provides the REST client API for communication with Microsoft Dynamics 365 Common Data Service servers
+/** This class requires the following options for Microsoft Dynamics 365 Common Data Service authentication and
+    authorization to the target server:
+    - \c oauth2_client_id: the OAuth2 client ID
+    - \c oauth2_client_secret: the OAuth2 client secret
+
+    Errors returned from Dynamics will have the following format:
+    - \c err: will be the hex error code from Dynamics (ex: \c 0x8006088a)
+    - \c desc: the exception message (ex: <tt>Resource not found for the segment 'WhoAmi'.</tt>)
+    - \c arg: the error hash from the server plus a \c decoded_body argument with any decoded message body
+*/
+public class CdsRestClient inherits RestClient::RestClient, CdsRestClientBase {
 
     private:internal {
         #! API version
@@ -292,7 +349,7 @@ CdsRestClient rest({
         @throw CDSRESTCLIENT-ERROR missing or invalid required option for REST
         authentication or communication
     */
-    constructor(hash<auto> opts, *softbool do_not_connect) : RestClient(CdsRestClient::getOptions(opts), True) {
+    constructor(hash<auto> opts, *softbool do_not_connect) : RestClient(CdsRestClientBase::getOptions(opts), True) {
         # check for the OAuth2 client id/secret options
         if (!oauth2_client_id || !oauth2_client_secret) {
             raiseError("missing the \"oauth2_client_id\" and \"oauth2_client_secret\" options");
@@ -367,59 +424,6 @@ CdsRestClient rest({
     #! Returns the URI path prefix
     string getUriPathPrefix() {
         return uri_path_pfx;
-    }
-
-    #! throws an exception due to an error
-    static raiseError(string fmt, ...) {
-        throw "CDSRESTCLIENT-ERROR", vsprintf(fmt, argv);
-    }
-
-    #! returns options for the \c CdsRestClient::CdsRestClient::constructor()
-    static hash<auto> getOptions(hash<auto> opts0) {
-        # create an untyped hash to avoid type constraints from the input hash
-        hash<auto> opts += opts0;
-        if (*string prof = opts.api_profile) {
-            *hash<CdsApiProfile> profile = ApiProfileMap{prof};
-            if (profile) {
-                # set ping options from profile if not already set
-                if (!opts.hasKey("ping_method")) {
-                    opts.ping_method = profile.ping_method;
-                }
-                if (!opts.hasKey("ping_path")) {
-                    opts.ping_path = profile.ping_path;
-                }
-                if (!opts.hasKey("ping_headers")) {
-                    opts.ping_headers = profile.ping_headers;
-                }
-                if (!opts.hasKey("oauth2_scopes")) {
-                    opts.oauth2_scopes = profile.oauth2_scopes;
-                }
-
-                # For Business Central, build the full URL with instance_type and API path
-                if (profile.default_base_uri && opts.instance_type) {
-                    string api = opts.api ?? profile.default_api_version;
-                    # Full URL: https://api.businesscentral.dynamics.com/v2.0/{instance_type}/api/v2.0/
-                    opts.url = profile.default_base_uri + api + "/" + opts.instance_type + "/api/" + api + "/";
-                }
-
-                # process scopes; substitute "{url}" with the real URL
-                opts.oauth2_scopes = map replace($1, "{url}", opts.url), opts.oauth2_scopes;
-            } else if (prof != "none") {
-                throw "CDS-RESTCLIENT-ERROR", sprintf("api_profile %y is unknown; known API profiles: %y", prof,
-                    keys ApiProfileMap);
-            }
-        }
-        if (opts.url !~ /\/$/) {
-            opts.url += "/";
-        }
-        return opts + {
-            "data": "json",
-            "oauth2_auth_url": opts.oauth2_auth_url ?? "auto",
-            "oauth2_token_url": opts.oauth2_token_url ?? "auto",
-            "oauth2_grant_type": opts.oauth2_grant_type ?? "authorization_code",
-            "oauth2_client_id": opts.oauth2_client_id,
-            "oauth2_client_secret": opts.oauth2_client_secret,
-        };
     }
 
     #! sends the outgoing HTTP message and recodes the response to data
@@ -556,13 +560,13 @@ public class CdsRestConnection inherits RestClient::RestConnection {
                     "default_value": "json",
                 },
                 "oauth2_auth_url": RestConnection::ConnectionScheme.options.oauth2_auth_url + <ConnectionOptionInfo>{
-                    "default_value": CdsRestClient::OAuth2AuthUrl,
+                    "default_value": CdsRestClientBase::OAuth2AuthUrl,
                 },
                 "oauth2_grant_type": RestConnection::ConnectionScheme.options.oauth2_grant_type + <ConnectionOptionInfo>{
                     "default_value": "authorization_code",
                 },
                 "oauth2_token_url": RestConnection::ConnectionScheme.options.oauth2_token_url + <ConnectionOptionInfo>{
-                    "default_value": CdsRestClient::OAuth2TokenUrl,
+                    "default_value": CdsRestClientBase::OAuth2TokenUrl,
                 },
             },
             "required_options": "oauth2_client_id,oauth2_client_secret",
@@ -702,7 +706,7 @@ public class CdsRestConnection inherits RestClient::RestConnection {
         }
         if (rv == "auto") {
             string tenant = opts.tenant ?? "common";
-            rv = CdsRestClient::OAuth2BaseUrl + tenant + CdsRestClient::OAuth2AuthUriPathSuffix;
+            rv = CdsRestClientBase::OAuth2BaseUrl + tenant + CdsRestClientBase::OAuth2AuthUriPathSuffix;
         } else if (!allow_relative && rv !~ /^http/) {
             string url = real_url;
             if (url !~ /\/$/) {
@@ -729,7 +733,7 @@ public class CdsRestConnection inherits RestClient::RestConnection {
         }
         if (rv == "auto") {
             string tenant = opts.tenant ?? "common";
-            rv = CdsRestClient::OAuth2BaseUrl + tenant + CdsRestClient::OAuth2TokenUriPathSuffix;
+            rv = CdsRestClientBase::OAuth2BaseUrl + tenant + CdsRestClientBase::OAuth2TokenUriPathSuffix;
         } else if (!allow_relative && rv !~ /^http/) {
             string url = real_url;
             if (url !~ /\/$/) {
@@ -1018,35 +1022,35 @@ public class BusinessCentralRestConnection inherits CdsRestConnection {
 }
 
 #! CDS REST client for non-blocking I/O
-public class CdsRestClientIo inherits RestClientIo::RestClientIo {
+public class CdsRestClientIo inherits RestClientIo::RestClientIo, CdsRestClientBase {
     #! Creates the object with the given options
     /** @param opts constructor options
         @param shared_mgr optional shared connection manager
     */
     constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
-            : RestClientIo(CdsRestClient::getOptions(opts), shared_mgr) {
+            : RestClientIo(CdsRestClientBase::getOptions(opts), shared_mgr) {
     }
 }
 
 #! Dynamics REST client for non-blocking I/O
-public class DynamicsRestClientIo inherits RestClientIo::RestClientIo {
+public class DynamicsRestClientIo inherits RestClientIo::RestClientIo, CdsRestClientBase {
     #! Creates the object with the given options
     /** @param opts constructor options
         @param shared_mgr optional shared connection manager
     */
     constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
-            : RestClientIo(CdsRestClient::getOptions(opts + {"api_profile": DynamicsProfile.name}), shared_mgr) {
+            : RestClientIo(CdsRestClientBase::getOptions(opts + {"api_profile": DynamicsProfile.name}), shared_mgr) {
     }
 }
 
 #! Business Central REST client for non-blocking I/O
-public class BusinessCentralRestClientIo inherits RestClientIo::RestClientIo {
+public class BusinessCentralRestClientIo inherits RestClientIo::RestClientIo, CdsRestClientBase {
     #! Creates the object with the given options
     /** @param opts constructor options
         @param shared_mgr optional shared connection manager
     */
     constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
-            : RestClientIo(CdsRestClient::getOptions(opts + {"api_profile": BusinessCentralProfile.name}),
+            : RestClientIo(CdsRestClientBase::getOptions(opts + {"api_profile": BusinessCentralProfile.name}),
                 shared_mgr) {
     }
 }

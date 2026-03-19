@@ -97,35 +97,8 @@ printf("Invoices: %y\n", result.body.invoices);
 #! the ZohoInvoiceRestClient namespace contains all the objects in the ZohoInvoiceRestClient module
 public namespace ZohoInvoiceRestClient {
 
-#! This class provides the REST client API for communication with Zoho Invoice servers
-/** Zoho Invoice uses a REST API with OAuth2 authentication.
-
-    @par URL Construction:
-    The API URL is constructed from the domain option:
-    - API: https://www.zohoapis{domain}/invoice/v3
-
-    The OAuth2 URLs are constructed from the subdomain and domain options:
-    - Auth: https://accounts.{subdomain}{domain}/oauth/v2/auth
-    - Token: https://accounts.{subdomain}{domain}/oauth/v2/token
-
-    @par Subdomains:
-    - zoho: Standard Zoho accounts
-    - zohocloud: Zoho Cloud accounts
-
-    @par Domains:
-    - .com: US/Global
-    - .eu: Europe
-    - .in: India
-    - .com.au: Australia
-    - .ca: Canada
-    - .sa: Saudi Arabia
-    - .jp: Japan
-
-    @par Important:
-    All API calls require an organization_id parameter. This client automatically appends
-    the organization_id to all requests.
-*/
-public class ZohoInvoiceRestClient inherits RestClient::RestClient {
+#! Common base class for ZohoInvoiceRestClient functionality
+public class ZohoInvoiceRestClientBase {
     public {
         #! Default subdomain
         const DefaultSubdomain = "zoho";
@@ -184,91 +157,6 @@ public class ZohoInvoiceRestClient inherits RestClient::RestClient {
         };
     }
 
-    private {
-        #! The organization ID - required for all API calls except /organizations
-        string organization_id;
-
-        #! Subdomain for Zoho URLs (zoho or zohocloud)
-        string subdomain;
-
-        #! Domain for Zoho URLs (.com, .eu, .in, .com.au, .ca, .sa, .jp)
-        string domain;
-    }
-
-    #! creates the object with the given options
-    /**
-        @par Example:
-        @code{.py}
-ZohoInvoiceRestClient zoho({
-    "oauth2_client_id": "your-client-id",
-    "oauth2_client_secret": "your-client-secret",
-    "oauth2_refresh_token": "your-refresh-token",
-    "organization_id": "your-org-id",
-    "subdomain": "zoho",
-    "domain": ".com",
-});
-        @endcode
-
-        @param opts valid options are all the options for the @ref RestClient::RestClient "RestClient" class
-        plus:
-        - \c organization_id: the Zoho Invoice organization ID (required for most operations)
-        - \c subdomain: the Zoho subdomain ("zoho" or "zohocloud")
-        - \c domain: the Zoho domain (".com", ".eu", ".in", ".com.au", ".ca", ".sa", ".jp")
-
-        @param do_not_connect if \c False (the default), then a connection will be immediately established to the
-        remote server
-
-        @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data serialization, etc
-        @throw ZOHOINVOICE-ERROR invalid subdomain or domain specified
-    */
-    constructor(hash<auto> opts, *softbool do_not_connect)
-            : RestClient(ZohoInvoiceRestClient::getOptions(opts), do_not_connect) {
-        # Store organization_id for all future requests
-        if (opts.organization_id) {
-            organization_id = opts.organization_id;
-        }
-        subdomain = opts.subdomain ?? DefaultSubdomain;
-        domain = opts.domain ?? DefaultDomain;
-        setAssumedEncoding("UTF-8");
-    }
-
-    #! Returns the organization ID
-    string getOrganizationId() {
-        return organization_id;
-    }
-
-    #! Sets the organization ID
-    setOrganizationId(string org_id) {
-        organization_id = org_id;
-    }
-
-    #! Returns the subdomain
-    string getSubdomain() {
-        return subdomain;
-    }
-
-    #! Returns the domain
-    string getDomain() {
-        return domain;
-    }
-
-    #! Overrides doRequest to automatically add organization_id parameter
-    /** The organization_id is automatically appended to all API paths except for
-        /organizations which is used to retrieve the list of available organizations.
-    */
-    hash<auto> doRequest(string method, string path, auto body,
-            *reference<hash<auto>> info, softbool decode_errors = True, *hash<auto> hdr) {
-        # Append organization_id to all requests except /organizations
-        if (organization_id && path !~ /^\/organizations($|\?)/) {
-            if (path !~ /\?/) {
-                path += "?organization_id=" + organization_id;
-            } else {
-                path += "&organization_id=" + organization_id;
-            }
-        }
-        return RestClient::doRequest(method, path, body, \info, decode_errors, hdr);
-    }
-
     #! returns options for @ref ZohoInvoiceRestClient::ZohoInvoiceRestClient::constructor()
     static hash<auto> getOptions(hash<auto> opts) {
         hash<auto> rv = DefaultOptions + opts;
@@ -320,6 +208,121 @@ ZohoInvoiceRestClient zoho({
     }
 }
 
+#! This class provides the REST client API for communication with Zoho Invoice servers
+/** Zoho Invoice uses a REST API with OAuth2 authentication.
+
+    @par URL Construction:
+    The API URL is constructed from the domain option:
+    - API: https://www.zohoapis{domain}/invoice/v3
+
+    The OAuth2 URLs are constructed from the subdomain and domain options:
+    - Auth: https://accounts.{subdomain}{domain}/oauth/v2/auth
+    - Token: https://accounts.{subdomain}{domain}/oauth/v2/token
+
+    @par Subdomains:
+    - zoho: Standard Zoho accounts
+    - zohocloud: Zoho Cloud accounts
+
+    @par Domains:
+    - .com: US/Global
+    - .eu: Europe
+    - .in: India
+    - .com.au: Australia
+    - .ca: Canada
+    - .sa: Saudi Arabia
+    - .jp: Japan
+
+    @par Important:
+    All API calls require an organization_id parameter. This client automatically appends
+    the organization_id to all requests.
+*/
+public class ZohoInvoiceRestClient inherits RestClient::RestClient, ZohoInvoiceRestClientBase {
+    private {
+        #! The organization ID - required for all API calls except /organizations
+        string organization_id;
+
+        #! Subdomain for Zoho URLs (zoho or zohocloud)
+        string subdomain;
+
+        #! Domain for Zoho URLs (.com, .eu, .in, .com.au, .ca, .sa, .jp)
+        string domain;
+    }
+
+    #! creates the object with the given options
+    /**
+        @par Example:
+        @code{.py}
+ZohoInvoiceRestClient zoho({
+    "oauth2_client_id": "your-client-id",
+    "oauth2_client_secret": "your-client-secret",
+    "oauth2_refresh_token": "your-refresh-token",
+    "organization_id": "your-org-id",
+    "subdomain": "zoho",
+    "domain": ".com",
+});
+        @endcode
+
+        @param opts valid options are all the options for the @ref RestClient::RestClient "RestClient" class
+        plus:
+        - \c organization_id: the Zoho Invoice organization ID (required for most operations)
+        - \c subdomain: the Zoho subdomain ("zoho" or "zohocloud")
+        - \c domain: the Zoho domain (".com", ".eu", ".in", ".com.au", ".ca", ".sa", ".jp")
+
+        @param do_not_connect if \c False (the default), then a connection will be immediately established to the
+        remote server
+
+        @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data serialization, etc
+        @throw ZOHOINVOICE-ERROR invalid subdomain or domain specified
+    */
+    constructor(hash<auto> opts, *softbool do_not_connect)
+            : RestClient(ZohoInvoiceRestClientBase::getOptions(opts), do_not_connect) {
+        # Store organization_id for all future requests
+        if (opts.organization_id) {
+            organization_id = opts.organization_id;
+        }
+        subdomain = opts.subdomain ?? DefaultSubdomain;
+        domain = opts.domain ?? DefaultDomain;
+        setAssumedEncoding("UTF-8");
+    }
+
+    #! Returns the organization ID
+    string getOrganizationId() {
+        return organization_id;
+    }
+
+    #! Sets the organization ID
+    setOrganizationId(string org_id) {
+        organization_id = org_id;
+    }
+
+    #! Returns the subdomain
+    string getSubdomain() {
+        return subdomain;
+    }
+
+    #! Returns the domain
+    string getDomain() {
+        return domain;
+    }
+
+    #! Overrides doRequest to automatically add organization_id parameter
+    /** The organization_id is automatically appended to all API paths except for
+        /organizations which is used to retrieve the list of available organizations.
+    */
+    hash<auto> doRequest(string method, string path, auto body,
+            *reference<hash<auto>> info, softbool decode_errors = True, *hash<auto> hdr) {
+        # Append organization_id to all requests except /organizations
+        if (organization_id && path !~ /^\/organizations($|\?)/) {
+            if (path !~ /\?/) {
+                path += "?organization_id=" + organization_id;
+            } else {
+                path += "&organization_id=" + organization_id;
+            }
+        }
+        return RestClient::doRequest(method, path, body, \info, decode_errors, hdr);
+    }
+}
+
 #! Class for Zoho Invoice REST connections; returns @ref ZohoInvoiceRestClient objects
 /** This class implements all options of @ref RestClient::RestConnection "RestClientConnection"; in addition,
     this class provides the following options:
@@ -350,14 +353,14 @@ public class ZohoInvoiceRestConnection inherits RestClient::RestConnection {
             "options": RestConnection::ConnectionScheme.options + {
                 "data": RestConnection::ConnectionScheme.options."data"
                 + <ConnectionOptionInfo>{
-                    "default_value": ZohoInvoiceRestClient::DefaultData,
+                    "default_value": ZohoInvoiceRestClientBase::DefaultData,
                 },
                 "subdomain": <ConnectionOptionInfo>{
                     "display_name": "Sub Domain",
                     "short_desc": "Zoho subdomain",
                     "type": "string",
                     "desc": "Select the Zoho subdomain for your account.",
-                    "default_value": ZohoInvoiceRestClient::DefaultSubdomain,
+                    "default_value": ZohoInvoiceRestClientBase::DefaultSubdomain,
                     "preselected": True,
                     "allowed_values": (
                         <AllowedValueInfo>{
@@ -379,7 +382,7 @@ public class ZohoInvoiceRestConnection inherits RestClient::RestConnection {
                     "short_desc": "Zoho domain",
                     "type": "string",
                     "desc": "Select the Zoho domain for your account based on your data center region.",
-                    "default_value": ZohoInvoiceRestClient::DefaultDomain,
+                    "default_value": ZohoInvoiceRestClientBase::DefaultDomain,
                     "preselected": True,
                     "allowed_values": (
                         <AllowedValueInfo>{
@@ -428,37 +431,37 @@ public class ZohoInvoiceRestConnection inherits RestClient::RestConnection {
                 },
                 "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
                 + <ConnectionOptionInfo>{
-                    "default_value": ZohoInvoiceRestClient::DefaultPingHeaders,
+                    "default_value": ZohoInvoiceRestClientBase::DefaultPingHeaders,
                 },
                 "ping_method": RestConnection::ConnectionScheme.options."ping_method"
                 + <ConnectionOptionInfo>{
-                    "default_value": ZohoInvoiceRestClient::DefaultPingMethod,
+                    "default_value": ZohoInvoiceRestClientBase::DefaultPingMethod,
                 },
                 "ping_path": RestConnection::ConnectionScheme.options."ping_path"
                 + <ConnectionOptionInfo>{
-                    "default_value": ZohoInvoiceRestClient::DefaultPingPath,
+                    "default_value": ZohoInvoiceRestClientBase::DefaultPingPath,
                 },
                 "oauth2_auth_url": RestConnection::ConnectionScheme.options.oauth2_auth_url
                 + <ConnectionOptionInfo>{
                     "default_value": sprintf("https://accounts.%s%s/oauth/v2/auth",
-                        ZohoInvoiceRestClient::DefaultSubdomain, ZohoInvoiceRestClient::DefaultDomain),
+                        ZohoInvoiceRestClientBase::DefaultSubdomain, ZohoInvoiceRestClientBase::DefaultDomain),
                 },
                 "oauth2_token_url": RestConnection::ConnectionScheme.options.oauth2_token_url
                 + <ConnectionOptionInfo>{
                     "default_value": sprintf("https://accounts.%s%s/oauth/v2/token",
-                        ZohoInvoiceRestClient::DefaultSubdomain, ZohoInvoiceRestClient::DefaultDomain),
+                        ZohoInvoiceRestClientBase::DefaultSubdomain, ZohoInvoiceRestClientBase::DefaultDomain),
                 },
                 "oauth2_grant_type": RestConnection::ConnectionScheme.options.oauth2_grant_type
                 + <ConnectionOptionInfo>{
-                    "default_value": ZohoInvoiceRestClient::DefaultGrantType,
+                    "default_value": ZohoInvoiceRestClientBase::DefaultGrantType,
                 },
                 "oauth2_scopes": RestConnection::ConnectionScheme.options.oauth2_scopes
                 + <ConnectionOptionInfo>{
-                    "default_value": ZohoInvoiceRestClient::DefaultScopes,
+                    "default_value": ZohoInvoiceRestClientBase::DefaultScopes,
                 },
                 "oauth2_auth_args": RestConnection::ConnectionScheme.options.oauth2_auth_args
                 + <ConnectionOptionInfo>{
-                    "default_value": ZohoInvoiceRestClient::DefaultAuthArgs,
+                    "default_value": ZohoInvoiceRestClientBase::DefaultAuthArgs,
                 },
             },
             "required_options": "subdomain,domain,token|oauth2_auth_url,oauth2_grant_type,oauth2_token_url,"
@@ -519,7 +522,7 @@ public class ZohoInvoiceRestConnection inherits RestClient::RestConnection {
     */
     private static hash<auto> getConfig(hash<auto> config) {
         # Get domain from options, default to .com
-        string domain = config.opts.domain ?? ZohoInvoiceRestClient::DefaultDomain;
+        string domain = config.opts.domain ?? ZohoInvoiceRestClientBase::DefaultDomain;
 
         # Build URL from domain
         string url = sprintf("zohoinvoice://www.zohoapis%s", domain);
@@ -539,18 +542,18 @@ public class ZohoInvoiceRestConnection inherits RestClient::RestConnection {
     *hash<auto> getConnectionOptions(*hash<auto> rtopts) {
         hash<auto> rv = RestConnection::getConnectionOptions(rtopts);
         # Always build OAuth2 URLs from subdomain and domain to ensure they match current settings
-        string subdomain = rv.subdomain ?? ZohoInvoiceRestClient::DefaultSubdomain;
-        string domain = rv.domain ?? ZohoInvoiceRestClient::DefaultDomain;
+        string subdomain = rv.subdomain ?? ZohoInvoiceRestClientBase::DefaultSubdomain;
+        string domain = rv.domain ?? ZohoInvoiceRestClientBase::DefaultDomain;
         rv.oauth2_auth_url = sprintf("https://accounts.%s%s/oauth/v2/auth", subdomain, domain);
         rv.oauth2_token_url = sprintf("https://accounts.%s%s/oauth/v2/token", subdomain, domain);
         if (!rv.oauth2_grant_type) {
-            rv.oauth2_grant_type = ZohoInvoiceRestClient::DefaultGrantType;
+            rv.oauth2_grant_type = ZohoInvoiceRestClientBase::DefaultGrantType;
         }
         if (!rv.oauth2_scopes) {
-            rv.oauth2_scopes = ZohoInvoiceRestClient::DefaultScopes;
+            rv.oauth2_scopes = ZohoInvoiceRestClientBase::DefaultScopes;
         }
         if (!rv.oauth2_auth_args) {
-            rv.oauth2_auth_args = ZohoInvoiceRestClient::DefaultAuthArgs;
+            rv.oauth2_auth_args = ZohoInvoiceRestClientBase::DefaultAuthArgs;
         }
         return rv;
     }
@@ -598,8 +601,8 @@ public class ZohoInvoiceRestConnection inherits RestClient::RestConnection {
         # update the URL and OAuth2 URLs immediately if necessary
         if (update_options) {
             # Build correct URLs from subdomain and domain options instead of hardcoded defaults
-            string subdomain = opts.subdomain ?? ZohoInvoiceRestClient::DefaultSubdomain;
-            string domain = opts.domain ?? ZohoInvoiceRestClient::DefaultDomain;
+            string subdomain = opts.subdomain ?? ZohoInvoiceRestClientBase::DefaultSubdomain;
+            string domain = opts.domain ?? ZohoInvoiceRestClientBase::DefaultDomain;
             string correct_url = sprintf("zohoinvoice://www.zohoapis%s", domain);
             string correct_auth_url = sprintf("https://accounts.%s%s/oauth/v2/auth", subdomain, domain);
             string correct_token_url = sprintf("https://accounts.%s%s/oauth/v2/token", subdomain, domain);
@@ -651,13 +654,13 @@ public class ZohoInvoiceRestConnection inherits RestClient::RestConnection {
 #! REST client for Zoho Invoice REST API using multiplexed HTTP connections
 /** @see ZohoInvoiceRestClient for more information
 */
-public class ZohoInvoiceRestClientIo inherits RestClientIo::RestClientIo {
+public class ZohoInvoiceRestClientIo inherits RestClientIo::RestClientIo, ZohoInvoiceRestClientBase {
     #! Creates the object with the given options
     /** @param opts constructor options
         @param shared_mgr optional shared connection manager
     */
     constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
-            : RestClientIo(ZohoInvoiceRestClient::getOptions(opts), shared_mgr) {
+            : RestClientIo(ZohoInvoiceRestClientBase::getOptions(opts), shared_mgr) {
     }
 }
 }

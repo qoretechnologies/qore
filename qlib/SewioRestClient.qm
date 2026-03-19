@@ -114,11 +114,8 @@ printf("%N\n", ans.body);
 
 #! the SewioRestClient namespace contains all the objects in the SewioRestClient module
 public namespace SewioRestClient {
-#! this class provides the REST client API for communication with <a href="http://www.sewio.net">Sewio.net</a>'s RTLS Studio servers
-/** This class requires the following options for <a href="http://www.sewio.net">Sewio.net</a>'s RTLS Studio authentication and authorization to the target server:
-    - \c apikey: the <a href="http://www.sewio.net">Sewio.net</a>'s RTLS Studio API key
-*/
-public class SewioRestClient inherits RestClient::RestClient {
+#! Common base class for SewioRestClient functionality
+public class SewioRestClientBase {
     public {
         #! default send encoding
         const DefaultSendEncoding = "gzip";
@@ -130,6 +127,20 @@ public class SewioRestClient inherits RestClient::RestClient {
         );
     }
 
+    #! returns options for the \c RestClient::RestClient::constructor() "RestClient::constructor()"
+    static hash getOptions(hash opts) {
+        return opts + {
+            "data": "json",
+            "headers": {"X-ApiKey": opts.apikey} + opts.headers,
+        };
+    }
+}
+
+#! this class provides the REST client API for communication with <a href="http://www.sewio.net">Sewio.net</a>'s RTLS Studio servers
+/** This class requires the following options for <a href="http://www.sewio.net">Sewio.net</a>'s RTLS Studio authentication and authorization to the target server:
+    - \c apikey: the <a href="http://www.sewio.net">Sewio.net</a>'s RTLS Studio API key
+*/
+public class SewioRestClient inherits RestClient::RestClient, SewioRestClientBase {
     private:internal {
         string apikey;
     }
@@ -168,7 +179,7 @@ SewioRestClient rest(("url": "http://rtlsstudio.com/sensmapserver", "apikey": ap
         @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data serialization, etc
         @throw SEWIORESTCLIENT-ERROR missing or invalid connection option
     */
-    constructor(hash<auto> opts, *softbool do_not_connect) : RestClient(SewioRestClient::getOptions(opts), True) {
+    constructor(hash<auto> opts, *softbool do_not_connect) : RestClient(SewioRestClientBase::getOptions(opts), True) {
         # check required options
         foreach string key in (RequiredOptions) {
             auto v = opts{key};
@@ -186,14 +197,6 @@ SewioRestClient rest(("url": "http://rtlsstudio.com/sensmapserver", "apikey": ap
         if (!do_not_connect) {
             connect();
         }
-    }
-
-    #! returns options for the \c RestClient::RestClient::constructor() "RestClient::constructor()"
-    static hash getOptions(hash opts) {
-        return opts + {
-            "data": "json",
-            "headers": {"X-ApiKey": opts.apikey} + opts.headers,
-        };
     }
 }
 
@@ -254,7 +257,7 @@ public class SewioRestConnection inherits RestClient::RestConnection {
                             "desc": "use no content encoding",
                         },
                     ),
-                    "default_value": SewioRestClient::DefaultSendEncoding,
+                    "default_value": SewioRestClientBase::DefaultSendEncoding,
                 },
                 "apikey": <ConnectionOptionInfo>{
                     "display_name": "API Key",
@@ -263,7 +266,7 @@ public class SewioRestConnection inherits RestClient::RestConnection {
                     "desc": "The Sewio RTLS Studio API key",
                 },
             },
-            "required_options": foldl $1 + "," + $2, SewioRestClient::RequiredOptions,
+            "required_options": foldl $1 + "," + $2, SewioRestClientBase::RequiredOptions,
         };
     }
 
@@ -332,13 +335,13 @@ public class SewioRestConnection inherits RestClient::RestConnection {
 }
 
 #! Sewio REST client for non-blocking I/O
-public class SewioRestClientIo inherits RestClientIo::RestClientIo {
+public class SewioRestClientIo inherits RestClientIo::RestClientIo, SewioRestClientBase {
     #! Creates the object with the given options
     /** @param opts constructor options
         @param shared_mgr optional shared connection manager
     */
     constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
-            : RestClientIo(SewioRestClient::getOptions(opts), shared_mgr) {
+            : RestClientIo(SewioRestClientBase::getOptions(opts), shared_mgr) {
     }
 }
 }

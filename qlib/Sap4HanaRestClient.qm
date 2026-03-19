@@ -96,11 +96,8 @@ printf("%N\n", ans.body);
 
 #! the Sap4HanaRestClient namespace contains all the objects in the Sap4HanaRestClient module
 public namespace Sap4HanaRestClient {
-#! this class provides the REST client API for communication with <a href="https://sap.com">SAP S/4Hana</a> servers
-/** This class requires the following options for <a href="https://sap.com">SAP S/4Hana</a> authentication and authorization to the target server:
-    - \c apikey: the <a href="https://sap.com">SAP S/4Hana</a> API key
-*/
-public class Sap4HanaRestClient inherits RestClient::RestClient {
+#! Common base class for Sap4HanaRestClient functionality
+public class Sap4HanaRestClientBase {
     public {
         #! default send encoding
         const DefaultSendEncoding = "gzip";
@@ -109,6 +106,39 @@ public class Sap4HanaRestClient inherits RestClient::RestClient {
         const OAuth2TokenUriPath = "oauth2/apitoken/v1";
     }
 
+    #! throws an exception due to an error
+    static raiseError(string fmt, ...) {
+        throw "SAP4HANARESTCLIENT-ERROR", vsprintf(fmt, argv);
+    }
+
+    #! returns options for the Sap4HanaRestClient constructors
+    static hash<auto> getOptions(hash<auto> opts) {
+        hash<auto> hdr;
+        if (!opts.client_id || !opts.client_secret) {
+            hdr = {
+                "ApiKey": opts.apikey,
+            };
+        } else {
+            opts += {
+                "oauth2_client_id": opts.client_id,
+                "oauth2_client_secret": opts.client_secret,
+                "oauth2_grant_type": opts.oauth2_grant_type ?? "client_credentials",
+                "oauth2_token_url": OAuth2TokenUriPath,
+            };
+        }
+        hdr += opts.headers;
+        return opts + {
+            "data": "json",
+            "headers": hdr,
+        };
+    }
+}
+
+#! this class provides the REST client API for communication with <a href="https://sap.com">SAP S/4Hana</a> servers
+/** This class requires the following options for <a href="https://sap.com">SAP S/4Hana</a> authentication and authorization to the target server:
+    - \c apikey: the <a href="https://sap.com">SAP S/4Hana</a> API key
+*/
+public class Sap4HanaRestClient inherits RestClient::RestClient, Sap4HanaRestClientBase {
     private:internal {
         # for access based on a simple API key
         string apikey;
@@ -163,7 +193,7 @@ Sap4HanaRestClient rest({"url": "https://sandbox.api.sap.com/s4hanacloud/sap/opu
         @throw SAP4HANARESTCLIENT-ERROR missing or invalid required option for
         <a href="https://sap.com">SAP S/4Hana</a> REST authentication or communication
     */
-    constructor(hash<auto> opts, *softbool do_not_connect) : RestClient(Sap4HanaRestClient::getOptions(opts), True) {
+    constructor(hash<auto> opts, *softbool do_not_connect) : RestClient(Sap4HanaRestClientBase::getOptions(opts), True) {
         # check for either the apikey or client id/secret options
         if (opts.apikey) {
             apikey = getString(opts, "apikey");
@@ -188,32 +218,6 @@ Sap4HanaRestClient rest({"url": "https://sandbox.api.sap.com/s4hanacloud/sap/opu
         }
     }
 
-    #! throws an exception due to an error
-    static raiseError(string fmt, ...) {
-        throw "SAP4HANARESTCLIENT-ERROR", vsprintf(fmt, argv);
-    }
-
-    #! returns options for the \c Sap4HanaRestClient::Sap4HanaRestClient::constructor() "Sap4HanaRestClient::constructor()"
-    static hash<auto> getOptions(hash<auto> opts) {
-        hash<auto> hdr;
-        if (!opts.client_id || !opts.client_secret) {
-            hdr = {
-                "ApiKey": opts.apikey,
-            };
-        } else {
-            opts += {
-                "oauth2_client_id": opts.client_id,
-                "oauth2_client_secret": opts.client_secret,
-                "oauth2_grant_type": opts.oauth2_grant_type ?? "client_credentials",
-                "oauth2_token_url": OAuth2TokenUriPath,
-            };
-        }
-        hdr += opts.headers;
-        return opts + {
-            "data": "json",
-            "headers": hdr,
-        };
-    }
 }
 
 #! class for <a href="https://sap.com">SAP S/4Hana</a> REST connections; returns @ref Sap4HanaRestClient::Sap4HanaRestClient objects
@@ -252,10 +256,10 @@ public class Sap4HanaRestConnection inherits RestClient::RestConnection {
                 "client_id": RestConnection::ConnectionScheme.options.oauth2_client_id,
                 "client_secret": RestConnection::ConnectionScheme.options.oauth2_client_secret,
                 "oauth2_token_url": RestConnection::ConnectionScheme.options.oauth2_token_url + <ConnectionOptionInfo>{
-                    "default_value": Sap4HanaRestClient::OAuth2TokenUriPath,
+                    "default_value": Sap4HanaRestClientBase::OAuth2TokenUriPath,
                 },
                 "send_encoding": RestConnection::ConnectionScheme.options.send_encoding + <ConnectionOptionInfo>{
-                    "default_value": Sap4HanaRestClient::DefaultSendEncoding,
+                    "default_value": Sap4HanaRestClientBase::DefaultSendEncoding,
                 },
             },
             "required_options": "client_id,client_secret|apikey",
@@ -375,13 +379,13 @@ public class Sap4HanaRestConnection inherits RestClient::RestConnection {
 }
 
 #! SAP S/4Hana REST client for non-blocking I/O
-public class Sap4HanaRestClientIo inherits RestClientIo::RestClientIo {
+public class Sap4HanaRestClientIo inherits RestClientIo::RestClientIo, Sap4HanaRestClientBase {
     #! Creates the object with the given options
     /** @param opts constructor options
         @param shared_mgr optional shared connection manager
     */
     constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
-            : RestClientIo(Sap4HanaRestClient::getOptions(opts), shared_mgr) {
+            : RestClientIo(Sap4HanaRestClientBase::getOptions(opts), shared_mgr) {
     }
 }
 }

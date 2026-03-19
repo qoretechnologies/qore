@@ -98,6 +98,40 @@ printf("Response body: %N\n", response.body);
 
 #! the ZeyosRestClient namespace contains all the objects in the ZeyosRestClient module
 public namespace ZeyosRestClient {
+#! Common base class for ZeyosRestClient functionality
+public class ZeyosRestClientBase {
+    public {
+        const RequiredOptions = (
+            "appsecret",
+            "instance",
+        );
+
+        const AuthPath = "/auth/v1/login";
+    }
+
+    #! returns options for the \c RestClient::RestClient::constructor() "RestClient::constructor()"
+    static hash<auto> getOptions(hash<auto> options) {
+        # the "{}" is to ensure that "new_options" stays "hash<auto>"
+        hash<auto> new_options = {} + options;
+
+        # remove username and password from URL
+        hash<UrlInfo> url_info = parse_url(options.url);
+        url_info -= ("username", "password");
+        # strip leading slash from path if present
+        url_info.path =~ s/^\///;
+        new_options.url = sprintf("%s://%s%s%s",
+            url_info.protocol ?? "https",
+            url_info.host,
+            (url_info.port ? ":" + url_info.port : ""),
+            (url_info.path.val() ? "/" + url_info.path : ""));
+
+        if (!exists options.no_charset) {
+            new_options.no_charset = True;
+        }
+        return new_options;
+    }
+}
+
 #! this class provides the REST client API for communication with the <a href="http://www.zeyos.com">zeyos.com</a> CRM ERP system
 /** This class requires one of the following options for <a href="http://www.zeyos.com">zeyos.com</a>'s
     authentication and authorization to the target server:
@@ -107,15 +141,7 @@ public namespace ZeyosRestClient {
 
     After connecting, the ZeyosRestClient class will request a session token that will be used in further communication.
     */
-public class ZeyosRestClient inherits RestClient::RestClient {
-    public {
-        const RequiredOptions = (
-            "appsecret",
-            "instance",
-        );
-
-        const AuthPath = "/auth/v1/login";
-    }
+public class ZeyosRestClient inherits RestClient::RestClient, ZeyosRestClientBase {
 
     private:internal {
         string identifier;
@@ -168,7 +194,7 @@ ZeyosRestClient zeyos(
         @throw ZEYOSRESTCLIENT-ERROR missing or invalid required option for <a href="http://www.zeyos.com">Zeyos.com</a> REST authentication or communication
     */
     constructor(hash<auto> options, *softbool do_not_connect)
-            : RestClient(ZeyosRestClient::getOptions(options), True) {
+            : RestClient(ZeyosRestClientBase::getOptions(options), True) {
         # set username and password, if present
         if (options.url) {
             self += parse_url(options.url){"username", "password"};
@@ -208,28 +234,6 @@ ZeyosRestClient zeyos(
                 connect();
             }
         }
-    }
-
-    #! returns options for the \c RestClient::RestClient::constructor() "RestClient::constructor()"
-    static hash<auto> getOptions(hash<auto> options) {
-        # the "{}" is to ensure that "new_options" stays "hash<auto>"
-        hash<auto> new_options = {} + options;
-
-        # remove username and password from URL
-        hash<UrlInfo> url_info = parse_url(options.url);
-        url_info -= ("username", "password");
-        # strip leading slash from path if present
-        url_info.path =~ s/^\///;
-        new_options.url = sprintf("%s://%s%s%s",
-            url_info.protocol ?? "https",
-            url_info.host,
-            (url_info.port ? ":" + url_info.port : ""),
-            (url_info.path.val() ? "/" + url_info.path : ""));
-
-        if (!exists options.no_charset) {
-            new_options.no_charset = True;
-        }
-        return new_options;
     }
 
     #! Checks if a login is necessary; if so, then the login is performed
@@ -300,7 +304,7 @@ public class ZeyosRestConnection inherits RestClient::RestConnection {
                     "desc": "Sets the Zeyos instance name (first segment of URI path)",
                 },
             },
-            "required_options": foldl $1 + "," + $2, ZeyosRestClient::RequiredOptions,
+            "required_options": foldl $1 + "," + $2, ZeyosRestClientBase::RequiredOptions,
         };
     }
 
@@ -377,13 +381,13 @@ public class ZeyosRestConnection inherits RestClient::RestConnection {
 }
 
 #! Zeyos REST client for non-blocking I/O
-public class ZeyosRestClientIo inherits RestClientIo::RestClientIo {
+public class ZeyosRestClientIo inherits RestClientIo::RestClientIo, ZeyosRestClientBase {
     #! Creates the object with the given options
     /** @param opts constructor options
         @param shared_mgr optional shared connection manager
     */
     constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
-            : RestClientIo(ZeyosRestClient::getOptions(opts), shared_mgr) {
+            : RestClientIo(ZeyosRestClientBase::getOptions(opts), shared_mgr) {
     }
 }
 }

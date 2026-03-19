@@ -93,6 +93,36 @@ printf("%N\n", ans.body);
 
 #! the MewsRestClient namespace contains all the objects in the MewsRestClient module
 public namespace MewsRestClient {
+#! Common base class for MewsRestClient functionality
+public class MewsRestClientBase {
+    public {
+        #! Connector REST API path prefix
+        const DefaultUriPathPrefix = "api/connector/v1";
+
+        #! Default client value
+        const DefaultClient = sprintf("Qore %s", Qore::VersionString);
+    }
+
+    #! returns options for @ref MewsRestClient::MewsRestClient::constructor()
+    static hash<auto> getOptions(hash<auto> opts) {
+        if (!opts.swagger && !opts.validator) {
+            string path = dirname(get_module_hash().MewsRestClient.filename)
+                + "/MewsRestDataProvider/mews-swagger-2.0.yaml";
+            if (is_file(path)) {
+                opts.swagger = path;
+                # the Mews Swagger file has been heavily corrected and updated but still needs compat flags to be
+                # usable
+                # - LM_OPTIONAL_REF_PROPERTIES: many properties set by references are missing in the data and must be
+                #   treated as optional
+                # - LM_ACCEPT_ALL_PROPERTIES: the API is often updated with new properties that are not in the schema;
+                #   this is to ensure that API calls will still work when the server returns unexpected data
+                opts.swagger_lax_parsing = LM_OPTIONAL_REF_PROPERTIES | LM_ACCEPT_ALL_PROPERTIES;
+            }
+        }
+        return opts + {"data": "json"};
+    }
+}
+
 #! this class provides the REST client API for communication with Mews servers
 /** You must use an OAuth2 token by setting the \c token and \c oauth2_refresh_token options; the following options
     need to be set as well:
@@ -102,15 +132,7 @@ public namespace MewsRestClient {
     Then an external program has to guide the user through using the authorization_grant flow to get a token to use;
     this module does not implement that flow.
 */
-public class MewsRestClient inherits RestClient::RestClient {
-    public {
-        #! Connector REST API path prefix
-        const DefaultUriPathPrefix = "api/connector/v1";
-
-        #! Default client value
-        const DefaultClient = sprintf("Qore %s", Qore::VersionString);
-    }
-
+public class MewsRestClient inherits RestClient::RestClient, MewsRestClientBase {
     private {
         #! Mews client token
         string client_token;
@@ -135,7 +157,7 @@ MewsRestClient rest(opts);
 
         @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data serialization, etc
     */
-    constructor(hash<auto> opts, *softbool do_not_connect) : RestClient(MewsRestClient::getOptions(opts), True) {
+    constructor(hash<auto> opts, *softbool do_not_connect) : RestClient(MewsRestClientBase::getOptions(opts), True) {
         if (opts.client_token) {
             client_token = opts.client_token;
         } else {
@@ -202,25 +224,6 @@ MewsRestClient rest(opts);
     #! Checks if a login is necessary; if so, then the login is performed
     private checkLogin(*reference<hash<auto>> info) {
     }
-
-    #! returns options for @ref MewsRestClient::MewsRestClient::constructor()
-    static hash<auto> getOptions(hash<auto> opts) {
-        if (!opts.swagger && !opts.validator) {
-            string path = dirname(get_module_hash().MewsRestClient.filename)
-                + "/MewsRestDataProvider/mews-swagger-2.0.yaml";
-            if (is_file(path)) {
-                opts.swagger = path;
-                # the Mews Swagger file has been heavily corrected and updated but still needs compat flags to be
-                # usable
-                # - LM_OPTIONAL_REF_PROPERTIES: many properties set by references are missing in the data and must be
-                #   treated as optional
-                # - LM_ACCEPT_ALL_PROPERTIES: the API is often updated with new properties that are not in the schema;
-                #   this is to ensure that API calls will still work when the server returns unexpected data
-                opts.swagger_lax_parsing = LM_OPTIONAL_REF_PROPERTIES | LM_ACCEPT_ALL_PROPERTIES;
-            }
-        }
-        return opts + {"data": "json"};
-    }
 }
 
 #! Class for Mews REST connections; returns @ref MewsRestClient objects
@@ -281,7 +284,7 @@ public class MewsRestConnection inherits RestClient::RestConnection {
                     "short_desc": "The Mews client value for requests",
                     "type": "string",
                     "desc": "The Mews client value for requests",
-                    "default_value": MewsRestClient::DefaultClient,
+                    "default_value": MewsRestClientBase::DefaultClient,
                 },
                 "client_token": <ConnectionOptionInfo>{
                     "display_name": "Mews Client Token",
@@ -370,7 +373,7 @@ public class MewsRestConnection inherits RestClient::RestConnection {
         # ensure that no validator is used, as loading the schema cannot be done in a nonblocking way in the polling
         # thread
         hash<auto> new_opts = real_opts + {
-            "ping_path": "/" + MewsRestClient::DefaultUriPathPrefix + "/" + real_opts.ping_path,
+            "ping_path": "/" + MewsRestClientBase::DefaultUriPathPrefix + "/" + real_opts.ping_path,
             "ping_body": getPingBody(),
         };
         if (real_opts.validator instanceof AbstractRestSchemaValidator) {
@@ -391,7 +394,7 @@ public class MewsRestConnection inherits RestClient::RestConnection {
     private *string getPingPath() {
         return real_opts.validator
             ? real_opts.ping_path
-            : MewsRestClient::DefaultUriPathPrefix + "/" + real_opts.ping_path;
+            : MewsRestClientBase::DefaultUriPathPrefix + "/" + real_opts.ping_path;
     }
 
     private auto getPingBody() {
@@ -437,13 +440,13 @@ public class MewsRestConnection inherits RestClient::RestConnection {
 #! REST client for Mews REST API using multiplexed HTTP connections
 /** @see MewsRestClient for more information
 */
-public class MewsRestClientIo inherits RestClientIo::RestClientIo {
+public class MewsRestClientIo inherits RestClientIo::RestClientIo, MewsRestClientBase {
     #! Creates the object with the given options
     /** @param opts constructor options
         @param shared_mgr optional shared connection manager
     */
     constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
-            : RestClientIo(MewsRestClient::getOptions(opts), shared_mgr) {
+            : RestClientIo(MewsRestClientBase::getOptions(opts), shared_mgr) {
     }
 }
 }

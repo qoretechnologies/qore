@@ -95,20 +95,8 @@ printf("Activities: %y\n", result.body);
 #! the CustomerIoRestClient namespace contains all the objects in the CustomerIoRestClient module
 public namespace CustomerIoRestClient {
 
-#! This class provides the REST client API for communication with Customer.io App API servers
-/** Customer.io uses two separate REST APIs:
-    - App API (this client): Bearer token auth, for reading data and triggering messages
-    - Track API (handled in DataProvider base class): Basic auth, for writing customer data and tracking events
-
-    @par Regional URLs:
-    - US: https://api.customer.io/v1 (App API), https://track.customer.io/api/v1 (Track API)
-    - EU: https://api-eu.customer.io/v1 (App API), https://track-eu.customer.io/api/v1 (Track API)
-
-    @par Rate Limits:
-    - App API: 10 requests per second (standard), 100/s (transactional), 1/10s (broadcasts)
-    - Track API: 100 requests per second
-*/
-public class CustomerIoRestClient inherits RestClient::RestClient {
+#! Common base class for CustomerIoRestClient functionality
+public class CustomerIoRestClientBase {
     public {
         #! Default US App API URL
         const DefaultAppApiUrl = "https://api.customer.io/v1/api";
@@ -157,6 +145,58 @@ public class CustomerIoRestClient inherits RestClient::RestClient {
         };
     }
 
+    #! Returns the App API URL for the given region
+    static string getAppApiUrl(string region) {
+        return region == "eu" ? EuAppApiUrl : DefaultAppApiUrl;
+    }
+
+    #! Returns the Track API URL for the given region
+    static string getTrackApiUrl(string region) {
+        return region == "eu" ? EuTrackApiUrl : DefaultTrackApiUrl;
+    }
+
+    #! returns options for @ref CustomerIoRestClient::CustomerIoRestClient::constructor()
+    static hash<auto> getOptions(hash<auto> opts) {
+        hash<auto> rv = DefaultOptions + opts;
+
+        # Validate region
+        string region = opts.region ?? DefaultRegion;
+        if (region !~ /^(us|eu)$/) {
+            throw "CUSTOMERIO-ERROR", sprintf("invalid region %y; allowed values: \"us\", \"eu\"", region);
+        }
+
+        # Build App API URL from region
+        rv.url = getAppApiUrl(region);
+
+        # Set Bearer token authentication
+        if (opts.app_api_key) {
+            rv.token = opts.app_api_key;
+        }
+
+        # Remove custom options so RestClient doesn't try to use them
+        remove rv.app_api_key;
+        remove rv.site_id;
+        remove rv.tracking_api_key;
+        remove rv.region;
+
+        return rv;
+    }
+}
+
+#! This class provides the REST client API for communication with Customer.io App API servers
+/** Customer.io uses two separate REST APIs:
+    - App API (this client): Bearer token auth, for reading data and triggering messages
+    - Track API (handled in DataProvider base class): Basic auth, for writing customer data and tracking events
+
+    @par Regional URLs:
+    - US: https://api.customer.io/v1 (App API), https://track.customer.io/api/v1 (Track API)
+    - EU: https://api-eu.customer.io/v1 (App API), https://track-eu.customer.io/api/v1 (Track API)
+
+    @par Rate Limits:
+    - App API: 10 requests per second (standard), 100/s (transactional), 1/10s (broadcasts)
+    - Track API: 100 requests per second
+*/
+public class CustomerIoRestClient inherits RestClient::RestClient, CustomerIoRestClientBase {
     #! creates the object with the given options
     /**
         @par Example:
@@ -183,7 +223,7 @@ CustomerIoRestClient cio({
         @throw CUSTOMERIO-ERROR missing required option 'app_api_key'
     */
     constructor(hash<auto> opts, *softbool do_not_connect)
-            : RestClient(CustomerIoRestClient::getOptions(opts), do_not_connect) {
+            : RestClient(CustomerIoRestClientBase::getOptions(opts), do_not_connect) {
         setAssumedEncoding("UTF-8");
     }
 
@@ -234,43 +274,6 @@ CustomerIoRestClient cio({
         }
         return default_delay;
     }
-
-    #! Returns the App API URL for the given region
-    static string getAppApiUrl(string region) {
-        return region == "eu" ? EuAppApiUrl : DefaultAppApiUrl;
-    }
-
-    #! Returns the Track API URL for the given region
-    static string getTrackApiUrl(string region) {
-        return region == "eu" ? EuTrackApiUrl : DefaultTrackApiUrl;
-    }
-
-    #! returns options for @ref CustomerIoRestClient::CustomerIoRestClient::constructor()
-    static hash<auto> getOptions(hash<auto> opts) {
-        hash<auto> rv = DefaultOptions + opts;
-
-        # Validate region
-        string region = opts.region ?? DefaultRegion;
-        if (region !~ /^(us|eu)$/) {
-            throw "CUSTOMERIO-ERROR", sprintf("invalid region %y; allowed values: \"us\", \"eu\"", region);
-        }
-
-        # Build App API URL from region
-        rv.url = getAppApiUrl(region);
-
-        # Set Bearer token authentication
-        if (opts.app_api_key) {
-            rv.token = opts.app_api_key;
-        }
-
-        # Remove custom options so RestClient doesn't try to use them
-        remove rv.app_api_key;
-        remove rv.site_id;
-        remove rv.tracking_api_key;
-        remove rv.region;
-
-        return rv;
-    }
 }
 
 #! Class for Customer.io REST connections; returns @ref CustomerIoRestClient objects
@@ -313,7 +316,7 @@ public class CustomerIoRestConnection inherits RestClient::RestConnection {
             "options": RestConnection::ConnectionScheme.options + {
                 "data": RestConnection::ConnectionScheme.options."data"
                 + <ConnectionOptionInfo>{
-                    "default_value": CustomerIoRestClient::DefaultData,
+                    "default_value": CustomerIoRestClientBase::DefaultData,
                 },
                 "app_api_key": <ConnectionOptionInfo>{
                     "display_name": "App API Key",
@@ -359,7 +362,7 @@ public class CustomerIoRestConnection inherits RestClient::RestConnection {
                     "type": "string",
                     "desc": "Select the Customer.io data center region for your account.\n\n"
                         "Your region is determined when you create your Customer.io account and cannot be changed.",
-                    "default_value": CustomerIoRestClient::DefaultRegion,
+                    "default_value": CustomerIoRestClientBase::DefaultRegion,
                     "preselected": True,
                     "allowed_values": (
                         <AllowedValueInfo>{
@@ -378,15 +381,15 @@ public class CustomerIoRestConnection inherits RestClient::RestConnection {
                 },
                 "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
                 + <ConnectionOptionInfo>{
-                    "default_value": CustomerIoRestClient::DefaultPingHeaders,
+                    "default_value": CustomerIoRestClientBase::DefaultPingHeaders,
                 },
                 "ping_method": RestConnection::ConnectionScheme.options."ping_method"
                 + <ConnectionOptionInfo>{
-                    "default_value": CustomerIoRestClient::DefaultPingMethod,
+                    "default_value": CustomerIoRestClientBase::DefaultPingMethod,
                 },
                 "ping_path": RestConnection::ConnectionScheme.options."ping_path"
                 + <ConnectionOptionInfo>{
-                    "default_value": CustomerIoRestClient::DefaultPingPath,
+                    "default_value": CustomerIoRestClientBase::DefaultPingPath,
                 },
             },
             "required_options": "app_api_key,site_id,tracking_api_key",
@@ -426,7 +429,7 @@ public class CustomerIoRestConnection inherits RestClient::RestConnection {
 
     #! returns config for @ref CustomerIoRestConnection::constructor()
     private static hash<auto> getConfig(hash<auto> config) {
-        string region = config.opts.region ?? CustomerIoRestClient::DefaultRegion;
+        string region = config.opts.region ?? CustomerIoRestClientBase::DefaultRegion;
         string url = sprintf("customerio://api%s.customer.io",
             region == "eu" ? "-eu" : "");
         return config + {
@@ -473,7 +476,7 @@ public class CustomerIoRestConnection inherits RestClient::RestConnection {
     setUpdateOptionsCode(*code update_options) {
         UpdateOptionsInterface::setUpdateOptionsCode(update_options);
         if (update_options) {
-            string region = opts.region ?? CustomerIoRestClient::DefaultRegion;
+            string region = opts.region ?? CustomerIoRestClientBase::DefaultRegion;
             string correct_url = sprintf("customerio://api%s.customer.io",
                 region == "eu" ? "-eu" : "");
             hash<auto> updates;
@@ -511,13 +514,13 @@ public class CustomerIoRestConnection inherits RestClient::RestConnection {
 #! REST client for Customer.io REST API using multiplexed HTTP connections
 /** @see CustomerIoRestClient for more information
 */
-public class CustomerIoRestClientIo inherits RestClientIo::RestClientIo {
+public class CustomerIoRestClientIo inherits RestClientIo::RestClientIo, CustomerIoRestClientBase {
     #! Creates the object with the given options
     /** @param opts constructor options
         @param shared_mgr optional shared connection manager
     */
     constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
-            : RestClientIo(CustomerIoRestClient::getOptions(opts), shared_mgr) {
+            : RestClientIo(CustomerIoRestClientBase::getOptions(opts), shared_mgr) {
     }
 }
 } # namespace CustomerIoRestClient

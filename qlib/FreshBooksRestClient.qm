@@ -96,21 +96,8 @@ printf("User: %s %s\n", result.body.response.first_name, result.body.response.la
 #! the FreshBooksRestClient namespace contains all the objects in the FreshBooksRestClient module
 public namespace FreshBooksRestClient {
 
-#! This class provides the REST client API for communication with FreshBooks servers
-/** FreshBooks uses a REST API at https://api.freshbooks.com with OAuth2 authentication.
-
-    @par Endpoint Structure:
-    - Accounting: /accounting/account/<accountId>/...
-    - Time tracking: /timetracking/business/<businessId>/...
-    - Identity: /auth/api/v1/...
-    - Events: /events/account/<accountId>/...
-
-    @par Authentication:
-    - OAuth2 with Bearer tokens
-    - Access tokens valid for 12 hours
-    - Refresh tokens never expire (one-time use)
-*/
-public class FreshBooksRestClient inherits RestClient::RestClient {
+#! Common base class for FreshBooksRestClient functionality
+public class FreshBooksRestClientBase {
     public {
         #! Default FreshBooks API URL
         const DefaultUrl = "https://api.freshbooks.com";
@@ -169,6 +156,46 @@ public class FreshBooksRestClient inherits RestClient::RestClient {
         };
     }
 
+    #! returns options for @ref FreshBooksRestClient::FreshBooksRestClient::constructor()
+    static hash<auto> getOptions(hash<auto> opts) {
+        hash<auto> rv = DefaultOptions + opts;
+
+        # Check if token-only mode (token provided without OAuth2 credentials)
+        bool token_only = opts.token && !opts.oauth2_client_id && !opts.oauth2_client_secret
+            && !opts.oauth2_refresh_token;
+
+        if (!token_only && opts.oauth2_client_id) {
+            rv += OAuth2Options;
+        } else if (opts.token) {
+            # Bearer token mode
+            rv.headers.Authorization = "Bearer " + opts.token;
+            # Remove token from opts so RestClient doesn't add another "Bearer" prefix
+            remove rv.token;
+        }
+
+        # Remove custom options that RestClient doesn't understand
+        remove rv.account_id;
+        remove rv.business_id;
+
+        return rv;
+    }
+}
+
+#! This class provides the REST client API for communication with FreshBooks servers
+/** FreshBooks uses a REST API at https://api.freshbooks.com with OAuth2 authentication.
+
+    @par Endpoint Structure:
+    - Accounting: /accounting/account/<accountId>/...
+    - Time tracking: /timetracking/business/<businessId>/...
+    - Identity: /auth/api/v1/...
+    - Events: /events/account/<accountId>/...
+
+    @par Authentication:
+    - OAuth2 with Bearer tokens
+    - Access tokens valid for 12 hours
+    - Refresh tokens never expire (one-time use)
+*/
+public class FreshBooksRestClient inherits RestClient::RestClient, FreshBooksRestClientBase {
     private {
         #! The FreshBooks account ID for accounting endpoints
         string account_id;
@@ -201,7 +228,7 @@ FreshBooksRestClient fb({
         @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data serialization, etc
     */
     constructor(hash<auto> opts, *softbool do_not_connect)
-            : RestClient(FreshBooksRestClient::getOptions(opts), do_not_connect) {
+            : RestClient(FreshBooksRestClientBase::getOptions(opts), do_not_connect) {
         if (opts.account_id) {
             account_id = opts.account_id;
         }
@@ -229,30 +256,6 @@ FreshBooksRestClient fb({
     #! Sets the business ID
     setBusinessId(string bid) {
         business_id = bid;
-    }
-
-    #! returns options for @ref FreshBooksRestClient::FreshBooksRestClient::constructor()
-    static hash<auto> getOptions(hash<auto> opts) {
-        hash<auto> rv = DefaultOptions + opts;
-
-        # Check if token-only mode (token provided without OAuth2 credentials)
-        bool token_only = opts.token && !opts.oauth2_client_id && !opts.oauth2_client_secret
-            && !opts.oauth2_refresh_token;
-
-        if (!token_only && opts.oauth2_client_id) {
-            rv += OAuth2Options;
-        } else if (opts.token) {
-            # Bearer token mode
-            rv.headers.Authorization = "Bearer " + opts.token;
-            # Remove token from opts so RestClient doesn't add another "Bearer" prefix
-            remove rv.token;
-        }
-
-        # Remove custom options that RestClient doesn't understand
-        remove rv.account_id;
-        remove rv.business_id;
-
-        return rv;
     }
 }
 
@@ -285,7 +288,7 @@ public class FreshBooksRestConnection inherits RestClient::RestConnection {
             "options": RestConnection::ConnectionScheme.options + {
                 "data": RestConnection::ConnectionScheme.options."data"
                 + <ConnectionOptionInfo>{
-                    "default_value": FreshBooksRestClient::DefaultData,
+                    "default_value": FreshBooksRestClientBase::DefaultData,
                 },
                 "account_id": <ConnectionOptionInfo>{
                     "display_name": "Account ID",
@@ -308,31 +311,31 @@ public class FreshBooksRestConnection inherits RestClient::RestConnection {
                 },
                 "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
                 + <ConnectionOptionInfo>{
-                    "default_value": FreshBooksRestClient::DefaultPingHeaders,
+                    "default_value": FreshBooksRestClientBase::DefaultPingHeaders,
                 },
                 "ping_method": RestConnection::ConnectionScheme.options."ping_method"
                 + <ConnectionOptionInfo>{
-                    "default_value": FreshBooksRestClient::DefaultPingMethod,
+                    "default_value": FreshBooksRestClientBase::DefaultPingMethod,
                 },
                 "ping_path": RestConnection::ConnectionScheme.options."ping_path"
                 + <ConnectionOptionInfo>{
-                    "default_value": FreshBooksRestClient::DefaultPingPath,
+                    "default_value": FreshBooksRestClientBase::DefaultPingPath,
                 },
                 "oauth2_auth_url": RestConnection::ConnectionScheme.options.oauth2_auth_url
                 + <ConnectionOptionInfo>{
-                    "default_value": FreshBooksRestClient::DefaultAuthUrl,
+                    "default_value": FreshBooksRestClientBase::DefaultAuthUrl,
                 },
                 "oauth2_token_url": RestConnection::ConnectionScheme.options.oauth2_token_url
                 + <ConnectionOptionInfo>{
-                    "default_value": FreshBooksRestClient::DefaultTokenUrl,
+                    "default_value": FreshBooksRestClientBase::DefaultTokenUrl,
                 },
                 "oauth2_grant_type": RestConnection::ConnectionScheme.options.oauth2_grant_type
                 + <ConnectionOptionInfo>{
-                    "default_value": FreshBooksRestClient::DefaultGrantType,
+                    "default_value": FreshBooksRestClientBase::DefaultGrantType,
                 },
                 "oauth2_auth_args": RestConnection::ConnectionScheme.options.oauth2_auth_args
                 + <ConnectionOptionInfo>{
-                    "default_value": FreshBooksRestClient::DefaultAuthArgs,
+                    "default_value": FreshBooksRestClientBase::DefaultAuthArgs,
                 },
             },
             "required_options": "oauth2_client_id,oauth2_client_secret",
@@ -350,7 +353,7 @@ public class FreshBooksRestConnection inherits RestClient::RestConnection {
 
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option
     */
-    constructor(string name, string description, string url = FreshBooksRestClient::DefaultUrl,
+    constructor(string name, string description, string url = FreshBooksRestClientBase::DefaultUrl,
             hash<auto> attributes = {}, hash<auto> options = {})
             : RestConnection(name, description, url, attributes, options) {
     }
@@ -385,13 +388,13 @@ public class FreshBooksRestConnection inherits RestClient::RestConnection {
     *hash<auto> getConnectionOptions(*hash<auto> rtopts) {
         hash<auto> rv = RestConnection::getConnectionOptions(rtopts);
         # Always set OAuth2 URLs
-        rv.oauth2_auth_url = FreshBooksRestClient::DefaultAuthUrl;
-        rv.oauth2_token_url = FreshBooksRestClient::DefaultTokenUrl;
+        rv.oauth2_auth_url = FreshBooksRestClientBase::DefaultAuthUrl;
+        rv.oauth2_token_url = FreshBooksRestClientBase::DefaultTokenUrl;
         if (!rv.oauth2_grant_type) {
-            rv.oauth2_grant_type = FreshBooksRestClient::DefaultGrantType;
+            rv.oauth2_grant_type = FreshBooksRestClientBase::DefaultGrantType;
         }
         if (!rv.oauth2_auth_args) {
-            rv.oauth2_auth_args = FreshBooksRestClient::DefaultAuthArgs;
+            rv.oauth2_auth_args = FreshBooksRestClientBase::DefaultAuthArgs;
         }
         return rv;
     }
@@ -461,13 +464,13 @@ public class FreshBooksRestConnection inherits RestClient::RestConnection {
 #! REST client for FreshBooks REST API using multiplexed HTTP connections
 /** @see FreshBooksRestClient for more information
 */
-public class FreshBooksRestClientIo inherits RestClientIo::RestClientIo {
+public class FreshBooksRestClientIo inherits RestClientIo::RestClientIo, FreshBooksRestClientBase {
     #! Creates the object with the given options
     /** @param opts constructor options
         @param shared_mgr optional shared connection manager
     */
     constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
-            : RestClientIo(FreshBooksRestClient::getOptions(opts), shared_mgr) {
+            : RestClientIo(FreshBooksRestClientBase::getOptions(opts), shared_mgr) {
     }
 }
 }

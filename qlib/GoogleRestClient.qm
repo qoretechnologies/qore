@@ -106,7 +106,11 @@ public namespace GoogleRestClient {
     @note This class encodes \c "+" characters in URI paths as \c "%2B", as the Google API server will return a
     <tt>400 Bad Request</tt> error to requests with this character unencoded
 */
-public class GoogleRestClient inherits RestClient::RestClient {
+#! Common base class for Google REST client functionality
+/** Contains constants, option processing, and authentication logic shared by both
+    @ref GoogleRestClient (synchronous) and @ref GoogleRestClientIo (async/multiplexed).
+*/
+public class GoogleRestClientBase {
     public {
         #! Default Google REST API URL
         const DefaultUrl = "https://www.googleapis.com";
@@ -170,6 +174,48 @@ public class GoogleRestClient inherits RestClient::RestClient {
         };
     }
 
+    #! Returns @ref True if the response was related to an authorization token error
+    /** @return @ref True if the response was related to an authorization token error
+    */
+    bool isAuthTokenError(int status_code, hash<auto> headers, *bool body_deserialized, *string body_content_type,
+            auto body) {
+        if (status_code != 401) {
+            return False;
+        }
+        if (!body_deserialized) {
+            return body =~ /Invalid Credentials/;
+        }
+        return body.error.errors[0].message == "Invalid Credentials";
+    }
+
+    #! returns options for the Google REST client constructors
+    static hash<auto> getOptions(hash<auto> opts) {
+        if (*string prof = opts.api_profile) {
+            *hash<auto> conf = ApiProfiles{prof};
+            if (!exists conf) {
+                throw "GOOGLE-RESTCLIENT-ERROR", sprintf("api_profile %y is unknown; known API profiles: %y", prof,
+                    keys ApiProfiles);
+            }
+            # set ping options
+            map opts{$1.key} = $1.value, conf.pairIterator(), !opts.hasKey($1.key);
+        }
+        return DefaultOptions + opts;
+    }
+}
+
+#! this class provides the REST client API for communication with Google servers
+/** You must use an OAuth2 token by setting the \c token and \c oauth2_refresh_token options; the following options
+    need to be set as well:
+    - \c oauth2_client_id: the OAuth2 client ID
+    - \c oauth2_client_secret: the OAuth2 client secret
+
+    Then an external program has to guide the user through using the authorization_grant flow to get a token to use;
+    this module does not implement that flow.
+
+    @note This class encodes \c "+" characters in URI paths as \c "%2B", as the Google API server will return a
+    <tt>400 Bad Request</tt> error to requests with this character unencoded
+*/
+public class GoogleRestClient inherits RestClient::RestClient, GoogleRestClientBase {
     #! creates the object with the given options
     /**
         @par Example:
@@ -188,35 +234,8 @@ GoogleRestClient rest(opts);
 
         @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data serialization, etc
     */
-    constructor(hash<auto> opts, *softbool do_not_connect) : RestClient(GoogleRestClient::getOptions(opts), True) {
-    }
-
-    #! Returns @ref True if the response was related to an authorization token error
-    /** @return @ref True if the response was related to an authorization token error
-    */
-    bool isAuthTokenError(int status_code, hash<auto> headers, *bool body_deserialized, *string body_content_type,
-            auto body) {
-        if (status_code != 401) {
-            return False;
-        }
-        if (!body_deserialized) {
-            return body =~ /Invalid Credentials/;
-        }
-        return body.error.errors[0].message == "Invalid Credentials";
-    }
-
-    #! returns options for @ref GoogleRestClient::constructor()
-    static hash<auto> getOptions(hash<auto> opts) {
-        if (*string prof = opts.api_profile) {
-            *hash<auto> conf = ApiProfiles{prof};
-            if (!exists conf) {
-                throw "GOOGLE-RESTCLIENT-ERROR", sprintf("api_profile %y is unknown; known API profiles: %y", prof,
-                    keys ApiProfiles);
-            }
-            # set ping options
-            map opts{$1.key} = $1.value, conf.pairIterator(), !opts.hasKey($1.key);
-        }
-        return DefaultOptions + opts;
+    constructor(hash<auto> opts, *softbool do_not_connect)
+            : RestClient(GoogleRestClientBase::getOptions(opts), True) {
     }
 }
 
@@ -270,23 +289,23 @@ public class GoogleRestConnection inherits RestClient::RestConnection {
                 },
                 "data": RestConnection::ConnectionScheme.options."data"
                    + <ConnectionOptionInfo>{
-                    "default_value": GoogleRestClient::DefaultData,
+                    "default_value": GoogleRestClientBase::DefaultData,
                 },
                 "oauth2_auth_args": RestConnection::ConnectionScheme.options.oauth2_auth_args
                     + <ConnectionOptionInfo>{
-                    "default_value": GoogleRestClient::DefaultAuthArgs,
+                    "default_value": GoogleRestClientBase::DefaultAuthArgs,
                 },
                 "oauth2_auth_url": RestConnection::ConnectionScheme.options.oauth2_auth_url
                     + <ConnectionOptionInfo>{
-                    "default_value": GoogleRestClient::DefaultAuthUrl,
+                    "default_value": GoogleRestClientBase::DefaultAuthUrl,
                 },
                 "oauth2_grant_type": RestConnection::ConnectionScheme.options.oauth2_grant_type
                     + <ConnectionOptionInfo>{
-                    "default_value": GoogleRestClient::DefaultGrantType,
+                    "default_value": GoogleRestClientBase::DefaultGrantType,
                 },
                 "oauth2_token_url": RestConnection::ConnectionScheme.options.oauth2_token_url
                     + <ConnectionOptionInfo>{
-                    "default_value": GoogleRestClient::DefaultTokenUrl,
+                    "default_value": GoogleRestClientBase::DefaultTokenUrl,
                 },
             },
             "required_options": "token|oauth2_auth_url,oauth2_grant_type,oauth2_token_url,"
@@ -305,7 +324,7 @@ public class GoogleRestConnection inherits RestClient::RestConnection {
 
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option
     */
-    constructor(string name, string description, string url = GoogleRestClient::DefaultUrl,
+    constructor(string name, string description, string url = GoogleRestClientBase::DefaultUrl,
             hash<auto> attributes = {}, hash<auto> options = {})
             : RestConnection(name, description, url, attributes, GoogleRestConnection::getOptions(options)) {
     }
@@ -341,10 +360,10 @@ public class GoogleRestConnection inherits RestClient::RestConnection {
     static hash<auto> getOptions(hash<auto> opts) {
         hash<auto> rv += opts;
         if (*string prof = opts.api_profile) {
-            *hash<auto> conf = (GoogleRestClient::ApiProfiles{prof} - ("encode_chars",));
+            *hash<auto> conf = (GoogleRestClientBase::ApiProfiles{prof} - ("encode_chars",));
             if (!exists conf) {
                 throw "GOOGLE-RESTCLIENT-ERROR", sprintf("api_profile %y is unknown; known API profiles: %y", prof,
-                    keys GoogleRestClient::ApiProfiles);
+                    keys GoogleRestClientBase::ApiProfiles);
             }
             # set ping options
             map rv{$1.key} = $1.value, conf.pairIterator(), !opts.hasKey($1.key);
@@ -431,7 +450,7 @@ public class GoogleCalendarRestConnection inherits GoogleRestConnection {
 
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option
     */
-    constructor(string name, string description, string url = GoogleRestClient::DefaultUrl,
+    constructor(string name, string description, string url = GoogleRestClientBase::DefaultUrl,
             hash<auto> attributes = {}, hash<auto> options = {})
             : GoogleRestConnection(name, description, url, attributes,
                 GoogleRestConnection::getOptions(options + {"api_profile": "calendar"})) {
@@ -707,13 +726,13 @@ public class GmailRestConnection inherits GoogleRestConnection {
 #! REST client for Google REST API using multiplexed HTTP connections
 /** @see GoogleRestClient for more information
 */
-public class GoogleRestClientIo inherits RestClientIo::RestClientIo {
+public class GoogleRestClientIo inherits RestClientIo::RestClientIo, GoogleRestClientBase {
     #! Creates the object with the given options
     /** @param opts constructor options
         @param shared_mgr optional shared connection manager
     */
     constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
-            : RestClientIo(GoogleRestClient::getOptions(opts), shared_mgr) {
+            : RestClientIo(GoogleRestClientBase::getOptions(opts), shared_mgr) {
     }
 }
 }
