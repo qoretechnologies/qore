@@ -366,6 +366,36 @@ public hashdecl RestResponseInfo {
 
     #! Content-Type header value from the response (if any)
     *string content_type;
+
+    #! The raw (undecoded) response body, if available
+    /** @since RestClient 2.7
+    */
+    *data response_body_raw;
+
+    #! The HTTP method used for the request
+    /** @since RestClient 2.7
+    */
+    *string request_method;
+
+    #! The request path
+    /** @since RestClient 2.7
+    */
+    *string request_path;
+
+    #! The request headers that were sent
+    /** @since RestClient 2.7
+    */
+    *hash<auto> request_headers;
+
+    #! The serialized request body that was sent
+    /** @since RestClient 2.7
+    */
+    *data request_body;
+
+    #! The protocol used for the request (e.g., "h1", "h2", "h3")
+    /** @since RestClient 2.7
+    */
+    *string protocol;
 }
 
 #! Abstract interface for REST clients

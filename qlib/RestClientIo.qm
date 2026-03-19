@@ -396,8 +396,9 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             # 2. Make HTTP request via multiplexed connection manager
             hash<auto> raw = mgr.request(url, method, path, hdr, prepared.serialized_body);
 
-            # 3. Deserialize and return
-            return buildResponse(raw, prepared.error_passthru, method, path);
+            # 3. Deserialize and return — pass request context for info fields
+            return buildResponse(raw, prepared.error_passthru, method, path, hdr,
+                prepared.serialized_body);
         }
 
         #! Sends an async generic REST request and returns a RestFuture
@@ -424,9 +425,12 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             Future raw_future = stream.requestAsync(method, path, hdr, prepared.serialized_body);
 
             # 3. Wrap in RestFuture with a closure that deserializes on get()
+            #    Capture request context for info fields
+            *hash<auto> req_hdr = hdr;
+            *data req_body = prepared.serialized_body;
             code<hash<RestClient::RestResponseInfo>(hash<auto>)> builder =
                 hash<RestClient::RestResponseInfo> sub (hash<auto> raw) {
-                    return buildResponse(raw, req_error_passthru, method, path);
+                    return buildResponse(raw, req_error_passthru, method, path, req_hdr, req_body);
                 };
 
             return new RestFuture(raw_future, stream, builder);
@@ -550,11 +554,13 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             @throw REST-RESPONSE-ERROR if \a req_error_passthru is False and status >= 300
         */
         private hash<RestClient::RestResponseInfo> buildResponse(hash<auto> raw,
-                bool req_error_passthru, string method, string path) {
+                bool req_error_passthru, string method, string path,
+                *hash<auto> request_headers, *data request_body) {
             @assert(raw.hasKey("status_code"));
             @assert(raw.hasKey("headers"));
 
             auto resp_body = raw.body;
+            *data response_body_raw = raw.body;
             *string content_type = raw.headers."content-type";
             if (exists resp_body && content_type) {
                 try {
@@ -577,6 +583,12 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                         "headers": raw.headers,
                         "body": resp_body,
                         "content_type": content_type,
+                        "response_body_raw": response_body_raw,
+                        "request_method": method,
+                        "request_path": path,
+                        "request_headers": request_headers,
+                        "request_body": request_body,
+                        "protocol": raw.protocol,
                     };
             }
 
@@ -585,6 +597,12 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 "headers": raw.headers,
                 "body": resp_body,
                 "content_type": content_type,
+                "response_body_raw": response_body_raw,
+                "request_method": method,
+                "request_path": path,
+                "request_headers": request_headers,
+                "request_body": request_body,
+                "protocol": raw.protocol,
             };
         }
 
