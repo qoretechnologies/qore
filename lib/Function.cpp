@@ -2158,13 +2158,25 @@ int UserVariantBase::setupCall(CodeEvaluationHelper *ceh, ReferenceHolder<QoreLi
     unsigned num_params = signature.numParams();
 
     for (unsigned i = 0; i < num_params; ++i) {
+        QoreValue val;
         if (args && *args) {
             if (args->canEdit()) {
                 assert(**args);
-                signature.lv[i]->instantiate(qore_list_private::get(***args)->takeExists(i));
+                val = qore_list_private::get(***args)->takeExists(i);
             } else {
-                signature.lv[i]->instantiate((*args)->retrieveEntry(i).refSelf());
+                val = (*args)->retrieveEntry(i).refSelf();
             }
+
+            // Apply type filtering for complex hash parameters
+            const QoreTypeInfo* paramTypeInfo = signature.getParamTypeInfo(i);
+            if (paramTypeInfo && val.getType() == NT_HASH) {
+                QoreTypeInfo::acceptInputParam(paramTypeInfo, i, signature.getName(i), val, xsink);
+                if (*xsink) {
+                    return -1;
+                }
+            }
+
+            signature.lv[i]->instantiate(val);
             continue;
         }
 
