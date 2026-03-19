@@ -2159,12 +2159,28 @@ int UserVariantBase::setupCall(CodeEvaluationHelper *ceh, ReferenceHolder<QoreLi
 
     for (unsigned i = 0; i < num_params; ++i) {
         if (args && *args) {
+            QoreValue val;
             if (args->canEdit()) {
                 assert(**args);
-                signature.lv[i]->instantiate(qore_list_private::get(***args)->takeExists(i));
+                val = qore_list_private::get(***args)->takeExists(i);
             } else {
-                signature.lv[i]->instantiate((*args)->retrieveEntry(i).refSelf());
+                val = (*args)->retrieveEntry(i).refSelf();
             }
+
+            // Apply type filter like JIT path: match instantiateFastCallParams in JITRuntime.cpp
+            const QoreTypeInfo* paramTypeInfo = signature.getParamTypeInfo(i);
+            if (QoreTypeInfo::mayRequireFilter(paramTypeInfo, val)) {
+                QoreTypeInfo::acceptInputParam(paramTypeInfo, i, signature.getName(i), val, xsink);
+                if (*xsink) {
+                    // Uninstantiate already-instantiated params in reverse
+                    for (int j = (int)i - 1; j >= 0; --j) {
+                        signature.lv[j]->uninstantiate(xsink);
+                    }
+                    return -1;
+                }
+            }
+
+            signature.lv[i]->instantiate(val);
             continue;
         }
 
