@@ -27,7 +27,7 @@ public namespace HttpClientIo {
 
 #! Abstract base class for HTTP client connections
 /** This class provides the common interface and shared concrete methods for
-    HTTP/2 and HTTP/3 client connections.
+    HTTP/1.1, HTTP/2, and HTTP/3 client connections.
 
     @par Thread Safety
     This class is thread-safe. All mutable state is protected by \c lock.
@@ -77,9 +77,12 @@ public class HttpClientConnection {
 
         #! Number of pending stream reservations (threads assigned but not yet submitted)
         int pending_stream_count = 0;
+
+        #! Proxy connection info (if using a proxy)
+        *hash<auto> proxy_info;
     }
 
-    #! Returns the protocol identifier: "h2" or "h3"
+    #! Returns the protocol identifier: "h1", "h2", or "h3"
     abstract string getProtocol();
 
     #! Returns the poll operation for this connection
@@ -264,7 +267,19 @@ public class HttpClientConnection {
         }
 
         log(LoggerLevel::DEBUG, "submitting request: %s %s", method, path);
-        int stream_id = submitRequestImpl(method, path, headers, body, callback, ctx);
+        int stream_id;
+        try {
+            stream_id = submitRequestImpl(method, path, headers, body, callback, ctx);
+        } catch (hash<ExceptionInfo> ex) {
+            # Mark connection Closed only for connection-fatal errors so the
+            # pool evicts it immediately; transient errors leave it Ready
+            if (HttpClientIo::HttpClientConnectionManager::isConnectionErrorStatic(ex.err)) {
+                AutoLock al(lock);
+                state = HttpClientConnectionState::Closed;
+                ready_cond.broadcast();
+            }
+            rethrow;
+        }
         @assert(stream_id >= 0);
 
         # Release the pending reservation AFTER successful submit —

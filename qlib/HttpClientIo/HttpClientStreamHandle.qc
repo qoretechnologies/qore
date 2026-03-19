@@ -230,6 +230,11 @@ public class HttpClientStreamHandle {
 
         try {
             date remaining = end_time - now_us();
+            if (remaining <= 0us) {
+                cancel();
+                throw "HTTPCLIENT-TIMEOUT",
+                    sprintf("request timed out after %d ms", wait_timeout);
+            }
             return f.get(remaining) ?? {};
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "FUTURE-TIMEOUT") {
@@ -240,11 +245,9 @@ public class HttpClientStreamHandle {
             if (ex.err == "HTTPCLIENT-CANCELLED") {
                 throw "HTTPCLIENT-CANCELLED", "request was cancelled";
             }
-            # Let QUIC/HTTP3 connection errors propagate unwrapped so the
-            # connection manager can detect, evict dead connections, and retry
-            if (ex.err == "QUIC-HTTP3-ERROR" || ex.err == "QUIC-READ-ERROR"
-                    || ex.err == "QUIC-RECV-ERROR" || ex.err == "HTTP3-CONNECT-ERROR"
-                    || ex.err == "HTTP3-STATE-ERROR" || ex.err == "HTTP3-ABORT") {
+            # Let connection errors propagate unwrapped so the connection
+            # manager can detect, evict dead connections, and retry
+            if (HttpClientIo::HttpClientConnectionManager::isConnectionErrorStatic(ex.err)) {
                 rethrow;
             }
             throw "HTTPCLIENT-REQUEST-ERROR", sprintf("%s: %s", ex.err, ex.desc);

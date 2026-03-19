@@ -36,6 +36,7 @@
 
 %requires(reexport) Mime >= 1.3
 %requires(reexport) RestClient >= 1.3.1
+%requires(reexport) RestClientIo
 %requires(reexport) ConnectionProvider >= 1.4
 
 module HueRestClient {
@@ -91,16 +92,8 @@ printf("%N\n", ans.body);
 
 #! the HueRestClient namespace contains all the objects in the HueRestClient module
 public namespace HueRestClient {
-#! this class provides the REST client API for communication with Hue servers
-/** You must use an OAuth2 token by setting the \c token and \c oauth2_refresh_token options; the following options
-    need to be set as well:
-    - \c oauth2_client_id: the OAuth2 client ID
-    - \c oauth2_client_secret: the OAuth2 client secret
-
-    Then an external program has to guide the user through using the authorization_grant flow to get a token to use;
-    this module does not implement that flow.
-*/
-public class HueRestClient inherits RestClient::RestClient {
+#! Common base class for HueRestClient functionality
+public class HueRestClientBase {
     public {
         #! Default Hue REST API URL
         const DefaultUrl = "rests://api.meethue.com/route/api";
@@ -131,6 +124,22 @@ public class HueRestClient inherits RestClient::RestClient {
         };
     }
 
+    #! returns options for @ref HueRestClient::HueRestClient::constructor()
+    static hash<auto> getOptions(hash<auto> opts) {
+        return DefaultOptions + opts;
+    }
+}
+
+#! this class provides the REST client API for communication with Hue servers
+/** You must use an OAuth2 token by setting the \c token and \c oauth2_refresh_token options; the following options
+    need to be set as well:
+    - \c oauth2_client_id: the OAuth2 client ID
+    - \c oauth2_client_secret: the OAuth2 client secret
+
+    Then an external program has to guide the user through using the authorization_grant flow to get a token to use;
+    this module does not implement that flow.
+*/
+public class HueRestClient inherits RestClient::RestClient, HueRestClientBase {
     #! creates the object with the given options
     /**
         @par Example:
@@ -146,12 +155,7 @@ HueRestClient rest(opts);
         @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data serialization, etc
     */
     constructor(hash<auto> opts, *softbool do_not_connect)
-            : RestClient(HueRestClient::getOptions(opts), True) {
-    }
-
-    #! returns options for @ref HueRestClient::HueRestClient::constructor()
-    static hash<auto> getOptions(hash<auto> opts) {
-        return DefaultOptions + opts;
+            : RestClient(HueRestClientBase::getOptions(opts), True) {
     }
 }
 
@@ -183,15 +187,15 @@ public class HueRestConnection inherits RestClient::RestConnection {
             "options": RestConnection::ConnectionScheme.options + {
                 "oauth2_auth_url": RestConnection::ConnectionScheme.options.oauth2_auth_url
                 + <ConnectionOptionInfo>{
-                    "default_value": HueRestClient::DefaultAuthUrl,
+                    "default_value": HueRestClientBase::DefaultAuthUrl,
                 },
                 "oauth2_grant_type": RestConnection::ConnectionScheme.options.oauth2_grant_type
                 + <ConnectionOptionInfo>{
-                    "default_value": HueRestClient::DefaultGrantType,
+                    "default_value": HueRestClientBase::DefaultGrantType,
                 },
                 "oauth2_token_url": RestConnection::ConnectionScheme.options.oauth2_token_url
                 + <ConnectionOptionInfo>{
-                    "default_value": HueRestClient::DefaultTokenUrl,
+                    "default_value": HueRestClientBase::DefaultTokenUrl,
                 },
             },
             "required_options": "token|oauth2_auth_url,oauth2_grant_type,oauth2_token_url,"
@@ -210,7 +214,7 @@ public class HueRestConnection inherits RestClient::RestConnection {
 
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option
     */
-    constructor(string name, string description, string url = HueRestClient::DefaultUrl,
+    constructor(string name, string description, string url = HueRestClientBase::DefaultUrl,
             hash<auto> attributes = {}, hash<auto> options = {})
             : RestConnection(name, description, url, attributes, options) {
     }
@@ -277,12 +281,32 @@ public class HueRestConnection inherits RestClient::RestConnection {
         @return a @ref HueRestClient object
     */
     private HueRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
-        return new HueRestClient(getConnectionOptions(), !connect);
+        return new HueRestClient(getConnectionOptions(rtopts), !connect);
+    }
+
+    #! Returns an async-I/O-capable connection object
+    /** @since HueRestClient 1.1
+    */
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new HueRestClientIo(getConnectionOptions(rtopts));
     }
 
     #! Returns the ConnectionSchemeInfo hash for this object
     private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
         return ConnectionScheme;
+    }
+}
+
+#! REST client for Hue REST API using multiplexed HTTP connections
+/** @see HueRestClient for more information
+*/
+public class HueRestClientIo inherits RestClientIo::RestClientIo, HueRestClientBase {
+    #! Creates the object with the given options
+    /** @param opts constructor options
+        @param shared_mgr optional shared connection manager
+    */
+    constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+            : RestClientIo(HueRestClientBase::getOptions(opts), shared_mgr) {
     }
 }
 }

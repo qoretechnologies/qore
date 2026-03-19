@@ -27,6 +27,7 @@
 %modern
 
 %requires(reexport) RestClient >= 2.2.0
+%requires(reexport) RestClientIo
 %requires(reexport) ConnectionProvider >= 2.0
 
 module BillwerkRestClient {
@@ -101,6 +102,50 @@ printf("Response body: %N\n", response.body);
 
 #! the BillwerkRestClient namespace contains all the objects in the BillwerkRestClient module
 public namespace BillwerkRestClient {
+#! Common base class for BillwerkRestClient functionality
+public class BillwerkRestClientBase {
+    public {
+        const RequiredOptions = (
+            "client_id",
+        );
+
+        const AuthPath = "/oauth/token";
+    }
+
+    #! returns options for the \c RestClient::RestClient::constructor() "RestClient::constructor()"
+    static hash<auto> getOptions(hash<auto> options) {
+        # the "{}" is to ensure that "new_options" stays "hash<auto>"
+        hash<auto> new_options = {} + options;
+        # rename client_id and client_secret
+        if (new_options.client_id) {
+            new_options.oauth2_client_id = remove new_options.client_id;
+        }
+        if (new_options.client_secret) {
+            new_options.oauth2_client_secret = remove new_options.client_secret;
+        }
+
+        # remove username and password from URL
+        hash<UrlInfo> url_info = parse_url(options.url);
+        url_info -= ("username", "password");
+        # strip leading slash from path if present
+        url_info.path =~ s/^\///;
+        new_options.url = sprintf("%s://%s%s%s",
+            url_info.protocol ?? "https",
+            url_info.host,
+            (url_info.port ? ":" + url_info.port : ""),
+            (url_info.path.val() ? "/" + url_info.path : ""));
+
+        if (!exists options.no_charset) {
+            new_options.no_charset = True;
+        }
+        if (!new_options.oauth2_token_url) {
+            new_options.oauth2_token_url = AuthPath;
+        }
+
+        return new_options;
+    }
+}
+
 #! this class provides the REST client API for communication with the <a href="http://www.billwerk.com">billwerk.com</a> platform
 /** This class requires one of the following options for <a href="http://www.billwerk.com">billwerk.com</a>'s
     authentication and authorization:
@@ -110,15 +155,7 @@ public namespace BillwerkRestClient {
 
     After connecting, the BillwerkRestClient class will request a session token that will be used in further communication.
 */
-public class BillwerkRestClient inherits RestClient::RestClient {
-    public {
-        const RequiredOptions = (
-            "client_id",
-        );
-
-        const AuthPath = "/oauth/token";
-    }
-
+public class BillwerkRestClient inherits RestClient::RestClient, BillwerkRestClientBase {
     private:internal {
         string client_id;
         string client_secret;
@@ -167,7 +204,7 @@ BillwerkRestClient billwerk(
         @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data serialization, etc
         @throw BILLWERKRESTCLIENT-ERROR missing or invalid required option for <a href="http://www.billwerk.com">Billwerk.com</a> REST authentication or communication
     */
-    constructor(hash<auto> options, *softbool do_not_connect) : RestClient(BillwerkRestClient::getOptions(options), True) {
+    constructor(hash<auto> options, *softbool do_not_connect) : RestClient(BillwerkRestClientBase::getOptions(options), True) {
         # the Billwerk server does not return a charset=UTF-8 with its JSON responses, but they are in UTF-8 encoding
         setAssumedEncoding("UTF-8");
 
@@ -212,39 +249,6 @@ BillwerkRestClient billwerk(
             }
         }
     }
-
-    #! returns options for the \c RestClient::RestClient::constructor() "RestClient::constructor()"
-    static hash<auto> getOptions(hash<auto> options) {
-        # the "{}" is to ensure that "new_options" stays "hash<auto>"
-        hash<auto> new_options = {} + options;
-        # rename client_id and client_secret
-        if (new_options.client_id) {
-            new_options.oauth2_client_id = remove new_options.client_id;
-        }
-        if (new_options.client_secret) {
-            new_options.oauth2_client_secret = remove new_options.client_secret;
-        }
-
-        # remove username and password from URL
-        hash<UrlInfo> url_info = parse_url(options.url);
-        url_info -= ("username", "password");
-        # strip leading slash from path if present
-        url_info.path =~ s/^\///;
-        new_options.url = sprintf("%s://%s%s%s",
-            url_info.protocol ?? "https",
-            url_info.host,
-            (url_info.port ? ":" + url_info.port : ""),
-            (url_info.path.val() ? "/" + url_info.path : ""));
-
-        if (!exists options.no_charset) {
-            new_options.no_charset = True;
-        }
-        if (!new_options.oauth2_token_url) {
-            new_options.oauth2_token_url = AuthPath;
-        }
-
-        return new_options;
-    }
 }
 
 #! class for <a href="http://www.billwerk.com">Billwerk.com</a> REST connections; returns @ref BillwerkRestClient::BillwerkRestClient objects
@@ -283,7 +287,7 @@ public class BillwerkRestConnection inherits RestClient::RestConnection {
                     "sensitive": True,
                 },
             },
-            "required_options": foldl $1 + "," + $2, BillwerkRestClient::RequiredOptions,
+            "required_options": foldl $1 + "," + $2, BillwerkRestClientBase::RequiredOptions,
         };
 
         #! options required to support the OAuth2 authorization code grant flow
@@ -391,12 +395,30 @@ public class BillwerkRestConnection inherits RestClient::RestConnection {
         @return a @ref BillwerkRestClient::BillwerkRestClient "BillwerkRestClient" object
     */
     private BillwerkRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
-        return new BillwerkRestClient(getConnectionOptions(), !connect);
+        return new BillwerkRestClient(getConnectionOptions(rtopts), !connect);
+    }
+
+    #! Returns an async-I/O-capable connection object
+    /** @since BillwerkRestClient 1.2
+    */
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new BillwerkRestClientIo(getConnectionOptions(rtopts));
     }
 
     #! Returns the ConnectionSchemeInfo hash for this object
     private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
         return ConnectionScheme;
+    }
+}
+
+#! Billwerk REST client for non-blocking I/O
+public class BillwerkRestClientIo inherits RestClientIo::RestClientIo, BillwerkRestClientBase {
+    #! Creates the object with the given options
+    /** @param opts constructor options
+        @param shared_mgr optional shared connection manager
+    */
+    constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+            : RestClientIo(BillwerkRestClientBase::getOptions(opts), shared_mgr) {
     }
 }
 }

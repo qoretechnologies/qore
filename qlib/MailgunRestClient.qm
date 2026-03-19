@@ -36,6 +36,7 @@
 
 %requires(reexport) Mime >= 1.3
 %requires(reexport) RestClient >= 1.3.1
+%requires(reexport) RestClientIo
 %requires(reexport) ConnectionProvider >= 1.4
 
 module MailgunRestClient {
@@ -89,16 +90,8 @@ printf("Domains: %N\n", result.body);
 #! the MailgunRestClient namespace contains all the objects in the MailgunRestClient module
 public namespace MailgunRestClient {
 
-#! This class provides the REST client API for communication with Mailgun servers
-/** Mailgun uses a REST API. This client wraps RestClient to handle HTTP Basic Auth authentication.
-
-    Authentication is done via HTTP Basic Auth with username "api" and the API key as password.
-
-    @par API Regions:
-    - US: https://api.mailgun.net/v3
-    - EU: https://api.eu.mailgun.net/v3 (for EU data residency)
-*/
-public class MailgunRestClient inherits RestClient::RestClient {
+#! Common base class for MailgunRestClient functionality
+public class MailgunRestClientBase {
     public {
         #! Default Mailgun API region
         const DefaultApiRegion = "US";
@@ -132,29 +125,6 @@ public class MailgunRestClient inherits RestClient::RestClient {
         };
     }
 
-    #! creates the object with the given options
-    /**
-        @par Example:
-        @code{.py}
-MailgunRestClient mailgun({"apikey": "your-api-key", "api_domain": "mg.example.com"});
-        @endcode
-
-        @param opts valid options are all the options for the @ref RestClient::RestClient "RestClient" class
-        plus:
-        - \c apikey: the Mailgun API key (required)
-        - \c api_region: the API region to use (US or EU, default: US)
-        - \c api_domain: the sending domain (required for most operations)
-
-        @param do_not_connect if \c False (the default), then a connection will be immediately established to the
-        remote server
-
-        @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data serialization, etc
-    */
-    constructor(hash<auto> opts, *softbool do_not_connect)
-            : RestClient(MailgunRestClient::getOptions(opts), do_not_connect) {
-        setAssumedEncoding("UTF-8");
-    }
-
     #! returns options for @ref MailgunRestClient::MailgunRestClient::constructor()
     static hash<auto> getOptions(hash<auto> opts) {
         hash<auto> rv = DefaultOptions + opts;
@@ -181,6 +151,40 @@ MailgunRestClient mailgun({"apikey": "your-api-key", "api_domain": "mg.example.c
         remove rv.api_domain;
 
         return rv;
+    }
+}
+
+#! This class provides the REST client API for communication with Mailgun servers
+/** Mailgun uses a REST API. This client wraps RestClient to handle HTTP Basic Auth authentication.
+
+    Authentication is done via HTTP Basic Auth with username "api" and the API key as password.
+
+    @par API Regions:
+    - US: https://api.mailgun.net/v3
+    - EU: https://api.eu.mailgun.net/v3 (for EU data residency)
+*/
+public class MailgunRestClient inherits RestClient::RestClient, MailgunRestClientBase {
+    #! creates the object with the given options
+    /**
+        @par Example:
+        @code{.py}
+MailgunRestClient mailgun({"apikey": "your-api-key", "api_domain": "mg.example.com"});
+        @endcode
+
+        @param opts valid options are all the options for the @ref RestClient::RestClient "RestClient" class
+        plus:
+        - \c apikey: the Mailgun API key (required)
+        - \c api_region: the API region to use (US or EU, default: US)
+        - \c api_domain: the sending domain (required for most operations)
+
+        @param do_not_connect if \c False (the default), then a connection will be immediately established to the
+        remote server
+
+        @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data serialization, etc
+    */
+    constructor(hash<auto> opts, *softbool do_not_connect)
+            : RestClient(MailgunRestClientBase::getOptions(opts), do_not_connect) {
+        setAssumedEncoding("UTF-8");
     }
 }
 
@@ -221,7 +225,7 @@ public class MailgunRestConnection inherits RestClient::RestConnection {
             "options": RestConnection::ConnectionScheme.options + {
                 "data": RestConnection::ConnectionScheme.options."data"
                 + <ConnectionOptionInfo>{
-                    "default_value": MailgunRestClient::DefaultData,
+                    "default_value": MailgunRestClientBase::DefaultData,
                 },
                 "apikey": <ConnectionOptionInfo>{
                     "display_name": "API Key",
@@ -243,7 +247,7 @@ public class MailgunRestConnection inherits RestClient::RestConnection {
                     "desc": "Select the Mailgun API region based on where your account is hosted:\n\n"
                         "- **US**: For US-hosted accounts (default)\n"
                         "- **EU**: For EU-hosted accounts with EU data residency",
-                    "default_value": MailgunRestClient::DefaultApiRegion,
+                    "default_value": MailgunRestClientBase::DefaultApiRegion,
                     "preselected": True,
                     "allowed_values": (
                         <AllowedValueInfo>{
@@ -271,15 +275,15 @@ public class MailgunRestConnection inherits RestClient::RestConnection {
                 },
                 "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
                 + <ConnectionOptionInfo>{
-                    "default_value": MailgunRestClient::DefaultPingHeaders,
+                    "default_value": MailgunRestClientBase::DefaultPingHeaders,
                 },
                 "ping_method": RestConnection::ConnectionScheme.options."ping_method"
                 + <ConnectionOptionInfo>{
-                    "default_value": MailgunRestClient::DefaultPingMethod,
+                    "default_value": MailgunRestClientBase::DefaultPingMethod,
                 },
                 "ping_path": RestConnection::ConnectionScheme.options."ping_path"
                 + <ConnectionOptionInfo>{
-                    "default_value": MailgunRestClient::DefaultPingPath,
+                    "default_value": MailgunRestClientBase::DefaultPingPath,
                 },
             },
             "required_options": "apikey",
@@ -365,7 +369,7 @@ public class MailgunRestConnection inherits RestClient::RestConnection {
     */
     private static hash<auto> getConfig(hash<auto> config) {
         # Get api_region from options, default to US
-        string region = config.opts.api_region ?? MailgunRestClient::DefaultApiRegion;
+        string region = config.opts.api_region ?? MailgunRestClientBase::DefaultApiRegion;
         # Build URL from region
         string url;
         switch (region) {
@@ -445,9 +449,29 @@ public class MailgunRestConnection inherits RestClient::RestConnection {
         return new MailgunRestClient(getConnectionOptions(rtopts), !connect);
     }
 
+    #! Returns an async-I/O-capable connection object
+    /** @since MailgunRestClient 1.1
+    */
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new MailgunRestClientIo(getConnectionOptions(rtopts));
+    }
+
     #! Returns the ConnectionSchemeInfo hash for this object
     private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
         return ConnectionScheme;
+    }
+}
+
+#! REST client for Mailgun REST API using multiplexed HTTP connections
+/** @see MailgunRestClient for more information
+*/
+public class MailgunRestClientIo inherits RestClientIo::RestClientIo, MailgunRestClientBase {
+    #! Creates the object with the given options
+    /** @param opts constructor options
+        @param shared_mgr optional shared connection manager
+    */
+    constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+            : RestClientIo(MailgunRestClientBase::getOptions(opts), shared_mgr) {
     }
 }
 }

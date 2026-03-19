@@ -121,9 +121,9 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
       "AbstractConnection::startPollRequest()" for async HTTP request support
     - added @ref ConnectionProvider::HttpRequestPollOperation "HttpRequestPollOperation" for async HTTP
       requests via non-blocking I/O
-    - refactored @ref ConnectionProvider::PollingConnectionMonitor "PollingConnectionMonitor" to delegate I/O to
-      an \c AsyncSocketIoController; the internal \c Socket::poll() event loop and pipe-based signaling have been
-      removed in favor of a lightweight timer thread
+    - refactored @ref ConnectionProvider::PollingConnectionMonitor "PollingConnectionMonitor" to use
+      per-connection timers via the \c AsyncIoController timer API instead of a dedicated timer thread;
+      ping operations are dispatched to the thread pool via \c submitTask() to keep the I/O thread responsive
     - added a new @ref ConnectionProvider::PollingConnectionMonitor "PollingConnectionMonitor" constructor
       accepting an explicit \c AsyncSocketIoController; the original constructor signature is preserved and uses
       the global async I/O controller singleton

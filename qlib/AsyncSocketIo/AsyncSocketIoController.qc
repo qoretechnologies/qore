@@ -156,21 +156,6 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         return Qore::AsyncIoController::submit(info, replace);
     }
 
-    #! Executes a socket operation synchronously
-    hash<SocketPollResultInfo> exec(hash<SocketPollOperationInfo> info, *bool replace) {
-        if (!info.sock) {
-            throw "CONTROLLER-ADD-ERROR", sprintf("Missing 'sock' value; got: %y", info);
-        }
-        if (!info.spop) {
-            throw "CONTROLLER-ADD-ERROR", sprintf("Missing 'spop' value; got: %y", info);
-        }
-        if (!info.owner) {
-            throw "CONTROLLER-ADD-ERROR", sprintf("Missing 'owner' value; required for proper shutdown via "
-                "cancelByOwner(); got: %y", info);
-        }
-        return Qore::AsyncIoController::exec(info, replace);
-    }
-
     #! Cancels the operation with the given Socket's unique hash as the key
     bool cancel(Socket sock) {
         return Qore::AsyncIoController::cancel(sock);
@@ -211,10 +196,28 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         Qore::AsyncIoController::submitTask(task, cancel);
     }
 
+    #! Adds a timer that fires a callback at the given deadline
+    /** @param deadline absolute time when the timer should fire
+        @param callback closure to call on the I/O thread when the timer fires
+        @return unique timer ID for cancellation
+    */
+    int addTimer(date deadline, code<nothing()> callback) {
+        return Qore::AsyncIoController::addTimer(deadline, callback);
+    }
+
+    #! Cancels a pending timer
+    /** @param timer_id the ID returned by addTimer()
+        @return True if the timer was found and canceled
+    */
+    bool cancelTimer(int timer_id) {
+        return Qore::AsyncIoController::cancelTimer(timer_id);
+    }
+
 }
 
 #! Returns the global async I/O controller singleton
-/** The controller is created during module initialization with \c autostop=True.
+/** The Qore wrapper is created lazily on first access; the underlying C++ singleton
+    is created and managed by libqore with \c autostop=True.
 
     All async I/O components should use this singleton rather than creating their
     own controller instances. This single-controller architecture eliminates
@@ -224,8 +227,8 @@ public class AsyncSocketIoController inherits LoggerWrapper {
 
     @see AsyncSocketIoController
 */
-public AsyncSocketIoController sub getGlobalAsyncIoController() {
-    return globalController;
+public synchronized AsyncSocketIoController sub getGlobalAsyncIoController() {
+    return globalController ?? (globalController = new AsyncSocketIoController(True));
 }
 
 our *AsyncSocketIoController globalController;

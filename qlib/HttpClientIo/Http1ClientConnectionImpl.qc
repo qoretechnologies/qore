@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
-#! @file Http2ClientConnectionImpl.qc HTTP/2 client connection implementation
+#! @file Http1ClientConnectionImpl.qc HTTP/1.1 client connection implementation
 
-/** Http2ClientConnectionImpl.qc Copyright 2026 Qore Technologies, s.r.o.
+/** Http1ClientConnectionImpl.qc Copyright 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -25,60 +25,66 @@
 #! Main namespace
 public namespace HttpClientIo {
 
-#! HTTP/2 client connection implementation
-/** This class wraps a Socket + Http2ClientPollOperation to provide a
-    higher-level interface for HTTP/2 multiplexed client connections.
+#! HTTP/1.1 client connection implementation
+/** This class wraps a Socket + Http1ClientPollOperation to provide a
+    higher-level interface for HTTP/1.1 client connections.
 
-    A single connection can handle multiple concurrent streams, with
-    responses dispatched to callbacks by stream ID.
+    HTTP/1.1 is a serial protocol — only one request can be in flight at a
+    time on a given connection. The connection manager creates multiple
+    connections for concurrent requests.
 
     @par Thread Safety
-    This class is thread-safe. Stream submission uses the nghttp2 session's
+    This class is thread-safe. Stream submission uses the poll operation's
     internal mutex for synchronization.
 */
-public class Http2ClientConnection inherits HttpClientConnection {
+public class Http1ClientConnection inherits HttpClientConnection {
     private {
         #! Poll operation for this connection
-        Http2ClientPollOperation poll_op;
+        Http1ClientPollOperation poll_op;
     }
 
     #! Copying is not supported
     private copy() {
-        throw "COPY-ERROR", "Http2ClientConnection objects cannot be copied";
+        throw "COPY-ERROR", "Http1ClientConnection objects cannot be copied";
     }
 
-    #! Creates a new HTTP/2 client connection
+    #! Creates a new HTTP/1.1 client connection
     /** @param url_info parsed URL info with host, port, scheme
         @param connect_timeout timeout for connection establishment
         @param logger optional logger for debug output
-        @param max_streams maximum concurrent streams per connection
+        @param max_streams maximum concurrent streams (should be 1 for HTTP/1.1)
         @param ssl_verify_mode SSL verification mode (optional)
         @param accept_all_certs if True, accept all SSL certificates including self-signed
     */
     constructor(hash<auto> url_info, timeout connect_timeout = DefaultConnectTimeout,
-            *LoggerInterface logger, int max_streams = DefaultMaxStreamsPerConnection,
+            *LoggerInterface logger, int max_streams = 1,
             *int ssl_verify_mode, bool accept_all_certs = False,
             *hash<auto> proxy_info) {
         self.url_info = url_info;
         self.connect_timeout = connect_timeout;
         self.logger = logger;
         self.proxy_info = proxy_info;
-        self.max_concurrent_streams = max_streams;
+        # HTTP/1.1 is serial — only 1 concurrent stream is supported
+        if (max_streams > 1) {
+            throw "HTTP1-OPTION-ERROR",
+                sprintf("HTTP/1.1 connections support only 1 concurrent stream, got %d", max_streams);
+        }
+        self.max_concurrent_streams = 1;
         self.last_activity = now_us();
         connection_id = allocateConnectionId();
 
-        log(LoggerLevel::DEBUG, "creating connection to %s:%d (ssl=%y max_streams=%d proxy=%y)",
-            url_info.host, url_info.port, url_info.protocol == "https", max_streams,
+        log(LoggerLevel::DEBUG, "creating HTTP/1.1 connection to %s:%d (ssl=%y proxy=%y)",
+            url_info.host, url_info.port, url_info.protocol == "https",
             proxy_info ? sprintf("%s:%d", proxy_info.host, proxy_info.port) : NOTHING);
 
-        poll_op = new Http2ClientPollOperation(url_info, connect_timeout, logger,
+        poll_op = new Http1ClientPollOperation(url_info, connect_timeout, logger,
             ssl_verify_mode, accept_all_certs, proxy_info);
         poll_op.setReadyCallback(\onConnectionReady());
     }
 
     #! Returns the protocol identifier
     string getProtocol() {
-        return "h2";
+        return "h1";
     }
 
     #! Returns the poll operation for this connection
@@ -118,72 +124,6 @@ public class Http2ClientConnection inherits HttpClientConnection {
         } catch () {
             # Ignore abort errors during close
         }
-    }
-
-    #! Sends data on a stream (HTTP/2-specific streaming support)
-    /** @param stream_id the stream ID to send data on
-        @param data the data to send (can be string or binary)
-        @param end_stream if True, signals end of stream
-
-        @throw HTTP2-STREAM-ERROR if the stream ID is not found
-        @throw HTTP2-STATE-ERROR if not in ready state
-    */
-    sendStreamData(int stream_id, data data, bool end_stream = False) {
-        *object ctl;
-        {
-            AutoLock al(lock);
-            if (state != HttpClientConnectionState::Ready) {
-                throw "HTTP2-STATE-ERROR",
-                    sprintf("cannot send data in state: %y", state);
-            }
-            last_activity = now_us();
-            ctl = controller_ref;
-        }
-
-        log(LoggerLevel::DEBUG, "sending data on stream %d", stream_id);
-        poll_op.sendStreamData(stream_id, data, end_stream);
-
-        if (ctl) {
-            ctl.wake();
-        }
-    }
-
-    #! Submits a request with streaming support (HTTP/2-specific)
-    /** @param method HTTP method
-        @param path request path
-        @param headers request headers
-        @param body request body (optional)
-        @param callback response callback
-        @param ctx optional context
-        @param streaming if True, enable streaming mode
-
-        @return the stream ID
-
-        @note The capacity check is performed atomically inside
-        poll_op.submitRequest() under stream_lock, so there is no TOCTOU gap.
-    */
-    int submitRequestStreaming(string method, string path, *hash<auto> headers, *data body,
-            HttpResponseCallback callback, *hash<auto> ctx, bool streaming = False) {
-        *object ctl;
-        {
-            AutoLock al(lock);
-            if (state != HttpClientConnectionState::Ready) {
-                throw "HTTPCLIENT-STATE-ERROR",
-                    sprintf("connection not ready: state=%y", state);
-            }
-            last_activity = now_us();
-            ctl = controller_ref;
-        }
-
-        log(LoggerLevel::DEBUG, "submitting request: %s %s (streaming=%y)", method, path, streaming);
-        int stream_id = poll_op.submitRequest(method, path, headers, body, callback, ctx,
-            max_concurrent_streams, streaming);
-
-        if (ctl) {
-            ctl.wake();
-        }
-
-        return stream_id;
     }
 }
 

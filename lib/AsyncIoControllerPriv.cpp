@@ -730,38 +730,6 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
     return nullptr;
 }
 
-QoreHashNode* AsyncIoControllerPriv::exec(QoreObject* self, QoreHashNode* info, bool replace,
-        ExceptionSink* xsink) {
-    // Submit the operation - this creates a Queue for us
-    QoreObject* q_obj = submit(self, info, replace, xsink);
-    if (*xsink) {
-        return nullptr;
-    }
-
-    if (!q_obj) {
-        xsink->raiseException("ASYNC-IO-ERROR", "exec() cannot be used with a callback");
-        return nullptr;
-    }
-
-    ReferenceHolder<QoreObject> q_holder(q_obj, xsink);
-    Queue* q = static_cast<Queue*>(q_obj->getReferencedPrivateData(CID_QUEUE, xsink));
-    if (!q || *xsink) {
-        return nullptr;
-    }
-    ReferenceHolder<Queue> q_ref(q, xsink);
-
-    // Wait for result (blocking)
-    QoreValue result = q->shift(xsink);
-    if (*xsink) {
-        return nullptr;
-    }
-    if (result.getType() == NT_HASH) {
-        return result.get<QoreHashNode>();
-    }
-    result.discard(xsink);
-    return nullptr;
-}
-
 bool AsyncIoControllerPriv::cancel(QoreSocketObject* sock, ExceptionSink* xsink) {
     std::string uh = getSocketHash(sock);
     SimpleRefHolder<QoreStringNode> key(new QoreStringNode(uh));
@@ -820,7 +788,7 @@ bool AsyncIoControllerPriv::cancelByKey(const QoreStringNode* key, ExceptionSink
     // Check autostop
     {
         AutoLocker al(m);
-        if (autostop_flag && rv && cache.empty() && dedicated_threads.empty() && tid) {
+        if (autostop_flag && rv && cache.empty() && dedicated_threads.empty() && timer_info_map.empty() && tid) {
             do_signal = enqueueCmdLocked(IoCommand::Quit);
             stopped = true;
         } else {
@@ -955,7 +923,7 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
     bool stopped = false;
     {
         AutoLocker al(m);
-        if (autostop_flag && count > 0 && cache.empty() && dedicated_threads.empty() && tid) {
+        if (autostop_flag && count > 0 && cache.empty() && dedicated_threads.empty() && timer_info_map.empty() && tid) {
             do_signal = enqueueCmdLocked(IoCommand::Quit);
             stopped = true;
         } else {
@@ -1702,8 +1670,8 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
             }
 
             // Check autostop (only if no deliveries pending — recheck after delivery)
-            if (cache.empty() && dedicated_threads.empty() && autostop_flag && cmdq.empty()
-                    && deferred_deliveries.empty()) {
+            if (cache.empty() && dedicated_threads.empty() && timer_info_map.empty()
+                    && autostop_flag && cmdq.empty() && deferred_deliveries.empty()) {
                 io_exiting = true;
                 if (io_waiting) {
                     io_cond.broadcast();
@@ -1742,7 +1710,8 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
         // Re-check autostop after deliveries (callbacks may have submitted new ops)
         if (!do_autostop && !deferred_deliveries.empty()) {
             AutoLocker al(m);
-            if (cache.empty() && dedicated_threads.empty() && autostop_flag && cmdq.empty()) {
+            if (cache.empty() && dedicated_threads.empty() && timer_info_map.empty()
+                    && autostop_flag && cmdq.empty()) {
                 io_exiting = true;
                 if (io_waiting) {
                     io_cond.broadcast();
@@ -1832,8 +1801,18 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
 
         // Deliver timer events outside lock
         for (auto& te : timer_events) {
-            if (cb_snapshot) {
-                // Build TimerEventInfo hash
+            // If udata is a code reference/closure, call it directly (no Qore-level dispatch needed)
+            if (te.udata.getType() == NT_RUNTIME_CLOSURE || te.udata.getType() == NT_FUNCREF) {
+                ResolvedCallReferenceNode* code_ref = te.udata.get<ResolvedCallReferenceNode>();
+                ExceptionSink cb_xsink;
+                ValueHolder rv(code_ref->execValue(nullptr, &cb_xsink), &cb_xsink);
+                if (cb_xsink) {
+                    log(QORE_LOG_LEVEL_ERROR, "timer code callback exception for timer %lld",
+                        (long long)te.id);
+                    cb_xsink.clear();
+                }
+            } else if (cb_snapshot) {
+                // Fall back to the registered timer callback for non-code udata
                 ReferenceHolder<QoreHashNode> timer_hash(
                     new QoreHashNode(hashdeclTimerEventInfo, xsink), xsink);
                 if (!*xsink) {
@@ -1896,7 +1875,8 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
 #endif
     }
 
-    // Cleanup on exit
+    // Cleanup on exit — cancel results are collected under lock and delivered outside
+    std::vector<PollInfo> exit_cancel_pinfos;
     {
         AutoLocker al(m);
 
@@ -1928,6 +1908,15 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
         }
         timer_info_map.clear();
 
+        // Deliver cancel results to all remaining cache entries so that
+        // callers blocked on callback delivery are unblocked during shutdown.
+        // Collect entries under lock, deliver outside lock to avoid deadlock.
+        for (auto& [key, pinfo] : cache) {
+            exit_cancel_pinfos.push_back(pinfo);
+            pinfo = PollInfo();
+        }
+        cache.clear();
+
         // Signal any pending CancelOwner done_cond waiters in the command queue
         // so cancelByOwner() doesn't hang when the I/O thread exits.
         // Must set cancel_done_flag under lock before broadcasting to prevent
@@ -1941,6 +1930,13 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
             }
         }
         cmdq.clear();
+    }
+
+    // Deliver cancel results to remaining cache entries outside the lock
+    // so exec() callers blocked on q->shift() are unblocked
+    for (auto& pinfo : exit_cancel_pinfos) {
+        doCancelIntern(pinfo, xsink);
+        pinfo.cleanup(xsink);
     }
 
     // Log the exit message before signaling waitStop(), so the per-controller

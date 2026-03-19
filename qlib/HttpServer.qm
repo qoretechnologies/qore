@@ -1600,6 +1600,13 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         }
 
         listeners{id}.addHandlers({name: info});
+
+        # propagate handler to the paired QUIC/HTTP3 listener if one exists
+        if (*int quic_id = quic_listener_map{id}) {
+            if (listeners.hasKey(quic_id)) {
+                listeners{quic_id}.addHandlers({name + "-h3": info});
+            }
+        }
     }
 
     #! adds a request handler to a listener given the listener's id
@@ -1663,6 +1670,13 @@ public class HttpServer inherits HttpServer::AbstractLogger {
             },
         };
         listeners{id}.addHandlers(h);
+
+        # propagate handler to the paired QUIC/HTTP3 listener if one exists
+        if (*int quic_id = quic_listener_map{id}) {
+            if (listeners.hasKey(quic_id)) {
+                listeners{quic_id}.addHandlers({name + "-h3": h{name}});
+            }
+        }
     }
 
     #! remove request handler from a listener given the listener's id
@@ -3203,14 +3217,31 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         @throw any exception raised during the I/O operation
     */
     execAsyncPollOperation(Socket s, AbstractPollOperation op) {
-        hash<SocketPollResultInfo> result = AsyncSocketIo::getGlobalAsyncIoController().exec(<SocketPollOperationInfo>{
+        # Use submit() with a callback instead of exec() to avoid blocking on
+        # the I/O controller's internal Queue.  The handler thread waits on a
+        # Counter that the callback signals — this has no dependency on the I/O
+        # thread's ability to process commands (only on it completing the poll
+        # operation), eliminating deadlock risk from thread pool exhaustion.
+        Counter done(1);
+        *hash<auto> op_ex;
+        code cb = sub (hash<SocketPollResultInfo> result) {
+            if (result.ex) {
+                op_ex = result.ex;
+            }
+            done.dec();
+        };
+        hash<SocketPollOperationInfo> info(<SocketPollOperationInfo>{
             "sock": s,
             "spop": op,
             "to": 30s,
             "owner": self.uniqueHash(),
+            "callback": cb,
         });
-        if (result.ex) {
-            throw result.ex.err, result.ex.desc, result.ex.arg;
+        AsyncSocketIo::AsyncSocketIoController ctrl = AsyncSocketIo::getGlobalAsyncIoController();
+        ctrl.submit(info);
+        done.waitForZero();
+        if (op_ex) {
+            throw op_ex.err, op_ex.desc, op_ex.arg;
         }
     }
 

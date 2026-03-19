@@ -33,6 +33,23 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         int port;
     }
 
+    #! Synchronous exec replacement: submit + Counter wait
+    /** Replaces the removed AsyncSocketIoController::exec() method.
+    */
+    static hash<SocketPollResultInfo> execOp(AsyncSocketIoController ctrl,
+            hash<SocketPollOperationInfo> info) {
+        Counter done(1);
+        hash<SocketPollResultInfo> rv;
+        code cb = sub (hash<SocketPollResultInfo> result) {
+            rv = result;
+            done.dec();
+        };
+        info.callback = cb;
+        ctrl.submit(info);
+        done.waitForZero();
+        return rv;
+    }
+
     constructor() : Test("AsyncSocketIoTest Test", "1.0") {
         addTestCase("main", \mainTest());
         addTestCase("owner required", \ownerRequiredTest());
@@ -107,7 +124,7 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         string test_owner = "async-io-test";
 
         AbstractPollOperation spop = rest.startPollSendRecv("GET", "/api_text", NOTHING, {"Do-Error": True});
-        hash<SocketPollResultInfo> info = io_controller.exec(<SocketPollOperationInfo>{
+        hash<SocketPollResultInfo> info = execOp(io_controller,<SocketPollOperationInfo>{
             "sock": rest,
             "spop": spop,
             "to": 10s,
@@ -117,7 +134,7 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         assertEq(500, out."code");
 
         spop = rest.startPollSendRecv("GET", "/api_text");
-        info = io_controller.exec(<SocketPollOperationInfo>{
+        info = execOp(io_controller,<SocketPollOperationInfo>{
             "sock": rest,
             "spop": spop,
             "to": 10s,
@@ -129,7 +146,7 @@ public class AsyncSocketIoTest inherits QUnit::Test {
 
         # test I/O timeout
         spop = rest.startPollSendRecv("GET", "/api_text", NOTHING, {"Wait-Forever": 1});
-        info = io_controller.exec(<SocketPollOperationInfo>{
+        info = execOp(io_controller,<SocketPollOperationInfo>{
             "sock": rest,
             "spop": spop,
             "to": 100ms,
@@ -161,7 +178,7 @@ public class AsyncSocketIoTest inherits QUnit::Test {
 
         # test that submitting without owner throws an error
         AbstractPollOperation spop = rest.startPollSendRecv("GET", "/api_text");
-        assertThrows("CONTROLLER-ADD-ERROR", "Missing 'owner' value", \io_controller.exec(),
+        assertThrows("CONTROLLER-ADD-ERROR", "Missing 'owner' value", \io_controller.submit(),
             (<SocketPollOperationInfo>{
                 "sock": rest,
                 "spop": spop,
@@ -448,7 +465,7 @@ public class AsyncSocketIoTest inherits QUnit::Test {
 
         RestClient rest({"url": "http://127.0.0.1:" + port});
         AbstractPollOperation spop = rest.startPollSendRecv("GET", "/api_text", NOTHING, {"Wait-Forever": 1});
-        hash<SocketPollResultInfo> info = io_controller.exec(<SocketPollOperationInfo>{
+        hash<SocketPollResultInfo> info = execOp(io_controller,<SocketPollOperationInfo>{
             "sock": rest,
             "spop": spop,
             "to": 0s,
@@ -467,7 +484,7 @@ public class AsyncSocketIoTest inherits QUnit::Test {
 
         RestClient rest({"url": "http://127.0.0.1:" + port});
         AbstractPollOperation spop = rest.startPollSendRecv("GET", "/api_text");
-        hash<SocketPollResultInfo> info = io_controller.exec(<SocketPollOperationInfo>{
+        hash<SocketPollResultInfo> info = execOp(io_controller,<SocketPollOperationInfo>{
             "sock": rest,
             "spop": spop,
             "to": 5s,
@@ -499,7 +516,7 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         int close_port = startCloseServer();
         RestClient rest({"url": "http://127.0.0.1:" + close_port});
         AbstractPollOperation spop = rest.startPollSendRecv("GET", "/api_text");
-        hash<SocketPollResultInfo> info = io_controller.exec(<SocketPollOperationInfo>{
+        hash<SocketPollResultInfo> info = execOp(io_controller,<SocketPollOperationInfo>{
             "sock": rest,
             "spop": spop,
             "to": 30s,
@@ -561,7 +578,7 @@ public class AsyncSocketIoTest inherits QUnit::Test {
                 try {
                     RestClient rest({"url": "http://127.0.0.1:" + port});
                     AbstractPollOperation spop = rest.startPollSendRecv("GET", "/api_text");
-                    hash<SocketPollResultInfo> info = io_controller.exec(<SocketPollOperationInfo>{
+                    hash<SocketPollResultInfo> info = execOp(io_controller,<SocketPollOperationInfo>{
                         "sock": rest,
                         "spop": spop,
                         "to": 10s,
@@ -801,7 +818,7 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         # Verify the controller is still functional after a throwing callback
         RestClient rest2({"url": "http://127.0.0.1:" + port});
         AbstractPollOperation spop2 = rest2.startPollSendRecv("GET", "/api_text");
-        hash<SocketPollResultInfo> info = io_controller.exec(<SocketPollOperationInfo>{
+        hash<SocketPollResultInfo> info = execOp(io_controller,<SocketPollOperationInfo>{
             "sock": rest2,
             "spop": spop2,
             "to": 10s,

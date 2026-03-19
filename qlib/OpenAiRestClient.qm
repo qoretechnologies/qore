@@ -36,6 +36,7 @@
 
 %requires(reexport) Mime >= 1.3
 %requires(reexport) RestClient >= 1.3.1
+%requires(reexport) RestClientIo
 %requires(reexport) ConnectionProvider >= 1.4
 
 module OpenAiRestClient {
@@ -127,10 +128,8 @@ stream.close();
 
 #! the OpenAiRestClient namespace contains all the objects in the OpenAiRestClient module
 public namespace OpenAiRestClient {
-#! this class provides the REST client API for communication with OpenAi servers
-/** You must use an API key in the 'token' option to call OpenAi APIs
-*/
-public class OpenAiRestClient inherits RestClient::RestClient {
+#! Common base class for OpenAiRestClient functionality
+public class OpenAiRestClientBase {
     public {
         #! Default OpenAi REST API URL
         const DefaultUrl = "https://api.openai.com";
@@ -145,6 +144,23 @@ public class OpenAiRestClient inherits RestClient::RestClient {
         };
     }
 
+    #! returns options for @ref OpenAiRestClient::OpenAiRestClient::constructor()
+    static hash<auto> getOptions(hash<auto> opts) {
+        if (!opts.swagger && !opts.validator && opts.use_schema) {
+            string path = dirname(get_module_hash().OpenAiRestClient.filename)
+                + "/OpenAiDataProvider/openai-swagger-2.0.yaml";
+            if (is_file(path)) {
+                opts.swagger = path;
+            }
+        }
+        return DefaultOptions + opts;
+    }
+}
+
+#! this class provides the REST client API for communication with OpenAi servers
+/** You must use an API key in the 'token' option to call OpenAi APIs
+*/
+public class OpenAiRestClient inherits RestClient::RestClient, OpenAiRestClientBase {
     private {
         #! The API version in use
         string api;
@@ -165,22 +181,10 @@ OpenAiRestClient rest(opts);
         @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data serialization, etc
     */
     constructor(hash<auto> opts, *softbool do_not_connect)
-            : RestClient(OpenAiRestClient::getOptions(opts), True) {
+            : RestClient(OpenAiRestClientBase::getOptions(opts), True) {
         if (validator instanceof NullRestSchemaValidator) {
             setConnectionPath(getString(opts, "api") ?? DefaultApiVersion);
         }
-    }
-
-    #! returns options for @ref OpenAiRestClient::OpenAiRestClient::constructor()
-    static hash<auto> getOptions(hash<auto> opts) {
-        if (!opts.swagger && !opts.validator && opts.use_schema) {
-            string path = dirname(get_module_hash().OpenAiRestClient.filename)
-                + "/OpenAiDataProvider/openai-swagger-2.0.yaml";
-            if (is_file(path)) {
-                opts.swagger = path;
-            }
-        }
-        return DefaultOptions + opts;
     }
 
     #! Opens a Server-Sent Events stream for responses
@@ -382,7 +386,7 @@ public class OpenAiRestConnection inherits RestClient::RestConnection {
                     "short_desc": "The API version to use",
                     "desc": "The API version to use",
                     "type": "string",
-                    "default_value": OpenAiRestClient::DefaultApiVersion,
+                    "default_value": OpenAiRestClientBase::DefaultApiVersion,
                 },
                 "use_schema": <ConnectionOptionInfo>{
                     "display_name": "Use OpenAPI Schema",
@@ -493,12 +497,32 @@ public class OpenAiRestConnection inherits RestClient::RestConnection {
         @return a @ref OpenAiRestClient object
     */
     private OpenAiRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
-        return new OpenAiRestClient(getConnectionOptions(), !connect);
+        return new OpenAiRestClient(getConnectionOptions(rtopts), !connect);
+    }
+
+    #! Returns an async-I/O-capable connection object
+    /** @since OpenAiRestClient 1.2
+    */
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new OpenAiRestClientIo(getConnectionOptions(rtopts));
     }
 
     #! Returns the ConnectionSchemeInfo hash for this object
     private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
         return ConnectionScheme;
+    }
+}
+
+#! REST client for OpenAi REST API using multiplexed HTTP connections
+/** @see OpenAiRestClient for more information
+*/
+public class OpenAiRestClientIo inherits RestClientIo::RestClientIo, OpenAiRestClientBase {
+    #! Creates the object with the given options
+    /** @param opts constructor options
+        @param shared_mgr optional shared connection manager
+    */
+    constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+            : RestClientIo(OpenAiRestClientBase::getOptions(opts), shared_mgr) {
     }
 }
 }

@@ -37,18 +37,6 @@ module AsyncSocketIo {
     author  = "David Nichols <david@qore.org>";
     url     = "http://qore.org";
     license = "MIT";
-    init = sub () {
-        # Pre-initialize the global controller singleton (uses AsyncIoController::get() internally)
-        AsyncSocketIo::globalController = new AsyncSocketIo::AsyncSocketIoController(True);
-    };
-    del = sub () {
-        # Just delete the Qore wrapper; the C++ singleton is stopped by
-        # qore_async_io_controller_cleanup() in qore_cleanup() after all
-        # modules have been unloaded
-        if (AsyncSocketIo::globalController) {
-            delete AsyncSocketIo::globalController;
-        }
-    };
 }
 
 /** @mainpage AsyncSocketIo Module
@@ -83,7 +71,11 @@ module AsyncSocketIo {
       the I/O thread
     - @ref AsyncSocketIo::AsyncSocketIoController::submitTask() "submitTask()" convenience
       method for submitting work to the thread pool
+    - @ref AsyncSocketIo::AsyncSocketIoController::addTimer() "addTimer()" and
+      @ref AsyncSocketIo::AsyncSocketIoController::cancelTimer() "cancelTimer()" for scheduling
+      code callbacks on the I/O thread via the C++ event-loop timer API
     - global singleton via @ref AsyncSocketIo::getGlobalAsyncIoController() "getGlobalAsyncIoController()"
+      (lazily initialized on first access; lifecycle managed by libqore)
 
     @section asyncsocketiointernals Internal Design
 

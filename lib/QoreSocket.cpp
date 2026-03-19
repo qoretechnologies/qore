@@ -6593,6 +6593,11 @@ QoreHashNode* SocketHttp2ServerPollOperation::checkHeadersOnlyDispatch(bool& han
 QoreHashNode* SocketHttp2ServerPollOperation::continuePoll(ExceptionSink* xsink) {
     AutoLocker al(sock->priv->m);
 
+    if (!sock->priv->socket->priv->isOpen()) {
+        xsink->raiseException("HTTP2-ERROR", "socket closed during poll operation");
+        return nullptr;
+    }
+
     while (true) {
         switch (h2_state) {
             case H2S_SEND_PREFACE: {
@@ -6974,6 +6979,11 @@ SocketHttp2SendResponsePollOperation::~SocketHttp2SendResponsePollOperation() {
 QoreHashNode* SocketHttp2SendResponsePollOperation::continuePoll(ExceptionSink* xsink) {
     AutoLocker al(sock->priv->m);
 
+    if (!sock->priv->socket->priv->isOpen()) {
+        xsink->raiseException("HTTP2-ERROR", "socket closed during poll operation");
+        return nullptr;
+    }
+
     // Get session from socket
     Http2Session* session = sock->priv->socket->priv->h2_session.get();
     if (!session) {
@@ -7158,6 +7168,11 @@ QoreHashNode* SocketHttp2SendStreamingResponsePollOperation::continuePoll(Except
     }
 
     AutoLocker al(sock->priv->m);
+
+    if (!sock->priv->socket->priv->isOpen()) {
+        xsink->raiseException("HTTP2-ERROR", "socket closed during poll operation");
+        return nullptr;
+    }
 
     Http2Session* session = sock->priv->socket->priv->h2_session.get();
     if (!session) {
@@ -7375,6 +7390,11 @@ SocketHttp2FlushPollOperation::SocketHttp2FlushPollOperation(ExceptionSink* xsin
 
 QoreHashNode* SocketHttp2FlushPollOperation::continuePoll(ExceptionSink* xsink) {
     AutoLocker al(sock->priv->m);
+
+    if (!sock->priv->socket->priv->isOpen()) {
+        xsink->raiseException("HTTP2-ERROR", "socket closed during poll operation");
+        return nullptr;
+    }
 
     Http2Session* session = sock->priv->socket->priv->h2_session.get();
     if (!session) {
@@ -7632,6 +7652,15 @@ int32_t SocketHttp2ClientMultiplexPollOperation::submitRequest(const char* metho
 
 QoreHashNode* SocketHttp2ClientMultiplexPollOperation::continuePoll(ExceptionSink* xsink) {
     AutoLocker al(sock->priv->m);
+
+    // Check if the socket was closed by another thread (e.g., connection
+    // close during h2c probe timeout).  Without this check, subsequent
+    // operations (brecv, send) would hit an assertion failure on the
+    // invalid socket fd.
+    if (!sock->priv->socket->priv->isOpen() || !sock->priv->socket->priv->h2_session) {
+        xsink->raiseException("HTTP2-ERROR", "socket closed during poll operation");
+        return nullptr;
+    }
 
     while (true) {
         switch (h2_state) {

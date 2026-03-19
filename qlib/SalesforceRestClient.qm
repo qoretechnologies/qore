@@ -36,6 +36,7 @@
 
 %requires(reexport) Mime >= 1.3
 %requires(reexport) RestClient >= 1.3.1
+%requires(reexport) RestClientIo
 %requires(reexport) ConnectionProvider >= 1.4
 
 module SalesforceRestClient {
@@ -263,6 +264,102 @@ public const BulkJobContentTypes = {
     BulkJobZipXml: "zip/xml",
 };
 
+#! Common base class for SalesforceRestClient functionality
+public class SalesforceRestClientBase {
+    public {
+        #! defaults for direct member values
+        const Defaults = {
+            "oauth2_auth_url": "https://login.salesforce.com/services/oauth2/authorize",
+            "oauth2_token_url": "https://login.salesforce.com/services/oauth2/token",
+            "oauth2_logout_url": "https://login.salesforce.com/services/oauth2/revoke",
+            "api": "auto",
+            "oauth2_grant_type": "authorization_code",
+            "oauth2_scopes": (
+                "full",
+                "api",
+                "id",
+                "refresh_token",
+            ),
+        };
+
+        #! default send encoding
+        const DefaultSendEncoding = "gzip";
+
+        #! required options
+        const RequiredOptions = (
+            # the Salesforce.com "consumer key"
+            "oauth2_client_id",
+            # the Salesforce.com "consumer secret"
+            "oauth2_client_secret",
+        );
+
+        #! Salesforce.com async dataload namespace
+        const AsyncDataloadNs = "http://www.force.com/2009/06/asyncapi/dataload";
+
+        #! Salesforce.com XML jobInfo attributes
+        const JobInfoAttributes = {
+            "^attributes^": {
+                "xmlns": AsyncDataloadNs,
+            },
+        };
+    }
+
+    #! Returns @ref True if the response was related to an authorization token error
+    /** @return @ref True if the response was related to an authorization token error
+    */
+    bool isAuthTokenError(int status_code, hash<auto> headers, bool body_deserialized, *string body_content_type,
+            auto body) {
+        if (status_code != 403) {
+            return False;
+        }
+        if (body == "Bad_OAuth_Token") {
+            return True;
+        }
+        if (!body_deserialized) {
+            return body =~ /token validity expired/;
+        }
+        return body.error_description == "token validity expired";
+    }
+
+    #! returns a date string for use with Salesforce.com Bulk REST API requests
+    /** @param d the date to return as a formatted string using \c "YYYY-MM-DDTHH:mm:SSZ"
+
+        @return the string corresponding to the date
+
+        @see @ref date_formatting "Date Formatting Strings"
+    */
+    static string getBulkDate(date d) {
+        return d.format("YYYY-MM-DDTHH:mm:SSZ");
+    }
+
+    #! returns a date string in GMT for use in Salesforce.com requests
+    static string getGmtDate(date d) {
+        return gmtime(d).format("Dy, DD Mon YYYY HH:mm:SS") + " GMT";
+    }
+
+    #! returns options for the RestClient constructors
+    static hash getOptions(*hash<auto> opts) {
+        if (opts.token && opts.instance_url) {
+            opts.url = opts.instance_url;
+        }
+        # data "auto" == "json"
+        if (opts."data" == "auto") {
+            delete opts."data";
+        }
+        return {
+            "additional_methods": {"PATCH": False} + opts.additional_methods,
+            "data": "json",
+
+            "oauth2_auth_url": opts.oauth2_auth_url ?? Defaults.oauth2_auth_url,
+            "oauth2_token_url": opts.oauth2_token_url ?? Defaults.oauth2_token_url,
+            "oauth2_client_id": opts.oauth2_client_id,
+            "oauth2_client_secret": opts.oauth2_client_secret,
+
+            "url": opts.oauth2_auth_url ?? Defaults.oauth2_auth_url,
+        } + Defaults + opts;
+    }
+}
+
 #! this class provides the REST client API for communication with Salesforce.com
 /** This class requires the following options for Salesforce.com authentication and authorization to the target Connected App:
     - \c oauth2_client_id: the Salesforce.com "consumer key"
@@ -309,44 +406,7 @@ If-Modified-Since: Thu, 24 Nov 2016 23:00:00 GMT
     - \c bulkJobAddBatch()
     - @ref bulkJobClose()
 */
-public class SalesforceRestClient inherits RestClient::RestClient {
-    public {
-        #! defaults for direct member values
-        const Defaults = {
-            "oauth2_auth_url": "https://login.salesforce.com/services/oauth2/authorize",
-            "oauth2_token_url": "https://login.salesforce.com/services/oauth2/token",
-            "oauth2_logout_url": "https://login.salesforce.com/services/oauth2/revoke",
-            "api": "auto",
-            "oauth2_grant_type": "authorization_code",
-            "oauth2_scopes": (
-                "full",
-                "api",
-                "id",
-                "refresh_token",
-            ),
-        };
-
-        #! default send encoding
-        const DefaultSendEncoding = "gzip";
-
-        #! required options
-        const RequiredOptions = (
-            # the Salesforce.com "consumer key"
-            "oauth2_client_id",
-            # the Salesforce.com "consumer secret"
-            "oauth2_client_secret",
-        );
-
-        #! Salesforce.com async dataload namespace
-        const AsyncDataloadNs = "http://www.force.com/2009/06/asyncapi/dataload";
-
-        #! Salesforce.com XML jobInfo attributes
-        const JobInfoAttributes = {
-            "^attributes^": {
-                "xmlns": AsyncDataloadNs,
-            },
-        };
-    }
+public class SalesforceRestClient inherits RestClient::RestClient, SalesforceRestClientBase {
 
     private {
         #! Salesforce.com OAuth2 Revoke Token URL
@@ -431,7 +491,7 @@ SalesforceRestClient rest({"url": "http://localhost:8001/rest"});
         @throw SALESFORCERESTCLIENT-ERROR missing or invalid connection option
     */
     constructor(*hash<auto> opts, *softbool do_not_connect)
-            : RestClient(SalesforceRestClient::getOptions(opts), True) {
+            : RestClient(SalesforceRestClientBase::getOptions(opts), True) {
         # set options
         setSendEncoding(opts.send_encoding ?? DefaultSendEncoding);
         # check required options
@@ -1036,23 +1096,6 @@ sfrest.logout();
         debug("SalesforceRestClient: API set to %y %y URL: %y", api_used, ah, getURL());
     }
 
-    #! Returns @ref True if the response was related to an authorization token error
-    /** @return @ref True if the response was related to an authorization token error
-    */
-    bool isAuthTokenError(int status_code, hash<auto> headers, bool body_deserialized, *string body_content_type,
-            auto body) {
-        if (status_code != 403) {
-            return False;
-        }
-        if (body == "Bad_OAuth_Token") {
-            return True;
-        }
-        if (!body_deserialized) {
-            return body =~ /token validity expired/;
-        }
-        return body.error_description == "token validity expired";
-    }
-
     #! Return OAuth2 options
     /** @return a hash of OAuth2 options
     */
@@ -1061,22 +1104,6 @@ sfrest.logout();
             "instance_url": instance_url,
             "id_service_url": id_service_url,
         };
-    }
-
-    #! returns a date string for use with Salesforce.com Bulk REST API requests
-    /** @param d the date to return as a formatted string using \c "YYYY-MM-DDTHH:mm:SSZ"
-
-        @return the string corresponding to the date
-
-        @see @ref date_formatting "Date Formatting Strings"
-    */
-    static string getBulkDate(date d) {
-        return d.format("YYYY-MM-DDTHH:mm:SSZ");
-    }
-
-    #! returns a date string in GMT for use in Salesforce.com requests
-    static string getGmtDate(date d) {
-        return gmtime(d).format("Dy, DD Mon YYYY HH:mm:SS") + " GMT";
     }
 
     #! Checks the API and sets the final URL
@@ -1108,28 +1135,6 @@ sfrest.logout();
         }
 
         setApi();
-    }
-
-    #! returns options for the \c RestClient::RestClient::constructor() "RestClient::constructor()"
-    private static hash getOptions(*hash<auto> opts) {
-        if (opts.token && opts.instance_url) {
-            opts.url = opts.instance_url;
-        }
-        # data "auto" == "json"
-        if (opts."data" == "auto") {
-            delete opts."data";
-        }
-        return {
-            "additional_methods": {"PATCH": False} + opts.additional_methods,
-            "data": "json",
-
-            "oauth2_auth_url": opts.oauth2_auth_url ?? Defaults.oauth2_auth_url,
-            "oauth2_token_url": opts.oauth2_token_url ?? Defaults.oauth2_token_url,
-            "oauth2_client_id": opts.oauth2_client_id,
-            "oauth2_client_secret": opts.oauth2_client_secret,
-
-            "url": opts.oauth2_auth_url ?? Defaults.oauth2_auth_url,
-        } + Defaults + opts;
     }
 
     #! Checks if a login is necessary; if so, then the login is performed
@@ -1237,7 +1242,7 @@ public class SalesforceRestConnection inherits RestClient::RestConnection {
                     "type": "string",
                     "desc": "The Salesforce API version to use; use `auto` (the default) to use the latest API "
                         "version",
-                    "default_value": SalesforceRestClient::Defaults.api,
+                    "default_value": SalesforceRestClientBase::Defaults.api,
                 },
                 "oauth2_client_id": RestConnection::ConnectionScheme.options.oauth2_client_id + <ConnectionOptionInfo>{
                     "desc": "The OAuth2 client_id and also the Salesforce \"consumer key\" for the Connected App",
@@ -1265,25 +1270,25 @@ public class SalesforceRestConnection inherits RestClient::RestConnection {
                         "on login)",
                 },
                 "oauth2_auth_url": RestConnection::ConnectionScheme.options.oauth2_auth_url + <ConnectionOptionInfo>{
-                    "default_value": SalesforceRestClient::Defaults.oauth2_auth_url,
+                    "default_value": SalesforceRestClientBase::Defaults.oauth2_auth_url,
                 },
                 "oauth2_token_url": RestConnection::ConnectionScheme.options.oauth2_token_url + <ConnectionOptionInfo>{
-                    "default_value": SalesforceRestClient::Defaults.oauth2_token_url,
+                    "default_value": SalesforceRestClientBase::Defaults.oauth2_token_url,
                 },
                 "oauth2_logout_url": <ConnectionOptionInfo>{
                     "display_name": "OAuth2 Revocation URL",
                     "short_desc": "The OAuth logout / revoke token URL",
                     "type": "string",
                     "desc": "The OAuth logout / revoke token URL",
-                    "default_value": SalesforceRestClient::Defaults.oauth2_logout_url,
+                    "default_value": SalesforceRestClientBase::Defaults.oauth2_logout_url,
                 },
                 "oauth2_grant_type": RestConnection::ConnectionScheme.options.oauth2_grant_type
                     + <ConnectionOptionInfo>{
-                    "default_value": SalesforceRestClient::Defaults.oauth2_grant_type,
+                    "default_value": SalesforceRestClientBase::Defaults.oauth2_grant_type,
                 },
                 "oauth2_scopes": RestConnection::ConnectionScheme.options.oauth2_scopes
                     + <ConnectionOptionInfo>{
-                    "default_value": SalesforceRestClient::Defaults.oauth2_scopes,
+                    "default_value": SalesforceRestClientBase::Defaults.oauth2_scopes,
                 },
                 "password": RestConnection::ConnectionScheme.options."password" + <ConnectionOptionInfo>{
                     "desc": "the Salesforce.com password (will override any password in the URL)",
@@ -1477,7 +1482,14 @@ public class SalesforceRestConnection inherits RestClient::RestConnection {
         @return a @ref SalesforceRestClient::SalesforceRestClient "SalesforceRestClient" object
     */
     private SalesforceRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
-        return new SalesforceRestClient(getConnectionOptions(), !connect);
+        return new SalesforceRestClient(getConnectionOptions(rtopts), !connect);
+    }
+
+    #! Returns an async-I/O-capable connection object
+    /** @since %SalesforceRestClient 2.1
+    */
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new SalesforceRestClientIo(getConnectionOptions(rtopts));
     }
 
     #! Returns the ConnectionSchemeInfo hash for this object
@@ -1586,6 +1598,17 @@ public class SalesforceRestPingPollOperation inherits RestClient::RestPingPollOp
 
         state = SPS_GET_APIS;
         poller = rc.startPollSendRecv("GET", path, NOTHING, headers);
+    }
+}
+
+#! Salesforce REST client for non-blocking I/O
+public class SalesforceRestClientIo inherits RestClientIo::RestClientIo, SalesforceRestClientBase {
+    #! Creates the object with the given options
+    /** @param opts constructor options
+        @param shared_mgr optional shared connection manager
+    */
+    constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+            : RestClientIo(SalesforceRestClientBase::getOptions(opts), shared_mgr) {
     }
 }
 }
