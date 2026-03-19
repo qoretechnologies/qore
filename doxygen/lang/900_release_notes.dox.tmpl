@@ -1170,6 +1170,24 @@ cargo install tree-sitter-cli@0.26.5
       - polling-based event triggers for new contacts, appointments, and messages
       - action catalog integration with 20 actions and 3 triggers
       - connection support with \c gohighlevelres:// URL scheme
+    - @ref constantcontactrestclientintro "ConstantContactRestClient" module
+      - new module providing a REST client for Constant Contact's email marketing API
+      - supports OAuth2 authentication with bearer tokens
+      - provides ConstantContactRestConnection for connection management with \c constantcontactres:// URL scheme
+    - @ref constantcontactdataproviderintro "ConstantContactDataProvider" module
+      - new module providing a data provider API for Constant Contact email marketing
+      - contact management (create, update, delete, list, find by ID)
+      - contact list management (create, update, delete, list)
+      - tag management (create, update, delete, list)
+      - custom field management (create, update, delete, list)
+      - segment management (create, update, delete, list)
+      - email campaign management (create, update, delete, list, schedule)
+      - bulk activities (import/export contacts, add/remove list members)
+      - reports (email campaign summaries)
+      - account management (get, update)
+      - polling-based event triggers for contacts, email campaigns, and contact lists
+      - action catalog integration with 38 actions and 3 triggers
+      - connection support with \c constantcontactres:// URL scheme
     - @ref squarerestclientintro "SquareRestClient" module
       - new module providing a REST client for Square's payments and commerce API
       - supports OAuth2 authentication with bearer tokens

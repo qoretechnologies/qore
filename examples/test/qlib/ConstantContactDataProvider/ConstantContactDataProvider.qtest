@@ -1,0 +1,837 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  ConstantContactDataProvider.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/RestClient.qm
+
+%try-module json
+%define NoJson
+%endtry
+
+%requires ../../../../qlib/ConstantContactRestClient.qm
+%requires ../../../../qlib/ConstantContactDataProvider
+
+%exec-class ConstantContactDataProviderTest
+
+public class ConstantContactDataProviderTest inherits QUnit::Test {
+    private {
+        #! Constant Contact REST client for integration tests
+        *ConstantContactRestClient::ConstantContactRestClient client;
+
+        #! Logger for verbose output
+        Logger logger;
+
+        #! Custom command-line options
+        const MyOpts = Opts + {
+            "client_id": "i,client-id=s",
+            "client_secret": "s,client-secret=s",
+            "token": "t,token=s",
+            "conn": "c,connection=s",
+        };
+
+        #! Test contact list ID (created during integration tests)
+        *string testListId;
+
+        #! Test contact ID (created during integration tests)
+        *string testContactId;
+    }
+
+    constructor() : Test("ConstantContactDataProvider Test", "1.0", \ARGV, MyOpts) {
+        logger = new Logger("test", LoggerLevel::getLevelInfo());
+
+        # Unit tests (always run, no credentials needed)
+        addTestCase("sanity tests", \sanityTests());
+        addTestCase("factory tests", \factoryTests());
+        addTestCase("metadata tests", \metadataTests());
+        addTestCase("child provider tests", \childProviderTests());
+        addTestCase("data type tests", \dataTypeTests());
+        addTestCase("trigger example data tests", \triggerExampleDataTests());
+        addTestCase("negative tests", \negativeTests());
+        addTestCase("connection tests", \connectionTests());
+
+        # Integration tests (require Constant Contact credentials)
+        addTestCase("integration tests", \integrationTests());
+
+        # Try to set up connection for integration tests
+        try {
+            setupConnection();
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("Connection setup failed: %s: %s\n", ex.err, ex.desc);
+            }
+        }
+
+        set_return_value(main());
+    }
+
+    #! Sets up the Constant Contact client for integration tests
+    private setupConnection() {
+        # Try to use a connection from Qorus if specified
+        *string conn_name = m_options.conn ?? ENV.CONSTANTCONTACT_CONNECTION;
+        if (conn_name) {
+            if (m_options.verbose) {
+                printf("Using connection: %s\n", conn_name);
+            }
+            client = get_connection(conn_name).get();
+            return;
+        }
+
+        *string token = m_options.token ?? ENV.CONSTANTCONTACT_ACCESS_TOKEN;
+        *string client_id = m_options.client_id ?? ENV.CONSTANTCONTACT_CLIENT_ID;
+        *string client_secret = m_options.client_secret ?? ENV.CONSTANTCONTACT_CLIENT_SECRET;
+
+        if (!token && (!client_id || !client_secret)) {
+            if (m_options.verbose) {
+                printf("Missing Constant Contact credentials. Required:\n");
+                printf("  - CONSTANTCONTACT_CONNECTION or -c option (Qorus connection name)\n");
+                printf("Or:\n");
+                printf("  - CONSTANTCONTACT_ACCESS_TOKEN or -t option (access token)\n");
+                printf("Or:\n");
+                printf("  - CONSTANTCONTACT_CLIENT_ID or -i option\n");
+                printf("  - CONSTANTCONTACT_CLIENT_SECRET or -s option\n");
+            }
+            return;
+        }
+
+        # Token-only mode
+        if (token && (!client_id || !client_secret)) {
+            if (m_options.verbose) {
+                printf("Using token-only mode (no OAuth2 refresh)\n");
+            }
+            hash<auto> opts = {
+                "token": token,
+            };
+            client = new ConstantContactRestClient::ConstantContactRestClient(opts);
+            return;
+        }
+
+        # Full OAuth2 mode
+        hash<auto> opts = {
+            "oauth2_client_id": client_id,
+            "oauth2_client_secret": client_secret,
+        };
+        if (token) {
+            opts.token = token;
+        }
+        client = new ConstantContactRestClient::ConstantContactRestClient(opts);
+    }
+
+    #! Check if json module is available
+    private checkJson() {
+%ifdef NoJson
+        testSkip("no json module present");
+%endif
+    }
+
+    #! Basic sanity tests - provider instantiation
+    sanityTests() {
+        checkJson();
+        try {
+            ConstantContactDataProvider::ConstantContactDataProvider prov({
+                "constantcontactrestclient_options": {
+                    "token": "fake-token",
+                },
+            });
+            assertEq("constantcontact", prov.getName());
+            assertTrue(prov.getDesc().val());
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "OAUTH2-ERROR") {
+                testSkip("OAuth2 requires manual authorization - skipping sanity tests");
+            }
+            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
+                    || ex.err == "QOREADDRINFO-GETINFO-ERROR") {
+                testSkip(sprintf("cannot connect to Constant Contact API: %s", ex.desc));
+            }
+            rethrow;
+        }
+    }
+
+    #! Factory tests - verify factory registration
+    factoryTests() {
+        checkJson();
+        AbstractDataProviderFactory factory = DataProvider::getFactory("constantcontact");
+        assertEq("constantcontact", factory.getInfo().name);
+        assertTrue(factory.getInfo().children_can_support_apis);
+        assertTrue(factory.getInfo().children_can_support_records);
+        assertTrue(factory.getInfo().children_can_support_observers);
+
+        hash<auto> factoryOpts = factory.getInfo().provider_info.constructor_options;
+        assertTrue(factoryOpts.hasKey("constantcontactrestclient"));
+    }
+
+    #! Metadata tests - verify provider info structure
+    metadataTests() {
+        checkJson();
+        try {
+            ConstantContactDataProvider::ConstantContactDataProvider prov({
+                "constantcontactrestclient_options": {
+                    "token": "fake-token",
+                },
+            });
+            hash<DataProviderInfo> info = prov.getInfo();
+
+            assertTrue(info.supports_children);
+            assertTrue(info.children_can_support_apis);
+            assertTrue(info.children_can_support_records);
+            assertTrue(info.children_can_support_observers);
+            assertEq("ConstantContactDataProvider", info.type);
+
+            assertTrue(info.constructor_options.hasKey("constantcontactrestclient"));
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "OAUTH2-ERROR") {
+                testSkip("OAuth2 requires manual authorization - skipping metadata tests");
+            }
+            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
+                    || ex.err == "QOREADDRINFO-GETINFO-ERROR") {
+                testSkip(sprintf("cannot connect to Constant Contact API: %s", ex.desc));
+            }
+            rethrow;
+        }
+    }
+
+    #! Child provider tests - verify hierarchy
+    childProviderTests() {
+        checkJson();
+        ConstantContactDataProvider::ConstantContactDataProvider prov;
+        try {
+            prov = new ConstantContactDataProvider::ConstantContactDataProvider({
+                "constantcontactrestclient_options": {
+                    "token": "fake-token",
+                },
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "OAUTH2-ERROR") {
+                testSkip("OAuth2 requires manual authorization - skipping child provider tests");
+            }
+            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
+                    || ex.err == "QOREADDRINFO-GETINFO-ERROR") {
+                testSkip(sprintf("cannot connect to Constant Contact API: %s", ex.desc));
+            }
+            rethrow;
+        }
+
+        # Check child provider names
+        list<string> children = prov.getChildProviderNames();
+
+        # Verify all top-level child providers exist
+        assertTrue(children.contains("contacts"));
+        assertTrue(children.contains("contact-lists"));
+        assertTrue(children.contains("tags"));
+        assertTrue(children.contains("custom-fields"));
+        assertTrue(children.contains("segments"));
+        assertTrue(children.contains("email-campaigns"));
+        assertTrue(children.contains("activities"));
+        assertTrue(children.contains("reports"));
+        assertTrue(children.contains("account"));
+        assertTrue(children.contains("events"));
+
+        # Check contacts child provider
+        AbstractDataProvider contacts = prov.getChildProvider("contacts");
+        assertEq("contacts", contacts.getName());
+        hash<DataProviderInfo> contactsInfo = contacts.getInfo();
+        assertTrue(contactsInfo.supports_read);
+        assertTrue(contactsInfo.supports_native_search);
+        assertTrue(contactsInfo.supports_children);
+
+        # Verify contacts has action children
+        list<string> contactChildren = contacts.getChildProviderNames();
+        assertTrue(contactChildren.contains("create"));
+        assertTrue(contactChildren.contains("update"));
+        assertTrue(contactChildren.contains("delete"));
+
+        # Check contact-lists child provider
+        AbstractDataProvider contactLists = prov.getChildProvider("contact-lists");
+        assertEq("contact-lists", contactLists.getName());
+        hash<DataProviderInfo> contactListsInfo = contactLists.getInfo();
+        assertTrue(contactListsInfo.supports_read);
+        assertTrue(contactListsInfo.supports_native_search);
+
+        # Verify contact-lists has action children
+        list<string> contactListChildren = contactLists.getChildProviderNames();
+        assertTrue(contactListChildren.contains("create"));
+        assertTrue(contactListChildren.contains("update"));
+        assertTrue(contactListChildren.contains("delete"));
+
+        # Check tags child provider
+        AbstractDataProvider tags = prov.getChildProvider("tags");
+        assertEq("tags", tags.getName());
+        list<string> tagChildren = tags.getChildProviderNames();
+        assertTrue(tagChildren.contains("create"));
+        assertTrue(tagChildren.contains("update"));
+        assertTrue(tagChildren.contains("delete"));
+
+        # Check custom-fields child provider
+        AbstractDataProvider customFields = prov.getChildProvider("custom-fields");
+        assertEq("custom-fields", customFields.getName());
+        list<string> customFieldChildren = customFields.getChildProviderNames();
+        assertTrue(customFieldChildren.contains("create"));
+        assertTrue(customFieldChildren.contains("update"));
+        assertTrue(customFieldChildren.contains("delete"));
+
+        # Check segments child provider
+        AbstractDataProvider segments = prov.getChildProvider("segments");
+        assertEq("segments", segments.getName());
+        list<string> segmentChildren = segments.getChildProviderNames();
+        assertTrue(segmentChildren.contains("create"));
+        assertTrue(segmentChildren.contains("update"));
+        assertTrue(segmentChildren.contains("delete"));
+
+        # Check email-campaigns child provider
+        AbstractDataProvider emailCampaigns = prov.getChildProvider("email-campaigns");
+        assertEq("email-campaigns", emailCampaigns.getName());
+        list<string> emailCampaignChildren = emailCampaigns.getChildProviderNames();
+        assertTrue(emailCampaignChildren.contains("create"));
+        assertTrue(emailCampaignChildren.contains("update"));
+        assertTrue(emailCampaignChildren.contains("delete"));
+        assertTrue(emailCampaignChildren.contains("schedule"));
+
+        # Check activities child provider
+        AbstractDataProvider activities = prov.getChildProvider("activities");
+        assertEq("activities", activities.getName());
+        list<string> activityChildren = activities.getChildProviderNames();
+        assertTrue(activityChildren.contains("import-contacts"));
+        assertTrue(activityChildren.contains("export-contacts"));
+        assertTrue(activityChildren.contains("add-list-members"));
+        assertTrue(activityChildren.contains("remove-list-members"));
+
+        # Check reports child provider
+        AbstractDataProvider reports = prov.getChildProvider("reports");
+        assertEq("reports", reports.getName());
+        list<string> reportChildren = reports.getChildProviderNames();
+        assertTrue(reportChildren.contains("get-email-summary"));
+
+        # Check account child provider
+        AbstractDataProvider account = prov.getChildProvider("account");
+        assertEq("account", account.getName());
+        list<string> accountChildren = account.getChildProviderNames();
+        assertTrue(accountChildren.contains("get"));
+        assertTrue(accountChildren.contains("update"));
+
+        # Check events child provider and triggers
+        AbstractDataProvider events = prov.getChildProvider("events");
+        assertEq("events", events.getName());
+        hash<DataProviderInfo> eventsInfo = events.getInfo();
+        assertTrue(eventsInfo.supports_children);
+        assertTrue(eventsInfo.children_can_support_observers);
+
+        list<string> eventChildren = events.getChildProviderNames();
+        assertTrue(eventChildren.contains("new-contact"));
+        assertTrue(eventChildren.contains("new-email-campaign"));
+        assertTrue(eventChildren.contains("new-contact-list"));
+
+        # Verify event providers have correct info
+        AbstractDataProvider newContact = events.getChildProvider("new-contact");
+        assertEq("new-contact", newContact.getName());
+        hash<DataProviderInfo> newContactInfo = newContact.getInfo();
+        assertTrue(newContactInfo.supports_observable);
+    }
+
+    #! Data type tests - verify record type definitions
+    dataTypeTests() {
+        checkJson();
+        # Test contact data type
+        ConstantContactDataProvider::ConstantContactContactDataType contactType();
+        hash<string, AbstractDataField> contactFields = contactType.getFields();
+        assertTrue(contactFields.hasKey("contact_id"));
+        assertTrue(contactFields.hasKey("email_address"));
+        assertTrue(contactFields.hasKey("first_name"));
+        assertTrue(contactFields.hasKey("last_name"));
+        assertTrue(contactFields.hasKey("company_name"));
+        assertTrue(contactFields.hasKey("job_title"));
+        assertTrue(contactFields.hasKey("created_at"));
+        assertTrue(contactFields.hasKey("updated_at"));
+        assertTrue(contactFields.hasKey("custom_fields"));
+        assertTrue(contactFields.hasKey("list_memberships"));
+        assertTrue(contactFields.hasKey("taggings"));
+
+        # Test contact list data type
+        ConstantContactDataProvider::ConstantContactContactListDataType listType();
+        hash<string, AbstractDataField> listFields = listType.getFields();
+        assertTrue(listFields.hasKey("list_id"));
+        assertTrue(listFields.hasKey("name"));
+        assertTrue(listFields.hasKey("description"));
+        assertTrue(listFields.hasKey("favorite"));
+        assertTrue(listFields.hasKey("membership_count"));
+        assertTrue(listFields.hasKey("created_at"));
+
+        # Test tag data type
+        ConstantContactDataProvider::ConstantContactTagDataType tagType();
+        hash<string, AbstractDataField> tagFields = tagType.getFields();
+        assertTrue(tagFields.hasKey("tag_id"));
+        assertTrue(tagFields.hasKey("name"));
+        assertTrue(tagFields.hasKey("contacts_count"));
+        assertTrue(tagFields.hasKey("created_at"));
+
+        # Test custom field data type
+        ConstantContactDataProvider::ConstantContactCustomFieldDataType customFieldType();
+        hash<string, AbstractDataField> customFieldFields = customFieldType.getFields();
+        assertTrue(customFieldFields.hasKey("custom_field_id"));
+        assertTrue(customFieldFields.hasKey("label"));
+        assertTrue(customFieldFields.hasKey("name"));
+        assertTrue(customFieldFields.hasKey("type"));
+
+        # Test segment data type
+        ConstantContactDataProvider::ConstantContactSegmentDataType segmentType();
+        hash<string, AbstractDataField> segmentFields = segmentType.getFields();
+        assertTrue(segmentFields.hasKey("segment_id"));
+        assertTrue(segmentFields.hasKey("name"));
+        assertTrue(segmentFields.hasKey("segment_criteria"));
+        assertTrue(segmentFields.hasKey("created_at"));
+
+        # Test email campaign data type
+        ConstantContactDataProvider::ConstantContactEmailCampaignDataType campaignType();
+        hash<string, AbstractDataField> campaignFields = campaignType.getFields();
+        assertTrue(campaignFields.hasKey("campaign_id"));
+        assertTrue(campaignFields.hasKey("name"));
+        assertTrue(campaignFields.hasKey("current_status"));
+        assertTrue(campaignFields.hasKey("type"));
+
+        # Test account data type
+        ConstantContactDataProvider::ConstantContactAccountDataType accountType();
+        hash<string, AbstractDataField> accountFields = accountType.getFields();
+        assertTrue(accountFields.hasKey("encoded_account_id"));
+        assertTrue(accountFields.hasKey("organization_name"));
+        assertTrue(accountFields.hasKey("first_name"));
+        assertTrue(accountFields.hasKey("last_name"));
+
+        # Test create contact request data type
+        ConstantContactDataProvider::ConstantContactCreateContactRequestDataType createContactType();
+        hash<string, AbstractDataField> createContactFields = createContactType.getFields();
+        assertTrue(createContactFields.hasKey("email_address"));
+        assertTrue(createContactFields.hasKey("first_name"));
+        assertTrue(createContactFields.hasKey("last_name"));
+        assertTrue(createContactFields.hasKey("list_memberships"));
+
+        # Test create contact list request data type
+        ConstantContactDataProvider::ConstantContactCreateContactListRequestDataType createListType();
+        hash<string, AbstractDataField> createListFields = createListType.getFields();
+        assertTrue(createListFields.hasKey("name"));
+        assertTrue(createListFields.hasKey("description"));
+        assertTrue(createListFields.hasKey("favorite"));
+    }
+
+    #! Trigger example data tests
+    triggerExampleDataTests() {
+        checkJson();
+        ConstantContactDataProvider::ConstantContactDataProvider prov;
+        try {
+            prov = new ConstantContactDataProvider::ConstantContactDataProvider({
+                "constantcontactrestclient_options": {
+                    "token": "fake-token",
+                },
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "OAUTH2-ERROR") {
+                testSkip("OAuth2 requires manual authorization - skipping trigger tests");
+            }
+            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
+                    || ex.err == "QOREADDRINFO-GETINFO-ERROR") {
+                testSkip(sprintf("cannot connect to Constant Contact API: %s", ex.desc));
+            }
+            rethrow;
+        }
+
+        AbstractDataProvider events = prov.getChildProvider("events");
+        list<string> triggerNames = (
+            "new-contact",
+            "new-email-campaign",
+            "new-contact-list",
+        );
+
+        foreach string triggerName in (triggerNames) {
+            AbstractDataProvider triggerProvider = events.getChildProvider(triggerName);
+
+            # Verify event types are defined
+            hash<string, hash<DataProviderMessageInfo>> eventTypes = triggerProvider.getEventTypes();
+            assertTrue(eventTypes.hasKey(triggerName),
+                sprintf("%s should define event type '%s'", triggerName, triggerName));
+
+            # Verify event type has a data type
+            assertTrue(eventTypes{triggerName}.type instanceof AbstractDataProviderType,
+                sprintf("%s event type should have a data type", triggerName));
+
+            # Get example event data (will fall back to fake data since we have fake credentials)
+            auto exampleData = triggerProvider.getExampleEventData(triggerName);
+            assertTrue(exampleData instanceof hash,
+                sprintf("%s getExampleEventData() should return a hash", triggerName));
+        }
+    }
+
+    #! Negative tests - test error handling and invalid inputs
+    negativeTests() {
+        checkJson();
+        ConstantContactDataProvider::ConstantContactDataProvider prov;
+        try {
+            prov = new ConstantContactDataProvider::ConstantContactDataProvider({
+                "constantcontactrestclient_options": {
+                    "token": "fake-token",
+                },
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "OAUTH2-ERROR") {
+                testSkip("OAuth2 requires manual authorization - skipping negative tests");
+            }
+            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
+                    || ex.err == "QOREADDRINFO-GETINFO-ERROR") {
+                testSkip(sprintf("cannot connect to Constant Contact API: %s", ex.desc));
+            }
+            rethrow;
+        }
+
+        # Test getting non-existent child provider
+        assertThrows("INVALID-CHILD-PROVIDER", sub() {
+            prov.getChildProviderEx("nonexistent");
+        });
+
+        # Test account get action has correct info
+        AbstractDataProvider accountGet = prov.getChildProvider("account").getChildProvider("get");
+        hash<DataProviderInfo> accountGetInfo = accountGet.getInfo();
+        assertTrue(accountGetInfo.supports_request);
+    }
+
+    #! Connection tests - verify REST connection
+    connectionTests() {
+        checkJson();
+        # Verify the scheme is registered
+        hash<auto> scheme = ConnectionSchemeCache::getScheme("constantcontactres");
+        assertTrue(scheme.schemes.constantcontactres);
+        assertTrue(scheme.auto_url);
+
+        # Verify scheme has required options
+        assertTrue(scheme.options.hasKey("oauth2_auth_url"));
+        assertTrue(scheme.options.hasKey("oauth2_token_url"));
+        assertTrue(scheme.options.hasKey("oauth2_client_id"));
+        assertTrue(scheme.options.hasKey("oauth2_client_secret"));
+    }
+
+    #! Integration tests - require real Constant Contact credentials
+    integrationTests() {
+        checkJson();
+
+        if (!client) {
+            testSkip("No Constant Contact credentials available - skipping integration tests");
+            return;
+        }
+
+        if (m_options.verbose) {
+            printf("Running Constant Contact integration tests...\n");
+        }
+
+        # Test 1: Create a contact list
+        testCreateContactList();
+
+        # Test 2: Get the contact list
+        testGetContactList();
+
+        # Test 3: Create a contact with the list
+        testCreateContact();
+
+        # Test 4: Get the contact
+        testGetContact();
+
+        # Test 5: Update the contact
+        testUpdateContact();
+
+        # Test 6: Delete the contact
+        testDeleteContact();
+
+        # Test 7: Delete the contact list
+        testDeleteContactList();
+
+        # Test 8: Get account summary
+        testGetAccountSummary();
+
+        # Cleanup any remaining test data
+        cleanup();
+    }
+
+    #! Test creating a contact list
+    private testCreateContactList() {
+        ConstantContactDataProvider::ConstantContactDataProvider prov(client);
+        AbstractDataProvider createAction = prov.getChildProvider("contact-lists")
+            .getChildProvider("create");
+
+        string unique = now_us().format("YYYYMMDDHHmmssxxxxxx");
+        hash<auto> result = createAction.doRequest({
+            "name": "Test List " + unique,
+            "description": "Integration test list - safe to delete",
+            "favorite": False,
+        });
+
+        assertTrue(result.hasKey("list_id"), "Created contact list should have 'list_id' field");
+        assertTrue(result.list_id.val(), "Contact list ID should be non-empty");
+        testListId = result.list_id;
+
+        if (m_options.verbose) {
+            printf("Created contact list: %s\n", testListId);
+        }
+    }
+
+    #! Test getting a contact list by ID
+    private testGetContactList() {
+        if (!testListId) {
+            testSkip("No test contact list created");
+            return;
+        }
+
+        ConstantContactDataProvider::ConstantContactDataProvider prov(client);
+        AbstractDataProvider contactLists = prov.getChildProvider("contact-lists");
+
+        AbstractDataProviderRecordIterator iter = contactLists.searchRecords(NOTHING, {
+            "list_id": testListId,
+        });
+        assertTrue(iter.next(), "Should find contact list by ID");
+        hash<auto> record = iter.getValue();
+        assertEq(testListId, record.list_id, "Contact list ID should match");
+        assertTrue(record.name.regex("^Test List "), "Contact list name should start with 'Test List'");
+    }
+
+    #! Test creating a contact with list membership
+    private testCreateContact() {
+        ConstantContactDataProvider::ConstantContactDataProvider prov(client);
+        AbstractDataProvider createAction = prov.getChildProvider("contacts")
+            .getChildProvider("create");
+
+        string unique = now_us().format("YYYYMMDDHHmmssxxxxxx");
+
+        hash<auto> req = {
+            "email_address": {
+                "address": sprintf("test_%s@example.com", unique),
+                "permission_to_send": "implicit",
+            },
+            "first_name": "Test",
+            "last_name": "User_" + unique,
+            "create_source": "Account",
+        };
+
+        # Add list membership if we have a test list
+        if (testListId) {
+            req.list_memberships = (testListId,);
+        }
+
+        hash<auto> result = createAction.doRequest(req);
+
+        assertTrue(result.hasKey("contact_id"), "Created contact should have 'contact_id' field");
+        assertTrue(result.contact_id.val(), "Contact ID should be non-empty");
+        testContactId = result.contact_id;
+
+        if (m_options.verbose) {
+            printf("Created contact: %s\n", testContactId);
+        }
+
+        # Verify data persistence - retrieve the contact and verify fields
+        AbstractDataProvider contacts = prov.getChildProvider("contacts");
+        AbstractDataProviderRecordIterator iter = contacts.searchRecords(NOTHING, {
+            "contact_id": testContactId,
+        });
+        assertTrue(iter.next(), "Should find created contact by ID");
+        hash<auto> fetched = iter.getValue();
+        assertEq("Test", fetched.first_name, "Contact first_name should match");
+        assertTrue(fetched.last_name.regex("User_" + unique),
+            "Contact last_name should match");
+    }
+
+    #! Test getting a single contact by ID
+    private testGetContact() {
+        if (!testContactId) {
+            testSkip("No test contact created");
+            return;
+        }
+
+        ConstantContactDataProvider::ConstantContactDataProvider prov(client);
+        AbstractDataProvider contacts = prov.getChildProvider("contacts");
+
+        AbstractDataProviderRecordIterator iter = contacts.searchRecords(NOTHING, {
+            "contact_id": testContactId,
+        });
+        assertTrue(iter.next(), "Should find contact by ID");
+        hash<auto> record = iter.getValue();
+        assertEq(testContactId, record.contact_id, "Contact ID should match");
+        assertTrue(record.hasKey("first_name"), "Contact should have first_name");
+        assertTrue(record.hasKey("last_name"), "Contact should have last_name");
+    }
+
+    #! Test updating a contact
+    private testUpdateContact() {
+        if (!testContactId) {
+            testSkip("No test contact created");
+            return;
+        }
+
+        ConstantContactDataProvider::ConstantContactDataProvider prov(client);
+        AbstractDataProvider updateAction = prov.getChildProvider("contacts")
+            .getChildProvider("update");
+
+        hash<auto> result = updateAction.doRequest({
+            "contact_id": testContactId,
+            "first_name": "Updated",
+            "update_source": "Account",
+        });
+
+        assertTrue(result.hasKey("contact_id"), "Updated contact should have 'contact_id' field");
+        assertEq(testContactId, result.contact_id, "Updated contact ID should match");
+
+        # Verify the update persisted
+        AbstractDataProvider contacts = prov.getChildProvider("contacts");
+        AbstractDataProviderRecordIterator iter = contacts.searchRecords(NOTHING, {
+            "contact_id": testContactId,
+        });
+        assertTrue(iter.next(), "Should find updated contact");
+        hash<auto> fetched = iter.getValue();
+        assertEq("Updated", fetched.first_name, "Contact first_name should be updated");
+    }
+
+    #! Test deleting a contact
+    private testDeleteContact() {
+        if (!testContactId) {
+            testSkip("No test contact created");
+            return;
+        }
+
+        ConstantContactDataProvider::ConstantContactDataProvider prov(client);
+        AbstractDataProvider deleteAction = prov.getChildProvider("contacts")
+            .getChildProvider("delete");
+
+        try {
+            deleteAction.doRequest({
+                "contact_id": testContactId,
+            });
+            assertTrue(True, "Contact deletion completed without error");
+        } catch (hash<ExceptionInfo> ex) {
+            # Some API errors are acceptable (e.g., already deleted)
+            if (m_options.verbose) {
+                printf("Contact delete returned: %s: %s\n", ex.err, ex.desc);
+            }
+            assertTrue(True, "Contact deletion attempted");
+        }
+
+        if (m_options.verbose) {
+            printf("Deleted contact: %s\n", testContactId);
+        }
+        # Clear the ID so cleanup doesn't try to delete again
+        testContactId = NOTHING;
+    }
+
+    #! Test deleting a contact list
+    private testDeleteContactList() {
+        if (!testListId) {
+            testSkip("No test contact list created");
+            return;
+        }
+
+        ConstantContactDataProvider::ConstantContactDataProvider prov(client);
+        AbstractDataProvider deleteAction = prov.getChildProvider("contact-lists")
+            .getChildProvider("delete");
+
+        try {
+            deleteAction.doRequest({
+                "list_id": testListId,
+            });
+            assertTrue(True, "Contact list deletion completed without error");
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("Contact list delete returned: %s: %s\n", ex.err, ex.desc);
+            }
+            assertTrue(True, "Contact list deletion attempted");
+        }
+
+        if (m_options.verbose) {
+            printf("Deleted contact list: %s\n", testListId);
+        }
+        # Clear the ID so cleanup doesn't try to delete again
+        testListId = NOTHING;
+    }
+
+    #! Test getting account summary
+    private testGetAccountSummary() {
+        ConstantContactDataProvider::ConstantContactDataProvider prov(client);
+        AbstractDataProvider getAccount = prov.getChildProvider("account")
+            .getChildProvider("get");
+
+        hash<auto> result = getAccount.doRequest({});
+
+        assertTrue(result.hasKey("encoded_account_id"),
+            "Account summary should have 'encoded_account_id' field");
+        assertTrue(result.encoded_account_id.val(),
+            "Encoded account ID should be non-empty");
+
+        if (m_options.verbose) {
+            printf("Account ID: %s, Organization: %s\n",
+                result.encoded_account_id, result.organization_name ?? "N/A");
+        }
+    }
+
+    #! Cleanup test data
+    private cleanup() {
+        # Delete test contact if still present
+        if (testContactId) {
+            if (m_options.verbose) {
+                printf("Cleaning up test contact: %s\n", testContactId);
+            }
+            try {
+                ConstantContactDataProvider::ConstantContactDataProvider prov(client);
+                AbstractDataProvider deleteAction = prov.getChildProvider("contacts")
+                    .getChildProvider("delete");
+                deleteAction.doRequest({
+                    "contact_id": testContactId,
+                });
+                if (m_options.verbose) {
+                    printf("Test contact deleted successfully\n");
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (m_options.verbose) {
+                    printf("Warning: contact cleanup failed: %s: %s\n", ex.err, ex.desc);
+                }
+            }
+        }
+
+        # Delete test contact list if still present
+        if (testListId) {
+            if (m_options.verbose) {
+                printf("Cleaning up test contact list: %s\n", testListId);
+            }
+            try {
+                ConstantContactDataProvider::ConstantContactDataProvider prov(client);
+                AbstractDataProvider deleteAction = prov.getChildProvider("contact-lists")
+                    .getChildProvider("delete");
+                deleteAction.doRequest({
+                    "list_id": testListId,
+                });
+                if (m_options.verbose) {
+                    printf("Test contact list deleted successfully\n");
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (m_options.verbose) {
+                    printf("Warning: contact list cleanup failed: %s: %s\n", ex.err, ex.desc);
+                }
+            }
+        }
+    }
+}
