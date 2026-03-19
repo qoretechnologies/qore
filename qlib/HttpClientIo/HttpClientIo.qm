@@ -28,7 +28,7 @@
 %requires AsyncSocketIo
 
 module HttpClientIo {
-    version = "1.1";
+    version = "1.2";
     desc = "Unified HTTP/1.1, HTTP/2, and HTTP/3 client I/O";
     author = "Qore Technologies, s.r.o.";
     url = "https://qore.org";
@@ -131,6 +131,16 @@ auto mgr_h3 = new HttpClientConnectionManager({"protocol": "h3"});
     @endcode
 
     @section httpclientio_relnotes Release Notes
+
+    @subsection httpclientio_v1_2 Version 1.2
+    - Added HTTP proxy support via \c proxy_url option in
+      @ref HttpClientConnectionManagerOptions
+    - HTTP/1.1: plain HTTP requests through proxy use absolute URLs; HTTPS targets
+      use HTTP CONNECT tunnel + TLS upgrade
+    - HTTP/2: HTTPS through proxy uses HTTP/1.1 CONNECT tunnel before TLS+ALPN
+      negotiation
+    - HTTP/3: auto-downgrades to HTTP/2 when a proxy is configured; throws if
+      HTTP/3 is explicitly forced with a proxy
 
     @subsection httpclientio_v1_1 Version 1.1
     - Added HTTP/1.1 support via @ref Http1ClientConnection, @ref Http1ClientPollOperation,
@@ -357,6 +367,17 @@ public namespace HttpClientIo {
         /** @see HttpClientProtocol, HttpClientProtocolMap
         */
         string protocol = "auto";
+
+        #! Proxy URL (e.g., "http://proxy:8080")
+        /** When set, all connections are routed through this HTTP proxy.
+            For HTTPS targets, the proxy tunnel is established via HTTP CONNECT.
+            For plain HTTP targets, requests use absolute URLs through the proxy.
+
+            @note HTTP/3 (QUIC) cannot tunnel through HTTP proxies — when a proxy is
+            configured, HTTP/3 is automatically downgraded to HTTP/2 in auto mode,
+            or an error is thrown if HTTP/3 is explicitly forced.
+        */
+        *string proxy_url;
 
         #! HTTP/3-only: client certificate for mutual TLS (mTLS)
         *SSLCertificate client_cert;

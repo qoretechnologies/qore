@@ -77,6 +77,9 @@ public class HttpClientConnection {
 
         #! Number of pending stream reservations (threads assigned but not yet submitted)
         int pending_stream_count = 0;
+
+        #! Proxy connection info (if using a proxy)
+        *hash<auto> proxy_info;
     }
 
     #! Returns the protocol identifier: "h1", "h2", or "h3"
@@ -267,11 +270,14 @@ public class HttpClientConnection {
         int stream_id;
         try {
             stream_id = submitRequestImpl(method, path, headers, body, callback, ctx);
-        } catch () {
-            # Mark connection as closed so it gets evicted from the pool
-            AutoLock al(lock);
-            state = HttpClientConnectionState::Closed;
-            ready_cond.broadcast();
+        } catch (hash<ExceptionInfo> ex) {
+            # Mark connection Closed only for connection-fatal errors so the
+            # pool evicts it immediately; transient errors leave it Ready
+            if (HttpClientIo::HttpClientConnectionManager::isConnectionErrorStatic(ex.err)) {
+                AutoLock al(lock);
+                state = HttpClientConnectionState::Closed;
+                ready_cond.broadcast();
+            }
             rethrow;
         }
         @assert(stream_id >= 0);

@@ -98,6 +98,9 @@ public class HttpClientConnectionManager {
         #! Logger
         *LoggerInterface logger;
 
+        #! Parsed proxy info (host, port, protocol, ssl)
+        *hash<auto> proxy_info;
+
         #! Shutdown flag
         bool shutdown = False;
 
@@ -134,6 +137,28 @@ public class HttpClientConnectionManager {
                 sprintf("max_streams_per_connection must be >= 0 (0 = unlimited), got %d",
                     self.opts.max_streams_per_connection);
         }
+        # Parse proxy URL if provided
+        if (self.opts.proxy_url.val()) {
+            hash<auto> purl;
+            try {
+                purl = parse_url(self.opts.proxy_url);
+            } catch (hash<ExceptionInfo> ex) {
+                throw "HTTPCLIENT-OPTION-ERROR",
+                    sprintf("invalid proxy URL %y: %s", self.opts.proxy_url, ex.desc);
+            }
+            if (!purl.host) {
+                throw "HTTPCLIENT-OPTION-ERROR",
+                    sprintf("proxy URL %y has no host", self.opts.proxy_url);
+            }
+            bool proxy_ssl = (purl.protocol == "https");
+            proxy_info = {
+                "host": purl.host,
+                "port": purl.port ?? (proxy_ssl ? 443 : 80),
+                "protocol": purl.protocol ?? "http",
+                "ssl": proxy_ssl,
+            };
+        }
+
         # Use the process-wide global controller by default; all managers share
         # a single I/O thread for efficient async operation
         controller = AsyncSocketIo::getGlobalAsyncIoController();
@@ -459,6 +484,11 @@ public class HttpClientConnectionManager {
                 throw "HTTPCLIENT-URL-ERROR",
                     "HTTP/3 requires HTTPS (URL scheme must be https://)";
             }
+            if (proxy_info) {
+                throw "HTTPCLIENT-PROXY-ERROR",
+                    "HTTP/3 (QUIC) cannot tunnel through HTTP proxies; use protocol "
+                    "\"auto\" or \"h2\" with a proxy";
+            }
             return "h3";
         }
 
@@ -487,6 +517,12 @@ public class HttpClientConnectionManager {
                 }
             }
             # Time to re-probe
+        }
+
+        # QUIC cannot tunnel through HTTP proxies — downgrade to H2
+        if (proxy_info) {
+            log(LoggerLevel::DEBUG, "proxy configured, skipping H3 (QUIC cannot tunnel)");
+            return "h2";
         }
 
         # Try H3 first
@@ -689,9 +725,10 @@ public class HttpClientConnectionManager {
     */
     private HttpClientConnection createConnection(hash<auto> url_info, string key, string protocol) {
         if (protocol == "h1") {
-            log(LoggerLevel::DEBUG, "creating new HTTP/1.1 connection to %s", key);
+            log(LoggerLevel::DEBUG, "creating new HTTP/1.1 connection to %s%s", key,
+                proxy_info ? sprintf(" via proxy %s:%d", proxy_info.host, proxy_info.port) : "");
             return new Http1ClientConnection(url_info, opts.connect_timeout, logger,
-                1, opts.ssl_verify_mode, opts.accept_all_certs);
+                1, opts.ssl_verify_mode, opts.accept_all_certs, proxy_info);
         }
 
         if (protocol == "h3") {
@@ -718,21 +755,30 @@ public class HttpClientConnectionManager {
         }
 
         # Create H2 connection
-        log(LoggerLevel::DEBUG, "creating new HTTP/2 connection to %s", key);
+        log(LoggerLevel::DEBUG, "creating new HTTP/2 connection to %s%s", key,
+            proxy_info ? sprintf(" via proxy %s:%d", proxy_info.host, proxy_info.port) : "");
         return new Http2ClientConnection(url_info, opts.connect_timeout, logger,
-            opts.max_streams_per_connection, opts.ssl_verify_mode, opts.accept_all_certs);
+            opts.max_streams_per_connection, opts.ssl_verify_mode, opts.accept_all_certs,
+            proxy_info);
     }
 
     #! Internal: submits a connection poll operation to the controller
-    private submitConnectionToController(string key, HttpClientConnection conn) {
+    /** @param key the pool key "host:port"
+        @param conn the connection to submit
+        @param initial if True, log the initial submission (suppressed on re-submit to reduce noise)
+    */
+    private submitConnectionToController(string key, HttpClientConnection conn,
+            bool initial = True) {
         HttpClientPollOperation op = conn.getPollOperation();
         Socket sock = conn.getSocket();
         string owner = self.uniqueHash();
 
-        log(LoggerLevel::DEBUG, "submitting %s connection %d to controller for %s",
-            conn.getProtocol(), conn.getConnectionId(), key);
+        if (initial) {
+            log(LoggerLevel::DEBUG, "submitting %s connection %d to controller for %s",
+                conn.getProtocol(), conn.getConnectionId(), key);
+        }
 
-        hash<SocketPollOperationInfo> info = <SocketPollOperationInfo>{
+        controller.submit(<SocketPollOperationInfo>{
             "sock": sock,
             "spop": op,
             "owner": owner,
@@ -740,9 +786,7 @@ public class HttpClientConnectionManager {
             "callback": sub (hash<SocketPollResultInfo> result) {
                 handleConnectionResult(key, conn, result);
             },
-        };
-
-        controller.submit(info);
+        });
     }
 
     #! Internal: handles connection result from controller callback
@@ -807,7 +851,8 @@ public class HttpClientConnectionManager {
             removeConnectionFromPool(key, conn);
             return;
         }
-        submitConnectionToController(key, conn);
+        # Re-submit with initial=False to suppress redundant log line
+        submitConnectionToController(key, conn, False);
     }
 
     #! Internal: removes a connection from the pool
@@ -840,6 +885,11 @@ public class HttpClientConnectionManager {
 
     #! Internal: checks if an error indicates a dead connection
     private bool isConnectionError(string err) {
+        return isConnectionErrorStatic(err);
+    }
+
+    #! Static version of isConnectionError() for use by other classes
+    static bool isConnectionErrorStatic(string err) {
         return err == "QUIC-HTTP3-ERROR"
             || err == "QUIC-READ-ERROR"
             || err == "QUIC-RECV-ERROR"
@@ -857,10 +907,7 @@ public class HttpClientConnectionManager {
             || err == "HTTP1-SEND-ERROR"
             || err == "HTTP1-RECV-ERROR"
             || err == "HTTPCLIENT-STATE-ERROR"
-            || err == "HTTPCLIENT-CONNECT-ERROR"
-            || err == "HTTPCLIENT-REQUEST-ERROR"
-            || err == "HTTPCLIENT-TIMEOUT"
-            || err == "SOCKET-SEND-ERROR";
+            || err == "HTTPCLIENT-CONNECT-ERROR";
     }
 
     #! Internal: checks if an error indicates an h2c protocol incompatibility
@@ -873,9 +920,6 @@ public class HttpClientConnectionManager {
             || err == "HTTP2-ALPN-ERROR"
             || err == "HTTP2-ABORT"
             || err == "HTTP2-ERROR"
-            || err == "SOCKET-SEND-ERROR"
-            || err == "HTTPCLIENT-REQUEST-ERROR"
-            || err == "HTTPCLIENT-TIMEOUT"
             || err == "HTTPCLIENT-CONNECT-ERROR";
     }
 

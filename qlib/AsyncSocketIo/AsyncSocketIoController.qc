@@ -156,21 +156,6 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         return Qore::AsyncIoController::submit(info, replace);
     }
 
-    #! Executes a socket operation synchronously
-    hash<SocketPollResultInfo> exec(hash<SocketPollOperationInfo> info, *bool replace) {
-        if (!info.sock) {
-            throw "CONTROLLER-ADD-ERROR", sprintf("Missing 'sock' value; got: %y", info);
-        }
-        if (!info.spop) {
-            throw "CONTROLLER-ADD-ERROR", sprintf("Missing 'spop' value; got: %y", info);
-        }
-        if (!info.owner) {
-            throw "CONTROLLER-ADD-ERROR", sprintf("Missing 'owner' value; required for proper shutdown via "
-                "cancelByOwner(); got: %y", info);
-        }
-        return Qore::AsyncIoController::exec(info, replace);
-    }
-
     #! Cancels the operation with the given Socket's unique hash as the key
     bool cancel(Socket sock) {
         return Qore::AsyncIoController::cancel(sock);

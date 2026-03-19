@@ -139,8 +139,8 @@ hashdecl Qore::SocketPollResultInfo {
     (epoll on Linux, kqueue on macOS/BSD) via the EventLoop class.
 
     The controller runs a dedicated I/O thread that processes socket events and drives poll
-    operations through their state machines. Operations are submitted via @ref submit() or
-    @ref exec(), and results are delivered via Queue or callback.
+    operations through their state machines. Operations are submitted via @ref submit(),
+    and results are delivered via callback.
 
     The controller supports:
     - Multiple concurrent operations on different sockets
@@ -226,32 +226,6 @@ static *Queue AsyncIoController::submit(hash<SocketPollOperationInfo> info, *boo
     ReferenceHolder<AsyncIoControllerPriv> ctrl_holder(ctrl, xsink);
     ReferenceHolder<QoreObject> obj_holder(obj, xsink);
     return ctrl->submit(obj, const_cast<QoreHashNode*>(info), replace, xsink);
-}
-
-//! Executes an async I/O operation synchronously on the global singleton
-/** @par Example:
-    @code{.py}
-    hash<SocketPollResultInfo> result = AsyncIoController::exec({"sock": sock, "spop": op, "owner": "server"});
-    @endcode
-
-    @param info the operation info hash
-    @param replace if @ref True "True", cancel any existing operation with the same key
-
-    @return the result hash
-
-    @throw ASYNC-IO-ERROR if the controller is shutting down or the info hash is invalid
-
-    @since %Qore 2.3
-*/
-static hash<SocketPollResultInfo> AsyncIoController::exec(hash<SocketPollOperationInfo> info, *bool replace) {
-    QoreObject* obj;
-    AsyncIoControllerPriv* ctrl = get_singleton(obj, xsink);
-    if (!ctrl) {
-        return QoreValue();
-    }
-    ReferenceHolder<AsyncIoControllerPriv> ctrl_holder(ctrl, xsink);
-    ReferenceHolder<QoreObject> obj_holder(obj, xsink);
-    return ctrl->exec(obj, const_cast<QoreHashNode*>(info), replace, xsink);
 }
 
 //! Cancels an operation by socket on the global singleton

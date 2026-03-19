@@ -730,38 +730,6 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
     return nullptr;
 }
 
-QoreHashNode* AsyncIoControllerPriv::exec(QoreObject* self, QoreHashNode* info, bool replace,
-        ExceptionSink* xsink) {
-    // Submit the operation - this creates a Queue for us
-    QoreObject* q_obj = submit(self, info, replace, xsink);
-    if (*xsink) {
-        return nullptr;
-    }
-
-    if (!q_obj) {
-        xsink->raiseException("ASYNC-IO-ERROR", "exec() cannot be used with a callback");
-        return nullptr;
-    }
-
-    ReferenceHolder<QoreObject> q_holder(q_obj, xsink);
-    Queue* q = static_cast<Queue*>(q_obj->getReferencedPrivateData(CID_QUEUE, xsink));
-    if (!q || *xsink) {
-        return nullptr;
-    }
-    ReferenceHolder<Queue> q_ref(q, xsink);
-
-    // Wait for result (blocking)
-    QoreValue result = q->shift(xsink);
-    if (*xsink) {
-        return nullptr;
-    }
-    if (result.getType() == NT_HASH) {
-        return result.get<QoreHashNode>();
-    }
-    result.discard(xsink);
-    return nullptr;
-}
-
 bool AsyncIoControllerPriv::cancel(QoreSocketObject* sock, ExceptionSink* xsink) {
     std::string uh = getSocketHash(sock);
     SimpleRefHolder<QoreStringNode> key(new QoreStringNode(uh));
@@ -1907,7 +1875,8 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
 #endif
     }
 
-    // Cleanup on exit
+    // Cleanup on exit — cancel results are collected under lock and delivered outside
+    std::vector<PollInfo> exit_cancel_pinfos;
     {
         AutoLocker al(m);
 
@@ -1939,6 +1908,16 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
         }
         timer_info_map.clear();
 
+        // Deliver cancel results to all remaining cache entries so that
+        // exec() callers blocked on q->shift() are unblocked during shutdown.
+        // Collect entries under lock, deliver outside lock to avoid deadlock.
+        std::vector<PollInfo> exit_cancel_pinfos;
+        for (auto& [key, pinfo] : cache) {
+            exit_cancel_pinfos.push_back(pinfo);
+            pinfo = PollInfo();
+        }
+        cache.clear();
+
         // Signal any pending CancelOwner done_cond waiters in the command queue
         // so cancelByOwner() doesn't hang when the I/O thread exits.
         // Must set cancel_done_flag under lock before broadcasting to prevent
@@ -1952,6 +1931,13 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
             }
         }
         cmdq.clear();
+    }
+
+    // Deliver cancel results to remaining cache entries outside the lock
+    // so exec() callers blocked on q->shift() are unblocked
+    for (auto& pinfo : exit_cancel_pinfos) {
+        doCancelIntern(pinfo, xsink);
+        pinfo.cleanup(xsink);
     }
 
     // Log the exit message before signaling waitStop(), so the per-controller

@@ -47,6 +47,10 @@ public class Http2ClientPollOperation inherits HttpClientPollOperation {
     public {
         #! SSL upgrade state (HTTP/2-specific; QUIC bundles TLS in the handshake)
         const STATE_SSL_UPGRADE = "ssl_upgrade";
+        #! Proxy CONNECT send state
+        const STATE_PROXY_CONNECT_SEND = "proxy_connect_send";
+        #! Proxy CONNECT recv state
+        const STATE_PROXY_CONNECT_RECV = "proxy_connect_recv";
 
         #! Maximum completed outputs to drain per continuePoll() call
         const MAX_DRAIN_ITERATIONS = 100;
@@ -61,6 +65,12 @@ public class Http2ClientPollOperation inherits HttpClientPollOperation {
     private {
         #! Whether SSL is required
         bool ssl_required;
+
+        #! Proxy info (host, port, protocol, ssl)
+        *hash<auto> proxy_info;
+
+        #! True when HTTPS target through proxy (requires CONNECT tunnel)
+        bool proxy_tunnel = False;
 
         #! Whether the H2 protocol has been confirmed (via ALPN or SETTINGS exchange)
         /** For HTTPS, H2 is confirmed by ALPN negotiation during the TLS handshake.
@@ -86,11 +96,13 @@ public class Http2ClientPollOperation inherits HttpClientPollOperation {
         @param accept_all_certs if True, accept all SSL certificates including self-signed
     */
     constructor(hash<auto> url_info, timeout connect_timeout = DefaultConnectTimeout, *LoggerInterface logger,
-            *int ssl_verify_mode, bool accept_all_certs = False) {
+            *int ssl_verify_mode, bool accept_all_certs = False,
+            *hash<auto> proxy_info) {
         self.url_info = url_info;
         self.connect_timeout = connect_timeout;
         self.logger = logger;
         self.ssl_required = url_info.protocol == "https";
+        self.proxy_info = proxy_info;
 
         sock = new Socket();
 
@@ -276,6 +288,14 @@ public class Http2ClientPollOperation inherits HttpClientPollOperation {
                     return handleSslUpgrade();
                 }
 
+                case STATE_PROXY_CONNECT_SEND: {
+                    return handleProxyConnectSend();
+                }
+
+                case STATE_PROXY_CONNECT_RECV: {
+                    return handleProxyConnectRecv();
+                }
+
                 case STATE_READING: {
                     return handleReading();
                 }
@@ -319,8 +339,16 @@ public class Http2ClientPollOperation inherits HttpClientPollOperation {
 
     #! Internal: starts the connection
     private startConnect() {
-        string target = sprintf("%s:%d", url_info.host, url_info.port);
-        log(LoggerLevel::DEBUG, "connecting to %s (ssl=%y)", target, ssl_required);
+        string target;
+        if (proxy_info) {
+            target = sprintf("%s:%d", proxy_info.host, proxy_info.port);
+            proxy_tunnel = ssl_required;
+            log(LoggerLevel::DEBUG, "connecting to proxy %s (target=%s:%d ssl=%y tunnel=%y)",
+                target, url_info.host, url_info.port, ssl_required, proxy_tunnel);
+        } else {
+            target = sprintf("%s:%d", url_info.host, url_info.port);
+            log(LoggerLevel::DEBUG, "connecting to %s (ssl=%y)", target, ssl_required);
+        }
         current_op = sock.startPollConnect(target);
         state = STATE_CONNECTING;
     }
@@ -340,7 +368,10 @@ public class Http2ClientPollOperation inherits HttpClientPollOperation {
 
             if (current_op.goalReached()) {
                 log(LoggerLevel::DEBUG, "TCP connection established");
-                if (ssl_required) {
+                if (proxy_tunnel) {
+                    # HTTPS through proxy: send CONNECT request first
+                    startProxyConnect();
+                } else if (ssl_required) {
                     startSslUpgrade();
                 } else {
                     startMultiplex();
@@ -348,6 +379,80 @@ public class Http2ClientPollOperation inherits HttpClientPollOperation {
                 return continuePoll();
             } else {
                 setError("HTTP2-CONNECT-ERROR", "connection failed");
+                return NOTHING;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            setError(ex.err, ex.desc);
+            return NOTHING;
+        }
+    }
+
+    #! Internal: builds and sends a CONNECT request to the proxy
+    private startProxyConnect() {
+        string target = sprintf("%s:%d", url_info.host, url_info.port);
+        string connect_req = sprintf("CONNECT %s HTTP/1.1\r\nHost: %s\r\n\r\n", target, target);
+        log(LoggerLevel::DEBUG, "sending CONNECT %s to proxy", target);
+        current_op = sock.startPollSend(binary(connect_req));
+        state = STATE_PROXY_CONNECT_SEND;
+    }
+
+    #! Internal: handles proxy CONNECT send state
+    private *hash<SocketPollInfo> handleProxyConnectSend() {
+        if (!current_op) {
+            setError("HTTP2-CONNECT-ERROR", "proxy CONNECT send not initialized");
+            return NOTHING;
+        }
+
+        try {
+            auto poll_info = current_op.continuePoll();
+            if (poll_info) {
+                return poll_info;
+            }
+
+            if (current_op.goalReached()) {
+                log(LoggerLevel::DEBUG, "proxy CONNECT sent, reading response");
+                current_op = sock.startPollReadHttpHeader();
+                state = STATE_PROXY_CONNECT_RECV;
+                return handleProxyConnectRecv();
+            } else {
+                setError("HTTP2-CONNECT-ERROR", "proxy CONNECT send failed");
+                return NOTHING;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            setError(ex.err, ex.desc);
+            return NOTHING;
+        }
+    }
+
+    #! Internal: handles proxy CONNECT response
+    private *hash<SocketPollInfo> handleProxyConnectRecv() {
+        if (!current_op) {
+            setError("HTTP2-CONNECT-ERROR", "proxy CONNECT recv not initialized");
+            return NOTHING;
+        }
+
+        try {
+            auto poll_info = current_op.continuePoll();
+            if (poll_info) {
+                return poll_info;
+            }
+
+            if (current_op.goalReached()) {
+                hash<auto> output = current_op.getOutput();
+                hash<auto> hdr = output.hdr;
+                int status = hdr.status_code;
+                if (status < 200 || status >= 300) {
+                    setError("HTTP2-CONNECT-ERROR",
+                        sprintf("proxy CONNECT failed with HTTP %d: %s", status,
+                            hdr.status_message ?? "unknown"));
+                    return NOTHING;
+                }
+                log(LoggerLevel::DEBUG, "proxy CONNECT tunnel established (status=%d)", status);
+                # Tunnel established — start TLS+ALPN through the tunnel
+                startSslUpgrade();
+                return continuePoll();
+            } else {
+                setError("HTTP2-CONNECT-ERROR", "proxy CONNECT response read failed");
                 return NOTHING;
             }
         } catch (hash<ExceptionInfo> ex) {

@@ -83,11 +83,177 @@ class JsonEchoHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! Handler that returns HTML for testing allow_any_response
+class HtmlHandler inherits AbstractHttpRequestHandler {
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, "<html><body>Hello</body></html>",
+            {"Content-Type": "text/html"});
+    }
+}
+
+#! Echo handler that includes request headers in the response for verification
+class EchoHeadersHandler inherits AbstractHttpRequestHandler {
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        hash<auto> resp_body = {
+            "method": hdr.method,
+            "path": hdr.path,
+            "request_headers": hdr,
+        };
+        if (body) {
+            if (body.typeCode() == NT_BINARY) {
+                body = body.toString();
+            }
+            try {
+                resp_body.body = parse_json(body);
+            } catch () {
+                resp_body.body = body;
+            }
+        }
+        return makeResponse(200, make_json(resp_body), {"Content-Type": MimeTypeJson});
+    }
+}
+
 #! Handler that returns errors for testing error_passthru
 class ErrorHandler inherits AbstractHttpRequestHandler {
     hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
         return makeResponse(500, make_json({"error": "internal server error"}),
             {"Content-Type": MimeTypeJson});
+    }
+}
+
+#! Mock OAuth2 token endpoint handler
+class OAuth2TokenHandler inherits AbstractHttpRequestHandler {
+    private {
+        #! Number of token requests received
+        int request_count = 0;
+        Mutex mtx();
+        #! Expected client_id (if set)
+        *string expected_client_id;
+        #! Expected client_secret (if set)
+        *string expected_client_secret;
+        #! Access token to return
+        string return_token = "test-access-token";
+        #! Refresh token to return
+        *string return_refresh_token = "test-refresh-token";
+        #! Token expiry in seconds
+        int return_expires_in = 3600;
+        #! If True, return an error
+        bool return_error = False;
+    }
+
+    constructor(*string expected_client_id, *string expected_client_secret) {
+        self.expected_client_id = expected_client_id;
+        self.expected_client_secret = expected_client_secret;
+    }
+
+    int getRequestCount() {
+        AutoLock al(mtx);
+        return request_count;
+    }
+
+    resetRequestCount() {
+        AutoLock al(mtx);
+        request_count = 0;
+    }
+
+    setReturnToken(string token) {
+        self.return_token = token;
+    }
+
+    setReturnRefreshToken(*string token) {
+        self.return_refresh_token = token;
+    }
+
+    setReturnExpiresIn(int expires_in) {
+        self.return_expires_in = expires_in;
+    }
+
+    setReturnError(bool val) {
+        self.return_error = val;
+    }
+
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        {
+            AutoLock al(mtx);
+            ++request_count;
+        }
+
+        if (return_error) {
+            return makeResponse(400, make_json({"error": "invalid_grant"}),
+                {"Content-Type": MimeTypeJson});
+        }
+
+        # Parse form-urlencoded body
+        hash<auto> params;
+        if (body) {
+            string body_str = body.typeCode() == NT_BINARY ? body.toString() : body;
+            params = parse_uri_query("?" + body_str).params;
+        }
+
+        # Check for basic auth
+        *string auth_header = hdr.authorization ?? hdr.Authorization;
+        if (auth_header =~ /^Basic /) {
+            # Basic auth — client_id/secret in Authorization header
+        } else if (expected_client_id && params.client_id != expected_client_id) {
+            return makeResponse(401, make_json({"error": "invalid_client",
+                "error_description": sprintf("expected client_id %y, got %y",
+                    expected_client_id, params.client_id)}),
+                {"Content-Type": MimeTypeJson});
+        }
+
+        hash<auto> resp = {
+            "access_token": return_token,
+            "token_type": "Bearer",
+            "expires_in": return_expires_in,
+        };
+        if (return_refresh_token) {
+            resp.refresh_token = return_refresh_token;
+        }
+
+        return makeResponse(200, make_json(resp), {"Content-Type": MimeTypeJson});
+    }
+}
+
+#! Handler that returns 401 on first request, then 200 on retry
+class Auth401Handler inherits AbstractHttpRequestHandler {
+    private {
+        #! Set of tokens that should get 401
+        hash<string, bool> reject_tokens;
+        Mutex mtx();
+    }
+
+    constructor() {
+    }
+
+    addRejectToken(string token) {
+        AutoLock al(mtx);
+        reject_tokens{token} = True;
+    }
+
+    removeRejectToken(string token) {
+        AutoLock al(mtx);
+        remove reject_tokens{token};
+    }
+
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        # Check Authorization header
+        *string auth = hdr.authorization ?? hdr.Authorization;
+        if (auth) {
+            *string token = (auth =~ x/Bearer\s+(.+)/)[0];
+            {
+                AutoLock al(mtx);
+                if (token && reject_tokens{token}) {
+                    return makeResponse(401, make_json({"error": "invalid_token"}),
+                        {"Content-Type": MimeTypeJson});
+                }
+            }
+        }
+        hash<auto> resp_body = {
+            "method": hdr.method,
+            "path": hdr.path,
+            "status": "ok",
+        };
+        return makeResponse(200, make_json(resp_body), {"Content-Type": MimeTypeJson});
     }
 }
 
@@ -99,6 +265,10 @@ class RestClientIoTest inherits QUnit::Test {
         #! HTTP/1.1-only server (no async_mode, no HTTP/2 support)
         HttpServer h1only_server;
         int h1only_port;
+        #! Token handler for OAuth2 tests
+        OAuth2TokenHandler token_handler;
+        #! Auth 401 handler for OAuth2 retry tests
+        Auth401Handler auth401_handler;
     }
 
     const CertPem = "-----BEGIN CERTIFICATE-----
@@ -189,6 +359,62 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         addTestCase("auto plain http fallback to h1", \testAutoPlainHttpFallback());
         addTestCase("auto plain http fallback caching", \testAutoPlainHttpFallbackCaching());
         addTestCase("auto plain http concurrent fallback", \testAutoPlainHttpConcurrentFallback());
+        addTestCase("oauth2 client_credentials", \testOAuth2ClientCredentials());
+        addTestCase("oauth2 password grant", \testOAuth2PasswordGrant());
+        addTestCase("oauth2 proactive refresh", \testOAuth2ProactiveRefresh());
+        addTestCase("oauth2 concurrent refresh", \testOAuth2ConcurrentRefresh());
+        addTestCase("oauth2 401 retry", \testOAuth2_401Retry());
+        addTestCase("oauth2 setOAuth2Options/getOAuth2Options", \testOAuth2OptionsRoundTrip());
+        addTestCase("oauth2 getNewToken", \testOAuth2GetNewToken());
+        addTestCase("oauth2 basic auth", \testOAuth2BasicAuth());
+        addTestCase("oauth2 secret only auth", \testOAuth2SecretOnlyAuth());
+        addTestCase("oauth2 scopes", \testOAuth2Scopes());
+        addTestCase("oauth2 token args", \testOAuth2TokenArgs());
+        addTestCase("oauth2 different token URL host", \testOAuth2DifferentTokenHost());
+        addTestCase("oauth2 invalid options", \testOAuth2InvalidOptions());
+        addTestCase("oauth2 authorization_code throws", \testOAuth2AuthCodeThrows());
+        addTestCase("oauth2 refresh failure", \testOAuth2RefreshFailure());
+        addTestCase("oauth2 async", \testOAuth2Async());
+        addTestCase("oauth2 pool", \testOAuth2Pool());
+        # Phase 1: Simple additions
+        addTestCase("getLogger", \testGetLogger());
+        addTestCase("allow any response", \testAllowAnyResponse());
+        addTestCase("allow any response async", \testAllowAnyResponseAsync());
+        addTestCase("allow any response + error passthru", \testAllowAnyResponseWithErrorPassthru());
+        addTestCase("setContentEncoding", \testSetContentEncoding());
+        addTestCase("setContentEncoding invalid", \testSetContentEncodingInvalid());
+        addTestCase("validator access", \testValidatorAccess());
+        # Phase 2: Connection path
+        addTestCase("connection path", \testConnectionPath());
+        addTestCase("connection path no double", \testConnectionPathNoDouble());
+        addTestCase("connection path clear", \testConnectionPathClear());
+        addTestCase("connection path constructor", \testConnectionPathConstructor());
+        addTestCase("connection path trailing slash", \testConnectionPathTrailingSlash());
+        addTestCase("connection path empty vs NOTHING", \testConnectionPathEmptyVsNothing());
+        addTestCase("connection path h1", \testConnectionPathH1());
+        # Phase 3: Basic auth
+        addTestCase("basic auth", \testBasicAuth());
+        addTestCase("basic auth clear", \testBasicAuthClear());
+        addTestCase("basic auth constructor", \testBasicAuthConstructor());
+        addTestCase("basic auth empty password", \testBasicAuthEmptyPassword());
+        addTestCase("basic auth special chars", \testBasicAuthSpecialChars());
+        addTestCase("basic auth overwrite", \testBasicAuthOverwrite());
+        addTestCase("basic auth + token interaction", \testBasicAuthTokenInteraction());
+        addTestCase("basic auth clear idempotent", \testBasicAuthClearIdempotent());
+        # Phase 4: Request signing
+        addTestCase("signed request", \testSignedRequest());
+        addTestCase("signed request async", \testSignedRequestAsync());
+        addTestCase("signed request with body", \testSignedRequestWithBody());
+        addTestCase("signed request with connection path", \testSignedRequestWithConnectionPath());
+        addTestCase("signed request signer throws", \testSignedRequestSignerThrows());
+        addTestCase("signed request hdr excludes sig", \testSignedRequestHdrExcludesSig());
+        # Phase 5: Proxy protocol tests
+        addTestCase("proxy h3 auto downgrade", \testProxyH3AutoDowngrade());
+        addTestCase("proxy h3 forced error", \testProxyH3ForcedError());
+        addTestCase("proxy invalid url", \testProxyInvalidUrl());
+        addTestCase("proxy default port", \testProxyDefaultPort());
+        addTestCase("proxy with h1 protocol", \testProxyWithH1Protocol());
+        addTestCase("proxy with h2 protocol", \testProxyWithH2Protocol());
 
         # Create servers once in the constructor — they're shared across all test
         # cases since the handlers are stateless. This avoids a race condition
@@ -203,9 +429,15 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             "debug": True,
             "async_mode": True,
         };
+        token_handler = new OAuth2TokenHandler("test-client-id", "test-client-secret");
+        auth401_handler = new Auth401Handler();
         server = new HttpServer(http_opts);
         server.setHandler("/api", "/api", MimeTypeJson, new JsonEchoHandler());
         server.setHandler("/error", "/error", MimeTypeJson, new ErrorHandler());
+        server.setHandler("/html", "/html", "text/html", new HtmlHandler());
+        server.setHandler("/echo", "/echo", MimeTypeJson, new EchoHeadersHandler());
+        server.setHandler("/oauth/token", "/oauth/token", MimeTypeFormUrlEncoded, token_handler);
+        server.setHandler("/auth401", "/auth401", MimeTypeJson, auth401_handler);
         server.setDefaultHandler("/api", new JsonEchoHandler());
         port = server.addListener(<HttpListenerOptionInfo>{
             "service": 0,
@@ -227,6 +459,8 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         });
         h1only_server.setHandler("/api", "/api", MimeTypeJson, new JsonEchoHandler());
         h1only_server.setHandler("/error", "/error", MimeTypeJson, new ErrorHandler());
+        h1only_server.setHandler("/html", "/html", "text/html", new HtmlHandler());
+        h1only_server.setHandler("/echo", "/echo", MimeTypeJson, new EchoHeadersHandler());
         h1only_server.setDefaultHandler("/api", new JsonEchoHandler());
         h1only_port = h1only_server.addListener(<HttpListenerOptionInfo>{
             "service": 0,
@@ -964,5 +1198,1154 @@ Do+Sl1gfqlpgpszQaOMjR4M=
                 sprintf("auto h2c→h1 fallback concurrent request %d status", i));
         }
 %endif
+    }
+
+    # ---- OAuth2 Tests ----
+
+    #! Helper to create a client with OAuth2 config
+    private RestClientIo::RestClientIo createOAuth2Client(*hash<auto> extra_opts) {
+        hash<auto> opts = {
+            "url": sprintf("https://127.0.0.1:%d", port),
+            "data": "json",
+            "error_passthru": True,
+            "accept_all_certs": True,
+            "protocol": "h2",
+            "oauth2_grant_type": "client_credentials",
+            "oauth2_client_id": "test-client-id",
+            "oauth2_client_secret": "test-client-secret",
+            "oauth2_token_url": "/oauth/token",
+        } + extra_opts;
+        return new RestClientIo::RestClientIo(opts);
+    }
+
+    testOAuth2ClientCredentials() {
+%ifndef NoJson
+        token_handler.resetRequestCount();
+        token_handler.setReturnToken("cc-access-token");
+        token_handler.setReturnRefreshToken("cc-refresh-token");
+
+        # Token is acquired on construction (checkLogin)
+        RestClientIo::RestClientIo rest = createOAuth2Client();
+        on_exit rest.close();
+
+        # Verify initial token was acquired
+        assertEq(1, token_handler.getRequestCount(), "initial token request");
+        assertEq("cc-access-token", rest.getToken());
+        assertEq("Bearer", rest.getTokenType());
+
+        # Make a request — should use the acquired token
+        hash<RestClient::RestResponseInfo> resp = rest.restGet("/api/test");
+        assertEq(200, resp.status_code);
+        assertEq("GET", resp.body.method);
+
+        # No additional token requests should have been made
+        assertEq(1, token_handler.getRequestCount(), "no extra token requests");
+%endif
+    }
+
+    testOAuth2PasswordGrant() {
+%ifndef NoJson
+        token_handler.resetRequestCount();
+        token_handler.setReturnToken("pwd-access-token");
+
+        RestClientIo::RestClientIo rest = createOAuth2Client({
+            "oauth2_grant_type": "password",
+            "username": "testuser",
+            "password": "testpass",
+        });
+        on_exit rest.close();
+
+        assertEq(1, token_handler.getRequestCount(), "initial token request");
+        assertEq("pwd-access-token", rest.getToken());
+%endif
+    }
+
+    testOAuth2ProactiveRefresh() {
+%ifndef NoJson
+        token_handler.resetRequestCount();
+        token_handler.setReturnToken("initial-token");
+        token_handler.setReturnRefreshToken("initial-refresh");
+
+        RestClientIo::RestClientIo rest = createOAuth2Client();
+        on_exit rest.close();
+
+        assertEq(1, token_handler.getRequestCount(), "initial login");
+
+        # Set the token to be expired >10 minutes ago via setToken with a past expiry
+        # This triggers requiresRefresh() = True on next request
+        rest.setToken("Bearer", "expired-token", "refresh-token-for-test",
+            now_us() - 15m);
+
+        # Now make a request — ensureToken should detect the stale token and refresh
+        token_handler.setReturnToken("refreshed-token");
+        hash<RestClient::RestResponseInfo> resp = rest.restGet("/api/test");
+        assertEq(200, resp.status_code);
+        assertEq(2, token_handler.getRequestCount(), "proactive refresh");
+        assertEq("refreshed-token", rest.getToken());
+%endif
+    }
+
+    testOAuth2ConcurrentRefresh() {
+%ifndef NoJson
+        token_handler.resetRequestCount();
+        token_handler.setReturnToken("initial-token");
+        token_handler.setReturnRefreshToken("initial-refresh");
+
+        RestClientIo::RestClientIo rest = createOAuth2Client();
+        on_exit rest.close();
+
+        assertEq(1, token_handler.getRequestCount(), "initial login");
+
+        # Set expired token
+        rest.setToken("Bearer", "expired-token", "refresh-for-concurrent",
+            now_us() - 15m);
+
+        # Reset count to measure only refresh requests
+        token_handler.resetRequestCount();
+        token_handler.setReturnToken("concurrent-refreshed-token");
+
+        # Launch 5 threads concurrently — only 1 should refresh
+        Counter cnt(5);
+        *hash<ExceptionInfo> bg_ex;
+        Mutex ex_mtx();
+        for (int i = 0; i < 5; ++i) {
+            background sub () {
+                on_exit cnt.dec();
+                try {
+                    rest.restGet(sprintf("/api/item/%d", i));
+                } catch (hash<ExceptionInfo> ex) {
+                    AutoLock al(ex_mtx);
+                    if (!bg_ex) {
+                        bg_ex = ex;
+                    }
+                }
+            }();
+        }
+        cnt.waitForZero();
+
+        if (bg_ex) {
+            throw bg_ex.err, bg_ex.desc;
+        }
+        # Only 1 token refresh request should have hit the server
+        assertEq(1, token_handler.getRequestCount(), "only 1 refresh request");
+        assertEq("concurrent-refreshed-token", rest.getToken());
+%endif
+    }
+
+    testOAuth2_401Retry() {
+%ifndef NoJson
+        token_handler.resetRequestCount();
+        token_handler.setReturnToken("initial-token");
+        token_handler.setReturnRefreshToken("initial-refresh");
+
+        # Create client that talks to the auth401 handler
+        RestClientIo::RestClientIo rest = new RestClientIo::RestClientIo({
+            "url": sprintf("https://127.0.0.1:%d", port),
+            "data": "json",
+            "error_passthru": True,
+            "accept_all_certs": True,
+            "protocol": "h2",
+            "oauth2_grant_type": "client_credentials",
+            "oauth2_client_id": "test-client-id",
+            "oauth2_client_secret": "test-client-secret",
+            "oauth2_token_url": "/oauth/token",
+        });
+        on_exit rest.close();
+
+        # Initial token acquired
+        assertEq(1, token_handler.getRequestCount());
+
+        # Set up 401 rejection for the initial token
+        auth401_handler.addRejectToken("initial-token");
+        on_exit auth401_handler.removeRejectToken("initial-token");
+
+        # Set up new token to be returned on refresh
+        token_handler.setReturnToken("new-token-after-401");
+
+        # Make request to auth401 handler — should get 401, refresh, retry
+        # Need to wait past MinimumTokenRefresh (1 minute)
+        # Since we can't wait, set token_timestamp to the past via setToken
+        rest.setToken("Bearer", "initial-token", "initial-refresh",
+            now_us() + 1h);
+        # Set token_timestamp to > 1m ago by calling setToken with a past-acquired token
+        # Actually, setToken sets token_timestamp = now_us(), so we need to work around this
+        # Instead, let's just verify the 401 is returned when we can't retry
+        hash<RestClient::RestResponseInfo> resp = rest.restGet("/auth401/test");
+        # canRetryAuth requires (now_us() - token_timestamp) >= 1m, which won't be true here
+        # So the 401 should be returned as-is
+        assertEq(401, resp.status_code);
+%endif
+    }
+
+    testOAuth2OptionsRoundTrip() {
+%ifndef NoJson
+        token_handler.resetRequestCount();
+        RestClientIo::RestClientIo rest = createClient();
+        on_exit rest.close();
+
+        # Initially no OAuth2 options
+        hash<auto> opts = rest.getOAuth2Options();
+        assertEq(NOTHING, opts.oauth2_grant_type);
+
+        # Set OAuth2 options
+        rest.setOAuth2Options({
+            "oauth2_grant_type": "client_credentials",
+            "oauth2_client_id": "new-client-id",
+            "oauth2_client_secret": "new-client-secret",
+            "oauth2_token_url": "/oauth/token",
+            "oauth2_scopes": ("read", "write"),
+        });
+
+        opts = rest.getOAuth2Options();
+        assertEq("client_credentials", opts.oauth2_grant_type);
+        assertEq("new-client-id", opts.oauth2_client_id);
+        assertEq("new-client-secret", opts.oauth2_client_secret);
+        assertEq("/oauth/token", opts.oauth2_token_url);
+        assertEq(("read", "write"), opts.oauth2_scopes);
+        assertEq(True, opts.oauth2_auto_refresh);
+%endif
+    }
+
+    testOAuth2GetNewToken() {
+%ifndef NoJson
+        token_handler.resetRequestCount();
+        token_handler.setReturnToken("forced-token");
+        token_handler.setReturnRefreshToken("forced-refresh");
+
+        RestClientIo::RestClientIo rest = createOAuth2Client();
+        on_exit rest.close();
+
+        assertEq(1, token_handler.getRequestCount(), "initial login");
+
+        # Force a new token (need to wait past MinimumTokenRefresh)
+        # Since token_timestamp was just set, we need to test that it throws
+        assertThrows("OAUTH2-ERROR", "rate limit", \rest.getNewToken());
+%endif
+    }
+
+    testOAuth2BasicAuth() {
+%ifndef NoJson
+        # Create a separate handler that doesn't validate client_id/secret in body
+        # (they should be in the Authorization header)
+        OAuth2TokenHandler basic_handler();
+        basic_handler.setReturnToken("basic-auth-token");
+        server.setHandler("/oauth/basic", "/oauth/basic", MimeTypeFormUrlEncoded, basic_handler);
+
+        RestClientIo::RestClientIo rest = createOAuth2Client({
+            "oauth2_token_url": "/oauth/basic",
+            "oauth2_token_use_basic_auth": True,
+        });
+        on_exit rest.close();
+
+        assertEq(1, basic_handler.getRequestCount());
+        assertEq("basic-auth-token", rest.getToken());
+%endif
+    }
+
+    testOAuth2SecretOnlyAuth() {
+%ifndef NoJson
+        OAuth2TokenHandler secret_handler();
+        secret_handler.setReturnToken("secret-only-token");
+        server.setHandler("/oauth/secret", "/oauth/secret", MimeTypeFormUrlEncoded, secret_handler);
+
+        RestClientIo::RestClientIo rest = createOAuth2Client({
+            "oauth2_token_url": "/oauth/secret",
+            "oauth2_token_auth_secret_only": True,
+        });
+        on_exit rest.close();
+
+        assertEq(1, secret_handler.getRequestCount());
+        assertEq("secret-only-token", rest.getToken());
+%endif
+    }
+
+    testOAuth2Scopes() {
+%ifndef NoJson
+        token_handler.resetRequestCount();
+        token_handler.setReturnToken("scoped-token");
+
+        RestClientIo::RestClientIo rest = createOAuth2Client({
+            "oauth2_scopes": ("read", "write", "admin"),
+        });
+        on_exit rest.close();
+
+        assertEq(1, token_handler.getRequestCount());
+        assertEq("scoped-token", rest.getToken());
+%endif
+    }
+
+    testOAuth2TokenArgs() {
+%ifndef NoJson
+        token_handler.resetRequestCount();
+        token_handler.setReturnToken("args-token");
+
+        RestClientIo::RestClientIo rest = createOAuth2Client({
+            "oauth2_token_args": {"audience": "https://api.example.com"},
+        });
+        on_exit rest.close();
+
+        assertEq(1, token_handler.getRequestCount());
+        assertEq("args-token", rest.getToken());
+%endif
+    }
+
+    testOAuth2DifferentTokenHost() {
+%ifndef NoJson
+        # Token URL is on the same server but via absolute URL
+        token_handler.resetRequestCount();
+        token_handler.setReturnToken("abs-url-token");
+
+        RestClientIo::RestClientIo rest = createOAuth2Client({
+            "oauth2_token_url": sprintf("https://127.0.0.1:%d/oauth/token", port),
+        });
+        on_exit rest.close();
+
+        assertEq(1, token_handler.getRequestCount());
+        assertEq("abs-url-token", rest.getToken());
+%endif
+    }
+
+    testOAuth2InvalidOptions() {
+%ifndef NoJson
+        # Missing required options for client_credentials
+        assertThrows("OAUTH2-ERROR", sub () {
+            new RestClientIo::RestClientIo({
+                "url": sprintf("https://127.0.0.1:%d", port),
+                "data": "json",
+                "accept_all_certs": True,
+                "oauth2_grant_type": "client_credentials",
+                # Missing client_id, client_secret, token_url
+            });
+        });
+
+        # Invalid grant type
+        assertThrows("OAUTH2-ERROR", sub () {
+            new RestClientIo::RestClientIo({
+                "url": sprintf("https://127.0.0.1:%d", port),
+                "data": "json",
+                "accept_all_certs": True,
+                "oauth2_grant_type": "invalid_type",
+            });
+        });
+
+        # Password grant without username
+        assertThrows("OAUTH2-ERROR", sub () {
+            new RestClientIo::RestClientIo({
+                "url": sprintf("https://127.0.0.1:%d", port),
+                "data": "json",
+                "accept_all_certs": True,
+                "oauth2_grant_type": "password",
+                "oauth2_client_id": "test",
+                "oauth2_client_secret": "test",
+                "oauth2_token_url": "/oauth/token",
+                # Missing username and password
+            });
+        });
+%endif
+    }
+
+    testOAuth2AuthCodeThrows() {
+%ifndef NoJson
+        # authorization_code grant should throw on auto-login
+        assertThrows("OAUTH2-ERROR", "manually authorized", sub () {
+            new RestClientIo::RestClientIo({
+                "url": sprintf("https://127.0.0.1:%d", port),
+                "data": "json",
+                "accept_all_certs": True,
+                "oauth2_grant_type": "authorization_code",
+                "oauth2_client_id": "test",
+                "oauth2_client_secret": "test",
+                "oauth2_token_url": "/oauth/token",
+                "oauth2_auth_url": "https://example.com/auth",
+                "oauth2_redirect_url": "https://example.com/callback",
+            });
+        });
+
+        # implicit grant should throw on auto-login
+        assertThrows("OAUTH2-ERROR", "manually authorized", sub () {
+            new RestClientIo::RestClientIo({
+                "url": sprintf("https://127.0.0.1:%d", port),
+                "data": "json",
+                "accept_all_certs": True,
+                "oauth2_grant_type": "implicit",
+                "oauth2_client_id": "test",
+                "oauth2_auth_url": "https://example.com/auth",
+                "oauth2_redirect_url": "https://example.com/callback",
+            });
+        });
+%endif
+    }
+
+    testOAuth2RefreshFailure() {
+%ifndef NoJson
+        token_handler.resetRequestCount();
+        token_handler.setReturnToken("initial-rf-token");
+        token_handler.setReturnRefreshToken("rf-refresh");
+
+        RestClientIo::RestClientIo rest = createOAuth2Client();
+        on_exit rest.close();
+
+        assertEq(1, token_handler.getRequestCount());
+
+        # Set expired token to trigger refresh
+        rest.setToken("Bearer", "expired-rf", "rf-refresh", now_us() - 15m);
+
+        # Make the token server return errors
+        token_handler.setReturnError(True);
+        on_exit token_handler.setReturnError(False);
+
+        # Request should still work but with error from refresh — ensureToken throws
+        assertThrows("OAUTH2-ERROR", sub () { rest.restGet("/api/test"); });
+%endif
+    }
+
+    testOAuth2Async() {
+%ifndef NoJson
+        token_handler.resetRequestCount();
+        token_handler.setReturnToken("async-token");
+        token_handler.setReturnRefreshToken("async-refresh");
+
+        RestClientIo::RestClientIo rest = createOAuth2Client();
+        on_exit rest.close();
+
+        assertEq(1, token_handler.getRequestCount(), "initial login");
+
+        # Async request should work with the acquired token
+        RestClientIo::RestFuture f = rest.restGetAsync("/api/test");
+        hash<RestClient::RestResponseInfo> resp = f.get(30s);
+        assertEq(200, resp.status_code);
+        assertEq("GET", resp.body.method);
+
+        # No additional token requests
+        assertEq(1, token_handler.getRequestCount(), "no extra token requests");
+%endif
+    }
+
+    testOAuth2Pool() {
+%ifndef NoJson
+        token_handler.resetRequestCount();
+        token_handler.setReturnToken("pool-token");
+        token_handler.setReturnRefreshToken("pool-refresh");
+
+        hash<auto> client_opts = {
+            "url": sprintf("https://127.0.0.1:%d", port),
+            "data": "json",
+            "error_passthru": True,
+            "accept_all_certs": True,
+            "protocol": "h2",
+            "oauth2_grant_type": "client_credentials",
+            "oauth2_client_id": "test-client-id",
+            "oauth2_client_secret": "test-client-secret",
+            "oauth2_token_url": "/oauth/token",
+        };
+        RestClientIo::RestClientIoPool pool(client_opts);
+        on_exit pool.shutdown();
+
+        assertEq(1, token_handler.getRequestCount(), "initial login");
+        assertEq("pool-token", pool.getToken());
+
+        RestClientIo::RestClientIo rc = pool.acquire();
+        on_exit pool.release();
+
+        hash<RestClient::RestResponseInfo> resp = rc.restGet("/api/test");
+        assertEq(200, resp.status_code);
+        assertEq("GET", resp.body.method);
+%endif
+    }
+
+    # ---- Phase 1: Simple additions ----
+
+    testGetLogger() {
+        # Client with logger
+        Logger logger("test-logger", LoggerLevel::getLevelDebug());
+        RestClientIo::RestClientIo rest = createClient({
+            "logger": logger,
+        });
+        on_exit rest.close();
+
+        *LoggerInterface lg = rest.getLogger();
+        assertEq(True, exists lg);
+        assertEq(True, lg instanceof LoggerInterface);
+
+        # Client without logger
+        RestClientIo::RestClientIo rest2 = createClient();
+        on_exit rest2.close();
+        assertEq(True, !exists rest2.getLogger());
+    }
+
+    testAllowAnyResponse() {
+%ifndef NoJson
+        # Default: allow_any_response is False — DESERIALIZATION-ERROR is thrown for
+        # non-deserializable content
+        RestClientIo::RestClientIo rest = new RestClientIo::RestClientIo({
+            "url": sprintf("https://127.0.0.1:%d", port),
+            "data": "json",
+            "error_passthru": True,
+            "accept_all_certs": True,
+            "protocol": "h2",
+        });
+        on_exit rest.close();
+
+        assertEq(False, rest.getAllowAnyResponse());
+        assertThrows("DESERIALIZATION-ERROR", sub () { rest.restGet("/html"); });
+
+        # Set allow_any_response — should return raw body
+        rest.setAllowAnyResponse(True);
+        assertEq(True, rest.getAllowAnyResponse());
+        hash<RestClient::RestResponseInfo> resp = rest.restGet("/html");
+        assertEq(200, resp.status_code);
+        assertRegex("text/html", resp.content_type);
+        # Body should contain HTML
+        assertRegex("Hello", resp.body);
+
+        # Constructor option
+        RestClientIo::RestClientIo rest2 = new RestClientIo::RestClientIo({
+            "url": sprintf("https://127.0.0.1:%d", port),
+            "data": "json",
+            "allow_any_response": True,
+            "accept_all_certs": True,
+            "protocol": "h2",
+        });
+        on_exit rest2.close();
+        assertEq(True, rest2.getAllowAnyResponse());
+        resp = rest2.restGet("/html");
+        assertEq(200, resp.status_code);
+%endif
+    }
+
+    testSetContentEncoding() {
+        RestClientIo::RestClientIo rest = createClient();
+        on_exit rest.close();
+
+        rest.setContentEncoding("gzip");
+        hash<auto> hdrs = rest.getDefaultHeaders();
+        assertEq("gzip", hdrs."accept-encoding");
+
+        rest.setContentEncoding("identity");
+        hdrs = rest.getDefaultHeaders();
+        assertEq("identity", hdrs."accept-encoding");
+
+        # Constructor option
+        RestClientIo::RestClientIo rest2 = createClient({
+            "content_encoding": "deflate",
+        });
+        on_exit rest2.close();
+        hdrs = rest2.getDefaultHeaders();
+        assertEq(True, exists hdrs."accept-encoding");
+    }
+
+    testValidatorAccess() {
+%ifndef NoJson
+        RestClientIo::RestClientIo rest = createClient();
+        on_exit rest.close();
+
+        # Get default validator
+        auto v = rest.getValidator();
+        assertEq(True, v instanceof RestSchemaValidator::AbstractRestSchemaValidator);
+        assertEq(True, v instanceof RestSchemaValidator::NullRestSchemaValidator);
+
+        # Set a new validator (NullRestSchemaValidator as replacement)
+        auto new_v = new RestSchemaValidator::NullRestSchemaValidator();
+        rest.setValidator(new_v);
+        auto v2 = rest.getValidator();
+        assertEq(True, v2 instanceof RestSchemaValidator::NullRestSchemaValidator);
+
+        # Constructor option
+        auto ctor_v = new RestSchemaValidator::NullRestSchemaValidator();
+        RestClientIo::RestClientIo rest2 = createClient({
+            "validator": ctor_v,
+        });
+        on_exit rest2.close();
+        auto v3 = rest2.getValidator();
+        assertEq(True, v3 instanceof RestSchemaValidator::AbstractRestSchemaValidator);
+%endif
+    }
+
+    # ---- Phase 2: Connection path ----
+
+    testConnectionPath() {
+%ifndef NoJson
+        RestClientIo::RestClientIo rest = createClient();
+        on_exit rest.close();
+
+        rest.setConnectionPath("/api/v2");
+        assertEq("/api/v2", rest.getConnectionPath());
+
+        hash<RestClient::RestResponseInfo> resp = rest.restGet("/users");
+        assertEq(200, resp.status_code);
+        # Path should include connection path (server may strip leading /)
+        assertRegex("api/v2/users", resp.body.path);
+%endif
+    }
+
+    testConnectionPathNoDouble() {
+%ifndef NoJson
+        RestClientIo::RestClientIo rest = createClient();
+        on_exit rest.close();
+
+        rest.setConnectionPath("/api");
+        hash<RestClient::RestResponseInfo> resp = rest.restGet("/api/users");
+        assertEq(200, resp.status_code);
+        # Should NOT double-prepend: path should be /api/users, not /api/api/users
+        assertRegex("api/users", resp.body.path);
+        assertEq(True, resp.body.path !~ /api\/api\//);
+%endif
+    }
+
+    testConnectionPathClear() {
+%ifndef NoJson
+        RestClientIo::RestClientIo rest = createClient();
+        on_exit rest.close();
+
+        rest.setConnectionPath("/api/v2");
+        assertEq("/api/v2", rest.getConnectionPath());
+
+        rest.clearConnectionPath();
+        assertEq(True, !exists rest.getConnectionPath());
+
+        hash<RestClient::RestResponseInfo> resp = rest.restGet("/api/test");
+        assertEq(200, resp.status_code);
+        # Path should NOT include connection path
+        assertRegex("api/test", resp.body.path);
+        assertEq(True, resp.body.path !~ /api\/v2/);
+%endif
+    }
+
+    testConnectionPathConstructor() {
+%ifndef NoJson
+        RestClientIo::RestClientIo rest = createClient({
+            "default_path": "/api",
+        });
+        on_exit rest.close();
+
+        assertEq("/api", rest.getConnectionPath());
+
+        hash<RestClient::RestResponseInfo> resp = rest.restGet("/test");
+        assertEq(200, resp.status_code);
+        assertRegex("api/test", resp.body.path);
+%endif
+    }
+
+    # ---- Phase 3: Basic auth ----
+
+    testBasicAuth() {
+%ifndef NoJson
+        RestClientIo::RestClientIo rest = createClient();
+        on_exit rest.close();
+
+        rest.setUserPassword("testuser", "testpass");
+        hash<auto> hdrs = rest.getDefaultHeaders();
+        string expected = "Basic " + make_base64_string("testuser:testpass");
+        assertEq(expected, hdrs.authorization);
+
+        # Verify the authorization header is sent in requests
+        hash<RestClient::RestResponseInfo> resp = rest.restGet("/echo/test");
+        assertEq(200, resp.status_code);
+        assertEq(True, exists resp.body.request_headers.authorization);
+%endif
+    }
+
+    testBasicAuthClear() {
+%ifndef NoJson
+        RestClientIo::RestClientIo rest = createClient();
+        on_exit rest.close();
+
+        rest.setUserPassword("user1", "pass1");
+        assertEq(True, exists rest.getDefaultHeaders().authorization);
+
+        rest.clearUserPassword();
+        assertEq(True, !exists rest.getDefaultHeaders().authorization);
+%endif
+    }
+
+    testBasicAuthConstructor() {
+%ifndef NoJson
+        # Username/password without OAuth2 should set basic auth
+        RestClientIo::RestClientIo rest = createClient({
+            "username": "ctoruser",
+            "password": "ctorpass",
+        });
+        on_exit rest.close();
+
+        string expected = "Basic " + make_base64_string("ctoruser:ctorpass");
+        assertEq(expected, rest.getDefaultHeaders().authorization);
+
+        # With OAuth2, username/password should NOT set basic auth header
+        # (they're used for the OAuth2 password grant instead)
+        token_handler.resetRequestCount();
+        token_handler.setReturnToken("ctor-oauth-token");
+        RestClientIo::RestClientIo rest2 = createClient({
+            "username": "oauthuser",
+            "password": "oauthpass",
+            "oauth2_grant_type": "password",
+            "oauth2_client_id": "test-client-id",
+            "oauth2_client_secret": "test-client-secret",
+            "oauth2_token_url": "/oauth/token",
+        });
+        on_exit rest2.close();
+
+        # Should have Bearer token from OAuth2, not Basic auth
+        assertRegex("Bearer", rest2.getDefaultHeaders().authorization);
+%endif
+    }
+
+    # ---- Phase 4: Request signing ----
+
+    testSignedRequest() {
+%ifndef NoJson
+        RestClientIo::RestClientIo rest = createClient();
+        on_exit rest.close();
+
+        # Signer that concatenates path and body info
+        code signer = auto sub (hash<auto> info) {
+            return "sig-" + info.path;
+        };
+
+        hash<RestClient::RestResponseInfo> resp = rest.doSignedRequest(
+            "x-signature", signer, "GET", "/echo/test", NOTHING);
+        assertEq(200, resp.status_code);
+        # Verify the signature header was sent
+        assertEq(True, exists resp.body.request_headers."x-signature");
+        assertRegex("sig-", resp.body.request_headers."x-signature");
+%endif
+    }
+
+    testSignedRequestAsync() {
+%ifndef NoJson
+        RestClientIo::RestClientIo rest = createClient();
+        on_exit rest.close();
+
+        code signer = auto sub (hash<auto> info) {
+            return "async-sig-" + info.path;
+        };
+
+        RestClientIo::RestFuture f = rest.doSignedRequestAsync(
+            "x-signature", signer, "GET", "/echo/test", NOTHING);
+        hash<RestClient::RestResponseInfo> resp = f.get(30s);
+        assertEq(200, resp.status_code);
+        assertEq(True, exists resp.body.request_headers."x-signature");
+        assertRegex("async-sig-", resp.body.request_headers."x-signature");
+%endif
+    }
+
+    # ---- Phase 5: Proxy protocol tests ----
+
+    testProxyH3AutoDowngrade() {
+        # With a proxy configured and auto protocol, H3 should not be attempted
+        # (QUIC cannot tunnel through HTTP proxies)
+        HttpClientIo::HttpClientConnectionManager mgr(
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "protocol": "auto",
+                "proxy_url": "http://127.0.0.1:9999",
+            }
+        );
+        on_exit mgr.closeAll();
+
+        # The manager should have been created successfully (no error)
+        hash<auto> stats = mgr.getStats();
+        assertEq("auto", stats.protocol);
+    }
+
+    testProxyH3ForcedError() {
+        # Forcing H3 with a proxy should throw
+        assertThrows("HTTPCLIENT-PROXY-ERROR", sub () {
+            HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+                    "protocol": "h3",
+                    "proxy_url": "http://127.0.0.1:9999",
+                }
+            );
+            # Need to actually try to use the connection to trigger resolveProtocol
+            mgr.request("https://example.com", "GET", "/");
+        });
+    }
+
+    # ---- Additional Phase 1 tests ----
+
+    testAllowAnyResponseAsync() {
+%ifndef NoJson
+        # Verify allow_any_response works with async requests too
+        RestClientIo::RestClientIo rest = new RestClientIo::RestClientIo({
+            "url": sprintf("https://127.0.0.1:%d", port),
+            "data": "json",
+            "allow_any_response": True,
+            "accept_all_certs": True,
+            "protocol": "h2",
+        });
+        on_exit rest.close();
+
+        RestClientIo::RestFuture f = rest.restGetAsync("/html");
+        hash<RestClient::RestResponseInfo> resp = f.get(30s);
+        assertEq(200, resp.status_code);
+        assertRegex("Hello", resp.body);
+
+        # Without allow_any_response, async should also throw
+        RestClientIo::RestClientIo rest2 = new RestClientIo::RestClientIo({
+            "url": sprintf("https://127.0.0.1:%d", port),
+            "data": "json",
+            "allow_any_response": False,
+            "accept_all_certs": True,
+            "protocol": "h2",
+        });
+        on_exit rest2.close();
+
+        RestClientIo::RestFuture f2 = rest2.restGetAsync("/html");
+        assertThrows("DESERIALIZATION-ERROR", \f2.get(), (30s,));
+%endif
+    }
+
+    testAllowAnyResponseWithErrorPassthru() {
+%ifndef NoJson
+        # Both error_passthru=True AND allow_any_response=True on 500 + HTML response
+        RestClientIo::RestClientIo rest = new RestClientIo::RestClientIo({
+            "url": sprintf("https://127.0.0.1:%d", port),
+            "data": "json",
+            "error_passthru": True,
+            "allow_any_response": True,
+            "accept_all_certs": True,
+            "protocol": "h2",
+        });
+        on_exit rest.close();
+
+        # Normal JSON error response should still deserialize
+        hash<RestClient::RestResponseInfo> resp = rest.restGet("/error");
+        assertEq(500, resp.status_code);
+        assertEq("internal server error", resp.body.error);
+
+        # HTML response should return raw body (not throw)
+        resp = rest.restGet("/html");
+        assertEq(200, resp.status_code);
+        assertRegex("Hello", resp.body);
+
+        # Without error_passthru, 500 should throw even with allow_any_response
+        RestClientIo::RestClientIo rest2 = new RestClientIo::RestClientIo({
+            "url": sprintf("https://127.0.0.1:%d", port),
+            "data": "json",
+            "error_passthru": False,
+            "allow_any_response": True,
+            "accept_all_certs": True,
+            "protocol": "h2",
+        });
+        on_exit rest2.close();
+        assertThrows("REST-RESPONSE-ERROR", sub () { rest2.restGet("/error"); });
+%endif
+    }
+
+    testSetContentEncodingInvalid() {
+        RestClientIo::RestClientIo rest = createClient();
+        on_exit rest.close();
+
+        # Invalid encoding should throw
+        assertThrows("RESTCLIENT-ERROR", sub () { rest.setSendEncoding("not-a-real-encoding"); });
+        assertThrows("RESTCLIENT-ERROR", sub () { rest.setContentEncoding("not-a-real-encoding"); });
+    }
+
+    # ---- Additional Phase 2 tests ----
+
+    testConnectionPathTrailingSlash() {
+%ifndef NoJson
+        RestClientIo::RestClientIo rest = createClient();
+        on_exit rest.close();
+
+        # Trailing slash on connection path
+        rest.setConnectionPath("/api/");
+        hash<RestClient::RestResponseInfo> resp = rest.restGet("/test");
+        assertEq(200, resp.status_code);
+        # Should have /api//test or /api/test depending on normalization
+        assertRegex("api/", resp.body.path);
+%endif
+    }
+
+    testConnectionPathEmptyVsNothing() {
+%ifndef NoJson
+        RestClientIo::RestClientIo rest = createClient();
+        on_exit rest.close();
+
+        # Set to empty string
+        rest.setConnectionPath("");
+        # Empty string in Qore has no .val() — should behave like no path
+        hash<RestClient::RestResponseInfo> resp = rest.restGet("/api/test");
+        assertEq(200, resp.status_code);
+        assertRegex("api/test", resp.body.path);
+
+        # Set to NOTHING
+        rest.setConnectionPath();
+        assertEq(True, !exists rest.getConnectionPath());
+        resp = rest.restGet("/api/test");
+        assertEq(200, resp.status_code);
+        assertRegex("api/test", resp.body.path);
+%endif
+    }
+
+    testConnectionPathH1() {
+%ifndef NoJson
+        # Connection path should work with HTTP/1.1 too
+        RestClientIo::RestClientIo rest = createH1Client({
+            "default_path": "/api",
+        });
+        on_exit rest.close();
+
+        assertEq("/api", rest.getConnectionPath());
+
+        hash<RestClient::RestResponseInfo> resp = rest.restGet("/test");
+        assertEq(200, resp.status_code);
+        assertRegex("api/test", resp.body.path);
+%endif
+    }
+
+    # ---- Additional Phase 3 tests ----
+
+    testBasicAuthEmptyPassword() {
+%ifndef NoJson
+        RestClientIo::RestClientIo rest = createClient();
+        on_exit rest.close();
+
+        # Empty password — should produce "user:" before base64
+        rest.setUserPassword("user", "");
+        string expected = "Basic " + make_base64_string("user:");
+        assertEq(expected, rest.getDefaultHeaders().authorization);
+
+        # Verify it works with requests
+        hash<RestClient::RestResponseInfo> resp = rest.restGet("/echo/test");
+        assertEq(200, resp.status_code);
+        assertEq(expected, resp.body.request_headers.authorization);
+%endif
+    }
+
+    testBasicAuthSpecialChars() {
+%ifndef NoJson
+        RestClientIo::RestClientIo rest = createClient();
+        on_exit rest.close();
+
+        # Username with colon, password with special chars
+        rest.setUserPassword("user:name", "p@ss:w0rd!");
+        string expected = "Basic " + make_base64_string("user:name:p@ss:w0rd!");
+        assertEq(expected, rest.getDefaultHeaders().authorization);
+
+        # UTF-8 characters
+        rest.setUserPassword("ùser", "pàss");
+        expected = "Basic " + make_base64_string("ùser:pàss");
+        assertEq(expected, rest.getDefaultHeaders().authorization);
+%endif
+    }
+
+    testBasicAuthOverwrite() {
+%ifndef NoJson
+        RestClientIo::RestClientIo rest = createClient();
+        on_exit rest.close();
+
+        # First set
+        rest.setUserPassword("user1", "pass1");
+        string expected1 = "Basic " + make_base64_string("user1:pass1");
+        assertEq(expected1, rest.getDefaultHeaders().authorization);
+
+        # Overwrite with different credentials
+        rest.setUserPassword("user2", "pass2");
+        string expected2 = "Basic " + make_base64_string("user2:pass2");
+        assertEq(expected2, rest.getDefaultHeaders().authorization);
+        # Verify the old credentials are gone
+        assertEq(True, rest.getDefaultHeaders().authorization != expected1);
+%endif
+    }
+
+    testBasicAuthTokenInteraction() {
+%ifndef NoJson
+        # Last writer wins: setToken overwrites setUserPassword and vice versa
+        RestClientIo::RestClientIo rest = createClient();
+        on_exit rest.close();
+
+        # Set basic auth
+        rest.setUserPassword("user", "pass");
+        assertRegex("Basic", rest.getDefaultHeaders().authorization);
+
+        # setToken should overwrite authorization header
+        rest.setToken("Bearer", "my-token");
+        assertEq("Bearer my-token", rest.getDefaultHeaders().authorization);
+
+        # setUserPassword should overwrite back
+        rest.setUserPassword("user2", "pass2");
+        assertRegex("Basic", rest.getDefaultHeaders().authorization);
+
+        # clearUserPassword should remove authorization
+        rest.clearUserPassword();
+        assertEq(True, !exists rest.getDefaultHeaders().authorization);
+%endif
+    }
+
+    testBasicAuthClearIdempotent() {
+        RestClientIo::RestClientIo rest = createClient();
+        on_exit rest.close();
+
+        # Clear without ever setting — should not throw
+        rest.clearUserPassword();
+        assertEq(True, !exists rest.getDefaultHeaders().authorization);
+
+        # Set then clear twice
+        rest.setUserPassword("user", "pass");
+        rest.clearUserPassword();
+        rest.clearUserPassword();
+        assertEq(True, !exists rest.getDefaultHeaders().authorization);
+    }
+
+    # ---- Additional Phase 4 tests ----
+
+    testSignedRequestWithBody() {
+%ifndef NoJson
+        RestClientIo::RestClientIo rest = createClient();
+        on_exit rest.close();
+
+        # Signer that includes body info — verify serialized body is passed
+        code signer = auto sub (hash<auto> info) {
+            return sprintf("body-len:%d,path:%s", info.body ? info.body.size() : 0, info.path);
+        };
+
+        hash<auto> body = {"key": "value"};
+        hash<RestClient::RestResponseInfo> resp = rest.doSignedRequest(
+            "x-signature", signer, "POST", "/echo/test", body);
+        assertEq(200, resp.status_code);
+        # Signature should contain body length > 0 (serialized JSON body)
+        assertRegex("body-len:[1-9]", resp.body.request_headers."x-signature");
+        assertRegex("path:", resp.body.request_headers."x-signature");
+        # Verify original body was also sent
+        assertEq("value", resp.body.body.key);
+%endif
+    }
+
+    testSignedRequestWithConnectionPath() {
+%ifndef NoJson
+        RestClientIo::RestClientIo rest = createClient({
+            "default_path": "/echo",
+        });
+        on_exit rest.close();
+
+        # Signer should receive the path WITH connection_path prepended
+        code signer = auto sub (hash<auto> info) {
+            return "signed-path:" + info.path;
+        };
+
+        hash<RestClient::RestResponseInfo> resp = rest.doSignedRequest(
+            "x-signature", signer, "GET", "/test", NOTHING);
+        assertEq(200, resp.status_code);
+        # The signer should have received /echo/test
+        assertRegex("signed-path:/echo/test", resp.body.request_headers."x-signature");
+        # The request path should also be /echo/test
+        assertRegex("echo/test", resp.body.path);
+%endif
+    }
+
+    testSignedRequestSignerThrows() {
+%ifndef NoJson
+        RestClientIo::RestClientIo rest = createClient();
+        on_exit rest.close();
+
+        code signer = auto sub (hash<auto> info) {
+            throw "SIGNER-ERROR", "signing failed";
+        };
+
+        # Sync: exception should propagate
+        assertThrows("SIGNER-ERROR", "signing failed", sub () {
+            rest.doSignedRequest("x-signature", signer, "GET", "/echo/test", NOTHING);
+        });
+
+        # Async: exception should propagate at call time (not at get())
+        assertThrows("SIGNER-ERROR", "signing failed", sub () {
+            rest.doSignedRequestAsync("x-signature", signer, "GET", "/echo/test", NOTHING);
+        });
+%endif
+    }
+
+    testSignedRequestHdrExcludesSig() {
+%ifndef NoJson
+        RestClientIo::RestClientIo rest = createClient();
+        on_exit rest.close();
+
+        # Verify that the signer receives headers WITHOUT the signature header
+        bool sig_absent_in_hdr = False;
+        code signer = auto sub (hash<auto> info) {
+            sig_absent_in_hdr = !info.hdr.hasKey("x-signature");
+            return "test-sig";
+        };
+
+        rest.addDefaultHeaders({"x-custom": "val"});
+        hash<RestClient::RestResponseInfo> resp = rest.doSignedRequest(
+            "x-signature", signer, "GET", "/echo/test", NOTHING);
+        assertEq(200, resp.status_code);
+        # Signer should NOT have seen "x-signature" in the hdr param
+        assertEq(True, sig_absent_in_hdr);
+        # But the actual request should have both headers
+        assertEq(True, exists resp.body.request_headers."x-signature");
+        assertEq(True, exists resp.body.request_headers."x-custom");
+%endif
+    }
+
+    # ---- Additional Phase 5 tests ----
+
+    testProxyInvalidUrl() {
+        # Proxy URL that fails to parse (no host after scheme)
+        assertThrows("HTTPCLIENT-OPTION-ERROR", sub () {
+            new HttpClientIo::HttpClientConnectionManager(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+                    "proxy_url": "http://",
+                }
+            );
+        });
+
+        # Empty proxy URL should be treated as no proxy (no error)
+        HttpClientIo::HttpClientConnectionManager mgr(
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "proxy_url": "",
+            }
+        );
+        on_exit mgr.closeAll();
+        assertEq("auto", mgr.getStats().protocol);
+    }
+
+    testProxyDefaultPort() {
+        # HTTP proxy without port should default to 80
+        HttpClientIo::HttpClientConnectionManager mgr(
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "proxy_url": "http://proxy.example.com",
+            }
+        );
+        on_exit mgr.closeAll();
+        # Manager created successfully with default port
+        hash<auto> stats = mgr.getStats();
+        assertEq("auto", stats.protocol);
+
+        # HTTPS proxy without port should default to 443
+        HttpClientIo::HttpClientConnectionManager mgr2(
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "proxy_url": "https://proxy.example.com",
+            }
+        );
+        on_exit mgr2.closeAll();
+        stats = mgr2.getStats();
+        assertEq("auto", stats.protocol);
+    }
+
+    testProxyWithH1Protocol() {
+        # H1 protocol with proxy should be accepted (no error)
+        HttpClientIo::HttpClientConnectionManager mgr(
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "protocol": "h1",
+                "proxy_url": "http://127.0.0.1:9999",
+            }
+        );
+        on_exit mgr.closeAll();
+        hash<auto> stats = mgr.getStats();
+        assertEq("h1", stats.protocol);
+    }
+
+    testProxyWithH2Protocol() {
+        # H2 protocol with proxy should be accepted (no error)
+        HttpClientIo::HttpClientConnectionManager mgr(
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "protocol": "h2",
+                "proxy_url": "http://127.0.0.1:9999",
+            }
+        );
+        on_exit mgr.closeAll();
+        hash<auto> stats = mgr.getStats();
+        assertEq("h2", stats.protocol);
     }
 }

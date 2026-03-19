@@ -2047,16 +2047,26 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                 }
                 throw ex.err, ex.desc, ex.arg;
             }
-            hash<SocketPollResultInfo> result = wsc.getAsyncCtrl().exec(<SocketPollOperationInfo>{
+            # Submit the send to the I/O controller with a callback — never block
+            # the handler thread on exec(), which creates a dependency on the I/O
+            # thread and can cause thread pool exhaustion deadlocks when the I/O
+            # thread is busy dispatching requests to the same pool.
+            # On send error, stop the connection; the startImpl() loop will notice
+            # stop_flag on its next iteration.
+            wsc.getAsyncCtrl().submit(<SocketPollOperationInfo>{
                 "sock": sock,
                 "spop": op,
                 "to": send_timeout,
                 "owner": wsc.getOwnerId(),
                 "other": {"goal": "ws-send"},
+                "callback": sub (hash<SocketPollResultInfo> result) {
+                    if (result.ex) {
+                        logError("async WebSocket send failed: %s: %s",
+                            result.ex.err, result.ex.desc);
+                        wsc.stop();
+                    }
+                },
             });
-            if (result.ex) {
-                throw result.ex.err, result.ex.desc, result.ex.arg;
-            }
             return True;
         }
         sock.send2(frame, send_timeout);

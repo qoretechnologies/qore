@@ -58,20 +58,23 @@ public class Http1ClientConnection inherits HttpClientConnection {
     */
     constructor(hash<auto> url_info, timeout connect_timeout = DefaultConnectTimeout,
             *LoggerInterface logger, int max_streams = 1,
-            *int ssl_verify_mode, bool accept_all_certs = False) {
+            *int ssl_verify_mode, bool accept_all_certs = False,
+            *hash<auto> proxy_info) {
         self.url_info = url_info;
         self.connect_timeout = connect_timeout;
         self.logger = logger;
+        self.proxy_info = proxy_info;
         # HTTP/1.1 is serial — enforce max 1 concurrent stream
         self.max_concurrent_streams = max_streams > 0 ? max_streams : 1;
         self.last_activity = now_us();
         connection_id = allocateConnectionId();
 
-        log(LoggerLevel::DEBUG, "creating HTTP/1.1 connection to %s:%d (ssl=%y)",
-            url_info.host, url_info.port, url_info.protocol == "https");
+        log(LoggerLevel::DEBUG, "creating HTTP/1.1 connection to %s:%d (ssl=%y proxy=%y)",
+            url_info.host, url_info.port, url_info.protocol == "https",
+            proxy_info ? sprintf("%s:%d", proxy_info.host, proxy_info.port) : NOTHING);
 
         poll_op = new Http1ClientPollOperation(url_info, connect_timeout, logger,
-            ssl_verify_mode, accept_all_certs);
+            ssl_verify_mode, accept_all_certs, proxy_info);
         poll_op.setReadyCallback(\onConnectionReady());
     }
 
