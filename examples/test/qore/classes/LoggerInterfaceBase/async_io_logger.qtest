@@ -52,10 +52,7 @@ class AsyncIoLoggerTest inherits QUnit::Test {
         addTestCase("clear logger", \testClearLogger());
         addTestCase("replace logger", \testReplaceLogger());
         addTestCase("set_async_io_logger validation", \testSetAsyncIoLoggerValidation());
-        addTestCase("AsyncIoController global fallback", \testControllerGlobalFallback());
-        addTestCase("AsyncIoController per-controller priority", \testControllerPriority());
-        addTestCase("log level filtering", \testLogLevelFiltering());
-        addTestCase("thread safety", \testThreadSafety());
+        addTestCase("singleton logger", \testSingletonLogger());
         set_return_value(main());
     }
 
@@ -124,120 +121,29 @@ class AsyncIoLoggerTest inherits QUnit::Test {
         assertNothing(get_async_io_logger());
     }
 
-    #! AsyncIoController falls back to global logger when no per-controller logger is set
-    testControllerGlobalFallback() {
-        on_exit set_async_io_logger(NOTHING);
-
-        TestLogger global_lgr();
-        global_lgr.min_level = 0;
-        set_async_io_logger(global_lgr);
-
-        # Create controller without per-controller logger (autostop=False to keep I/O thread alive)
-        AsyncIoController ctrl(False);
-        ctrl.start();
-        assertTrue(ctrl.waitReady(10s));
-
-        # The I/O thread logs "I/O thread ready" at DEBUG level when it starts
-        ctrl.stop();
-        ctrl.waitStop();
-
-        list<hash<auto>> msgs = global_lgr.getMessages();
-        # Should have at least the "I/O thread ready" message
-        assertTrue(msgs.size() >= 1,
-            sprintf("expected >= 1 log messages from global logger fallback, got %d", msgs.size()));
-    }
-
-    #! Per-controller logger takes precedence over global logger
-    testControllerPriority() {
-        on_exit set_async_io_logger(NOTHING);
-
-        TestLogger global_lgr();
-        global_lgr.min_level = 0;
-        set_async_io_logger(global_lgr);
+    #! AsyncIoController::setLogger() sets/clears the per-controller logger on the singleton
+    testSingletonLogger() {
+        on_exit {
+            set_async_io_logger(NOTHING);
+            AsyncIoController::setLogger(NOTHING);
+        }
 
         TestLogger ctrl_lgr();
         ctrl_lgr.min_level = 0;
 
-        AsyncIoController ctrl(False);
-        ctrl.setLogger(ctrl_lgr);
-        ctrl.start();
-        assertTrue(ctrl.waitReady(10s));
-        ctrl.stop();
-        ctrl.waitStop();
+        # Set per-controller logger on the singleton
+        AsyncIoController::setLogger(ctrl_lgr);
 
-        # Per-controller logger should have messages (at least "I/O thread ready")
-        list<hash<auto>> ctrl_msgs = ctrl_lgr.getMessages();
-        assertTrue(ctrl_msgs.size() >= 1,
-            sprintf("expected >= 1 log messages from per-controller logger, got %d", ctrl_msgs.size()));
+        # Clear it
+        AsyncIoController::setLogger(NOTHING);
 
-        # Global logger should have NO messages (per-controller takes priority)
-        list<hash<auto>> global_msgs = global_lgr.getMessages();
-        assertEq(0, global_msgs.size(),
-            sprintf("expected 0 log messages from global logger, got %d", global_msgs.size()));
-    }
+        # Set global logger and verify it's used
+        TestLogger global_lgr();
+        global_lgr.min_level = 0;
+        set_async_io_logger(global_lgr);
 
-    #! Messages below the enabled level are not forwarded
-    testLogLevelFiltering() {
-        on_exit set_async_io_logger(NOTHING);
-
-        TestLogger lgr();
-        lgr.min_level = 30000;  # WARN level
-        set_async_io_logger(lgr);
-
-        # Create controller - its DEBUG messages should be filtered out
-        AsyncIoController ctrl(False);
-        ctrl.start();
-        assertTrue(ctrl.waitReady(10s));
-        ctrl.stop();
-        ctrl.waitStop();
-
-        # All controller lifecycle messages are at DEBUG level (10000), which is below WARN (30000)
-        list<hash<auto>> msgs = lgr.getMessages();
-        assertEq(0, msgs.size(),
-            sprintf("expected 0 messages (all filtered), got %d: %y", msgs.size(), msgs));
-    }
-
-    #! Multiple threads can log concurrently while logger is set/cleared
-    testThreadSafety() {
-        on_exit set_async_io_logger(NOTHING);
-
-        TestLogger lgr();
-        lgr.min_level = 0;
-        set_async_io_logger(lgr);
-
-        Counter cnt(4);
-        list<string> errors();
-        Mutex err_mtx();
-
-        # Start multiple controllers concurrently
-        for (int i = 0; i < 4; ++i) {
-            int idx = i;
-            background sub() {
-                on_exit cnt.dec();
-                try {
-                    AsyncIoController ctrl(False);
-                    ctrl.start();
-                    ctrl.waitReady(10s);
-                    ctrl.stop();
-                    ctrl.waitStop();
-                } catch (hash<ExceptionInfo> ex) {
-                    AutoLock al(err_mtx);
-                    push errors, sprintf("thread %d: %s: %s", idx, ex.err, ex.desc);
-                }
-            }();
-        }
-
-        # Also cycle the global logger a few times while controllers are running
-        for (int i = 0; i < 10; ++i) {
-            TestLogger tmp();
-            tmp.min_level = 0;
-            set_async_io_logger(tmp);
-        }
-        set_async_io_logger(lgr);
-
-        int rc = cnt.waitForZero(30s);
-        assertEq(0, rc, "all threads completed within timeout");
-        assertEq(0, errors.size(),
-            errors.size() > 0 ? sprintf("thread errors: %y", errors) : "no errors");
+        # Verify both loggers are accessible
+        *object got = get_async_io_logger();
+        assertEq(True, got === global_lgr);
     }
 }

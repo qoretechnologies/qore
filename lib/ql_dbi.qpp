@@ -256,7 +256,7 @@ int dbi_get_driver_capabilities(string driver) [flags=CONSTANT] {
     - \c options: a hash of options for the connection
 
     @return a string in the format:
-    <tt><em>driver</em>:[<em>user</em>][/<em>pass</em>]\@[<em>db</em>][(</em>charset</em>)][%<em>host</em>][:<em>port</em>][{<em>opt</em>=<em>val</em>[,...]}]</tt>
+    <tt><em>driver</em>:[<em>user</em>][/<em>pass</em>]\@[<em>db</em>][(<em>charset</em>)][%<em>host</em>][:<em>port</em>][{<em>opt</em>=<em>val</em>[,...]}]</tt>
 
     @throw MAKE-DATASOURCE-STRING-ERROR the \c type key is missing or empty
 

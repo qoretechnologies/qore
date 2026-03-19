@@ -1,0 +1,1066 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  KitDataProvider.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/RestClient.qm
+
+%try-module json
+%define NoJson
+%endtry
+
+%requires ../../../../qlib/KitRestClient.qm
+%requires ../../../../qlib/KitDataProvider
+
+%exec-class KitDataProviderTest
+
+public class KitDataProviderTest inherits QUnit::Test {
+    private {
+        #! Kit REST client for integration tests
+        *KitRestClient::KitRestClient client;
+
+        #! Custom command-line options
+        const MyOpts = Opts + {
+            "apikey": "k,apikey=s",
+            "conn": "c,connection=s",
+        };
+
+        #! IDs of test resources to clean up
+        *string testTagId;
+        *string testCustomFieldId;
+        *string testSubscriberId;
+        *string testBroadcastId;
+        *string testSubscriberEmail;
+    }
+
+    constructor() : Test("KitDataProvider Test", "1.0", \ARGV, MyOpts) {
+        # Unit tests (always run, no credentials needed)
+        addTestCase("sanity tests", \sanityTests());
+        addTestCase("factory tests", \factoryTests());
+        addTestCase("metadata tests", \metadataTests());
+        addTestCase("data type tests", \dataTypeTests());
+        addTestCase("connection tests", \connectionTests());
+
+        # Integration tests (require Kit credentials)
+        addTestCase("tag CRUD tests", \tagCrudTests());
+        addTestCase("custom field CRUD tests", \customFieldCrudTests());
+        addTestCase("subscriber tests", \subscriberTests());
+        addTestCase("broadcast CRUD tests", \broadcastCrudTests());
+        addTestCase("forms tests", \formsTests());
+        addTestCase("sequences tests", \sequencesTests());
+        addTestCase("purchases tests", \purchasesTests());
+        addTestCase("tag subscriber tests", \tagSubscriberTests());
+        addTestCase("bulk create subscribers tests", \bulkCreateSubscribersTests());
+        addTestCase("bulk tag subscribers tests", \bulkTagSubscribersTests());
+        addTestCase("add subscriber to form tests", \addSubscriberToFormTests());
+        addTestCase("add subscriber to sequence tests", \addSubscriberToSequenceTests());
+        addTestCase("trigger example data tests", \triggerExampleDataTests());
+
+        # Try to set up connection for integration tests
+        try {
+            setupConnection();
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("Connection setup failed: %s: %s\n", ex.err, ex.desc);
+            }
+        }
+
+        set_return_value(main());
+    }
+
+    #! Sets up the Kit client for integration tests
+    private setupConnection() {
+        *string conn_name = m_options.conn ?? ENV.KIT_CONNECTION;
+        if (conn_name) {
+            AbstractConnection conn = get_connection(conn_name);
+            if (conn instanceof KitRestClient::KitRestConnection) {
+                client = (cast<KitRestClient::KitRestConnection>(conn)).get(True);
+            }
+            return;
+        }
+
+        *string apikey = m_options.apikey ?? ENV.KIT_API_KEY;
+        *string token = ENV.KIT_TOKEN;
+        *string client_id = ENV.KIT_OAUTH2_CLIENT_ID;
+        *string client_secret = ENV.KIT_OAUTH2_CLIENT_SECRET;
+        *string refresh_token = ENV.KIT_OAUTH2_REFRESH_TOKEN;
+
+        if (apikey) {
+            client = new KitRestClient::KitRestClient({"apikey": apikey});
+        } else if (token) {
+            client = new KitRestClient::KitRestClient({"token": token});
+        } else if (client_id && client_secret && refresh_token) {
+            client = new KitRestClient::KitRestClient({
+                "oauth2_client_id": client_id,
+                "oauth2_client_secret": client_secret,
+                "oauth2_refresh_token": refresh_token,
+            });
+        }
+    }
+
+    #! Helper to skip integration tests when no credentials
+    private skipIfNoCredentials() {
+        if (!client) {
+            testSkip("no Kit credentials available");
+        }
+    }
+
+    # ========== UNIT TESTS ==========
+
+    sanityTests() {
+        assertEq("Kit", KitDataProvider::AppName);
+        assertEq(500, KitDataProvider::DefaultPageSize);
+        assertEq(60, KitDataProvider::DefaultPollInterval);
+        assertEq(30, KitDataProvider::MinPollInterval);
+
+        # Verify event constants
+        assertEq("subscriber-activate", KitDataProvider::EVENT_SUBSCRIBER_ACTIVATE);
+        assertEq("subscriber-unsubscribe", KitDataProvider::EVENT_SUBSCRIBER_UNSUBSCRIBE);
+        assertEq("subscriber-bounce", KitDataProvider::EVENT_SUBSCRIBER_BOUNCE);
+        assertEq("subscriber-complain", KitDataProvider::EVENT_SUBSCRIBER_COMPLAIN);
+        assertEq("form-subscribe", KitDataProvider::EVENT_FORM_SUBSCRIBE);
+        assertEq("course-subscribe", KitDataProvider::EVENT_COURSE_SUBSCRIBE);
+    }
+
+    factoryTests() {
+        AbstractDataProviderFactory factory = DataProvider::getFactory("kit");
+        assertEq(True, factory instanceof KitDataProvider::KitDataProviderFactory);
+
+        hash<DataProviderFactoryInfo> info = factory.getInfo();
+        assertEq("kit", info.name);
+        assertEq(True, info.children_can_support_apis);
+        assertEq(True, info.children_can_support_records);
+        assertEq(True, info.children_can_support_observers);
+    }
+
+    metadataTests() {
+        *hash<auto> app = DataProviderActionCatalog::getApp("Kit");
+        assertEq(True, app.val(), "Kit app registered in action catalog");
+        assertEq("Kit", app.display_name);
+        assertEq("kitrest", app.scheme);
+
+        list<hash<auto>> actions = DataProviderActionCatalog::getActions("Kit");
+        assertEq(True, actions.size() >= 35, "at least 35 actions registered");
+
+        bool found_create_subscriber = False;
+        bool found_list_subscribers = False;
+        bool found_subscriber_activate = False;
+        foreach hash<auto> action in (actions) {
+            if (action.action == "create-subscriber") {
+                found_create_subscriber = True;
+                assertEq(DPAT_API, action.action_code);
+            }
+            if (action.action == "list-subscribers") {
+                found_list_subscribers = True;
+                assertEq(DPAT_FIND, action.action_code);
+            }
+            if (action.action == "subscriber-activate") {
+                found_subscriber_activate = True;
+                assertEq(DPAT_EVENT, action.action_code);
+            }
+        }
+        assertEq(True, found_create_subscriber, "create-subscriber action registered");
+        assertEq(True, found_list_subscribers, "list-subscribers action registered");
+        assertEq(True, found_subscriber_activate, "subscriber-activate event registered");
+    }
+
+    dataTypeTests() {
+        KitDataProvider::KitSubscriberDataType sub_type();
+        hash<auto> fields = sub_type.getFields();
+        assertEq(True, fields.hasKey("id"), "subscriber type has id field");
+        assertEq(True, fields.hasKey("email_address"), "subscriber type has email_address field");
+        assertEq(True, fields.hasKey("first_name"), "subscriber type has first_name field");
+        assertEq(True, fields.hasKey("state"), "subscriber type has state field");
+
+        KitDataProvider::KitTagDataType tag_type();
+        hash<auto> tfields = tag_type.getFields();
+        assertEq(True, tfields.hasKey("id"), "tag type has id field");
+        assertEq(True, tfields.hasKey("name"), "tag type has name field");
+
+        KitDataProvider::KitBroadcastDataType bcast_type();
+        hash<auto> bfields = bcast_type.getFields();
+        assertEq(True, bfields.hasKey("id"), "broadcast type has id field");
+        assertEq(True, bfields.hasKey("subject"), "broadcast type has subject field");
+        assertEq(True, bfields.hasKey("content"), "broadcast type has content field");
+
+        KitDataProvider::KitFormDataType form_type();
+        hash<auto> ffields = form_type.getFields();
+        assertEq(True, ffields.hasKey("id"), "form type has id field");
+        assertEq(True, ffields.hasKey("name"), "form type has name field");
+
+        KitDataProvider::KitSequenceDataType seq_type();
+        hash<auto> sfields = seq_type.getFields();
+        assertEq(True, sfields.hasKey("id"), "sequence type has id field");
+        assertEq(True, sfields.hasKey("name"), "sequence type has name field");
+
+        KitDataProvider::KitPurchaseDataType purchase_type();
+        hash<auto> pfields = purchase_type.getFields();
+        assertEq(True, pfields.hasKey("id"), "purchase type has id field");
+        assertEq(True, pfields.hasKey("transaction_id"), "purchase type has transaction_id field");
+
+        KitDataProvider::KitCustomFieldDataType cf_type();
+        hash<auto> cfields = cf_type.getFields();
+        assertEq(True, cfields.hasKey("id"), "custom field type has id field");
+        assertEq(True, cfields.hasKey("label"), "custom field type has label field");
+
+        KitDataProvider::KitBroadcastStatsDataType stats_type();
+        hash<auto> stfields = stats_type.getFields();
+        assertEq(True, stfields.hasKey("recipients"), "broadcast stats type has recipients field");
+        assertEq(True, stfields.hasKey("open_rate"), "broadcast stats type has open_rate field");
+    }
+
+    connectionTests() {
+        assertEq(True, exists ConnectionSchemeCache::getScheme("kitrest"),
+            "kitrest scheme registered");
+
+        hash<auto> scheme = ConnectionSchemeCache::getScheme("kitrest");
+        assertEq("Kit REST Connection", scheme.display_name);
+    }
+
+    # ========== INTEGRATION TESTS ==========
+
+    #! Tag CRUD: create -> list (verify) -> update -> list (verify) -> cleanup
+    tagCrudTests() {
+        skipIfNoCredentials();
+        KitDataProvider::KitDataProvider provider(client);
+        AbstractDataProvider tags = provider.getChildProvider("tags");
+
+        # Create a tag
+        AbstractDataProvider create_tag = tags.getChildProvider("create");
+        string tag_name = "QoreTest_" + now_us().toString();
+        hash<auto> tag = create_tag.doRequest({"name": tag_name});
+        assertEq(True, tag.id.val(), "tag created with ID");
+        assertEq(True, tag.name.val(), "tag has name");
+        testTagId = string(tag.id);
+
+        on_exit {
+            # Kit tags API has no delete endpoint; leave test tag
+            # We'll clean it up by noting it's a test tag
+            testTagId = NOTHING;
+        }
+
+        # List tags and verify created tag exists
+        AbstractDataProviderRecordIterator iter = tags.searchRecords(NOTHING, {"limit": 100});
+        bool found = False;
+        while (iter.next()) {
+            if (string(iter.getValue().id) == testTagId) {
+                found = True;
+                break;
+            }
+        }
+        assertEq(True, found, "created tag found in list");
+
+        # Get tag by ID
+        AbstractDataProviderRecordIterator get_iter = tags.searchRecords(NOTHING, {
+            "tag_id": testTagId,
+        });
+        assertEq(True, get_iter.next(), "tag found by ID");
+        hash<auto> fetched_tag = get_iter.getValue();
+        assertEq(tag_name, fetched_tag.name, "tag name matches");
+
+        # Update tag
+        AbstractDataProvider update_tag = tags.getChildProvider("update");
+        string updated_name = "QoreTestUpdated_" + now_us().toString();
+        hash<auto> updated = update_tag.doRequest({
+            "tag_id": testTagId,
+            "name": updated_name,
+        });
+        assertEq(updated_name, updated.name, "tag name updated");
+
+        # Verify update persisted
+        AbstractDataProviderRecordIterator verify_iter = tags.searchRecords(NOTHING, {
+            "tag_id": testTagId,
+        });
+        assertEq(True, verify_iter.next(), "updated tag found");
+        assertEq(updated_name, verify_iter.getValue().name, "tag name update persisted");
+    }
+
+    #! Custom field CRUD: create -> list (verify) -> update -> delete -> verify deleted
+    customFieldCrudTests() {
+        skipIfNoCredentials();
+        KitDataProvider::KitDataProvider provider(client);
+        AbstractDataProvider cf = provider.getChildProvider("custom-fields");
+
+        # Create a custom field
+        AbstractDataProvider create_cf = cf.getChildProvider("create");
+        string cf_label = "QoreTestField_" + now_us().toString();
+        hash<auto> field = create_cf.doRequest({"label": cf_label});
+        assertEq(True, field.id.val(), "custom field created with ID");
+        assertEq(True, field.label.val(), "custom field has label");
+        testCustomFieldId = string(field.id);
+
+        on_exit {
+            # Cleanup: delete custom field
+            if (testCustomFieldId) {
+                try {
+                    AbstractDataProvider del_cf = cf.getChildProvider("delete");
+                    del_cf.doRequest({"custom_field_id": testCustomFieldId});
+                } catch (hash<ExceptionInfo> ex) {
+                    if (m_options.verbose) {
+                        printf("Cleanup custom field failed: %s: %s\n", ex.err, ex.desc);
+                    }
+                }
+                testCustomFieldId = NOTHING;
+            }
+        }
+
+        # List and verify
+        AbstractDataProviderRecordIterator cf_iter = cf.searchRecords(NOTHING, {"limit": 100});
+        bool found = False;
+        while (cf_iter.next()) {
+            if (string(cf_iter.getValue().id) == testCustomFieldId) {
+                found = True;
+                break;
+            }
+        }
+        assertEq(True, found, "created custom field found in list");
+
+        # Update
+        AbstractDataProvider update_cf = cf.getChildProvider("update");
+        string updated_label = "QoreTestFieldUpd_" + now_us().toString();
+        hash<auto> updated = update_cf.doRequest({
+            "custom_field_id": testCustomFieldId,
+            "label": updated_label,
+        });
+        assertEq(updated_label, updated.label, "custom field updated");
+
+        # Delete
+        AbstractDataProvider delete_cf = cf.getChildProvider("delete");
+        delete_cf.doRequest({"custom_field_id": testCustomFieldId});
+        testCustomFieldId = NOTHING;
+
+        # Verify deletion - field should not appear in list
+        AbstractDataProviderRecordIterator verify_iter = cf.searchRecords(NOTHING, {"limit": 100});
+        bool still_exists = False;
+        while (verify_iter.next()) {
+            if (string(verify_iter.getValue().id) == string(field.id)) {
+                still_exists = True;
+                break;
+            }
+        }
+        assertEq(False, still_exists, "deleted custom field no longer in list");
+    }
+
+    #! Subscriber: create -> get -> update -> verify update -> unsubscribe
+    subscriberTests() {
+        skipIfNoCredentials();
+        KitDataProvider::KitDataProvider provider(client);
+        AbstractDataProvider subs = provider.getChildProvider("subscribers");
+
+        # Create subscriber
+        testSubscriberEmail = "qore-test-" + now_us().toString() + "@example.com";
+        AbstractDataProvider create_sub = subs.getChildProvider("create");
+        hash<auto> new_sub = create_sub.doRequest({
+            "email_address": testSubscriberEmail,
+            "first_name": "QoreTest",
+        });
+        assertEq(True, new_sub.id.val(), "subscriber created with ID");
+        testSubscriberId = string(new_sub.id);
+
+        on_exit {
+            # Cleanup: unsubscribe
+            if (testSubscriberId) {
+                try {
+                    AbstractDataProvider unsub = subs.getChildProvider("unsubscribe");
+                    unsub.doRequest({"subscriber_id": testSubscriberId});
+                } catch (hash<ExceptionInfo> ex) {
+                    if (m_options.verbose) {
+                        printf("Cleanup unsubscribe failed: %s: %s\n", ex.err, ex.desc);
+                    }
+                }
+                testSubscriberId = NOTHING;
+            }
+        }
+
+        # Get subscriber by ID
+        AbstractDataProviderRecordIterator get_iter = subs.searchRecords(NOTHING, {
+            "subscriber_id": testSubscriberId,
+        });
+        assertEq(True, get_iter.next(), "subscriber found by ID");
+        hash<auto> fetched = get_iter.getValue();
+        assertEq(testSubscriberEmail, fetched.email_address, "subscriber email matches");
+        assertEq("QoreTest", fetched.first_name, "subscriber first_name matches");
+
+        # Search by email
+        AbstractDataProviderRecordIterator email_iter = subs.searchRecords(NOTHING, {
+            "email_address": testSubscriberEmail,
+        });
+        assertEq(True, email_iter.next(), "subscriber found by email");
+        assertEq(testSubscriberEmail, email_iter.getValue().email_address,
+            "email search returns correct subscriber");
+
+        # Update subscriber
+        AbstractDataProvider update_sub = subs.getChildProvider("update");
+        hash<auto> updated = update_sub.doRequest({
+            "subscriber_id": testSubscriberId,
+            "first_name": "QoreTestUpdated",
+        });
+        assertEq("QoreTestUpdated", updated.first_name, "subscriber updated");
+
+        # Verify update persisted
+        AbstractDataProviderRecordIterator verify_iter = subs.searchRecords(NOTHING, {
+            "subscriber_id": testSubscriberId,
+        });
+        assertEq(True, verify_iter.next(), "updated subscriber found");
+        assertEq("QoreTestUpdated", verify_iter.getValue().first_name,
+            "subscriber first_name update persisted");
+
+        # Unsubscribe is handled by on_exit cleanup
+    }
+
+    #! Broadcast CRUD: create draft -> list (verify) -> get -> update -> stats -> delete -> verify
+    broadcastCrudTests() {
+        skipIfNoCredentials();
+        KitDataProvider::KitDataProvider provider(client);
+        AbstractDataProvider broadcasts = provider.getChildProvider("broadcasts");
+
+        # Create a draft broadcast
+        AbstractDataProvider create_bc = broadcasts.getChildProvider("create");
+        string subject = "QoreTest Broadcast " + now_us().toString();
+        hash<auto> bc = create_bc.doRequest({
+            "subject": subject,
+            "content": "<p>This is a test broadcast from Qore integration tests.</p>",
+        });
+        assertEq(True, bc.id.val(), "broadcast created with ID");
+        testBroadcastId = string(bc.id);
+
+        on_exit {
+            # Cleanup: delete broadcast
+            if (testBroadcastId) {
+                try {
+                    AbstractDataProvider del_bc = broadcasts.getChildProvider("delete");
+                    del_bc.doRequest({"broadcast_id": testBroadcastId});
+                } catch (hash<ExceptionInfo> ex) {
+                    if (m_options.verbose) {
+                        printf("Cleanup broadcast failed: %s: %s\n", ex.err, ex.desc);
+                    }
+                }
+                testBroadcastId = NOTHING;
+            }
+        }
+
+        # List broadcasts and verify
+        AbstractDataProviderRecordIterator list_iter = broadcasts.searchRecords(NOTHING,
+            {"limit": 50});
+        bool found = False;
+        while (list_iter.next()) {
+            if (string(list_iter.getValue().id) == testBroadcastId) {
+                found = True;
+                break;
+            }
+        }
+        assertEq(True, found, "created broadcast found in list");
+
+        # Get broadcast by ID
+        AbstractDataProviderRecordIterator get_iter = broadcasts.searchRecords(NOTHING, {
+            "broadcast_id": testBroadcastId,
+        });
+        assertEq(True, get_iter.next(), "broadcast found by ID");
+        hash<auto> fetched = get_iter.getValue();
+        assertEq(subject, fetched.subject, "broadcast subject matches");
+
+        # Update broadcast
+        AbstractDataProvider update_bc = broadcasts.getChildProvider("update");
+        string updated_subject = "QoreTest Updated " + now_us().toString();
+        hash<auto> updated = update_bc.doRequest({
+            "broadcast_id": testBroadcastId,
+            "subject": updated_subject,
+        });
+        assertEq(updated_subject, updated.subject, "broadcast updated");
+
+        # Verify update persisted
+        AbstractDataProviderRecordIterator verify_iter = broadcasts.searchRecords(NOTHING, {
+            "broadcast_id": testBroadcastId,
+        });
+        assertEq(True, verify_iter.next(), "updated broadcast found");
+        assertEq(updated_subject, verify_iter.getValue().subject,
+            "broadcast subject update persisted");
+
+        # Get broadcast stats
+        AbstractDataProvider stats = broadcasts.getChildProvider("stats");
+        try {
+            hash<auto> stats_result = stats.doRequest({"broadcast_id": testBroadcastId});
+            # Draft broadcasts may return empty stats
+            assertEq(True, exists stats_result, "broadcast stats returned");
+        } catch (hash<ExceptionInfo> ex) {
+            # Stats may not be available for draft broadcasts
+            if (m_options.verbose) {
+                printf("Broadcast stats: %s: %s\n", ex.err, ex.desc);
+            }
+        }
+
+        # Delete broadcast
+        AbstractDataProvider del_bc = broadcasts.getChildProvider("delete");
+        del_bc.doRequest({"broadcast_id": testBroadcastId});
+        testBroadcastId = NOTHING;
+
+        # Verify deletion
+        bool confirmed_gone = False;
+        try {
+            AbstractDataProviderRecordIterator del_iter = broadcasts.searchRecords(NOTHING, {
+                "broadcast_id": string(bc.id),
+            });
+            confirmed_gone = !del_iter.next();
+        } catch (hash<ExceptionInfo> ex) {
+            # 404 means deleted
+            confirmed_gone = True;
+        }
+        assertEq(True, confirmed_gone, "broadcast deleted successfully");
+    }
+
+    #! Forms: list -> (if forms exist) list form subscribers
+    formsTests() {
+        skipIfNoCredentials();
+        KitDataProvider::KitDataProvider provider(client);
+        AbstractDataProvider forms = provider.getChildProvider("forms");
+
+        # List forms
+        AbstractDataProviderRecordIterator iter = forms.searchRecords(NOTHING, {
+            "status": "active",
+            "limit": 5,
+        });
+        list<hash<auto>> form_list = ();
+        while (iter.next()) {
+            form_list += iter.getValue();
+        }
+        assertEq(True, form_list.size() >= 0, "forms list API call succeeded");
+
+        # If forms exist, test form subscribers sub-collection
+        if (form_list.size() > 0) {
+            string form_id = string(form_list[0].id);
+
+            # Get form by ID
+            AbstractDataProviderRecordIterator form_iter = forms.searchRecords(NOTHING, {
+                "form_id": form_id,
+            });
+            assertEq(True, form_iter.next(), "form found by ID");
+
+            # List form subscribers
+            AbstractDataProvider form_subs = forms.getChildProvider("form-subscribers");
+            AbstractDataProviderRecordIterator subs_iter = form_subs.searchRecords(NOTHING, {
+                "form_id": form_id,
+                "limit": 5,
+            });
+            # Verify the API call works by iterating results
+            list<hash<auto>> form_sub_list = ();
+            while (subs_iter.next()) {
+                form_sub_list += subs_iter.getValue();
+            }
+            assertEq(True, form_sub_list.size() >= 0, "form subscribers list API call succeeded");
+        }
+    }
+
+    #! Sequences: list -> (if sequences exist) list sequence subscribers
+    sequencesTests() {
+        skipIfNoCredentials();
+        KitDataProvider::KitDataProvider provider(client);
+        AbstractDataProvider sequences = provider.getChildProvider("sequences");
+
+        # List sequences
+        AbstractDataProviderRecordIterator iter = sequences.searchRecords(NOTHING, {"limit": 5});
+        list<hash<auto>> seq_list = ();
+        while (iter.next()) {
+            seq_list += iter.getValue();
+        }
+        assertEq(True, seq_list.size() >= 0, "sequences list API call succeeded");
+
+        # If sequences exist, test sequence subscribers sub-collection
+        if (seq_list.size() > 0) {
+            string seq_id = string(seq_list[0].id);
+
+            # Get sequence by ID
+            AbstractDataProviderRecordIterator seq_iter = sequences.searchRecords(NOTHING, {
+                "sequence_id": seq_id,
+            });
+            assertEq(True, seq_iter.next(), "sequence found by ID");
+
+            # List sequence subscribers
+            AbstractDataProvider seq_subs = sequences.getChildProvider("sequence-subscribers");
+            AbstractDataProviderRecordIterator subs_iter = seq_subs.searchRecords(NOTHING, {
+                "sequence_id": seq_id,
+                "limit": 5,
+            });
+            list<hash<auto>> seq_sub_list = ();
+            while (subs_iter.next()) {
+                seq_sub_list += subs_iter.getValue();
+            }
+            assertEq(True, seq_sub_list.size() >= 0, "sequence subscribers list API call succeeded");
+        }
+    }
+
+    #! Purchases: create -> list (verify) -> get by ID
+    purchasesTests() {
+        skipIfNoCredentials();
+        KitDataProvider::KitDataProvider provider(client);
+        AbstractDataProvider purchases = provider.getChildProvider("purchases");
+
+        # Create a purchase
+        AbstractDataProvider create_purchase = purchases.getChildProvider("create");
+        string txn_id = "qore_test_" + now_us().toString();
+        hash<auto> purchase;
+        try {
+            purchase = create_purchase.doRequest({
+                "email_address": "qore-purchase-test@example.com",
+                "transaction_id": txn_id,
+                "products": ({
+                    "name": "Test Product",
+                    "pid": 1,
+                    "lid": 1,
+                    "quantity": 1,
+                    "unit_price": 9.99,
+                },),
+                "currency": "USD",
+                "total": 9.99,
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.arg.status_code == 401) {
+                testSkip("purchases endpoint requires OAuth2 authentication");
+            }
+            rethrow;
+        }
+        assertEq(True, purchase.id.val(), "purchase created with ID");
+        string purchase_id = string(purchase.id);
+
+        # List purchases and verify
+        AbstractDataProviderRecordIterator list_iter = purchases.searchRecords(NOTHING,
+            {"limit": 50});
+        bool found = False;
+        while (list_iter.next()) {
+            if (string(list_iter.getValue().id) == purchase_id) {
+                found = True;
+                break;
+            }
+        }
+        assertEq(True, found, "created purchase found in list");
+
+        # Get purchase by ID
+        AbstractDataProviderRecordIterator get_iter = purchases.searchRecords(NOTHING, {
+            "purchase_id": purchase_id,
+        });
+        assertEq(True, get_iter.next(), "purchase found by ID");
+        hash<auto> fetched = get_iter.getValue();
+        assertEq(txn_id, fetched.transaction_id, "purchase transaction_id matches");
+    }
+
+    #! Tag subscriber: tag -> list tag subscribers -> untag
+    tagSubscriberTests() {
+        skipIfNoCredentials();
+        KitDataProvider::KitDataProvider provider(client);
+        AbstractDataProvider subs = provider.getChildProvider("subscribers");
+        AbstractDataProvider tags = provider.getChildProvider("tags");
+
+        # Create a test subscriber
+        string test_email = "qore-tag-test-" + now_us().toString() + "@example.com";
+        AbstractDataProvider create_sub = subs.getChildProvider("create");
+        hash<auto> new_sub = create_sub.doRequest({
+            "email_address": test_email,
+            "first_name": "QoreTagTest",
+        });
+        string sub_id = string(new_sub.id);
+
+        # Create a test tag
+        AbstractDataProvider create_tag = tags.getChildProvider("create");
+        hash<auto> tag = create_tag.doRequest({
+            "name": "QoreTagSubTest_" + now_us().toString(),
+        });
+        string tag_id = string(tag.id);
+
+        on_exit {
+            # Cleanup: unsubscribe the test subscriber
+            try {
+                AbstractDataProvider unsub = subs.getChildProvider("unsubscribe");
+                unsub.doRequest({"subscriber_id": sub_id});
+            } catch (hash<ExceptionInfo> ex) {
+                if (m_options.verbose) {
+                    printf("Cleanup unsubscribe failed: %s: %s\n", ex.err, ex.desc);
+                }
+            }
+        }
+
+        # Tag the subscriber
+        AbstractDataProvider tag_sub = tags.getChildProvider("tag-subscriber");
+        hash<auto> tag_result;
+        try {
+            tag_result = tag_sub.doRequest({
+                "tag_id": tag_id,
+                "email_address": test_email,
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.arg.status_code == 401 || ex.arg.status_code == 404) {
+                testSkip("tag-subscriber endpoint requires OAuth2 authentication");
+            }
+            rethrow;
+        }
+        assertEq(True, tag_result.val(), "subscriber tagged");
+
+        # List tag subscribers
+        AbstractDataProvider tag_subs = tags.getChildProvider("tag-subscribers");
+        AbstractDataProviderRecordIterator tag_subs_iter = tag_subs.searchRecords(NOTHING, {
+            "tag_id": tag_id,
+            "limit": 50,
+        });
+        bool found = False;
+        while (tag_subs_iter.next()) {
+            if (string(tag_subs_iter.getValue().id) == sub_id) {
+                found = True;
+                break;
+            }
+        }
+        assertEq(True, found, "tagged subscriber found in tag subscribers list");
+
+        # Untag the subscriber
+        AbstractDataProvider untag_sub = tags.getChildProvider("untag-subscriber");
+        auto untag_result = untag_sub.doRequest({
+            "tag_id": tag_id,
+            "subscriber_id": sub_id,
+        });
+        assertEq(Type::Hash, untag_result.type(), "untag returns a hash");
+
+        # Verify untag - subscriber should no longer appear in tag subscribers
+        AbstractDataProviderRecordIterator verify_iter = tag_subs.searchRecords(NOTHING, {
+            "tag_id": tag_id,
+            "limit": 50,
+        });
+        bool still_tagged = False;
+        while (verify_iter.next()) {
+            if (string(verify_iter.getValue().id) == sub_id) {
+                still_tagged = True;
+                break;
+            }
+        }
+        assertEq(False, still_tagged, "untagged subscriber no longer in tag list");
+    }
+
+    #! Bulk create subscribers: create 2 subscribers in one call, then unsubscribe both
+    bulkCreateSubscribersTests() {
+        skipIfNoCredentials();
+        KitDataProvider::KitDataProvider provider(client);
+        AbstractDataProvider subs = provider.getChildProvider("subscribers");
+
+        string email1 = "qore-bulk1-" + now_us().toString() + "@example.com";
+        string email2 = "qore-bulk2-" + now_us().toString() + "@example.com";
+
+        # Bulk create
+        AbstractDataProvider bulk_create = subs.getChildProvider("bulk-create");
+        hash<auto> result;
+        try {
+            result = bulk_create.doRequest({
+                "subscribers": (
+                    {"email_address": email1, "first_name": "BulkTest1"},
+                    {"email_address": email2, "first_name": "BulkTest2"},
+                ),
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.arg.status_code == 401) {
+                testSkip("bulk create endpoint requires OAuth2 authentication");
+            }
+            rethrow;
+        }
+        assertEq(True, result.val(), "bulk create returned response");
+
+        on_exit {
+            # Cleanup: unsubscribe both test subscribers
+            AbstractDataProvider unsub_dp = subs.getChildProvider("unsubscribe");
+            foreach string email in ((email1, email2)) {
+                try {
+                    # Look up subscriber by email to get ID
+                    AbstractDataProviderRecordIterator it = subs.searchRecords(NOTHING, {
+                        "email_address": email,
+                    });
+                    if (it.next()) {
+                        unsub_dp.doRequest({"subscriber_id": string(it.getValue().id)});
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    if (m_options.verbose) {
+                        printf("Cleanup bulk subscriber %s failed: %s: %s\n",
+                            email, ex.err, ex.desc);
+                    }
+                }
+            }
+        }
+
+        # Verify at least one subscriber was created (bulk is async, so check after a moment)
+        AbstractDataProviderRecordIterator iter1 = subs.searchRecords(NOTHING, {
+            "email_address": email1,
+        });
+        assertEq(True, iter1.next(), "bulk subscriber 1 found after create");
+        assertEq(email1, iter1.getValue().email_address, "bulk subscriber 1 created");
+    }
+
+    #! Bulk tag subscribers: create tag + subscribers, bulk tag, verify
+    bulkTagSubscribersTests() {
+        skipIfNoCredentials();
+        KitDataProvider::KitDataProvider provider(client);
+        AbstractDataProvider subs = provider.getChildProvider("subscribers");
+        AbstractDataProvider tags = provider.getChildProvider("tags");
+
+        # Create a test tag
+        AbstractDataProvider create_tag = tags.getChildProvider("create");
+        hash<auto> tag = create_tag.doRequest({
+            "name": "QoreBulkTagTest_" + now_us().toString(),
+        });
+        string tag_id = string(tag.id);
+
+        # Create two test subscribers
+        string email1 = "qore-bulktag1-" + now_us().toString() + "@example.com";
+        string email2 = "qore-bulktag2-" + now_us().toString() + "@example.com";
+        AbstractDataProvider create_sub = subs.getChildProvider("create");
+        hash<auto> subscriber1 = create_sub.doRequest({"email_address": email1});
+        hash<auto> subscriber2 = create_sub.doRequest({"email_address": email2});
+
+        on_exit {
+            # Cleanup: unsubscribe both
+            AbstractDataProvider unsub_dp = subs.getChildProvider("unsubscribe");
+            foreach string sid in ((string(subscriber1.id), string(subscriber2.id))) {
+                try {
+                    unsub_dp.doRequest({"subscriber_id": sid});
+                } catch (hash<ExceptionInfo> ex) {
+                    if (m_options.verbose) {
+                        printf("Cleanup bulk-tag subscriber failed: %s: %s\n",
+                            ex.err, ex.desc);
+                    }
+                }
+            }
+        }
+
+        # Bulk tag
+        AbstractDataProvider bulk_tag = tags.getChildProvider("bulk-tag");
+        hash<auto> bulk_result;
+        try {
+            bulk_result = bulk_tag.doRequest({
+                "tag_id": tag_id,
+                "subscribers": (email1, email2),
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.arg.status_code == 401) {
+                testSkip("bulk tag endpoint requires OAuth2 authentication");
+            }
+            rethrow;
+        }
+        assertEq(True, bulk_result.val(), "bulk tag returned response");
+
+        # Verify tag subscribers list contains at least one
+        # Bulk operations are async, so retry a few times with a short delay
+        AbstractDataProvider tag_subs = tags.getChildProvider("tag-subscribers");
+        int tagged_count = 0;
+        int max_attempts = 5;
+        for (int attempt = 0; attempt < max_attempts; ++attempt) {
+            if (attempt > 0) {
+                sleep(2s);
+            }
+            AbstractDataProviderRecordIterator tag_iter = tag_subs.searchRecords(NOTHING, {
+                "tag_id": tag_id,
+                "limit": 50,
+            });
+            tagged_count = 0;
+            while (tag_iter.next()) {
+                string sid = string(tag_iter.getValue().id);
+                if (sid == string(subscriber1.id) || sid == string(subscriber2.id)) {
+                    tagged_count++;
+                }
+            }
+            if (tagged_count > 0) {
+                break;
+            }
+        }
+        assertEq(True, tagged_count > 0, "bulk-tagged subscribers found in tag list");
+    }
+
+    #! Add subscriber to form: requires an existing form
+    addSubscriberToFormTests() {
+        skipIfNoCredentials();
+        KitDataProvider::KitDataProvider provider(client);
+        AbstractDataProvider forms = provider.getChildProvider("forms");
+        AbstractDataProvider subs = provider.getChildProvider("subscribers");
+
+        # Find an active form
+        AbstractDataProviderRecordIterator form_iter = forms.searchRecords(NOTHING, {
+            "status": "active",
+            "limit": 1,
+        });
+        if (!form_iter.next()) {
+            testSkip("no active forms in Kit account");
+        }
+        string form_id = string(form_iter.getValue().id);
+
+        # Create a test subscriber email
+        string test_email = "qore-form-test-" + now_us().toString() + "@example.com";
+
+        # Add subscriber to form
+        AbstractDataProvider add_sub = forms.getChildProvider("add-subscriber");
+        hash<auto> result;
+        try {
+            result = add_sub.doRequest({
+                "form_id": form_id,
+                "email_address": test_email,
+                "first_name": "QoreFormTest",
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.arg.status_code == 404 || ex.arg.status_code == 401) {
+                testSkip("add-subscriber-to-form endpoint not available with current auth");
+            }
+            rethrow;
+        }
+        assertEq(True, result.val(), "add-subscriber-to-form returned response");
+        assertEq(True, result.id.val(), "subscriber added to form has ID");
+
+        on_exit {
+            # Cleanup: unsubscribe the test subscriber
+            try {
+                AbstractDataProvider unsub_dp = subs.getChildProvider("unsubscribe");
+                unsub_dp.doRequest({"subscriber_id": string(result.id)});
+            } catch (hash<ExceptionInfo> ex) {
+                if (m_options.verbose) {
+                    printf("Cleanup form subscriber failed: %s: %s\n", ex.err, ex.desc);
+                }
+            }
+        }
+
+        # Verify subscriber appears in form subscribers
+        AbstractDataProvider form_subs = forms.getChildProvider("form-subscribers");
+        AbstractDataProviderRecordIterator subs_iter = form_subs.searchRecords(NOTHING, {
+            "form_id": form_id,
+            "limit": 50,
+        });
+        bool found = False;
+        while (subs_iter.next()) {
+            if (string(subs_iter.getValue().id) == string(result.id)) {
+                found = True;
+                break;
+            }
+        }
+        assertEq(True, found, "subscriber found in form subscribers list");
+    }
+
+    #! Add subscriber to sequence: requires an existing sequence
+    addSubscriberToSequenceTests() {
+        skipIfNoCredentials();
+        KitDataProvider::KitDataProvider provider(client);
+        AbstractDataProvider sequences = provider.getChildProvider("sequences");
+        AbstractDataProvider subs = provider.getChildProvider("subscribers");
+
+        # Find a sequence
+        AbstractDataProviderRecordIterator seq_iter = sequences.searchRecords(NOTHING, {
+            "limit": 1,
+        });
+        if (!seq_iter.next()) {
+            testSkip("no sequences in Kit account");
+        }
+        string seq_id = string(seq_iter.getValue().id);
+
+        # Create a test subscriber email
+        string test_email = "qore-seq-test-" + now_us().toString() + "@example.com";
+
+        # Add subscriber to sequence
+        AbstractDataProvider add_sub = sequences.getChildProvider("add-subscriber");
+        hash<auto> result = add_sub.doRequest({
+            "sequence_id": seq_id,
+            "email_address": test_email,
+        });
+        assertEq(True, result.val(), "add-subscriber-to-sequence returned response");
+        assertEq(True, result.id.val(), "subscriber added to sequence has ID");
+
+        on_exit {
+            # Cleanup: unsubscribe the test subscriber
+            try {
+                AbstractDataProvider unsub_dp = subs.getChildProvider("unsubscribe");
+                unsub_dp.doRequest({"subscriber_id": string(result.id)});
+            } catch (hash<ExceptionInfo> ex) {
+                if (m_options.verbose) {
+                    printf("Cleanup sequence subscriber failed: %s: %s\n", ex.err, ex.desc);
+                }
+            }
+        }
+
+        # Verify subscriber appears in sequence subscribers
+        AbstractDataProvider seq_subs = sequences.getChildProvider("sequence-subscribers");
+        AbstractDataProviderRecordIterator subs_iter = seq_subs.searchRecords(NOTHING, {
+            "sequence_id": seq_id,
+            "limit": 50,
+        });
+        bool found = False;
+        while (subs_iter.next()) {
+            if (string(subs_iter.getValue().id) == string(result.id)) {
+                found = True;
+                break;
+            }
+        }
+        assertEq(True, found, "subscriber found in sequence subscribers list");
+    }
+
+    #! Trigger example data: verify each event provider returns valid example data
+    triggerExampleDataTests() {
+        skipIfNoCredentials();
+        KitDataProvider::KitDataProvider provider(client);
+        AbstractDataProvider events = provider.getChildProvider("events");
+
+        *list<string> event_children = events.getChildProviderNames();
+        assertEq(True, event_children.size() >= 6, "at least 6 event providers");
+
+        list<string> expected_triggers = (
+            "subscriber-activate",
+            "subscriber-unsubscribe",
+            "subscriber-bounce",
+            "subscriber-complain",
+            "form-subscribe",
+            "course-subscribe",
+        );
+
+        foreach string trigger_name in (expected_triggers) {
+            AbstractDataProvider trigger = events.getChildProvider(trigger_name);
+            assertEq(trigger_name, trigger.getName(),
+                sprintf("trigger %s name matches", trigger_name));
+
+            # Verify supports_observable
+            hash<DataProviderInfo> trigger_info = trigger.getInfo();
+            assertEq(True, trigger_info.supports_observable,
+                sprintf("trigger %s supports_observable", trigger_name));
+
+            # Verify event types
+            hash<string, hash<DataProviderMessageInfo>> event_types = trigger.getEventTypes();
+            assertEq(True, event_types.hasKey(trigger_name),
+                sprintf("trigger %s has matching event type", trigger_name));
+
+            # Verify example event data
+            auto example = trigger.getExampleEventData(trigger_name);
+            assertEq(True, example.val(),
+                sprintf("trigger %s returns example data", trigger_name));
+            assertEq(Type::Hash, example.type(),
+                sprintf("trigger %s example data is a hash", trigger_name));
+            assertEq(True, example.id.val(),
+                sprintf("trigger %s example data has id field", trigger_name));
+            assertEq(True, example.email_address.val(),
+                sprintf("trigger %s example data has email_address field", trigger_name));
+            assertEq(True, example.hasKey("first_name"),
+                sprintf("trigger %s example data has first_name field", trigger_name));
+            assertEq(True, example.hasKey("state"),
+                sprintf("trigger %s example data has state field", trigger_name));
+        }
+    }
+}

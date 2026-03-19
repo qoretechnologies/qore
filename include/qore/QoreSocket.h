@@ -1966,6 +1966,7 @@ public:
         @param body request body (optional)
         @param body_len body length
         @param xsink exception sink for error reporting
+        @param streaming if true, the request body will be sent in streaming mode
 
         @return the stream ID assigned to this request, or -1 on error
 

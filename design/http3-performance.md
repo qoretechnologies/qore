@@ -363,41 +363,29 @@ matter for real-world applications:
 
 ---
 
-### Multi-connection QUIC limitation (single I/O thread)
+### Multi-connection QUIC on a single I/O thread
 
-The `AsyncSocketIoController` runs a **single I/O thread** that services all
-registered poll operations via one `epoll` instance. This works well for HTTP/2
-(TCP) and for a single QUIC connection, but creates I/O starvation when multiple
-QUIC connections are active simultaneously.
+All H2 and H3 client connections share the same `AsyncSocketIoController` I/O
+thread.  Fair scheduling across multiple QUIC connections is ensured by a
+**per-connection packet budget** in the C++ `continuePoll()` implementation.
 
-**Why HTTP/2 is unaffected:** TCP connections have kernel-level buffering. When
-the I/O thread is busy with connection A, data for connection B accumulates in
-the kernel's TCP receive buffer. When the thread returns to B, the data is still
-there. TCP also has no userspace timers that expire while waiting.
+**Packet budget:** `SocketQuicClientPollOperation::continuePoll()` processes at
+most `QUIC_CLIENT_RECV_BUDGET` (32) packets per call.  At ~1μs/packet this gives
+~32μs per connection, ensuring the I/O thread cycles through all connections
+before any QUIC timer expires.  When the budget is exhausted and more packets
+remain, `continuePoll()` returns `poll_timeout_ms=0` to trigger an immediate
+re-poll.
 
-**Why QUIC is affected:** Each QUIC connection uses a UDP socket with a
-userspace protocol state machine. QUIC processing (handshake, crypto, flow
-control, congestion) runs inside `continuePoll()` in C++ code. When the I/O
-thread is busy calling `continuePoll()` on connection A:
+**Why HTTP/2 doesn't need a budget:** TCP connections have kernel-level buffering.
+When the I/O thread is busy with connection A, data for connection B accumulates
+in the kernel's TCP receive buffer.  TCP also has no userspace timers.
 
-- Connection B's UDP packets sit unprocessed in the socket buffer
-- QUIC has aggressive idle/handshake timeouts (typically seconds)
-- If B's packets aren't processed before its timers expire, the session fails
-
-The starvation pattern is self-reinforcing: connection A generates continuous
-events (response frames arriving), so the thread keeps picking it up. Connection
-B never gets serviced, and its handshake or idle timer expires.
-
-**Workarounds:**
-- Use one `HttpClientConnectionManager` at a time (sequential lifecycle)
-- Use connection pooling within a single manager (one QUIC connection handles
-  many concurrent streams via multiplexing — this is HTTP/3's strength)
-- For HTTP/2 workloads, multiple concurrent managers work fine
-
-**Future fix:** A multi-thread I/O controller that dedicates one thread per QUIC
-connection (or uses a thread pool with per-connection affinity) would eliminate
-this limitation. Alternatively, a single thread with round-robin `continuePoll()`
-scheduling and short time slices could ensure fair servicing across connections.
+**Historical note:** Before the packet budget was introduced, QUIC connections
+used dedicated I/O threads (`dedicated_thread: True`) to avoid starvation on the
+shared event loop.  The dedicated-thread model didn't scale: N H3 connections
+required N dedicated threads, causing throughput collapse at higher concurrency.
+The packet budget + shared event loop eliminates this by providing fair scheduling
+similar to how nginx handles all QUIC connections on the same event loop as TCP.
 
 ---
 

@@ -48,6 +48,7 @@ See also: [data-provider-development-guide.md](data-provider-development-guide.m
 - [ ] `short_desc` under 80 chars, **plain text** (no markdown formatting)
 - [ ] `desc` is **markdown-formatted** text explaining what the service is (see [Markdown in Descriptions](#markdown-in-descriptions))
 - [ ] Logo provided with correct MIME type
+- [ ] **Logo stored as a separate file** (e.g., `square-logo.svg`) and loaded at module level (see [App Icon Convention](#app-icon-convention))
 
 ---
 
@@ -156,12 +157,16 @@ The goal: actions should expose enough API functionality to be genuinely useful,
 
 **Every option with a finite set of allowed values MUST declare them explicitly using `allowed_values`** - this enables dropdown generation in the UI. Describing allowed values in text descriptions provides a poor UX because the UI cannot parse free-text descriptions into dropdown options.
 
+**All `allowed_values` entries MUST use `hash<AllowedValueInfo>` with a `display_name` field** for the best UX. The `display_name` provides a human-readable label shown in dropdown menus, while the `value` field contains the actual API value. Never use bare values (strings/ints) in `allowed_values` — always wrap them in `AllowedValueInfo` with `display_name`.
+
 - [ ] Data provider options with enumerated values use `allowed_values` field
 - [ ] Connection options with enumerated values use `allowed_values` field
 - [ ] Action options with enumerated values use `allowed_values` or `ref_data` fields
+- [ ] **Every `allowed_values` entry is a `hash<AllowedValueInfo>` with both `value` and `display_name`**
+- [ ] `display_name` is user-friendly (Title Case, human-readable — e.g., "Bank Transfer" not "bank_transfer")
 - [ ] No option has allowed values described only in `desc`, `short_desc`, or `display_name` text
 
-### Example (correct)
+### Example (correct — AllowedValueInfo with display_name)
 ```qore
 "status": <DataProviderOptionInfo>{
     "display_name": "Status",
@@ -175,7 +180,17 @@ The goal: actions should expose enough API functionality to be genuinely useful,
 },
 ```
 
-### Example (wrong - no dropdown possible)
+### Example (wrong — bare values without display_name)
+```qore
+"status": <DataProviderOptionInfo>{
+    "display_name": "Status",
+    "short_desc": "Filter by invoice status",
+    "type": AbstractDataProviderTypeMap."string",
+    "allowed_values": ("draft", "sent", "paid"),  // BAD: no display_name, poor UX
+},
+```
+
+### Example (wrong — no dropdown possible)
 ```qore
 "status": <DataProviderOptionInfo>{
     "display_name": "Status",
@@ -459,6 +474,38 @@ Short `desc` values (1-2 simple sentences) are fine as-is — don't add markdown
 - [ ] Fields accepting multiple homogeneous values (URLs, IDs, tags) use list types (`SoftListOrNothingType`) instead of delimited strings
 - [ ] The provider joins list values to the expected delimiter format in `doRequestImpl()` before sending to the API
 - [ ] Fields with structured sub-fields or range syntax within delimiters (e.g., `page;fieldName;value`, `0, 2-5, 7-`) remain as `StringOrNothingType`
+
+---
+
+## App Icon Convention
+
+App icons (logos) should be stored as **separate files** in the module directory rather than inlined as string constants. This keeps the code clean, makes icons easy to update, and allows standard SVG tooling to work with the files.
+
+### Rules
+- [ ] Icon stored as a separate file (e.g., `square-logo.svg`) in the module's directory
+- [ ] **Icon has square dimensions** (equal width and height) for consistent rendering across all UI contexts
+- [ ] Loaded at module level using `File::readTextFile()` with `get_script_dir()`
+- [ ] Declared as a `public const` so it's available for `registerApp()` and connection schemes
+
+### Example
+```qore
+# In the module's main .qm or a .qc file
+public const SquareLogo = File::readTextFile(get_script_dir() + "/square-logo.svg");
+
+# Used in registerApp()
+DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+    ...
+    "logo": SquareLogo,
+    "logo_mime_type": MimeTypeSvg,
+    ...
+});
+```
+
+### Anti-pattern (inlined logo — hard to maintain)
+```qore
+# BAD: icon inlined as string constant
+public const SquareLogo = "<svg xmlns=\"http://www.w3.org/2000/svg\" ...>...</svg>";
+```
 
 ---
 

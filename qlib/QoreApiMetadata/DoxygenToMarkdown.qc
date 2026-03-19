@@ -172,7 +172,7 @@ public class DoxygenToMarkdown {
         return result;
     }
 
-    #! Convert HTML <table> elements to Markdown tables
+    #! Convert HTML \<table\> elements to Markdown tables
     private static string convertHtmlTables(string text) {
         string result = text;
         while (True) {

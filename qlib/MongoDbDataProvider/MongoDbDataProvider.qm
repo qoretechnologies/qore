@@ -157,7 +157,7 @@ module MongoDbDataProvider {
 
     @htmlonly
     <div class="image">
-      <img src="mongodb-logo.svg" alt="MongoDB Logo" style="width:40%;">
+      <img src="mongodb-logo.svg" alt="MongoDB Logo" style="width:150px;">
     </div>
     @endhtmlonly
 

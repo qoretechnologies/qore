@@ -1,0 +1,304 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/SqlUtil
+
+%requires QUnit
+
+%exec-class AutoTriggerTest
+
+class AutoTriggerTest inherits QUnit::Test {
+    constructor() : Test("AutoTrigger", "1.0") {
+        addTestCase("pgsql trigger generation", \pgsqlTests());
+        addTestCase("oracle trigger generation", \oracleTests());
+        addTestCase("mysql trigger generation", \mysqlTests());
+        addTestCase("mssql trigger generation", \mssqlTests());
+        addTestCase("all-drivers generation", \allDriversTests());
+        addTestCase("insert-only mode", \insertOnlyTests());
+        addTestCase("empty config", \emptyConfigTests());
+        addTestCase("created-only config", \createdOnlyTests());
+        addTestCase("sequence-only config", \sequenceOnlyTests());
+        addTestCase("multiple sequence columns", \multipleSequenceTests());
+        addTestCase("unsupported driver", \unsupportedDriverTests());
+        addTestCase("mssql custom pk columns", \mssqlCustomPkTests());
+        addTestCase("insert-only modified consistency", \insertOnlyModifiedTests());
+        set_return_value(main());
+    }
+
+    private hash<auto> getFullConfig() {
+        return {
+            "created": True,
+            "modified": True,
+            "sequence_columns": {
+                "id": "seq_my_table",
+            },
+        };
+    }
+
+    pgsqlTests() {
+        hash<auto> result = SqlUtil::generate_auto_triggers("pgsql", "my_table", getFullConfig());
+
+        # Check structure
+        assertTrue(result.hasKey("triggers"));
+        assertTrue(result.hasKey("driver"));
+        assertTrue(result.driver.hasKey("pgsql"));
+        assertTrue(result.driver.pgsql.hasKey("functions"));
+
+        # Check trigger name
+        assertTrue(result.triggers.hasKey("trig_my_table"));
+
+        # Check trigger references the function
+        assertTrue(result.triggers.trig_my_table.contains("execute procedure trig_my_table()"));
+        assertTrue(result.triggers.trig_my_table.contains("before insert or update"));
+
+        # Check function SQL
+        string func_sql = result.driver.pgsql.functions."trig_my_table()";
+        assertTrue(func_sql.contains("returns trigger language plpgsql"));
+        assertTrue(func_sql.contains("nextval('seq_my_table')"));
+        assertTrue(func_sql.contains("new.created"));
+        assertTrue(func_sql.contains("new.modified"));
+        assertTrue(func_sql.contains("tg_op = 'INSERT'"));
+        assertTrue(func_sql.contains("tg_op = 'UPDATE'"));
+    }
+
+    oracleTests() {
+        hash<auto> result = SqlUtil::generate_auto_triggers("oracle", "my_table", getFullConfig());
+
+        assertTrue(result.hasKey("triggers"));
+        assertTrue(result.triggers.hasKey("trig_my_table"));
+        assertFalse(result.hasKey("driver"));  # Oracle doesn't need separate functions
+
+        string sql = result.triggers.trig_my_table;
+        assertTrue(sql.contains("BEFORE INSERT OR UPDATE ON MY_TABLE"));
+        assertTrue(sql.contains("REFERENCING NEW AS NEW OLD AS OLD"));
+        assertTrue(sql.contains("FOR EACH ROW"));
+        assertTrue(sql.contains("seq_my_table.nextval"));
+        assertTrue(sql.contains(":new.created"));
+        assertTrue(sql.contains(":new.modified"));
+        assertTrue(sql.contains("localtimestamp"));
+    }
+
+    mysqlTests() {
+        hash<auto> result = SqlUtil::generate_auto_triggers("mysql", "my_table", getFullConfig());
+
+        assertTrue(result.hasKey("triggers"));
+        assertTrue(result.triggers.hasKey("trig_my_table_insert"));
+        assertTrue(result.triggers.hasKey("trig_my_table_update"));
+
+        # INSERT trigger
+        string insert_sql = result.triggers.trig_my_table_insert;
+        assertTrue(insert_sql.contains("before insert on my_table"));
+        assertTrue(insert_sql.contains("my_nextval('seq_my_table')"));
+        assertTrue(insert_sql.contains("new.created"));
+        assertTrue(insert_sql.contains("new.modified"));
+
+        # UPDATE trigger
+        string update_sql = result.triggers.trig_my_table_update;
+        assertTrue(update_sql.contains("before update on my_table"));
+        assertTrue(update_sql.contains("new.modified"));
+    }
+
+    mssqlTests() {
+        hash<auto> result = SqlUtil::generate_auto_triggers("mssql", "my_table", getFullConfig());
+
+        assertTrue(result.hasKey("triggers"));
+        assertTrue(result.triggers.hasKey("trig_my_table"));
+
+        string sql = result.triggers.trig_my_table;
+        assertTrue(sql.contains("AFTER INSERT, UPDATE"));
+        assertTrue(sql.contains("GETDATE()"));
+        assertTrue(sql.contains("SET NOCOUNT ON"));
+    }
+
+    allDriversTests() {
+        hash<auto> result = SqlUtil::generate_auto_triggers_all_drivers("my_table", getFullConfig());
+
+        # Check all drivers present
+        assertTrue(result.triggers.driver.hasKey("oracle"));
+        assertTrue(result.triggers.driver.hasKey("pgsql"));
+        assertTrue(result.triggers.driver.hasKey("mysql"));
+
+        # Check PostgreSQL functions
+        assertTrue(result.driver.pgsql.hasKey("functions"));
+
+        # Verify each driver has triggers
+        assertGt(0, result.triggers.driver.oracle.size());
+        assertGt(0, result.triggers.driver.pgsql.size());
+        assertGt(0, result.triggers.driver.mysql.size());
+    }
+
+    insertOnlyTests() {
+        hash<auto> config = {
+            "created": True,
+            "modified": True,
+        };
+
+        # PostgreSQL insert-only
+        hash<auto> pgsql = SqlUtil::generate_auto_triggers("pgsql", "test_table", config, True);
+        assertTrue(pgsql.triggers.trig_test_table.contains("before insert on"));
+        assertFalse(pgsql.triggers.trig_test_table.contains("or update"));
+
+        # PostgreSQL function should NOT have UPDATE block
+        string func = pgsql.driver.pgsql.functions."trig_test_table()";
+        assertFalse(func.contains("tg_op = 'UPDATE'"));
+
+        # Oracle insert-only
+        hash<auto> oracle = SqlUtil::generate_auto_triggers("oracle", "test_table", config, True);
+        assertTrue(oracle.triggers.trig_test_table.contains("BEFORE INSERT ON"));
+        assertFalse(oracle.triggers.trig_test_table.contains("OR UPDATE"));
+
+        # MySQL insert-only: no update trigger
+        hash<auto> mysql = SqlUtil::generate_auto_triggers("mysql", "test_table", config, True);
+        assertTrue(mysql.triggers.hasKey("trig_test_table_insert"));
+        assertFalse(mysql.triggers.hasKey("trig_test_table_update"));
+    }
+
+    emptyConfigTests() {
+        hash<auto> config = {
+            "created": False,
+            "modified": False,
+        };
+
+        # Should return empty hash for all drivers
+        hash<auto> result = SqlUtil::generate_auto_triggers("pgsql", "test", config);
+        assertEq(0, result.size());
+
+        result = SqlUtil::generate_auto_triggers("oracle", "test", config);
+        assertEq(0, result.size());
+
+        result = SqlUtil::generate_auto_triggers("mysql", "test", config);
+        assertEq(0, result.size());
+    }
+
+    createdOnlyTests() {
+        hash<auto> config = {
+            "created": True,
+            "modified": False,
+        };
+
+        hash<auto> pgsql = SqlUtil::generate_auto_triggers("pgsql", "test", config);
+        string func = pgsql.driver.pgsql.functions."trig_test()";
+        assertTrue(func.contains("new.created"));
+        assertFalse(func.contains("new.modified"));
+
+        hash<auto> oracle = SqlUtil::generate_auto_triggers("oracle", "test", config);
+        assertTrue(oracle.triggers.trig_test.contains(":new.created"));
+        assertFalse(oracle.triggers.trig_test.contains(":new.modified"));
+    }
+
+    sequenceOnlyTests() {
+        hash<auto> config = {
+            "created": False,
+            "modified": False,
+            "sequence_columns": {
+                "id": "seq_test",
+            },
+        };
+
+        hash<auto> pgsql = SqlUtil::generate_auto_triggers("pgsql", "test", config);
+        string func = pgsql.driver.pgsql.functions."trig_test()";
+        assertTrue(func.contains("nextval('seq_test')"));
+        assertFalse(func.contains("new.created"));
+        assertFalse(func.contains("new.modified"));
+    }
+
+    multipleSequenceTests() {
+        hash<auto> config = {
+            "created": True,
+            "modified": True,
+            "sequence_columns": {
+                "id": "seq_test_id",
+                "sub_id": "seq_test_sub_id",
+            },
+        };
+
+        hash<auto> pgsql = SqlUtil::generate_auto_triggers("pgsql", "test", config);
+        string func = pgsql.driver.pgsql.functions."trig_test()";
+        assertTrue(func.contains("nextval('seq_test_id')"));
+        assertTrue(func.contains("nextval('seq_test_sub_id')"));
+        assertTrue(func.contains("new.id"));
+        assertTrue(func.contains("new.sub_id"));
+
+        hash<auto> oracle = SqlUtil::generate_auto_triggers("oracle", "test", config);
+        assertTrue(oracle.triggers.trig_test.contains("seq_test_id.nextval"));
+        assertTrue(oracle.triggers.trig_test.contains("seq_test_sub_id.nextval"));
+    }
+
+    unsupportedDriverTests() {
+        assertThrows("AUTO-TRIGGER-ERROR", sub () {
+            SqlUtil::generate_auto_triggers("sqlite3", "test", getFullConfig());
+        });
+        assertThrows("AUTO-TRIGGER-ERROR", sub () {
+            SqlUtil::generate_auto_triggers("unknown", "test", getFullConfig());
+        });
+    }
+
+    mssqlCustomPkTests() {
+        hash<auto> config = {
+            "created": True,
+            "modified": True,
+        };
+
+        # Default PK (id)
+        hash<auto> result = SqlUtil::generate_auto_triggers("mssql", "orders", config);
+        string sql = result.triggers.trig_orders;
+        assertTrue(sql.contains("t.id = i.id"), "default PK uses 'id'");
+
+        # Custom single PK column
+        result = SqlUtil::generate_auto_triggers("mssql", "orders", config, False, ("order_id",));
+        sql = result.triggers.trig_orders;
+        assertTrue(sql.contains("t.order_id = i.order_id"), "custom single PK");
+        assertFalse(sql.contains("t.id = i.id"), "should not use default 'id'");
+
+        # Composite PK
+        result = SqlUtil::generate_auto_triggers("mssql", "order_items", config, False,
+            ("order_id", "line_num"));
+        sql = result.triggers.trig_order_items;
+        assertTrue(sql.contains("t.order_id = i.order_id"), "composite PK col 1");
+        assertTrue(sql.contains("t.line_num = i.line_num"), "composite PK col 2");
+        assertTrue(sql.contains("AND"), "composite PK uses AND");
+
+        # Verify deleted table also uses custom PK in modified logic
+        assertTrue(sql.contains("d.order_id = i.order_id"), "deleted join uses composite PK");
+        assertTrue(sql.contains("d.line_num = i.line_num"), "deleted join uses composite PK col 2");
+    }
+
+    insertOnlyModifiedTests() {
+        # Verify all drivers set modified on INSERT even in insert_only mode
+        hash<auto> config = {
+            "created": True,
+            "modified": True,
+        };
+
+        # PostgreSQL: modified should be set on INSERT in insert_only mode
+        hash<auto> pgsql = SqlUtil::generate_auto_triggers("pgsql", "t", config, True);
+        string func = pgsql.driver.pgsql.functions."trig_t()";
+        assertTrue(func.contains("new.modified"), "pgsql insert_only sets modified on INSERT");
+        # Should NOT have UPDATE block
+        assertFalse(func.contains("tg_op = 'UPDATE'"), "pgsql insert_only has no UPDATE block");
+
+        # Oracle: modified should be set on INSERT in insert_only mode
+        hash<auto> oracle = SqlUtil::generate_auto_triggers("oracle", "t", config, True);
+        string oracle_sql = oracle.triggers.trig_t;
+        assertTrue(oracle_sql.contains(":new.modified"), "oracle insert_only sets modified on INSERT");
+        assertFalse(oracle_sql.contains("OR UPDATE"), "oracle insert_only has no OR UPDATE");
+        # Verify it's inside the 'if inserting' block (not the general modified block)
+        assertFalse(oracle_sql.contains(":new.modified = :old.modified"),
+            "oracle insert_only should NOT have UPDATE-time modified comparison");
+
+        # MySQL: modified should be set on INSERT in insert_only mode
+        hash<auto> mysql = SqlUtil::generate_auto_triggers("mysql", "t", config, True);
+        string insert_sql = mysql.triggers.trig_t_insert;
+        assertTrue(insert_sql.contains("new.modified"), "mysql insert_only sets modified on INSERT");
+        assertFalse(mysql.triggers.hasKey("trig_t_update"),
+            "mysql insert_only has no update trigger");
+
+        # MSSQL insert_only: only AFTER INSERT, no ", UPDATE" trigger event
+        hash<auto> mssql = SqlUtil::generate_auto_triggers("mssql", "t", config, True);
+        string mssql_sql = mssql.triggers.trig_t;
+        assertTrue(mssql_sql.contains("AFTER INSERT"), "mssql insert_only has INSERT");
+        assertFalse(mssql_sql.contains(", UPDATE"), "mssql insert_only trigger has no UPDATE event");
+    }
+}

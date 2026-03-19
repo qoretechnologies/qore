@@ -668,7 +668,7 @@ public class WebSocketConnection {
 
         @note Internal API — called by @ref WebSocketHandler from the handler (I/O) thread.
         Not intended for use by subclasses.  A single frame larger than
-        @ref WebSocketHandler::MaxPendingSendBytes "MaxPendingSendBytes" can never be buffered
+        @ref WebSocketHandler::WebSocketHandler::MaxPendingSendBytes "MaxPendingSendBytes" can never be buffered
         and will always be dropped.
 
         @since WebSocketHandler 2.5
@@ -2094,7 +2094,8 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
 
     #! Drains pending send buffer in order; stops at first backpressure or frame cap
     /** Sends buffered frames one at a time until the buffer is empty, the transport
-        pushes back again, or @ref MaxDrainFramesPerIteration frames have been sent.
+        pushes back again, or @ref WebSocketHandler::WebSocketHandler::MaxDrainFramesPerIteration
+        "MaxDrainFramesPerIteration" frames have been sent.
         Uses peek+dequeue to ensure frames are not lost on failure.
 
         The frame cap prevents starving incoming data when a large backlog has accumulated;

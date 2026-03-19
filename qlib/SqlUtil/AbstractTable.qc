@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore AbstractTable class definition
 
-/** AbstractTable.qc Copyright 2019 - 2024 Qore Technologies, s.r.o.
+/** AbstractTable.qc Copyright 2019 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -3485,7 +3485,7 @@ upsert(row_hash);
         @param upsert_strategy see \c upsert_options for possible values for the upsert strategy
         @param opt a hash of options for the upsert operation; see \c SqlUtil::AbstractTable::UpsertOptions for common options; each driver can support additional driver-specific options
 
-        @return a closure that can be executed given a hash argument representing either a single row or a set of rows (where each key value is a list of column values) that will be updated or inserted in the database with the given upsert strategy; the closure returned does not check the input hash for validity; the closure has the following signature: @code{.py} int sub upsert(hash<auto> row) {} @endcode The return value of the closure is always @ref SqlUtil::AbstractTable::UR_Verified; see \c upsert_results for more information
+        @return a closure that can be executed given a hash argument representing either a single row or a set of rows (where each key value is a list of column values) that will be updated or inserted in the database with the given upsert strategy; the closure returned does not check the input hash for validity; the closure has the following signature: @code{.py} int sub upsert(hash<auto> row) {} @endcode The return value of the closure is always \c SqlUtil::AbstractTable::UR_Verified; see \c upsert_results for more information
 
         @throw COLUMN-ERROR an unknown column was referenced in the hash to be inserted
         @throw UPSERT-ERROR no primary key, unique constraint, or unique index for upsert; not all columns of the unique constraint/index are used in the upsert statement

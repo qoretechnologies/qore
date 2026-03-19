@@ -1,0 +1,909 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file Schema.qm Qore user module for working with SQL data
+
+/*  Schema.qm Copyright 2014 - 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum Qore version
+%requires qore >= 1.0
+
+# requires the SqlUtil module
+%requires SqlUtil >= 1.5
+
+# requires the Util module
+%requires Util >= 1.1
+
+# requires the DataProvider module for DPQL expression support
+%requires DataProvider
+
+# don't use "$" signs for variables and class members, assume local variable scope
+%modern
+
+%try-module yaml
+%define NoYaml
+%endtry
+
+%try-module json
+%define NoJson
+%endtry
+
+module Schema {
+    version = "1.5.0";
+    desc = "user module for working with SQL schemas";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+}
+
+/** @mainpage Schema Module
+
+    @tableofcontents
+
+    @section schemaintro Introduction to the Schema Module
+
+    The %Schema module provides a high level database-independent API for working with database schemas;
+    it uses the <a href="../../SqlUtil/html/index.html">SqlUtil</a> module to provide the middle and low-level
+    schema management logic from a database-independent representation of a database schema.
+
+    To use this module, use \c "%requires Schema" in your code.
+
+    All the public symbols in the module are defined in the Schema namespace.
+
+    Classes provided by this module:
+    - @ref Schema::AbstractSchema "AbstractSchema": base class for schema representation and management
+    - @ref Schema::AbstractVersionedSchema "AbstractVersionedSchema": base class for versioned schema representation
+      and management where the schema contains its current version
+    - @ref Schema::DataSchema "DataSchema": pure data schema class that loads definitions from
+      YAML (\c .ysm) or JSON (\c .jsm) files
+    - @ref Schema::DataSchemaLoader "DataSchemaLoader": static utility class for loading, validating, and
+      normalizing data schema files
+    - @ref Schema::MigrationExecutor "MigrationExecutor": executes data-driven migration actions defined
+      in schema files
+
+    @section schema_data_schema Pure Data Schema Definitions
+
+    The @ref Schema::DataSchema "DataSchema" class supports defining database schemas using YAML (\c .ysm)
+    or JSON (\c .jsm) files instead of Qore code. This makes schemas accessible to non-programmers and
+    enables schema management without code execution.
+
+    @par Example: Creating a schema from a .ysm file
+    @code{.py}
+    %modern
+    %requires Schema
+
+    Datasource ds("pgsql:user/pass@host/db");
+    on_exit ds.commit();
+
+    DataSchema schema(ds, "my_schema.ysm");
+    schema.align(True, 1);  # force=True, verbose=1
+    @endcode
+
+    @par Example: Using the qschema CLI tool
+    @code
+    # Create or upgrade a database schema
+    qschema align mydb schema.ysm
+
+    # Show what would change without executing (dry run)
+    qschema align --dry-run mydb schema.ysm
+
+    # Compare schema definition to current database state
+    qschema diff mydb schema.ysm -v
+
+    # Validate a schema file
+    qschema validate schema.ysm
+
+    # Show schema summary
+    qschema info -v schema.ysm
+
+    # Export existing database to .ysm format
+    qschema export mydb -o exported.ysm
+    @endcode
+
+    @par Example: Minimal .ysm schema definition
+    @code{.yaml}
+    schema:
+      name: MyApp
+      version: "1.0.0"
+
+    tables:
+      users:
+        columns:
+          id: {type: int, notnull: true}
+          name: {type: varchar, size: 240, notnull: true}
+          email: {type: varchar, size: 500}
+          created: {type: timestamp}
+          modified: {type: timestamp}
+        primary_key:
+          name: pk_users
+          columns: [id]
+        indexes:
+          idx_users_email:
+            columns: [email]
+            unique: true
+        auto_triggers:
+          created: true
+          modified: true
+          sequence_columns:
+            id: seq_users
+
+    sequences:
+      seq_users: {}
+
+    reference_data:
+      strict:
+        schema_info:
+          columns: [name, version, modified]
+          rows:
+            - [MyApp, "1.0.0", {exp: "now"}]
+    @endcode
+
+    @par Example: Schema with version-based migrations
+    @code{.yaml}
+    schema:
+      name: MyApp
+      version: "1.1.0"
+
+    # ... tables, sequences as above ...
+
+    migrations:
+      - version: "1.1.0"
+        description: "Add status column to users"
+        post_align:
+          - id: add_col
+            action: add_column
+            table: users
+            column: status
+            type: {type: char, size: 1}
+
+          - id: populate
+            depends_on: [add_col]
+            action: update
+            table: users
+            set: {status: "A"}
+            where: {status: null}
+    @endcode
+
+    See \c design/data-schema-format.md in the Qore source for the complete format specification.
+
+    @section schema_upgrades Schema Upgrades and Migrations
+
+    When a schema version changes, the @ref Schema::MigrationExecutor "MigrationExecutor" runs
+    migration steps to transform data alongside DDL changes. Migrations are defined per-version
+    and execute in version order.
+
+    @subsection schema_upgrade_phases Upgrade Phases
+
+    Each migration has two phases:
+    - \b pre_align — runs \b before DDL changes (table creation, column additions, etc.)
+    - \b post_align — runs \b after DDL changes
+
+    Use \c pre_align to prepare data before schema changes (e.g., backing up data from columns
+    that will be dropped). Use \c post_align to populate new columns, migrate data between tables,
+    or set defaults after columns are added.
+
+    @par Example: Multi-version upgrade chain
+    @code{.yaml}
+    schema:
+      name: MyApp
+      version: "2.0.0"
+
+    # ... table definitions for v2.0.0 ...
+
+    migrations:
+      # v1.1.0: Add email column with default value
+      - version: "1.1.0"
+        description: "Add email column"
+        post_align:
+          - action: update
+            table: users
+            set: {email: "unknown@example.com"}
+            where: {email: null}
+
+      # v1.2.0: Rename column and migrate data
+      - version: "1.2.0"
+        description: "Rename status to user_status"
+        pre_align:
+          # Back up data before the column rename
+          - action: insert_from_select
+            table: user_status_backup
+            columns: [user_id, status]
+            source_table: users
+            select: {}
+        post_align:
+          - action: update
+            table: users
+            set: {user_status: "active"}
+            where: {user_status: null}
+
+      # v2.0.0: Major restructuring with raw SQL
+      - version: "2.0.0"
+        description: "Partition audit table"
+        post_align:
+          - action: sql
+            statements:
+              - "ALTER TABLE audit_log RENAME TO audit_log_old"
+            driver:
+              pgsql:
+                - "ALTER TABLE audit_log RENAME TO audit_log_old"
+              oracle:
+                - "ALTER TABLE AUDIT_LOG RENAME TO AUDIT_LOG_OLD"
+    @endcode
+
+    When upgrading from v1.0.0 to v2.0.0, all three migration blocks execute in order.
+    When upgrading from v1.2.0 to v2.0.0, only the v2.0.0 migration executes.
+
+    @subsection schema_upgrade_data Data-Driven Migrations
+
+    Most migrations use data-driven actions that work across all database drivers:
+
+    @code{.yaml}
+    post_align:
+      # Update existing rows
+      - action: update
+        table: users
+        set: {status: "A"}
+        where: {status: null}
+
+      # Insert seed data
+      - action: insert
+        table: config
+        rows:
+          - {key: "app.version", value: "2.0.0"}
+          - {key: "app.mode", value: "production"}
+
+      # Delete obsolete data
+      - action: delete
+        table: temp_migration_data
+        where: {migrated: true}
+
+      # Copy data between tables
+      - action: insert_from_select
+        table: users_archive
+        columns: [id, name, email]
+        source_table: users
+        select: {status: "D"}
+
+      # DDL operations (executed via SqlUtil, driver-independent)
+      - action: add_column
+        table: users
+        column: display_name
+        type: {type: varchar, size: 240}
+
+      - action: add_index
+        table: users
+        name: idx_users_display_name
+        columns: [display_name]
+
+      - action: add_constraint
+        table: orders
+        name: fk_orders_users
+        constraint_type: foreign
+        columns: [user_id]
+        target_table: users
+        target_columns: [id]
+    @endcode
+
+    @subsection schema_upgrade_sql Raw SQL Migrations
+
+    For driver-specific operations not covered by data-driven actions, use the \c sql action.
+    This requires \c trusted or \c admin access level.
+
+    @code{.yaml}
+    post_align:
+      - action: sql
+        # Default statements (used when no driver-specific override matches)
+        statements:
+          - "CREATE MATERIALIZED VIEW mv_summary AS SELECT status, count(*) FROM users GROUP BY status"
+
+        # Driver-specific overrides (optional)
+        driver:
+          pgsql:
+            - "CREATE MATERIALIZED VIEW mv_summary AS SELECT status, count(*) FROM users GROUP BY status"
+            - "CREATE UNIQUE INDEX idx_mv_summary ON mv_summary (status)"
+          oracle:
+            - "CREATE MATERIALIZED VIEW mv_summary AS SELECT status, count(*) cnt FROM users GROUP BY status"
+    @endcode
+
+    The \c driver key maps driver names (\c pgsql, \c oracle, \c mysql, \c mssql) to
+    driver-specific SQL statement lists. If a match is found for the current driver, those
+    statements execute instead of the \c statements list.
+
+    @subsection schema_upgrade_scripts Script-Based Migrations
+
+    For complex migrations requiring procedural logic, use the \c script action to run a
+    Qore script file. This requires \c trusted or \c admin access level.
+
+    @code{.yaml}
+    post_align:
+      - action: script
+        file: migrations/v2_data_transform.qr
+    @endcode
+
+    The script must define a \c migrate() entry point:
+    @code{.py}
+    %modern
+    %requires SqlUtil
+
+    sub migrate(AbstractDatasource ds, *SqlUtil::Tables table_cache, *hash<auto> schema_info,
+            int verbose) {
+        AbstractTable users = table_cache.users ?? (new Table(ds, "users")).getTable();
+
+        # Complex migration logic with full Qore capabilities
+        SQLStatement stmt(ds);
+        stmt.prepare("SELECT id, first_name, last_name FROM users WHERE display_name IS NULL");
+        stmt.exec();
+        while (stmt.next()) {
+            hash<auto> row = stmt.fetchRow();
+            users.update(
+                {"display_name": row.first_name + " " + row.last_name},
+                {"id": row.id},
+            );
+        }
+
+        if (verbose > 0) {
+            printf("  migrated %d user display names\n", stmt.affectedRows());
+        }
+    }
+    @endcode
+
+    @subsection schema_upgrade_access Access Levels
+
+    Access levels control which migration actions are permitted:
+
+    | Level | Constant | Allowed Actions |
+    |-------|----------|----------------|
+    | \c untrusted | @ref Schema::AL_UNTRUSTED "AL_UNTRUSTED" | Data-driven actions only (update, insert, delete, DDL operations) |
+    | \c trusted | @ref Schema::AL_TRUSTED "AL_TRUSTED" | All data-driven actions + raw SQL (\c sql) + scripts (\c script) |
+    | \c admin | @ref Schema::AL_ADMIN "AL_ADMIN" | Everything including force operations |
+
+    @par Setting the access level
+    @code{.py}
+    # Programmatic
+    DataSchema schema(ds, "schema.ysm", NOTHING, Schema::AL_UNTRUSTED);
+
+    # CLI
+    qschema align --access-level untrusted mydb schema.ysm
+    @endcode
+
+    Use \c untrusted for schemas from external sources where raw SQL execution would be a
+    security risk. Use \c trusted (the default) for internal schemas.
+
+    @subsection schema_upgrade_deps Step Dependencies
+
+    By default, steps execute in declaration order. For complex migrations where steps have
+    dependencies, use \c id and \c depends_on for explicit ordering:
+
+    @code{.yaml}
+    post_align:
+      - id: add_status_col
+        action: add_column
+        table: users
+        column: status
+        type: {type: char, size: 1}
+
+      - id: add_status_idx
+        depends_on: [add_status_col]
+        action: add_index
+        table: users
+        name: idx_users_status
+        columns: [status]
+
+      - id: populate_status
+        depends_on: [add_status_col]
+        action: update
+        table: users
+        set: {status: "A"}
+
+      - id: drop_old_col
+        depends_on: [populate_status]
+        action: drop_column
+        table: users
+        column: old_status
+    @endcode
+
+    The dependency resolver uses topological sort (Kahn's algorithm) with declaration order
+    as tiebreaker. Circular dependencies are detected and throw \c MIGRATION-ERROR.
+
+    @section schema_qschema The qschema CLI Tool
+
+    The \c qschema command-line tool provides database schema management from \c .ysm/\c .jsm files.
+
+    @subsection schema_qschema_syntax Syntax
+
+    @code
+    qschema <command> <connection> <schema-file> [options]   # DB commands
+    qschema <command> <schema-file> [options]                # file-only commands
+    @endcode
+
+    The \c connection argument can be:
+    - A \b connection \b name registered with \c DatasourceProvider (via \c QORE_DATASOURCE_PROVIDERS env var)
+    - A direct \b connection \b string: \c driver:user/pass@host/db (e.g., \c pgsql:admin/secret@localhost/myapp)
+
+    @subsection schema_qschema_commands Commands
+
+    @par align — Create or upgrade a database schema
+    @code
+    # Create schema from scratch or upgrade to the target version
+    $ qschema align mydb schema.ysm
+    Aligning MyApp v2.0.0 to pgsql...
+    12 changes made (schema created)
+
+    # Upgrade with verbose output showing each change
+    $ qschema align mydb schema.ysm -v
+    Aligning MyApp v2.0.0 to pgsql...
+    *** creating table users...
+    *** creating sequence seq_users...
+    12 changes made
+
+    # Force re-alignment even when versions match
+    $ qschema align mydb schema.ysm --force
+    @endcode
+
+    @par align --dry-run — Preview changes without executing
+    @code
+    $ qschema align --dry-run mydb schema.ysm
+    Dry run: MyApp v2.0.0 against pgsql
+
+    Changes detected:
+      + 3 additions
+      ~ 1 modification
+
+    SQL:
+      CREATE TABLE users (...);
+      CREATE INDEX idx_users_email ON users (email);
+      ALTER TABLE orders ADD COLUMN status VARCHAR(1);
+
+    Total: 4 changes needed
+    @endcode
+
+    @par diff — Compare schema definition to database
+    @code
+    $ qschema diff mydb schema.ysm
+    Comparing MyApp v2.0.0 vs pgsql
+
+    Changes detected:
+      + 2 additions
+      - 1 removal
+      = 5 unchanged
+
+    SQL:
+      ALTER TABLE users ADD COLUMN email VARCHAR(500);
+      DROP INDEX idx_old_name;
+
+    Total: 3 changes needed
+
+    # Verbose: show per-object change details
+    $ qschema diff mydb schema.ysm -v
+    @endcode
+
+    @par drop — Remove schema from database
+    @code
+    # Preview what would be dropped
+    $ qschema drop --dry-run mydb schema.ysm
+
+    # Drop with force (ignores errors from missing objects)
+    $ qschema drop mydb schema.ysm --force
+    @endcode
+
+    @par validate — Validate a schema file against the meta-schema
+    @code
+    $ qschema validate schema.ysm
+    Schema MyApp v2.0.0: validation PASSED
+
+    $ qschema validate schema.ysm -v
+    Schema MyApp v2.0.0: validation PASSED
+      Tables: 5
+      Sequences: 3
+      Migrations: 2
+      Reference data tables: 4
+    @endcode
+
+    @par info — Display schema metadata
+    @code
+    $ qschema info schema.ysm
+    Schema: MyApp
+    Version: 2.0.0
+    Version table: schema_info.version
+
+    Tables (5)
+      users                          4 columns, pk: pk_users
+      orders                         6 columns, pk: pk_orders
+      ...
+
+    $ qschema info -v schema.ysm    # verbose: show columns and auto-triggers
+    @endcode
+
+    @par export — Reverse-engineer database to .ysm/.jsm
+    @code
+    # Export to YAML (default)
+    $ qschema export mydb -o exported.ysm
+
+    # Export to JSON
+    $ qschema export mydb -o exported.jsm --format json
+
+    # Print to stdout
+    $ qschema export mydb
+    @endcode
+
+    @subsection schema_qschema_options Options
+
+    | Option | Description |
+    |--------|-------------|
+    | \c --data-ts \c <name> | Data tablespace name |
+    | \c --index-ts \c <name> | Index tablespace name |
+    | \c --access-level \c <level> | \c untrusted, \c trusted (default), or \c admin |
+    | \c -f, \c --force | Force operation |
+    | \c -n, \c --dry-run | Show SQL without executing (for \c align and \c drop) |
+    | \c -C, \c --no-color | Disable colorized output |
+    | \c -v, \c --verbose | Increase verbosity (repeatable) |
+    | \c -o, \c --output \c <file> | Output file (for \c export) |
+    | \c --format \c yaml\|json | Export format (default: \c yaml) |
+
+    @subsection schema_qschema_workflow Typical Workflow
+
+    @code
+    # 1. Write your schema definition
+    vim my_schema.ysm
+
+    # 2. Validate it
+    qschema validate my_schema.ysm
+
+    # 3. Preview what would change
+    qschema align --dry-run mydb my_schema.ysm
+
+    # 4. Apply the schema
+    qschema align mydb my_schema.ysm -v
+
+    # 5. Later, check if the database matches the schema
+    qschema diff mydb my_schema.ysm
+
+    # 6. Reverse-engineer an existing database to start managing it
+    qschema export mydb -o existing_schema.ysm
+    @endcode
+
+    @section schema_meta_schema Meta-Schema Validation
+
+    Schema files are validated against a JSON Schema (Draft 2020-12) definition stored in the
+    @ref Schema::DataSchemaJsonSchema "DataSchemaJsonSchema" constant. This meta-schema validates
+    the structure of \c .ysm/\c .jsm files including required fields, column types, migration
+    action types, and reference data format.
+
+    @par Accessing the meta-schema
+    @code{.py}
+    %modern
+    %requires Schema
+
+    # Get the meta-schema as a Qore hash
+    hash<auto> meta = Schema::DataSchemaJsonSchema;
+    printf("Schema: %s\n", meta."$schema");
+    # -> "https://json-schema.org/draft/2020-12/schema"
+    @endcode
+
+    @par Validating a schema file programmatically
+    @code{.py}
+    %modern
+    %requires Schema
+
+    # Validate and load in one step (validation is on by default)
+    hash<auto> data = Schema::DataSchemaLoader::loadFile("my_schema.ysm");
+
+    # Load without validation (faster, for trusted files)
+    hash<auto> data = Schema::DataSchemaLoader::loadFile("my_schema.ysm", False);
+
+    # Validate a hash directly
+    Schema::DataSchemaLoader::validate(my_schema_hash);
+    @endcode
+
+    @par Validating from the command line
+    @code
+    qschema validate schema.ysm
+    qschema validate schema.ysm -v   # verbose: show table/column counts
+    @endcode
+
+    The meta-schema defines:
+    - Required top-level keys: \c schema (with \c name and \c version)
+    - Column types: \c int, \c varchar, \c char, \c timestamp, \c date, \c number, \c blob,
+      \c clob, \c binary
+    - Migration action types: all 17 supported actions with their field definitions
+    - Reference data categories: \c strict, \c normal, \c create_only, \c insert_only
+    - Auto-trigger configuration: \c created, \c modified, \c sequence_columns
+
+    @section schema_relnotes Schema Module Release History
+
+    @subsection schema_v1_5_0 Schema Module v1.5.0
+    - separated module into individual \c .qc files for better maintainability
+    - added @ref Schema::DataSchema "DataSchema" class for pure data schema definitions from
+      YAML (\c .ysm) or JSON (\c .jsm) files — no Qore code required
+    - added @ref Schema::DataSchemaLoader "DataSchemaLoader" class for loading, validating, and
+      normalizing data schema files against a JSON Schema (Draft 2020-12) meta-schema
+    - added @ref Schema::MigrationExecutor "MigrationExecutor" class for executing data-driven
+      migration actions with access level enforcement and dependency-based step ordering
+    - added @ref Schema::DataSchemaJsonSchema "DataSchemaJsonSchema" constant with the meta-schema
+      for validating \c .ysm/\c .jsm files
+    - added access level constants: @ref Schema::AL_UNTRUSTED "AL_UNTRUSTED",
+      @ref Schema::AL_TRUSTED "AL_TRUSTED", @ref Schema::AL_ADMIN "AL_ADMIN"
+    - added \c qschema CLI tool for schema management (align, drop, diff, validate, info, export)
+    - added DataProvider dependency for DPQL expression evaluation in reference data
+    - 17 migration actions supported: update, insert, delete, insert_from_select, add_column,
+      drop_column, modify_column, rename_column, rename_table, add_index, drop_index,
+      add_constraint, drop_constraint, add_trigger, drop_trigger, sql, script
+
+    @subsection schema_v1_4_2 Schema Module v1.4.2
+    - fixed reporting changes with negative verbose options
+      (<a href="https://github.com/qoretechnologies/qore/issues/4702">issue 4702</a>)
+
+    @subsection schema_v1_4_1 Schema Module v1.4.1
+    - allow information about schema changes after alignments to be returned to the user
+      (<a href="https://github.com/qoretechnologies/qore/issues/4637">issue 4637</a>)
+
+    @subsection schema_v1_4 Schema Module v1.4
+    - allow schema operations to be executed with no output (verbose < 0)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3996">issue 3996</a>)
+
+    @subsection schema_v1_3_1 Schema Module v1.3.1
+    - fixed a bug where too little information was passed to post schema alignment code
+      (<a href="https://github.com/qoretechnologies/qore/issues/3640">issue 3640</a>)
+
+    @subsection schema_v1_3 Schema Module v1.3
+    - improved logging output when performing schema alignments
+      (<a href="https://github.com/qoretechnologies/qore/issues/3114">issue 3114</a>)
+    - fixed AbstractSchema::checkExistence()
+      (<a href="https://github.com/qoretechnologies/qore/issues/3266">issue 3266</a>)
+
+    @subsection schema_v1_2 Schema Module v1.2
+    - added the following public functions: (<a href="https://github.com/qoretechnologies/qore/issues/1851">issue 1851</a>)
+      - Schema::c_blob()
+      - Schema::c_clob()
+    - updated for complex types
+
+    @subsection schema_v1_1_1 Schema Module v1.1.1
+    - applied the \a force option (i.e. cascade) when aligning schemas
+      (<a href="https://github.com/qoretechnologies/qore/issues/1314">issue 1314</a>)
+
+    @subsection schema_v1_1 Schema Module v1.1
+    - added the following public functions:
+      - Schema::c_char()
+      - Schema::c_date()
+      - Schema::c_int()
+      - Schema::c_number()
+      - Schema::c_timestamp()
+      - Schema::c_varchar()
+    - added the following public constants:
+      - Schema::C_NULL
+      - Schema::C_NOT_NULL
+    - bug fixes:
+      - fixed \c Schema::AbstractSchema::combineOptions() "AbstractSchema::combineOptions()" to accept NOTHING as
+        well as a valid option hash
+      - fixed a bug with <i>"insert-only reference data"</i> with the verbose option; the upsert strategy was changed
+        to \c UpsertSelectFirst which means that insert-only reference data could also be updated
+      - fixed a bug where it was not possible to provide Database options when creating schemas
+        (<a href="https://github.com/qoretechnologies/qore/issues/501">bug 501</a>)
+
+    @subsection schema_v1_0 Schema Module v1.0
+    - initial release
+*/
+
+#! this namespace contains all public definitions in the %Schema module
+public namespace Schema {
+    #! Helper constant for column hash functions with "NULL" constraint for better readability
+    public const C_NULL = False;
+    #! Helper constant for column hash functions with "NOT NULL" constraint for better readability
+    public const C_NOT_NULL = True;
+
+    #! returns a column hash for an \c INT column
+    /** @param notnull @ref True "True" for a <tt>NOT NULL</tt> constraint on the column
+        @param comment an optional comment for the column
+        @note might be a numeric type if \c INT is not supported by the dataserver
+        @see c_number()
+     */
+    public hash<GenericColumnInfo> sub c_int(bool notnull = False, *string comment) {
+        return cast<hash<GenericColumnInfo>>((
+            "qore_type": Type::Int,
+            "comment": comment,
+        ) + (notnull ? ("notnull": True) : NOTHING));
+    }
+
+    #! returns a column hash for an \c INT column
+    /** @param comment the comment for the column
+     */
+    public hash<GenericColumnInfo> sub c_int(string comment) {
+        return new hash<GenericColumnInfo>((
+            "qore_type": Type::Int,
+            "comment": comment,
+        ));
+    }
+
+    #! returns a column hash for a \c VARCHAR column
+    public hash<GenericColumnInfo> sub c_varchar(int size, bool notnull = False, *string comment) {
+        return cast<hash<GenericColumnInfo>>((
+            "qore_type": SqlUtil::VARCHAR,
+            "size": size,
+            "comment": comment,
+        ) + (notnull ? ("notnull": True) : NOTHING));
+    }
+
+    #! returns a column hash for a \c VARCHAR column
+    public hash<GenericColumnInfo> sub c_varchar(int size, string comment) {
+        return new hash<GenericColumnInfo>((
+            "qore_type": SqlUtil::VARCHAR,
+            "size": size,
+            "comment": comment,
+        ));
+    }
+
+    #! returns a column hash for a \c CHAR column
+    public hash<GenericColumnInfo> sub c_char(int size, bool notnull = False, *string comment) {
+        return cast<hash<GenericColumnInfo>>((
+            "qore_type": SqlUtil::CHAR,
+            "size": size,
+            "comment": comment,
+        ) + (notnull ? ("notnull": True) : NOTHING));
+    }
+
+    #! returns a column hash for a \c CHAR column
+    public hash<GenericColumnInfo> sub c_char(int size, string comment) {
+        return new hash<GenericColumnInfo>((
+            "qore_type": SqlUtil::CHAR,
+            "size": size,
+            "comment": comment,
+        ));
+    }
+
+    #! returns a column hash for a \c DATE column
+    public hash<GenericColumnInfo> sub c_date(bool notnull = False, *string comment) {
+        return cast<hash<GenericColumnInfo>>((
+            "qore_type": Type::Date,
+            "driver": ("oracle": ("native_type": "date"), "pgsql": ("native_type": "date")),
+            "comment": comment,
+        ) + (notnull ? ("notnull": True) : NOTHING));
+    }
+
+    #! returns a column hash for a \c DATE column
+    public hash<GenericColumnInfo> sub c_date(string comment) {
+        return cast<hash<GenericColumnInfo>>((
+            "qore_type": Type::Date,
+            "driver": ("oracle": ("native_type": "date"), "pgsql": ("native_type": "date")),
+            "comment": comment,
+        ));
+    }
+
+    #! returns a column hash for a \c TIMESTAMP column
+    public hash<GenericColumnInfo> sub c_timestamp(bool notnull = False, *string comment) {
+        return cast<hash<GenericColumnInfo>>((
+            "qore_type": Type::Date,
+            "comment": comment,
+        ) + (notnull ? ("notnull": True) : NOTHING));
+    }
+
+    #! returns a column hash for a \c TIMESTAMP column
+    public hash<GenericColumnInfo> sub c_timestamp(string comment) {
+        return new hash<GenericColumnInfo>((
+            "qore_type": Type::Date,
+            "comment": comment,
+        ));
+    }
+
+    #! returns a column hash for a \c NUMBER or \c NUMERIC column (no size)
+    public hash<GenericColumnInfo> sub c_number(bool notnull = False, *string comment) {
+        return cast<hash<GenericColumnInfo>>((
+            "qore_type": SqlUtil::NUMERIC,
+            "comment": comment,
+        ) + (notnull ? ("notnull": True) : NOTHING));
+    }
+
+    #! returns a column hash for a \c NUMBER or \c NUMERIC column with size and scale
+    public hash<GenericColumnInfo> sub c_number(int size, int scale, bool notnull = False, *string comment) {
+        return cast<hash<GenericColumnInfo>>((
+            "qore_type": SqlUtil::NUMERIC,
+            "size": size,
+            "scale": scale,
+            "comment": comment,
+        ) + (notnull ? ("notnull": True) : NOTHING));
+    }
+
+    #! returns a column hash for a \c NUMBER or \c NUMERIC column with size only
+    public hash<GenericColumnInfo> sub c_number(int size, bool notnull = False, *string comment) {
+        return cast<hash<GenericColumnInfo>>((
+            "qore_type": SqlUtil::NUMERIC,
+            "size": size,
+            "comment": comment,
+        ) + (notnull ? ("notnull": True) : NOTHING));
+    }
+
+    #! returns a column hash for a \c NUMBER or \c NUMERIC column with size and comment
+    public hash<GenericColumnInfo> sub c_number(int size, string comment) {
+        return new hash<GenericColumnInfo>((
+            "qore_type": SqlUtil::NUMERIC,
+            "size": size,
+            "comment": comment,
+        ));
+    }
+
+    #! returns a column hash for a \c BLOB column
+    public hash<GenericColumnInfo> sub c_blob(bool notnull = False, *string comment) {
+        return cast<hash<GenericColumnInfo>>({
+            "qore_type": SqlUtil::BLOB,
+            "comment": comment,
+        } + (notnull ? {"notnull": True} : NOTHING));
+    }
+
+    #! returns a column hash for a \c BLOB column
+    public hash<GenericColumnInfo> sub c_blob(string comment) {
+        return new hash<GenericColumnInfo>({
+            "qore_type": SqlUtil::BLOB,
+            "comment": comment,
+        });
+    }
+
+    #! returns a column hash for a \c CLOB column
+    public hash<GenericColumnInfo> sub c_clob(bool notnull = False, *string comment) {
+        return cast<hash<GenericColumnInfo>>({
+            "qore_type": SqlUtil::CLOB,
+            "comment": comment,
+        } + (notnull ? {"notnull": True} : NOTHING));
+    }
+
+    #! returns a column hash for a \c CLOB column
+    public hash<GenericColumnInfo> sub c_clob(string comment) {
+        return new hash<GenericColumnInfo>({
+            "qore_type": SqlUtil::CLOB,
+            "comment": comment,
+        });
+    }
+
+    #! returns a column hash for a binary column
+    public hash<GenericColumnInfo> sub c_binary(bool notnull = False, *string comment) {
+        return cast<hash<GenericColumnInfo>>((
+            "qore_type": Type::Binary,
+            "comment": comment,
+        ) + (notnull ? ("notnull": True) : NOTHING));
+    }
+
+    #! returns a column hash for a binary column
+    public hash<GenericColumnInfo> sub c_binary(string comment) {
+        return new hash<GenericColumnInfo>((
+            "qore_type": Type::Binary,
+            "comment": comment,
+        ));
+    }
+
+    #! Provides information on schema changes
+    public hashdecl SchemaAlignmentInfo {
+        #! Set to True if only creations / additions were made
+        bool created;
+        #! The total number of changes made
+        int num_changes;
+        #! Change map; action code -> count
+        *hash<string, int> change_map;
+        #! Summary map for data changes; upsert action code -> count
+        *hash<string, int> data_change_map;
+    }
+
+    #! Schema option hash definitions
+    public hashdecl SchemaOptionInfo {
+        #! explicit data tablespace name
+        *string data_ts;
+        #! explicit index tablespace name
+        *string index_ts;
+        #! options for @ref SqlUtil::Database::constructor()
+        *hash<auto> db_opts;
+    }
+} # namespace Schema

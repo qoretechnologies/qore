@@ -343,7 +343,8 @@ public class WebSocketClientPollOperationTest inherits QUnit::Test {
         }
 
         controller.cancelByOwner(owner);
-        controller.stop();
+        # NOTE: do not call controller.stop() — the controller is the global singleton
+        # shared by the HttpServer; stopping it would cancel the server's accept operations
         assertTrue(poll_op.goalReached(), "poll operation closed after controller test");
     }
 

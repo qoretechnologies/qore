@@ -147,7 +147,7 @@ SewioRestClient rest(("url": "http://rtlsstudio.com/sensmapserver", "apikey": ap
 ("additional_methods": ("PROPFIND": True, "MKCOL": True ));
             @endcode
         - \c apikey: (required) the <a href="http://www.sewio.net">Sewio.net</a>'s RTLS Studio api key for the target server
-        - \c content_encoding: for possible values, see \c EncodingSupport; this sets the send encoding (if the \c "send_encoding" option is not set) and the requested response encoding (note that the @ref RestClient::RestClient "RestClient" class will only compress outgoing message bodies over @ref RestClient::RestClient::CompressionThreshold "CompressionThreshold" bytes in size)
+        - \c content_encoding: for possible values, see \c EncodingSupport; this sets the send encoding (if the \c "send_encoding" option is not set) and the requested response encoding (note that the @ref RestClient::RestClient "RestClient" class will only compress outgoing message bodies over \c CompressionThreshold bytes in size)
         - \c data: a \c DataSerializationOptions "data serialization option"; if not present defaults to \c "json"
         - \c default_path: The default path to use for new connections if a path is not otherwise specified in the connection URL
         - \c default_port: The default port number to connect to if none is given in the URL
@@ -160,7 +160,7 @@ SewioRestClient rest(("url": "http://rtlsstudio.com/sensmapserver", "apikey": ap
         - \c proxy: The proxy URL for connecting through a proxy
         - \c redirect_passthru: if @ref True "True" then redirect responses will be passed to the caller instead of
             processed
-        - \c send_encoding: a \c EncodingSupport "send data encoding option" or the value \c "auto" which means to use automatic encoding; if not present defaults to \c "gzip" content encoding on sent message bodies (note that the @ref RestClient::RestClient "RestClient" class will only compress outgoing message bodies over @ref RestClient::RestClient::CompressionThreshold "CompressionThreshold" bytes in size)
+        - \c send_encoding: a \c EncodingSupport "send data encoding option" or the value \c "auto" which means to use automatic encoding; if not present defaults to \c "gzip" content encoding on sent message bodies (note that the @ref RestClient::RestClient "RestClient" class will only compress outgoing message bodies over \c CompressionThreshold bytes in size)
         - \c timeout: The timeout value in milliseconds (also can be a relative date-time value for clarity, ex: \c 30s)
         @param do_not_connect if \c False (the default), then a connection will be immediately established to the remote server
 

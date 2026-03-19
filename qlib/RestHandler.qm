@@ -747,7 +747,7 @@ public namespace RestHandler {
 
         #! Returns @ref True if the stream handler has detected a receive error
         /** This allows the HTTP/2 and HTTP/3 body streaming loop in
-            @ref AbstractStreamRequest::handleRequest() to stop reading DATA frames
+            \c AbstractStreamRequest::handleRequest() to stop reading DATA frames
             after the handler detects an error mid-stream.
 
             @return @ref True if a receive error has been detected
@@ -1171,7 +1171,7 @@ public namespace RestHandler {
         /** For Connect protocol (DataStream 2.0) and DataStream v1 over HTTP/2 or HTTP/3,
             this allows the framework to skip pre-buffering the entire request body and instead
             pass DATA frames incrementally to the stream handler via
-            @ref AbstractStreamRequest::handleRequest(). This enables mid-stream error detection
+            \c AbstractStreamRequest::handleRequest(). This enables mid-stream error detection
             (e.g. COLUMN-ERROR during an upsert) without buffering the entire body in memory.
 
             @param cx the connection context

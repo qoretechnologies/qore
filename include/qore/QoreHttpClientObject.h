@@ -425,8 +425,8 @@ public:
     */
     DLLEXPORT int getHttp3Mode() const;
 
-    //! Returns @ref True if the connection is currently using HTTP/3 (QUIC)
-    /** @return @ref True if HTTP/3 is active on the current connection
+    //! Returns \c true if the connection is currently using HTTP/3 (QUIC)
+    /** @return \c true if HTTP/3 is active on the current connection
 
         @since %Qore 2.3
     */

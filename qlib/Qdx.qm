@@ -1659,9 +1659,13 @@ string doxygen_output = proc.process();
             # Process members
             if (group.members) {
                 foreach auto member in (group.members) {
-                    # member is an expression containing a declaration
                     if (member.declaration) {
+                        # member is an expression containing a declaration
                         processDeclaration(member.declaration);
+                    } else if (member.nodetype == ANT_Declaration) {
+                        # CSTTranslator emits class constants (and other declarations) directly
+                        # as top-level nodes in the members list, not wrapped in .declaration
+                        processDeclaration(member);
                     }
                 }
             }
@@ -2090,15 +2094,30 @@ string doxygen_output = proc.process();
             # Track @verbatim nesting: scanning backward, @endverbatim increments
             # and @verbatim decrements; /** inside a verbatim block is example code
             int verbatim_depth = 0;
+            # Track @code nesting: scanning backward, @endcode increments
+            # and @code decrements; /* inside a code block is example code
+            int code_depth = 0;
             while (line >= 0) {
                 string cur = lines[line];
                 result = (cur,) + result;
-                if (cur =~ /@endverbatim/) {
+                # Count @verbatim and @endverbatim separately since a line may
+                # contain both (e.g. "@verbatim ... @endverbatim")
+                if (cur =~ /@endverbatim\b/) {
                     ++verbatim_depth;
-                } else if (cur =~ /@verbatim/) {
+                }
+                if (cur =~ /@verbatim\b/) {
                     --verbatim_depth;
                 }
-                if (verbatim_depth == 0) {
+                # Count @code and @endcode separately since a line may contain both
+                # (e.g. "@code{.py} ... @endcode"); use word boundary to avoid
+                # @code matching inside @endcode
+                if (cur =~ /@endcode\b/) {
+                    ++code_depth;
+                }
+                if (cur =~ /@code\b/) {
+                    --code_depth;
+                }
+                if (verbatim_depth == 0 && code_depth == 0) {
                     if (isBlockCommentStart(cur)) {
                         return result;
                     }
@@ -2134,6 +2153,9 @@ string doxygen_output = proc.process();
                     continue;
                 }
                 # Normalize @ref function references by stripping trailing ()
+                # When () is followed by ':', add display text to prevent the colon
+                # from being treated as part of the @ref target by doxygen
+                line =~ s/@ref\s+([A-Za-z0-9_:]+)\(\):/@ref $1 "$1():"/g;
                 line =~ s/@ref\s+([A-Za-z0-9_:]+)\(\)/@ref $1/g;
                 # Process tables in doc comments
                 line = dth.process(line);

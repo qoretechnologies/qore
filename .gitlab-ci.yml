@@ -1,7 +1,6 @@
 stages:
   - build
   - test
-  - perf
 
 default:
   services:
@@ -94,6 +93,21 @@ build-alpine-arm64:
   before_script: []
   script:
     - test/docker_test/build.sh
+  artifacts:
+    paths:
+      - build/
+    expire_in: 1 day
+
+build-perf:
+  stage: build
+  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
+  tags:
+    - k8s
+    - amd64
+  services: []
+  before_script: []
+  script:
+    - test/docker_test/build-perf.sh
   artifacts:
     paths:
       - build/
@@ -365,25 +379,35 @@ test-macos:
     expire_in: 7 days
 
 test-perf:
-  stage: perf
+  stage: test
+  needs: [build-perf]
   image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
   tags:
     - k8s
     - amd64
   services: []
-  # Don't download build artifacts — test-perf rebuilds from scratch with
-  # Release optimization.  Without this, artifacts from all 4 build jobs
-  # (different architectures/platforms) are extracted into build/, corrupting
-  # the cmake cache and causing module-loading failures.
-  dependencies: []
-  allow_failure: true
   variables:
     QORE_PERF_TESTS_ONLY: "1"
     QORE_EXCLUDE_PERF_TESTS: ""
   before_script:
+    - |
+        curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
+        -X POST --oauth2-bearer ${GITHUB_ACCESS_TOKEN} -H "Content-Type: application/json" \
+        -d "{\"state\": \"pending\", \"context\": \"${REPO_NAME}-perf\", \"description\": \"Gitlab CI perf\", \"target_url\": \"${CI_JOB_URL}\"}"
     - set +e
   script:
-    - test/docker_test/test-perf.sh
+    - |
+        if test/docker_test/test-perf.sh; then
+          curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
+            -X POST --oauth2-bearer ${GITHUB_ACCESS_TOKEN} -H "Content-Type: application/json" \
+            -d "{\"state\": \"success\", \"context\": \"${REPO_NAME}-perf\", \"description\": \"Gitlab CI perf\", \"target_url\": \"${CI_JOB_URL}\"}"
+          exit 0
+        else
+          curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
+            -X POST --oauth2-bearer ${GITHUB_ACCESS_TOKEN} -H "Content-Type: application/json" \
+            -d "{\"state\": \"failure\", \"context\": \"${REPO_NAME}-perf\", \"description\": \"Gitlab CI perf\", \"target_url\": \"${CI_JOB_URL}\"}"
+          exit 1
+        fi
   artifacts:
     when: on_failure
     paths:

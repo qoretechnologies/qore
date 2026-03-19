@@ -10,7 +10,7 @@
 %requires ../../../../qlib/BulkSqlUtil
 %requires ../../../../qlib/PgsqlSqlUtilBase.qm
 %requires ../../../../qlib/PgsqlSqlUtil.qm
-%requires ../../../../qlib/Schema.qm
+%requires ../../../../qlib/Schema
 
 %requires ./BulkSqlUtilTestBase.qm
 #/;

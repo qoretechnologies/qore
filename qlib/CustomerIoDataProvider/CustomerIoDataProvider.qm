@@ -1,0 +1,1354 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore CustomerIoDataProvider module definition
+
+/*  CustomerIoDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%modern
+# require type definitions everywhere
+# strict argument handling
+# enable all warnings
+
+%requires(reexport) DataProvider
+%requires(reexport) CustomerIoRestClient
+%try-module json
+%define NoJson
+%endtry
+
+module CustomerIoDataProvider {
+    version = "1.0";
+    desc = "User module providing a data provider API for Customer.io marketing automation services";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # Register the data provider factory
+        DataProvider::registerFactory(new CustomerIoDataProviderFactory());
+
+        # Register the application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": CustomerIoDataProvider::AppName,
+            "display_name": "Customer.io",
+            "short_desc": "Customer.io marketing automation platform",
+            "desc": "Customer.io is a marketing automation platform for sending targeted emails, push notifications, "
+                "SMS messages, and Slack messages based on customer behavior and attributes.\n\n"
+                "**Features:**\n"
+                "- Customer management (create, update, delete, suppress)\n"
+                "- Campaign and broadcast management\n"
+                "- Transactional email and push notification sending\n"
+                "- Event tracking and page view tracking\n"
+                "- Segment management\n"
+                "- Collection and snippet management\n"
+                "- Real-time webhooks for email, SMS, push, and Slack events",
+            "scheme": "customerio",
+            "logo": CustomerIoLogo,
+            "logo_file_name": "customerio-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::Email, DataProvider::AppGroup::Marketing, DataProvider::AppGroup::Analytics),
+        });
+
+        # ========== PEOPLE ACTIONS ==========
+
+        # List People
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/people",
+            "action": "list-people",
+            "groups": "People",
+            "display_name": "List People",
+            "short_desc": "List and search people",
+            "desc": "Retrieve a list of people from Customer.io with optional filtering by email, ID, "
+                "or Customer.io internal ID.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": CustomerIoPeopleDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("PersonList", new CustomerIoPersonDataType(), True);
+            },
+            "options": {
+                "email": <ActionOptionInfo>{
+                    "display_name": "Email",
+                    "short_desc": "Filter by email address",
+                    "desc": "Filter people by email address",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "id": <ActionOptionInfo>{
+                    "display_name": "ID",
+                    "short_desc": "Filter by customer ID",
+                    "desc": "Filter people by customer ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "cio_id": <ActionOptionInfo>{
+                    "display_name": "CIO ID",
+                    "short_desc": "Filter by Customer.io ID",
+                    "desc": "Filter people by Customer.io internal ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+        });
+
+        # Get Person
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/get-person",
+            "action": "get-person",
+            "groups": "People",
+            "display_name": "Get Person",
+            "short_desc": "Get a person by ID",
+            "desc": "Retrieve a person's attributes from Customer.io by customer ID, email, or cio_id.",
+            "action_code": DPAT_API,
+            "data_provider_info": CustomerIoGetPersonDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return CustomerIoGetPersonDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(CustomerIoGetPersonRequestDataType::Fields),
+        });
+
+        # Create/Update Customer
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/create-update-customer",
+            "action": "create-update-customer",
+            "groups": "People",
+            "display_name": "Create/Update Customer",
+            "short_desc": "Create or update a customer",
+            "desc": "Create a new customer or update an existing customer in Customer.io via the Track API. "
+                "Sets the customer's email, attributes, and other properties.",
+            "action_code": DPAT_API,
+            "data_provider_info": CustomerIoCreateUpdateCustomerDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(CustomerIoCreateUpdateCustomerRequestDataType::Fields),
+        });
+
+        # Delete Customer
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/delete-customer",
+            "action": "delete-customer",
+            "groups": "People",
+            "display_name": "Delete Customer",
+            "short_desc": "Delete a customer",
+            "desc": "Delete a customer from Customer.io via the Track API. This action cannot be undone.",
+            "action_code": DPAT_API,
+            "data_provider_info": CustomerIoDeleteCustomerDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(CustomerIoDeleteCustomerRequestDataType::Fields),
+        });
+
+        # Suppress Customer
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/suppress-customer",
+            "action": "suppress-customer",
+            "groups": "People",
+            "display_name": "Suppress Customer",
+            "short_desc": "Suppress a customer",
+            "desc": "Suppress a customer in Customer.io, blocking all messaging to the customer.",
+            "action_code": DPAT_API,
+            "data_provider_info": CustomerIoSuppressCustomerDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(CustomerIoSuppressCustomerRequestDataType::Fields),
+        });
+
+        # Unsuppress Customer
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/unsuppress-customer",
+            "action": "unsuppress-customer",
+            "groups": "People",
+            "display_name": "Unsuppress Customer",
+            "short_desc": "Unsuppress a customer",
+            "desc": "Unsuppress a customer in Customer.io, re-enabling messaging to the customer.",
+            "action_code": DPAT_API,
+            "data_provider_info": CustomerIoUnsuppressCustomerDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(CustomerIoUnsuppressCustomerRequestDataType::Fields),
+        });
+
+        # Merge Customers
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/merge-customers",
+            "action": "merge-customers",
+            "groups": "People",
+            "display_name": "Merge Customers",
+            "short_desc": "Merge two customer profiles",
+            "desc": "Merge two customer profiles in Customer.io. The primary profile is kept and the "
+                "secondary profile's data is merged into it.",
+            "action_code": DPAT_API,
+            "data_provider_info": CustomerIoMergeCustomersDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(CustomerIoMergeCustomersRequestDataType::Fields),
+        });
+
+        # ========== SEGMENTS ACTIONS ==========
+
+        # List Segments
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/segments",
+            "action": "list-segments",
+            "groups": "Segments",
+            "display_name": "List Segments",
+            "short_desc": "List segments",
+            "desc": "Retrieve a list of segments from Customer.io.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": CustomerIoSegmentsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("SegmentList", new CustomerIoSegmentDataType(), True);
+            },
+            "options": {
+                "page": <ActionOptionInfo>{
+                    "display_name": "Page",
+                    "short_desc": "Page number",
+                    "desc": "Page number for pagination (starting at 1)",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+                "page_size": <ActionOptionInfo>{
+                    "display_name": "Page Size",
+                    "short_desc": "Results per page",
+                    "desc": "Number of results per page",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+            },
+        });
+
+        # Get Segment
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/get-segment",
+            "action": "get-segment",
+            "groups": "Segments",
+            "display_name": "Get Segment",
+            "short_desc": "Get a segment by ID",
+            "desc": "Retrieve a segment's details from Customer.io by segment ID.",
+            "action_code": DPAT_API,
+            "data_provider_info": CustomerIoGetSegmentDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return CustomerIoGetSegmentDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(CustomerIoGetSegmentRequestDataType::Fields),
+        });
+
+        # Get Segment People
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/get-segment-people",
+            "action": "get-segment-people",
+            "groups": "Segments",
+            "display_name": "Get Segment People",
+            "short_desc": "Get people in a segment",
+            "desc": "Retrieve the list of people belonging to a Customer.io segment.",
+            "action_code": DPAT_API,
+            "data_provider_info": CustomerIoGetSegmentPeopleDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(CustomerIoGetSegmentPeopleRequestDataType::Fields),
+        });
+
+        # ========== CAMPAIGNS ACTIONS ==========
+
+        # List Campaigns
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/campaigns",
+            "action": "list-campaigns",
+            "groups": "Campaigns",
+            "display_name": "List Campaigns",
+            "short_desc": "List campaigns",
+            "desc": "Retrieve a list of campaigns from Customer.io.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": CustomerIoCampaignsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("CampaignList", new CustomerIoCampaignDataType(), True);
+            },
+            "options": {
+                "page": <ActionOptionInfo>{
+                    "display_name": "Page",
+                    "short_desc": "Page number",
+                    "desc": "Page number for pagination (starting at 1)",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+                "page_size": <ActionOptionInfo>{
+                    "display_name": "Page Size",
+                    "short_desc": "Results per page",
+                    "desc": "Number of results per page",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+            },
+        });
+
+        # Get Campaign
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/get-campaign",
+            "action": "get-campaign",
+            "groups": "Campaigns",
+            "display_name": "Get Campaign",
+            "short_desc": "Get a campaign by ID",
+            "desc": "Retrieve a campaign's details from Customer.io by campaign ID.",
+            "action_code": DPAT_API,
+            "data_provider_info": CustomerIoGetCampaignDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return CustomerIoGetCampaignDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(CustomerIoGetCampaignRequestDataType::Fields),
+        });
+
+        # Get Campaign Metrics
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/get-campaign-metrics",
+            "action": "get-campaign-metrics",
+            "groups": "Campaigns",
+            "display_name": "Get Campaign Metrics",
+            "short_desc": "Get metrics for a campaign",
+            "desc": "Retrieve metrics and performance data for a Customer.io campaign.",
+            "action_code": DPAT_API,
+            "data_provider_info": CustomerIoGetCampaignMetricsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(CustomerIoGetCampaignMetricsRequestDataType::Fields),
+        });
+
+        # Get Campaign Actions
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/get-campaign-actions",
+            "action": "get-campaign-actions",
+            "groups": "Campaigns",
+            "display_name": "Get Campaign Actions",
+            "short_desc": "Get actions for a campaign",
+            "desc": "Retrieve the list of actions (messages) configured for a Customer.io campaign.",
+            "action_code": DPAT_API,
+            "data_provider_info": CustomerIoGetCampaignActionsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(CustomerIoGetCampaignActionsRequestDataType::Fields),
+        });
+
+        # ========== BROADCASTS ACTIONS ==========
+
+        # List Broadcasts
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/broadcasts",
+            "action": "list-broadcasts",
+            "groups": "Broadcasts",
+            "display_name": "List Broadcasts",
+            "short_desc": "List broadcasts",
+            "desc": "Retrieve a list of broadcasts from Customer.io.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": CustomerIoBroadcastsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("BroadcastList", new CustomerIoBroadcastDataType(), True);
+            },
+            "options": {
+                "page": <ActionOptionInfo>{
+                    "display_name": "Page",
+                    "short_desc": "Page number",
+                    "desc": "Page number for pagination (starting at 1)",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+                "page_size": <ActionOptionInfo>{
+                    "display_name": "Page Size",
+                    "short_desc": "Results per page",
+                    "desc": "Number of results per page",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+            },
+        });
+
+        # Get Broadcast
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/get-broadcast",
+            "action": "get-broadcast",
+            "groups": "Broadcasts",
+            "display_name": "Get Broadcast",
+            "short_desc": "Get a broadcast by ID",
+            "desc": "Retrieve a broadcast's details from Customer.io by broadcast ID.",
+            "action_code": DPAT_API,
+            "data_provider_info": CustomerIoGetBroadcastDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return CustomerIoGetBroadcastDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(CustomerIoGetBroadcastRequestDataType::Fields),
+        });
+
+        # Trigger Broadcast
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/trigger-broadcast",
+            "action": "trigger-broadcast",
+            "groups": "Broadcasts",
+            "display_name": "Trigger Broadcast",
+            "short_desc": "Trigger a broadcast",
+            "desc": "Trigger a Customer.io broadcast, optionally targeting specific recipients with custom data.",
+            "action_code": DPAT_API,
+            "data_provider_info": CustomerIoTriggerBroadcastDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(CustomerIoTriggerBroadcastRequestDataType::Fields),
+        });
+
+        # ========== TRANSACTIONAL ACTIONS ==========
+
+        # Send Transactional Email
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/send-transactional-email",
+            "action": "send-transactional-email",
+            "groups": "Transactional",
+            "display_name": "Send Transactional Email",
+            "short_desc": "Send a transactional email",
+            "desc": "Send a transactional email via Customer.io using a pre-defined transactional message template.",
+            "action_code": DPAT_API,
+            "data_provider_info": CustomerIoSendTransactionalEmailDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return CustomerIoSendTransactionalEmailDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(CustomerIoSendTransactionalEmailRequestDataType::Fields),
+        });
+
+        # Send Transactional Push
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/send-transactional-push",
+            "action": "send-transactional-push",
+            "groups": "Transactional",
+            "display_name": "Send Transactional Push",
+            "short_desc": "Send a transactional push notification",
+            "desc": "Send a transactional push notification via Customer.io using a pre-defined transactional "
+                "message template.",
+            "action_code": DPAT_API,
+            "data_provider_info": CustomerIoSendTransactionalPushDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return CustomerIoSendTransactionalPushDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(CustomerIoSendTransactionalPushRequestDataType::Fields),
+        });
+
+        # ========== COLLECTIONS ACTIONS ==========
+
+        # List Collections
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/collections",
+            "action": "list-collections",
+            "groups": "Collections",
+            "display_name": "List Collections",
+            "short_desc": "List collections",
+            "desc": "Retrieve a list of collections from Customer.io.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": CustomerIoCollectionsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("CollectionList", new CustomerIoCollectionDataType(), True);
+            },
+            "options": {
+                "page": <ActionOptionInfo>{
+                    "display_name": "Page",
+                    "short_desc": "Page number",
+                    "desc": "Page number for pagination (starting at 1)",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+                "page_size": <ActionOptionInfo>{
+                    "display_name": "Page Size",
+                    "short_desc": "Results per page",
+                    "desc": "Number of results per page",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+            },
+        });
+
+        # Get Collection
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/get-collection",
+            "action": "get-collection",
+            "groups": "Collections",
+            "display_name": "Get Collection",
+            "short_desc": "Get a collection by ID",
+            "desc": "Retrieve a collection's details from Customer.io by collection ID.",
+            "action_code": DPAT_API,
+            "data_provider_info": CustomerIoGetCollectionDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return CustomerIoGetCollectionDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(CustomerIoGetCollectionRequestDataType::Fields),
+        });
+
+        # Create Collection
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/create-collection",
+            "action": "create-collection",
+            "groups": "Collections",
+            "display_name": "Create Collection",
+            "short_desc": "Create a new collection",
+            "desc": "Create a new collection in Customer.io for storing and managing data.",
+            "action_code": DPAT_API,
+            "data_provider_info": CustomerIoCreateCollectionDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return CustomerIoCreateCollectionDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(CustomerIoCreateCollectionRequestDataType::Fields),
+        });
+
+        # Update Collection
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/update-collection",
+            "action": "update-collection",
+            "groups": "Collections",
+            "display_name": "Update Collection",
+            "short_desc": "Update an existing collection",
+            "desc": "Update an existing collection in Customer.io.",
+            "action_code": DPAT_API,
+            "data_provider_info": CustomerIoUpdateCollectionDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return CustomerIoUpdateCollectionDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(CustomerIoUpdateCollectionRequestDataType::Fields),
+        });
+
+        # Delete Collection
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/delete-collection",
+            "action": "delete-collection",
+            "groups": "Collections",
+            "display_name": "Delete Collection",
+            "short_desc": "Delete a collection",
+            "desc": "Delete a collection from Customer.io. This action cannot be undone.",
+            "action_code": DPAT_API,
+            "data_provider_info": CustomerIoDeleteCollectionDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(CustomerIoDeleteCollectionRequestDataType::Fields),
+        });
+
+        # ========== SNIPPETS ACTIONS ==========
+
+        # List Snippets
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/snippets",
+            "action": "list-snippets",
+            "groups": "Snippets",
+            "display_name": "List Snippets",
+            "short_desc": "List snippets",
+            "desc": "Retrieve a list of all snippets from Customer.io.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": CustomerIoSnippetsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("SnippetList", new CustomerIoSnippetDataType(), True);
+            },
+        });
+
+        # Get Snippet
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/get-snippet",
+            "action": "get-snippet",
+            "groups": "Snippets",
+            "display_name": "Get Snippet",
+            "short_desc": "Get a snippet by name",
+            "desc": "Retrieve a snippet's details from Customer.io by snippet name.",
+            "action_code": DPAT_API,
+            "data_provider_info": CustomerIoGetSnippetDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return CustomerIoGetSnippetDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(CustomerIoGetSnippetRequestDataType::Fields),
+        });
+
+        # Create Snippet
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/create-snippet",
+            "action": "create-snippet",
+            "groups": "Snippets",
+            "display_name": "Create Snippet",
+            "short_desc": "Create a new snippet",
+            "desc": "Create a new snippet in Customer.io for reusable content in messages.",
+            "action_code": DPAT_API,
+            "data_provider_info": CustomerIoCreateSnippetDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return CustomerIoCreateSnippetDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(CustomerIoCreateSnippetRequestDataType::Fields),
+        });
+
+        # Update Snippet
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/update-snippet",
+            "action": "update-snippet",
+            "groups": "Snippets",
+            "display_name": "Update Snippet",
+            "short_desc": "Update an existing snippet",
+            "desc": "Update an existing snippet in Customer.io.",
+            "action_code": DPAT_API,
+            "data_provider_info": CustomerIoUpdateSnippetDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return CustomerIoUpdateSnippetDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(CustomerIoUpdateSnippetRequestDataType::Fields),
+        });
+
+        # Delete Snippet
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/delete-snippet",
+            "action": "delete-snippet",
+            "groups": "Snippets",
+            "display_name": "Delete Snippet",
+            "short_desc": "Delete a snippet",
+            "desc": "Delete a snippet from Customer.io. This action cannot be undone.",
+            "action_code": DPAT_API,
+            "data_provider_info": CustomerIoDeleteSnippetDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(CustomerIoDeleteSnippetRequestDataType::Fields),
+        });
+
+        # ========== EXPORTS ACTIONS ==========
+
+        # Create Export
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/create-export",
+            "action": "create-export",
+            "groups": "Exports",
+            "display_name": "Create Export",
+            "short_desc": "Create a data export",
+            "desc": "Create a new data export in Customer.io for customers or deliveries.",
+            "action_code": DPAT_API,
+            "data_provider_info": CustomerIoCreateExportDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return CustomerIoCreateExportDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(CustomerIoCreateExportRequestDataType::Fields),
+        });
+
+        # Get Export Status
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/get-export-status",
+            "action": "get-export-status",
+            "groups": "Exports",
+            "display_name": "Get Export Status",
+            "short_desc": "Get the status of an export",
+            "desc": "Check the status of a Customer.io data export by export ID.",
+            "action_code": DPAT_API,
+            "data_provider_info": CustomerIoGetExportStatusDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return CustomerIoGetExportStatusDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(CustomerIoGetExportStatusRequestDataType::Fields),
+        });
+
+        # Download Export
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/download-export",
+            "action": "download-export",
+            "groups": "Exports",
+            "display_name": "Download Export",
+            "short_desc": "Download a completed export",
+            "desc": "Download the data from a completed Customer.io export.",
+            "action_code": DPAT_API,
+            "data_provider_info": CustomerIoDownloadExportDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(CustomerIoDownloadExportRequestDataType::Fields),
+        });
+
+        # ========== MESSAGES ACTIONS ==========
+
+        # List Deliveries
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/messages",
+            "action": "list-deliveries",
+            "groups": "Messages",
+            "display_name": "List Deliveries",
+            "short_desc": "List message deliveries",
+            "desc": "Retrieve a list of message deliveries from Customer.io with optional filtering by "
+                "metric type and date range.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": CustomerIoMessagesDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("MessageList", new CustomerIoMessageDataType(), True);
+            },
+            "options": {
+                "metric": <ActionOptionInfo>{
+                    "display_name": "Metric",
+                    "short_desc": "Filter by delivery metric type",
+                    "desc": "Filter messages by delivery metric type (e.g., `email_sent`, `email_delivered`)",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "email_sent", "desc": "Email sent"},
+                        <AllowedValueInfo>{"value": "email_delivered", "desc": "Email delivered"},
+                        <AllowedValueInfo>{"value": "email_opened", "desc": "Email opened"},
+                        <AllowedValueInfo>{"value": "email_clicked", "desc": "Email clicked"},
+                        <AllowedValueInfo>{"value": "email_bounced", "desc": "Email bounced"},
+                        <AllowedValueInfo>{"value": "email_dropped", "desc": "Email dropped"},
+                        <AllowedValueInfo>{"value": "email_spammed", "desc": "Email marked as spam"},
+                        <AllowedValueInfo>{"value": "email_unsubscribed", "desc": "Email unsubscribed"},
+                        <AllowedValueInfo>{"value": "sms_sent", "desc": "SMS sent"},
+                        <AllowedValueInfo>{"value": "sms_delivered", "desc": "SMS delivered"},
+                        <AllowedValueInfo>{"value": "sms_failed", "desc": "SMS failed"},
+                        <AllowedValueInfo>{"value": "push_sent", "desc": "Push sent"},
+                        <AllowedValueInfo>{"value": "push_delivered", "desc": "Push delivered"},
+                        <AllowedValueInfo>{"value": "push_opened", "desc": "Push opened"},
+                        <AllowedValueInfo>{"value": "push_failed", "desc": "Push failed"},
+                    ),
+                },
+                "start": <ActionOptionInfo>{
+                    "display_name": "Start Timestamp",
+                    "short_desc": "Filter from this Unix timestamp",
+                    "desc": "Filter messages sent on or after this Unix timestamp",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "end": <ActionOptionInfo>{
+                    "display_name": "End Timestamp",
+                    "short_desc": "Filter until this Unix timestamp",
+                    "desc": "Filter messages sent on or before this Unix timestamp",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+            },
+        });
+
+        # Get Message
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/get-message",
+            "action": "get-message",
+            "groups": "Messages",
+            "display_name": "Get Message",
+            "short_desc": "Get a message by ID",
+            "desc": "Retrieve a message's details from Customer.io by message ID.",
+            "action_code": DPAT_API,
+            "data_provider_info": CustomerIoGetMessageDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return CustomerIoGetMessageDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(CustomerIoGetMessageRequestDataType::Fields),
+        });
+
+        # ========== ACTIVITIES ACTIONS ==========
+
+        # List Activities
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/activities",
+            "action": "list-activities",
+            "groups": "Activities",
+            "display_name": "List Activities",
+            "short_desc": "List activities",
+            "desc": "Retrieve a list of activities from Customer.io with optional filtering by type, "
+                "customer ID, and date range.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": CustomerIoActivitiesDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("ActivityList", new CustomerIoActivityDataType(), True);
+            },
+            "options": {
+                "type": <ActionOptionInfo>{
+                    "display_name": "Activity Type",
+                    "short_desc": "Filter by activity type",
+                    "desc": "Filter activities by type",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "customer_id": <ActionOptionInfo>{
+                    "display_name": "Customer ID",
+                    "short_desc": "Filter by customer ID",
+                    "desc": "Filter activities by customer ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "start": <ActionOptionInfo>{
+                    "display_name": "Start Timestamp",
+                    "short_desc": "Filter from this Unix timestamp",
+                    "desc": "Filter activities on or after this Unix timestamp",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "end": <ActionOptionInfo>{
+                    "display_name": "End Timestamp",
+                    "short_desc": "Filter until this Unix timestamp",
+                    "desc": "Filter activities on or before this Unix timestamp",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+            },
+        });
+
+        # ========== NEWSLETTERS ACTIONS ==========
+
+        # List Newsletters
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/newsletters",
+            "action": "list-newsletters",
+            "groups": "Newsletters",
+            "display_name": "List Newsletters",
+            "short_desc": "List newsletters",
+            "desc": "Retrieve a list of newsletters from Customer.io.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": CustomerIoNewslettersDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("NewsletterList", new CustomerIoNewsletterDataType(), True);
+            },
+            "options": {
+                "page": <ActionOptionInfo>{
+                    "display_name": "Page",
+                    "short_desc": "Page number",
+                    "desc": "Page number for pagination (starting at 1)",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+                "page_size": <ActionOptionInfo>{
+                    "display_name": "Page Size",
+                    "short_desc": "Results per page",
+                    "desc": "Number of results per page",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+            },
+        });
+
+        # Get Newsletter
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/get-newsletter",
+            "action": "get-newsletter",
+            "groups": "Newsletters",
+            "display_name": "Get Newsletter",
+            "short_desc": "Get a newsletter by ID",
+            "desc": "Retrieve a newsletter's details from Customer.io by newsletter ID.",
+            "action_code": DPAT_API,
+            "data_provider_info": CustomerIoGetNewsletterDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return CustomerIoGetNewsletterDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(CustomerIoGetNewsletterRequestDataType::Fields),
+        });
+
+        # ========== EVENTS ACTIONS (Track API) ==========
+
+        # Track Event
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/track-event",
+            "action": "track-event",
+            "groups": "Events",
+            "display_name": "Track Event",
+            "short_desc": "Track a custom event for a customer",
+            "desc": "Track a custom event for a customer in Customer.io via the Track API. Events can trigger "
+                "campaigns and workflows.",
+            "action_code": DPAT_API,
+            "data_provider_info": CustomerIoTrackEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(CustomerIoTrackEventRequestDataType::Fields),
+        });
+
+        # Track Anonymous Event
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/track-anonymous-event",
+            "action": "track-anonymous-event",
+            "groups": "Events",
+            "display_name": "Track Anonymous Event",
+            "short_desc": "Track an anonymous event",
+            "desc": "Track an anonymous event in Customer.io that is not tied to a specific customer.",
+            "action_code": DPAT_API,
+            "data_provider_info": CustomerIoTrackAnonymousEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(CustomerIoTrackAnonymousEventRequestDataType::Fields),
+        });
+
+        # Track Page View
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/track-page-view",
+            "action": "track-page-view",
+            "groups": "Events",
+            "display_name": "Track Page View",
+            "short_desc": "Track a page view for a customer",
+            "desc": "Track a page view event for a customer in Customer.io via the Track API.",
+            "action_code": DPAT_API,
+            "data_provider_info": CustomerIoTrackPageViewDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(CustomerIoTrackPageViewRequestDataType::Fields),
+        });
+
+        # ========== DEVICES ACTIONS (Track API) ==========
+
+        # Add Device
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/add-device",
+            "action": "add-device",
+            "groups": "Devices",
+            "display_name": "Add Device",
+            "short_desc": "Add a device to a customer",
+            "desc": "Add a mobile device to a customer in Customer.io for push notification targeting.",
+            "action_code": DPAT_API,
+            "data_provider_info": CustomerIoAddDeviceDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(CustomerIoAddDeviceRequestDataType::Fields),
+        });
+
+        # Delete Device
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/delete-device",
+            "action": "delete-device",
+            "groups": "Devices",
+            "display_name": "Delete Device",
+            "short_desc": "Delete a device from a customer",
+            "desc": "Remove a mobile device from a customer in Customer.io.",
+            "action_code": DPAT_API,
+            "data_provider_info": CustomerIoDeleteDeviceDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(CustomerIoDeleteDeviceRequestDataType::Fields),
+        });
+
+        # ========== OBJECTS ACTIONS (Track API) ==========
+
+        # Create/Update Object
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/create-update-object",
+            "action": "create-update-object",
+            "groups": "Objects",
+            "display_name": "Create/Update Object",
+            "short_desc": "Create or update an object",
+            "desc": "Create or update a custom object in Customer.io via the Track API.",
+            "action_code": DPAT_API,
+            "data_provider_info": CustomerIoCreateUpdateObjectDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(CustomerIoCreateUpdateObjectRequestDataType::Fields),
+        });
+
+        # Delete Object
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/delete-object",
+            "action": "delete-object",
+            "groups": "Objects",
+            "display_name": "Delete Object",
+            "short_desc": "Delete an object",
+            "desc": "Delete a custom object from Customer.io via the Track API.",
+            "action_code": DPAT_API,
+            "data_provider_info": CustomerIoDeleteObjectDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(CustomerIoDeleteObjectRequestDataType::Fields),
+        });
+
+        # Add Relationships
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/add-relationships",
+            "action": "add-relationships",
+            "groups": "Objects",
+            "display_name": "Add Relationships",
+            "short_desc": "Add relationships between an object and people",
+            "desc": "Add relationships between an object and people in Customer.io via the Track API.",
+            "action_code": DPAT_API,
+            "data_provider_info": CustomerIoAddRelationshipsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(CustomerIoAddRelationshipsRequestDataType::Fields),
+        });
+
+        # Delete Relationships
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/delete-relationships",
+            "action": "delete-relationships",
+            "groups": "Objects",
+            "display_name": "Delete Relationships",
+            "short_desc": "Delete relationships between an object and people",
+            "desc": "Delete relationships between an object and people in Customer.io via the Track API.",
+            "action_code": DPAT_API,
+            "data_provider_info": CustomerIoDeleteRelationshipsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(CustomerIoDeleteRelationshipsRequestDataType::Fields),
+        });
+
+        # ========== TRIGGERS (DPAT_EVENT) ==========
+
+        # Watch Email Sent
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/events/" + EVENT_EMAIL_SENT,
+            "action": "watch-" + EVENT_EMAIL_SENT,
+            "groups": "Triggers",
+            "display_name": "Watch Email Sent",
+            "short_desc": "Watch for email sent events",
+            "desc": "Receive a notification when an email is sent via Customer.io.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_EMAIL_SENT,
+            "data_provider_info": CustomerIoEmailSentEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new CustomerIoWebhookEventDataType(); },
+        });
+
+        # Watch Email Delivered
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/events/" + EVENT_EMAIL_DELIVERED,
+            "action": "watch-" + EVENT_EMAIL_DELIVERED,
+            "groups": "Triggers",
+            "display_name": "Watch Email Delivered",
+            "short_desc": "Watch for email delivered events",
+            "desc": "Receive a notification when an email is delivered via Customer.io.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_EMAIL_DELIVERED,
+            "data_provider_info": CustomerIoEmailDeliveredEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new CustomerIoWebhookEventDataType(); },
+        });
+
+        # Watch Email Opened
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/events/" + EVENT_EMAIL_OPENED,
+            "action": "watch-" + EVENT_EMAIL_OPENED,
+            "groups": "Triggers",
+            "display_name": "Watch Email Opened",
+            "short_desc": "Watch for email opened events",
+            "desc": "Receive a notification when an email is opened via Customer.io.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_EMAIL_OPENED,
+            "data_provider_info": CustomerIoEmailOpenedEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new CustomerIoWebhookEventDataType(); },
+        });
+
+        # Watch Email Clicked
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/events/" + EVENT_EMAIL_CLICKED,
+            "action": "watch-" + EVENT_EMAIL_CLICKED,
+            "groups": "Triggers",
+            "display_name": "Watch Email Clicked",
+            "short_desc": "Watch for email clicked events",
+            "desc": "Receive a notification when a link in an email is clicked via Customer.io.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_EMAIL_CLICKED,
+            "data_provider_info": CustomerIoEmailClickedEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new CustomerIoWebhookEventDataType(); },
+        });
+
+        # Watch Email Bounced
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/events/" + EVENT_EMAIL_BOUNCED,
+            "action": "watch-" + EVENT_EMAIL_BOUNCED,
+            "groups": "Triggers",
+            "display_name": "Watch Email Bounced",
+            "short_desc": "Watch for email bounced events",
+            "desc": "Receive a notification when an email bounces via Customer.io.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_EMAIL_BOUNCED,
+            "data_provider_info": CustomerIoEmailBouncedEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new CustomerIoWebhookEventDataType(); },
+        });
+
+        # Watch Email Dropped
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/events/" + EVENT_EMAIL_DROPPED,
+            "action": "watch-" + EVENT_EMAIL_DROPPED,
+            "groups": "Triggers",
+            "display_name": "Watch Email Dropped",
+            "short_desc": "Watch for email dropped events",
+            "desc": "Receive a notification when an email is dropped by Customer.io.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_EMAIL_DROPPED,
+            "data_provider_info": CustomerIoEmailDroppedEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new CustomerIoWebhookEventDataType(); },
+        });
+
+        # Watch Email Spammed
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/events/" + EVENT_EMAIL_SPAMMED,
+            "action": "watch-" + EVENT_EMAIL_SPAMMED,
+            "groups": "Triggers",
+            "display_name": "Watch Email Spammed",
+            "short_desc": "Watch for email marked as spam events",
+            "desc": "Receive a notification when an email is marked as spam via Customer.io.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_EMAIL_SPAMMED,
+            "data_provider_info": CustomerIoEmailSpammedEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new CustomerIoWebhookEventDataType(); },
+        });
+
+        # Watch Email Unsubscribed
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/events/" + EVENT_EMAIL_UNSUBSCRIBED,
+            "action": "watch-" + EVENT_EMAIL_UNSUBSCRIBED,
+            "groups": "Triggers",
+            "display_name": "Watch Email Unsubscribed",
+            "short_desc": "Watch for email unsubscribed events",
+            "desc": "Receive a notification when a recipient unsubscribes via an email from Customer.io.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_EMAIL_UNSUBSCRIBED,
+            "data_provider_info": CustomerIoEmailUnsubscribedEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new CustomerIoWebhookEventDataType(); },
+        });
+
+        # Watch SMS Sent
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/events/" + EVENT_SMS_SENT,
+            "action": "watch-" + EVENT_SMS_SENT,
+            "groups": "Triggers",
+            "display_name": "Watch SMS Sent",
+            "short_desc": "Watch for SMS sent events",
+            "desc": "Receive a notification when an SMS message is sent via Customer.io.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_SMS_SENT,
+            "data_provider_info": CustomerIoSmsSentEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new CustomerIoWebhookEventDataType(); },
+        });
+
+        # Watch SMS Delivered
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/events/" + EVENT_SMS_DELIVERED,
+            "action": "watch-" + EVENT_SMS_DELIVERED,
+            "groups": "Triggers",
+            "display_name": "Watch SMS Delivered",
+            "short_desc": "Watch for SMS delivered events",
+            "desc": "Receive a notification when an SMS message is delivered via Customer.io.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_SMS_DELIVERED,
+            "data_provider_info": CustomerIoSmsDeliveredEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new CustomerIoWebhookEventDataType(); },
+        });
+
+        # Watch SMS Failed
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/events/" + EVENT_SMS_FAILED,
+            "action": "watch-" + EVENT_SMS_FAILED,
+            "groups": "Triggers",
+            "display_name": "Watch SMS Failed",
+            "short_desc": "Watch for SMS failed events",
+            "desc": "Receive a notification when an SMS message fails to send via Customer.io.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_SMS_FAILED,
+            "data_provider_info": CustomerIoSmsFailedEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new CustomerIoWebhookEventDataType(); },
+        });
+
+        # Watch SMS Clicked
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/events/" + EVENT_SMS_CLICKED,
+            "action": "watch-" + EVENT_SMS_CLICKED,
+            "groups": "Triggers",
+            "display_name": "Watch SMS Clicked",
+            "short_desc": "Watch for SMS clicked events",
+            "desc": "Receive a notification when a link in an SMS message is clicked via Customer.io.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_SMS_CLICKED,
+            "data_provider_info": CustomerIoSmsClickedEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new CustomerIoWebhookEventDataType(); },
+        });
+
+        # Watch Push Sent
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/events/" + EVENT_PUSH_SENT,
+            "action": "watch-" + EVENT_PUSH_SENT,
+            "groups": "Triggers",
+            "display_name": "Watch Push Sent",
+            "short_desc": "Watch for push sent events",
+            "desc": "Receive a notification when a push notification is sent via Customer.io.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_PUSH_SENT,
+            "data_provider_info": CustomerIoPushSentEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new CustomerIoWebhookEventDataType(); },
+        });
+
+        # Watch Push Delivered
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/events/" + EVENT_PUSH_DELIVERED,
+            "action": "watch-" + EVENT_PUSH_DELIVERED,
+            "groups": "Triggers",
+            "display_name": "Watch Push Delivered",
+            "short_desc": "Watch for push delivered events",
+            "desc": "Receive a notification when a push notification is delivered via Customer.io.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_PUSH_DELIVERED,
+            "data_provider_info": CustomerIoPushDeliveredEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new CustomerIoWebhookEventDataType(); },
+        });
+
+        # Watch Push Opened
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/events/" + EVENT_PUSH_OPENED,
+            "action": "watch-" + EVENT_PUSH_OPENED,
+            "groups": "Triggers",
+            "display_name": "Watch Push Opened",
+            "short_desc": "Watch for push opened events",
+            "desc": "Receive a notification when a push notification is opened via Customer.io.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_PUSH_OPENED,
+            "data_provider_info": CustomerIoPushOpenedEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new CustomerIoWebhookEventDataType(); },
+        });
+
+        # Watch Push Failed
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/events/" + EVENT_PUSH_FAILED,
+            "action": "watch-" + EVENT_PUSH_FAILED,
+            "groups": "Triggers",
+            "display_name": "Watch Push Failed",
+            "short_desc": "Watch for push failed events",
+            "desc": "Receive a notification when a push notification fails to send via Customer.io.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_PUSH_FAILED,
+            "data_provider_info": CustomerIoPushFailedEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new CustomerIoWebhookEventDataType(); },
+        });
+
+        # Watch Slack Sent
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/events/" + EVENT_SLACK_SENT,
+            "action": "watch-" + EVENT_SLACK_SENT,
+            "groups": "Triggers",
+            "display_name": "Watch Slack Sent",
+            "short_desc": "Watch for Slack sent events",
+            "desc": "Receive a notification when a Slack message is sent via Customer.io.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_SLACK_SENT,
+            "data_provider_info": CustomerIoSlackSentEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new CustomerIoWebhookEventDataType(); },
+        });
+
+        # Watch Slack Clicked
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/events/" + EVENT_SLACK_CLICKED,
+            "action": "watch-" + EVENT_SLACK_CLICKED,
+            "groups": "Triggers",
+            "display_name": "Watch Slack Clicked",
+            "short_desc": "Watch for Slack clicked events",
+            "desc": "Receive a notification when a link in a Slack message is clicked via Customer.io.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_SLACK_CLICKED,
+            "data_provider_info": CustomerIoSlackClickedEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new CustomerIoWebhookEventDataType(); },
+        });
+
+        # Watch Slack Failed
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/events/" + EVENT_SLACK_FAILED,
+            "action": "watch-" + EVENT_SLACK_FAILED,
+            "groups": "Triggers",
+            "display_name": "Watch Slack Failed",
+            "short_desc": "Watch for Slack failed events",
+            "desc": "Receive a notification when a Slack message fails to send via Customer.io.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_SLACK_FAILED,
+            "data_provider_info": CustomerIoSlackFailedEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new CustomerIoWebhookEventDataType(); },
+        });
+
+        # Watch Subscribed
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/events/" + EVENT_SUBSCRIBED,
+            "action": "watch-" + EVENT_SUBSCRIBED,
+            "groups": "Triggers",
+            "display_name": "Watch Subscribed",
+            "short_desc": "Watch for customer subscribed events",
+            "desc": "Receive a notification when a customer subscribes via Customer.io.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_SUBSCRIBED,
+            "data_provider_info": CustomerIoSubscribedEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new CustomerIoWebhookEventDataType(); },
+        });
+
+        # Watch Unsubscribed
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CustomerIoDataProvider::AppName,
+            "path": "/events/" + EVENT_UNSUBSCRIBED,
+            "action": "watch-" + EVENT_UNSUBSCRIBED,
+            "groups": "Triggers",
+            "display_name": "Watch Unsubscribed",
+            "short_desc": "Watch for customer unsubscribed events",
+            "desc": "Receive a notification when a customer unsubscribes via Customer.io.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_UNSUBSCRIBED,
+            "data_provider_info": CustomerIoUnsubscribedEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new CustomerIoWebhookEventDataType(); },
+        });
+    }; # end init
+} # end module
+
+/** @mainpage CustomerIoDataProvider Module
+
+    @tableofcontents
+
+    @section customeriodataproviderintro CustomerIoDataProvider Introduction
+
+    The %CustomerIoDataProvider module provides a data provider API for Customer.io marketing
+    automation services through the Customer.io REST API (both App API and Track API).
+
+    To use this module, use \c "%requires CustomerIoDataProvider" in your code.
+
+    All the public symbols in the module are defined in the CustomerIoDataProvider namespace.
+
+    The main classes are:
+    - @ref CustomerIoDataProvider::CustomerIoDataProvider "CustomerIoDataProvider":
+      the root data provider for Customer.io with child providers for people, campaigns,
+      segments, broadcasts, collections, snippets, exports, messages, activities, newsletters,
+      events, objects, and devices
+
+    @par Authentication:
+    Customer.io uses API key-based authentication. You need a Site ID and API Key for the Track API,
+    and an App API Key for the App API. These can be obtained from the Customer.io Settings >
+    Account Settings > API Credentials page.
+
+    @par Example:
+    @code{.py}
+#!/usr/bin/env qore
+
+%requires CustomerIoDataProvider
+
+CustomerIoDataProvider cio({"api_key": ENV.CUSTOMERIO_APP_API_KEY});
+
+# List people
+map printf("Person: %s (Email: %s)\n", $1.id, $1.email),
+    cio.getChildProvider("people").searchRecords({"email": "user@example.com"});
+
+# Create/update a customer
+hash<auto> result = cio.getChildProvider("create-update-customer").doRequest({
+    "customer_id": "user-123",
+    "email": "user@example.com",
+    "attributes": {
+        "first_name": "John",
+        "last_name": "Doe",
+        "plan": "premium",
+    },
+});
+printf("Customer updated: %y\n", result);
+
+# Track an event
+cio.getChildProvider("track-event").doRequest({
+    "customer_id": "user-123",
+    "name": "purchase",
+    "data": {
+        "product": "Widget",
+        "amount": 29.99,
+    },
+});
+    @endcode
+
+    @section customeriodataproviderrelnotes Release Notes
+
+    @subsection customeriodataproviderv1_0 CustomerIoDataProvider v1.0
+    - the initial version of the %CustomerIoDataProvider module
+*/
+
+#! Contains all public definitions in the CustomerIoDataProvider module
+public namespace CustomerIoDataProvider {
+}

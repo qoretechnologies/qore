@@ -182,7 +182,7 @@ ServiceNowRestClient rest({
         - \c content_encoding: for possible values, see \c EncodingSupport; this sets the send encoding (if the
             \c "send_encoding" option is not set) and the requested response encoding (note that the
             @ref RestClient::RestClient "RestClient" class will only compress outgoing message bodies over
-            @ref RestClient::RestClient::CompressionThreshold "CompressionThreshold" bytes in size)
+            \c CompressionThreshold bytes in size)
         - \c data: a \c DataSerializationOptions "data serialization option"; if not present defaults to \c "json"
         - \c default_path: The default path to use for new connections if a path is not otherwise specified in the
             connection URL
@@ -202,7 +202,7 @@ ServiceNowRestClient rest({
         - \c send_encoding: a \c EncodingSupport "send data encoding option" or the value \c "auto" which means
             to use automatic encoding; if not present defaults to \c "gzip" content encoding on sent message bodies
             (note that the @ref RestClient::RestClient "RestClient" class will only compress outgoing message bodies
-            over @ref RestClient::RestClient::CompressionThreshold "CompressionThreshold" bytes in size)
+            over \c CompressionThreshold bytes in size)
         - \c timeout: The timeout value in milliseconds (also can be a relative date-time value for clarity, ex:
           \c 30s)
         - \c username: (required) The ServiceNow username

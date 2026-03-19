@@ -117,7 +117,7 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
 
     This feature was originally intended to prepare for JIT compilation by enforcing stricter typing and
     automatically initializing typed variables with default values. However, the NaN-boxing optimization
-    for @ref QoreValue (reducing value size from 16 to 8 bytes with single-comparison type guards) addressed
+    for \c QoreValue (reducing value size from 16 to 8 bytes with single-comparison type guards) addressed
     JIT requirements more effectively without requiring behavioral changes.
 
     The @ref loose-types "%loose-types" parse directive is also removed (it was only used to disable
@@ -335,7 +335,7 @@ qore --compile-module MyModule.qm --strip-source
 
     @par New Build Requirement: Rust Toolchain and tree-sitter CLI
     @parblock
-    The \c astparser module now uses a <a href="https://tree-sitter.github.io/tree-sitter/">tree-sitter</a>-based
+    The @ref astparserintro "astparser" module now uses a <a href="https://tree-sitter.github.io/tree-sitter/">tree-sitter</a>-based
     parser backend for Qore source code analysis. Building %Qore from source now requires a
     <a href="https://rustup.rs/">Rust toolchain</a> (cargo) and the \c tree-sitter CLI tool to generate the
     parser from the Qore grammar definition.
@@ -357,7 +357,7 @@ cargo install tree-sitter-cli@0.26.5
     @par New Required Build Dependency: Eigen3
     @parblock
     <a href="https://eigen.tuxfamily.org/">Eigen3</a> (>= 3.4, including Eigen 5.x) is now a
-    <b>required</b> build dependency. It is used by the new \c ml binary module for linear algebra
+    <b>required</b> build dependency. It is used by the new @ref mlintro "ml" binary module for linear algebra
     operations. The build will fail if Eigen3 is not found.
 
     On macOS, CMake now automatically detects MacPorts (\c /opt/local) and Homebrew prefixes for
@@ -474,8 +474,20 @@ cargo install tree-sitter-cli@0.26.5
       - service segment filtering option to skip envelope segments during iteration
       - DataProvider integration for use in data pipelines and integration workflows
     - @ref asyncsocketiointro "AsyncSocketIo" module
-      - new \c Http3StreamContext class for HTTP/3 stream context management
-      - new \c AbstractStreamContext base class for protocol-agnostic stream handling
+      - high-performance event loop for asynchronous socket I/O using epoll (Linux) / kqueue (macOS/BSD)
+      - new @ref AsyncSocketIo::AsyncSocketIoController "AsyncSocketIoController" class providing a dedicated I/O
+        thread with three-phase polling cycle for managing multiple concurrent socket operations
+      - process-wide global singleton via @ref AsyncSocketIo::getGlobalAsyncIoController()
+        "getGlobalAsyncIoController()" with auto-start/stop behavior
+      - new \c Http2StreamContext class for HTTP/2 sockets with direct I/O mode
+      - new \c Http3StreamContext class for HTTP/3 QUIC streams with backpressure handling
+      - new \c AbstractStreamContext abstract base class for protocol-agnostic stream I/O
+      - shared @ref Qore::Thread::ThreadPool "ThreadPool" for dispatching callbacks off the I/O thread
+      - support for WebSocket over HTTP/2 (RFC 8441) and HTTP/3 (RFC 9220)
+      - this module is the foundation for the future of socket I/O in %Qore, providing the event-loop
+        infrastructure used by @ref httpclientiointro "HttpClientIo",
+        @ref restclientio_intro "RestClientIo", and
+        @ref httpserverasynciointro "HttpServerAsyncIo"
     - @ref connectionproviderintro "ConnectionProvider" module
       - added the \c ConnectionProvider::RestartableIoHelper class
       - new \c http_version option in \c ConnectionProvider::HttpConnection for HTTP version control ("auto", "1.0", "1.1", "2.0", "3.0")
@@ -508,6 +520,32 @@ cargo install tree-sitter-cli@0.26.5
         \c DataProvider::DataProviderActionInfo for context-sensitive action filtering and propagation
       - added \c amqp factory registration to \c DataProvider::FactoryMap for the
         <a href="https://github.com/qoretechnologies/module-amqp">amqp</a> module
+      - added 67 generic DPQL expressions for arithmetic, string, type conversion, encoding,
+        cryptographic, regex, date/time, collection, and serialization operations
+      - added \c now() function returning current timestamp with microsecond precision
+      - added module-conditional expression registration for YAML, JSON, and XML serialization
+        functions (registered when the corresponding modules are available)
+      - added \c dp_get_all_expression_info() public function to retrieve all expression metadata
+    - <a href="../../modules/Schema/html/index.html#schemaintro">Schema</a> module
+      - added \c Schema::DataSchema class for pure data schema definitions from YAML (\c .ysm) or
+        JSON (\c .jsm) files — enables schema management without writing Qore code
+      - added \c Schema::DataSchemaLoader class for loading, validating, and normalizing data schema
+        files against a JSON Schema (Draft 2020-12) meta-schema
+      - added \c Schema::MigrationExecutor class for data-driven migration actions with access level
+        enforcement and dependency-based step ordering (17 action types supported)
+      - added \c qschema CLI tool for schema management: \c align, \c drop, \c diff, \c validate,
+        \c info, \c export commands with colorized output and dry-run support
+      - separated module into individual \c .qc files for maintainability
+    - <a href="../../modules/SchemaReverse/html/index.html#schemareverseintro">SchemaReverse</a> module
+      - added \c toYaml() and \c toJson() methods on \c AbstractReverseObject and \c SchemaReverse
+        for exporting database schemas to \c .ysm/\c .jsm format
+      - added \c SchemaReverse::toQore() for structured hash output compatible with \c DataSchema
+      - fixed numeric scale extraction and trigger accumulation bugs
+      - added foreign key constraint extraction via \c getForeignConstraints()
+    - <a href="../../modules/SqlUtil/html/index.html#sqlutilintro">SqlUtil</a> module
+      - added \c SqlUtil::generate_auto_triggers() for generating standard database triggers
+        (created/modified timestamps, sequence-based ID columns) for PostgreSQL, Oracle, MySQL, and MSSQL
+      - added \c SqlUtil::generate_auto_triggers_all_drivers() for cross-driver trigger definitions
     - @ref openapi3intro "OpenApi3" module
       - new module supporting OpenAPI 3.* schemas for REST API integration
       - new @ref OpenApi3::OpenApi3SchemaGenerator "OpenApi3SchemaGenerator" class for generating OpenAPI 3.0.3 schemas from Qore source code
@@ -532,7 +570,7 @@ cargo install tree-sitter-cli@0.26.5
         - enables handling many more concurrent connections with fewer threads
         - sub-millisecond response latency for simple requests
         - new @ref HttpServer::HttpServer::isAsyncMode() "HttpServer::isAsyncMode()" method to check if async mode is enabled
-        - new @ref HttpServer::HttpServer::queueAsyncResponse() "HttpServer::queueAsyncResponse()" method for async response sending
+        - new \c HttpServer::queueAsyncResponse() method for async response sending
         - set \c async_mode to \c False in @ref HttpServer::HttpServerOptionInfo "HttpServerOptionInfo" to disable
       - fixed I/O thread blocking on \c Socket::getPeerInfo() calls that could cause the server to become unresponsive
         by disabling DNS hostname lookups and moving calls to after SSL handshake completion
@@ -560,6 +598,23 @@ cargo install tree-sitter-cli@0.26.5
       - new @ref HttpClientIo::Http3ClientConnection "Http3ClientConnection" class for HTTP/3 connections
       - new @ref HttpClientIo::Http2ClientStreamHandle "Http2ClientStreamHandle" class with HTTP/2 streaming support
       - new @ref HttpClientIo::Http3ClientStreamHandle "Http3ClientStreamHandle" class for HTTP/3 stream handles
+      - dead connection detection and eviction with QUIC session health checks
+      - pending stream reservation tracking to limit blast radius of handshake failures
+      - all I/O driven by the @ref asyncsocketiointro "AsyncSocketIo" event loop
+    - @ref restclientio_intro "RestClientIo" module
+      - new module providing a REST client API over multiplexed HTTP/2 and HTTP/3 connections
+      - implements the @ref RestClient::AbstractRestClient "AbstractRestClient" interface for drop-in compatibility
+      - async API with Future-returning methods (@ref RestClientIo::RestClientIo::restGetAsync() "restGetAsync()",
+        @ref RestClientIo::RestClientIo::restPostAsync() "restPostAsync()", etc.)
+      - supports shared @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager" for
+        connection sharing across multiple @ref RestClientIo::RestClientIo "RestClientIo" instances
+      - data serialization/deserialization for JSON, YAML, XML, CBOR, URL-encoded, text, and binary formats
+      - new @ref RestClientIo::RestClientIoPool "RestClientIoPool" class providing thread-safe connection pooling
+        built on @ref Qore::Thread::AbstractConnectionPool "AbstractConnectionPool"
+    - @ref restclientintro "RestClient" module
+      - new @ref RestClient::RestClientPool "RestClientPool" class providing thread-safe connection pooling
+        for @ref RestClient::RestClient "RestClient" instances, built on
+        @ref Qore::Thread::AbstractConnectionPool "AbstractConnectionPool"
     - @ref httpserverutilintro "HttpServerUtil" module
       - added functionality to support setting cookies
       - refactored authentication methods to provide a more extensible and clear design
@@ -605,7 +660,7 @@ cargo install tree-sitter-cli@0.26.5
         (<a href="https://github.com/qoretechnologies/qore/issues/5065">issue 5065</a>)
         - new \c extensions constructor option for extension negotiation
         - automatic compression/decompression when extensions are active
-        - new @ref WebSocketClient::WebSocketClient::hasPerMessageDeflate() "hasPerMessageDeflate()" and @ref WebSocketClient::WebSocketClient::getActiveExtensions() "getActiveExtensions()" methods
+        - new \c hasPerMessageDeflate() and \c getActiveExtensions() methods
     - @ref websockethandlerintro "WebSocketHandler" module
       - added optional AsyncAPI 3.0 validation support for WebSocket messages
       - added server-side WebSocket extension support with permessage-deflate compression
@@ -635,7 +690,7 @@ cargo install tree-sitter-cli@0.26.5
         - @ref Qore::File "File" read, write, and lock operations use polling with interrupt checks
         - @ref Qore::PipeInputStream "PipeInputStream" and @ref Qore::PipeOutputStream "PipeOutputStream" operations use polling
         - @ref Qore::StdoutOutputStream "StdoutOutputStream" and @ref Qore::StderrOutputStream "StderrOutputStream" use polling
-        - @ref Qore::Datasource "Datasource" transaction lock acquisition is interruptible
+        - @ref Qore::SQL::Datasource "Datasource" transaction lock acquisition is interruptible
       - security presets: @ref Qore::SandboxManager::createLockdown() "createLockdown()" and
         @ref Qore::SandboxManager::createWebSafe() "createWebSafe()"
       - see @ref sandboxing "Sandboxing and Security" for full documentation
@@ -669,7 +724,7 @@ cargo install tree-sitter-cli@0.26.5
         internal check (\c qore_check_cancel()) that polls for both thread-level cancellation and
         program-level interrupt requests
       - @ref Qore::cancel_thread() "cancel_thread()" and @ref Qore::clear_thread_cancel() "clear_thread_cancel()"
-        require the @ref Qore::Option::HAVE_THREAD_CONTROL "THREAD_CONTROL" functional domain; sandboxed code
+        require the \c THREAD_CONTROL functional domain; sandboxed code
         without this domain cannot clear the cancellation flag, making cancellation effectively unavoidable
       - @ref Qore::thread_cancelled() "thread_cancelled()" only requires \c THREAD_INFO, so any code can poll its
         cancellation status
@@ -723,7 +778,7 @@ cargo install tree-sitter-cli@0.26.5
     - new @ref Qore::ParseOptions "ParseOptions" class providing an opaque container for parse option flags
       supporting more than 64 option bits
       (<a href="https://github.com/qoretechnologies/qore/issues/5145">issue 5145</a>)
-      - overcomes the limitation of the legacy @ref PO_constants "PO_*" 64-bit integer constants
+      - overcomes the limitation of the legacy @ref parse_options "PO_*" 64-bit integer constants
       - supports options by name (string), by integer constant, or by combining other ParseOptions objects
       - new @ref Qore::Program "Program" constructor overload accepting a @ref Qore::ParseOptions "ParseOptions" object
       - new @ref Qore::Program::getFullParseOptions() "Program::getFullParseOptions()" method returning
@@ -742,7 +797,7 @@ cargo install tree-sitter-cli@0.26.5
     - <b>ReadOnlyFile short reads</b>
       - new \c ReadOnlyFile::readShortBinary() method returns immediately with any available data without trying to
         fill the requested size
-    - new classes and methods in the @ref reflection "reflection" module:
+    - new classes and methods in the @ref reflectionintro "reflection" module:
       - \c Qore::Reflection::Enum class for enum reflection
       - \c Qore::Reflection::EnumMember class for enum member reflection
       - @ref Qore::Reflection::Namespace::getEnums() "Namespace::getEnums()" to list enums in a namespace
@@ -887,7 +942,7 @@ cargo install tree-sitter-cli@0.26.5
         commands
       - includes MemcachedClient class for direct memcached server interaction
       - connection support with \c memcached:// and \c memcacheds:// (SSL) URL schemes
-    - \c ml module
+    - @ref mlintro "ml" module
       - new builtin module providing machine learning algorithms powered by Eigen3
       - Isolation Forest for unsupervised anomaly detection
       - Local Outlier Factor (LOF) for density-based anomaly detection using k-nearest neighbors
@@ -905,7 +960,7 @@ cargo install tree-sitter-cli@0.26.5
         holt-winters, seasonal-decomposition, linear-regression, lof, and gmm
       - optional onnx-model pipeline processor for ONNX Runtime inference
       - action catalog integration with the "ML Analytics" app
-    - @ref mongodb "mongodb" module
+    - @ref mongodbintro "mongodb" module
       - new builtin module providing MongoDB client connectivity using libmongoc
       - provides MongoClient, MongoDatabase, MongoCollection, MongoCursor, and ObjectId classes
       - full CRUD operations support (insertOne, insertMany, find, findOne, updateOne, updateMany, deleteOne,
@@ -955,6 +1010,15 @@ cargo install tree-sitter-cli@0.26.5
       - action catalog integration with 22 actions
       - webhook-based event trigger for new invoices
       - connection support with \c wave:// URL scheme
+    - @ref woocommercerestclientintro "WooCommerceRestClient" module
+      - new module providing a REST client for WooCommerce's REST API v3
+      - supports HTTP Basic Auth with consumer key and consumer secret
+      - provides WooCommerceRestConnection for connection management with \c woocommerce:// URL scheme
+    - @ref woocommercedataproviderintro "WooCommerceDataProvider" module
+      - new module providing a data provider API for WooCommerce e-commerce services
+      - 51 actions across orders, products, customers, coupons, webhooks, reports, shipping, taxes, settings
+      - 26 webhook-based triggers (15 built-in topics + 11 custom action triggers with enrichment)
+      - connection support with \c woocommerce:// URL scheme
     - @ref mailgunrestclientintro "MailgunRestClient" module
       - new module providing a REST client for Mailgun's email API
       - supports API key authentication with US and EU region endpoints
@@ -1004,7 +1068,7 @@ cargo install tree-sitter-cli@0.26.5
       - supports HTTP Basic Authentication with API key (empty username, API key as password)
       - all requests include \c version=v2 query parameter automatically
       - provides LemlistRestConnection for connection management with \c lemlist:// URL scheme
-    - @ref lemlistdataproviderintro "LemlistDataProvider" module
+    - \c LemlistDataProvider module
       - new module providing a data provider API for Lemlist sales outreach and email campaign services
       - campaign management (create, pause, start campaigns)
       - lead management (add, update, remove leads from campaigns)
@@ -1037,6 +1101,22 @@ cargo install tree-sitter-cli@0.26.5
       - webhook-based event triggers for order and shipment notifications
       - action catalog integration with 36 actions and 4 triggers
       - connection support with \c shipstation:// URL scheme
+    - @ref customeriorestclientintro "CustomerIoRestClient" module
+      - new module providing a REST client for Customer.io's App API and Track API
+      - supports dual authentication: Bearer token (App API) and HTTP Basic Auth (Track API)
+      - regional endpoint support for US and EU data centers
+      - provides CustomerIoRestConnection for connection management with \c customerio:// URL scheme
+    - @ref customeriodataproviderintro "CustomerIoDataProvider" module
+      - new module providing a data provider API for Customer.io marketing automation services
+      - customer management (create, update, delete, suppress, merge)
+      - campaign, broadcast, segment, and newsletter management
+      - transactional email and push notification sending
+      - event tracking, page view tracking, and device management
+      - object and relationship management
+      - collection and snippet management for message personalization
+      - webhook-based event triggers for email, SMS, push, Slack, and subscription events
+      - action catalog integration with 46 actions and 21 triggers
+      - connection support with \c customerio:// URL scheme
     - @ref instantlyrestclientintro "InstantlyRestClient" module
       - new module providing a REST client for Instantly's email outreach API v2
       - supports Bearer token (API key) authentication
@@ -1177,6 +1257,18 @@ cargo install tree-sitter-cli@0.26.5
       - polling-based event triggers for contacts, opportunities, orders, tasks, and notes
       - action catalog integration with 45+ actions and 7 triggers
       - connection support with \c keaprest:// URL scheme
+    - @ref kitrestclientintro "KitRestClient" module
+      - new module providing a REST client for Kit's email marketing API
+      - supports OAuth2 and API key authentication
+      - provides KitRestConnection for connection management with \c kitrest:// URL scheme
+    - @ref kitdataproviderintro "KitDataProvider" module
+      - new module providing a data provider API for Kit email marketing
+      - subscriber management (create, update, unsubscribe, bulk create, list, get by ID)
+      - tag management (create, update, tag/untag subscribers, bulk tag)
+      - custom field, broadcast, form, sequence, and purchase management
+      - polling-based event triggers for 6 subscriber events
+      - action catalog integration with 30+ actions and 6 triggers
+      - connection support with \c kitrest:// URL scheme
     - @ref gohighlevelrestclientintro "GoHighLevelRestClient" module
       - new module providing a REST client for GoHighLevel's CRM and marketing automation API
       - supports OAuth2 authentication with bearer tokens
@@ -1230,7 +1322,7 @@ cargo install tree-sitter-cli@0.26.5
       - new module providing a REST client for Tableau's analytics and BI REST API
       - supports Personal Access Token (PAT) session-token authentication
       - provides TableauRestConnection for connection management with \c tableaures:// URL scheme
-    - @ref tableaudataproviderintro "TableauDataProvider" module
+    - \c TableauDataProvider module
       - new module providing a data provider API for Tableau analytics
       - datasource management (search, get, update, delete, download, add/remove tags)
       - project management (search, create, update, delete)
@@ -1310,15 +1402,15 @@ cargo install tree-sitter-cli@0.26.5
       - added @ref astparser::AstTreeSearcher::findScopeSymbols() "AstTreeSearcher::findScopeSymbols()" for
         scope-aware symbol completion with scope level information
         (<a href="https://github.com/qoretechnologies/qore/issues/5125">issue 5125</a>)
-      - added @ref ADK_Typedef "ADK_Typedef" constant for typedef declarations
+      - added \c ADK_Typedef constant for typedef declarations
         (<a href="https://github.com/qoretechnologies/qore/issues/5125">issue 5125</a>)
-      - added @ref ASYK_TypeAlias "ASYK_TypeAlias" constant for typedef symbol kind
+      - added \c ASYK_TypeAlias constant for typedef symbol kind
         (<a href="https://github.com/qoretechnologies/qore/issues/5125">issue 5125</a>)
-      - added @ref ASUK_TypedefDeclName "ASUK_TypedefDeclName" and @ref ASUK_TypedefTypeName "ASUK_TypedefTypeName"
+      - added \c ASUK_TypedefDeclName and \c ASUK_TypedefTypeName
         constants for typedef usage kinds
-      - added @ref ADK_Enum "ADK_Enum" constant for enum declarations
-      - added @ref ASYK_Enum "ASYK_Enum" constant for enum symbol kind
-      - added @ref ASUK_EnumDeclName "ASUK_EnumDeclName" and @ref ASUK_EnumMemberName "ASUK_EnumMemberName"
+      - added \c ADK_Enum constant for enum declarations
+      - added \c ASYK_Enum constant for enum symbol kind
+      - added \c ASUK_EnumDeclName and \c ASUK_EnumMemberName
         constants for enum usage kinds
       - fixed off-by-one bug in @ref astparser::AstTree::getNodesInfo() "AstTree::getNodesInfo()" line numbers
         (now returns 0-indexed values consistent with LSP convention)
@@ -1341,7 +1433,7 @@ cargo install tree-sitter-cli@0.26.5
       - installed as @c qls system command, usable from any editor supporting LSP
     - @ref qorecodeformatintro "QoreCodeFormat" module
       - new module providing automated Qore source code formatting using the tree-sitter-based CST from the
-        \c astparser module
+        @ref astparserintro "astparser" module
       - line-length-aware wrapping (120 character default) with intelligent binary expression chain and ternary
         operator wrapping
       - preserves comments, parse directives, and string literals
@@ -1426,7 +1518,7 @@ cargo install tree-sitter-cli@0.26.5
     - @ref utilintro "Util" module
       - fixed the @ref Util::glob_to_regex() "glob_to_regex()" function
         (<a href="https://github.com/qoretechnologies/qore/issues/4996">issue 4996</a>)
-    - @ref reflection "reflection" module
+    - @ref reflectionintro "reflection" module
       - @ref Qore::Reflection::Class::getConstant() "Class::getConstant()" now searches the class hierarchy
         (<a href="https://github.com/qoretechnologies/qore/issues/4998">issue 4998</a>)
     - fixed a bug handling nested conditional parsing directives
@@ -1656,8 +1748,8 @@ hash<ExtendedInfo> ext = <ExtendedInfo>{"name": "test", "id": 1, "created": now(
       - member shadowing (child member with same name as parent member) is a parse error
       - circular inheritance is detected and reported as a parse error
       - type compatibility: derived hashdecl values can be assigned to parent hashdecl variables
-      - new public API: @ref TypedHashDecl::getParentHashDecl() "TypedHashDecl::getParentHashDecl()" and
-        @ref TypedHashDecl::inheritsFrom() "TypedHashDecl::inheritsFrom()"
+      - new public API: \c TypedHashDecl::getParentHashDecl() and
+        \c TypedHashDecl::inheritsFrom()
       - new reflection API: @ref Qore::Reflection::TypedHash::getParentTypedHash() "TypedHash::getParentTypedHash()"
         and @ref Qore::Reflection::TypedHash::inheritsFrom() "TypedHash::inheritsFrom()"
 
@@ -1685,6 +1777,8 @@ hash<ExtendedInfo> ext = <ExtendedInfo>{"name": "test", "id": 1, "created": now(
       now resolves static methods in a manner similar to other programming languages based on the context of the call
     - New Modules
       - <a href="../../modules/AsyncSocketIo/html/index.html#asyncsocketiointro">AsyncSocketIo</a>
+      - <a href="../../modules/HttpClientIo/html/index.html#httpclientiointro">HttpClientIo</a>
+      - <a href="../../modules/RestClientIo/html/index.html#restclientio_intro">RestClientIo</a>
       - <a href="../../modules/DiscordDataProvider/html/index.html#discorddataproviderintro">DiscordDataProvider</a>
       - <a href="../../modules/DiscordRestClient/html/index.html#discordrestclientintro">DiscordRestClient</a>
       - <a href="../../modules/DiscordWebSocketClient/html/index.html#discordwebsocketclientintro">DiscordWebSocketClient</a>
@@ -1771,10 +1865,10 @@ hash<ExtendedInfo> ext = <ExtendedInfo>{"name": "test", "id": 1, "created": now(
       - Modules must now implement \c extern \c "C" \c {name}_qore_module_desc(QoreModuleInfo&) to register
         module metadata (hyphens in module names are converted to underscores for the C symbol name);
         see @ref qore_modules for the updated developer guide
-      - @ref qore_module_init_t signature changed from \c QoreStringNode*() to
+      - \c qore_module_init_t signature changed from \c QoreStringNode*() to
         \c void(QoreModuleInitContext&, \c ExceptionSink&); errors are now reported via exceptions
-      - @ref qore_module_ns_init_t now takes an additional \c ExceptionSink& parameter
-      - The @ref QoreModuleInfo struct uses default member initializers, making it extensible without future API breaks
+      - \c qore_module_ns_init_t now takes an additional \c ExceptionSink& parameter
+      - The \c QoreModuleInfo struct uses default member initializers, making it extensible without future API breaks
 
     @subsection qore_2_0_0_bug_fixes Bug Fixes in Qore
     - <a href="../../modules/BulkSqlUtil/html/index.html#bulksqlutilintro">BulkSqlUtil</a> module

@@ -158,6 +158,9 @@ public class Main inherits QUnit::Test {
         addTestCase("GET tests", \methodGetTest());
         addTestCase("PUT tests", \methodPutTest());
         addTestCase("POST tests", \methodPostTest());
+        addTestCase("pool factory", \testPoolFactory());
+        addTestCase("pool with options", \testPoolWithOptions());
+        addTestCase("pool concurrent", \testPoolConcurrent());
 
         @debug {
             set_signal_handler(SIGUSR1, sub (int sig) {
@@ -360,6 +363,67 @@ public class Main inherits QUnit::Test {
         #printf("ret: %y\n", ret);
         assertEq(<abcd>, binary(ret.body));
         assertEq(MimeTypeOctetStream, ret."content-type");
+    }
+
+    testPoolFactory() {
+        code<RestClient::AbstractRestClient()> factory = RestClient::AbstractRestClient sub () {
+            return new RestClient({"url": "http://127.0.0.1:" + port});
+        };
+        RestClient::RestClientPool pool(factory,
+            <Qore::Thread::ConnectionPoolOptions>{"min": 1, "max": 3});
+        on_exit pool.shutdown();
+
+        RestClient rc = cast<RestClient>(pool.acquire());
+        on_exit pool.release();
+
+        auto ret = rc.get("/api_text");
+        assertEq(VALUE_TEXT.output, ret.body);
+
+        assertTrue(rc instanceof RestClient::AbstractRestClient);
+    }
+
+    testPoolWithOptions() {
+        # Use the options-based constructor — no factory closure needed
+        RestClient::RestClientPool pool({"url": "http://127.0.0.1:" + port},
+            <Qore::Thread::ConnectionPoolOptions>{"min": 1, "max": 3});
+        on_exit pool.shutdown();
+
+        RestClient rc = cast<RestClient>(pool.acquire());
+        on_exit pool.release();
+
+        auto ret = rc.get("/api_text");
+        assertEq(VALUE_TEXT.output, ret.body);
+
+        assertTrue(rc instanceof RestClient::RestClient);
+    }
+
+    testPoolConcurrent() {
+        RestClient::RestClientPool pool({"url": "http://127.0.0.1:" + port},
+            <Qore::Thread::ConnectionPoolOptions>{"min": 2, "max": 5});
+        on_exit pool.shutdown();
+
+        Counter cnt(5);
+        list<auto> results = ();
+        Mutex mtx();
+        for (int i = 0; i < 5; ++i) {
+            background sub () {
+                on_exit cnt.dec();
+                RestClient rc = cast<RestClient>(pool.acquire());
+                on_exit pool.release();
+                auto ret = rc.get("/api_text");
+                {
+                    AutoLock al(mtx);
+                    push results, ret;
+                }
+            }();
+        }
+        cnt.waitForZero();
+
+        assertEq(5, results.size());
+        for (int i = 0; i < 5; ++i) {
+            assertEq(VALUE_TEXT.output, results[i].body,
+                sprintf("pool concurrent request %d", i));
+        }
     }
 
     connectionTests() {

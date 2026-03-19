@@ -31,7 +31,7 @@ public namespace ServerSentEventClient {
     Also supports the following runtime options in getImpl():
     - \c "logger": a \c Logger::LoggerInterface "LoggerInterface" object for internal logging
     - \c "start_thread": a closure to start a new thread (signature:
-      @verbatim int sub start_thread(code callable) {}@endverbatim)
+      \c "int sub start_thread(code callable) {}")
     - \c "yield": a closure to yield current thread execution
 */
 public class ServerSentEventConnection inherits ConnectionProvider::AbstractConnectionWithInfo {
@@ -160,7 +160,7 @@ public class ServerSentEventConnection inherits ConnectionProvider::AbstractConn
     /** @return a hash with the following keys reflecting support for the corresponding runtime options in getImpl():
         - \c "logger": a \c Logger::LoggerInterface "LoggerInterface" object for internal logging
         - \c "start_thread": a closure to start a new thread (signature:
-          @verbatim int sub start_thread(code callable) {}@endverbatim)
+          \c "int sub start_thread(code callable) {}")
         - \c "yield": a closure to yield current thread execution
     */
     *hash<auto> getRuntimeOptions() {
@@ -188,7 +188,7 @@ public class ServerSentEventConnection inherits ConnectionProvider::AbstractConn
         - \c "logger": a \c Logger::LoggerInterface "LoggerInterface" object for internal logging
         - \c "reconnect": try to reconnect when the connection is closed or lost (default @ref False)
         - \c "start_thread": a closure to start a new thread (signature:
-          @verbatim int sub start_thread(code callable) {}@endverbatim)
+          \c "int sub start_thread(code callable) {}")
         - \c "yield": a closure to yield current thread execution
 
         @return a @ref ServerSentEventClient object

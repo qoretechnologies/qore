@@ -41,6 +41,14 @@
 %define NoYaml
 %endtry
 
+%try-module json
+%define NoJson
+%endtry
+
+%try-module xml
+%define NoXml
+%endtry
+
 module DataProvider {
     version = "3.3.0";
     desc = "user module for data integration patterns and data and API introspection";
@@ -48,6 +56,21 @@ module DataProvider {
     url = "http://qore.org";
     license = "MIT";
     init = sub () {
+        # register module-conditional expression implementations
+        hash<auto> extra;
+%ifndef NoYaml
+        extra += YamlExpressionImplementations;
+%endif
+%ifndef NoJson
+        extra += JsonExpressionImplementations;
+%endif
+%ifndef NoXml
+        extra += XmlExpressionImplementations;
+%endif
+        if (extra) {
+            AbstractDataProvider::ExtraExpressionImplementations = extra;
+        }
+
         # register the data provider factory
         DataProvider::registerFactory(new NullDataProviderFactory());
 
@@ -1005,6 +1028,22 @@ if (errors) {
     @section dataprovider_relnotes Release Notes
 
     @subsection dataprovider_v3_3 DataProvider v3.3
+    - added 67 generic DPQL expressions for use in data-driven contexts (arithmetic, string
+      operations, type conversions, encoding, cryptographic operations, regex, date/time,
+      collection operations, and serialization functions)
+    - new expression categories: arithmetic (\c +, \c -, \c *, \c /), string (\c upr, \c lwr,
+      \c trim, \c substr, \c join, \c replace), type conversion (\c toString, \c toInt,
+      \c toFloat, \c toNumber, \c toBool, \c toDate), encoding (\c to-hex, \c to-base64,
+      \c parse_hex, \c parse_base64), crypto (\c digest, \c hmac, \c encrypt, \c decrypt),
+      serialization (\c make_yaml, \c parse_yaml, \c make_json, \c parse_json, \c make_xml,
+      \c parse_xml)
+    - added \c now() function returning current timestamp with microsecond precision
+    - added @ref DataProvider::AbstractDataProvider::ExtraExpressionImplementations
+      "ExtraExpressionImplementations" static member for module-conditional expression
+      registration (YAML, JSON, XML expressions registered when modules are available)
+    - added @ref DataProvider::dp_get_all_expression_info() "dp_get_all_expression_info()"
+      public function to retrieve all available expression metadata
+    - added 60+ operator alias mappings for user-friendly expression names
     - added @ref DataProvider::DPAD_PASS_THROUGH "DPAD_PASS_THROUGH" constant for pipeline processor
       actions whose output type is the same as their input type (e.g., filter processors that
       drop non-matching records but do not modify matching ones)

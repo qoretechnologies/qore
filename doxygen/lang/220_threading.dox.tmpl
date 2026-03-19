@@ -225,15 +225,15 @@ x=null@endverbatim
     - <b>Language-level loops:</b> \c while, \c for, \c foreach, and \c do-while check at the start of each iteration
     - <b>Sleep operations:</b> @ref Qore::sleep() "sleep()" and @ref Qore::usleep() "usleep()"
     - <b>Threading primitive waits:</b>
-      - @ref Qore::Thread::Gate "Gate"::enter()
-      - @ref Qore::Thread::Mutex "Mutex"::lock()
-      - @ref Qore::Thread::Counter "Counter"::waitForZero()
-      - @ref Qore::Thread::Condition "Condition"::wait()
-      - @ref Qore::Thread::RWLock "RWLock"::readLock() and writeLock()
+      - @ref Qore::Thread::Gate "Gate"::\c enter()
+      - @ref Qore::Thread::Mutex "Mutex"::\c lock()
+      - @ref Qore::Thread::Counter "Counter"::\c waitForZero()
+      - @ref Qore::Thread::Condition "Condition"::\c wait()
+      - @ref Qore::Thread::RWLock "RWLock"::\c readLock() and \c writeLock()
     - <b>Auto-lock constructors:</b> @ref Qore::Thread::AutoLock "AutoLock",
       @ref Qore::Thread::AutoGate "AutoGate", @ref Qore::Thread::AutoReadLock "AutoReadLock", and
       @ref Qore::Thread::AutoWriteLock "AutoWriteLock"
-    - <b>Queue operations:</b> @ref Qore::Thread::Queue "Queue"::get() and pop() (both timed and untimed)
+    - <b>Queue operations:</b> @ref Qore::Thread::Queue "Queue"::\c get() and \c pop() (both timed and untimed)
     - <b>I/O operations:</b> pipe reads/writes, file locking, and backquote command execution
 
     Blocking check points (threading primitives, I/O) use a 500ms polling interval; the thread does not respond to

@@ -746,7 +746,7 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
             Individual values are hashes in the form of Security Requirement Objects.
             See https://github.com/OAI/OpenAPI-Specification/blob/master/versions/2.0.md#securityRequirementObject.
             That is, the hash keys MUST correspond to security schemes declared
-            in the @ref OpenApi3Schema::securitySchemes "Security Definitions",
+            in the \c securitySchemes "Security Definitions",
             while the values are lists of scope names (strings) required for the execution.
         */
         hash<string, softlist<string>> security;
@@ -2592,7 +2592,7 @@ public class OperationObject inherits ObjectBase, ParameterGroup, RestSchemaVali
             Individual values are hashes in the form of Security Requirement Objects.
             See https://github.com/OAI/OpenAPI-Specification/blob/master/versions/2.0.md#securityRequirementObject.
             That is, the hash keys MUST correspond to security schemes declared
-            in the @ref OpenApi3Schema::securitySchemes "Security Definitions",
+            in the \c securitySchemes "Security Definitions",
             while the values are lists of scope names (strings) required for the execution.
          */
         list<hash<string, list<string>>> security;

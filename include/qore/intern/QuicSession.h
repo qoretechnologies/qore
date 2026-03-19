@@ -328,7 +328,7 @@ public:
         as its own UDP datagram.  Short header (1-RTT) packets cannot be
         coalesced, so sending multiple concatenated packets in one datagram
         would cause the receiver to silently discard all but the first.
-        @param packets output: one vector<uint8_t> per datagram
+        @param batch output: one vector<uint8_t> per datagram
         @param xsink exception sink
         @return number of packets generated, 0 if nothing to send, -1 on error
     */

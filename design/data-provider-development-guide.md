@@ -563,6 +563,88 @@ public class MyEventsProvider inherits MyDataProviderBase {
 }
 ```
 
+### Webhook Enrichment (Minimal Payload)
+
+Some APIs send minimal webhook payloads containing only an object ID or resource URL instead of the full object data. In this case, `handleWebhookEvent()` must make an additional API request to fetch the complete object before notifying observers.
+
+**When to use:** The external API's webhook payload lacks the fields needed by the event data type — typically just an ID, resource URL, or a small subset of fields.
+
+**Pattern:**
+
+```qore
+public class MyEventProvider inherits MyDataProviderBase, DelayedObservable {
+    private {
+        *hash<auto> webhook_info;
+        *string webhook_id;
+    }
+
+    observersReady() {
+        # Create local webhook endpoint
+        webhook_info = DataProvider::DataProviderWebhook::createWebhook({
+            "method": "POST",
+            "callback": \handleWebhookEvent(),
+        });
+
+        # Register webhook with external API
+        hash<auto> response = doPost("/webhooks", {
+            "url": webhook_info.url,
+            "event": "item.created",
+        });
+        webhook_id = response.id;
+    }
+
+    private handleWebhookEvent(hash<auto> payload) {
+        # payload is minimal, e.g.: {"id": "abc123", "event": "item.created"}
+
+        # Fetch the full object from the API
+        hash<auto> full_record;
+        try {
+            full_record = doGet("/items/" + payload.id);
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::ERROR, "handleWebhookEvent: error fetching full record: %s",
+                get_exception_string(ex));
+            return;
+        }
+
+        # Notify observers with the enriched data
+        notifyObservers(getEventType(), full_record);
+    }
+
+    private stopEventsIntern() {
+        # Delete webhook from remote API
+        if (webhook_id) {
+            try {
+                doDelete("/webhooks/" + webhook_id);
+            } catch (hash<ExceptionInfo> ex) {
+                log(LoggerLevel::ERROR, "error deleting webhook: %s", get_exception_string(ex));
+            }
+            remove webhook_id;
+        }
+
+        # Delete local webhook endpoint
+        if (webhook_info) {
+            DataProvider::DataProviderWebhook::deleteWebhook(webhook_info);
+            remove webhook_info;
+        }
+    }
+}
+```
+
+**If the payload contains a resource URL** (instead of just an ID), parse it to extract the path:
+
+```qore
+private hash<auto> fetchResourceData(string resource_url) {
+    hash<auto> url_info = parse_url(resource_url);
+    string path = url_info.path ?? "";
+    if (url_info.query) {
+        path += "?" + url_info.query;
+    }
+    return doGet(path);
+}
+```
+
+**Reference implementation:** `ShipStationBaseEventDataProvider.qc` — receives only a `resource_url` in the webhook payload, fetches the full order/shipment via REST, then notifies observers with the enriched data.
+
 ---
 
 ## Dynamic Options

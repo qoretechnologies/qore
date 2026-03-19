@@ -210,9 +210,13 @@ public class ConnectionSchemeCache {
 
             "shipstation": "ShipStationRestClient",
 
+            "customerio": "CustomerIoRestClient",
+
             "instantly": "InstantlyRestClient",
 
             "keaprest": "KeapRestClient",
+
+            "kitrest": "KitRestClient",
 
             "apollorest": "ApolloRestClient",
 
@@ -243,6 +247,8 @@ public class ConnectionSchemeCache {
             "unleashed": "UnleashedRestClient",
 
             "wave": "WaveRestClient",
+            "woocommerce": "WooCommerceRestClient",
+            "woocommerces": "WooCommerceRestClient",
 
             "zohobooks": "ZohoBooksRestClient",
             "zohoinventory": "ZohoInventoryRestClient",

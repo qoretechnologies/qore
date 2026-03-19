@@ -429,7 +429,12 @@ MACRO (QORE_USER_MODULE _module_file _mod_deps)
 
         # prepare QDX arguments
         if (EXTRA_FILES)
-            set(QDX_DOXYFILE_ARGS -T${CMAKE_SOURCE_DIR} -M=${CMAKE_SOURCE_DIR}/${_module_file}:${CMAKE_BINARY_DIR}/doxygen/qlib/${f}.qm.dox.h ${MOD_DEPS} ${CMAKE_SOURCE_DIR}/doxygen/qlib/Doxyfile.cmake.tmpl ${MOD_DOXYFILE} --extra-files ${EXTRA_FILES})
+            if (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/qlib/${f})
+                set(_module_src_dir ${CMAKE_SOURCE_DIR}/qlib/${f})
+            else()
+                get_filename_component(_module_src_dir ${CMAKE_SOURCE_DIR}/${_module_file} DIRECTORY)
+            endif()
+            set(QDX_DOXYFILE_ARGS -T${CMAKE_SOURCE_DIR} -M=${CMAKE_SOURCE_DIR}/${_module_file}:${CMAKE_BINARY_DIR}/doxygen/qlib/${f}.qm.dox.h ${MOD_DEPS} ${CMAKE_SOURCE_DIR}/doxygen/qlib/Doxyfile.cmake.tmpl ${MOD_DOXYFILE} --extra-prefix ${_module_src_dir}/ --extra-files ${EXTRA_FILES})
         else (EXTRA_FILES)
             set(QDX_DOXYFILE_ARGS -T${CMAKE_SOURCE_DIR} -M=${CMAKE_SOURCE_DIR}/${_module_file}:${CMAKE_BINARY_DIR}/doxygen/qlib/${f}.qm.dox.h ${MOD_DEPS} ${CMAKE_SOURCE_DIR}/doxygen/qlib/Doxyfile.cmake.tmpl ${MOD_DOXYFILE})
         endif (EXTRA_FILES)

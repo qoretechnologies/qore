@@ -38,14 +38,14 @@ module AsyncSocketIo {
     url     = "http://qore.org";
     license = "MIT";
     init = sub () {
-        # Pre-initialize the global controller singleton
+        # Pre-initialize the global controller singleton (uses AsyncIoController::get() internally)
         AsyncSocketIo::globalController = new AsyncSocketIo::AsyncSocketIoController(True);
     };
     del = sub () {
-        # Stop the global controller and its ThreadPool during module unload
-        # to prevent idle ThreadPool threads from blocking program exit
+        # Just delete the Qore wrapper; the C++ singleton is stopped by
+        # qore_async_io_controller_cleanup() in qore_cleanup() after all
+        # modules have been unloaded
         if (AsyncSocketIo::globalController) {
-            AsyncSocketIo::globalController.stopClear();
             delete AsyncSocketIo::globalController;
         }
     };
@@ -71,14 +71,14 @@ module AsyncSocketIo {
       async socket I/O using epoll (Linux) / kqueue (macOS/BSD)
     - @ref AsyncSocketIo::AsyncSocketIoController "AsyncSocketIoController" with submit(), exec(),
       cancel(), cancelByKey(), cancelByOwner(), wake() operations
-    - custom key support in @ref SocketPollOperationInfo
+    - custom key support in \c SocketPollOperationInfo
     - @ref AsyncSocketIo::Http2StreamContext "Http2StreamContext" stream-scoped send/receive helper
       for HTTP/2 sockets with direct I/O mode for handler-thread-driven frame reading
     - @ref AsyncSocketIo::Http3StreamContext "Http3StreamContext" stream-scoped send/receive helper
       for HTTP/3 QUIC streams with backpressure handling and I/O controller wake integration
     - @ref AsyncSocketIo::AbstractStreamContext "AbstractStreamContext" abstract base class providing a
       protocol-agnostic stream I/O interface for WebSocket over HTTP/2 (RFC 8441) and HTTP/3 (RFC 9220)
-    - @ref AsyncSocketIo::AsyncSocketIoController::getThreadPool() "getThreadPool()" for lazy
+    - \c getThreadPool() for lazy
       access to a shared @ref Qore::Thread::ThreadPool "ThreadPool" for dispatching callbacks off
       the I/O thread
     - @ref AsyncSocketIo::AsyncSocketIoController::submitTask() "submitTask()" convenience

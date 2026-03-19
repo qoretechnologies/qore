@@ -156,6 +156,13 @@ public namespace HttpClientIo {
     #! Default request timeout (60 seconds)
     public const DefaultRequestTimeout = 60s;
 
+    #! Maximum pending stream reservations on a Connecting connection
+    /** Limits the blast radius when a QUIC handshake fails — once this many
+        threads are waiting on one connection's handshake, additional threads
+        create new connections instead of all blocking on the same one.
+    */
+    public const DefaultMaxPendingPerConnection = 10;
+
     #! Protocol selection enum
     /** @since HttpClientIo 1.0
     */
@@ -188,7 +195,7 @@ public namespace HttpClientIo {
 
         @since HttpClientIo 1.0
     */
-    public typedef HttpResponseCallback = code<nothing(hash<auto> response, *hash<auto> error)>;
+    public typedef HttpResponseCallback = code<nothing(hash<auto>, *hash<auto>)>;
 
     #! Connection state enum
     public enum HttpClientConnectionState {

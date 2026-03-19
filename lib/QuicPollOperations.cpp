@@ -52,17 +52,25 @@ constexpr int QUIC_MAX_RECV_BATCH = 16;
 #include "qore/intern/QuicCommon.h"
 
 //! Maximum poll timeout (ms) when no QUIC timer is pending.
-/** When the only in-flight packets are ACK-only (not tracked for PTO per RFC 9002),
-    ngtcp2_conn_get_expiry() returns UINT64_MAX.  Without a bounded default, the
-    I/O thread's poll() falls back to the full operation timeout (e.g. 30s), stalling
-    the connection while the peer's PTO-driven retransmissions arrive unseen.
-    1 second is short enough to ensure prompt reaction to incoming data while avoiding
-    excessive wakeups during idle periods.
+/** Fallback poll timeout (ms) when ngtcp2 reports no timer pending
+    (ngtcp2_conn_get_expiry() == UINT64_MAX).  Per RFC 9002, ACK-only packets
+    are not loss-detected, so the peer's retransmission timer drives recovery.
+    1 second is a reasonable fallback for this rare edge case.
 */
 static constexpr int64_t QUIC_NO_TIMER_POLL_MS = 1000;
 
+//! Maximum packets to process per continuePoll() call for QUIC client connections.
+/** Prevents a single connection from monopolizing the shared I/O thread when
+    multiple QUIC connections are active.  At ~1μs/packet, a budget of 32 gives
+    ~32μs per continuePoll() call, ensuring fair scheduling across connections.
+    When the budget is exhausted and more packets remain, continuePoll() returns
+    poll_info with poll_timeout_ms=0 to trigger an immediate re-poll.
+*/
+static constexpr int QUIC_CLIENT_RECV_BUDGET = 32;
+
 //! Set the "poll_timeout_ms" key on a poll info hash based on the next QUIC timer expiry.
-/** Clamps the poll timeout so that retransmission/PTO timers fire promptly.
+/** Translates the ngtcp2 timer expiry into a poll timeout hint so the I/O
+    thread's poll() wakes when the QUIC retransmission/PTO timer fires.
     @param poll_info the poll info hash to update (must not be nullptr)
     @param expiry the next timer expiry (UINT64_MAX if no timer pending)
     @param xsink for exception handling
@@ -585,7 +593,11 @@ QoreHashNode* SocketQuicClientPollOperation::trySetupEarlyHttp3(ExceptionSink* x
     }
     if (srv == SOCK_POLLOUT) {
         // Partial send — caller should yield for write readiness
-        return getSocketPollInfoHash(xsink, SOCK_POLLOUT);
+        QoreHashNode* poll_info = getSocketPollInfoHash(xsink, SOCK_POLLOUT);
+        if (poll_info) {
+            setPollTimeoutFromExpiry(poll_info, h3_expiry, xsink);
+        }
+        return poll_info;
     }
     return nullptr;
 }
@@ -634,7 +646,11 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                     return nullptr;
                 }
                 if (rv == SOCK_POLLOUT) {
-                    return getSocketPollInfoHash(xsink, SOCK_POLLOUT);
+                    QoreHashNode* poll_info = getSocketPollInfoHash(xsink, SOCK_POLLOUT);
+                    if (poll_info) {
+                        setPollTimeoutFromExpiry(poll_info, next_expiry, xsink);
+                    }
+                    return poll_info;
                 }
 
                 // 0-RTT: set up HTTP/3 early when 0-RTT TX key is installed
@@ -721,19 +737,29 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
 
                 // Send any pending frames (HTTP/3 control + QPACK streams)
                 // Coalesced: timer + write
+                ngtcp2_tstamp setup_expiry;
                 {
-                    ngtcp2_tstamp next_expiry;
-                    int rv = sendPendingPackets(next_expiry, xsink);
+                    int rv = sendPendingPackets(setup_expiry, xsink);
                     if (*xsink) {
                         return nullptr;
                     }
                     if (rv == SOCK_POLLOUT) {
-                        return getSocketPollInfoHash(xsink, SOCK_POLLOUT);
+                        QoreHashNode* poll_info = getSocketPollInfoHash(xsink, SOCK_POLLOUT);
+                        if (poll_info) {
+                            setPollTimeoutFromExpiry(poll_info, setup_expiry, xsink);
+                        }
+                        return poll_info;
                     }
                 }
 
                 qcs_state = QCS::READING;
-                return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+                {
+                    QoreHashNode* poll_info = getSocketPollInfoHash(xsink, SOCK_POLLIN);
+                    if (poll_info) {
+                        setPollTimeoutFromExpiry(poll_info, setup_expiry, xsink);
+                    }
+                    return poll_info;
+                }
             }
 
             case QCS::READING: {
@@ -751,10 +777,13 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                     return nullptr;  // goal reached
                 }
 
-                // Drain all available datagrams from the socket buffer;
-                // each recvfrom() returns exactly one UDP datagram, so we
-                // must loop until EAGAIN to process all buffered packets
-                while (true) {
+                // Drain available datagrams from the socket buffer, up to
+                // the per-call budget.  Each recvfrom() returns exactly one
+                // UDP datagram; the budget ensures fair scheduling when
+                // multiple QUIC connections share the same I/O thread.
+                int packets_processed = 0;
+                bool budget_exhausted = false;
+                while (packets_processed < QUIC_CLIENT_RECV_BUDGET) {
                     int rv = recvAndProcessPacket(xsink);
                     if (*xsink) {
                         return nullptr;
@@ -762,6 +791,7 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                     if (rv == SOCK_POLLIN) {
                         break;  // EAGAIN — no more data
                     }
+                    ++packets_processed;
                     // Check for completed streams after each datagram
                     if (quic_session->hasCompletedStreams()) {
                         cached_stream = quic_session->takeCompletedStream();
@@ -775,6 +805,9 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                         }
                         return nullptr;  // goal reached
                     }
+                }
+                if (packets_processed >= QUIC_CLIENT_RECV_BUDGET) {
+                    budget_exhausted = true;
                 }
 
                 // Check if connection closed
@@ -817,7 +850,8 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                     // response may already be in the kernel socket buffer
                     // by the time sendPendingPackets() returns — this
                     // eliminates one full poll() syscall round-trip.
-                    while (true) {
+                    // Use remaining budget from the first recv loop.
+                    while (packets_processed < QUIC_CLIENT_RECV_BUDGET) {
                         int rrv = recvAndProcessPacket(xsink);
                         if (*xsink) {
                             return nullptr;
@@ -825,6 +859,7 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                         if (rrv == SOCK_POLLIN) {
                             break;  // EAGAIN — no more data
                         }
+                        ++packets_processed;
                         if (quic_session->hasCompletedStreams()) {
                             cached_stream = quic_session->takeCompletedStream();
                             qcs_state = QCS::RESPONSE_READY;
@@ -839,6 +874,9 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                             }
                             return nullptr;  // goal reached
                         }
+                    }
+                    if (packets_processed >= QUIC_CLIENT_RECV_BUDGET) {
+                        budget_exhausted = true;
                     }
 
                     // Flush any pending frames generated by the fast-path recv
@@ -871,7 +909,13 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                     // timers fire even when no packets arrive
                     QoreHashNode* poll_info = getSocketPollInfoHash(xsink, events);
                     if (poll_info) {
-                        setPollTimeoutFromExpiry(poll_info, next_expiry, xsink);
+                        if (budget_exhausted) {
+                            // More packets may remain in the socket buffer;
+                            // request immediate re-poll for fair scheduling
+                            poll_info->setKeyValue("poll_timeout_ms", 0, xsink);
+                        } else {
+                            setPollTimeoutFromExpiry(poll_info, next_expiry, xsink);
+                        }
                     }
                     return poll_info;
                 }

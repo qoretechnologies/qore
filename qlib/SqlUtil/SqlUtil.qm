@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file SqlUtil.qm Qore user module for working with SQL data
 
-/*  SqlUtil.qm Copyright (C) 2013 - 2024 Qore Technologies, s.r.o.
+/*  SqlUtil.qm Copyright (C) 2013 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -321,7 +321,7 @@ module SqlUtil {
 
     There are many methods in the @ref SqlUtil::AbstractTable "AbstractTable" class for retrieving data from the database; here is an overview:
     - @ref SqlUtil::AbstractTable::find(auto) : finds a row corresponding to the given single value of the primary key; if not present @ref nothing is returned
-    - @ref SqlUtil::AbstractTable::find(list<auto>) : finds all rows corresponding to the given list of values of the primary key; if none are present @ref nothing is returned
+    - \c SqlUtil::AbstractTable::find(list&lt;auto&gt;) : finds all rows corresponding to the given list of values of the primary key; if none are present @ref nothing is returned
     - \c SqlUtil::AbstractTable::find(hash<auto>): find a row corresponding to the given hash of column name/value pairs, which must at least reference all columns of the table's primary key; if no row matches, @ref nothing is returned
     - @ref SqlUtil::AbstractTable::findSingle() : finds the first (of possibly many) rows that match the @ref where_clauses "where clause hash argument" or returns @ref nothing if no row matches
     - @ref SqlUtil::AbstractTable::findAll() : returns all rows that match the @ref where_clauses "where clause hash argument" or returns @ref nothing if no row matches

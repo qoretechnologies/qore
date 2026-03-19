@@ -1,0 +1,446 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file WooCommerceRestClient.qm Qore user module for calling WooCommerce REST API services
+
+/*  WooCommerceRestClient.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+
+# require type definitions everywhere
+
+# enable all warnings
+
+# don't use "$" for vars, members, and methods, assume local variable scope
+%modern
+
+# do not ignore argument errors
+
+%requires(reexport) Mime >= 1.3
+%requires(reexport) RestClient >= 1.3.1
+%requires(reexport) ConnectionProvider >= 1.4
+
+module WooCommerceRestClient {
+    version = "1.0";
+    desc = "User module for calling WooCommerce REST API services";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        ConnectionSchemeCache::registerScheme("woocommerce", WooCommerceRestConnection::ConnectionScheme);
+    };
+}
+
+/** @mainpage WooCommerceRestClient Module
+
+    @tableofcontents
+
+    @section woocommercerestclientintro WooCommerceRestClient Introduction
+
+    The %WooCommerceRestClient module provides an API for calling WooCommerce's REST API services.
+
+    To use this module, use \c "%requires WooCommerceRestClient" in your code.
+
+    All the public symbols in the module are defined in the WooCommerceRestClient namespace.
+
+    The main classes are:
+    - @ref WooCommerceRestClient::WooCommerceRestClient "WooCommerceRestClient":
+      this class provides the REST client API for communication with the WooCommerce API;
+      it handles authentication via HTTP Basic Auth using consumer key and secret
+    - @ref WooCommerceRestClient::WooCommerceRestConnection "WooCommerceRestConnection":
+      provides a connection object to WooCommerce services (based on the
+      @ref connectionproviderintro "ConnectionProvider" module)
+
+    @par Example:
+    @code{.py}
+#!/usr/bin/env qore
+
+%requires WooCommerceRestClient
+
+WooCommerceRestClient wc({
+    "store_url": "https://mystore.com",
+    "consumer_key": ENV.WC_CONSUMER_KEY,
+    "consumer_secret": ENV.WC_CONSUMER_SECRET,
+});
+hash<auto> result = wc.get("system_status");
+printf("Status: %N\n", result.body);
+    @endcode
+
+    @section woocommercerestclientrelnotes Release Notes
+
+    @subsection woocommercerestclientv1_0 WooCommerceRestClient v1.0
+    - the initial version of the %WooCommerceRestClient module
+*/
+
+#! the WooCommerceRestClient namespace contains all the objects in the WooCommerceRestClient module
+public namespace WooCommerceRestClient {
+
+#! This class provides the REST client API for communication with WooCommerce servers
+/** WooCommerce uses a REST API v3 with HTTP Basic Auth authentication.
+
+    Authentication is done via HTTP Basic Auth where:
+    - Username = Consumer Key
+    - Password = Consumer Secret
+
+    @par API Information:
+    - Base URL: {store_url}/wp-json/wc/v3/
+    - Pagination: page-based with \c page and \c per_page parameters (max 100)
+    - Response headers: \c X-WP-Total and \c X-WP-TotalPages for pagination info
+    - Rate Limits: 25 POST requests per 10 seconds (PUT/PATCH excluded)
+    - Date Format: ISO 8601 (YYYY-MM-DDTHH:MM:SSZ)
+*/
+public class WooCommerceRestClient inherits RestClient::RestClient {
+    public {
+        #! Default WooCommerce API path
+        const DefaultApiPath = "/wp-json/wc/v3/";
+
+        #! Default "data" option value
+        const DefaultData = "json";
+
+        #! Default WooCommerce ping method
+        const DefaultPingMethod = "GET";
+
+        #! Default WooCommerce ping path (system status - lightweight endpoint)
+        const DefaultPingPath = "system_status";
+
+        #! Default WooCommerce ping headers
+        const DefaultPingHeaders = {
+            "Accept": MimeTypeJson,
+        };
+
+        #! Default constructor options
+        const DefaultOptions = {
+            "data": DefaultData,
+            "ping_headers": DefaultPingHeaders,
+            "ping_method": DefaultPingMethod,
+            "ping_path": DefaultPingPath,
+        };
+    }
+
+    #! creates the object with the given options
+    /**
+        @par Example:
+        @code{.py}
+WooCommerceRestClient wc({
+    "store_url": "https://mystore.com",
+    "consumer_key": "ck_xxxxx",
+    "consumer_secret": "cs_xxxxx",
+});
+        @endcode
+
+        @param opts valid options are all the options for the @ref RestClient::RestClient "RestClient" class
+        plus:
+        - \c store_url: the WooCommerce store URL (required)
+        - \c consumer_key: the WooCommerce consumer key (required)
+        - \c consumer_secret: the WooCommerce consumer secret (required)
+
+        @param do_not_connect if \c False (the default), then a connection will be immediately established to the
+        remote server
+
+        @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data serialization, etc
+        @throw WOOCOMMERCE-ERROR missing required option
+    */
+    constructor(hash<auto> opts, *softbool do_not_connect)
+            : RestClient(WooCommerceRestClient::getOptions(opts), do_not_connect) {
+        setAssumedEncoding("UTF-8");
+    }
+
+    #! returns options for @ref WooCommerceRestClient::WooCommerceRestClient::constructor()
+    static hash<auto> getOptions(hash<auto> opts) {
+        hash<auto> rv = DefaultOptions + opts;
+
+        # Validate store_url is provided
+        if (!opts.store_url) {
+            throw "WOOCOMMERCE-ERROR", "missing required option 'store_url' (WooCommerce store URL)";
+        }
+
+        # Validate consumer_key is provided
+        if (!opts.consumer_key) {
+            throw "WOOCOMMERCE-ERROR", "missing required option 'consumer_key' (WooCommerce consumer key)";
+        }
+
+        # Validate consumer_secret is provided
+        if (!opts.consumer_secret) {
+            throw "WOOCOMMERCE-ERROR", "missing required option 'consumer_secret' (WooCommerce consumer secret)";
+        }
+
+        # Build URL from store_url: {store_url}/wp-json/wc/v3/
+        string store_url = opts.store_url;
+        # Remove trailing slash if present
+        if (store_url =~ /\/$/) {
+            store_url = store_url.substr(0, store_url.size() - 1);
+        }
+        rv.url = store_url + DefaultApiPath;
+
+        # Set HTTP Basic Auth: username=consumer_key, password=consumer_secret
+        rv.username = opts.consumer_key;
+        rv.password = opts.consumer_secret;
+
+        # Remove custom options so RestClient doesn't try to use them
+        remove rv.store_url;
+        remove rv.consumer_key;
+        remove rv.consumer_secret;
+
+        return rv;
+    }
+}
+
+#! Class for WooCommerce REST connections; returns @ref WooCommerceRestClient objects
+/** This class implements all options of @ref RestClient::RestConnection "RestClientConnection"; in addition,
+    this class provides the following options:
+    - \c store_url: the WooCommerce store URL (e.g., \c https://mystore.com)
+    - \c consumer_key: the WooCommerce consumer key (used as username for Basic Auth)
+    - \c consumer_secret: the WooCommerce consumer secret (used as password for Basic Auth)
+
+    @see @ref WooCommerceRestClient::WooCommerceRestClient::constructor() for more information on the above options
+*/
+public class WooCommerceRestConnection inherits RestClient::RestConnection {
+    public {
+        #! Default WooCommerce connection URL
+        const DefaultConnectionUrl = "woocommerce://localhost";
+
+        #! Connection entry info
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "WooCommerce REST Connection",
+            "short_desc": "A connection to the WooCommerce REST API",
+            "desc": "A connection to the WooCommerce REST API v3 for e-commerce management.\n\n"
+                "WooCommerce is the most popular open-source e-commerce platform built on WordPress. "
+                "This integration enables managing orders, products, customers, coupons, webhooks, "
+                "reports, shipping, taxes, and store settings.\n\n"
+                "**Authentication:**\n"
+                "- Uses HTTP Basic Auth with Consumer Key and Consumer Secret\n"
+                "- Generate API credentials in WordPress admin: WooCommerce > Settings > Advanced > REST API\n\n"
+                "**Pagination:**\n"
+                "- Page-based with `page` and `per_page` parameters (max `100` per page)\n"
+                "- Total counts available in `X-WP-Total` and `X-WP-TotalPages` response headers",
+            "cls": Class::forName("WooCommerceRestConnection"),
+            "auto_url": True,
+            "schemes": {
+                "woocommerce": True,
+                "woocommerces": True,
+            },
+            "base_scheme_map": {
+                "https": "woocommerces",
+            },
+            "options": RestConnection::ConnectionScheme.options + {
+                "data": RestConnection::ConnectionScheme.options."data"
+                + <ConnectionOptionInfo>{
+                    "default_value": WooCommerceRestClient::DefaultData,
+                },
+                "store_url": <ConnectionOptionInfo>{
+                    "display_name": "Store URL",
+                    "short_desc": "WooCommerce store URL",
+                    "type": "string",
+                    "desc": "The full URL of your WooCommerce store (e.g., `https://mystore.com`).\n\n"
+                        "This is the base URL of your WordPress site where WooCommerce is installed. "
+                        "The API path `/wp-json/wc/v3/` will be appended automatically.\n\n"
+                        "**Examples:**\n"
+                        "- `https://mystore.com`\n"
+                        "- `https://shop.example.com`\n"
+                        "- `https://example.com/shop` (if WordPress is in a subdirectory)",
+                    "preselected": True,
+                },
+                "consumer_key": <ConnectionOptionInfo>{
+                    "display_name": "Consumer Key",
+                    "short_desc": "WooCommerce consumer key for authentication",
+                    "type": "string",
+                    "desc": "The WooCommerce REST API consumer key used as the username for HTTP Basic Auth.\n\n"
+                        "**To obtain your API credentials:**\n"
+                        "1. Log in to your WordPress admin panel\n"
+                        "2. Go to **WooCommerce > Settings > Advanced > REST API**\n"
+                        "3. Click **Add key**\n"
+                        "4. Enter a description, select a user, and choose **Read/Write** permissions\n"
+                        "5. Click **Generate API key**\n"
+                        "6. Copy the **Consumer key** (starts with `ck_`)",
+                    "sensitive": True,
+                    "preselected": True,
+                },
+                "consumer_secret": <ConnectionOptionInfo>{
+                    "display_name": "Consumer Secret",
+                    "short_desc": "WooCommerce consumer secret for authentication",
+                    "type": "string",
+                    "desc": "The WooCommerce REST API consumer secret used as the password for HTTP Basic Auth.\n\n"
+                        "**To obtain your API credentials:**\n"
+                        "1. Follow the same steps as for the Consumer Key above\n"
+                        "2. Copy the **Consumer secret** (starts with `cs_`)\n\n"
+                        "**Note:** The consumer secret is only shown once when generated. "
+                        "If you lose it, you will need to generate new credentials.",
+                    "sensitive": True,
+                    "preselected": True,
+                },
+                "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
+                + <ConnectionOptionInfo>{
+                    "default_value": WooCommerceRestClient::DefaultPingHeaders,
+                },
+                "ping_method": RestConnection::ConnectionScheme.options."ping_method"
+                + <ConnectionOptionInfo>{
+                    "default_value": WooCommerceRestClient::DefaultPingMethod,
+                },
+                "ping_path": RestConnection::ConnectionScheme.options."ping_path"
+                + <ConnectionOptionInfo>{
+                    "default_value": WooCommerceRestClient::DefaultPingPath,
+                },
+            },
+            "required_options": "store_url,consumer_key,consumer_secret",
+            "messages": (
+                <UiMessageInfo>{
+                    "title": "How to Obtain Your API Credentials",
+                    "intent": "info",
+                    "content": "1. Log in to your **WordPress admin panel**\n"
+                        "2. Navigate to **WooCommerce > Settings > Advanced > REST API**\n"
+                        "3. Click **Add key**\n"
+                        "4. Enter a description (e.g., \"Qorus Integration\")\n"
+                        "5. Select a WordPress user and choose **Read/Write** permissions\n"
+                        "6. Click **Generate API key**\n"
+                        "7. Copy both the **Consumer key** (`ck_...`) and **Consumer secret** (`cs_...`)\n\n"
+                        "**Important:**\n"
+                        "- The Consumer secret is only displayed once when generated\n"
+                        "- Store your credentials securely\n"
+                        "- HTTPS is required for Basic Auth (HTTP requires OAuth 1.0a)",
+                },
+            ),
+        };
+    }
+
+    #! creates the WooCommerceRestConnection object
+    /** @param name the name of the connection
+        @param description connection description
+        @param url connection URL (potentially with password info)
+        @param attributes various attributes. See below
+        @param options connection options
+
+        See @ref ConnectionProvider::AbstractConnection::constructor() for \c attributes and \c options reference.
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option
+    */
+    constructor(string name, string description, string url = DefaultConnectionUrl,
+            hash<auto> attributes = {}, hash<auto> options = {})
+            : RestConnection(name, description, url, attributes, options) {
+    }
+
+    #! creates the WooCommerceRestConnection object
+    /** @param config with the following keys:
+        - name (required string): the connection name
+        - display_name (optional string): the display name
+        - short_desc (optional string): a short description in plain text
+        - desc (optional string): a long description with markdown formatting
+        - url (required string): the connection URL
+        - opts (optional hash): connection options
+        - logger (optional LoggerInterface object): logger for the connection
+        @param attr optional connection attributes
+        - monitor (optional bool): should the connection be monitored? Default: True
+        - enabled (optional bool): is the connection enabled? Default: True
+        - locked (optional bool): is the connection locked? Default: False
+        - debug_data (optional bool): debug data? Default: False
+        - tags (optional hash): tags for the connection; no default value
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option or attribute
+    */
+    constructor(hash<auto> config, *hash<auto> attr)
+            : RestConnection(WooCommerceRestConnection::getConfig(config), attr) {
+    }
+
+    #! returns config for @ref WooCommerceRestConnection::constructor()
+    /** Constructs the connection URL from the store_url option
+    */
+    private static hash<auto> getConfig(hash<auto> config) {
+        # Build URL from store_url if provided
+        if (config.opts.store_url) {
+            string store_url = config.opts.store_url;
+            # Remove trailing slash if present
+            if (store_url =~ /\/$/) {
+                store_url = store_url.substr(0, store_url.size() - 1);
+            }
+            # Preserve host, port, and path from store URL
+            hash<auto> url_info = parse_url(store_url);
+            # Use woocommerces:// for HTTPS, woocommerce:// for HTTP so that
+            # conn.real_url preserves the correct scheme from store_url
+            string conn_url = (url_info.protocol == "https" ? "woocommerces" : "woocommerce")
+                + "://" + url_info.host;
+            if (url_info.port) {
+                conn_url += sprintf(":%d", url_info.port);
+            }
+            if (url_info.path) {
+                conn_url += url_info.path;
+            }
+            # Include the API path in the connection URL so conn.real_url has the
+            # full API base; this matches the pattern used by BigCommerce, Chargebee, etc.
+            conn_url += WooCommerceRestClient::DefaultApiPath;
+            config.url = conn_url;
+        }
+        return config;
+    }
+
+    #! returns \c "woocommerce"
+    string getType() {
+        return "woocommerce";
+    }
+
+    #! returns @ref True as this connection returns a data provider with the @ref getDataProvider() method
+    /** @return @ref True as this connection returns a data provider with the @ref getDataProvider() method
+
+        @see @ref getDataProvider()
+    */
+    bool hasDataProvider() {
+        return True;
+    }
+
+    #! Returns the data provider application name this connection serves, if any
+    /** @return the data provider application name this connection serves, if any
+    */
+    *string getAppName() {
+        return "WooCommerce";
+    }
+
+    #! returns a data provider object for this connection
+    /** @param constructor_options any additional constructor options for the data provider
+
+        @return a data provider object for this connection
+    */
+    DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        # to avoid circular dependencies, this object loads the WooCommerceDataProvider and creates the data provider
+        # object dynamically
+        load_module("WooCommerceDataProvider");
+        return create_object("WooCommerceDataProvider", self);
+    }
+
+    #! Sets child data provider capabilities
+    private setChildCapabilities() {
+        children_can_support_records = True;
+        children_can_support_apis = True;
+    }
+
+    #! returns a @ref WooCommerceRestClient object
+    /** @param connect if @ref True "True", then the connection is returned already connected
+        @param rtopts this connection type does not accept any runtime options, so this parameter is ignored
+
+        @return a @ref WooCommerceRestClient object
+    */
+    private WooCommerceRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
+        return new WooCommerceRestClient(getConnectionOptions(rtopts), !connect);
+    }
+
+    #! Returns the ConnectionSchemeInfo hash for this object
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+}
+}

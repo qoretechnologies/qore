@@ -872,7 +872,7 @@ const PO_ALLOW_RETURNS = PO_ALLOW_RETURNS;
 //! @deprecated support removed in %Qore 2.3; remains defined as 0 for backward compatibility
 /** The @ref strict-types "%strict-types" functionality was intended to prepare for JIT compilation by
     enforcing stricter typing and automatically initializing typed variables with default values.
-    However, the NaN-boxing optimization for @ref QoreValue addressed JIT requirements more effectively
+    However, the NaN-boxing optimization for \c QoreValue addressed JIT requirements more effectively
     without requiring behavioral changes.
 
     Code using \c %strict-types will parse without error but the directive has no effect.
