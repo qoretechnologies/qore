@@ -1116,7 +1116,42 @@ public:
                 return nullptr;
             }
         }
-        return ti->return_vec[0].spec.getComplexHash();
+        const QoreTypeInfo* result = ti->return_vec[0].spec.getComplexHash();
+
+        // CRITICAL FIX for hash<HashdeclType> cast operations:
+        // When parsing `cast<hash<string, hash<DataProviderExpressionInfo>>>()`,
+        // the parser creates a type where:
+        //   - getName() = "hash<string, hash<DataProviderExpressionInfo>>"
+        //   - getComplexHash() = nullptr (not a QoreComplexHashTypeSpec)
+        //   - getHashDecl() = DataProviderExpressionInfo hashdecl
+        //
+        // The cast operator selection logic uses getComplexHashValueType() to determine
+        // which handler to use. Without this fix, it returns nullptr and selects the
+        // QoreHashDeclCastOperatorNode handler, which incorrectly sets the hashdecl
+        // binding on the cast result. This causes "INVALID-MEMBER" errors when accessing
+        // hash keys later (the hash thinks it's a typed-hash, not a complex hash).
+        //
+        // Solution: Return the hashdecl's type info (which represents the hashdecl-typed
+        // hash, i.e., hash<string, HashdeclType>), so the complex hash handler is selected.
+        //
+        // Note: This is semantically correct because:
+        // - For `hash<string, DataProviderExpressionInfo>`, the "value type" is really
+        //   "DataProviderExpressionInfo as a typed-hash type", which is what hd->getTypeInfo()
+        //   represents in the context of complex hashes.
+        // - The cast operator uses this to determine HOW to cast, not what the final type is.
+        // - The final type is still the full complex hash, set via parse_context.typeInfo.
+        if (!result) {
+            const TypedHashDecl* hd = ti->return_vec[0].spec.getHashDecl();
+            if (hd) {
+                const char* type_name = getName(ti);
+                if (type_name && strstr(type_name, "hash<")) {
+                    // This is hash<HashdeclType> notation - return the hashdecl's type info
+                    // to signal that complex hash handler should be used
+                    return hd->getTypeInfo();
+                }
+            }
+        }
+        return result;
     }
 
     // static version of method, checking for null pointer
