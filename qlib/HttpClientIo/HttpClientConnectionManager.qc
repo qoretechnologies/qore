@@ -640,6 +640,9 @@ public class HttpClientConnectionManager {
                 }
                 if (!h2c_ok) {
                     log(LoggerLevel::DEBUG, "h2c probe failed for %s, falling back to HTTP/1.1", key);
+                    # Cancel the probe connection from the controller BEFORE closing
+                    # the socket to prevent the I/O thread from reading a closed fd
+                    try { controller.cancel(conn.getSocket()); } catch () {}
                     try { conn.close(); } catch () {}
                     {
                         AutoWriteLock al(pool_lock);

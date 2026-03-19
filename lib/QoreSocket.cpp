@@ -7633,6 +7633,15 @@ int32_t SocketHttp2ClientMultiplexPollOperation::submitRequest(const char* metho
 QoreHashNode* SocketHttp2ClientMultiplexPollOperation::continuePoll(ExceptionSink* xsink) {
     AutoLocker al(sock->priv->m);
 
+    // Check if the socket was closed by another thread (e.g., connection
+    // close during h2c probe timeout).  Without this check, subsequent
+    // operations (brecv, send) would hit an assertion failure on the
+    // invalid socket fd.
+    if (!sock->priv->socket->priv->isOpen() || !sock->priv->socket->priv->h2_session) {
+        xsink->raiseException("HTTP2-ERROR", "socket closed during poll operation");
+        return nullptr;
+    }
+
     while (true) {
         switch (h2_state) {
             case H2C_SEND_PREFACE: {
