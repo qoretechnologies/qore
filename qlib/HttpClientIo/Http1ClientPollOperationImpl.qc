@@ -252,9 +252,14 @@ public class Http1ClientPollOperation inherits HttpClientPollOperation {
     }
 
     #! Cancels a pending request
+    /** For HTTP/1.1, if the request is already in flight (sending or receiving),
+        the connection is closed since we cannot safely abort a serial exchange
+        mid-stream without corrupting the protocol state.
+    */
     cancelRequest(int stream_id) {
         string sid = string(stream_id);
         *HttpResponseCallback cb;
+        bool in_flight = False;
         {
             AutoLock al(stream_lock);
             if (!stream_callbacks.hasKey(sid)) {
@@ -268,10 +273,17 @@ public class Http1ClientPollOperation inherits HttpClientPollOperation {
             remove stream_ctxs{sid};
             --active_stream_count;
             if (active_sid == stream_id) {
-                remove active_sid;
-                remove active_method;
-                remove pending_request_data;
-                req_state = REQ_IDLE;
+                if (req_state == REQ_IDLE) {
+                    # Request hasn't started sending yet — safe to cancel
+                    remove active_sid;
+                    remove active_method;
+                    remove pending_request_data;
+                } else {
+                    # Request is in flight — must close the connection to avoid
+                    # corrupting protocol state (we can't safely skip a partial
+                    # HTTP/1.1 response)
+                    in_flight = True;
+                }
             }
         }
 
@@ -283,7 +295,12 @@ public class Http1ClientPollOperation inherits HttpClientPollOperation {
             }
         }
 
-        log(LoggerLevel::DEBUG, "cancelled request: stream_id=%d", stream_id);
+        if (in_flight) {
+            log(LoggerLevel::DEBUG, "cancelled in-flight request stream_id=%d — closing connection", stream_id);
+            setError("HTTP1-CANCELLED", "connection closed due to in-flight cancellation");
+        } else {
+            log(LoggerLevel::DEBUG, "cancelled request: stream_id=%d", stream_id);
+        }
     }
 
     #! Continues the poll operation
@@ -474,7 +491,16 @@ public class Http1ClientPollOperation inherits HttpClientPollOperation {
             return handleSending();
         }
 
-        # No pending request — wait for wake or socket events
+        # Detect server-initiated close: if the socket has data available
+        # while idle (no pending request), it's likely EOF from the server.
+        # Use isDataAvailable(0) for a non-blocking check.
+        if (sock.isDataAvailable(0)) {
+            log(LoggerLevel::DEBUG, "idle socket has data — server likely closed connection");
+            setError("HTTP1-CONNECTION-CLOSED", "server closed the connection");
+            return NOTHING;
+        }
+
+        # No pending request, no socket data — wait for wake or socket events
         state = STATE_WAIT_READ;
         return <SocketPollInfo>{
             "events": SOCK_POLLIN,
@@ -669,7 +695,11 @@ public class Http1ClientPollOperation inherits HttpClientPollOperation {
         return NOTHING;
     }
 
-    #! Internal: handles trailing CRLF after last chunk
+    #! Internal: handles trailers after the last chunk
+    /** After the `0\r\n` last-chunk, the server may send optional trailer
+        headers followed by a terminating empty line (`\r\n`). We loop
+        reading lines until we get the empty line.
+    */
     private *hash<SocketPollInfo> handleRecvChunkCrlf() {
         auto poll_info = current_op.continuePoll();
         if (poll_info) {
@@ -677,8 +707,15 @@ public class Http1ClientPollOperation inherits HttpClientPollOperation {
         }
 
         if (current_op.goalReached()) {
-            # Chunked transfer complete
-            return dispatchResponse();
+            string line = current_op.getOutput();
+            if (line == "\r\n") {
+                # Empty line — chunked transfer complete
+                return dispatchResponse();
+            }
+            # Trailer line — read next line (could be another trailer or the empty line)
+            log(LoggerLevel::DEBUG, "chunked trailer: %y", line.substr(0, line.size() - 2));
+            current_op = sock.startPollRecvUntilBytesString("\r\n");
+            return handleRecvChunkCrlf();
         }
 
         setError("HTTP1-RECV-ERROR", "chunk trailer read failed");

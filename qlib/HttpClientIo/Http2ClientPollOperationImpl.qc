@@ -65,10 +65,17 @@ public class Http2ClientPollOperation inherits HttpClientPollOperation {
         #! Whether the H2 protocol has been confirmed (via ALPN or SETTINGS exchange)
         /** For HTTPS, H2 is confirmed by ALPN negotiation during the TLS handshake.
             For plain HTTP (h2c prior knowledge), H2 is only confirmed after the
-            server responds with a valid SETTINGS frame. Until confirmed, the
-            readyCallback is deferred so that waitForReady() blocks.
+            server responds with valid H2 data (SETTINGS frame). Until confirmed,
+            the readyCallback is deferred so that waitForReady() blocks.
         */
         bool h2_confirmed = False;
+
+        #! Number of successful continuePoll() cycles in READING state
+        /** Used for h2c confirmation: the first cycle sends our preface (POLLOUT);
+            a second successful cycle with poll_info means the server responded
+            with valid H2 data.
+        */
+        int reading_cycle_count = 0;
     }
 
     #! Creates the poll operation for a new connection
@@ -413,6 +420,18 @@ public class Http2ClientPollOperation inherits HttpClientPollOperation {
 
         try {
             auto poll_info = current_op.continuePoll();
+
+            # h2c confirmation: after the initial preface send (cycle 0), if we get
+            # a successful poll cycle with valid poll_info, the server has responded
+            # with valid H2 data (SETTINGS frame).  This confirms h2c support.
+            if (!h2_confirmed && poll_info) {
+                ++reading_cycle_count;
+                if (reading_cycle_count > 1) {
+                    h2_confirmed = True;
+                    log(LoggerLevel::DEBUG, "h2c confirmed: server supports HTTP/2 prior knowledge");
+                    fireReadyCallback();
+                }
+            }
 
             # Process ALL available outputs from the C++ layer in a loop
             int drain_count = 0;

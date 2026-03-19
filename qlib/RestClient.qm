@@ -4273,10 +4273,15 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
     }
 
     #! Returns an async-I/O-capable REST client using multiplexed HTTP connections
-    /** @param connect if @ref True "True", the connection is returned already connected
+    /** @param connect ignored — RestClientIo connections are established lazily on
+        the first request via the HttpClientConnectionManager
         @param rtopts runtime options for connection acquisition
 
         @return a @ref RestClientIo::RestClientIo "RestClientIo" object
+
+        @note RestClientIo uses a connection manager that establishes and pools
+        connections on demand; there is no eager connection phase. The \a connect
+        parameter is accepted for API compatibility with getImpl() but has no effect.
 
         @since %RestClient 2.6
     */
