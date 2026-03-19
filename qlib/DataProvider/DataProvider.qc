@@ -207,6 +207,7 @@ public class DataProvider {
             "unleashed": "UnleashedDataProvider",
 
             "wave": "WaveDataProvider",
+            "woocommerce": "WooCommerceDataProvider",
 
             "zohobooks": "ZohoBooksDataProvider",
             "zohoinventory": "ZohoInventoryDataProvider",

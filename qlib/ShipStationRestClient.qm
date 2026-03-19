@@ -305,11 +305,8 @@ public class ShipStationRestConnection inherits RestClient::RestConnection {
                 "ShipStation is a web-based shipping software that streamlines order fulfillment for "
                 "e-commerce businesses. This integration enables managing orders, shipments, carriers, "
                 "products, stores, and warehouses.\n\n"
-                "**Rate Limits:**\n"
-                "- 40 requests per minute per API credential set\n"
-                "- Rate limit headers are included in all responses\n\n"
-                "**Date Format:**\n"
-                "- All dates use ISO 8601 format in PST/PDT timezone",
+                "**Important:** This integration uses the ShipStation **V1 API** and requires V1 API "
+                "credentials (API Key + API Secret pair). ShipStation V2 API keys are not compatible.",
             "cls": Class::forName("ShipStationRestConnection"),
             "auto_url": True,
             "schemes": {
@@ -325,28 +322,30 @@ public class ShipStationRestConnection inherits RestClient::RestConnection {
                 },
                 "api_key": <ConnectionOptionInfo>{
                     "display_name": "API Key",
-                    "short_desc": "ShipStation API key for authentication",
+                    "short_desc": "ShipStation V1 API key for authentication",
                     "type": "string",
-                    "desc": "The ShipStation API key used as the username for HTTP Basic Auth.\n\n"
-                        "**To obtain your API credentials:**\n"
+                    "desc": "The ShipStation **V1** API key used as the username for HTTP Basic Auth.\n\n"
+                        "**To obtain your V1 API credentials:**\n"
                         "1. Log in to ShipStation at https://app.shipstation.com\n"
                         "2. Click the gear icon (Settings) in the top right\n"
-                        "3. Go to Account > API Settings\n"
+                        "3. Go to **Account > API Settings**\n"
                         "4. Click 'Generate API Keys' if you don't have any\n"
                         "5. Copy your API Key\n\n"
-                        "**Note:** Keep your API key secure and never share it publicly.",
+                        "**Important:** This must be a V1 API key (part of an API Key + API Secret pair). "
+                        "ShipStation V2 API keys (single token) are not compatible with this integration. "
+                        "V1 API keys are available on ShipStation Gold, Scale, or higher-tier plans.",
                     "sensitive": True,
                     "preselected": True,
                 },
                 "api_secret": <ConnectionOptionInfo>{
                     "display_name": "API Secret",
-                    "short_desc": "ShipStation API secret for authentication",
+                    "short_desc": "ShipStation V1 API secret for authentication",
                     "type": "string",
-                    "desc": "The ShipStation API secret used as the password for HTTP Basic Auth.\n\n"
-                        "**To obtain your API credentials:**\n"
+                    "desc": "The ShipStation **V1** API secret used as the password for HTTP Basic Auth.\n\n"
+                        "**To obtain your V1 API credentials:**\n"
                         "1. Log in to ShipStation at https://app.shipstation.com\n"
                         "2. Click the gear icon (Settings) in the top right\n"
-                        "3. Go to Account > API Settings\n"
+                        "3. Go to **Account > API Settings**\n"
                         "4. Your API Secret is shown alongside your API Key\n\n"
                         "**Note:** The API Secret is only shown once when generated. "
                         "If you lose it, you'll need to generate new credentials.",
@@ -371,27 +370,22 @@ public class ShipStationRestConnection inherits RestClient::RestConnection {
                 <UiMessageInfo>{
                     "title": "How to Obtain Your API Credentials",
                     "intent": "info",
-                    "content": "1. Log in to ShipStation at https://app.shipstation.com\n"
+                    "content": "This integration requires **ShipStation V1 API credentials** "
+                        "(an API Key + API Secret pair).\n\n"
+                        "**Steps to generate V1 API credentials:**\n"
+                        "1. Log in to ShipStation at https://app.shipstation.com\n"
                         "2. Click the **gear icon** (Settings) in the top right corner\n"
                         "3. Navigate to **Account > API Settings**\n"
-                        "4. Click **Generate API Keys** if you don't have existing credentials\n"
-                        "5. Copy both your **API Key** and **API Secret**\n\n"
+                        "4. Make sure **V1** is selected (not V2)\n"
+                        "5. Click **Generate API Keys** if you don't have existing credentials\n"
+                        "6. Copy both your **API Key** and **API Secret**\n\n"
                         "**Important:**\n"
-                        "- The API Secret is only displayed once when generated\n"
-                        "- Store your credentials securely\n"
-                        "- If you lose your API Secret, you'll need to generate new credentials",
-                },
-                <UiMessageInfo>{
-                    "title": "Rate Limits",
-                    "intent": "warning",
-                    "content": "ShipStation enforces a rate limit of **40 requests per minute** per API credential set.\n\n"
-                        "**Rate limit information is included in response headers:**\n"
-                        "- `X-Rate-Limit-Limit`: Maximum requests allowed per window\n"
-                        "- `X-Rate-Limit-Remaining`: Requests remaining in current window\n"
-                        "- `X-Rate-Limit-Reset`: Seconds until the rate limit window resets\n\n"
-                        "**When the limit is exceeded:**\n"
-                        "- HTTP 429 (Too Many Requests) is returned\n"
-                        "- Wait for `X-Rate-Limit-Reset` seconds before retrying",
+                        "- The API Secret is only displayed once when generated; store your credentials "
+                        "securely\n"
+                        "- V1 API credentials are available on ShipStation **Gold, Scale, or higher-tier** "
+                        "plans\n"
+                        "- ShipStation also offers **V2 API keys** (a single token); these are **not "
+                        "compatible** with this integration",
                 },
             ),
         };
