@@ -1600,6 +1600,13 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         }
 
         listeners{id}.addHandlers({name: info});
+
+        # propagate handler to the paired QUIC/HTTP3 listener if one exists
+        if (*int quic_id = quic_listener_map{id}) {
+            if (listeners.hasKey(quic_id)) {
+                listeners{quic_id}.addHandlers({name + "-h3": info});
+            }
+        }
     }
 
     #! adds a request handler to a listener given the listener's id
@@ -1663,6 +1670,13 @@ public class HttpServer inherits HttpServer::AbstractLogger {
             },
         };
         listeners{id}.addHandlers(h);
+
+        # propagate handler to the paired QUIC/HTTP3 listener if one exists
+        if (*int quic_id = quic_listener_map{id}) {
+            if (listeners.hasKey(quic_id)) {
+                listeners{quic_id}.addHandlers({name + "-h3": h{name}});
+            }
+        }
     }
 
     #! remove request handler from a listener given the listener's id
