@@ -1116,23 +1116,7 @@ public:
                 return nullptr;
             }
         }
-        const QoreTypeInfo* result = ti->return_vec[0].spec.getComplexHash();
-
-        // PHASE 4 FIX: Handle hash<HashdeclType> notation
-        // If getComplexHash() returned nullptr but type looks like "hash<..."
-        // and the spec is actually a hashdecl, return the hashdecl's type info
-        // (which represents hash<string, HashdeclType>)
-        if (!result) {
-            const TypedHashDecl* hd = ti->return_vec[0].spec.getHashDecl();
-            if (hd) {
-                const char* type_name = getName(ti);
-                if (type_name && strstr(type_name, "hash<")) {
-                    // This is hash<HashdeclType> notation - return the hashdecl's hash type info
-                    return hd->getTypeInfo();
-                }
-            }
-        }
-        return result;
+        return ti->return_vec[0].spec.getComplexHash();
     }
 
     // static version of method, checking for null pointer
