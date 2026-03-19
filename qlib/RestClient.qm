@@ -58,7 +58,7 @@
 %endtry
 
 module RestClient {
-    version = "2.5";
+    version = "2.4";
     desc = "user module for calling REST services";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -352,7 +352,7 @@ public hashdecl AuthCodeInfo {
 }
 
 #! Unified REST response info returned by @ref AbstractRestClient methods
-/** @since RestClient 2.5
+/** @since RestClient 2.4
 */
 public hashdecl RestResponseInfo {
     #! HTTP status code
@@ -368,32 +368,32 @@ public hashdecl RestResponseInfo {
     *string content_type;
 
     #! The raw (undecoded) response body, if available
-    /** @since RestClient 2.7
+    /** @since RestClient 2.4
     */
     *data response_body_raw;
 
     #! The HTTP method used for the request
-    /** @since RestClient 2.7
+    /** @since RestClient 2.4
     */
     *string request_method;
 
     #! The request path
-    /** @since RestClient 2.7
+    /** @since RestClient 2.4
     */
     *string request_path;
 
     #! The request headers that were sent
-    /** @since RestClient 2.7
+    /** @since RestClient 2.4
     */
     *hash<auto> request_headers;
 
     #! The serialized request body that was sent
-    /** @since RestClient 2.7
+    /** @since RestClient 2.4
     */
     *data request_body;
 
     #! The protocol used for the request (e.g., "h1", "h2", "h3")
-    /** @since RestClient 2.7
+    /** @since RestClient 2.4
     */
     *string protocol;
 }
@@ -406,7 +406,7 @@ public hashdecl RestResponseInfo {
     GET, HEAD, and OPTIONS methods do not accept a body parameter, correcting the original
     design that allowed bodies on these methods contrary to REST conventions.
 
-    @since RestClient 2.5
+    @since RestClient 2.4
 */
 public class AbstractRestClient inherits Serializable, Qore::Thread::AbstractPoolableResource {
     #! Sends an HTTP \c GET request and returns the response
@@ -1584,70 +1584,70 @@ hash<auto> ans = rest.del("/orders/1");
     }
 
     #! Sends an HTTP \c GET request and returns a @ref RestResponseInfo hash
-    /** @since RestClient 2.5
+    /** @since RestClient 2.4
     */
     hash<RestResponseInfo> restGet(string path, *hash<auto> hdr) {
         return makeRestResponse(doRequest("GET", path, NOTHING, NOTHING, NOTHING, hdr));
     }
 
     #! Sends an HTTP \c HEAD request and returns a @ref RestResponseInfo hash
-    /** @since RestClient 2.5
+    /** @since RestClient 2.4
     */
     hash<RestResponseInfo> restHead(string path, *hash<auto> hdr) {
         return makeRestResponse(doRequest("HEAD", path, NOTHING, NOTHING, NOTHING, hdr));
     }
 
     #! Sends an HTTP \c OPTIONS request and returns a @ref RestResponseInfo hash
-    /** @since RestClient 2.5
+    /** @since RestClient 2.4
     */
     hash<RestResponseInfo> restOptions(string path, *hash<auto> hdr) {
         return makeRestResponse(doRequest("OPTIONS", path, NOTHING, NOTHING, NOTHING, hdr));
     }
 
     #! Sends an HTTP \c POST request and returns a @ref RestResponseInfo hash
-    /** @since RestClient 2.5
+    /** @since RestClient 2.4
     */
     hash<RestResponseInfo> restPost(string path, auto body, *hash<auto> hdr) {
         return makeRestResponse(doRequest("POST", path, body, NOTHING, NOTHING, hdr));
     }
 
     #! Sends an HTTP \c PUT request and returns a @ref RestResponseInfo hash
-    /** @since RestClient 2.5
+    /** @since RestClient 2.4
     */
     hash<RestResponseInfo> restPut(string path, auto body, *hash<auto> hdr) {
         return makeRestResponse(doRequest("PUT", path, body, NOTHING, NOTHING, hdr));
     }
 
     #! Sends an HTTP \c PATCH request and returns a @ref RestResponseInfo hash
-    /** @since RestClient 2.5
+    /** @since RestClient 2.4
     */
     hash<RestResponseInfo> restPatch(string path, auto body, *hash<auto> hdr) {
         return makeRestResponse(doRequest("PATCH", path, body, NOTHING, NOTHING, hdr));
     }
 
     #! Sends an HTTP \c DELETE request and returns a @ref RestResponseInfo hash
-    /** @since RestClient 2.5
+    /** @since RestClient 2.4
     */
     hash<RestResponseInfo> restDel(string path, auto body, *hash<auto> hdr) {
         return makeRestResponse(doRequest("DELETE", path, body, NOTHING, NOTHING, hdr));
     }
 
     #! Sends a generic REST request and returns a @ref RestResponseInfo hash
-    /** @since RestClient 2.5
+    /** @since RestClient 2.4
     */
     hash<RestResponseInfo> restDoRequest(string method, string path, auto body, *hash<auto> hdr) {
         return makeRestResponse(doRequest(method, path, body, NOTHING, NOTHING, hdr));
     }
 
     #! Closes the client by disconnecting the underlying HTTP connection
-    /** @since RestClient 2.5
+    /** @since RestClient 2.4
     */
     close() {
         disconnect();
     }
 
     #! Converts a raw RestClient response hash to a @ref RestResponseInfo hash
-    /** @since RestClient 2.5
+    /** @since RestClient 2.4
     */
     private hash<RestResponseInfo> makeRestResponse(hash<auto> rv) {
         return <RestResponseInfo>{
@@ -4313,7 +4313,7 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
         connections on demand; there is no eager connection phase. The \a connect
         parameter is accepted for API compatibility with getImpl() but has no effect.
 
-        @since %RestClient 2.6
+        @since %RestClient 2.4
     */
     private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
         load_module("RestClientIo");
@@ -5062,7 +5062,7 @@ on_exit pool.release();
 hash<RestResponseInfo> resp = rc.restGet("/api/data");
     @endcode
 
-    @since RestClient 2.5
+    @since RestClient 2.4
 */
 public class RestClientPool inherits Qore::Thread::AbstractConnectionPool {
     private {

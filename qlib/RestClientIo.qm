@@ -25,7 +25,7 @@
 %modern
 
 %requires Logger
-%requires RestClient >= 2.5
+%requires RestClient >= 2.4
 %requires(reexport) HttpClientIo
 %requires(reexport) RestSchemaValidator >= 1.0
 %requires Mime >= 1.7
