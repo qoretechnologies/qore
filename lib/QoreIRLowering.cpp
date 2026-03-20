@@ -3400,6 +3400,15 @@ bool QoreIRLowering::needsNotNothingGuard(const QoreValue* expr, const QoreTypeI
                         // If the expression type allows nothing (optional return), skip guard
                         // even if the target type expects non-nothing
                         if (expr_type && QoreTypeInfo::parseReturns(expr_type, NT_NOTHING) != QTI_NOT_EQUAL) {
+                            static bool debug_guard_skip = [] {
+                                const char* debug_env = getenv("QORE_IR_DEBUG");
+                                return debug_env && strstr(debug_env, "guard");
+                            }();
+                            if (debug_guard_skip) {
+                                fprintf(stderr, "[GUARD-SKIP-OPTIONAL] Skipping guard for optional type: %s\n",
+                                        expr_type ? QoreTypeInfo::getName(expr_type) : "<unknown>");
+                                fflush(stderr);
+                            }
                             return false;
                         }
                     }
