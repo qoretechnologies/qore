@@ -271,6 +271,10 @@ public class RedditRestConnection inherits RestClient::RestConnection {
                 + <ConnectionOptionInfo>{
                     "default_value": RedditRestClient::DefaultTokenUrl,
                 },
+                "oauth2_token_auth": RestConnection::ConnectionScheme.options.oauth2_token_auth
+                + <ConnectionOptionInfo>{
+                    "default_value": "basic",
+                },
             },
             "required_options": "oauth2_client_id,oauth2_client_secret",
         };
@@ -321,18 +325,13 @@ public class RedditRestConnection inherits RestClient::RestConnection {
     #! Returns connection options
     *hash<auto> getConnectionOptions(*hash<auto> rtopts) {
         hash<auto> rv = RestConnection::getConnectionOptions(rtopts);
-        # Always set OAuth2 URLs
+        # Always rebuild OAuth2 URLs and settings (not just when unset)
         rv.oauth2_auth_url = RedditRestClient::DefaultAuthUrl;
         rv.oauth2_token_url = RedditRestClient::DefaultTokenUrl;
-        if (!rv.oauth2_grant_type) {
-            rv.oauth2_grant_type = RedditRestClient::DefaultGrantType;
-        }
-        if (!rv.oauth2_scopes) {
-            rv.oauth2_scopes = RedditRestClient::DefaultScopes;
-        }
-        if (!rv.oauth2_auth_args) {
-            rv.oauth2_auth_args = RedditRestClient::DefaultAuthArgs;
-        }
+        rv.oauth2_grant_type = RedditRestClient::DefaultGrantType;
+        rv.oauth2_scopes = RedditRestClient::DefaultScopes;
+        rv.oauth2_auth_args = RedditRestClient::DefaultAuthArgs;
+        rv.oauth2_token_auth = "basic";
         return rv;
     }
 

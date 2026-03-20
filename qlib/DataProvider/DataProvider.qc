@@ -174,6 +174,7 @@ public class DataProvider {
             "kit": "KitDataProvider",
             "apollo": "ApolloDataProvider",
             "reddit": "RedditDataProvider",
+            "redditLeadAds": "RedditLeadAdsDataProvider",
             "square": "SquareDataProvider",
             "squarespace": "SquarespaceDataProvider",
             "tableau": "TableauDataProvider",

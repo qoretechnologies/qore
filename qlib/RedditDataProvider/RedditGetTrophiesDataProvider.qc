@@ -36,6 +36,8 @@ public class RedditGetTrophiesDataProvider inherits RedditDataProviderBase {
         };
 
         const ConstructorOptions = BaseConstructorOptions;
+
+        static RedditTrophyDataType ResponseType();
     }
 
     constructor(RedditRestClient::RedditRestClient rest) : RedditDataProviderBase(rest) {
@@ -54,11 +56,22 @@ public class RedditGetTrophiesDataProvider inherits RedditDataProviderBase {
     }
 
     private *AbstractDataProviderType getResponseTypeImpl() {
-        return AbstractDataProviderTypeMap."hash";
+        return new RedditTrophyDataType();
     }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        return doGet("api/v1/me/trophies");
+        hash<auto> response = doGet("api/v1/me/trophies");
+        # Extract trophy list from Reddit's response:
+        # {"kind": "TrophyList", "data": {"trophies": [{"kind": "t6", "data": {...}}, ...]}}
+        list<hash<auto>> result = ();
+        if (response.data.trophies.typeCode() == NT_LIST) {
+            foreach auto trophy in (response.data.trophies) {
+                if (trophy.data) {
+                    result += trophy.data;
+                }
+            }
+        }
+        return result;
     }
 
     private hash<DataProviderInfo> getStaticInfoImpl() {

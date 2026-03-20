@@ -1,0 +1,126 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore RedditLeadAdsDataProvider module definition
+
+/*  RedditLeadAdsDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%modern
+
+%requires(reexport) DataProvider
+%requires(reexport) RedditLeadAdsRestClient
+
+module RedditLeadAdsDataProvider {
+    version = "1.0";
+    desc = "User module providing a data provider API for Reddit Lead Generation Ads";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # Register the data provider factory
+        DataProvider::registerFactory(new RedditLeadAdsDataProviderFactory());
+
+        # Register the application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": RedditLeadAdsDataProvider::AppName,
+            "display_name": "Reddit Lead Ads",
+            "short_desc": "Reddit Lead Generation Ads",
+            "desc": "Reddit Lead Generation Ads allow advertisers to capture user contact "
+                "information through in-platform forms.\n\n"
+                "This integration provides a polling-based trigger to watch for new lead "
+                "form submissions from Reddit advertising campaigns.",
+            "scheme": "redditleadads",
+            "logo": RedditLeadAdsLogo,
+            "logo_file_name": "reddit-lead-ads-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::SocialMedia, DataProvider::AppGroup::Marketing),
+        });
+
+        # ========== TRIGGERS ==========
+
+        # Watch New Lead
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": RedditLeadAdsDataProvider::AppName,
+            "path": "/events/new-lead",
+            "action": "new-lead",
+            "groups": "Triggers",
+            "display_name": "New Lead",
+            "short_desc": "Watch for new lead form submissions",
+            "desc": "Watch for new lead form submissions from Reddit Lead Generation Ads "
+                "via polling",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_LEAD,
+            "options": {
+                "account_id": <ActionOptionInfo>{
+                    "display_name": "Account ID",
+                    "short_desc": "The Reddit Ads account ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The Reddit Ads account ID to poll for lead form submissions",
+                },
+                "campaign_id": <ActionOptionInfo>{
+                    "display_name": "Campaign ID",
+                    "short_desc": "Filter to a specific campaign",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                    "desc": "Optional campaign ID to filter lead submissions. If not set, "
+                        "watches all campaigns in the account.",
+                },
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "Seconds between polls",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "How often to poll for new leads (seconds). Default: `60`",
+                },
+                "start_date": <ActionOptionInfo>{
+                    "display_name": "Start Date",
+                    "short_desc": "Only detect leads after this date",
+                    "type": AbstractDataProviderTypeMap."*date",
+                    "desc": "Only detect leads submitted after this date/time",
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () {
+                return new RedditLeadAdsLeadDataType();
+            },
+        });
+    };
+}
+
+/** @mainpage RedditLeadAdsDataProvider Module
+
+    @tableofcontents
+
+    @section redditleadadsdataproviderintro RedditLeadAdsDataProvider Introduction
+
+    The %RedditLeadAdsDataProvider module provides a data provider API for Reddit Lead
+    Generation Ads, enabling polling-based detection of new lead form submissions.
+
+    The following data provider classes are provided:
+    - @ref RedditLeadAdsDataProvider::RedditLeadAdsDataProvider "RedditLeadAdsDataProvider" -
+      the main Reddit Lead Ads data provider
+
+    @section redditleadadsdataproviderrelnotes Release Notes
+
+    @subsection redditleadadsdataproviderv1_0 RedditLeadAdsDataProvider v1.0
+    - the initial version of the %RedditLeadAdsDataProvider module
+*/

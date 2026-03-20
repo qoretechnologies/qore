@@ -74,7 +74,11 @@ public class RedditSubredditsDataProvider inherits RedditDataProviderBase {
                 "display_name": "Sort",
                 "short_desc": "Sort order for search results",
                 "type": AbstractDataProviderType::get(SoftStringOrNothingType),
-                "desc": "Sort order (relevance, activity)",
+                "desc": "Sort order for search results",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "relevance", "display_name": "Relevance"},
+                    <AllowedValueInfo>{"value": "activity", "display_name": "Activity"},
+                ),
             },
         };
 

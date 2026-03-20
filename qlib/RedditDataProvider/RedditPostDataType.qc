@@ -106,7 +106,7 @@ public class RedditPostDataType inherits HashDataType {
                 "type": SoftBoolOrNothingType,
                 "display_name": "Is Self Post",
                 "short_desc": "Whether this is a text post",
-                "desc": "Indicates if this is a self/text post (True) or a link post (False)",
+                "desc": "Indicates if this is a self/text post (`True`) or a link post (`False`)",
             },
             "over_18": {
                 "type": SoftBoolOrNothingType,
@@ -130,7 +130,7 @@ public class RedditPostDataType inherits HashDataType {
                 "type": StringOrNothingType,
                 "display_name": "Distinguished",
                 "short_desc": "Distinguished status",
-                "desc": "The distinguished status of the post (moderator, admin, or NOTHING)",
+                "desc": "The distinguished status of the post (`moderator`, `admin`, or `NOTHING`)",
             },
             "link_flair_text": {
                 "type": StringOrNothingType,

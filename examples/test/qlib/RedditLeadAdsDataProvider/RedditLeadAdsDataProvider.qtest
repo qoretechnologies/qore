@@ -1,0 +1,243 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  RedditLeadAdsDataProvider.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires QUnit
+%requires RedditLeadAdsRestClient
+%requires RedditLeadAdsDataProvider
+
+%exec-class RedditLeadAdsDataProviderTest
+
+class RedditLeadAdsDataProviderTest inherits QUnit::Test {
+    public {
+        const MyOpts = Opts + {
+            "client_id": "I,client-id=s",
+            "client_secret": "S,client-secret=s",
+            "token": "t,token=s",
+            "refresh_token": "R,refresh-token=s",
+            "account_id": "a,account-id=s",
+        };
+    }
+
+    private {
+        *string client_id;
+        *string client_secret;
+        *string token;
+        *string refresh_token;
+        *string account_id;
+    }
+
+    constructor() : Test("RedditLeadAdsDataProvider", "1.0", \ARGV, MyOpts) {
+        client_id = m_options.client_id ?? ENV.REDDIT_ADS_CLIENT_ID;
+        client_secret = m_options.client_secret ?? ENV.REDDIT_ADS_CLIENT_SECRET;
+        token = m_options.token ?? ENV.REDDIT_ADS_TOKEN;
+        refresh_token = m_options.refresh_token ?? ENV.REDDIT_ADS_REFRESH_TOKEN;
+        account_id = m_options.account_id ?? ENV.REDDIT_ADS_ACCOUNT_ID;
+
+        addTestCase("factory test", \factoryTest());
+        addTestCase("data type test", \dataTypeTest());
+        addTestCase("provider structure test", \providerStructureTest());
+
+        addTestCase("example event data test", \exampleEventDataTest());
+
+        if (canRunIntegrationTests()) {
+            addTestCase("connection ping test", \connectionPingTest());
+            addTestCase("connection test", \connectionTest());
+            if (account_id) {
+                addTestCase("lead form submissions test", \leadFormSubmissionsTest());
+            }
+        }
+
+        set_return_value(main());
+    }
+
+    private bool canRunIntegrationTests() {
+        if (!client_id && !token) {
+            if (m_options.verbose > 0) {
+                printf("Skipping integration tests: no credentials provided\n");
+                printf("Set REDDIT_ADS_CLIENT_ID + REDDIT_ADS_CLIENT_SECRET + "
+                    "REDDIT_ADS_REFRESH_TOKEN or REDDIT_ADS_TOKEN to enable\n");
+            }
+            return False;
+        }
+        return True;
+    }
+
+    private hash<auto> getConnectionOpts() {
+        hash<auto> opts;
+        if (token) {
+            opts.token = token;
+        } else {
+            opts.oauth2_client_id = client_id;
+            opts.oauth2_client_secret = client_secret;
+            opts.oauth2_refresh_token = refresh_token;
+        }
+        return opts;
+    }
+
+    private RedditLeadAdsRestClient getRestClient() {
+        return new RedditLeadAdsRestClient(getConnectionOpts());
+    }
+
+    factoryTest() {
+        RedditLeadAdsDataProviderFactory factory();
+        hash<DataProviderFactoryInfo> info = factory.getInfo();
+        assertEq("redditLeadAds", info.name);
+        assertTrue(info.children_can_support_observers);
+    }
+
+    dataTypeTest() {
+        RedditLeadAdsLeadDataType lead_type();
+        # Verify all fields exist
+        assertTrue(lead_type.hasField("id"));
+        assertTrue(lead_type.hasField("created_at"));
+        assertTrue(lead_type.hasField("campaign_id"));
+        assertTrue(lead_type.hasField("campaign_name"));
+        assertTrue(lead_type.hasField("ad_group_id"));
+        assertTrue(lead_type.hasField("ad_id"));
+        assertTrue(lead_type.hasField("form_id"));
+        assertTrue(lead_type.hasField("email"));
+        assertTrue(lead_type.hasField("full_name"));
+        assertTrue(lead_type.hasField("job_title"));
+        assertTrue(lead_type.hasField("company_name"));
+        assertTrue(lead_type.hasField("phone_number"));
+        assertTrue(lead_type.hasField("custom_fields"));
+
+        # Verify key field types
+        assertEq("string", lead_type.getField("id").getType().getName());
+        assertEq("*date", lead_type.getField("created_at").getType().getName());
+        assertEq("*string", lead_type.getField("email").getType().getName());
+        assertEq("*string", lead_type.getField("full_name").getType().getName());
+        assertEq("*string", lead_type.getField("campaign_id").getType().getName());
+    }
+
+    providerStructureTest() {
+        # Verify provider hierarchy
+        RedditLeadAdsRestClient rest({"token": "test"}, True);
+        RedditLeadAdsDataProvider provider(rest);
+        assertEq("redditLeadAds", provider.getName());
+
+        # Verify events child exists
+        *list<string> children = provider.getChildProviderNames();
+        assertTrue(children.contains("events"));
+    }
+
+    exampleEventDataTest() {
+        # Create provider with dummy token for structural testing
+        RedditLeadAdsRestClient rest({"token": "test"}, True);
+        RedditLeadAdsDataProvider provider(rest);
+
+        # Navigate to the watch provider
+        AbstractDataProvider events = provider.getChildProvider("events");
+        AbstractDataProvider watch = events.getChildProvider("new-lead");
+
+        # Get example event data (will use fake data since no real connection)
+        auto example = watch.getExampleEventData("new-lead");
+        assertEq(Type::Hash, example.type());
+        assertTrue(example.hasKey("id"));
+        assertTrue(example.hasKey("email"));
+        assertTrue(example.hasKey("full_name"));
+        assertTrue(example.hasKey("campaign_id"));
+        assertTrue(example.hasKey("campaign_name"));
+        assertTrue(example.hasKey("job_title"));
+        assertTrue(example.hasKey("company_name"));
+        assertTrue(example.hasKey("phone_number"));
+    }
+
+    connectionPingTest() {
+        hash<auto> opts = getConnectionOpts();
+        RedditLeadAdsRestConnection conn("test", "test connection",
+            RedditLeadAdsRestConnection::DefaultConnectionUrl, {}, opts);
+        hash<auto> ping_result = conn.ping(True);
+        assertEq(True, ping_result.ok, "connection ping succeeds");
+        if (m_options.verbose > 0) {
+            printf("Reddit Ads REST connection ping successful\n");
+        }
+    }
+
+    connectionTest() {
+        RedditLeadAdsRestClient rest = getRestClient();
+        # Test GET /api/v3/me
+        hash<auto> info;
+        auto response = rest.get("me", NOTHING, \info);
+        assertEq(200, info."response-code");
+        # Verify response has expected fields
+        assertTrue(response.body.hasKey("id") || response.body.hasKey("name"),
+            "me endpoint returns user identity fields");
+        if (m_options.verbose > 0) {
+            printf("Reddit Ads API connection successful\n");
+        }
+    }
+
+    leadFormSubmissionsTest() {
+        RedditLeadAdsRestClient rest = getRestClient();
+        # Test the lead form submissions endpoint to verify path and response schema
+        string path = sprintf("accounts/%s/lead_form_submissions", account_id);
+        hash<auto> info;
+        try {
+            auto response = rest.get(path, NOTHING, \info);
+            assertEq(200, info."response-code", "lead form submissions endpoint returns 200");
+
+            # Verify response structure
+            hash<auto> body = response.body ?? {};
+            # The response should contain a list of leads in one of these keys
+            *list<auto> leads = body.data ?? body.lead_form_submissions ?? body.results;
+
+            if (leads) {
+                # Verify first lead has expected fields from RedditLeadAdsLeadDataType
+                hash<auto> lead = leads[0];
+                assertTrue(lead.hasKey("id"), "lead has id field");
+                # Verify key data type fields are present in the API response
+                assertTrue(lead.hasKey("created_at"), "lead has created_at field");
+                assertTrue(lead.hasKey("campaign_id"), "lead has campaign_id field");
+                assertTrue(lead.hasKey("form_id"), "lead has form_id field");
+                # Verify contact fields (may be NOTHING but keys should exist)
+                assertTrue(lead.hasKey("email"), "lead has email field");
+                assertTrue(lead.hasKey("full_name"), "lead has full_name field");
+                if (m_options.verbose > 0) {
+                    printf("Lead form submission fields: %y\n", keys lead);
+                    printf("First lead ID: %y\n", lead.id);
+                }
+            } else if (m_options.verbose > 0) {
+                printf("No lead form submissions found for account %s (empty result set)\n",
+                    account_id);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # 404 means the endpoint path may be wrong; 403 means insufficient permissions
+            if (ex.err == "REST-RESPONSE-ERROR") {
+                int status = ex.arg.status_code;
+                if (status == 404) {
+                    fail("lead form submissions endpoint returned 404 — verify API path");
+                } else if (status == 403) {
+                    testSkip("insufficient permissions to access lead form submissions");
+                } else {
+                    rethrow;
+                }
+            } else {
+                rethrow;
+            }
+        }
+    }
+}

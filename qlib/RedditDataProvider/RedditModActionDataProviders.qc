@@ -36,6 +36,7 @@ public class RedditModIdRequestDataType inherits HashDataType {
                 "short_desc": "The fullname of the thing",
                 "desc": "The fullname of the post or comment to perform the action on",
                 "required": True,
+                "example_value": "t3_abc123",
             },
         };
     }
@@ -97,7 +98,7 @@ public class RedditRemoveRequestDataType inherits HashDataType {
                 "type": SoftBoolOrNothingType,
                 "display_name": "Spam",
                 "short_desc": "Mark as spam",
-                "desc": "Whether to mark the item as spam. Default: False",
+                "desc": "Whether to mark the item as spam. Default: `False`",
             },
         };
     }
@@ -157,8 +158,14 @@ public class RedditDistinguishRequestDataType inherits HashDataType {
                 "type": StringType,
                 "display_name": "How",
                 "short_desc": "Distinguished type",
-                "desc": "How to distinguish: 'yes' for moderator, 'no' to remove, 'admin', 'special'",
+                "desc": "How to distinguish: `yes` for moderator, `no` to remove, `admin`, `special`",
                 "required": True,
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "yes", "display_name": "Moderator"},
+                    <AllowedValueInfo>{"value": "no", "display_name": "Remove Distinction"},
+                    <AllowedValueInfo>{"value": "admin", "display_name": "Admin"},
+                    <AllowedValueInfo>{"value": "special", "display_name": "Special"},
+                ),
             },
         };
     }
@@ -289,7 +296,7 @@ public class RedditStickyRequestDataType inherits HashDataType {
                 "type": SoftBoolType,
                 "display_name": "Sticky State",
                 "short_desc": "Whether to sticky or unsticky",
-                "desc": "True to sticky, False to unsticky",
+                "desc": "`True` to sticky, `False` to unsticky",
                 "required": True,
             },
             "num": {

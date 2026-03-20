@@ -83,8 +83,7 @@ module RedditDataProvider {
             "short_desc": "Get karma breakdown by subreddit",
             "desc": "Get the authenticated user's karma breakdown by subreddit",
             "action_code": DPAT_API,
-            "options": {},
-            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+            "output_type": RedditGetKarmaDataProvider::ResponseType,
         });
 
         # Get Trophies
@@ -97,8 +96,7 @@ module RedditDataProvider {
             "short_desc": "Get the user's trophies",
             "desc": "Get the authenticated user's trophies and awards",
             "action_code": DPAT_API,
-            "options": {},
-            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+            "output_type": RedditGetTrophiesDataProvider::ResponseType,
         });
 
         # Update Preferences
@@ -116,10 +114,16 @@ module RedditDataProvider {
                     "display_name": "Over 18",
                     "short_desc": "Show NSFW content",
                     "type": AbstractDataProviderTypeMap."*softbool",
+                    "preselected": True,
                 },
                 "email_messages": <ActionOptionInfo>{
                     "display_name": "Email Messages",
                     "short_desc": "Send email notifications",
+                    "type": AbstractDataProviderTypeMap."*softbool",
+                },
+                "show_link_flair": <ActionOptionInfo>{
+                    "display_name": "Show Link Flair",
+                    "short_desc": "Show link flair",
                     "type": AbstractDataProviderTypeMap."*softbool",
                 },
                 "default_comment_sort": <ActionOptionInfo>{
@@ -127,13 +131,14 @@ module RedditDataProvider {
                     "short_desc": "Default comment sort order",
                     "type": AbstractDataProviderTypeMap."*string",
                     "allowed_values": (
-                        <AllowedValueInfo>{"value": "best", "desc": "Best"},
-                        <AllowedValueInfo>{"value": "top", "desc": "Top"},
-                        <AllowedValueInfo>{"value": "new", "desc": "New"},
-                        <AllowedValueInfo>{"value": "controversial", "desc": "Controversial"},
-                        <AllowedValueInfo>{"value": "old", "desc": "Old"},
-                        <AllowedValueInfo>{"value": "qa", "desc": "Q&A"},
+                        <AllowedValueInfo>{"value": "best", "display_name": "Best"},
+                        <AllowedValueInfo>{"value": "top", "display_name": "Top"},
+                        <AllowedValueInfo>{"value": "new", "display_name": "New"},
+                        <AllowedValueInfo>{"value": "controversial", "display_name": "Controversial"},
+                        <AllowedValueInfo>{"value": "old", "display_name": "Old"},
+                        <AllowedValueInfo>{"value": "qa", "display_name": "Q&A"},
                     ),
+                    "preselected": True,
                 },
             },
             "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
@@ -157,6 +162,7 @@ module RedditDataProvider {
                     "short_desc": "Get a specific subreddit",
                     "type": AbstractDataProviderTypeMap."*string",
                     "ref_data": "subreddits",
+                    "preselected": True,
                 },
                 "q": <ActionOptionInfo>{
                     "display_name": "Search Query",
@@ -168,6 +174,15 @@ module RedditDataProvider {
                     "display_name": "My Subreddits",
                     "short_desc": "List subscribed subreddits",
                     "type": AbstractDataProviderTypeMap."*softbool",
+                },
+                "sort": <ActionOptionInfo>{
+                    "display_name": "Sort",
+                    "short_desc": "Sort order for search results",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "relevance", "display_name": "Relevance"},
+                        <AllowedValueInfo>{"value": "activity", "display_name": "Activity"},
+                    ),
                 },
                 "limit": <ActionOptionInfo>{
                     "display_name": "Limit",
@@ -189,15 +204,19 @@ module RedditDataProvider {
             "short_desc": "Subscribe to or unsubscribe from a subreddit",
             "desc": "Subscribe to or unsubscribe from a subreddit",
             "action_code": DPAT_API,
-            "options": {
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                RedditSubscribeRequestDataType::Fields, {
+                    "preselected": True,
+                },
+            ) + {
                 "action": <ActionOptionInfo>{
                     "display_name": "Action",
                     "short_desc": "Subscribe or unsubscribe",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
                     "allowed_values": (
-                        <AllowedValueInfo>{"value": "sub", "desc": "Subscribe"},
-                        <AllowedValueInfo>{"value": "unsub", "desc": "Unsubscribe"},
+                        <AllowedValueInfo>{"value": "sub", "display_name": "Subscribe"},
+                        <AllowedValueInfo>{"value": "unsub", "display_name": "Unsubscribe"},
                     ),
                 },
                 "sr_name": <ActionOptionInfo>{
@@ -206,10 +225,9 @@ module RedditDataProvider {
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
                     "ref_data": "subreddits",
-                    "preselected": True,
                 },
             },
-            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+            "output_type": RedditSubscribeDataProvider::ResponseType,
         });
 
         # ========== POST ACTIONS ==========
@@ -237,10 +255,10 @@ module RedditDataProvider {
                     "short_desc": "Sort order",
                     "type": AbstractDataProviderTypeMap."*string",
                     "allowed_values": (
-                        <AllowedValueInfo>{"value": "hot", "desc": "Hot"},
-                        <AllowedValueInfo>{"value": "new", "desc": "New"},
-                        <AllowedValueInfo>{"value": "top", "desc": "Top"},
-                        <AllowedValueInfo>{"value": "rising", "desc": "Rising"},
+                        <AllowedValueInfo>{"value": "hot", "display_name": "Hot"},
+                        <AllowedValueInfo>{"value": "new", "display_name": "New"},
+                        <AllowedValueInfo>{"value": "top", "display_name": "Top"},
+                        <AllowedValueInfo>{"value": "rising", "display_name": "Rising"},
                     ),
                     "preselected": True,
                 },
@@ -254,12 +272,12 @@ module RedditDataProvider {
                     "short_desc": "Time range for top/search",
                     "type": AbstractDataProviderTypeMap."*string",
                     "allowed_values": (
-                        <AllowedValueInfo>{"value": "hour", "desc": "Past hour"},
-                        <AllowedValueInfo>{"value": "day", "desc": "Past 24 hours"},
-                        <AllowedValueInfo>{"value": "week", "desc": "Past week"},
-                        <AllowedValueInfo>{"value": "month", "desc": "Past month"},
-                        <AllowedValueInfo>{"value": "year", "desc": "Past year"},
-                        <AllowedValueInfo>{"value": "all", "desc": "All time"},
+                        <AllowedValueInfo>{"value": "hour", "display_name": "Past Hour"},
+                        <AllowedValueInfo>{"value": "day", "display_name": "Past 24 Hours"},
+                        <AllowedValueInfo>{"value": "week", "display_name": "Past Week"},
+                        <AllowedValueInfo>{"value": "month", "display_name": "Past Month"},
+                        <AllowedValueInfo>{"value": "year", "display_name": "Past Year"},
+                        <AllowedValueInfo>{"value": "all", "display_name": "All Time"},
                     ),
                 },
                 "limit": <ActionOptionInfo>{
@@ -289,24 +307,21 @@ module RedditDataProvider {
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
                     "ref_data": "subreddits",
-                    "preselected": True,
                 },
                 "title": <ActionOptionInfo>{
                     "display_name": "Title",
                     "short_desc": "Post title",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
-                    "preselected": True,
                 },
                 "kind": <ActionOptionInfo>{
                     "display_name": "Post Type",
                     "short_desc": "Type of post",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
-                    "preselected": True,
                     "allowed_values": (
-                        <AllowedValueInfo>{"value": "self", "desc": "Text post"},
-                        <AllowedValueInfo>{"value": "link", "desc": "Link post"},
+                        <AllowedValueInfo>{"value": "self", "display_name": "Text Post"},
+                        <AllowedValueInfo>{"value": "link", "display_name": "Link Post"},
                     ),
                 },
                 "text": <ActionOptionInfo>{
@@ -330,8 +345,23 @@ module RedditDataProvider {
                     "short_desc": "Mark as spoiler",
                     "type": AbstractDataProviderTypeMap."*softbool",
                 },
+                "flair_id": <ActionOptionInfo>{
+                    "display_name": "Flair ID",
+                    "short_desc": "Post flair template ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "flair_text": <ActionOptionInfo>{
+                    "display_name": "Flair Text",
+                    "short_desc": "Post flair text",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "sendreplies": <ActionOptionInfo>{
+                    "display_name": "Send Replies",
+                    "short_desc": "Send reply notifications",
+                    "type": AbstractDataProviderTypeMap."*softbool",
+                },
             },
-            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+            "output_type": RedditCreatePostDataProvider::ResponseType,
         });
 
         # Edit Post/Comment
@@ -350,14 +380,12 @@ module RedditDataProvider {
                     "short_desc": "The fullname of the thing to edit",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
-                    "preselected": True,
                 },
                 "text": <ActionOptionInfo>{
                     "display_name": "Text",
                     "short_desc": "The new text content",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
-                    "preselected": True,
                 },
             },
             "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
@@ -379,7 +407,6 @@ module RedditDataProvider {
                     "short_desc": "The fullname to delete",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
-                    "preselected": True,
                 },
             },
             "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
@@ -403,19 +430,18 @@ module RedditDataProvider {
                     "short_desc": "The post ID",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
-                    "preselected": True,
                 },
                 "sort": <ActionOptionInfo>{
                     "display_name": "Sort",
                     "short_desc": "Comment sort order",
                     "type": AbstractDataProviderTypeMap."*string",
                     "allowed_values": (
-                        <AllowedValueInfo>{"value": "best", "desc": "Best"},
-                        <AllowedValueInfo>{"value": "top", "desc": "Top"},
-                        <AllowedValueInfo>{"value": "new", "desc": "New"},
-                        <AllowedValueInfo>{"value": "controversial", "desc": "Controversial"},
-                        <AllowedValueInfo>{"value": "old", "desc": "Old"},
-                        <AllowedValueInfo>{"value": "qa", "desc": "Q&A"},
+                        <AllowedValueInfo>{"value": "best", "display_name": "Best"},
+                        <AllowedValueInfo>{"value": "top", "display_name": "Top"},
+                        <AllowedValueInfo>{"value": "new", "display_name": "New"},
+                        <AllowedValueInfo>{"value": "controversial", "display_name": "Controversial"},
+                        <AllowedValueInfo>{"value": "old", "display_name": "Old"},
+                        <AllowedValueInfo>{"value": "qa", "display_name": "Q&A"},
                     ),
                 },
                 "limit": <ActionOptionInfo>{
@@ -444,7 +470,6 @@ module RedditDataProvider {
                     "short_desc": "The parent fullname",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
-                    "preselected": True,
                     "desc": "The fullname of the parent post (t3_) or comment (t1_) to reply to",
                 },
                 "text": <ActionOptionInfo>{
@@ -452,7 +477,6 @@ module RedditDataProvider {
                     "short_desc": "Comment text",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
-                    "preselected": True,
                 },
             },
             "get_output_type": AbstractDataProviderType sub () { return new RedditCommentDataType(); },
@@ -476,18 +500,16 @@ module RedditDataProvider {
                     "short_desc": "The fullname to vote on",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
-                    "preselected": True,
                 },
                 "dir": <ActionOptionInfo>{
                     "display_name": "Direction",
                     "short_desc": "Vote direction",
                     "type": AbstractDataProviderTypeMap."int",
                     "required": True,
-                    "preselected": True,
                     "allowed_values": (
-                        <AllowedValueInfo>{"value": 1, "desc": "Upvote"},
-                        <AllowedValueInfo>{"value": 0, "desc": "Remove vote"},
-                        <AllowedValueInfo>{"value": -1, "desc": "Downvote"},
+                        <AllowedValueInfo>{"value": 1, "display_name": "Upvote"},
+                        <AllowedValueInfo>{"value": 0, "display_name": "Remove Vote"},
+                        <AllowedValueInfo>{"value": -1, "display_name": "Downvote"},
                     ),
                 },
             },
@@ -513,9 +535,9 @@ module RedditDataProvider {
                     "type": AbstractDataProviderTypeMap."*string",
                     "preselected": True,
                     "allowed_values": (
-                        <AllowedValueInfo>{"value": "inbox", "desc": "Inbox"},
-                        <AllowedValueInfo>{"value": "sent", "desc": "Sent"},
-                        <AllowedValueInfo>{"value": "unread", "desc": "Unread"},
+                        <AllowedValueInfo>{"value": "inbox", "display_name": "Inbox"},
+                        <AllowedValueInfo>{"value": "sent", "display_name": "Sent"},
+                        <AllowedValueInfo>{"value": "unread", "display_name": "Unread"},
                     ),
                 },
                 "limit": <ActionOptionInfo>{
@@ -544,21 +566,18 @@ module RedditDataProvider {
                     "short_desc": "Recipient username",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
-                    "preselected": True,
                 },
                 "subject": <ActionOptionInfo>{
                     "display_name": "Subject",
                     "short_desc": "Message subject",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
-                    "preselected": True,
                 },
                 "text": <ActionOptionInfo>{
                     "display_name": "Text",
                     "short_desc": "Message body",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
-                    "preselected": True,
                 },
             },
             "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
@@ -580,7 +599,6 @@ module RedditDataProvider {
                     "short_desc": "The message fullname",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
-                    "preselected": True,
                 },
             },
             "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
@@ -602,7 +620,6 @@ module RedditDataProvider {
                     "short_desc": "The message fullname",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
-                    "preselected": True,
                 },
             },
             "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
@@ -626,7 +643,6 @@ module RedditDataProvider {
                     "short_desc": "The Reddit username",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
-                    "preselected": True,
                 },
                 "type": <ActionOptionInfo>{
                     "display_name": "Content Type",
@@ -634,9 +650,33 @@ module RedditDataProvider {
                     "type": AbstractDataProviderTypeMap."*string",
                     "preselected": True,
                     "allowed_values": (
-                        <AllowedValueInfo>{"value": "about", "desc": "User info"},
-                        <AllowedValueInfo>{"value": "submitted", "desc": "User's posts"},
-                        <AllowedValueInfo>{"value": "comments", "desc": "User's comments"},
+                        <AllowedValueInfo>{"value": "about", "display_name": "User Info"},
+                        <AllowedValueInfo>{"value": "submitted", "display_name": "User's Posts"},
+                        <AllowedValueInfo>{"value": "comments", "display_name": "User's Comments"},
+                    ),
+                },
+                "sort": <ActionOptionInfo>{
+                    "display_name": "Sort",
+                    "short_desc": "Sort order for content",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "hot", "display_name": "Hot"},
+                        <AllowedValueInfo>{"value": "new", "display_name": "New"},
+                        <AllowedValueInfo>{"value": "top", "display_name": "Top"},
+                        <AllowedValueInfo>{"value": "controversial", "display_name": "Controversial"},
+                    ),
+                },
+                "t": <ActionOptionInfo>{
+                    "display_name": "Time Range",
+                    "short_desc": "Time range for top sort",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "hour", "display_name": "Past Hour"},
+                        <AllowedValueInfo>{"value": "day", "display_name": "Past 24 Hours"},
+                        <AllowedValueInfo>{"value": "week", "display_name": "Past Week"},
+                        <AllowedValueInfo>{"value": "month", "display_name": "Past Month"},
+                        <AllowedValueInfo>{"value": "year", "display_name": "Past Year"},
+                        <AllowedValueInfo>{"value": "all", "display_name": "All Time"},
                     ),
                 },
                 "limit": <ActionOptionInfo>{
@@ -667,15 +707,15 @@ module RedditDataProvider {
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
                     "ref_data": "subreddits",
-                    "preselected": True,
                 },
                 "type": <ActionOptionInfo>{
                     "display_name": "Flair Type",
                     "short_desc": "Type of flair",
                     "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
                     "allowed_values": (
-                        <AllowedValueInfo>{"value": "link", "desc": "Link flair"},
-                        <AllowedValueInfo>{"value": "user", "desc": "User flair"},
+                        <AllowedValueInfo>{"value": "link", "display_name": "Link Flair"},
+                        <AllowedValueInfo>{"value": "user", "display_name": "User Flair"},
                     ),
                 },
             },
@@ -699,17 +739,18 @@ module RedditDataProvider {
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
                     "ref_data": "subreddits",
-                    "preselected": True,
                 },
                 "flair_template_id": <ActionOptionInfo>{
                     "display_name": "Flair Template ID",
                     "short_desc": "The flair template",
                     "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
                 },
                 "link": <ActionOptionInfo>{
                     "display_name": "Post Fullname",
                     "short_desc": "The post for link flair",
                     "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
                 },
                 "name": <ActionOptionInfo>{
                     "display_name": "Username",
@@ -743,7 +784,6 @@ module RedditDataProvider {
                     "short_desc": "The fullname to approve",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
-                    "preselected": True,
                 },
             },
             "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
@@ -765,7 +805,6 @@ module RedditDataProvider {
                     "short_desc": "The fullname to remove",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
-                    "preselected": True,
                 },
                 "spam": <ActionOptionInfo>{
                     "display_name": "Spam",
@@ -792,7 +831,6 @@ module RedditDataProvider {
                     "short_desc": "The post fullname to lock",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
-                    "preselected": True,
                 },
             },
             "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
@@ -814,7 +852,6 @@ module RedditDataProvider {
                     "short_desc": "The post fullname to unlock",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
-                    "preselected": True,
                 },
             },
             "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
@@ -836,14 +873,129 @@ module RedditDataProvider {
                     "short_desc": "The post fullname",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
-                    "preselected": True,
                 },
                 "state": <ActionOptionInfo>{
                     "display_name": "Sticky State",
                     "short_desc": "Sticky or unsticky",
                     "type": AbstractDataProviderTypeMap."softbool",
                     "required": True,
-                    "preselected": True,
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+        });
+
+        # Distinguish
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": RedditDataProvider::AppName,
+            "path": "/moderation/distinguish",
+            "action": "distinguish",
+            "groups": "Moderation",
+            "display_name": "Distinguish",
+            "short_desc": "Distinguish a post or comment",
+            "desc": "Distinguish a post or comment as a moderator or admin",
+            "action_code": DPAT_API,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Thing ID",
+                    "short_desc": "The fullname to distinguish",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                },
+                "how": <ActionOptionInfo>{
+                    "display_name": "How",
+                    "short_desc": "Distinguished type",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "yes", "display_name": "Moderator"},
+                        <AllowedValueInfo>{"value": "no", "display_name": "Remove Distinction"},
+                        <AllowedValueInfo>{"value": "admin", "display_name": "Admin"},
+                        <AllowedValueInfo>{"value": "special", "display_name": "Special"},
+                    ),
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+        });
+
+        # Mark NSFW
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": RedditDataProvider::AppName,
+            "path": "/moderation/mark-nsfw",
+            "action": "mark-nsfw",
+            "groups": "Moderation",
+            "display_name": "Mark NSFW",
+            "short_desc": "Mark a post as NSFW",
+            "desc": "Mark a post as NSFW (Not Safe For Work)",
+            "action_code": DPAT_API,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Post ID",
+                    "short_desc": "The post fullname to mark",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+        });
+
+        # Unmark NSFW
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": RedditDataProvider::AppName,
+            "path": "/moderation/unmark-nsfw",
+            "action": "unmark-nsfw",
+            "groups": "Moderation",
+            "display_name": "Unmark NSFW",
+            "short_desc": "Unmark a post as NSFW",
+            "desc": "Remove the NSFW flag from a post",
+            "action_code": DPAT_API,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Post ID",
+                    "short_desc": "The post fullname to unmark",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+        });
+
+        # Mark Spoiler
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": RedditDataProvider::AppName,
+            "path": "/moderation/mark-spoiler",
+            "action": "mark-spoiler",
+            "groups": "Moderation",
+            "display_name": "Mark Spoiler",
+            "short_desc": "Mark a post as a spoiler",
+            "desc": "Mark a post as containing spoilers",
+            "action_code": DPAT_API,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Post ID",
+                    "short_desc": "The post fullname to mark",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+        });
+
+        # Unmark Spoiler
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": RedditDataProvider::AppName,
+            "path": "/moderation/unmark-spoiler",
+            "action": "unmark-spoiler",
+            "groups": "Moderation",
+            "display_name": "Unmark Spoiler",
+            "short_desc": "Unmark a post as a spoiler",
+            "desc": "Remove the spoiler flag from a post",
+            "action_code": DPAT_API,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Post ID",
+                    "short_desc": "The post fullname to unmark",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
                 },
             },
             "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
@@ -866,13 +1018,12 @@ module RedditDataProvider {
                     "short_desc": "The HTTP method",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
-                    "preselected": True,
                     "allowed_values": (
-                        <AllowedValueInfo>{"value": "GET", "desc": "GET request"},
-                        <AllowedValueInfo>{"value": "POST", "desc": "POST request"},
-                        <AllowedValueInfo>{"value": "PUT", "desc": "PUT request"},
-                        <AllowedValueInfo>{"value": "PATCH", "desc": "PATCH request"},
-                        <AllowedValueInfo>{"value": "DELETE", "desc": "DELETE request"},
+                        <AllowedValueInfo>{"value": "GET", "display_name": "GET Request"},
+                        <AllowedValueInfo>{"value": "POST", "display_name": "POST Request"},
+                        <AllowedValueInfo>{"value": "PUT", "display_name": "PUT Request"},
+                        <AllowedValueInfo>{"value": "PATCH", "display_name": "PATCH Request"},
+                        <AllowedValueInfo>{"value": "DELETE", "display_name": "DELETE Request"},
                     ),
                 },
                 "path": <ActionOptionInfo>{
@@ -880,12 +1031,12 @@ module RedditDataProvider {
                     "short_desc": "The API path",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
-                    "preselected": True,
                 },
                 "body": <ActionOptionInfo>{
                     "display_name": "Request Body",
                     "short_desc": "Optional request body",
                     "type": AbstractDataProviderTypeMap."*hash",
+                    "preselected": True,
                 },
             },
             "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
@@ -911,13 +1062,12 @@ module RedditDataProvider {
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
                     "ref_data": "subreddits",
-                    "preselected": True,
                 },
                 "poll_interval": <ActionOptionInfo>{
                     "display_name": "Poll Interval",
                     "short_desc": "Seconds between polls",
                     "type": AbstractDataProviderTypeMap."*int",
-                    "desc": "How often to poll for new posts (seconds). Default: 60",
+                    "desc": "How often to poll for new posts in seconds. Default: `60`",
                 },
             },
             "get_output_type": AbstractDataProviderType sub () { return new RedditPostDataType(); },
@@ -940,13 +1090,12 @@ module RedditDataProvider {
                     "short_desc": "The post to watch",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
-                    "preselected": True,
                 },
                 "poll_interval": <ActionOptionInfo>{
                     "display_name": "Poll Interval",
                     "short_desc": "Seconds between polls",
                     "type": AbstractDataProviderTypeMap."*int",
-                    "desc": "How often to poll for new comments (seconds). Default: 60",
+                    "desc": "How often to poll for new comments in seconds. Default: `60`",
                 },
             },
             "get_output_type": AbstractDataProviderType sub () { return new RedditCommentDataType(); },
@@ -968,7 +1117,8 @@ module RedditDataProvider {
                     "display_name": "Poll Interval",
                     "short_desc": "Seconds between polls",
                     "type": AbstractDataProviderTypeMap."*int",
-                    "desc": "How often to poll for new messages (seconds). Default: 60",
+                    "desc": "How often to poll for new messages in seconds. Default: `60`",
+                    "preselected": True,
                 },
             },
             "get_output_type": AbstractDataProviderType sub () { return new RedditMessageDataType(); },

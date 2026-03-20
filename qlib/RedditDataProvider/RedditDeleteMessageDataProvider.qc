@@ -34,6 +34,7 @@ public class RedditDeleteMessageRequestDataType inherits HashDataType {
                 "short_desc": "The fullname of the message",
                 "desc": "The fullname (t4_ prefix) of the message to delete",
                 "required": True,
+                "example_value": "t4_msg123",
             },
         };
     }
@@ -55,6 +56,8 @@ public class RedditDeleteMessageDataProvider inherits RedditDataProviderBase {
         };
 
         const ConstructorOptions = BaseConstructorOptions;
+
+        static AbstractDataProviderType ResponseType = AbstractDataProviderTypeMap."hash";
     }
 
     constructor(RedditRestClient::RedditRestClient rest) : RedditDataProviderBase(rest) {

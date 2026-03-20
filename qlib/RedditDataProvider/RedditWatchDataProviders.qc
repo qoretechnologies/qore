@@ -43,31 +43,41 @@ public class RedditWatchNewPostsDataProvider inherits RedditWatchDataProviderBas
             "subreddit": <DataProviderOptionInfo>{
                 "display_name": "Subreddit",
                 "short_desc": "The subreddit to watch for new posts",
-                "type": AbstractDataProviderType::get(SoftStringType),
+                "type": AbstractDataProviderType::get(SoftStringOrNothingType),
                 "desc": "The display name of the subreddit to watch for new posts",
-                "required": True,
             },
         };
     }
 
     private {
         #! The subreddit to watch
-        string subreddit;
+        *string subreddit;
     }
 
     constructor(RedditRestClient::RedditRestClient rest, *hash<auto> options)
             : RedditWatchDataProviderBase(rest, options) {
-        if (!options.subreddit) {
-            throw "REDDIT-ERROR", "subreddit is required for watching new posts";
+        if (options.subreddit) {
+            subreddit = options.subreddit;
         }
-        subreddit = options.subreddit;
     }
 
     string getName() { return EVENT_NEW_POST; }
-    *string getDesc() { return "Watch for new posts in subreddit r/" + subreddit; }
+    *string getDesc() { return subreddit ? "Watch for new posts in subreddit r/" + subreddit : "Watch for new posts in a subreddit"; }
+
+    private string getSubreddit() {
+        if (!subreddit) {
+            *hash<auto> ctx = DataProvider::DataProviderDataContextHelper::getHash();
+            subreddit = ctx.subreddit;
+        }
+        if (!subreddit) {
+            throw "REDDIT-ERROR", "subreddit is required for watching new posts; "
+                "provide it as a constructor option or via data context";
+        }
+        return subreddit;
+    }
 
     private list<hash<auto>> fetchRecords(date since) {
-        return fetchAllPages("r/" + subreddit + "/new", NOTHING, DefaultPageSize);
+        return fetchAllPages("r/" + getSubreddit() + "/new", NOTHING, DefaultPageSize);
     }
 
     private string getEventName() { return EVENT_NEW_POST; }
@@ -79,10 +89,19 @@ public class RedditWatchNewPostsDataProvider inherits RedditWatchDataProviderBas
             "id": "abc123",
             "name": "t3_abc123",
             "title": "Example Post Title",
+            "selftext": "This is an example self post body with some text content.",
             "author": "example_user",
-            "subreddit": subreddit,
+            "subreddit": subreddit ?? "test",
             "score": 42,
-            "created_utc": float(now_us().getEpochSecondsInt()),
+            "upvote_ratio": 0.95,
+            "num_comments": 7,
+            "created_utc": float(now_us().getEpochSeconds()),
+            "url": "https://www.reddit.com/r/test/comments/abc123/example_post_title/",
+            "permalink": "/r/test/comments/abc123/example_post_title/",
+            "is_self": True,
+            "over_18": False,
+            "stickied": False,
+            "locked": False,
         };
     }
 }
@@ -106,31 +125,41 @@ public class RedditWatchNewCommentsDataProvider inherits RedditWatchDataProvider
             "article": <DataProviderOptionInfo>{
                 "display_name": "Post ID",
                 "short_desc": "The post ID to watch for comments",
-                "type": AbstractDataProviderType::get(SoftStringType),
+                "type": AbstractDataProviderType::get(SoftStringOrNothingType),
                 "desc": "The post ID (base36, without t3_ prefix) to watch for new comments",
-                "required": True,
             },
         };
     }
 
     private {
         #! The post ID to watch
-        string article;
+        *string article;
     }
 
     constructor(RedditRestClient::RedditRestClient rest, *hash<auto> options)
             : RedditWatchDataProviderBase(rest, options) {
-        if (!options.article) {
-            throw "REDDIT-ERROR", "article (post ID) is required for watching new comments";
+        if (options.article) {
+            article = options.article;
         }
-        article = options.article;
     }
 
     string getName() { return EVENT_NEW_COMMENT; }
-    *string getDesc() { return "Watch for new comments on post " + article; }
+    *string getDesc() { return article ? "Watch for new comments on post " + article : "Watch for new comments on a post"; }
+
+    private string getArticle() {
+        if (!article) {
+            *hash<auto> ctx = DataProvider::DataProviderDataContextHelper::getHash();
+            article = ctx.article;
+        }
+        if (!article) {
+            throw "REDDIT-ERROR", "article (post ID) is required for watching new comments; "
+                "provide it as a constructor option or via data context";
+        }
+        return article;
+    }
 
     private list<hash<auto>> fetchRecords(date since) {
-        hash<auto> response = doGet("comments/" + article, {"sort": "new"});
+        hash<auto> response = doGet("comments/" + getArticle(), {"sort": "new"});
         list<hash<auto>> results = ();
         # GET /comments/{article} returns a list of two Listings
         auto comment_listing;
@@ -160,8 +189,14 @@ public class RedditWatchNewCommentsDataProvider inherits RedditWatchDataProvider
             "name": "t1_xyz789",
             "body": "Example comment text",
             "author": "example_user",
-            "link_id": "t3_" + article,
-            "created_utc": float(now_us().getEpochSecondsInt()),
+            "subreddit": "test",
+            "score": 5,
+            "created_utc": float(now_us().getEpochSeconds()),
+            "parent_id": "t3_" + (article ?? "abc123"),
+            "link_id": "t3_" + (article ?? "abc123"),
+            "permalink": "/r/test/comments/abc123/example_post/xyz789/",
+            "is_submitter": False,
+            "stickied": False,
         };
     }
 }
@@ -203,8 +238,11 @@ public class RedditWatchNewMessagesDataProvider inherits RedditWatchDataProvider
             "subject": "Example Message",
             "body": "Example message body",
             "author": "example_user",
-            "created_utc": float(now_us().getEpochSecondsInt()),
+            "dest": "recipient_user",
+            "created_utc": float(now_us().getEpochSeconds()),
             "new": True,
+            "was_comment": False,
+            "first_message_name": "t4_msg100",
         };
     }
 }

@@ -26,8 +26,6 @@ class RedditDataProviderTest inherits QUnit::Test {
         *string token;
         *string refresh_token;
         *string test_subreddit;
-
-        RedditRestClient rest;
     }
 
     constructor() : Test("RedditDataProvider", "1.0", \ARGV, MyOpts) {
@@ -39,12 +37,18 @@ class RedditDataProviderTest inherits QUnit::Test {
 
         addTestCase("factory test", \factoryTest());
         addTestCase("data type test", \dataTypeTest());
+        addTestCase("user subreddit type test", \userSubredditTypeTest());
+        addTestCase("trigger example data test", \triggerExampleDataTest());
 
         if (canRunIntegrationTests()) {
             addTestCase("connection test", \connectionTest());
             addTestCase("account test", \accountTest());
             addTestCase("subreddit test", \subredditTest());
             addTestCase("post lifecycle test", \postLifecycleTest());
+            addTestCase("comment lifecycle test", \commentLifecycleTest());
+            addTestCase("vote test", \voteTest());
+            addTestCase("flair test", \flairTest());
+            addTestCase("message test", \messageTest());
         }
 
         set_return_value(main());
@@ -84,43 +88,136 @@ class RedditDataProviderTest inherits QUnit::Test {
     }
 
     dataTypeTest() {
-        # Test all data types can be instantiated
+        # Test all data types can be instantiated and have expected fields
         RedditAccountDataType account_type();
-        assertTrue(account_type.hasField("name"));
-        assertTrue(account_type.hasField("id"));
+        hash<string, AbstractDataField> account_fields = account_type.getFields();
+        assertTrue(account_fields.hasKey("name"));
+        assertTrue(account_fields.hasKey("id"));
+        assertTrue(account_fields.hasKey("link_karma"));
+        assertTrue(account_fields.hasKey("comment_karma"));
+        assertTrue(account_fields.hasKey("subreddit"));
 
         RedditPostDataType post_type();
-        assertTrue(post_type.hasField("title"));
-        assertTrue(post_type.hasField("subreddit"));
+        hash<string, AbstractDataField> post_fields = post_type.getFields();
+        assertTrue(post_fields.hasKey("id"));
+        assertTrue(post_fields.hasKey("name"));
+        assertTrue(post_fields.hasKey("title"));
+        assertTrue(post_fields.hasKey("selftext"));
+        assertTrue(post_fields.hasKey("author"));
+        assertTrue(post_fields.hasKey("subreddit"));
+        assertTrue(post_fields.hasKey("score"));
+        assertTrue(post_fields.hasKey("created_utc"));
 
         RedditCommentDataType comment_type();
-        assertTrue(comment_type.hasField("body"));
-        assertTrue(comment_type.hasField("author"));
+        hash<string, AbstractDataField> comment_fields = comment_type.getFields();
+        assertTrue(comment_fields.hasKey("id"));
+        assertTrue(comment_fields.hasKey("body"));
+        assertTrue(comment_fields.hasKey("author"));
+        assertTrue(comment_fields.hasKey("parent_id"));
+        assertTrue(comment_fields.hasKey("link_id"));
 
         RedditSubredditDataType sub_type();
-        assertTrue(sub_type.hasField("display_name"));
-        assertTrue(sub_type.hasField("subscribers"));
+        hash<string, AbstractDataField> sub_fields = sub_type.getFields();
+        assertTrue(sub_fields.hasKey("display_name"));
+        assertTrue(sub_fields.hasKey("subscribers"));
+        assertTrue(sub_fields.hasKey("subreddit_type"));
 
         RedditMessageDataType msg_type();
-        assertTrue(msg_type.hasField("subject"));
-        assertTrue(msg_type.hasField("dest"));
+        hash<string, AbstractDataField> msg_fields = msg_type.getFields();
+        assertTrue(msg_fields.hasKey("subject"));
+        assertTrue(msg_fields.hasKey("body"));
+        assertTrue(msg_fields.hasKey("author"));
+        assertTrue(msg_fields.hasKey("dest"));
 
         RedditFlairDataType flair_type();
-        assertTrue(flair_type.hasField("text"));
+        hash<string, AbstractDataField> flair_fields = flair_type.getFields();
+        assertTrue(flair_fields.hasKey("id"));
+        assertTrue(flair_fields.hasKey("text"));
+        assertTrue(flair_fields.hasKey("text_editable"));
 
         RedditKarmaDataType karma_type();
-        assertTrue(karma_type.hasField("sr"));
+        hash<string, AbstractDataField> karma_fields = karma_type.getFields();
+        assertTrue(karma_fields.hasKey("sr"));
+        assertTrue(karma_fields.hasKey("comment_karma"));
+        assertTrue(karma_fields.hasKey("link_karma"));
 
         RedditTrophyDataType trophy_type();
-        assertTrue(trophy_type.hasField("name"));
+        hash<string, AbstractDataField> trophy_fields = trophy_type.getFields();
+        assertTrue(trophy_fields.hasKey("name"));
+        assertTrue(trophy_fields.hasKey("description"));
+    }
+
+    userSubredditTypeTest() {
+        # Test the typed sub-type for user subreddit
+        RedditUserSubredditDataType sub_type();
+        hash<string, AbstractDataField> sub_fields = sub_type.getFields();
+        assertTrue(sub_fields.hasKey("display_name"));
+        assertTrue(sub_fields.hasKey("title"));
+        assertTrue(sub_fields.hasKey("url"));
+        assertTrue(sub_fields.hasKey("icon_img"));
+        assertTrue(sub_fields.hasKey("public_description"));
+
+        # Test nullable variant
+        RedditUserSubredditDataType sub_type_nullable(AutoHashOrNothingType);
+        hash<string, AbstractDataField> nullable_fields = sub_type_nullable.getFields();
+        assertTrue(nullable_fields.hasKey("display_name"));
+    }
+
+    triggerExampleDataTest() {
+        # Test getExampleEventData() for each watch provider
+        # Since we can't make API calls without credentials, we just verify
+        # the fake data has the expected fields
+
+        RedditRestClient rest({"url": "https://oauth.reddit.com", "token": "fake"}, True);
+
+        # New posts trigger
+        RedditWatchNewPostsDataProvider post_watch(rest);
+        auto post_example = post_watch.getExampleEventData(EVENT_NEW_POST);
+        assertTrue(post_example.id.val(), "new-post example has id");
+        assertTrue(post_example.name.val(), "new-post example has name");
+        assertTrue(post_example.title.val(), "new-post example has title");
+        assertTrue(post_example.author.val(), "new-post example has author");
+        assertTrue(exists post_example.created_utc, "new-post example has created_utc");
+
+        # New comments trigger
+        RedditWatchNewCommentsDataProvider comment_watch(rest);
+        auto comment_example = comment_watch.getExampleEventData(EVENT_NEW_COMMENT);
+        assertTrue(comment_example.id.val(), "new-comment example has id");
+        assertTrue(comment_example.name.val(), "new-comment example has name");
+        assertTrue(comment_example.body.val(), "new-comment example has body");
+        assertTrue(comment_example.author.val(), "new-comment example has author");
+
+        # New messages trigger
+        RedditWatchNewMessagesDataProvider msg_watch(rest);
+        auto msg_example = msg_watch.getExampleEventData(EVENT_NEW_MESSAGE);
+        assertTrue(msg_example.id.val(), "new-message example has id");
+        assertTrue(msg_example.name.val(), "new-message example has name");
+        assertTrue(msg_example.subject.val(), "new-message example has subject");
+        assertTrue(msg_example.body.val(), "new-message example has body");
     }
 
     connectionTest() {
+        # Test connection ping
+        hash<auto> conn_opts = {};
+        if (token) {
+            conn_opts.token = token;
+        } else {
+            conn_opts.oauth2_client_id = client_id;
+            conn_opts.oauth2_client_secret = client_secret;
+            conn_opts.oauth2_refresh_token = refresh_token;
+        }
+        RedditRestConnection conn("test-reddit", "Test Reddit connection",
+            RedditRestConnection::DefaultConnectionUrl, {}, conn_opts);
+        hash<auto> ping_result = conn.ping(True);
+        assertEq("ok", ping_result.ok.toString());
+
         RedditRestClient rest = getRestClient();
-        # Test ping (GET /api/v1/me)
+        # Test basic API call (GET /api/v1/me)
         hash<auto> result = rest.get("api/v1/me");
         assertEq(200, result.status_code);
         assertTrue(result.body.name.val());
+        # Verify specific field types
+        assertEq(NT_STRING, result.body.name.typeCode());
         if (m_options.verbose > 0) {
             printf("Authenticated as: %s\n", result.body.name);
         }
@@ -134,11 +231,15 @@ class RedditDataProviderTest inherits QUnit::Test {
         AbstractDataProvider account = provider.getChildProvider("account");
         assertEq("account", account.getName());
 
-        # Get current user
+        # Get current user and verify specific field values
         AbstractDataProviderRecordIterator iter = account.searchRecords();
         assertTrue(iter.next());
         hash<auto> record = iter.getValue();
-        assertTrue(record.name.val());
+        assertTrue(record.name.val(), "account has username");
+        assertTrue(record.id.val(), "account has id");
+        # Verify karma fields exist (may be 0 for new accounts)
+        assertTrue(exists record.link_karma, "account has link_karma");
+        assertTrue(exists record.comment_karma, "account has comment_karma");
         if (m_options.verbose > 0) {
             printf("Account: %s (link karma: %d, comment karma: %d)\n",
                 record.name, record.link_karma, record.comment_karma);
@@ -158,10 +259,11 @@ class RedditDataProviderTest inherits QUnit::Test {
         int count = 0;
         while (iter.next()) {
             hash<auto> record = iter.getValue();
-            assertTrue(record.display_name.val());
+            assertTrue(record.display_name.val(), "subreddit has display_name");
+            assertTrue(exists record.subscribers, "subreddit has subscribers");
             ++count;
         }
-        assertTrue(count > 0);
+        assertTrue(count > 0, "found subreddits matching 'programming'");
         if (m_options.verbose > 0) {
             printf("Found %d subreddits matching 'programming'\n", count);
         }
@@ -188,11 +290,236 @@ class RedditDataProviderTest inherits QUnit::Test {
         int count = 0;
         while (iter.next()) {
             hash<auto> record = iter.getValue();
-            assertTrue(record.title.val());
+            assertTrue(record.title.val(), "post has title");
+            assertTrue(record.name.val(), "post has fullname");
+            assertTrue(record.author.val(), "post has author");
+            assertEq(test_subreddit, record.subreddit, "post is from correct subreddit");
+            assertTrue(exists record.score, "post has score");
+            assertTrue(exists record.created_utc, "post has created_utc");
             ++count;
         }
         if (m_options.verbose > 0) {
             printf("Found %d posts in r/%s\n", count, test_subreddit);
+        }
+
+        # Create a test post
+        string test_title = "Test Post " + now_us().format("YYYY-MM-DD HH:mm:ss");
+        string test_text = "This is an automated test post. Please ignore.";
+        AbstractDataProvider create_prov = posts.getChildProvider("create");
+        auto create_result = create_prov.doRequest({
+            "sr": test_subreddit,
+            "title": test_title,
+            "kind": "self",
+            "text": test_text,
+        });
+        assertTrue(create_result.id.val(), "create-post returned id");
+        assertTrue(create_result.name.val(), "create-post returned name");
+        string post_fullname = create_result.name;
+        if (m_options.verbose > 0) {
+            printf("Created post: %s (%s)\n", post_fullname, test_title);
+        }
+
+        # Edit the post
+        AbstractDataProvider edit_prov = posts.getChildProvider("edit");
+        string updated_text = test_text + "\n\nEdited at " + now_us().format("HH:mm:ss");
+        auto edit_result = edit_prov.doRequest({
+            "thing_id": post_fullname,
+            "text": updated_text,
+        });
+        assertTrue(edit_result.typeCode() == NT_HASH, "edit returned hash");
+        if (edit_result.json.data.things) {
+            hash<auto> edited = edit_result.json.data.things[0].data;
+            assertEq(updated_text, edited.selftext, "edited text matches");
+        }
+        if (m_options.verbose > 0) {
+            printf("Edited post: %s\n", post_fullname);
+        }
+
+        # Delete the post (cleanup)
+        AbstractDataProvider delete_prov = posts.getChildProvider("delete");
+        delete_prov.doRequest({"id": post_fullname});
+        if (m_options.verbose > 0) {
+            printf("Deleted post: %s\n", post_fullname);
+        }
+    }
+
+    commentLifecycleTest() {
+        if (!test_subreddit) {
+            if (m_options.verbose > 0) {
+                printf("Skipping comment lifecycle test: no test subreddit provided\n");
+            }
+            return;
+        }
+
+        RedditRestClient rest = getRestClient();
+        RedditDataProvider provider(rest);
+
+        # Create a test post to comment on
+        AbstractDataProvider posts = provider.getChildProvider("posts");
+        AbstractDataProvider create_post = posts.getChildProvider("create");
+        string test_title = "Comment Test Post " + now_us().format("YYYY-MM-DD HH:mm:ss");
+        auto post_result = create_post.doRequest({
+            "sr": test_subreddit,
+            "title": test_title,
+            "kind": "self",
+            "text": "Automated test post for comment lifecycle test.",
+        });
+        assertTrue(post_result.name.val(), "created post for comment test");
+        string post_fullname = post_result.name;
+        # Extract post ID (without t3_ prefix)
+        string post_id = post_result.id;
+        if (m_options.verbose > 0) {
+            printf("Created test post: %s (%s)\n", post_fullname, post_id);
+        }
+
+        # Create a comment on the post
+        AbstractDataProvider comments = provider.getChildProvider("comments");
+        AbstractDataProvider create_comment = comments.getChildProvider("create");
+        string comment_text = "Automated test comment. Please ignore.";
+        auto comment_result = create_comment.doRequest({
+            "parent": post_fullname,
+            "text": comment_text,
+        });
+        assertTrue(comment_result.typeCode() == NT_HASH, "create-comment returned hash");
+        if (comment_result.json.data.things) {
+            # Reddit returns comment data nested in json.data.things
+            hash<auto> comment_data = comment_result.json.data.things[0].data;
+            assertEq(comment_text, comment_data.body, "comment body matches");
+            assertTrue(comment_data.author.val(), "comment has author");
+            assertTrue(comment_data.name.val(), "comment has fullname");
+        }
+        if (m_options.verbose > 0) {
+            printf("Created comment on post %s\n", post_fullname);
+        }
+
+        # List comments on the post
+        AbstractDataProviderRecordIterator iter = comments.searchRecords(NOTHING, {
+            "article": post_id,
+            "limit": 10,
+        });
+        int count = 0;
+        while (iter.next()) {
+            hash<auto> record = iter.getValue();
+            assertTrue(record.id.val(), "comment has id");
+            assertTrue(record.body.val(), "comment has body");
+            assertTrue(record.author.val(), "comment has author");
+            ++count;
+        }
+        assertTrue(count > 0, "found comments on the test post");
+        if (m_options.verbose > 0) {
+            printf("Found %d comments on post %s\n", count, post_id);
+        }
+
+        # Cleanup: delete the test post (also removes comments)
+        AbstractDataProvider delete_prov = posts.getChildProvider("delete");
+        delete_prov.doRequest({"id": post_fullname});
+        if (m_options.verbose > 0) {
+            printf("Deleted test post: %s\n", post_fullname);
+        }
+    }
+
+    voteTest() {
+        if (!test_subreddit) {
+            if (m_options.verbose > 0) {
+                printf("Skipping vote test: no test subreddit provided\n");
+            }
+            return;
+        }
+
+        RedditRestClient rest = getRestClient();
+        RedditDataProvider provider(rest);
+
+        # Find a post to vote on
+        AbstractDataProvider posts = provider.getChildProvider("posts");
+        AbstractDataProviderRecordIterator iter = posts.searchRecords(NOTHING, {
+            "subreddit": test_subreddit,
+            "sort": "hot",
+            "limit": 1,
+        });
+        if (!iter.next()) {
+            if (m_options.verbose > 0) {
+                printf("No posts found in r/%s to vote on\n", test_subreddit);
+            }
+            return;
+        }
+        hash<auto> post = iter.getValue();
+        string post_fullname = post.name;
+
+        # Vote (upvote)
+        AbstractDataProvider vote_prov = provider.getChildProvider("vote");
+        auto vote_result = vote_prov.doRequest({
+            "id": post_fullname,
+            "dir": 1,
+        });
+        assertTrue(vote_result.typeCode() == NT_HASH, "vote returned hash");
+        if (m_options.verbose > 0) {
+            printf("Upvoted post: %s\n", post_fullname);
+        }
+
+        # Remove vote (unvote)
+        vote_prov.doRequest({
+            "id": post_fullname,
+            "dir": 0,
+        });
+        if (m_options.verbose > 0) {
+            printf("Removed vote on post: %s\n", post_fullname);
+        }
+    }
+
+    flairTest() {
+        if (!test_subreddit) {
+            if (m_options.verbose > 0) {
+                printf("Skipping flair test: no test subreddit provided\n");
+            }
+            return;
+        }
+
+        RedditRestClient rest = getRestClient();
+        RedditDataProvider provider(rest);
+
+        # List flair templates for the test subreddit
+        AbstractDataProvider flair = provider.getChildProvider("flair");
+        AbstractDataProviderRecordIterator iter = flair.searchRecords(NOTHING, {
+            "subreddit": test_subreddit,
+            "type": "link",
+        });
+        int count = 0;
+        while (iter.next()) {
+            hash<auto> record = iter.getValue();
+            assertTrue(record.id.val(), "flair has id");
+            assertTrue(exists record.text, "flair has text field");
+            ++count;
+        }
+        if (m_options.verbose > 0) {
+            printf("Found %d link flair templates in r/%s\n", count, test_subreddit);
+        }
+        # Note: count may be 0 if the subreddit has no flair templates configured
+    }
+
+    messageTest() {
+        RedditRestClient rest = getRestClient();
+        RedditDataProvider provider(rest);
+
+        # List messages (inbox)
+        AbstractDataProvider messages = provider.getChildProvider("messages");
+        AbstractDataProviderRecordIterator iter = messages.searchRecords(NOTHING, {
+            "where": "inbox",
+            "limit": 5,
+        });
+        int count = 0;
+        while (iter.next()) {
+            hash<auto> record = iter.getValue();
+            assertTrue(record.name.val(), "message has fullname");
+            assertTrue(exists record.new, "message has read status");
+            # Verify the fullname has the expected prefix
+            assertTrue(record.name =~ /^t[0-9]_/, "message fullname has type prefix");
+            # Verify author or dest is present
+            assertTrue(record.author.val() || record.dest.val(),
+                "message has author or dest");
+            ++count;
+        }
+        if (m_options.verbose > 0) {
+            printf("Found %d messages in inbox\n", count);
         }
     }
 }

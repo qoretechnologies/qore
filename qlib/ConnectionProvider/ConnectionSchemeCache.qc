@@ -221,6 +221,7 @@ public class ConnectionSchemeCache {
             "apollorest": "ApolloRestClient",
 
             "redditrest": "RedditRestClient",
+            "redditleadads": "RedditLeadAdsRestClient",
 
             "squareres": "SquareRestClient",
             "squarespaceres": "SquarespaceRestClient",

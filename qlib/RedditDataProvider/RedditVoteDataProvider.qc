@@ -34,13 +34,19 @@ public class RedditVoteRequestDataType inherits HashDataType {
                 "short_desc": "The fullname of the thing to vote on",
                 "desc": "The fullname of the post (t3_) or comment (t1_) to vote on",
                 "required": True,
+                "example_value": "t3_abc123",
             },
             "dir": {
                 "type": IntType,
                 "display_name": "Vote Direction",
                 "short_desc": "Vote direction (1, 0, -1)",
-                "desc": "The vote direction: 1 for upvote, 0 to remove vote, -1 for downvote",
+                "desc": "The vote direction: `1` for upvote, `0` to remove vote, `-1` for downvote",
                 "required": True,
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": 1, "display_name": "Upvote"},
+                    <AllowedValueInfo>{"value": 0, "display_name": "Remove Vote"},
+                    <AllowedValueInfo>{"value": -1, "display_name": "Downvote"},
+                ),
             },
         };
     }
@@ -62,6 +68,8 @@ public class RedditVoteDataProvider inherits RedditDataProviderBase {
         };
 
         const ConstructorOptions = BaseConstructorOptions;
+
+        static AbstractDataProviderType ResponseType = AbstractDataProviderTypeMap."hash";
     }
 
     constructor(RedditRestClient::RedditRestClient rest) : RedditDataProviderBase(rest) {

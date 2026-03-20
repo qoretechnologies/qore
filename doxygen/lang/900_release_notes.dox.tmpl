@@ -1185,6 +1185,15 @@ cargo install tree-sitter-cli@0.26.5
       - moderation actions (approve, remove, distinguish, lock, sticky, NSFW, spoiler)
       - polling-based triggers for new posts, comments, and messages
       - connection support with \c redditrest:// URL scheme
+    - @ref redditleadadsrestclientintro "RedditLeadAdsRestClient" module
+      - new module providing a REST client for Reddit's Ads API
+      - supports OAuth2 authentication with bearer tokens
+      - provides RedditLeadAdsRestConnection for connection management with \c redditleadads:// URL scheme
+    - @ref redditleadadsdataproviderintro "RedditLeadAdsDataProvider" module
+      - new module providing a data provider API for Reddit Lead Generation Ads
+      - polling-based trigger for new lead form submissions
+      - captures email, name, job title, company, phone, and custom fields
+      - connection support with \c redditleadads:// URL scheme
     - @ref squarerestclientintro "SquareRestClient" module
       - new module providing a REST client for Square's payments and commerce API
       - supports OAuth2 authentication with bearer tokens

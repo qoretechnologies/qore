@@ -34,6 +34,7 @@ public class RedditComposeMessageRequestDataType inherits HashDataType {
                 "short_desc": "The recipient username",
                 "desc": "The username of the message recipient",
                 "required": True,
+                "example_value": "spez",
             },
             "subject": {
                 "type": StringType,
@@ -41,6 +42,7 @@ public class RedditComposeMessageRequestDataType inherits HashDataType {
                 "short_desc": "The message subject",
                 "desc": "The subject line of the message",
                 "required": True,
+                "example_value": "Hello",
             },
             "text": {
                 "type": StringType,
@@ -48,6 +50,7 @@ public class RedditComposeMessageRequestDataType inherits HashDataType {
                 "short_desc": "The message body",
                 "desc": "The body text of the message (markdown formatted)",
                 "required": True,
+                "example_value": "Hi, I wanted to reach out about...",
             },
         };
     }
@@ -69,6 +72,8 @@ public class RedditComposeMessageDataProvider inherits RedditDataProviderBase {
         };
 
         const ConstructorOptions = BaseConstructorOptions;
+
+        static AbstractDataProviderType ResponseType = AbstractDataProviderTypeMap."hash";
     }
 
     constructor(RedditRestClient::RedditRestClient rest) : RedditDataProviderBase(rest) {

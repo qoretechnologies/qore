@@ -50,7 +50,15 @@ public class RedditUpdatePrefsRequestDataType inherits HashDataType {
                 "type": StringOrNothingType,
                 "display_name": "Default Comment Sort",
                 "short_desc": "Default comment sort order",
-                "desc": "Default comment sort order (best, top, new, controversial, old, qa)",
+                "desc": "Default comment sort order",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "best", "display_name": "Best"},
+                    <AllowedValueInfo>{"value": "top", "display_name": "Top"},
+                    <AllowedValueInfo>{"value": "new", "display_name": "New"},
+                    <AllowedValueInfo>{"value": "controversial", "display_name": "Controversial"},
+                    <AllowedValueInfo>{"value": "old", "display_name": "Old"},
+                    <AllowedValueInfo>{"value": "qa", "display_name": "Q&A"},
+                ),
             },
         };
     }
@@ -72,6 +80,8 @@ public class RedditUpdatePrefsDataProvider inherits RedditDataProviderBase {
         };
 
         const ConstructorOptions = BaseConstructorOptions;
+
+        static AbstractDataProviderType ResponseType = AbstractDataProviderTypeMap."hash";
     }
 
     constructor(RedditRestClient::RedditRestClient rest) : RedditDataProviderBase(rest) {

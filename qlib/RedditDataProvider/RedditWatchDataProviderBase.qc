@@ -35,7 +35,7 @@ public class RedditWatchDataProviderBase inherits RedditDataProviderBase,
                 "display_name": "Poll Interval",
                 "short_desc": "How often to poll for new records (seconds)",
                 "type": AbstractDataProviderType::get(SoftIntOrNothingType),
-                "desc": "Polling interval in seconds (minimum " + MinPollInterval + ")",
+                "desc": "Polling interval in seconds (minimum `" + MinPollInterval + "`)",
                 "default_value": DefaultPollInterval,
             },
             "start_date": <DataProviderOptionInfo>{
@@ -150,7 +150,7 @@ public class RedditWatchDataProviderBase inherits RedditDataProviderBase,
         return {
             "id": "EXAMPLE_ID_12345",
             "name": "t3_example",
-            "created_utc": float(now_us().getEpochSecondsInt()),
+            "created_utc": float(now_us().getEpochSeconds()),
         };
     }
 

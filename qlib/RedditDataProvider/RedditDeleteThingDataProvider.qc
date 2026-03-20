@@ -34,6 +34,7 @@ public class RedditDeleteThingRequestDataType inherits HashDataType {
                 "short_desc": "The fullname of the thing to delete",
                 "desc": "The fullname (t1_ for comment, t3_ for post) of the thing to delete",
                 "required": True,
+                "example_value": "t3_abc123",
             },
         };
     }
@@ -55,6 +56,8 @@ public class RedditDeleteThingDataProvider inherits RedditDataProviderBase {
         };
 
         const ConstructorOptions = BaseConstructorOptions;
+
+        static AbstractDataProviderType ResponseType = AbstractDataProviderTypeMap."hash";
     }
 
     constructor(RedditRestClient::RedditRestClient rest) : RedditDataProviderBase(rest) {

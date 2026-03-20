@@ -36,6 +36,8 @@ public class RedditGetKarmaDataProvider inherits RedditDataProviderBase {
         };
 
         const ConstructorOptions = BaseConstructorOptions;
+
+        static RedditKarmaDataType ResponseType();
     }
 
     constructor(RedditRestClient::RedditRestClient rest) : RedditDataProviderBase(rest) {
@@ -54,11 +56,16 @@ public class RedditGetKarmaDataProvider inherits RedditDataProviderBase {
     }
 
     private *AbstractDataProviderType getResponseTypeImpl() {
-        return AbstractDataProviderTypeMap."hash";
+        return new RedditKarmaDataType();
     }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        return doGet("api/v1/me/karma");
+        hash<auto> response = doGet("api/v1/me/karma");
+        # Extract karma list from Reddit's response: {"kind": "KarmaList", "data": [...]}
+        if (response.data.typeCode() == NT_LIST) {
+            return response.data;
+        }
+        return ();
     }
 
     private hash<DataProviderInfo> getStaticInfoImpl() {

@@ -341,13 +341,13 @@ public class RedditDataProviderBase inherits DataProvider::AbstractDataProvider 
         list<hash<AllowedValueInfo>> rv = ();
         try {
             list<hash<auto>> subs = fetchAllPages("subreddits/mine/subscriber", NOTHING, 100);
-            foreach hash<auto> sub in (subs) {
+            foreach hash<auto> subreddit in (subs) {
                 rv += <AllowedValueInfo>{
-                    "display_name": sub.display_name ?? sub.name,
-                    "short_desc": sub.title ?? "",
-                    "desc": sprintf("%s - %s", sub.display_name ?? sub.name,
-                        sub.public_description ?? ""),
-                    "value": sub.display_name,
+                    "display_name": subreddit.display_name ?? subreddit.name,
+                    "short_desc": subreddit.title ?? "",
+                    "desc": sprintf("%s - %s", subreddit.display_name ?? subreddit.name,
+                        subreddit.public_description ?? ""),
+                    "value": subreddit.display_name,
                 };
             }
         } catch (hash<ExceptionInfo> ex) {

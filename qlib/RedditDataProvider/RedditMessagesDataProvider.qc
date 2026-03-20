@@ -50,7 +50,12 @@ public class RedditMessagesDataProvider inherits RedditDataProviderBase {
                 "display_name": "Folder",
                 "short_desc": "Message folder to list",
                 "type": AbstractDataProviderType::get(SoftStringOrNothingType),
-                "desc": "The message folder to list (inbox, sent, unread). Default: inbox",
+                "desc": "The message folder to list. Default: `inbox`",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "inbox", "display_name": "Inbox"},
+                    <AllowedValueInfo>{"value": "sent", "display_name": "Sent"},
+                    <AllowedValueInfo>{"value": "unread", "display_name": "Unread"},
+                ),
             },
             "limit": <DataProviderOptionInfo>{
                 "display_name": "Limit",

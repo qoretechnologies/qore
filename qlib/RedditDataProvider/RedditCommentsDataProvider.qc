@@ -57,7 +57,15 @@ public class RedditCommentsDataProvider inherits RedditDataProviderBase {
                 "display_name": "Sort",
                 "short_desc": "Comment sort order",
                 "type": AbstractDataProviderType::get(SoftStringOrNothingType),
-                "desc": "Sort order for comments (best, top, new, controversial, old, qa)",
+                "desc": "Sort order for comments",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "best", "display_name": "Best"},
+                    <AllowedValueInfo>{"value": "top", "display_name": "Top"},
+                    <AllowedValueInfo>{"value": "new", "display_name": "New"},
+                    <AllowedValueInfo>{"value": "controversial", "display_name": "Controversial"},
+                    <AllowedValueInfo>{"value": "old", "display_name": "Old"},
+                    <AllowedValueInfo>{"value": "qa", "display_name": "Q&A"},
+                ),
             },
             "limit": <DataProviderOptionInfo>{
                 "display_name": "Limit",

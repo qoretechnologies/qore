@@ -34,6 +34,7 @@ public class RedditEditTextRequestDataType inherits HashDataType {
                 "short_desc": "The fullname of the thing to edit",
                 "desc": "The fullname (t1_ for comment, t3_ for self post) of the thing to edit",
                 "required": True,
+                "example_value": "t3_abc123",
             },
             "text": {
                 "type": StringType,
@@ -41,6 +42,7 @@ public class RedditEditTextRequestDataType inherits HashDataType {
                 "short_desc": "The new text content",
                 "desc": "The new body text (markdown formatted)",
                 "required": True,
+                "example_value": "Updated text content",
             },
         };
     }
@@ -62,6 +64,8 @@ public class RedditEditTextDataProvider inherits RedditDataProviderBase {
         };
 
         const ConstructorOptions = BaseConstructorOptions;
+
+        static AbstractDataProviderType ResponseType = AbstractDataProviderTypeMap."hash";
     }
 
     constructor(RedditRestClient::RedditRestClient rest) : RedditDataProviderBase(rest) {

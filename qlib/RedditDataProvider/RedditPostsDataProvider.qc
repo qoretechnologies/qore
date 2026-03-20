@@ -57,7 +57,13 @@ public class RedditPostsDataProvider inherits RedditDataProviderBase {
                 "display_name": "Sort",
                 "short_desc": "Sort order for posts",
                 "type": AbstractDataProviderType::get(SoftStringOrNothingType),
-                "desc": "Sort order for posts (hot, new, top, rising). Default: hot",
+                "desc": "Sort order for posts. Default: `hot`",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "hot", "display_name": "Hot"},
+                    <AllowedValueInfo>{"value": "new", "display_name": "New"},
+                    <AllowedValueInfo>{"value": "top", "display_name": "Top"},
+                    <AllowedValueInfo>{"value": "rising", "display_name": "Rising"},
+                ),
             },
             "q": <DataProviderOptionInfo>{
                 "display_name": "Search Query",
@@ -69,7 +75,15 @@ public class RedditPostsDataProvider inherits RedditDataProviderBase {
                 "display_name": "Time Range",
                 "short_desc": "Time range for top/search",
                 "type": AbstractDataProviderType::get(SoftStringOrNothingType),
-                "desc": "Time range for 'top' sort or search (hour, day, week, month, year, all)",
+                "desc": "Time range for `top` sort or search",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "hour", "display_name": "Past Hour"},
+                    <AllowedValueInfo>{"value": "day", "display_name": "Past 24 Hours"},
+                    <AllowedValueInfo>{"value": "week", "display_name": "Past Week"},
+                    <AllowedValueInfo>{"value": "month", "display_name": "Past Month"},
+                    <AllowedValueInfo>{"value": "year", "display_name": "Past Year"},
+                    <AllowedValueInfo>{"value": "all", "display_name": "All Time"},
+                ),
             },
             "limit": <DataProviderOptionInfo>{
                 "display_name": "Limit",

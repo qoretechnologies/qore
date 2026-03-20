@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
-#! @file RedditEventsDataProvider.qc Reddit events container data provider
+#! Qore RedditLeadAdsDataProvider module definition
 
-/*  RedditEventsDataProvider.qc Copyright 2026 Qore Technologies, s.r.o.
+/*  RedditLeadAdsDataProvider.qc Copyright 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -22,17 +22,17 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-#! Contains all public definitions in the RedditDataProvider module
-public namespace RedditDataProvider {
+#! Contains all public definitions in the RedditLeadAdsDataProvider module
+public namespace RedditLeadAdsDataProvider {
 
-#! Reddit events data provider - parent for all polling triggers
-public class RedditEventsDataProvider inherits RedditDataProviderBase {
+#! The main Reddit Lead Ads data provider class (root provider)
+public class RedditLeadAdsDataProvider inherits RedditLeadAdsDataProviderBase {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
-            "name": "events",
-            "desc": "Reddit events/triggers data provider",
-            "type": "RedditEventsDataProvider",
+            "name": "redditLeadAds",
+            "desc": "Reddit Lead Ads data provider for lead generation form submissions",
+            "type": "RedditLeadAdsDataProvider",
             "supports_children": True,
             "children_can_support_observers": True,
             "constructor_options": ConstructorOptions,
@@ -41,45 +41,45 @@ public class RedditEventsDataProvider inherits RedditDataProviderBase {
         #! Constructor options
         const ConstructorOptions = BaseConstructorOptions;
 
-        #! Child provider map for triggers
+        #! Child provider map
         const ChildMap = {
-            EVENT_NEW_POST: Class::forName("RedditWatchNewPostsDataProvider"),
-            EVENT_NEW_COMMENT: Class::forName("RedditWatchNewCommentsDataProvider"),
-            EVENT_NEW_MESSAGE: Class::forName("RedditWatchNewMessagesDataProvider"),
+            "events": Class::forName("RedditLeadAdsEventsDataProvider"),
         };
     }
 
-    #! Creates the object with a REST client
-    constructor(RedditRestClient::RedditRestClient rest) : RedditDataProviderBase(rest) {
+    constructor(*hash<auto> options) : RedditLeadAdsDataProviderBase(options) {
     }
 
-    #! Returns the provider name
+    constructor(RedditLeadAdsRestClient::RedditLeadAdsRestClient rest)
+            : RedditLeadAdsDataProviderBase(rest) {
+    }
+
+    constructor(RedditLeadAdsRestClient::RedditLeadAdsRestConnection conn)
+            : RedditLeadAdsDataProviderBase(conn) {
+    }
+
     string getName() {
-        return "events";
+        return "redditLeadAds";
     }
 
-    #! Returns the provider description
     *string getDesc() {
-        return "Reddit events/triggers data provider for polling-based event detection";
+        return "Reddit Lead Ads data provider for lead generation form submissions";
     }
 
-    #! Returns child provider names
     private *list<string> getChildProviderNamesImpl() {
         return keys ChildMap;
     }
 
-    #! Returns a child provider by name
     private *AbstractDataProvider getChildProviderImpl(string name) {
         *Class cls = ChildMap{name};
         if (cls) {
-            return cls.newObject(rest, NOTHING);
+            return cls.newObject(rest);
         }
     }
 
-    #! Returns static provider info
     private hash<DataProviderInfo> getStaticInfoImpl() {
         return ProviderInfo;
     }
 }
 
-} # namespace RedditDataProvider
+} # namespace RedditLeadAdsDataProvider

@@ -57,7 +57,11 @@ public class RedditFlairDataProvider inherits RedditDataProviderBase {
                 "display_name": "Flair Type",
                 "short_desc": "Type of flair (link or user)",
                 "type": AbstractDataProviderType::get(SoftStringOrNothingType),
-                "desc": "The type of flair to retrieve (link or user). Default: link",
+                "desc": "The type of flair to retrieve. Default: `link`",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "link", "display_name": "Link Flair"},
+                    <AllowedValueInfo>{"value": "user", "display_name": "User Flair"},
+                ),
             },
         };
 
@@ -110,10 +114,15 @@ public class RedditFlairDataProvider inherits RedditDataProviderBase {
         string path = "r/" + search_options.subreddit + "/api/" + flair_type + "_flair_v2";
 
         # Flair endpoints return a flat list, not a Listing
-        hash<auto> response = doGet(path);
+        hash<auto> info;
+        hash<auto> response = rest.get(path, NOTHING, \info);
         list<hash<auto>> results = ();
-        if (response.typeCode() == NT_LIST) {
-            results = response;
+        if (response.body.typeCode() == NT_LIST) {
+            foreach auto item in (response.body) {
+                if (item.typeCode() == NT_HASH) {
+                    results += item;
+                }
+            }
         }
 
         return new DefaultRecordIterator(new ListHashIterator(results),

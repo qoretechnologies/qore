@@ -34,6 +34,7 @@ public class RedditCreateCommentRequestDataType inherits HashDataType {
                 "short_desc": "The fullname of the parent",
                 "desc": "The fullname of the parent post (t3_) or comment (t1_) to reply to",
                 "required": True,
+                "example_value": "t3_abc123",
             },
             "text": {
                 "type": StringType,
@@ -41,6 +42,7 @@ public class RedditCreateCommentRequestDataType inherits HashDataType {
                 "short_desc": "The comment text",
                 "desc": "The body text of the comment (markdown formatted)",
                 "required": True,
+                "example_value": "Great post!",
             },
         };
     }
@@ -62,6 +64,8 @@ public class RedditCreateCommentDataProvider inherits RedditDataProviderBase {
         };
 
         const ConstructorOptions = BaseConstructorOptions;
+
+        static RedditCommentDataType ResponseType();
     }
 
     constructor(RedditRestClient::RedditRestClient rest) : RedditDataProviderBase(rest) {

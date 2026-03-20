@@ -25,6 +25,54 @@
 #! Contains all public definitions in the RedditDataProvider module
 public namespace RedditDataProvider {
 
+#! Reddit user subreddit (profile subreddit) type
+public class RedditUserSubredditDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "display_name": {
+                "type": StringOrNothingType,
+                "display_name": "Display Name",
+                "short_desc": "The user subreddit display name",
+                "desc": "The display name of the user's profile subreddit",
+            },
+            "title": {
+                "type": StringOrNothingType,
+                "display_name": "Title",
+                "short_desc": "The subreddit title",
+                "desc": "The title of the user's profile subreddit",
+            },
+            "url": {
+                "type": StringOrNothingType,
+                "display_name": "URL",
+                "short_desc": "The subreddit URL path",
+                "desc": "The URL path of the user's profile subreddit",
+            },
+            "icon_img": {
+                "type": StringOrNothingType,
+                "display_name": "Icon",
+                "short_desc": "Profile icon URL",
+                "desc": "URL of the user's profile icon image",
+            },
+            "banner_img": {
+                "type": StringOrNothingType,
+                "display_name": "Banner",
+                "short_desc": "Profile banner URL",
+                "desc": "URL of the user's profile banner image",
+            },
+            "public_description": {
+                "type": StringOrNothingType,
+                "display_name": "Description",
+                "short_desc": "Profile description",
+                "desc": "The public description of the user's profile",
+            },
+        };
+    }
+
+    constructor(*Type base_type) : HashDataType(base_type ?? AutoHashType) {
+        addQoreFields(Fields);
+    }
+}
+
 #! Reddit account record type
 public class RedditAccountDataType inherits HashDataType {
     public {
@@ -86,7 +134,7 @@ public class RedditAccountDataType inherits HashDataType {
                 "desc": "URL of the user's profile avatar image",
             },
             "subreddit": {
-                "type": AutoHashOrNothingType,
+                "type": new RedditUserSubredditDataType(AutoHashOrNothingType),
                 "display_name": "User Subreddit",
                 "short_desc": "The user's profile subreddit",
                 "desc": "Hash containing information about the user's profile subreddit (u/username)",

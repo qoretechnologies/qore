@@ -34,6 +34,7 @@ public class RedditCreatePostRequestDataType inherits HashDataType {
                 "short_desc": "The subreddit to post to",
                 "desc": "The display name of the subreddit to submit the post to",
                 "required": True,
+                "example_value": "test",
             },
             "title": {
                 "type": StringType,
@@ -41,13 +42,18 @@ public class RedditCreatePostRequestDataType inherits HashDataType {
                 "short_desc": "The post title",
                 "desc": "The title of the post (max 300 characters)",
                 "required": True,
+                "example_value": "My Example Post",
             },
             "kind": {
                 "type": StringType,
                 "display_name": "Post Type",
                 "short_desc": "Type of post (self or link)",
-                "desc": "The type of post: 'self' for text post, 'link' for link post",
+                "desc": "The type of post: `self` for text post, `link` for link post",
                 "required": True,
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "self", "display_name": "Text Post"},
+                    <AllowedValueInfo>{"value": "link", "display_name": "Link Post"},
+                ),
             },
             "text": {
                 "type": StringOrNothingType,
@@ -89,7 +95,7 @@ public class RedditCreatePostRequestDataType inherits HashDataType {
                 "type": SoftBoolOrNothingType,
                 "display_name": "Send Replies",
                 "short_desc": "Send reply notifications",
-                "desc": "Whether to send inbox notifications for replies. Default: True",
+                "desc": "Whether to send inbox notifications for replies. Default: `True`",
             },
         };
     }
@@ -111,6 +117,8 @@ public class RedditCreatePostDataProvider inherits RedditDataProviderBase {
         };
 
         const ConstructorOptions = BaseConstructorOptions;
+
+        static RedditPostDataType ResponseType();
     }
 
     constructor(RedditRestClient::RedditRestClient rest) : RedditDataProviderBase(rest) {
@@ -129,12 +137,14 @@ public class RedditCreatePostDataProvider inherits RedditDataProviderBase {
     }
 
     private *AbstractDataProviderType getResponseTypeImpl() {
-        return AbstractDataProviderTypeMap."hash";
+        return new RedditPostDataType();
     }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         req.api_type = "json";
-        return doPost("api/submit", req);
+        hash<auto> response = doPost("api/submit", req);
+        # Extract post data from Reddit's response: {"json": {"data": {"id": ..., "name": ..., "url": ...}}}
+        return response.json.data ?? response;
     }
 
     private hash<DataProviderInfo> getStaticInfoImpl() {

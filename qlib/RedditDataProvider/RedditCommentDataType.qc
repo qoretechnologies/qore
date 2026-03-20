@@ -100,7 +100,7 @@ public class RedditCommentDataType inherits HashDataType {
                 "type": StringOrNothingType,
                 "display_name": "Distinguished",
                 "short_desc": "Distinguished status",
-                "desc": "The distinguished status of the comment (moderator, admin, or NOTHING)",
+                "desc": "The distinguished status of the comment (`moderator`, `admin`, or `NOTHING`)",
             },
             "stickied": {
                 "type": SoftBoolOrNothingType,
@@ -109,10 +109,10 @@ public class RedditCommentDataType inherits HashDataType {
                 "desc": "Indicates if the comment is stickied (pinned) at the top",
             },
             "edited": {
-                "type": AutoOrNothingType,
+                "type": FloatOrNothingType,
                 "display_name": "Edited",
-                "short_desc": "Edit timestamp or False",
-                "desc": "Unix timestamp of the last edit, or False if never edited",
+                "short_desc": "Edit timestamp",
+                "desc": "Unix timestamp of the last edit, or `NOTHING` if never edited",
             },
         };
     }

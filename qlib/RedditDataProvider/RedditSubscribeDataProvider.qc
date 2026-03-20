@@ -32,8 +32,12 @@ public class RedditSubscribeRequestDataType inherits HashDataType {
                 "type": StringType,
                 "display_name": "Action",
                 "short_desc": "Subscribe or unsubscribe",
-                "desc": "The action to perform: 'sub' to subscribe, 'unsub' to unsubscribe",
+                "desc": "The action to perform",
                 "required": True,
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "sub", "display_name": "Subscribe"},
+                    <AllowedValueInfo>{"value": "unsub", "display_name": "Unsubscribe"},
+                ),
             },
             "sr_name": {
                 "type": StringType,
@@ -62,6 +66,8 @@ public class RedditSubscribeDataProvider inherits RedditDataProviderBase {
         };
 
         const ConstructorOptions = BaseConstructorOptions;
+
+        static AbstractDataProviderType ResponseType = AbstractDataProviderTypeMap."hash";
     }
 
     constructor(RedditRestClient::RedditRestClient rest) : RedditDataProviderBase(rest) {
