@@ -450,7 +450,7 @@ QoreValue QoreIRInterpreter::evalExpr(QoreIROpcode op, const QoreValue& expr, Ex
         case QoreIROpcode::ChompString:
         case QoreIROpcode::TransliterateAny:
         case QoreIROpcode::TransliterateString:
-        case QoreIROpcode::BackgroundInt:
+        // NOTE: BackgroundInt is handled in main execute() loop, not here
         case QoreIROpcode::ListAssignAny:
         case QoreIROpcode::PopAny:
         case QoreIROpcode::PushAny:
