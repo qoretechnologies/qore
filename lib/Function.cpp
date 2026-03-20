@@ -2927,6 +2927,15 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 // Body locals are still instantiated, so AST can re-execute.
                 if (!*xsink && qore_jit_deopt_requested()) {
                     printd(2, "evalTiered JIT-DEOPT: '%s' — falling back to AST\n", name);
+                    static bool debug_deopt = [] {
+                        const char* debug_env = getenv("QORE_IR_DEBUG");
+                        return debug_env && strstr(debug_env, "deopt");
+                    }();
+                    if (debug_deopt) {
+                        fprintf(stderr, "[DEOPT-JIT->AST] Function '%s' deopting from JIT to AST\n",
+                                name ? name : "<unknown>");
+                        fflush(stderr);
+                    }
                     if (pgm) {
                         pgm->recordIRFallback("JIT guard failure");
                     }
@@ -3054,6 +3063,15 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                     fell_back_to_ast = true;
                     printd(2, "UserVariantBase::evalTiered() IR execution failed for '%s', "
                         "falling back to AST\n", name);
+                    static bool debug_deopt = [] {
+                        const char* debug_env = getenv("QORE_IR_DEBUG");
+                        return debug_env && strstr(debug_env, "deopt");
+                    }();
+                    if (debug_deopt) {
+                        fprintf(stderr, "[DEOPT-IR->AST] Function '%s' deopting from IR to AST\n",
+                                name ? name : "<unknown>");
+                        fflush(stderr);
+                    }
                     if (pgm) {
                         pgm->recordIRFallback("execution: runtime failure");
                     }

@@ -3124,10 +3124,16 @@ load_local_done:
             case QoreIROpcode::LoadClosure: {
                 auto* local_inst = static_cast<QoreIRLocalInstruction*>(inst);
                 QoreValue out;
-                fprintf(stderr, "[CLOSURE-LOAD] var='%s', has_operands=%d, has_closure=%d\n",
-                        local_inst->local ? local_inst->local->getName() : "<unknown>",
-                        (int)!inst->operands.empty(), (int)(closure != nullptr));
-                fflush(stderr);
+                static bool debug_closure = [] {
+                    const char* debug_env = getenv("QORE_IR_DEBUG");
+                    return debug_env && strstr(debug_env, "closure");
+                }();
+                if (debug_closure) {
+                    fprintf(stderr, "[CLOSURE-LOAD] var='%s', has_operands=%d, has_closure=%d\n",
+                            local_inst->local ? local_inst->local->getName() : "<unknown>",
+                            (int)!inst->operands.empty(), (int)(closure != nullptr));
+                    fflush(stderr);
+                }
                 if (!inst->operands.empty() && closure) {
                     QoreValue idx_val = getIRValue(values, inst->operands[0]);
                     int64 idx = idx_val.getAsBigInt();
@@ -3148,11 +3154,33 @@ load_local_done:
                         // function's own variable) over runtime closure env (which
                         // may point to the calling closure's variable in recursive
                         // scenarios).
-                        ClosureVarValue* cv = thread_find_closure_var(local_inst->local->getName());
+                        static bool debug_closure = [] {
+                            const char* debug_env = getenv("QORE_IR_DEBUG");
+                            return debug_env && strstr(debug_env, "closure");
+                        }();
+                        const char* var_name = local_inst->local->getName();
+                        if (debug_closure) {
+                            fprintf(stderr, "[CLOSURE-LOOKUP-ATTEMPT] Trying to find var='%s' in cvstack\n", var_name);
+                            fflush(stderr);
+                        }
+                        ClosureVarValue* cv = thread_find_closure_var(var_name);
                         if (!cv) {
+                            if (debug_closure) {
+                                fprintf(stderr, "[CLOSURE-LOOKUP-CVSTACK-FAILED] thread_find_closure_var returned NULL for '%s', trying thread_get_runtime_closure_var\n", var_name);
+                                fflush(stderr);
+                            }
                             cv = thread_get_runtime_closure_var(local_inst->local);
+                        } else {
+                            if (debug_closure) {
+                                fprintf(stderr, "[CLOSURE-LOOKUP-CVSTACK-SUCCESS] Found '%s' in cvstack\n", var_name);
+                                fflush(stderr);
+                            }
                         }
                         if (cv) {
+                            if (debug_closure) {
+                                fprintf(stderr, "[CLOSURE-LOAD-SUCCESS] Evaluating found closure var '%s'\n", var_name);
+                                fflush(stderr);
+                            }
                             QoreValue val = cv->eval(xsink);
                             if (xsink && *xsink) {
                                 cleanupValues(values, cleanup, xsink, true, cleanup_log);
@@ -3166,8 +3194,9 @@ load_local_done:
                             out = val;
                         } else {
                             // Closure variable NOT FOUND - will result in nothing being stored
-                            fprintf(stderr, "[CLOSURE-LOAD-FAILED] Variable '%s' not found in closure context, returning nothing\n",
-                                    local_inst->local ? local_inst->local->getName() : "<unknown>");
+                            fprintf(stderr, "[CLOSURE-LOAD-FAILED] Variable '%s' not found in closure context, returning nothing\n", var_name);
+                            fprintf(stderr, "  - thread_find_closure_var() returned NULL\n");
+                            fprintf(stderr, "  - thread_get_runtime_closure_var() returned NULL\n");
                             fflush(stderr);
                         }
                     }

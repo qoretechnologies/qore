@@ -264,10 +264,12 @@ int StatementBlock::execIntern(RuntimeConfig& rc, QoreValue& return_value, Excep
         ExceptionSink obe_xsink;
         int nrc = 0;
         bool error = xsink->isException();
+        int ast_on_exit_count = 0;
         for (block_list_t::iterator i = popBlock(), e = on_block_exit_list.end(); i != e; ++i) {
             enum obe_type_e type = (*i).first;
             if (type == OBE_Unconditional || (!error && type == OBE_Success) || (error && type == OBE_Error)) {
                 if ((*i).second) {
+                    ast_on_exit_count++;
                     {
                         // instantiate exception for on_error blocks as an implicit arg
                         std::unique_ptr<SingleArgvContextHelper> argv_helper;
@@ -293,6 +295,16 @@ int StatementBlock::execIntern(RuntimeConfig& rc, QoreValue& return_value, Excep
                             error = true;
                     }
                 }
+            }
+        }
+        if (ast_on_exit_count > 0) {
+            static bool debug_on_exit = [] {
+                const char* debug_env = getenv("QORE_IR_DEBUG");
+                return debug_env && strstr(debug_env, "on_exit");
+            }();
+            if (debug_on_exit) {
+                fprintf(stderr, "[ON_EXIT-AST] executed %d on_exit handlers\n", ast_on_exit_count);
+                fflush(stderr);
             }
         }
         if (nrc)

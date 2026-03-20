@@ -30,6 +30,7 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/qore_program_private.h"
+#include <unistd.h>
 
 QoreString QoreBackgroundOperatorNode::name("background operator expression");
 
@@ -39,6 +40,16 @@ QoreValue QoreBackgroundOperatorNode::evalImpl(bool& needs_deref, ExceptionSink*
 }
 
 QoreValue QoreBackgroundOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    static int bg_eval_count = 0;
+    static bool debug_bg = [] {
+        const char* debug_env = getenv("QORE_IR_DEBUG");
+        return debug_env && strstr(debug_env, "bg");
+    }();
+    if (debug_bg) {
+        int eval_num = ++bg_eval_count;
+        fprintf(stderr, "[BG_EVAL %d] TID=%ld expr=%p\n", eval_num, (long)gettid(), exp.getInternalNode());
+        fflush(stderr);
+    }
     return do_op_background(rc, exp, xsink);
 }
 
