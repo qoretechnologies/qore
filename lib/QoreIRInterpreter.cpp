@@ -914,6 +914,7 @@ static QoreListNode* buildArgList(const IRValueSlots& values,
 static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
         const IRValueSlots& values, ExceptionSink* xsink) {
     QoreIROpcode op = inv->invoke_opcode;
+
     switch (op) {
         // Unary computation opcodes
         case QoreIROpcode::ToBool:
@@ -1248,7 +1249,18 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                         scoped->getVariant(), scoped->getArgs(), xsink);
                 }
             }
-            return evalAndRef(inv->expr, xsink);
+            QoreValue fallback_res = evalAndRef(inv->expr, xsink);
+            // CRITICAL DIAGNOSTIC: if evalAndRef returned nothing without an exception,
+            // log it so we can diagnose Invoke operation failures in closure contexts
+            if (fallback_res.isNothing() && (!xsink || !*xsink)) {
+                FILE* f = fopen("/home/david/invoke_nothing_bug.txt", "a");
+                if (f) {
+                    fprintf(f, "[CRITICAL] Call opcode evalAndRef returned nothing without exception\n");
+                    fflush(f);
+                    fclose(f);
+                }
+            }
+            return fallback_res;
         }
 
         // DotEval opcodes: use pre-evaluated base to avoid double-evaluation
@@ -1564,6 +1576,8 @@ static int executeOnBlockExitHandlers(std::vector<IROnBlockExitHandler>& handler
     if (handlers.empty()) {
         return 0;
     }
+    fprintf(stderr, "[ON_EXIT-IR] executing %zu on_exit handlers\n", handlers.size());
+    fflush(stderr);
     ExceptionSink obe_xsink;
     int nrc = 0;
     bool error = xsink && xsink->isException();
@@ -2136,6 +2150,18 @@ next_instruction:
                     }
                 }
             }
+        }
+
+        // Verbose IR lowering diagnostics: enable with QORE_IR_DEBUG env var
+        // Zero-cost when disabled: single static bool check only initialized once
+        static bool ir_verbose_enabled = (getenv("QORE_IR_DEBUG") != nullptr);
+
+        // Log instruction execution for diagnostics (zero-cost path when disabled)
+        if (ir_verbose_enabled && func.name.find("monitor") != std::string::npos) {
+            fprintf(stderr, "[IR-INSTR-PRE-%zu] func='%s' op=%d(%s) ", ip, func.name.c_str(),
+                    (int)inst->opcode, inst->opcode == QoreIROpcode::GuardNotNothing ? "GuardNotNothing" : "");
+            fprintf(stderr, "result_slot=%d\n", inst->result.id);
+            fflush(stderr);
         }
 
         switch (inst->opcode) {
@@ -3098,6 +3124,10 @@ load_local_done:
             case QoreIROpcode::LoadClosure: {
                 auto* local_inst = static_cast<QoreIRLocalInstruction*>(inst);
                 QoreValue out;
+                fprintf(stderr, "[CLOSURE-LOAD] var='%s', has_operands=%d, has_closure=%d\n",
+                        local_inst->local ? local_inst->local->getName() : "<unknown>",
+                        (int)!inst->operands.empty(), (int)(closure != nullptr));
+                fflush(stderr);
                 if (!inst->operands.empty() && closure) {
                     QoreValue idx_val = getIRValue(values, inst->operands[0]);
                     int64 idx = idx_val.getAsBigInt();
@@ -3134,6 +3164,11 @@ load_local_done:
                             // slot.  No additional refSelf for out — eval's +1 transfers to it.
                             storeValue(closures, local_inst->local, val, nullptr);
                             out = val;
+                        } else {
+                            // Closure variable NOT FOUND - will result in nothing being stored
+                            fprintf(stderr, "[CLOSURE-LOAD-FAILED] Variable '%s' not found in closure context, returning nothing\n",
+                                    local_inst->local ? local_inst->local->getName() : "<unknown>");
+                            fflush(stderr);
                         }
                     }
                 }
@@ -4973,6 +5008,17 @@ load_local_done:
                     return false;
                 }
                 QoreValue value = getIRValue(values, guard_inst->operands.front());
+
+                // Verbose logging for guard failures (zero-cost when disabled)
+                static bool ir_guard_verbose = (getenv("QORE_IR_DEBUG") != nullptr);
+                if (ir_guard_verbose && func.name.find("monitor") != std::string::npos) {
+                    uint32_t source_slot = guard_inst->operands.front().id;
+                    fprintf(stderr, "[IR-GUARD-CHECK] func='%s' ip=%zu guard_op=%d value_slot=%u val_type='%s' val_is_nothing=%d\n",
+                            func.name.c_str(), ip, (int)inst->opcode, source_slot,
+                            value.getTypeName(), (int)value.isNothing());
+                    fflush(stderr);
+                }
+
                 // Record type profile for this guard point
                 if (guard_inst->guard_id < func.guard_profile_count) {
                     func.guard_profiles[guard_inst->guard_id].record(value);
@@ -4982,8 +5028,22 @@ load_local_done:
                         // Guard type check failed — fall back to AST execution.
                         // Don't raise an exception; returning false without setting
                         // xsink tells evalTiered() to re-execute via AST.
-                        printd(2, "QoreIRInterpreter::execute() guard failed for '%s' "
-                            "— falling back to AST\n", func.name.c_str());
+                        const char* guard_type = "Unknown";
+                        switch (inst->opcode) {
+                            case QoreIROpcode::GuardInt: guard_type = "GuardInt"; break;
+                            case QoreIROpcode::GuardFloat: guard_type = "GuardFloat"; break;
+                            case QoreIROpcode::GuardType: guard_type = "GuardType"; break;
+                            case QoreIROpcode::GuardNotNothing: guard_type = "GuardNotNothing"; break;
+                            default: break;
+                        }
+                        printd(2, "QoreIRInterpreter::execute() guard failed (%s) for '%s' "
+                            "— falling back to AST\n", guard_type, func.name.c_str());
+                        fprintf(stderr, "[IR-EXEC] execute() returning false (IR deopt triggered) for '%s' (guard: %s, value: %s)\n",
+                                func.name.c_str(), guard_type, value.getTypeName());
+                        if (guard_inst->type_info) {
+                            fprintf(stderr, "           expected type: %s\n", QoreTypeInfo::getName(guard_inst->type_info));
+                        }
+                        fflush(stderr);
                         // Fire on_block_exit handlers before cleanup — guards may fire
                         // after side-effecting code (e.g., Mutex::lock() + on_exit
                         // Mutex::unlock()); without this, on_exit handlers are orphaned
