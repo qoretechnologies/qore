@@ -2091,6 +2091,7 @@ public namespace RestSchemaValidator {
                 MimeTypeYamlRpc: DeserializeYaml,
                 MimeTypeYaml: DeserializeYaml,
                 MimeTypeYamlApp: DeserializeYaml,
+                "application/connect+yaml": DeserializeYaml,
 %endif
 %ifndef NoXml
                 MimeTypeXml: DeserializeXml,
