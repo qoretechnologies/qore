@@ -5067,12 +5067,26 @@ load_local_done:
                         }
                         printd(2, "QoreIRInterpreter::execute() guard failed (%s) for '%s' "
                             "— falling back to AST\n", guard_type, func.name.c_str());
-                        fprintf(stderr, "[IR-EXEC] execute() returning false (IR deopt triggered) for '%s' (guard: %s, value: %s)\n",
-                                func.name.c_str(), guard_type, value.getTypeName());
-                        if (guard_inst->type_info) {
-                            fprintf(stderr, "           expected type: %s\n", QoreTypeInfo::getName(guard_inst->type_info));
+                        static bool debug_guard = [] {
+                            const char* debug_env = getenv("QORE_IR_DEBUG");
+                            return debug_env && strstr(debug_env, "guard");
+                        }();
+                        if (debug_guard) {
+                            fprintf(stderr, "[IR-GUARD-FAILED] execute() returning false (deopt) for '%s'\n",
+                                    func.name.c_str());
+                            fprintf(stderr, "                   Guard: %s, Value: %s\n", guard_type, value.getTypeName());
+                            if (guard_inst->type_info) {
+                                fprintf(stderr, "                   Expected: %s\n", QoreTypeInfo::getName(guard_inst->type_info));
+                            }
+                            fflush(stderr);
+                        } else {
+                            fprintf(stderr, "[IR-EXEC] execute() returning false (IR deopt triggered) for '%s' (guard: %s, value: %s)\n",
+                                    func.name.c_str(), guard_type, value.getTypeName());
+                            if (guard_inst->type_info) {
+                                fprintf(stderr, "           expected type: %s\n", QoreTypeInfo::getName(guard_inst->type_info));
+                            }
+                            fflush(stderr);
                         }
-                        fflush(stderr);
                         // Fire on_block_exit handlers before cleanup — guards may fire
                         // after side-effecting code (e.g., Mutex::lock() + on_exit
                         // Mutex::unlock()); without this, on_exit handlers are orphaned
