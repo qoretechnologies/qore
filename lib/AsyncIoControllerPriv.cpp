@@ -677,6 +677,16 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
             return nullptr;
         }
 
+        // Start I/O thread if needed — must happen BEFORE inserting into cache,
+        // because startIntern() releases the lock while waiting for an exiting
+        // I/O thread, and the exit cleanup iterates cache and discards entries
+        if (io_exiting || !tid) {
+            startIntern(xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+        }
+
         PollInfo& pinfo = cache[uh];
         pinfo.sock_obj = sock_obj;
         sock_obj->ref();
@@ -692,20 +702,6 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         pinfo.queue = res.result_queue; res.result_queue = nullptr;
         pinfo.callback = res.callback; res.callback = nullptr;
         pinfo.timeout_date_us = 0;  // Will be set in I/O thread
-
-        // Start I/O thread if needed
-        if (io_exiting || !tid) {
-            startIntern(xsink);
-            if (*xsink) {
-                // Copy PollInfo out before erasing — pinfo is a reference into cache
-                PollInfo failed_pinfo = pinfo;
-                pinfo = PollInfo();
-                cache.erase(uh);
-                failed_pinfo.cleanup(xsink);
-                // res still owns new_queue_obj — destructor will clean it up
-                return nullptr;
-            }
-        }
 
         ++submit_seq;
         do_signal = enqueueCmdLocked(IoCommand::Add, uh);
@@ -1216,11 +1212,6 @@ int64_t AsyncIoControllerPriv::addTimer(const DateTimeNode* deadline, QoreValue 
             return -1;
         }
 
-        // Store user data under lock (add a reference for our storage)
-        TimerInfo tinfo;
-        tinfo.udata = udata.refSelf();
-        timer_info_map[id] = tinfo;
-
         // Enqueue command
         Command cmd;
         cmd.cmd = IoCommand::AddTimer;
@@ -1231,12 +1222,18 @@ int64_t AsyncIoControllerPriv::addTimer(const DateTimeNode* deadline, QoreValue 
         if (io_exiting || !tid) {
             startIntern(xsink);
             if (*xsink) {
-                // Clean up our reference on error
-                timer_info_map[id].udata.discard(xsink);
-                timer_info_map.erase(id);
                 return -1;
             }
         }
+
+        // Store user data under lock AFTER startIntern() — the exiting I/O thread's
+        // cleanup iterates timer_info_map and discards entries; inserting before
+        // startIntern() lets the exit cleanup destroy our callback while we wait for
+        // the old thread to finish, causing the timer to fire with no callback
+        TimerInfo tinfo;
+        tinfo.udata = udata.refSelf();
+        timer_info_map[id] = tinfo;
+
         cmdq.push_back(cmd);
         do_signal = true;
     }
