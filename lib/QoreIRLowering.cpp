@@ -6672,9 +6672,11 @@ QoreIRValue QoreIRLowering::lowerStaticCall(const QoreValue& expr, std::string& 
         return QoreIRValue();
     }
 
-    // Static methods are always resolved at parse time — use CallStaticDirect
-    // to pre-evaluate args and bypass AST round-trip at runtime.
-    if (call->getMethod()) {
+    // Only use CallStaticDirect if AST conclusively determined the variant at parse time.
+    // If getVariant() returns nullptr, AST set runtime_match=true, meaning parse-time variant
+    // selection was inconclusive (due to missing type information), and runtime dispatch is required.
+    const AbstractQoreFunctionVariant* variant = call->getVariant();
+    if (call->getMethod() && variant) {
         QoreIRValue result;
         bool should_invoke = !exception_stack.empty();
         if (should_invoke) {
@@ -6689,7 +6691,7 @@ QoreIRValue QoreIRLowering::lowerStaticCall(const QoreValue& expr, std::string& 
             builder.setBlock(normal_block);
             result = inst->result;
         } else {
-            auto* inst = builder.createCallStaticDirect(call->getMethod(), call->getVariant(), expr,
+            auto* inst = builder.createCallStaticDirect(call->getMethod(), variant, expr,
                 lowered_args, call->loc);
             result = inst->result;
         }
