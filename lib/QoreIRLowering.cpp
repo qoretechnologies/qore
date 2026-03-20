@@ -3383,6 +3383,33 @@ bool QoreIRLowering::needsNotNothingGuard(const QoreValue* expr, const QoreTypeI
             return false;
         }
     }
+
+    // CRITICAL FIX: Check if the expression itself allows NOTHING (e.g., optional return type)
+    // If expr returns *Type (can be nothing), don't insert a guard even if target expects non-nothing
+    // This prevents guard failures in IR->AST deopt that cause re-execution of side effects
+    if (expr && expr->hasNode()) {
+        const AbstractQoreNode* node = expr->getInternalNode();
+        // Analyze the expression to get its actual return type
+        if (node && dynamic_cast<const ParseNode*>(node)) {
+            try {
+                QoreParseAnalysis expr_analysis;
+                if (getAnalysis(*expr, expr_analysis)) {
+                    // Check if expression's type explicitly allows nothing
+                    if (expr_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)) {
+                        const QoreTypeInfo* expr_type = expr_analysis.known_type;
+                        // If the expression type allows nothing (optional return), skip guard
+                        // even if the target type expects non-nothing
+                        if (expr_type && QoreTypeInfo::parseReturns(expr_type, NT_NOTHING) != QTI_NOT_EQUAL) {
+                            return false;
+                        }
+                    }
+                }
+            } catch (...) {
+                // Fall through to normal logic on analysis failure
+            }
+        }
+    }
+
     const QoreTypeInfo* type = getGuaranteedTypeForValue(expr, target_type);
     if (type && QoreTypeInfo::parseReturns(type, NT_NOTHING) == QTI_NOT_EQUAL) {
         if (expr && expr->hasNode()) {
