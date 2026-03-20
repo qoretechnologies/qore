@@ -1947,10 +1947,19 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // ensuring on_exit/on_error/on_success handlers always fire.
     // Constructed AFTER local_cleanup so it's destroyed BEFORE it — handlers fire
     // while runtime locals are still valid on the thread-local variable stack.
+    // Only fires handlers if scope_stack is not empty (handlers weren't already fired
+    // via normal ScopeExit instructions).
     struct ScopeExitGuard {
         decltype(fireScopeExits)& fire;
-        ~ScopeExitGuard() { fire(0); }
-    } scope_exit_guard{fireScopeExits};
+        std::vector<size_t>& scope_stack;
+        ~ScopeExitGuard() {
+            // Only fire remaining handlers if scope_stack is not empty (handlers weren't already
+            // fired via normal ScopeExit instructions during function execution).
+            if (!scope_stack.empty()) {
+                fire(0);
+            }
+        }
+    } scope_exit_guard{fireScopeExits, scope_stack};
 
     // Cache pointers to thread-local runtime location fields.
     // Avoids repeated TLS lookups (pthread_getspecific + std::map::find) per instruction.
