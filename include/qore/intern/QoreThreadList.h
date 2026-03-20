@@ -215,6 +215,12 @@ public:
         entry[tid].status = status;
     }
 
+    //! Marks a thread as joined so cleanup() will not call pthread_detach()
+    DLLLOCAL void setJoined(int tid) {
+        AutoLocker al(lck);
+        entry[tid].joined = true;
+    }
+
     DLLLOCAL void deleteData(int tid);
 
     DLLLOCAL void deleteDataRelease(int tid);

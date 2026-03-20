@@ -690,8 +690,7 @@ void ThreadEntry::cleanup() {
 
     assert(!thread_data);
 
-    if (status != QTS_NA && status != QTS_RESERVED && !joined && ptid
-            && !pthread_equal(ptid, pthread_self())) {
+    if (status != QTS_NA && status != QTS_RESERVED && !joined && ptid) {
         pthread_detach(ptid);
     }
 
@@ -3297,6 +3296,9 @@ void init_qore_threads() {
 
     // setup parent thread data
     thread_list.activate(initial_thread = get_thread_entry());
+    // mark the initial thread as joined so cleanup() does not call pthread_detach();
+    // the main thread exits naturally with the process and must not be detached
+    thread_list.setJoined(initial_thread);
 
     // initialize recursive mutex attribute
     pthread_mutexattr_init(&ma_recursive);
