@@ -26,6 +26,7 @@
 */
 
 #include "QC_IsolationForest.h"
+#include "ml_serialization.h"
 
 #include <numeric>
 
@@ -87,6 +88,10 @@ void QoreIsolationForest::fit(const MatrixXd& data, ExceptionSink* xsink) {
     std::iota(all_indices.begin(), all_indices.end(), 0);
 
     for (int t = 0; t < n_trees; ++t) {
+        if (qore_check_cancel(xsink, "IsolationForest fit")) {
+            return;
+        }
+
         // Random subsample without replacement
         std::vector<int> sample_indices(all_indices);
         for (int i = static_cast<int>(sample_indices.size()) - 1; i > 0; --i) {
@@ -268,6 +273,9 @@ QoreListNode* QoreIsolationForest::scoreMatrix(const MatrixXd& data, ExceptionSi
 
     ReferenceHolder<QoreListNode> rv(new QoreListNode(hashdeclIsolationForestResult->getTypeInfo()), xsink);
     for (Eigen::Index i = 0; i < data.rows(); ++i) {
+        if (i % 100 == 0 && qore_check_cancel(xsink, "IsolationForest scoreMatrix")) {
+            return nullptr;
+        }
         RowVectorXd row = data.row(i);
         QoreHashNode* result = scoreInternal(row, xsink);
         if (*xsink) {
@@ -276,4 +284,86 @@ QoreListNode* QoreIsolationForest::scoreMatrix(const MatrixXd& data, ExceptionSi
         rv->push(result, xsink);
     }
     return rv.release();
+}
+
+std::vector<uint8_t> QoreIsolationForest::serializeState() const {
+    std::vector<uint8_t> buf;
+    // Hyperparameters
+    MLSerialization::writeInt32(buf, n_trees);
+    MLSerialization::writeInt32(buf, sample_size);
+    MLSerialization::writeInt32(buf, max_depth);
+    MLSerialization::writeScalar(buf, threshold);
+    // Model state
+    MLSerialization::writeInt32(buf, n_features);
+    MLSerialization::writeInt32(buf, actual_sample_size);
+    // Trees: count + per-tree flat nodes
+    MLSerialization::writeInt32(buf, static_cast<int32_t>(trees.size()));
+    for (const auto& tree : trees) {
+        MLSerialization::writeInt32(buf, static_cast<int32_t>(tree.nodes.size()));
+        for (const auto& node : tree.nodes) {
+            MLSerialization::writeInt32(buf, node.feature);
+            MLSerialization::writeScalar(buf, node.split_value);
+            MLSerialization::writeInt32(buf, node.left);
+            MLSerialization::writeInt32(buf, node.right);
+            MLSerialization::writeInt32(buf, node.size);
+        }
+    }
+    MLSerialization::writeStringVector(buf, field_names);
+    return buf;
+}
+
+QoreIsolationForest* QoreIsolationForest::deserializeState(const uint8_t* data, size_t len,
+    ExceptionSink* xsink) {
+    const uint8_t* ptr = data;
+    size_t remaining = len;
+
+    int32_t n_trees = MLSerialization::readInt32(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    int32_t sample_size = MLSerialization::readInt32(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    int32_t max_depth = MLSerialization::readInt32(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    double threshold = MLSerialization::readScalar(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    int32_t n_features = MLSerialization::readInt32(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    int32_t actual_sample_size = MLSerialization::readInt32(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+
+    int32_t tree_count = MLSerialization::readInt32(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+
+    std::vector<IsolationTree> trees;
+    trees.reserve(tree_count);
+    for (int32_t t = 0; t < tree_count; ++t) {
+        int32_t node_count = MLSerialization::readInt32(ptr, remaining, xsink);
+        if (*xsink) { return nullptr; }
+        IsolationTree tree;
+        tree.nodes.resize(node_count);
+        for (int32_t n = 0; n < node_count; ++n) {
+            tree.nodes[n].feature = MLSerialization::readInt32(ptr, remaining, xsink);
+            if (*xsink) { return nullptr; }
+            tree.nodes[n].split_value = MLSerialization::readScalar(ptr, remaining, xsink);
+            if (*xsink) { return nullptr; }
+            tree.nodes[n].left = MLSerialization::readInt32(ptr, remaining, xsink);
+            if (*xsink) { return nullptr; }
+            tree.nodes[n].right = MLSerialization::readInt32(ptr, remaining, xsink);
+            if (*xsink) { return nullptr; }
+            tree.nodes[n].size = MLSerialization::readInt32(ptr, remaining, xsink);
+            if (*xsink) { return nullptr; }
+        }
+        trees.push_back(std::move(tree));
+    }
+
+    std::vector<std::string> field_names = MLSerialization::readStringVector(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+
+    std::unique_ptr<QoreIsolationForest> obj(new QoreIsolationForest(
+        n_trees, sample_size, max_depth, threshold, 1));
+    obj->n_features = n_features;
+    obj->actual_sample_size = actual_sample_size;
+    obj->trees = std::move(trees);
+    obj->field_names = std::move(field_names);
+    obj->fitted = true;
+    return obj.release();
 }

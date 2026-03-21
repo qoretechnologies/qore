@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore GoogleDataProvider module definition
 
-/** GoogleApiParentDataProvider.qc Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/** GoogleApiParentDataProvider.qc Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -32,15 +32,15 @@ public class GoogleApiParentDataProvider inherits GoogleDataProviderBase {
             "restclient": <DataProviderOptionInfo>{
                 "display_name": "REST Client",
                 "short_desc": "The Google REST client to use",
-                "type": AbstractDataProviderType::get(new Type("GoogleRestClient")),
-                "desc": "The `GoogleRestClient` object to use",
+                "type": AbstractDataProviderType::get(new Type("GoogleRestClientIo")),
+                "desc": "The `GoogleRestClientIo` object to use",
             },
             "restclient_options": <DataProviderOptionInfo>{
                 "display_name": "REST Client Options",
                 "short_desc": "Google REST client options to use when creating a new client",
                 "type": AbstractDataProviderTypeMap."*hash",
-                "desc": "Options to the `GoogleRestClient` constructor; only used if a `GoogleRestClient` object is "
-                    "created for a call",
+                "desc": "Options to the `GoogleRestClientIo` constructor; only used if a `GoogleRestClientIo` object "
+                    "is created for a call",
             },
             "oauth2_client_id": <DataProviderOptionInfo>{
                 "display_name": "OAuth2 Client ID",
@@ -96,14 +96,14 @@ public class GoogleApiParentDataProvider inherits GoogleDataProviderBase {
     }
 
     #! Creates the object
-    constructor(RestClient::RestClient rest, string api, string resource, *hash<auto> path_args,
+    constructor(RestClientIo::RestClientIo rest, string api, string resource, *hash<auto> path_args,
             *string path_prefix, ...)
             : GoogleDataProviderBase(rest) {
         self.api = api;
         resource_path = resource.split("/");
         self.path_args = path_args;
         setSubpaths(path_prefix, argv);
-        desc = sprintf("Google %s %s provider for `%s`", api, resource_path.last(), rest.getSafeURL());
+        desc = sprintf("Google %s %s provider for `%s`", api, resource_path.last(), rest.getSafeUrl());
         type = sprintf("Google%s%sDataProvider", cap(api), cap(resource_path.last()));
         methods = getMethodsForResource(api, resource_path, path_args);
         check();
@@ -139,7 +139,7 @@ public class GoogleApiParentDataProvider inherits GoogleDataProviderBase {
         *list<hash<DataProvider::DataProviderSummaryInfo>> rv = map <DataProviderSummaryInfo>{
             "name": $1,
             "desc": sprintf("Google %s events/%s provider%s", self.api, $1,
-                rest ? sprintf(" for `%s`", rest.getSafeURL()) : ""),
+                rest ? sprintf(" for `%s`", rest.getSafeUrl()) : ""),
             "type": sprintf("Google%s%s%sDataProvider", api, resource_path.last(), cap($1)),
             "supports_request": True,
         }, keys methods;

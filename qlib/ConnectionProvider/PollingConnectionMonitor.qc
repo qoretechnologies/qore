@@ -27,7 +27,11 @@
 */
 public namespace ConnectionProvider {
 #! Class for monitoring connection supporting the polling API
-/** @since ConnectionProvider 1.7
+/** Uses per-connection timers via the AsyncIoController timer API instead of a dedicated timer
+    thread. Each connection gets its own timer that fires at the appropriate interval, dispatching
+    ping operations to the thread pool via submitTask().
+
+    @since ConnectionProvider 1.7
 */
 public class PollingConnectionMonitor inherits LoggerWrapper {
     public {
@@ -46,17 +50,14 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
         #! Connection cache; unique name -> connection object wrapper
         hash<string, hash<PollInfo>> cache;
 
-        #! Timer thread TID
-        int tid;
-
-        #! Autostart monitoring thread with first connection
+        #! Autostart monitoring with first connection
         bool autostart = True;
 
-        #! Quit flag for the timer thread
-        bool quit = False;
+        #! Whether monitoring is active
+        bool active = False;
 
         #! Flag indicating an explicit stop is in progress; prevents add() from
-        #! rescinding quit and restarting the timer thread
+        #! restarting monitoring
         bool stopping = False;
 
         #! ping timeout duration
@@ -76,11 +77,11 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
         #! Async I/O controller for delegating socket operations
         AsyncSocketIo::AsyncSocketIoController controller;
 
-        #! Condition variable for timer thread signaling
-        Condition timer_cond();
-
-        #! Timer thread WaitGroup
+        #! WaitGroup for tracking active/inactive state
         WaitGroup mcnt();
+
+        #! Counter for in-flight thread pool tasks dispatched by timer callbacks
+        Counter task_cnt();
     }
 
     #! Creates the object with an explicit async I/O controller
@@ -94,7 +95,7 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
         self.controller = AsyncSocketIo::getGlobalAsyncIoController();
     }
 
-    #! Stops the monitoring thread and destroys the object
+    #! Stops monitoring and destroys the object
     destructor() {
         stop();
     }
@@ -104,9 +105,10 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
         return {
             "autostart": autostart,
             "connections": (map {
-                $1.key: ($1.value.ping_active ? "I/O" : $1.value.start),
+                $1.key: $1.value.ping_active ? "I/O"
+                    : ($1.value.timer_id ? "timer" : "idle"),
             }, cache.pairIterator()),
-            "io_tid": tid,
+            "active": active,
         };
     }
 
@@ -121,7 +123,7 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
     }
 
     #! Starts monitoring
-    /** @throw MONITOR-START-ERROR if the timer thread is already running or the monitor is being stopped
+    /** @throw MONITOR-START-ERROR if monitoring is already active or the monitor is being stopped
     */
     start() {
         AutoLock al(m);
@@ -129,8 +131,8 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
         if (stopping) {
             throw "MONITOR-START-ERROR", "cannot start while the monitor is being stopped";
         }
-        if (tid) {
-            throw "MONITOR-START-ERROR", sprintf("timer thread is already running in TID %d", tid);
+        if (active) {
+            throw "MONITOR-START-ERROR", "monitor is already running";
         }
 
         startIntern();
@@ -138,26 +140,40 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
 
     #! Stops monitoring
     stop() {
-        list<string> cancel_names;
+        list<string> cancel_ping_names;
+        bool was_active;
         {
             AutoLock al(m);
             stopping = True;
-            if (tid) {
-                quit = True;
-                timer_cond.signal();
+            if (active) {
+                active = False;
+                was_active = True;
             }
             foreach string name in (keys cache) {
+                if (cache{name}.timer_id) {
+                    if (controller.cancelTimer(cache{name}.timer_id)) {
+                        task_cnt.dec();
+                    }
+                    delete cache{name}.timer_id;
+                }
                 if (cache{name}.ping_active) {
                     cache{name}.ping_active = False;
-                    cancel_names += name;
+                    cancel_ping_names += name;
                 }
             }
         }
         # Cancel outside the lock to avoid deadlock with callbacks
-        foreach string name in (cancel_names) {
+        foreach string name in (cancel_ping_names) {
             controller.cancelByOwner("pcm:" + name);
         }
-        mcnt.wait();
+        if (was_active) {
+            controller.waitForProcessing();
+        }
+        # Wait for all in-flight thread pool tasks to complete
+        task_cnt.waitForZero();
+        if (was_active) {
+            mcnt.done();
+        }
         {
             AutoLock al(m);
             stopping = False;
@@ -168,15 +184,21 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
     stopClear() {
         int count;
         list<string> cancel_names;
+        bool was_active;
         {
             AutoLock al(m);
             stopping = True;
             count = cache.size();
-            if (tid) {
-                quit = True;
-                timer_cond.signal();
+            if (active) {
+                active = False;
+                was_active = True;
             }
             foreach string name in (keys cache) {
+                if (cache{name}.timer_id) {
+                    if (controller.cancelTimer(cache{name}.timer_id)) {
+                        task_cnt.dec();
+                    }
+                }
                 if (cache{name}.ping_active) {
                     cancel_names += name;
                 }
@@ -187,7 +209,14 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
         foreach string name in (cancel_names) {
             controller.cancelByOwner("pcm:" + name);
         }
-        mcnt.wait();
+        if (was_active) {
+            controller.waitForProcessing();
+        }
+        # Wait for all in-flight thread pool tasks to complete
+        task_cnt.waitForZero();
+        if (was_active) {
+            mcnt.done();
+        }
         {
             AutoLock al(m);
             stopping = False;
@@ -196,12 +225,12 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
             count == 1 ? "" : "s");
     }
 
-    #! Waits for the monitoring thread to stop if it's running
+    #! Waits for monitoring to stop if active
     waitStop() {
         mcnt.wait();
     }
 
-    #! Returns @ref True if the timer thread is running
+    #! Returns @ref True if monitoring is active
     bool running() {
         return mcnt.getCount() > 0;
     }
@@ -255,6 +284,13 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
                 if (info.conn == conn) {
                     return;
                 }
+                # cancel existing timer
+                if (info.timer_id) {
+                    if (controller.cancelTimer(info.timer_id)) {
+                        task_cnt.dec();
+                    }
+                    delete cache{name}.timer_id;
+                }
                 # mark for cancellation outside the lock
                 if (info.ping_active) {
                     cache{name}.ping_active = False;
@@ -277,7 +313,7 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
 
         @return @ref True if the connection was removed, @ref False if no such connection is being monitored
 
-        @note Stops the timer thread if the last connection is removed and the \a autostart flag is enabled
+        @note Stops monitoring if the last connection is removed and the \a autostart flag is enabled
 
         @see removeConnectionEx()
     */
@@ -289,14 +325,17 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
             m.lock();
             on_exit m.unlock();
             if (cache{name}) {
+                if (cache{name}.timer_id) {
+                    if (controller.cancelTimer(cache{name}.timer_id)) {
+                        task_cnt.dec();
+                    }
+                }
                 need_cancel = cache{name}.ping_active;
                 remove cache{name};
                 rv = True;
-                if (autostart && !cache) {
-                    quit = True;
-                    timer_cond.signal();
-                } else {
-                    timer_cond.signal();
+                if (autostart && !cache && active) {
+                    active = False;
+                    mcnt.done();
                 }
             } else {
                 rv = False;
@@ -325,7 +364,7 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
     #! Removes the given connection without canceling in-flight pings
     /** @param name the connection to be removed
 
-        @return @ref True if the timer thread was signaled to stop
+        @return @ref True if monitoring was stopped due to removing the last connection
 
         Unlike removeConnection(), this method does not cancel in-flight ping operations via the
         controller.  This is useful during shutdown sequences where the caller holds locks and cannot
@@ -336,13 +375,18 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
     *bool removeConnectionNoWait(string name) {
         m.lock();
         on_exit m.unlock();
-        if (remove cache{name}) {
-            if (autostart && !cache) {
-                quit = True;
-                timer_cond.signal();
+        *hash<PollInfo> info = remove cache{name};
+        if (info) {
+            if (info.timer_id) {
+                if (controller.cancelTimer(info.timer_id)) {
+                    task_cnt.dec();
+                }
+            }
+            if (autostart && !cache && active) {
+                active = False;
+                mcnt.done();
                 return True;
             }
-            timer_cond.signal();
         }
     }
 
@@ -353,97 +397,91 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
     */
     private addOrUpdateIntern(AbstractConnection conn, *hash<auto> other, *bool start_pending) {
         string name = conn.getName();
+        int prev_gen = cache{name}.ping_gen ?? 0;
         cache{name} = <PollInfo>{
             "conn": conn,
             "other": other,
+            "ping_gen": prev_gen + 1,
         };
-        # Clear quit so the timer thread continues if it hasn't exited yet, but
-        # not during an explicit stop() — stopping prevents quit from being rescinded
         if (!stopping) {
-            quit = False;
-            if (autostart && !tid) {
+            if (autostart && !active) {
                 startIntern();
             }
-        }
-        if (start_pending) {
-            cache{name}.start = now_us();
-        }
-        timer_cond.signal();
-    }
-
-    private startIntern() {
-        quit = False;
-        mcnt.add();
-        on_error mcnt.done();
-        tid = background timerThread();
-    }
-
-    #! Timer thread: manages scheduling of ping operations
-    private timerThread() {
-        log(LoggerLevel::INFO, "started polling connection monitor timer thread");
-        on_exit {
-            {
-                AutoLock al(m);
-                remove tid;
-                # If quit was rescinded (add() set quit=False) and there are
-                # connections to monitor, restart the timer thread
-                if (!quit && autostart && cache) {
-                    startIntern();
-                }
+            if (active) {
+                scheduleNextPing(name, start_pending ? ping_repeat : 0s);
             }
-            log(LoggerLevel::INFO, "exiting polling connection monitor timer thread");
+        }
+    }
+
+    #! Starts monitoring for all cached connections
+    private startIntern() {
+        active = True;
+        mcnt.add();
+        on_error {
+            active = False;
             mcnt.done();
         }
-
-        while (True) {
-            list<string> due_names = ();
-            {
-                AutoLock al(m);
-                if (quit) {
-                    break;
-                }
-                date now = now_us();
-                *date next_deadline;
-
-                foreach string name in (keys cache) {
-                    hash<PollInfo> info = cache{name};
-                    if (info.ping_active) {
-                        continue;  # in-flight with controller
-                    }
-                    date delta = info.spop ? ping_timeout : ping_repeat;
-                    date trigger = info.start + delta;
-                    if (trigger <= now) {
-                        due_names += name;
-                    } else if (!next_deadline || trigger < next_deadline) {
-                        next_deadline = trigger;
+        date now = now_us();
+        foreach string name in (keys cache) {
+            if (!cache{name}.timer_id && !cache{name}.ping_active) {
+                # Calculate delay based on last ping time
+                date delay = 0s;
+                if (cache{name}.start) {
+                    date next_due = cache{name}.start + ping_repeat;
+                    if (next_due > now) {
+                        delay = next_due - now;
                     }
                 }
-
-                if (!due_names && !quit) {
-                    int wait_ms = next_deadline
-                        ? max(0, (next_deadline - now_us()).durationMilliseconds())
-                        : -1;
-                    timer_cond.wait(m, wait_ms);
-                    continue;
-                }
-                if (quit) {
-                    break;
-                }
+                scheduleNextPing(name, delay);
             }
+        }
+    }
 
-            # Submit pings outside the lock
-            for (int i = 0; i < due_names.size(); ++i) {
-                submitPing(due_names[i]);
+    #! Schedules a timer that will submit a ping for the named connection after the given delay
+    /** @param name the connection name
+        @param delay how long to wait before firing the ping
+    */
+    private scheduleNextPing(string name, date delay) {
+        if (!cache{name} || !active) {
+            return;
+        }
+        # Cancel existing timer if any
+        if (cache{name}.timer_id) {
+            if (controller.cancelTimer(cache{name}.timer_id)) {
+                task_cnt.dec();
             }
+            delete cache{name}.timer_id;
+        }
+        string conn_name = name;
+        int gen = ++cache{name}.ping_gen;
+        task_cnt.inc();
+        # Create closures here (not nested inside the timer callback) to avoid
+        # ThreadClosureVariableStack lookup failures on the I/O thread — nested
+        # closures cannot resolve outer-scope closure variables across threads.
+        code<nothing()> task = sub () {
+            on_exit task_cnt.dec();
+            submitPing(conn_name, gen);
+        };
+        code<nothing()> cancel_cb = sub () {
+            task_cnt.dec();
+        };
+        try {
+            cache{name}.timer_id = controller.addTimer(now_us() + delay, sub () {
+                controller.submitTask(task, cancel_cb);
+            });
+        } catch () {
+            task_cnt.dec();
+            rethrow;
         }
     }
 
     #! Starts and submits a ping operation to the async I/O controller
-    private submitPing(string name) {
+    private submitPing(string name, int gen) {
         AutoLock al(m);
-        if (!cache{name} || cache{name}.ping_active) {
+        if (!cache{name} || !active || cache{name}.ping_gen != gen || cache{name}.ping_active) {
             return;
         }
+        delete cache{name}.timer_id;
 
         AbstractPollOperation spop;
         try {
@@ -453,7 +491,9 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::ERROR, "%y: error handling ping start: %s", name, get_exception_string(ex));
             failedToStartPing(name, ex);
-            cache{name}.start = now_us();
+            if (active) {
+                scheduleNextPing(name, ping_repeat);
+            }
             return;
         }
 
@@ -464,7 +504,9 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
             cache{name}.conn.last_check = now_us();
             cache{name}.spop = spop;
             handlePingFailed(name, now_us() - cache{name}.start, ex);
-            cache{name}.start = now_us();
+            if (active) {
+                scheduleNextPing(name, ping_repeat);
+            }
             return;
         }
 
@@ -484,6 +526,9 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
                 };
                 handlePingFailed(name, 0us, ex);
             }
+            if (active) {
+                scheduleNextPing(name, ping_repeat);
+            }
             return;
         }
 
@@ -496,7 +541,7 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
         # callbacks inline (stores in cache, notifies I/O thread). Lock ordering is
         # PCM.m -> controller.m (never reverse), so no deadlock is possible.
         cache{name}.ping_active = True;
-        int gen = ++cache{name}.ping_gen;
+        int submit_gen = ++cache{name}.ping_gen;
         string conn_name = name;
         controller.submit(<SocketPollOperationInfo>{
             "sock": poll_info.socket,
@@ -504,7 +549,7 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
             "to": ping_timeout,
             "owner": "pcm:" + name,
             "callback": sub (hash<SocketPollResultInfo> result) {
-                handlePingResult(conn_name, gen, result);
+                handlePingResult(conn_name, submit_gen, result);
             },
         });
     }
@@ -530,7 +575,6 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
         if (result.canceled) {
             delete cache{name}.spop;
             cache{name}.start = now_us();
-            timer_cond.signal();
             return;
         }
 
@@ -563,7 +607,10 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
             handlePingFailed(name, delta, ex);
         }
 
-        timer_cond.signal();
+        # Schedule next ping if still active
+        if (active && cache{name}) {
+            scheduleNextPing(name, ping_repeat);
+        }
     }
 
     #! Could not start ping
@@ -628,6 +675,9 @@ hashdecl PollInfo {
 
     # generation counter for invalidating stale async results
     int ping_gen = 0;
+
+    # active repeat timer ID
+    *int timer_id;
 
     # other data stored alongside the connection
     *hash<auto> other;

@@ -71,6 +71,16 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
         #! Set by migrate() on the app thread; consumed by continuePoll() on
         #! the I/O thread so the fd swap happens on the thread that owns epoll
         bool migration_pending = False;
+
+        #! Address family used for the QUIC socket (AF_INET or AF_INET6)
+        /** Stored from the constructor so startConnect() passes the same
+            family to startPollQuicConnect(), ensuring the DNS resolution
+            inside the C++ layer uses the same address family as the bound
+            socket.  A mismatch (e.g. IPv6 socket + AF_INET resolve) causes
+            ngtcp2 path-validation to silently drop server responses because
+            the received src_addr family differs from the stored remote_addr.
+        */
+        int addr_family = AF_INET;
     }
 
     #! Creates the poll operation for a new QUIC connection
@@ -128,6 +138,7 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
             }
         }
         sock.bindINET(bind_addr, "0", True, family, SOCK_DGRAM);
+        addr_family = family;
 
         # Start the QUIC connection
         startConnect();
@@ -241,13 +252,7 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
                 : sprintf("%s:%d", url_info.host, url_info.port);
         }
 
-        # Submit with STREAM_ID_BLOCKED retry.  With the shared event loop
-        # and packet budget, the I/O thread fairly services all connections,
-        # so MAX_STREAMS frames are processed promptly.  Short retries with
-        # condition-variable waits handle the common case; if retries are
-        # exhausted, HTTP3-CAPACITY-ERROR signals the connection manager to
-        # open a new QUIC connection.
-        int stream_id;
+        # Phase 1: advisory capacity check under lock
         {
             AutoLock al(stream_lock);
             if (max_streams && active_stream_count >= max_streams) {
@@ -255,73 +260,119 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
                     sprintf("connection at capacity: %d/%d streams",
                         active_stream_count, max_streams);
             }
-            int retries = 0;
-            while (True) {
-                try {
-                    stream_id = sock.submitQuicRequest(method, path, req_headers, body);
-                    break;
-                } catch (hash<ExceptionInfo> ex) {
-                    if (ex.err == "QUIC-ERROR" && ex.desc =~ /STREAM_ID_BLOCKED/
-                            && retries < MaxStreamBlockedRetries) {
-                        ++retries;
-                        # Backoff: 1ms, 2ms, 4ms
-                        int backoff_val = 1 << (retries - 1);
-                        timeout backoff_ms = backoff_val * 1ms;
-                        log(LoggerLevel::DEBUG,
-                            "STREAM_ID_BLOCKED retry %d/%d (backoff %dms)",
-                            retries, MaxStreamBlockedRetries, backoff_val);
-                        # Wait on condition — signaled when continuePoll()
-                        # drains completed streams and frees stream slots
+        }
+
+        # Phase 2: submit to QUIC layer with STREAM_ID_BLOCKED retry.
+        #
+        # IMPORTANT: sock.submitQuicRequest() acquires sock->priv->m internally.
+        # The I/O thread holds sock->priv->m (via C++ continuePoll()) and then
+        # acquires stream_lock (in handleReading()).  Holding stream_lock here
+        # while calling submitQuicRequest() would therefore create a lock-order
+        # inversion and risk deadlock.  submitQuicRequest() is intentionally
+        # called outside stream_lock.
+        int stream_id;
+        int retries = 0;
+        while (True) {
+            try {
+                stream_id = sock.submitQuicRequest(method, path, req_headers, body);
+                break;
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "QUIC-ERROR" && ex.desc =~ /STREAM_ID_BLOCKED/
+                        && retries < MaxStreamBlockedRetries) {
+                    ++retries;
+                    # Backoff: 1ms, 2ms, 4ms
+                    int backoff_val = 1 << (retries - 1);
+                    timeout backoff_ms = backoff_val * 1ms;
+                    log(LoggerLevel::DEBUG,
+                        "STREAM_ID_BLOCKED retry %d/%d (backoff %dms)",
+                        retries, MaxStreamBlockedRetries, backoff_val);
+                    # Wait on condition — signaled when continuePoll()
+                    # drains completed streams and frees stream slots.
+                    # Acquire stream_lock only for the wait, not around the submit.
+                    {
+                        AutoLock al(stream_lock);
                         ++stream_blocked_waiters;
                         stream_capacity_cond.wait(stream_lock, backoff_ms);
                         --stream_blocked_waiters;
-                        string current_state = state;
-                        if (current_state != STATE_READING
-                                && current_state != STATE_WAIT_READ) {
-                            throw "HTTP3-STATE-ERROR",
-                                sprintf("connection closed during STREAM_ID_BLOCKED "
-                                    "retry (state: %y)", current_state);
-                        }
-                        continue;
                     }
-                    if (ex.err == "QUIC-ERROR" && ex.desc =~ /STREAM_ID_BLOCKED/) {
-                        # Retries exhausted — record the limit so
-                        # canAcceptStream() steers subsequent callers
-                        # to a new QUIC connection
+                    string retry_state = state;
+                    if (retry_state != STATE_READING && retry_state != STATE_WAIT_READ) {
+                        throw "HTTP3-STATE-ERROR",
+                            sprintf("connection closed during STREAM_ID_BLOCKED "
+                                "retry (state: %y)", retry_state);
+                    }
+                    continue;
+                }
+                if (ex.err == "QUIC-ERROR" && ex.desc =~ /STREAM_ID_BLOCKED/) {
+                    # Retries exhausted — record the limit so
+                    # canAcceptStream() steers subsequent callers
+                    # to a new QUIC connection
+                    int captured_active;
+                    int captured_limit;
+                    {
+                        AutoLock al(stream_lock);
                         if (!max_streams || active_stream_count < max_streams) {
                             quic_stream_limit = active_stream_count;
                         }
-                        log(LoggerLevel::DEBUG,
-                            "STREAM_ID_BLOCKED after %d retries — signaling "
-                            "capacity error (active: %d, quic_limit: %d)",
-                            MaxStreamBlockedRetries, active_stream_count,
-                            quic_stream_limit);
-                        throw "HTTP3-CAPACITY-ERROR",
-                            sprintf("QUIC stream limit reached on connection"
-                                " (active_streams: %d)", active_stream_count);
+                        captured_active = active_stream_count;
+                        captured_limit = quic_stream_limit;
                     }
-                    # Connection death errors — mark as closed immediately
-                    # so isClosed()/hasError() steer other callers away.
-                    # Cannot call setError() here (stream_lock is held),
-                    # so set state/error_info directly; the I/O thread will
-                    # notify remaining pending streams on its next cycle.
-                    if (ex.err == "QUIC-HTTP3-ERROR" || ex.err == "QUIC-READ-ERROR"
-                            || ex.err == "QUIC-RECV-ERROR") {
-                        error_info = {"err": ex.err, "desc": ex.desc};
-                        state = STATE_CLOSED;
-                        if (stream_blocked_waiters > 0) {
-                            stream_capacity_cond.broadcast();
-                        }
-                    }
-                    rethrow;
+                    log(LoggerLevel::DEBUG,
+                        "STREAM_ID_BLOCKED after %d retries — signaling "
+                        "capacity error (active: %d, quic_limit: %d)",
+                        MaxStreamBlockedRetries, captured_active, captured_limit);
+                    throw "HTTP3-CAPACITY-ERROR",
+                        sprintf("QUIC stream limit reached on connection"
+                            " (active_streams: %d)", captured_active);
                 }
+                # Connection death errors — mark as closed immediately
+                # so isClosed()/hasError() steer other callers away.
+                # The I/O thread will notify remaining pending streams on
+                # its next cycle.
+                if (ex.err == "QUIC-HTTP3-ERROR" || ex.err == "QUIC-READ-ERROR"
+                        || ex.err == "QUIC-RECV-ERROR") {
+                    AutoLock al(stream_lock);
+                    error_info = {"err": ex.err, "desc": ex.desc};
+                    state = STATE_CLOSED;
+                    if (stream_blocked_waiters > 0) {
+                        stream_capacity_cond.broadcast();
+                    }
+                }
+                rethrow;
             }
-            string sid = string(stream_id);
-            stream_callbacks{sid} = callback;
-            if (ctx) {
-                stream_ctxs{sid} = ctx;
+        }
+
+        # Phase 3: register callback under lock; re-check state in case the
+        # connection died between the submit and this registration
+        bool need_cancel = False;
+        string post_state;
+        {
+            AutoLock al(stream_lock);
+            post_state = state;
+            if (post_state != STATE_READING && post_state != STATE_WAIT_READ) {
+                # Stream was submitted to QUIC but connection is now dead;
+                # capture the need to cancel and release stream_lock first
+                # to avoid lock-order inversion (stream_lock → sock->priv->m
+                # vs I/O thread's sock->priv->m → stream_lock)
+                need_cancel = True;
+            } else {
+                string sid = string(stream_id);
+                stream_callbacks{sid} = callback;
+                if (ctx) {
+                    stream_ctxs{sid} = ctx;
+                }
+                ++active_stream_count;
             }
-            ++active_stream_count;
+        }
+        if (need_cancel) {
+            try {
+                if (session_id) {
+                    sock.cancelQuicStream(session_id, stream_id);
+                }
+            } catch () {}
+            throw "HTTP3-STATE-ERROR",
+                sprintf("connection closed during request submission (state: %y)",
+                    post_state);
         }
 
         return stream_id;
@@ -430,8 +481,9 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
 
     #! Internal: starts the QUIC connection
     private startConnect() {
-        log(LoggerLevel::DEBUG, "connecting to %s:%d via QUIC", url_info.host, url_info.port);
-        current_op = sock.startPollQuicConnect(url_info.host, url_info.port);
+        log(LoggerLevel::DEBUG, "connecting to %s:%d via QUIC (family %d)", url_info.host, url_info.port,
+            addr_family);
+        current_op = sock.startPollQuicConnect(url_info.host, url_info.port, addr_family);
         state = STATE_CONNECTING;
     }
 
@@ -522,7 +574,7 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
                 }
                 if (cb) {
                     try {
-                        cb(output + {"ctx": stream_ctx, "end_stream": True}, NOTHING);
+                        cb(output + {"ctx": stream_ctx, "end_stream": True, "protocol": "h3"}, NOTHING);
                     } catch (hash<ExceptionInfo> ex) {
                         log(LoggerLevel::ERROR, "stream callback exception: %s: %s",
                             ex.err, ex.desc);

@@ -549,6 +549,12 @@ int SocketQuicClientPollOperation::recvAndProcessPacket(ExceptionSink* xsink) {
         if (errno == EMSGSIZE) {
             return 0;  // truncated datagram discarded; continue draining
         }
+        if (errno == ECONNREFUSED) {
+            // ICMP "port unreachable" on a connected UDP socket — the server's
+            // UDP listener was not ready when the Initial was sent.  Treat as
+            // transient: return SOCK_POLLIN so the QUIC PTO timer retransmits.
+            return SOCK_POLLIN;
+        }
         xsink->raiseErrnoException("QUIC-RECV-ERROR", errno, "recvmsg() failed");
         return -1;
     }
@@ -629,6 +635,11 @@ QoreHashNode* SocketQuicClientPollOperation::flushAndReturnPollInfo(ExceptionSin
 
 QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) {
     AutoLocker al(sock->priv->m);
+
+    if (!sock->priv->socket->priv->isOpen()) {
+        xsink->raiseException("QUIC-POLL-ERROR", "socket closed during poll operation");
+        return nullptr;
+    }
 
     // Guard against continuePoll() after abort() has reset quic_session
     if (!quic_session) {
@@ -1587,6 +1598,11 @@ void SocketQuicServerPollOperation::cleanupClosedSessions() {
 QoreHashNode* SocketQuicServerPollOperation::continuePoll(ExceptionSink* xsink) {
     AutoLocker al(sock->priv->m);
 
+    if (!sock->priv->socket->priv->isOpen()) {
+        xsink->raiseException("QUIC-POLL-ERROR", "socket closed during poll operation");
+        return nullptr;
+    }
+
     while (true) {
         switch (qcs_state) {
             case QCS::HANDSHAKE_RECV: {
@@ -1768,6 +1784,21 @@ QoreHashNode* SocketQuicServerPollOperation::continuePoll(ExceptionSink* xsink) 
             case QCS::REQUEST_READY:
             case QCS::HEADERS_READY: {
                 // Already reached goal; if called again, go back to reading
+                // Flush pending writes (ACKs, handshake responses, flow control)
+                // for ALL sessions before checking for more streams.  Without
+                // this, handshake responses for sessions created during the
+                // initial packet drain are delayed until the state transitions
+                // to READING, stalling concurrent client connections.
+                // NOTE: do NOT drain packets here — the socket is in blocking
+                // mode (restored by checkHeadersOnlyDispatch), so recvfrom()
+                // would block.  Draining happens in READING after the
+                // non-blocking transition.
+                {
+                    ngtcp2_tstamp min_expiry;
+                    if (processTimersAndSendAll(min_expiry, xsink) < 0 || *xsink) {
+                        return nullptr;
+                    }
+                }
                 // Check for headers-only dispatch first
                 if (headers_only_) {
                     for (auto& entry : sessions_) {
@@ -2013,6 +2044,11 @@ int SocketQuicSendResponsePollOperation::recvAndProcessPackets(ExceptionSink* xs
 
 QoreHashNode* SocketQuicSendResponsePollOperation::continuePoll(ExceptionSink* xsink) {
     AutoLocker al(sock->priv->m);
+
+    if (!sock->priv->socket->priv->isOpen()) {
+        xsink->raiseException("QUIC-POLL-ERROR", "socket closed during poll operation");
+        return nullptr;
+    }
 
     // Guard against continuePoll() after abort() has reset quic_session
     if (!quic_session) {
@@ -2331,6 +2367,11 @@ QoreHashNode* SocketQuicSendStreamingResponsePollOperation::continuePoll(Excepti
     }
 
     AutoLocker al(sock->priv->m);
+
+    if (!sock->priv->socket->priv->isOpen()) {
+        xsink->raiseException("QUIC-POLL-ERROR", "socket closed during poll operation");
+        return nullptr;
+    }
 
     // Guard against continuePoll() after abort()
     if (!quic_session) {

@@ -1,0 +1,119 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_CrossValidator.qpp
+
+    Qore ml module - CrossValidator class definition
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+#include "qore/Qore.h"
+#include "QC_CrossValidator.h"
+
+extern const TypedHashDecl* hashdeclCrossValidationFold;
+
+//! The CrossValidator class splits data indices into k folds for cross-validation
+/** Cross-validation helps evaluate how well a model generalizes to unseen data.
+    The data is split into k equally-sized folds; each fold takes a turn as the
+    test set while the remaining folds form the training set.
+
+    @par Example:
+    @code{.py}
+CrossValidator cv({"n_folds": 5, "shuffle": True, "seed": 42});
+list<hash<CrossValidationFold>> folds = cv.split(100);
+# folds[0]: {"train_indices": (20..99), "test_indices": (0..19), "fold": 0}
+# folds[1]: {"train_indices": (0..19,40..99), "test_indices": (20..39), "fold": 1}
+# ... 5 folds total, each sample appears in exactly one test set
+    @endcode
+*/
+qclass CrossValidator [arg=QoreCrossValidator* cv; ns=Qore::ML; flags=final];
+
+//! Creates a CrossValidator instance
+/** @param options a hash with the following keys:
+    - \c n_folds (int, default 5): number of folds (must be >= 2)
+    - \c shuffle (bool, default False): whether to shuffle indices before splitting
+    - \c seed (int, default 0 = random): random seed for reproducible shuffling
+
+    @throw ML-CROSS-VALIDATOR-ERROR invalid option values
+*/
+CrossValidator::constructor(*hash<auto> options) {
+    int64 n_folds = 5;
+    bool shuffle = false;
+    int64 seed = 0;
+
+    if (options) {
+        QoreValue v = options->getKeyValue("n_folds");
+        if (!v.isNullOrNothing()) {
+            n_folds = v.getAsBigInt();
+        }
+        v = options->getKeyValue("shuffle");
+        if (!v.isNullOrNothing()) {
+            shuffle = v.getAsBool();
+        }
+        v = options->getKeyValue("seed");
+        if (!v.isNullOrNothing()) {
+            seed = v.getAsBigInt();
+        }
+    }
+
+    if (n_folds < 2) {
+        xsink->raiseException("ML-CROSS-VALIDATOR-ERROR",
+            "n_folds must be >= 2; got " QLLD, n_folds);
+        return;
+    }
+
+    self->setPrivate(CID_CROSSVALIDATOR,
+        new QoreCrossValidator(static_cast<int>(n_folds), shuffle, seed));
+}
+
+//! Creates a copy of the CrossValidator instance
+/** @throw COPY-ERROR CrossValidator objects cannot be copied
+*/
+CrossValidator::copy() {
+    xsink->raiseException("COPY-ERROR", "CrossValidator objects cannot be copied");
+}
+
+//! Splits sample indices into k folds
+/** @param n_samples the total number of samples
+    @return a list of @ref CrossValidationFold hashes, one per fold
+
+    @par Example:
+    @code{.py}
+CrossValidator cv({"n_folds": 3, "shuffle": True, "seed": 42});
+list<hash<CrossValidationFold>> folds = cv.split(90);
+foreach hash<CrossValidationFold> fold in (folds) {
+    printf("Fold %d: %d train, %d test\n", fold.fold,
+        fold.train_indices.lsize(), fold.test_indices.lsize());
+}
+    @endcode
+
+    @throw ML-CROSS-VALIDATOR-ERROR n_samples < n_folds
+*/
+list<hash<CrossValidationFold>> CrossValidator::split(int n_samples) {
+    return cv->split(n_samples, xsink);
+}
+
+//! Returns the number of folds
+/** @return the k value
+*/
+int CrossValidator::getNumFolds() [flags=CONSTANT] {
+    return cv->getNumFolds();
+}

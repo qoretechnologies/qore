@@ -558,6 +558,18 @@ private:
             llvm::Function* llvm_func, const char* label, bool is_float,
             std::function<llvm::Value*(llvm::Value*, llvm::Value*)> accumulate,
             std::string& error);
+
+    //! Inline a small callee's IR directly into the caller's LLVM function
+    //! Phase 3: Aggressive inlining for ≤20 instruction callees
+    //! @param callee_ir the QoreIRFunction to inline
+    //! @param call_inst the calling instruction (for operands and result ID)
+    //! @param llvm_func the caller's LLVM function
+    //! @param module LLVM module for helper functions
+    //! @param error error string for reporting
+    //! @return LLVM value representing the inlined call result, or nullptr on error
+    llvm::Value* emitInlinedCallee(const QoreIRFunction& callee_ir,
+            const QoreIRInstruction* call_inst, llvm::Function* llvm_func,
+            llvm::Module& module, std::string& error);
 };
 
 #endif

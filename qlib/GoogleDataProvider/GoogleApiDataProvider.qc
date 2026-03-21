@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore GoogleDataProvider module definition
 
-/** GoogleApiDataProvider.qc Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/** GoogleApiDataProvider.qc Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -50,14 +50,14 @@ public class GoogleApiDataProvider inherits GoogleDataProviderBase {
     }
 
     #! Creates the object
-    constructor(RestClient::RestClient rest, string api, string resource_action, *hash<auto> path_args)
+    constructor(RestClientIo::RestClientIo rest, string api, string resource_action, *hash<auto> path_args)
             : GoogleDataProviderBase(rest) {
         self.api = api;
         self.resource_action = resource_action;
         self.path_args = cast<hash<string, softstring>>(path_args);
 
         (category, name) = (resource_action =~ x/([^\/]+)\/([^\/]+)/);
-        desc = sprintf("Google %s %s provider for `%s`", api, resource_action, rest.getSafeURL());
+        desc = sprintf("Google %s %s provider for `%s`", api, resource_action, rest.getSafeUrl());
         type = sprintf("Google%s%s%sDataProvider", cap(api), cap(category), cap(name));
     }
 
@@ -84,15 +84,17 @@ public class GoogleApiDataProvider inherits GoogleDataProviderBase {
     */
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         hash<auto> req_info = prepareRequestForSchema(req);
-        hash<auto> info;
         try {
-            *hash<auto> rv = rest.doRequest(getMethodForSchema(api, resource_action), req_info.pathstr, req_info.body,
-                \info).body;
-            return getResponseTypeImpl().acceptsValue(rv);
+            hash<RestClient::RestResponseInfo> resp = rest.restDoRequest(
+                getMethodForSchema(api, resource_action), req_info.pathstr, req_info.body);
+            return getResponseTypeImpl().acceptsValue(resp.body);
         } catch (hash<ExceptionInfo> ex) {
             # ensure that any error response body is included in the exception
-            *hash<auto> ex_arg = info{"request-uri", "response-code", "response-body"};
-            rethrow ex.err, ex.desc, ex.arg + ex_arg;
+            rethrow ex.err, ex.desc, ex.arg + {
+                "request-uri": ex.arg.request_path,
+                "response-code": ex.arg.status_code,
+                "response-body": ex.arg.response_body_raw,
+            };
         }
     }
 
@@ -120,13 +122,15 @@ public class GoogleApiDataProvider inherits GoogleDataProviderBase {
         string get_action = category + "/get";
         hash<auto> req_info = prepareRequestForSchema(api, get_action, req, True);
 
-        hash<auto> info;
         try {
-            return rest.doRequest("GET", req_info.pathstr, NOTHING, \info).body;
+            return rest.restDoRequest("GET", req_info.pathstr).body;
         } catch (hash<ExceptionInfo> ex) {
             # ensure that any error response body is included in the exception
-            *hash<auto> ex_arg = info{"request-uri", "response-code", "response-body"};
-            rethrow ex.err, ex.desc, ex.arg + ex_arg;
+            rethrow ex.err, ex.desc, ex.arg + {
+                "request-uri": ex.arg.request_path,
+                "response-code": ex.arg.status_code,
+                "response-body": ex.arg.response_body_raw,
+            };
         }
     }
 

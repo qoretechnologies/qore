@@ -677,6 +677,16 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
             return nullptr;
         }
 
+        // Start I/O thread if needed — must happen BEFORE inserting into cache,
+        // because startIntern() releases the lock while waiting for an exiting
+        // I/O thread, and the exit cleanup iterates cache and discards entries
+        if (io_exiting || !tid) {
+            startIntern(xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+        }
+
         PollInfo& pinfo = cache[uh];
         pinfo.sock_obj = sock_obj;
         sock_obj->ref();
@@ -692,20 +702,6 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         pinfo.queue = res.result_queue; res.result_queue = nullptr;
         pinfo.callback = res.callback; res.callback = nullptr;
         pinfo.timeout_date_us = 0;  // Will be set in I/O thread
-
-        // Start I/O thread if needed
-        if (io_exiting || !tid) {
-            startIntern(xsink);
-            if (*xsink) {
-                // Copy PollInfo out before erasing — pinfo is a reference into cache
-                PollInfo failed_pinfo = pinfo;
-                pinfo = PollInfo();
-                cache.erase(uh);
-                failed_pinfo.cleanup(xsink);
-                // res still owns new_queue_obj — destructor will clean it up
-                return nullptr;
-            }
-        }
 
         ++submit_seq;
         do_signal = enqueueCmdLocked(IoCommand::Add, uh);
@@ -727,38 +723,6 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         result_queue_obj->ref();
         return result_queue_obj;
     }
-    return nullptr;
-}
-
-QoreHashNode* AsyncIoControllerPriv::exec(QoreObject* self, QoreHashNode* info, bool replace,
-        ExceptionSink* xsink) {
-    // Submit the operation - this creates a Queue for us
-    QoreObject* q_obj = submit(self, info, replace, xsink);
-    if (*xsink) {
-        return nullptr;
-    }
-
-    if (!q_obj) {
-        xsink->raiseException("ASYNC-IO-ERROR", "exec() cannot be used with a callback");
-        return nullptr;
-    }
-
-    ReferenceHolder<QoreObject> q_holder(q_obj, xsink);
-    Queue* q = static_cast<Queue*>(q_obj->getReferencedPrivateData(CID_QUEUE, xsink));
-    if (!q || *xsink) {
-        return nullptr;
-    }
-    ReferenceHolder<Queue> q_ref(q, xsink);
-
-    // Wait for result (blocking)
-    QoreValue result = q->shift(xsink);
-    if (*xsink) {
-        return nullptr;
-    }
-    if (result.getType() == NT_HASH) {
-        return result.get<QoreHashNode>();
-    }
-    result.discard(xsink);
     return nullptr;
 }
 
@@ -820,7 +784,7 @@ bool AsyncIoControllerPriv::cancelByKey(const QoreStringNode* key, ExceptionSink
     // Check autostop
     {
         AutoLocker al(m);
-        if (autostop_flag && rv && cache.empty() && dedicated_threads.empty() && tid) {
+        if (autostop_flag && rv && cache.empty() && dedicated_threads.empty() && timer_info_map.empty() && tid) {
             do_signal = enqueueCmdLocked(IoCommand::Quit);
             stopped = true;
         } else {
@@ -955,7 +919,7 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
     bool stopped = false;
     {
         AutoLocker al(m);
-        if (autostop_flag && count > 0 && cache.empty() && dedicated_threads.empty() && tid) {
+        if (autostop_flag && count > 0 && cache.empty() && dedicated_threads.empty() && timer_info_map.empty() && tid) {
             do_signal = enqueueCmdLocked(IoCommand::Quit);
             stopped = true;
         } else {
@@ -1248,11 +1212,6 @@ int64_t AsyncIoControllerPriv::addTimer(const DateTimeNode* deadline, QoreValue 
             return -1;
         }
 
-        // Store user data under lock (add a reference for our storage)
-        TimerInfo tinfo;
-        tinfo.udata = udata.refSelf();
-        timer_info_map[id] = tinfo;
-
         // Enqueue command
         Command cmd;
         cmd.cmd = IoCommand::AddTimer;
@@ -1263,12 +1222,18 @@ int64_t AsyncIoControllerPriv::addTimer(const DateTimeNode* deadline, QoreValue 
         if (io_exiting || !tid) {
             startIntern(xsink);
             if (*xsink) {
-                // Clean up our reference on error
-                timer_info_map[id].udata.discard(xsink);
-                timer_info_map.erase(id);
                 return -1;
             }
         }
+
+        // Store user data under lock AFTER startIntern() — the exiting I/O thread's
+        // cleanup iterates timer_info_map and discards entries; inserting before
+        // startIntern() lets the exit cleanup destroy our callback while we wait for
+        // the old thread to finish, causing the timer to fire with no callback
+        TimerInfo tinfo;
+        tinfo.udata = udata.refSelf();
+        timer_info_map[id] = tinfo;
+
         cmdq.push_back(cmd);
         do_signal = true;
     }
@@ -1702,8 +1667,8 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
             }
 
             // Check autostop (only if no deliveries pending — recheck after delivery)
-            if (cache.empty() && dedicated_threads.empty() && autostop_flag && cmdq.empty()
-                    && deferred_deliveries.empty()) {
+            if (cache.empty() && dedicated_threads.empty() && timer_info_map.empty()
+                    && autostop_flag && cmdq.empty() && deferred_deliveries.empty()) {
                 io_exiting = true;
                 if (io_waiting) {
                     io_cond.broadcast();
@@ -1742,7 +1707,8 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
         // Re-check autostop after deliveries (callbacks may have submitted new ops)
         if (!do_autostop && !deferred_deliveries.empty()) {
             AutoLocker al(m);
-            if (cache.empty() && dedicated_threads.empty() && autostop_flag && cmdq.empty()) {
+            if (cache.empty() && dedicated_threads.empty() && timer_info_map.empty()
+                    && autostop_flag && cmdq.empty()) {
                 io_exiting = true;
                 if (io_waiting) {
                     io_cond.broadcast();
@@ -1832,8 +1798,18 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
 
         // Deliver timer events outside lock
         for (auto& te : timer_events) {
-            if (cb_snapshot) {
-                // Build TimerEventInfo hash
+            // If udata is a code reference/closure, call it directly (no Qore-level dispatch needed)
+            if (te.udata.getType() == NT_RUNTIME_CLOSURE || te.udata.getType() == NT_FUNCREF) {
+                ResolvedCallReferenceNode* code_ref = te.udata.get<ResolvedCallReferenceNode>();
+                ExceptionSink cb_xsink;
+                ValueHolder rv(code_ref->execValue(nullptr, &cb_xsink), &cb_xsink);
+                if (cb_xsink) {
+                    log(QORE_LOG_LEVEL_ERROR, "timer code callback exception for timer %lld",
+                        (long long)te.id);
+                    cb_xsink.clear();
+                }
+            } else if (cb_snapshot) {
+                // Fall back to the registered timer callback for non-code udata
                 ReferenceHolder<QoreHashNode> timer_hash(
                     new QoreHashNode(hashdeclTimerEventInfo, xsink), xsink);
                 if (!*xsink) {
@@ -1896,7 +1872,8 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
 #endif
     }
 
-    // Cleanup on exit
+    // Cleanup on exit — cancel results are collected under lock and delivered outside
+    std::vector<PollInfo> exit_cancel_pinfos;
     {
         AutoLocker al(m);
 
@@ -1928,6 +1905,15 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
         }
         timer_info_map.clear();
 
+        // Deliver cancel results to all remaining cache entries so that
+        // callers blocked on callback delivery are unblocked during shutdown.
+        // Collect entries under lock, deliver outside lock to avoid deadlock.
+        for (auto& [key, pinfo] : cache) {
+            exit_cancel_pinfos.push_back(pinfo);
+            pinfo = PollInfo();
+        }
+        cache.clear();
+
         // Signal any pending CancelOwner done_cond waiters in the command queue
         // so cancelByOwner() doesn't hang when the I/O thread exits.
         // Must set cancel_done_flag under lock before broadcasting to prevent
@@ -1941,6 +1927,13 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
             }
         }
         cmdq.clear();
+    }
+
+    // Deliver cancel results to remaining cache entries outside the lock
+    // so exec() callers blocked on q->shift() are unblocked
+    for (auto& pinfo : exit_cancel_pinfos) {
+        doCancelIntern(pinfo, xsink);
+        pinfo.cleanup(xsink);
     }
 
     // Log the exit message before signaling waitStop(), so the per-controller

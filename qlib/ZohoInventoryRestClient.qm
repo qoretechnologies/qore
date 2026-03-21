@@ -36,6 +36,7 @@
 
 %requires(reexport) Mime >= 1.3
 %requires(reexport) RestClient >= 1.3.1
+%requires(reexport) RestClientIo
 %requires(reexport) ConnectionProvider >= 1.4
 
 module ZohoInventoryRestClient {
@@ -96,35 +97,8 @@ printf("Items: %y\n", result.body.items);
 #! the ZohoInventoryRestClient namespace contains all the objects in the ZohoInventoryRestClient module
 public namespace ZohoInventoryRestClient {
 
-#! This class provides the REST client API for communication with Zoho Inventory servers
-/** Zoho Inventory uses a REST API with OAuth2 authentication.
-
-    @par URL Construction:
-    The API URL is constructed from the domain option:
-    - API: https://www.zohoapis{domain}/inventory/v1
-
-    The OAuth2 URLs are constructed from the subdomain and domain options:
-    - Auth: https://accounts.{subdomain}{domain}/oauth/v2/auth
-    - Token: https://accounts.{subdomain}{domain}/oauth/v2/token
-
-    @par Subdomains:
-    - zoho: Standard Zoho accounts
-    - zohocloud: Zoho Cloud accounts
-
-    @par Domains:
-    - .com: US/Global
-    - .eu: Europe
-    - .in: India
-    - .com.au: Australia
-    - .ca: Canada
-    - .sa: Saudi Arabia
-    - .jp: Japan
-
-    @par Important:
-    All API calls require an organization_id parameter. This client automatically appends
-    the organization_id to all requests.
-*/
-public class ZohoInventoryRestClient inherits RestClient::RestClient {
+#! Common base class for ZohoInventoryRestClient functionality
+public class ZohoInventoryRestClientBase {
     public {
         #! Default subdomain
         const DefaultSubdomain = "zoho";
@@ -191,93 +165,6 @@ public class ZohoInventoryRestClient inherits RestClient::RestClient {
         };
     }
 
-    private {
-        #! The organization ID - required for all API calls except /organizations
-        string organization_id;
-
-        #! Subdomain for Zoho URLs (zoho or zohocloud)
-        string subdomain;
-
-        #! Domain for Zoho URLs (.com, .eu, .in, .com.au, .ca, .sa, .jp)
-        string domain;
-    }
-
-    #! creates the object with the given options
-    /**
-        @par Example:
-        @code{.py}
-ZohoInventoryRestClient zoho({
-    "oauth2_client_id": "your-client-id",
-    "oauth2_client_secret": "your-client-secret",
-    "oauth2_refresh_token": "your-refresh-token",
-    "organization_id": "your-org-id",
-    "subdomain": "zoho",
-    "domain": ".com",
-});
-        @endcode
-
-        @param opts valid options are all the options for the @ref RestClient::RestClient "RestClient" class
-        plus:
-        - \c organization_id: the Zoho Inventory organization ID (required for most operations)
-        - \c subdomain: the Zoho subdomain ("zoho" or "zohocloud")
-        - \c domain: the Zoho domain (".com", ".eu", ".in", ".com.au", ".ca", ".sa", ".jp")
-
-        @param do_not_connect if \c False (the default), then a connection will be immediately established to the
-        remote server
-
-        @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data serialization, etc
-        @throw ZOHOINVENTORY-ERROR invalid subdomain or domain specified
-    */
-    constructor(hash<auto> opts, *softbool do_not_connect)
-            : RestClient(ZohoInventoryRestClient::getOptions(opts), do_not_connect) {
-        # Store organization_id for all future requests
-        if (opts.organization_id) {
-            organization_id = opts.organization_id;
-        }
-        subdomain = opts.subdomain ?? DefaultSubdomain;
-        domain = opts.domain ?? DefaultDomain;
-        setAssumedEncoding("UTF-8");
-    }
-
-    #! Returns the organization ID
-    string getOrganizationId() {
-        return organization_id;
-    }
-
-    #! Sets the organization ID
-    setOrganizationId(string org_id) {
-        organization_id = org_id;
-    }
-
-    #! Returns the subdomain
-    string getSubdomain() {
-        return subdomain;
-    }
-
-    #! Returns the domain
-    string getDomain() {
-        return domain;
-    }
-
-    #! Overrides doRequest to automatically add organization_id parameter
-    /** The organization_id is automatically appended to all API paths except for
-        /organizations which is used to retrieve the list of available organizations,
-        and paths that already contain organization_id.
-    */
-    hash<auto> doRequest(string method, string path, auto body,
-            *reference<hash<auto>> info, softbool decode_errors = True, *hash<auto> hdr) {
-        # Append organization_id to all requests except /organizations (with or without leading slash)
-        # Also skip if organization_id is already in the path (to avoid duplicates)
-        if (organization_id && path !~ /^\/?organizations($|\?)/ && path !~ /organization_id=/) {
-            if (path !~ /\?/) {
-                path += "?organization_id=" + organization_id;
-            } else {
-                path += "&organization_id=" + organization_id;
-            }
-        }
-        return RestClient::doRequest(method, path, body, \info, decode_errors, hdr);
-    }
-
     #! returns options for @ref ZohoInventoryRestClient::ZohoInventoryRestClient::constructor()
     static hash<auto> getOptions(hash<auto> opts) {
         hash<auto> rv = DefaultOptions + opts;
@@ -329,6 +216,123 @@ ZohoInventoryRestClient zoho({
     }
 }
 
+#! This class provides the REST client API for communication with Zoho Inventory servers
+/** Zoho Inventory uses a REST API with OAuth2 authentication.
+
+    @par URL Construction:
+    The API URL is constructed from the domain option:
+    - API: https://www.zohoapis{domain}/inventory/v1
+
+    The OAuth2 URLs are constructed from the subdomain and domain options:
+    - Auth: https://accounts.{subdomain}{domain}/oauth/v2/auth
+    - Token: https://accounts.{subdomain}{domain}/oauth/v2/token
+
+    @par Subdomains:
+    - zoho: Standard Zoho accounts
+    - zohocloud: Zoho Cloud accounts
+
+    @par Domains:
+    - .com: US/Global
+    - .eu: Europe
+    - .in: India
+    - .com.au: Australia
+    - .ca: Canada
+    - .sa: Saudi Arabia
+    - .jp: Japan
+
+    @par Important:
+    All API calls require an organization_id parameter. This client automatically appends
+    the organization_id to all requests.
+*/
+public class ZohoInventoryRestClient inherits RestClient::RestClient, ZohoInventoryRestClientBase {
+    private {
+        #! The organization ID - required for all API calls except /organizations
+        string organization_id;
+
+        #! Subdomain for Zoho URLs (zoho or zohocloud)
+        string subdomain;
+
+        #! Domain for Zoho URLs (.com, .eu, .in, .com.au, .ca, .sa, .jp)
+        string domain;
+    }
+
+    #! creates the object with the given options
+    /**
+        @par Example:
+        @code{.py}
+ZohoInventoryRestClient zoho({
+    "oauth2_client_id": "your-client-id",
+    "oauth2_client_secret": "your-client-secret",
+    "oauth2_refresh_token": "your-refresh-token",
+    "organization_id": "your-org-id",
+    "subdomain": "zoho",
+    "domain": ".com",
+});
+        @endcode
+
+        @param opts valid options are all the options for the @ref RestClient::RestClient "RestClient" class
+        plus:
+        - \c organization_id: the Zoho Inventory organization ID (required for most operations)
+        - \c subdomain: the Zoho subdomain ("zoho" or "zohocloud")
+        - \c domain: the Zoho domain (".com", ".eu", ".in", ".com.au", ".ca", ".sa", ".jp")
+
+        @param do_not_connect if \c False (the default), then a connection will be immediately established to the
+        remote server
+
+        @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data serialization, etc
+        @throw ZOHOINVENTORY-ERROR invalid subdomain or domain specified
+    */
+    constructor(hash<auto> opts, *softbool do_not_connect)
+            : RestClient(ZohoInventoryRestClientBase::getOptions(opts), do_not_connect) {
+        # Store organization_id for all future requests
+        if (opts.organization_id) {
+            organization_id = opts.organization_id;
+        }
+        subdomain = opts.subdomain ?? DefaultSubdomain;
+        domain = opts.domain ?? DefaultDomain;
+        setAssumedEncoding("UTF-8");
+    }
+
+    #! Returns the organization ID
+    string getOrganizationId() {
+        return organization_id;
+    }
+
+    #! Sets the organization ID
+    setOrganizationId(string org_id) {
+        organization_id = org_id;
+    }
+
+    #! Returns the subdomain
+    string getSubdomain() {
+        return subdomain;
+    }
+
+    #! Returns the domain
+    string getDomain() {
+        return domain;
+    }
+
+    #! Overrides doRequest to automatically add organization_id parameter
+    /** The organization_id is automatically appended to all API paths except for
+        /organizations which is used to retrieve the list of available organizations,
+        and paths that already contain organization_id.
+    */
+    hash<auto> doRequest(string method, string path, auto body,
+            *reference<hash<auto>> info, softbool decode_errors = True, *hash<auto> hdr) {
+        # Append organization_id to all requests except /organizations (with or without leading slash)
+        # Also skip if organization_id is already in the path (to avoid duplicates)
+        if (organization_id && path !~ /^\/?organizations($|\?)/ && path !~ /organization_id=/) {
+            if (path !~ /\?/) {
+                path += "?organization_id=" + organization_id;
+            } else {
+                path += "&organization_id=" + organization_id;
+            }
+        }
+        return RestClient::doRequest(method, path, body, \info, decode_errors, hdr);
+    }
+}
+
 #! Class for Zoho Inventory REST connections; returns @ref ZohoInventoryRestClient objects
 /** This class implements all options of @ref RestClient::RestConnection "RestClientConnection"; in addition,
     this class provides the following options:
@@ -360,14 +364,14 @@ public class ZohoInventoryRestConnection inherits RestClient::RestConnection {
             "options": RestConnection::ConnectionScheme.options + {
                 "data": RestConnection::ConnectionScheme.options."data"
                 + <ConnectionOptionInfo>{
-                    "default_value": ZohoInventoryRestClient::DefaultData,
+                    "default_value": ZohoInventoryRestClientBase::DefaultData,
                 },
                 "subdomain": <ConnectionOptionInfo>{
                     "display_name": "Sub Domain",
                     "short_desc": "Zoho subdomain",
                     "type": "string",
                     "desc": "Select the Zoho subdomain for your account.",
-                    "default_value": ZohoInventoryRestClient::DefaultSubdomain,
+                    "default_value": ZohoInventoryRestClientBase::DefaultSubdomain,
                     "preselected": True,
                     "allowed_values": (
                         <AllowedValueInfo>{
@@ -389,7 +393,7 @@ public class ZohoInventoryRestConnection inherits RestClient::RestConnection {
                     "short_desc": "Zoho domain",
                     "type": "string",
                     "desc": "Select the Zoho domain for your account based on your data center region.",
-                    "default_value": ZohoInventoryRestClient::DefaultDomain,
+                    "default_value": ZohoInventoryRestClientBase::DefaultDomain,
                     "preselected": True,
                     "allowed_values": (
                         <AllowedValueInfo>{
@@ -438,37 +442,37 @@ public class ZohoInventoryRestConnection inherits RestClient::RestConnection {
                 },
                 "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
                 + <ConnectionOptionInfo>{
-                    "default_value": ZohoInventoryRestClient::DefaultPingHeaders,
+                    "default_value": ZohoInventoryRestClientBase::DefaultPingHeaders,
                 },
                 "ping_method": RestConnection::ConnectionScheme.options."ping_method"
                 + <ConnectionOptionInfo>{
-                    "default_value": ZohoInventoryRestClient::DefaultPingMethod,
+                    "default_value": ZohoInventoryRestClientBase::DefaultPingMethod,
                 },
                 "ping_path": RestConnection::ConnectionScheme.options."ping_path"
                 + <ConnectionOptionInfo>{
-                    "default_value": ZohoInventoryRestClient::DefaultPingPath,
+                    "default_value": ZohoInventoryRestClientBase::DefaultPingPath,
                 },
                 "oauth2_auth_url": RestConnection::ConnectionScheme.options.oauth2_auth_url
                 + <ConnectionOptionInfo>{
                     "default_value": sprintf("https://accounts.%s%s/oauth/v2/auth",
-                        ZohoInventoryRestClient::DefaultSubdomain, ZohoInventoryRestClient::DefaultDomain),
+                        ZohoInventoryRestClientBase::DefaultSubdomain, ZohoInventoryRestClientBase::DefaultDomain),
                 },
                 "oauth2_token_url": RestConnection::ConnectionScheme.options.oauth2_token_url
                 + <ConnectionOptionInfo>{
                     "default_value": sprintf("https://accounts.%s%s/oauth/v2/token",
-                        ZohoInventoryRestClient::DefaultSubdomain, ZohoInventoryRestClient::DefaultDomain),
+                        ZohoInventoryRestClientBase::DefaultSubdomain, ZohoInventoryRestClientBase::DefaultDomain),
                 },
                 "oauth2_grant_type": RestConnection::ConnectionScheme.options.oauth2_grant_type
                 + <ConnectionOptionInfo>{
-                    "default_value": ZohoInventoryRestClient::DefaultGrantType,
+                    "default_value": ZohoInventoryRestClientBase::DefaultGrantType,
                 },
                 "oauth2_scopes": RestConnection::ConnectionScheme.options.oauth2_scopes
                 + <ConnectionOptionInfo>{
-                    "default_value": ZohoInventoryRestClient::DefaultScopes,
+                    "default_value": ZohoInventoryRestClientBase::DefaultScopes,
                 },
                 "oauth2_auth_args": RestConnection::ConnectionScheme.options.oauth2_auth_args
                 + <ConnectionOptionInfo>{
-                    "default_value": ZohoInventoryRestClient::DefaultAuthArgs,
+                    "default_value": ZohoInventoryRestClientBase::DefaultAuthArgs,
                 },
             },
             "required_options": "token|oauth2_client_id,oauth2_client_secret",
@@ -528,7 +532,7 @@ public class ZohoInventoryRestConnection inherits RestClient::RestConnection {
     */
     private static hash<auto> getConfig(hash<auto> config) {
         # Get domain from options, default to .com
-        string domain = config.opts.domain ?? ZohoInventoryRestClient::DefaultDomain;
+        string domain = config.opts.domain ?? ZohoInventoryRestClientBase::DefaultDomain;
 
         # Build URL from domain - include /inventory/v1 API path
         string url = sprintf("zohoinventory://www.zohoapis%s/inventory/v1", domain);
@@ -548,19 +552,19 @@ public class ZohoInventoryRestConnection inherits RestClient::RestConnection {
     *hash<auto> getConnectionOptions(*hash<auto> rtopts) {
         hash<auto> rv = RestConnection::getConnectionOptions(rtopts);
         # Build OAuth2 URLs from subdomain and domain - always rebuild to ensure they match the domain
-        string subdomain = rv.subdomain ?? ZohoInventoryRestClient::DefaultSubdomain;
-        string domain = rv.domain ?? ZohoInventoryRestClient::DefaultDomain;
+        string subdomain = rv.subdomain ?? ZohoInventoryRestClientBase::DefaultSubdomain;
+        string domain = rv.domain ?? ZohoInventoryRestClientBase::DefaultDomain;
         # Always set OAuth2 URLs based on domain to ensure they're correct when domain changes
         rv.oauth2_auth_url = sprintf("https://accounts.%s%s/oauth/v2/auth", subdomain, domain);
         rv.oauth2_token_url = sprintf("https://accounts.%s%s/oauth/v2/token", subdomain, domain);
         if (!rv.oauth2_grant_type) {
-            rv.oauth2_grant_type = ZohoInventoryRestClient::DefaultGrantType;
+            rv.oauth2_grant_type = ZohoInventoryRestClientBase::DefaultGrantType;
         }
         if (!rv.oauth2_scopes) {
-            rv.oauth2_scopes = ZohoInventoryRestClient::DefaultScopes;
+            rv.oauth2_scopes = ZohoInventoryRestClientBase::DefaultScopes;
         }
         if (!rv.oauth2_auth_args) {
-            rv.oauth2_auth_args = ZohoInventoryRestClient::DefaultAuthArgs;
+            rv.oauth2_auth_args = ZohoInventoryRestClientBase::DefaultAuthArgs;
         }
         return rv;
     }
@@ -608,8 +612,8 @@ public class ZohoInventoryRestConnection inherits RestClient::RestConnection {
         # update the URL and OAuth2 URLs immediately if necessary
         if (update_options) {
             # Build correct URLs from subdomain and domain options instead of hardcoded defaults
-            string subdomain = opts.subdomain ?? ZohoInventoryRestClient::DefaultSubdomain;
-            string domain = opts.domain ?? ZohoInventoryRestClient::DefaultDomain;
+            string subdomain = opts.subdomain ?? ZohoInventoryRestClientBase::DefaultSubdomain;
+            string domain = opts.domain ?? ZohoInventoryRestClientBase::DefaultDomain;
             string correct_url = sprintf("zohoinventory://www.zohoapis%s/inventory/v1", domain);
             string correct_auth_url = sprintf("https://accounts.%s%s/oauth/v2/auth", subdomain, domain);
             string correct_token_url = sprintf("https://accounts.%s%s/oauth/v2/token", subdomain, domain);
@@ -642,12 +646,32 @@ public class ZohoInventoryRestConnection inherits RestClient::RestConnection {
         @return a @ref ZohoInventoryRestClient object
     */
     private ZohoInventoryRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
-        return new ZohoInventoryRestClient(getConnectionOptions(), !connect);
+        return new ZohoInventoryRestClient(getConnectionOptions(rtopts), !connect);
+    }
+
+    #! Returns an async-I/O-capable connection object
+    /** @since ZohoInventoryRestClient 1.1
+    */
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new ZohoInventoryRestClientIo(getConnectionOptions(rtopts));
     }
 
     #! Returns the ConnectionSchemeInfo hash for this object
     private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
         return ConnectionScheme;
+    }
+}
+
+#! REST client for Zoho Inventory REST API using multiplexed HTTP connections
+/** @see ZohoInventoryRestClient for more information
+*/
+public class ZohoInventoryRestClientIo inherits RestClientIo::RestClientIo, ZohoInventoryRestClientBase {
+    #! Creates the object with the given options
+    /** @param opts constructor options
+        @param shared_mgr optional shared connection manager
+    */
+    constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+            : RestClientIo(ZohoInventoryRestClientBase::getOptions(opts), shared_mgr) {
     }
 }
 }

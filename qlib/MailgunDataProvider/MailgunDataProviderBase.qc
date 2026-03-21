@@ -62,7 +62,7 @@ public class MailgunDataProviderBase inherits DataProvider::AbstractDataProvider
                 "type": AbstractDataProviderType::get(StringType),
                 "desc": "The Mailgun API region (US or EU)",
                 "required": True,
-                "default_value": MailgunRestClient::MailgunRestClient::DefaultApiRegion,
+                "default_value": MailgunRestClient::MailgunRestClientBase::DefaultApiRegion,
                 "allowed_values": (
                     <AllowedValueInfo>{
                         "value": "US",

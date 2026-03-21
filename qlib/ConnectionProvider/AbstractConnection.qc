@@ -656,6 +656,47 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
         }
     }
 
+    #! returns an async-I/O-capable connection object
+    /** Calls @ref getAsyncImpl() to acquire a connection object that uses non-blocking,
+        multiplexed I/O (e.g., HTTP/2, HTTP/3, or HTTP/1.1 via @ref HttpClientIo).
+
+        @param connect if @ref True "True" then the connection should be returned connected
+        @param rtopts runtime options for connection acquisition
+
+        @return the async-I/O-capable connection object
+
+        @throw CONNECTION-ASYNC-UNSUPPORTED if the connection type does not support async I/O
+        (the base class implementation throws this; subclasses override @ref getAsyncImpl()
+        to provide the async variant)
+
+        @since ConnectionProvider 2.2
+
+        @see getAsyncImpl()
+    */
+    object getAsync(bool connect = True, *hash<auto> rtopts) {
+        if (!connect) {
+            object o = getAsyncImpl(False, rtopts);
+            if (post_processing) {
+                post_processing(self, o);
+            }
+            return o;
+        }
+
+        on_exit
+            last_check = now_us();
+
+        try {
+            object o = getAsyncImpl(True, rtopts);
+            if (post_processing) {
+                post_processing(self, o);
+            }
+            return o;
+        } catch (hash<ExceptionInfo> ex) {
+            status = sprintf("%s: %s", ex.err, ex.desc);
+            rethrow;
+        }
+    }
+
     #! this method is called when parsing connection file definitions from text files when loading into the database
     /** reimplement this method in subclasses to parse the option hash as set from a text file if needed (for special
         option formats, etc)
@@ -1141,5 +1182,26 @@ scheme://user:pass@hostname:port/path
         @return the connection object
     */
     private abstract object getImpl(bool connect = True, *hash<auto> rtopts);
+
+    #! returns an async-I/O-capable connection object
+    /** The default implementation throws \c CONNECTION-ASYNC-UNSUPPORTED.
+        Subclasses that support async I/O (e.g., REST connections) override this
+        method to return an async-capable variant of the connection object.
+
+        @param connect if @ref True "True" then the connection should be returned connected
+        @param rtopts runtime options for connection acquisition
+
+        @return the async-I/O-capable connection object
+
+        @throw CONNECTION-ASYNC-UNSUPPORTED if the connection type does not support async I/O
+
+        @since ConnectionProvider 2.2
+
+        @see getAsync()
+    */
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        throw "CONNECTION-ASYNC-UNSUPPORTED",
+            sprintf("connection type %y does not support async I/O", getType());
+    }
 }
 } # ConnectionProvider namespace

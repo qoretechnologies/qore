@@ -479,7 +479,6 @@ public:
 
     DLLLOCAL ThreadData(int ptid, QoreProgram* p, bool n_foreign = false,
             int n_flags = QTF_NONE) :
-            
             tid(ptid),
             vlock(ptid),
             current_pgm(p),
@@ -497,49 +496,49 @@ public:
         } else {
             // save this thread's stack size as the default stack size can change
             size_t stack_guard = QORE_STACK_GUARD;
-        // on Linux the initial thread's stack is extended automatically, so we put a large number here
-        if (tid == initial_thread) {
+            // on Linux the initial thread's stack is extended automatically, so we put a large number here
+            if (tid == initial_thread) {
 #ifdef _Q_WINDOWS
-            // windows uses a 1MB stack size for the main thread
-            stack_size = 1024 * 1024;
+                // windows uses a 1MB stack size for the main thread
+                stack_size = 1024 * 1024;
 #else
 #ifdef HAVE_GETRLIMIT
-            // use rlimit to determine the main thread\s stack size
-            rlimit rl;
-            if (!getrlimit(RLIMIT_STACK, &rl) && rl.rlim_cur) {
-                stack_size = rl.rlim_cur;
-                printd(5, "rlimit: stack size: %lld bytes\n", rl.rlim_cur);
-            } else
+                // use rlimit to determine the main thread\s stack size
+                rlimit rl;
+                if (!getrlimit(RLIMIT_STACK, &rl) && rl.rlim_cur) {
+                    stack_size = rl.rlim_cur;
+                    printd(5, "rlimit: stack size: %lld bytes\n", rl.rlim_cur);
+                } else
 #endif
-            {
-                // all other knows OSes use an 8MB stack for the main thread
-                // Linux extends the main stack automatically, but the default is MB
-                // on Alpine Linux get_stack_size() will report a 128K stack size, so we hardcode it here
-                // in case it's too small
-                stack_size = 8 * 1024 * 1024;
-                printd(5, "stack size: %lld (%lld)\n", stack_size, get_stack_size());
+                {
+                    // all other knows OSes use an 8MB stack for the main thread
+                    // Linux extends the main stack automatically, but the default is MB
+                    // on Alpine Linux get_stack_size() will report a 128K stack size, so we hardcode it here
+                    // in case it's too small
+                    stack_size = 8 * 1024 * 1024;
+                    printd(5, "stack size: %lld (%lld)\n", stack_size, get_stack_size());
+                }
+#endif
+                // issue #4392: add 64K of additional stack in the primary thread
+                stack_guard += 64 * 1024;
+            } else {
+                stack_size = get_stack_size();
             }
-#endif
-            // issue #4392: add 64K of additional stack in the primary thread
-            stack_guard += 64 * 1024;
-        } else {
-            stack_size = get_stack_size();
-        }
-        stack_start = get_stack_pos();
-        size_t stack_adjusted_size = stack_size - stack_guard;
-        printd(5, "ThreadData::ThreadData() stack_adjusted_size: %lld qore_thread_stack_limit: %lld\n",
-            stack_adjusted_size, qore_thread_stack_limit);
+            stack_start = get_stack_pos();
+            size_t stack_adjusted_size = stack_size - stack_guard;
+            printd(5, "ThreadData::ThreadData() stack_adjusted_size: %lld qore_thread_stack_limit: %lld\n",
+                stack_adjusted_size, qore_thread_stack_limit);
 #ifdef STACK_DIRECTION_DOWN
             stack_limit = stack_start - stack_adjusted_size;
 #else
             stack_limit = stack_start + stack_adjusted_size;
 #endif // #ifdef STACK_DIRECTION_DOWN
-        }
 
 #ifdef IA64_64
-        // RSE stack grows up
-        rse_limit = get_rse_bsp() + stack_adjusted_size;
+            // RSE stack grows up
+            rse_limit = get_rse_bsp() + stack_adjusted_size;
 #endif // #ifdef IA64_64
+        }
 #endif // #ifdef QORE_MANAGE_STACK
     }
 
@@ -691,8 +690,7 @@ void ThreadEntry::cleanup() {
 
     assert(!thread_data);
 
-    if (status != QTS_NA && status != QTS_RESERVED && !joined && ptid
-            && !pthread_equal(ptid, pthread_self())) {
+    if (status != QTS_NA && status != QTS_RESERVED && !joined && ptid) {
         pthread_detach(ptid);
     }
 
@@ -1199,9 +1197,8 @@ void thread_uninstantiate_self() {
 LocalVarValue* thread_find_lvar(const char* id) {
     ThreadData* td = thread_data.get();
     //printd(5, "thread_find_lvar() pgm: %p tlpd: %p id: %s\n", td->current_pgm, td->tlpd, id);
-    return td->tlpd->lvstack.findMaybe(id);
+    return td->tlpd->lvstack.find(id);
 }
-
 
 ClosureVarValue* thread_instantiate_closure_var(const char* n_id, const QoreTypeInfo* typeInfo, QoreValue& nval, bool assign) {
     ThreadLocalProgramData* tlpd = thread_data.get()->tlpd;
@@ -1225,7 +1222,7 @@ void thread_uninstantiate_closure_var(ExceptionSink* xsink) {
 }
 
 ClosureVarValue* thread_find_closure_var(const char* id) {
-    return thread_data.get()->tlpd->cvstack.try_find(id);
+    return thread_data.get()->tlpd->cvstack.find(id);
 }
 
 const QoreClosureBase* thread_set_runtime_closure_env(const QoreClosureBase* current) {
@@ -1237,23 +1234,6 @@ const QoreClosureBase* thread_set_runtime_closure_env(const QoreClosureBase* cur
 
 cvv_vec_t* thread_get_all_closure_vars() {
     return thread_data.get()->tlpd->cvstack.getAll();
-}
-
-cvv_vec_t* thread_get_closure_vars_for_vlist(const LVarSet* vlist) {
-    if (!vlist || vlist->empty()) {
-        return nullptr;
-    }
-    cvv_vec_t* cv = nullptr;
-    for (const LocalVar* lv : *vlist) {
-        ClosureVarValue* cvv = thread_find_closure_var(lv->getName());
-        if (cvv) {
-            if (!cv) {
-                cv = new cvv_vec_t;
-            }
-            cv->push_back(cvv->refSelf());
-        }
-    }
-    return cv;
 }
 
 const QoreTypeInfo* parse_set_implicit_arg_type_info(const QoreTypeInfo* ti) {
@@ -1280,8 +1260,7 @@ void thread_set_closure_parse_env(ClosureParseEnvironment* cenv) {
 }
 
 ClosureVarValue* thread_get_runtime_closure_var(const LocalVar* id) {
-    const QoreClosureBase* closure_env = thread_data.get()->closure_rt_env;
-    return closure_env ? closure_env->find(id) : nullptr;
+    return thread_data.get()->closure_rt_env->find(id);
 }
 
 ClosureParseEnvironment* thread_get_closure_parse_env() {
@@ -1650,7 +1629,7 @@ const QoreProgramLocation* get_runtime_location() {
 }
 
 int swap_runtime_statement_location(ExceptionSink* xsink, const AbstractStatement* stmt, const QoreProgramLocation* loc,
-        QoreParseOptions po, const AbstractStatement*& old_stmt, const QoreProgramLocation*& old_loc, QoreParseOptions& old_po) {
+        const QoreParseOptions& po, const AbstractStatement*& old_stmt, const QoreProgramLocation*& old_loc, QoreParseOptions& old_po) {
     ThreadData* td = thread_data.get();
     old_stmt = td->runtime_statement;
     old_loc = td->runtime_loc;
@@ -1687,11 +1666,6 @@ void update_runtime_statement_location(const AbstractStatement* stmt, const Qore
     ThreadData* td = thread_data.get();
     td->runtime_statement = stmt;
     td->runtime_loc = loc;
-}
-
-RuntimeLocationCache get_runtime_location_cache() {
-    ThreadData* td = thread_data.get();
-    return {&td->runtime_loc, &td->runtime_statement};
 }
 
 void set_parse_file_info(QoreProgramLocation& loc) {
@@ -2223,10 +2197,6 @@ SingleArgvContextHelper::~SingleArgvContextHelper() {
 const QoreListNode* thread_get_implicit_args() {
     //printd(5, "thread_get_implicit_args() returning %p\n", thread_data.get()->current_implicit_arg);
     return thread_data.get()->current_implicit_arg;
-}
-
-void thread_set_implicit_args(QoreListNode* argv) {
-    thread_data.get()->current_implicit_arg = argv;
 }
 
 bool runtime_in_object_method(const char* name, const QoreObject* o) {
@@ -2864,7 +2834,8 @@ struct ThreadArg {
     int tid;
     int flags;
 
-    DLLLOCAL ThreadArg(q_thread_t n_f, void* a, int n_tid, int n_flags = QTF_NONE) : f(n_f), arg(a), tid(n_tid), flags(n_flags) {
+    DLLLOCAL ThreadArg(q_thread_t n_f, void* a, int n_tid, int n_flags = QTF_NONE)
+            : f(n_f), arg(a), tid(n_tid), flags(n_flags) {
     }
 
     DLLLOCAL void run(ExceptionSink* xsink) {
@@ -3325,9 +3296,9 @@ void init_qore_threads() {
 
     // setup parent thread data
     thread_list.activate(initial_thread = get_thread_entry());
-    // The main (initial) thread is not created by pthread_create(); calling pthread_detach()
-    // on it causes ASAN check failures on macOS. Mark it so cleanup() skips the detach.
-    thread_list.markNoDetach(initial_thread);
+    // mark the initial thread as joined so cleanup() does not call pthread_detach();
+    // the main thread exits naturally with the process and must not be detached
+    thread_list.setJoined(initial_thread);
 
     // initialize recursive mutex attribute
     pthread_mutexattr_init(&ma_recursive);

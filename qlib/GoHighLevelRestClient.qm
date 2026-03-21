@@ -32,6 +32,7 @@
 
 %requires(reexport) Mime >= 1.3
 %requires(reexport) RestClient >= 1.3.1
+%requires(reexport) RestClientIo
 %requires(reexport) ConnectionProvider >= 1.4
 
 module GoHighLevelRestClient {
@@ -91,23 +92,8 @@ printf("Calendars: %y\n", result.body.calendars);
 #! the GoHighLevelRestClient namespace contains all the objects in the GoHighLevelRestClient module
 public namespace GoHighLevelRestClient {
 
-#! This class provides the REST client API for communication with GoHighLevel servers
-/** GoHighLevel uses a REST API at https://services.leadconnectorhq.com with OAuth2 authentication.
-
-    @par Authentication:
-    - OAuth2 with Bearer tokens (Authorization Code Grant)
-    - Access tokens expire after ~24 hours
-    - Refresh tokens are single-use and valid for up to 1 year
-
-    @par API Structure:
-    All endpoints are at the base URL; a \c Version header is required on every request.
-
-    @par Important:
-    All API calls require a \c locationId parameter for location-scoped operations. This client
-    automatically appends the \c locationId query parameter to all requests. When using OAuth2,
-    the location ID is automatically extracted from the token response.
-*/
-public class GoHighLevelRestClient inherits RestClient::RestClient {
+#! Common base class for GoHighLevelRestClient functionality
+public class GoHighLevelRestClientBase {
     public {
         #! Default GoHighLevel API URL
         const DefaultUrl = "https://services.leadconnectorhq.com";
@@ -178,6 +164,44 @@ public class GoHighLevelRestClient inherits RestClient::RestClient {
         };
     }
 
+    #! returns options for @ref GoHighLevelRestClient::GoHighLevelRestClient::constructor()
+    static hash<auto> getOptions(hash<auto> opts) {
+        hash<auto> rv = DefaultOptions + opts;
+
+        if (opts.oauth2_client_id) {
+            rv += OAuth2Options;
+            # GoHighLevel requires version_id in the auth URL; it is derived from the
+            # client_id by taking the portion before the first hyphen
+            *string version_id = (opts.oauth2_client_id =~ x/^([0-9a-f]{24})-/)[0];
+            if (version_id) {
+                rv.oauth2_auth_args += {"version_id": version_id};
+            }
+        }
+
+        # Remove custom options that RestClient doesn't understand
+        remove rv.location_id;
+
+        return rv;
+    }
+}
+
+#! This class provides the REST client API for communication with GoHighLevel servers
+/** GoHighLevel uses a REST API at https://services.leadconnectorhq.com with OAuth2 authentication.
+
+    @par Authentication:
+    - OAuth2 with Bearer tokens (Authorization Code Grant)
+    - Access tokens expire after ~24 hours
+    - Refresh tokens are single-use and valid for up to 1 year
+
+    @par API Structure:
+    All endpoints are at the base URL; a \c Version header is required on every request.
+
+    @par Important:
+    All API calls require a \c locationId parameter for location-scoped operations. This client
+    automatically appends the \c locationId query parameter to all requests. When using OAuth2,
+    the location ID is automatically extracted from the token response.
+*/
+public class GoHighLevelRestClient inherits RestClient::RestClient, GoHighLevelRestClientBase {
     private {
         #! The location ID - automatically extracted from OAuth2 login, or set manually
         *string location_id;
@@ -206,7 +230,7 @@ GoHighLevelRestClient ghl({
         @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data serialization, etc
     */
     constructor(hash<auto> opts, *softbool do_not_connect)
-            : RestClient(GoHighLevelRestClient::getOptions(opts), do_not_connect) {
+            : RestClient(GoHighLevelRestClientBase::getOptions(opts), do_not_connect) {
         # Store location_id for all future requests
         if (opts.location_id) {
             location_id = opts.location_id;
@@ -303,25 +327,6 @@ GoHighLevelRestClient ghl({
         return new_opts;
     }
 
-    #! returns options for @ref GoHighLevelRestClient::GoHighLevelRestClient::constructor()
-    static hash<auto> getOptions(hash<auto> opts) {
-        hash<auto> rv = DefaultOptions + opts;
-
-        if (opts.oauth2_client_id) {
-            rv += OAuth2Options;
-            # GoHighLevel requires version_id in the auth URL; it is derived from the
-            # client_id by taking the portion before the first hyphen
-            *string version_id = (opts.oauth2_client_id =~ x/^([0-9a-f]{24})-/)[0];
-            if (version_id) {
-                rv.oauth2_auth_args += {"version_id": version_id};
-            }
-        }
-
-        # Remove custom options that RestClient doesn't understand
-        remove rv.location_id;
-
-        return rv;
-    }
 }
 
 #! Class for GoHighLevel REST connections; returns @ref GoHighLevelRestClient objects
@@ -353,7 +358,7 @@ public class GoHighLevelRestConnection inherits RestClient::RestConnection {
             "options": RestConnection::ConnectionScheme.options + {
                 "data": RestConnection::ConnectionScheme.options."data"
                 + <ConnectionOptionInfo>{
-                    "default_value": GoHighLevelRestClient::DefaultData,
+                    "default_value": GoHighLevelRestClientBase::DefaultData,
                 },
                 "location_id": <ConnectionOptionInfo>{
                     "display_name": "Location ID",
@@ -365,35 +370,35 @@ public class GoHighLevelRestConnection inherits RestClient::RestConnection {
                 },
                 "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
                 + <ConnectionOptionInfo>{
-                    "default_value": GoHighLevelRestClient::DefaultPingHeaders,
+                    "default_value": GoHighLevelRestClientBase::DefaultPingHeaders,
                 },
                 "ping_method": RestConnection::ConnectionScheme.options."ping_method"
                 + <ConnectionOptionInfo>{
-                    "default_value": GoHighLevelRestClient::DefaultPingMethod,
+                    "default_value": GoHighLevelRestClientBase::DefaultPingMethod,
                 },
                 "ping_path": RestConnection::ConnectionScheme.options."ping_path"
                 + <ConnectionOptionInfo>{
-                    "default_value": GoHighLevelRestClient::DefaultPingPath,
+                    "default_value": GoHighLevelRestClientBase::DefaultPingPath,
                 },
                 "oauth2_auth_args": RestConnection::ConnectionScheme.options.oauth2_auth_args
                 + <ConnectionOptionInfo>{
-                    "default_value": GoHighLevelRestClient::DefaultAuthArgs,
+                    "default_value": GoHighLevelRestClientBase::DefaultAuthArgs,
                 },
                 "oauth2_auth_url": RestConnection::ConnectionScheme.options.oauth2_auth_url
                 + <ConnectionOptionInfo>{
-                    "default_value": GoHighLevelRestClient::DefaultAuthUrl,
+                    "default_value": GoHighLevelRestClientBase::DefaultAuthUrl,
                 },
                 "oauth2_grant_type": RestConnection::ConnectionScheme.options.oauth2_grant_type
                 + <ConnectionOptionInfo>{
-                    "default_value": GoHighLevelRestClient::DefaultGrantType,
+                    "default_value": GoHighLevelRestClientBase::DefaultGrantType,
                 },
                 "oauth2_scopes": RestConnection::ConnectionScheme.options.oauth2_scopes
                 + <ConnectionOptionInfo>{
-                    "default_value": GoHighLevelRestClient::DefaultScopes,
+                    "default_value": GoHighLevelRestClientBase::DefaultScopes,
                 },
                 "oauth2_token_url": RestConnection::ConnectionScheme.options.oauth2_token_url
                 + <ConnectionOptionInfo>{
-                    "default_value": GoHighLevelRestClient::DefaultTokenUrl,
+                    "default_value": GoHighLevelRestClientBase::DefaultTokenUrl,
                 },
             },
             "required_options": "oauth2_client_id,oauth2_client_secret",
@@ -411,7 +416,7 @@ public class GoHighLevelRestConnection inherits RestClient::RestConnection {
 
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option
     */
-    constructor(string name, string description, string url = GoHighLevelRestClient::DefaultUrl,
+    constructor(string name, string description, string url = GoHighLevelRestClientBase::DefaultUrl,
             hash<auto> attributes = {}, hash<auto> options = {})
             : RestConnection(name, description, url, attributes, options) {
     }
@@ -522,7 +527,7 @@ public class GoHighLevelRestConnection inherits RestClient::RestConnection {
             new_opts.location_id = resp.locationId;
             # Update ping_path to include locationId (needed for async polling ping
             # which bypasses GoHighLevelRestClient::doRequest)
-            string ping_path = GoHighLevelRestClient::DefaultPingPath;
+            string ping_path = GoHighLevelRestClientBase::DefaultPingPath;
             new_opts.ping_path = ping_path + "?locationId=" + resp.locationId;
         }
         return new_opts;
@@ -538,9 +543,29 @@ public class GoHighLevelRestConnection inherits RestClient::RestConnection {
         return new GoHighLevelRestClient(getConnectionOptions(rtopts), !connect);
     }
 
+    #! Returns an async-I/O-capable connection object
+    /** @since GoHighLevelRestClient 1.1
+    */
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new GoHighLevelRestClientIo(getConnectionOptions(rtopts));
+    }
+
     #! Returns the ConnectionSchemeInfo hash for this object
     private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
         return ConnectionScheme;
+    }
+}
+
+#! REST client for GoHighLevel REST API using multiplexed HTTP connections
+/** @see GoHighLevelRestClient for more information
+*/
+public class GoHighLevelRestClientIo inherits RestClientIo::RestClientIo, GoHighLevelRestClientBase {
+    #! Creates the object with the given options
+    /** @param opts constructor options
+        @param shared_mgr optional shared connection manager
+    */
+    constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+            : RestClientIo(GoHighLevelRestClientBase::getOptions(opts), shared_mgr) {
     }
 }
 }

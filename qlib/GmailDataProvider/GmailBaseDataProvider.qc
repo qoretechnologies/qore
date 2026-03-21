@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore GmailDataProvider module definition
 
-/** GmailBaseDataProvider.qc Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/** GmailBaseDataProvider.qc Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -61,7 +61,7 @@ public class GmailBaseDataProvider inherits GoogleDataProvider::GoogleApiParentD
     }
 
     #! Creates the object from a REST connection
-    constructor(GoogleRestClient::GoogleRestClient rest) : GoogleApiParentDataProvider(rest,
+    constructor(GoogleRestClient::GoogleRestClientIo rest) : GoogleApiParentDataProvider(rest,
             GoogleDiscoveryGmailApiName, "gmail", {"userId": "me"}, "users", "drafts", "history", "messages",
                 "labels", "settings", "threads") {
     }
@@ -73,7 +73,7 @@ public class GmailBaseDataProvider inherits GoogleDataProvider::GoogleApiParentD
 
     #! Returns the data provider description
     *string getDesc() {
-        return sprintf("Google data %s provider for `%s`", ProviderInfo.name, rest.getSafeURL());
+        return sprintf("Google data %s provider for `%s`", ProviderInfo.name, rest.getSafeUrl());
     }
 
     #! Return data provider summary info

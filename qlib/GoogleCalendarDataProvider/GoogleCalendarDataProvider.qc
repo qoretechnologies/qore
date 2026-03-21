@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore GoogleCalendarDataProvider module definition
 
-/** GoogleCalendarDataProvider.qc Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/** GoogleCalendarDataProvider.qc Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -31,7 +31,7 @@ public class GoogleCalendarDataProvider inherits GoogleDataProvider::GoogleApiPa
     }
 
     #! Creates the object from a REST connection
-    constructor(GoogleRestClient::GoogleRestClient rest, string id)
+    constructor(GoogleRestClient::GoogleRestClientIo rest, string id)
             : GoogleDataProvider::GoogleApiParentDataProvider(rest, GoogleDiscoveryCalendarApiName, "calendars", {
                 "calendarId": id,
             }, NOTHING, "events", "acl") {

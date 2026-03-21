@@ -32,6 +32,7 @@
 
 %requires(reexport) Mime >= 1.3
 %requires(reexport) RestClient >= 1.3.1
+%requires(reexport) RestClientIo
 %requires(reexport) ConnectionProvider >= 1.4
 
 module PdfCoRestClient {
@@ -85,14 +86,8 @@ printf("PDF Info: %N\n", result.body);
 #! the PdfCoRestClient namespace contains all the objects in the PdfCoRestClient module
 public namespace PdfCoRestClient {
 
-#! This class provides the REST client API for communication with PDF.co servers
-/** PDF.co uses a REST API with API key authentication via the \c x-api-key header.
-
-    @par API Information:
-    - Base URL: https://api.pdf.co/v1
-    - Get API key at: https://app.pdf.co/
-*/
-public class PdfCoRestClient inherits RestClient::RestClient {
+#! Common base class for PdfCoRestClient functionality
+public class PdfCoRestClientBase {
     public {
         #! PDF.co API base URL
         const DefaultApiUrl = "https://api.pdf.co/v1";
@@ -120,28 +115,6 @@ public class PdfCoRestClient inherits RestClient::RestClient {
         };
     }
 
-    #! creates the object with the given options
-    /**
-        @par Example:
-        @code{.py}
-PdfCoRestClient pdfco({"apikey": "your-api-key"});
-        @endcode
-
-        @param opts valid options are all the options for the @ref RestClient::RestClient "RestClient" class
-        plus:
-        - \c apikey: the PDF.co API key (required)
-
-        @param do_not_connect if \c False (the default), then a connection will be immediately established to the
-        remote server
-
-        @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data serialization, etc
-        @throw PDFCO-ERROR missing required option 'apikey'
-    */
-    constructor(hash<auto> opts, *softbool do_not_connect)
-            : RestClient(PdfCoRestClient::getOptions(opts), do_not_connect) {
-        setAssumedEncoding("UTF-8");
-    }
-
     #! returns options for @ref PdfCoRestClient::PdfCoRestClient::constructor()
     static hash<auto> getOptions(hash<auto> opts) {
         hash<auto> rv = DefaultOptions + opts;
@@ -162,6 +135,37 @@ PdfCoRestClient pdfco({"apikey": "your-api-key"});
         remove rv.apikey;
 
         return rv;
+    }
+}
+
+#! This class provides the REST client API for communication with PDF.co servers
+/** PDF.co uses a REST API with API key authentication via the \c x-api-key header.
+
+    @par API Information:
+    - Base URL: https://api.pdf.co/v1
+    - Get API key at: https://app.pdf.co/
+*/
+public class PdfCoRestClient inherits RestClient::RestClient, PdfCoRestClientBase {
+    #! creates the object with the given options
+    /**
+        @par Example:
+        @code{.py}
+PdfCoRestClient pdfco({"apikey": "your-api-key"});
+        @endcode
+
+        @param opts valid options are all the options for the @ref RestClient::RestClient "RestClient" class
+        plus:
+        - \c apikey: the PDF.co API key (required)
+
+        @param do_not_connect if \c False (the default), then a connection will be immediately established to the
+        remote server
+
+        @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data serialization, etc
+        @throw PDFCO-ERROR missing required option 'apikey'
+    */
+    constructor(hash<auto> opts, *softbool do_not_connect)
+            : RestClient(PdfCoRestClientBase::getOptions(opts), do_not_connect) {
+        setAssumedEncoding("UTF-8");
     }
 }
 
@@ -195,7 +199,7 @@ public class PdfCoRestConnection inherits RestClient::RestConnection {
             "options": RestConnection::ConnectionScheme.options + {
                 "data": RestConnection::ConnectionScheme.options."data"
                 + <ConnectionOptionInfo>{
-                    "default_value": PdfCoRestClient::DefaultData,
+                    "default_value": PdfCoRestClientBase::DefaultData,
                 },
                 "apikey": <ConnectionOptionInfo>{
                     "display_name": "API Key",
@@ -209,15 +213,15 @@ public class PdfCoRestConnection inherits RestClient::RestConnection {
                 },
                 "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
                 + <ConnectionOptionInfo>{
-                    "default_value": PdfCoRestClient::DefaultPingHeaders,
+                    "default_value": PdfCoRestClientBase::DefaultPingHeaders,
                 },
                 "ping_method": RestConnection::ConnectionScheme.options."ping_method"
                 + <ConnectionOptionInfo>{
-                    "default_value": PdfCoRestClient::DefaultPingMethod,
+                    "default_value": PdfCoRestClientBase::DefaultPingMethod,
                 },
                 "ping_path": RestConnection::ConnectionScheme.options."ping_path"
                 + <ConnectionOptionInfo>{
-                    "default_value": PdfCoRestClient::DefaultPingPath,
+                    "default_value": PdfCoRestClientBase::DefaultPingPath,
                 },
             },
             "required_options": "apikey",
@@ -328,9 +332,29 @@ public class PdfCoRestConnection inherits RestClient::RestConnection {
         return new PdfCoRestClient(getConnectionOptions(rtopts), !connect);
     }
 
+    #! Returns an async-I/O-capable connection object
+    /** @since PdfCoRestClient 1.1
+    */
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new PdfCoRestClientIo(getConnectionOptions(rtopts));
+    }
+
     #! Returns the ConnectionSchemeInfo hash for this object
     private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
         return ConnectionScheme;
+    }
+}
+
+#! REST client for PDF.co REST API using multiplexed HTTP connections
+/** @see PdfCoRestClient for more information
+*/
+public class PdfCoRestClientIo inherits RestClientIo::RestClientIo, PdfCoRestClientBase {
+    #! Creates the object with the given options
+    /** @param opts constructor options
+        @param shared_mgr optional shared connection manager
+    */
+    constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+            : RestClientIo(PdfCoRestClientBase::getOptions(opts), shared_mgr) {
     }
 }
 }

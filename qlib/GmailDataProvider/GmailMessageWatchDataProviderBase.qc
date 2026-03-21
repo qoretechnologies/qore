@@ -106,12 +106,18 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
         #! Match query
         string q;
 
+        #! Current epoch for polling (tracks latest message timestamp)
+        int poll_epoch;
+
+        #! Message IDs already processed at current epoch (deduplication)
+        hash<string, bool> last_msg;
+
         #! Setup info for polling (initialized on first poll)
         hash<auto> setup_info;
     }
 
     #! Creates the object from a REST connection
-    constructor(GoogleRestClient::GoogleRestClient rest,
+    constructor(GoogleRestClient::GoogleRestClientIo rest,
             hash<string, hash<DataProviderOptionInfo>> constructor_options, *hash<auto> options)
             : GoogleDataProviderBase(rest),
               AbstractWatchDataProviderBase(GmailMessageWatchDataProviderBase::getPollInterval(
@@ -137,6 +143,7 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
         }
         if (copts.start_date) {
             start_date = copts.start_date;
+            poll_epoch = mktime(start_date);
         }
 
         q = copts.q;
@@ -149,16 +156,7 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
 
     #! Setup for a poll operation
     private hash<auto> setup() {
-        string uri = "gmail/v1/users/me/messages?q=" + q;
-
-        int epoch;
-        if (start_date) {
-            epoch = mktime(start_date);
-        }
-
         return {
-            "uri": uri,
-            "epoch": epoch,
             "msgtype": GmailMessageWatchDataProvider::getMessageEventType(),
         };
     }
@@ -174,17 +172,17 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
     #! Perform one poll
     private *hash<auto> pollOnceIntern(reference<hash<auto>> setup) {
         # check for matching mail
-        hash<auto> info;
         try {
             hash<auto> res;
-            string this_uri = setup.uri;
-            if (setup.epoch) {
-                this_uri += sprintf(" after:%d", setup.epoch);
+            string gmail_query = q;
+            if (poll_epoch) {
+                gmail_query += sprintf(" after:%d", poll_epoch);
             }
+            string this_uri = "gmail/v1/users/me/messages?q=" + encode_url(gmail_query);
             bool epoch_updated;
-            LoggerWrapper::debug("Gmail polling using URI: %y epoch: %y poll_interval: %ds", this_uri, setup.epoch,
+            LoggerWrapper::debug("Gmail polling using URI: %y epoch: %y poll_interval: %ds", this_uri, poll_epoch,
                 poll_secs);
-            res = rest.get(this_uri, NOTHING, \info).body;
+            res = rest.restGet(this_uri).body;
             int match;
             foreach hash<auto> minfo in (res.messages) {
                 # check for shutdown between REST calls
@@ -192,12 +190,12 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
                     break;
                 }
                 # skip messages already processed
-                if (setup.last_msg{minfo.id}) {
+                if (last_msg{minfo.id}) {
                     continue;
                 }
                 # retrieve each email
                 string msguri = sprintf("gmail/v1/users/me/messages/%s", minfo.id);
-                hash<auto> msg = rest.get(msguri, NOTHING, \info).body;
+                hash<auto> msg = rest.restGet(msguri).body;
 
                 # try to decode body as base64 if there is a Content-Transfer-Encoding header
                 # do not allow message bodies to be re-encoded as base64
@@ -212,25 +210,28 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
 
                 # internalDate is given as a ms offset from the epoch
                 int msg_epoch = msg.internalDate / 1000;
-                if (msg_epoch > setup.epoch) {
-                    # remove last msg hash
-                    setup.last_msg = {
-                        minfo.id: True,
-                    };
-                    setup.epoch = msg_epoch;
+                if (msg_epoch > poll_epoch) {
+                    # reset deduplication set for new epoch
+                    last_msg = {minfo.id: True};
+                    poll_epoch = msg_epoch;
                     epoch_updated = True;
-                } else if (msg_epoch == setup.epoch) {
-                    setup.last_msg{minfo.id} = True;
+                } else if (msg_epoch == poll_epoch) {
+                    last_msg{minfo.id} = True;
                 }
                 if (retrieve_attachments) {
                     msg.attachments = ();
                     foreach hash<auto> part in (msg.payload.parts) {
                         if (*string aid = part.body.attachmentId) {
-                            # retrieve attachment
+                            # retrieve attachment; skip on error to preserve the message event
                             string atturi = sprintf("gmail/v1/users/me/messages/%s/attachments/%s", minfo.id,
                                 aid);
-                            hash<auto> att = rest.get(atturi, NOTHING, \info).body;
-                            msg.attachments += getAttachment(att, part.headers);
+                            try {
+                                hash<auto> att = rest.restGet(atturi).body;
+                                msg.attachments += getAttachment(att, part.headers);
+                            } catch (hash<ExceptionInfo> att_ex) {
+                                LoggerWrapper::warn("Gmail: failed to retrieve attachment %y for message %y: %s",
+                                    aid, minfo.id, get_exception_string(att_ex));
+                            }
                         }
                     }
                     LoggerWrapper::info("Gmail: matched message %y attachments: %d", minfo.id,
@@ -245,12 +246,12 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
                 ++match;
                 messageReceived(msg);
                 if (delete_messages) {
-                    string deluri = sprintf("/gmail/v1/users/me/messages/%s", minfo.id);
-                    rest.del(deluri, NOTHING, \info);
+                    string deluri = sprintf("gmail/v1/users/me/messages/%s", minfo.id);
+                    rest.restDel(deluri);
                     LoggerWrapper::info("Gmail: deleted matched message %y", minfo.id);
                 }
                 if (epoch_updated) {
-                    LoggerWrapper::debug("Gmail using new epoch: %y", setup.epoch);
+                    LoggerWrapper::debug("Gmail using new epoch: %y", poll_epoch);
                 }
             }
             if (!match) {
@@ -300,6 +301,10 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
             val =~ s/^[^,]+,\s*//;
             val =~ s/ +/ /g;
             list<string> l = val.split(" ");
+            # Expect at least: day mon year time tz (5 tokens)
+            if (l.size() < 5) {
+                return;
+            }
             if (*int m = MonthMap{l[1].lwr()}) {
                 return date(sprintf("%04d-%02d-%02dT%s %s", l[2], m, l[0], l[3], l[4]));
             }

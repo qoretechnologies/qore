@@ -30,6 +30,7 @@
 
 %requires(reexport) Mime >= 1.3
 %requires(reexport) RestClient >= 1.3.1
+%requires(reexport) RestClientIo
 %requires(reexport) ConnectionProvider >= 1.4
 
 module ApolloRestClient {
@@ -87,18 +88,8 @@ printf("Users: %y\n", result.body.users);
 #! the ApolloRestClient namespace contains all the objects in the ApolloRestClient module
 public namespace ApolloRestClient {
 
-#! This class provides the REST client API for communication with Apollo servers
-/** Apollo uses a REST API at https://api.apollo.io/api/v1 with OAuth2 or API key authentication.
-
-    @par Authentication:
-    - OAuth2 with Bearer tokens (authorization code grant) for partner integrations
-    - API key via x-api-key header for direct API access
-    - OAuth2 access tokens expire after 30 days and are refreshed automatically
-
-    @par API Structure:
-    All endpoints are under /api/v1 (included in the base URL)
-*/
-public class ApolloRestClient inherits RestClient::RestClient {
+#! Common base class for ApolloRestClient functionality
+public class ApolloRestClientBase {
     public {
         #! Default Apollo API URL
         const DefaultUrl = "https://api.apollo.io/api/v1";
@@ -187,6 +178,35 @@ public class ApolloRestClient inherits RestClient::RestClient {
         };
     }
 
+    #! returns options for @ref ApolloRestClient::ApolloRestClient::constructor()
+    static hash<auto> getOptions(hash<auto> opts) {
+        hash<auto> rv = DefaultOptions + opts;
+
+        if (opts.oauth2_client_id) {
+            # OAuth2 mode
+            rv += OAuth2Options;
+        } else if (opts.token) {
+            # Bearer token mode
+            rv.headers.Authorization = "Bearer " + opts.token;
+            remove rv.token;
+        }
+
+        return rv;
+    }
+}
+
+#! This class provides the REST client API for communication with Apollo servers
+/** Apollo uses a REST API at https://api.apollo.io/api/v1 with OAuth2 or API key authentication.
+
+    @par Authentication:
+    - OAuth2 with Bearer tokens (authorization code grant) for partner integrations
+    - API key via x-api-key header for direct API access
+    - OAuth2 access tokens expire after 30 days and are refreshed automatically
+
+    @par API Structure:
+    All endpoints are under /api/v1 (included in the base URL)
+*/
+public class ApolloRestClient inherits RestClient::RestClient, ApolloRestClientBase {
     #! creates the object with the given options
     /**
         @par Example:
@@ -206,24 +226,8 @@ ApolloRestClient apollo({
         @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data serialization, etc
     */
     constructor(hash<auto> opts, *softbool do_not_connect)
-            : RestClient(ApolloRestClient::getOptions(opts), do_not_connect) {
+            : RestClient(ApolloRestClientBase::getOptions(opts), do_not_connect) {
         setAssumedEncoding("UTF-8");
-    }
-
-    #! returns options for @ref ApolloRestClient::ApolloRestClient::constructor()
-    static hash<auto> getOptions(hash<auto> opts) {
-        hash<auto> rv = DefaultOptions + opts;
-
-        if (opts.oauth2_client_id) {
-            # OAuth2 mode
-            rv += OAuth2Options;
-        } else if (opts.token) {
-            # Bearer token mode
-            rv.headers.Authorization = "Bearer " + opts.token;
-            remove rv.token;
-        }
-
-        return rv;
     }
 }
 
@@ -254,39 +258,39 @@ public class ApolloRestConnection inherits RestClient::RestConnection {
             "options": RestConnection::ConnectionScheme.options + {
                 "data": RestConnection::ConnectionScheme.options."data"
                 + <ConnectionOptionInfo>{
-                    "default_value": ApolloRestClient::DefaultData,
+                    "default_value": ApolloRestClientBase::DefaultData,
                 },
                 "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
                 + <ConnectionOptionInfo>{
-                    "default_value": ApolloRestClient::DefaultPingHeaders,
+                    "default_value": ApolloRestClientBase::DefaultPingHeaders,
                 },
                 "ping_method": RestConnection::ConnectionScheme.options."ping_method"
                 + <ConnectionOptionInfo>{
-                    "default_value": ApolloRestClient::DefaultPingMethod,
+                    "default_value": ApolloRestClientBase::DefaultPingMethod,
                 },
                 "ping_path": RestConnection::ConnectionScheme.options."ping_path"
                 + <ConnectionOptionInfo>{
-                    "default_value": ApolloRestClient::DefaultPingPath,
+                    "default_value": ApolloRestClientBase::DefaultPingPath,
                 },
                 "oauth2_auth_args": RestConnection::ConnectionScheme.options.oauth2_auth_args
                 + <ConnectionOptionInfo>{
-                    "default_value": ApolloRestClient::DefaultAuthArgs,
+                    "default_value": ApolloRestClientBase::DefaultAuthArgs,
                 },
                 "oauth2_scopes": RestConnection::ConnectionScheme.options.oauth2_scopes
                 + <ConnectionOptionInfo>{
-                    "default_value": ApolloRestClient::DefaultScopes,
+                    "default_value": ApolloRestClientBase::DefaultScopes,
                 },
                 "oauth2_auth_url": RestConnection::ConnectionScheme.options.oauth2_auth_url
                 + <ConnectionOptionInfo>{
-                    "default_value": ApolloRestClient::DefaultAuthUrl,
+                    "default_value": ApolloRestClientBase::DefaultAuthUrl,
                 },
                 "oauth2_grant_type": RestConnection::ConnectionScheme.options.oauth2_grant_type
                 + <ConnectionOptionInfo>{
-                    "default_value": ApolloRestClient::DefaultGrantType,
+                    "default_value": ApolloRestClientBase::DefaultGrantType,
                 },
                 "oauth2_token_url": RestConnection::ConnectionScheme.options.oauth2_token_url
                 + <ConnectionOptionInfo>{
-                    "default_value": ApolloRestClient::DefaultTokenUrl,
+                    "default_value": ApolloRestClientBase::DefaultTokenUrl,
                 },
             },
         };
@@ -303,7 +307,7 @@ public class ApolloRestConnection inherits RestClient::RestConnection {
 
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option
     */
-    constructor(string name, string description, string url = ApolloRestClient::DefaultUrl,
+    constructor(string name, string description, string url = ApolloRestClientBase::DefaultUrl,
             hash<auto> attributes = {}, hash<auto> options = {})
             : RestConnection(name, description, url, attributes, options) {
     }
@@ -338,10 +342,10 @@ public class ApolloRestConnection inherits RestClient::RestConnection {
     *hash<auto> getConnectionOptions(*hash<auto> rtopts) {
         hash<auto> rv = RestConnection::getConnectionOptions(rtopts);
         # Always set OAuth2 URLs
-        rv.oauth2_auth_url = ApolloRestClient::DefaultAuthUrl;
-        rv.oauth2_token_url = ApolloRestClient::DefaultTokenUrl;
+        rv.oauth2_auth_url = ApolloRestClientBase::DefaultAuthUrl;
+        rv.oauth2_token_url = ApolloRestClientBase::DefaultTokenUrl;
         if (!rv.oauth2_grant_type) {
-            rv.oauth2_grant_type = ApolloRestClient::DefaultGrantType;
+            rv.oauth2_grant_type = ApolloRestClientBase::DefaultGrantType;
         }
         return rv;
     }
@@ -402,9 +406,29 @@ public class ApolloRestConnection inherits RestClient::RestConnection {
         return new ApolloRestClient(getConnectionOptions(rtopts), !connect);
     }
 
+    #! Returns an async-I/O-capable connection object
+    /** @since ApolloRestClient 1.1
+    */
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new ApolloRestClientIo(getConnectionOptions(rtopts));
+    }
+
     #! Returns the ConnectionSchemeInfo hash for this object
     private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
         return ConnectionScheme;
+    }
+}
+
+#! REST client for Apollo REST API using multiplexed HTTP connections
+/** @see ApolloRestClient for more information
+*/
+public class ApolloRestClientIo inherits RestClientIo::RestClientIo, ApolloRestClientBase {
+    #! Creates the object with the given options
+    /** @param opts constructor options
+        @param shared_mgr optional shared connection manager
+    */
+    constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+            : RestClientIo(ApolloRestClientBase::getOptions(opts), shared_mgr) {
     }
 }
 }

@@ -36,6 +36,7 @@
 
 %requires(reexport) Mime >= 1.3
 %requires(reexport) RestClient >= 1.3.1
+%requires(reexport) RestClientIo
 %requires(reexport) ConnectionProvider >= 1.4
 
 module UnleashedRestClient {
@@ -92,29 +93,8 @@ printf("Customers: %N\n", result.body);
 #! the UnleashedRestClient namespace contains all the objects in the UnleashedRestClient module
 public namespace UnleashedRestClient {
 
-#! This class provides the REST client API for communication with Unleashed servers
-/** Unleashed uses a REST API with HMAC-SHA256 signature authentication:
-    - api-auth-id: Your API ID
-    - api-auth-signature: HMAC-SHA256 signature of the query string (base64 encoded)
-
-    @par API Information:
-    - Base URL: https://api.unleashedsoftware.com
-    - JSON format supported
-    - Pagination: pageSize query parameter
-
-    @par Authentication:
-    Both API ID and API Key are required for all API requests.
-    The signature is computed as:
-    1. Take the query string (without the leading ? and without the endpoint path)
-    2. Compute HMAC-SHA256 using the API Key as the secret
-    3. Base64 encode the result
-
-    These credentials can be obtained from the Unleashed application:
-    1. Log in to Unleashed as the Account Owner
-    2. Go to Settings > Integration > API Access
-    3. Copy your API ID and API Key
-*/
-public class UnleashedRestClient inherits RestClient::RestClient {
+#! Common base class for UnleashedRestClient functionality
+public class UnleashedRestClientBase {
     public {
         #! Unleashed API base URL
         const DefaultApiUrl = "https://api.unleashedsoftware.com";
@@ -155,6 +135,49 @@ public class UnleashedRestClient inherits RestClient::RestClient {
         };
     }
 
+    #! returns options for @ref UnleashedRestClient::UnleashedRestClient::constructor()
+    static hash<auto> getOptions(hash<auto> opts) {
+        hash<auto> rv = DefaultOptions + opts;
+
+        # Validate required credentials
+        if (!opts.api_id) {
+            throw "UNLEASHED-AUTH-ERROR", "missing required 'api_id' option";
+        }
+        if (!opts.apikey) {
+            throw "UNLEASHED-AUTH-ERROR", "missing required 'apikey' option";
+        }
+
+        # Remove credentials from options (they're stored separately for signature computation)
+        remove rv.api_id;
+        remove rv.apikey;
+
+        return rv;
+    }
+}
+
+#! This class provides the REST client API for communication with Unleashed servers
+/** Unleashed uses a REST API with HMAC-SHA256 signature authentication:
+    - api-auth-id: Your API ID
+    - api-auth-signature: HMAC-SHA256 signature of the query string (base64 encoded)
+
+    @par API Information:
+    - Base URL: https://api.unleashedsoftware.com
+    - JSON format supported
+    - Pagination: pageSize query parameter
+
+    @par Authentication:
+    Both API ID and API Key are required for all API requests.
+    The signature is computed as:
+    1. Take the query string (without the leading ? and without the endpoint path)
+    2. Compute HMAC-SHA256 using the API Key as the secret
+    3. Base64 encode the result
+
+    These credentials can be obtained from the Unleashed application:
+    1. Log in to Unleashed as the Account Owner
+    2. Go to Settings > Integration > API Access
+    3. Copy your API ID and API Key
+*/
+public class UnleashedRestClient inherits RestClient::RestClient, UnleashedRestClientBase {
     private {
         #! API ID for authentication
         string api_id;
@@ -185,30 +208,11 @@ UnleashedRestClient unleashed({
         @throw UNLEASHED-AUTH-ERROR missing required authentication credentials
     */
     constructor(hash<auto> opts, *softbool do_not_connect)
-            : RestClient(UnleashedRestClient::getOptions(opts), do_not_connect) {
+            : RestClient(UnleashedRestClientBase::getOptions(opts), do_not_connect) {
         # Store credentials for signature computation
         api_id = opts.api_id;
         apikey = opts.apikey;
         setAssumedEncoding("UTF-8");
-    }
-
-    #! returns options for @ref UnleashedRestClient::UnleashedRestClient::constructor()
-    static hash<auto> getOptions(hash<auto> opts) {
-        hash<auto> rv = DefaultOptions + opts;
-
-        # Validate required credentials
-        if (!opts.api_id) {
-            throw "UNLEASHED-AUTH-ERROR", "missing required 'api_id' option";
-        }
-        if (!opts.apikey) {
-            throw "UNLEASHED-AUTH-ERROR", "missing required 'apikey' option";
-        }
-
-        # Remove credentials from options (they're stored separately for signature computation)
-        remove rv.api_id;
-        remove rv.apikey;
-
-        return rv;
     }
 
     #! Computes the HMAC-SHA256 signature for the given query string
@@ -295,7 +299,7 @@ public class UnleashedRestConnection inherits RestClient::RestConnection {
             "options": RestConnection::ConnectionScheme.options + {
                 "data": RestConnection::ConnectionScheme.options."data"
                 + <ConnectionOptionInfo>{
-                    "default_value": UnleashedRestClient::DefaultData,
+                    "default_value": UnleashedRestClientBase::DefaultData,
                 },
                 "api_id": <ConnectionOptionInfo>{
                     "display_name": "API ID",
@@ -326,15 +330,15 @@ public class UnleashedRestConnection inherits RestClient::RestConnection {
                 },
                 "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
                 + <ConnectionOptionInfo>{
-                    "default_value": UnleashedRestClient::DefaultPingHeaders,
+                    "default_value": UnleashedRestClientBase::DefaultPingHeaders,
                 },
                 "ping_method": RestConnection::ConnectionScheme.options."ping_method"
                 + <ConnectionOptionInfo>{
-                    "default_value": UnleashedRestClient::DefaultPingMethod,
+                    "default_value": UnleashedRestClientBase::DefaultPingMethod,
                 },
                 "ping_path": RestConnection::ConnectionScheme.options."ping_path"
                 + <ConnectionOptionInfo>{
-                    "default_value": UnleashedRestClient::DefaultPingPath,
+                    "default_value": UnleashedRestClientBase::DefaultPingPath,
                 },
             },
             "messages": (
@@ -448,12 +452,32 @@ public class UnleashedRestConnection inherits RestClient::RestConnection {
         @return a @ref UnleashedRestClient object
     */
     private UnleashedRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
-        return new UnleashedRestClient(getConnectionOptions(), !connect);
+        return new UnleashedRestClient(getConnectionOptions(rtopts), !connect);
+    }
+
+    #! Returns an async-I/O-capable connection object
+    /** @since UnleashedRestClient 1.1
+    */
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new UnleashedRestClientIo(getConnectionOptions(rtopts));
     }
 
     #! Returns the ConnectionSchemeInfo hash for this object
     private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
         return ConnectionScheme;
+    }
+}
+
+#! REST client for Unleashed REST API using multiplexed HTTP connections
+/** @see UnleashedRestClient for more information
+*/
+public class UnleashedRestClientIo inherits RestClientIo::RestClientIo, UnleashedRestClientBase {
+    #! Creates the object with the given options
+    /** @param opts constructor options
+        @param shared_mgr optional shared connection manager
+    */
+    constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+            : RestClientIo(UnleashedRestClientBase::getOptions(opts), shared_mgr) {
     }
 }
 }

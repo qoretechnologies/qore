@@ -411,6 +411,338 @@ module DataProviderML {
                 }
             ),
         });
+
+        # register standard-scaler action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/standard-scaler",
+            "action": "standard-scaler",
+            "display_name": "Put All Fields on the Same Scale",
+            "short_desc": "Makes fields comparable by adjusting each to a common scale",
+            "desc": "Makes fields with different ranges directly comparable. For example, if "
+                "\"age\" ranges from 18–65 and \"income\" ranges from 20,000–200,000, comparing "
+                "them directly would let income dominate. This processor adjusts each field so "
+                "they all center around `0` with similar spread.\n\n"
+                "**When to use**: before clustering (Find Natural Groups), anomaly detection "
+                "(Detect Unusual Data Points), or dimensionality reduction (Reduce Data "
+                "Complexity) — any time your fields have different units or ranges.\n\n"
+                "**Example**: standardizing `age`, `income`, and `credit_score` before "
+                "customer segmentation ensures each factor contributes equally.\n\n"
+                "Records accumulate in a window. The first window learns the typical values "
+                "for each field; subsequent windows apply the same adjustment. Each record "
+                "receives:\n"
+                "- `scaled_values` — the adjusted field values (centered around `0`)\n"
+                "- `record_values` — the original values for comparison",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_AGGREGATE,
+            "cls": "DataProviderML::QoreStandardScalerProcessor",
+            "groups": ("ML Analytics",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreStandardScalerProcessor::ConstructorOptions{"fields", "window_size"}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register min-max-scaler action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/min-max-scaler",
+            "action": "min-max-scaler",
+            "display_name": "Normalize Values to a Range",
+            "short_desc": "Converts field values to a fixed range like 0 to 1",
+            "desc": "Converts field values to fit within a specific range (default `0.0` to "
+                "`1.0`). For example, temperatures ranging from -20°C to 45°C become `0.0` "
+                "to `1.0`, making them easy to compare with humidity (0%%–100%%) or wind speed "
+                "(0–150 km/h).\n\n"
+                "**When to use**: preparing data for scoring models, heat maps, or progress "
+                "bars where you need values between fixed bounds. Also useful before feeding "
+                "data into pre-trained ONNX models that expect normalized input.\n\n"
+                "**Example**: normalizing `price`, `quantity`, and `weight` to `0`–`1` before "
+                "displaying a product similarity score.\n\n"
+                "Records accumulate in a window. The first window learns the minimum and "
+                "maximum of each field; subsequent windows apply the same normalization. Each "
+                "record receives:\n"
+                "- `scaled_values` — field values converted to the target range\n"
+                "- `record_values` — the original values for comparison",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_AGGREGATE,
+            "cls": "DataProviderML::QoreMinMaxScalerProcessor",
+            "groups": ("ML Analytics",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreMinMaxScalerProcessor::ConstructorOptions{"fields", "window_size"}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreMinMaxScalerProcessor::ConstructorOptions{"feature_min", "feature_max"}, {
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register imputer action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/imputer",
+            "action": "imputer",
+            "display_name": "Fill In Missing Data",
+            "short_desc": "Automatically fills gaps in your data using smart defaults",
+            "desc": "Automatically fills in missing values in your data so downstream analysis "
+                "and ML steps can process complete records. For example, if 5%% of your sensor "
+                "readings are missing due to connectivity issues, this processor fills them in "
+                "with reasonable values based on the available data.\n\n"
+                "**Strategies**:\n"
+                "- **Average**: fill with the typical value (best for normally distributed data "
+                "like temperatures)\n"
+                "- **Middle value**: fill with the median (better when outliers are present, "
+                "e.g., transaction amounts)\n"
+                "- **Most common**: fill with the most frequently seen value (best for "
+                "categorical-like data such as status codes)\n"
+                "- **Fixed value**: fill with a specific number you choose (e.g., `0` or `-1` "
+                "as a sentinel)\n\n"
+                "Records accumulate in a window. The first window learns the fill values from "
+                "non-missing data; subsequent windows apply the same fill values. Each record "
+                "receives:\n"
+                "- `imputed_values` — the complete record with gaps filled in\n"
+                "- `missing_count` — how many fields were missing in this record\n"
+                "- `record_values` — the original values (with gaps) for comparison",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_AGGREGATE,
+            "cls": "DataProviderML::QoreImputerProcessor",
+            "groups": ("ML Analytics",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreImputerProcessor::ConstructorOptions{"fields", "window_size"}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreImputerProcessor::ConstructorOptions{"strategy", "constant_value"}, {
+                    "preselected": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register classification-metrics action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/classification-metrics",
+            "action": "classification-metrics",
+            "display_name": "Score Your Category Predictions",
+            "short_desc": "Checks how often your model picks the right category",
+            "desc": "Measures how well your model assigns items to the right category by "
+                "comparing what it predicted against what the correct answer actually was. "
+                "For example, if your spam filter labels 1,000 emails as \"spam\" or "
+                "\"not spam\", this tells you how often it got it right.\n\n"
+                "**What you get**:\n"
+                "- `accuracy` — what percentage of predictions were correct (e.g., `0.92` "
+                "means 92%% right)\n"
+                "- `per_class` — for each category, how reliable the model is: does it "
+                "catch most real cases (recall) without too many false alarms (precision)?\n"
+                "- `macro_f1` — overall quality score that treats every category equally, "
+                "even rare ones (ranges `0.0` to `1.0`; higher is better)\n"
+                "- `weighted_f1` — overall quality score weighted by how common each "
+                "category is\n\n"
+                "Records accumulate in a batch; when full, a single scorecard is emitted.",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_AGGREGATE,
+            "cls": "DataProviderML::QoreClassificationMetricsProcessor",
+            "groups": ("ML Analytics",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreClassificationMetricsProcessor::ConstructorOptions{
+                    "predicted_field", "true_field", "window_size",
+                }, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register regression-metrics action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/regression-metrics",
+            "action": "regression-metrics",
+            "display_name": "Score Your Number Predictions",
+            "short_desc": "Checks how close your predicted numbers are to the actual values",
+            "desc": "Measures how close your model's predicted numbers are to the real values. "
+                "For example, if your model predicts house prices, this tells you how far off "
+                "the predictions are on average and how much of the price variation the model "
+                "captures.\n\n"
+                "**What you get**:\n"
+                "- `mae` — average prediction error in the same units as your data (e.g., "
+                "\"off by $12,000 on average\")\n"
+                "- `rmse` — similar to MAE but penalizes large errors more heavily\n"
+                "- `r2` — how much of the variation your model explains (`1.0` = perfect, "
+                "`0.0` = no better than always guessing the average)\n"
+                "- `mse` — average squared error (used internally by many algorithms)\n"
+                "- `explained_variance` — similar to R² but also detects systematic bias\n\n"
+                "Records accumulate in a batch; when full, a single scorecard is emitted.",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_AGGREGATE,
+            "cls": "DataProviderML::QoreRegressionMetricsProcessor",
+            "groups": ("ML Analytics",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreRegressionMetricsProcessor::ConstructorOptions{
+                    "predicted_field", "true_field", "window_size",
+                }, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register clustering-metrics action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/clustering-metrics",
+            "action": "clustering-metrics",
+            "display_name": "Score Your Data Groupings",
+            "short_desc": "Checks whether your groups are distinct and meaningful",
+            "desc": "Measures whether the groups in your data are clearly separated or overlap "
+                "too much. For example, after segmenting customers into \"budget\", \"regular\", "
+                "and \"premium\" groups, this tells you whether the groups are genuinely distinct "
+                "or whether many customers sit on the boundary between groups.\n\n"
+                "**What you get**:\n"
+                "- `silhouette_score` — ranges from `-1.0` (groups overlap badly) to `1.0` "
+                "(perfectly separated); above `0.5` is generally good\n"
+                "- `davies_bouldin_score` — measures how much groups bleed into each other; "
+                "lower is better (`0.0` = no overlap at all)\n"
+                "- `calinski_harabasz_score` — measures how tight each group is compared to "
+                "how far apart the groups are; higher is better\n\n"
+                "Records accumulate in a batch; when full, a single scorecard is emitted.",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_AGGREGATE,
+            "cls": "DataProviderML::QoreClusteringMetricsProcessor",
+            "groups": ("ML Analytics",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreClusteringMetricsProcessor::ConstructorOptions{
+                    "fields", "cluster_field", "window_size",
+                }, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register logistic-regression action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/logistic-regression",
+            "action": "logistic-regression",
+            "display_name": "Categorize Records",
+            "short_desc": "Predicts which category each record belongs to based on its features",
+            "desc": "Classifies records into categories — such as spam vs. not spam, risk levels, "
+                "or product types — by learning from labeled examples. For example, given customer "
+                "attributes like age, income, and spending score, the model learns which segment "
+                "each customer belongs to and predicts segments for new records.\n\n"
+                "Records accumulate in a window; when full, the model learns and produces "
+                "predictions. Each record receives:\n"
+                "- `predicted_class` — the category label\n"
+                "- `max_probability` — confidence in the prediction (e.g., `0.92` means 92%% "
+                "sure)\n"
+                "- `probabilities` — breakdown across all categories",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_AGGREGATE,
+            "cls": "DataProviderML::QoreLogisticRegressionProcessor",
+            "groups": ("ML Analytics",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreLogisticRegressionProcessor::ConstructorOptions{
+                    "fields", "target_field", "window_size",
+                }, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreLogisticRegressionProcessor::ConstructorOptions{
+                    "learning_rate", "max_iterations", "regularization",
+                    "penalty", "fit_intercept",
+                }, {
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register knn-classification action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/knn-classification",
+            "action": "knn-classification",
+            "display_name": "Classify by Similarity",
+            "short_desc": "Predicts each record's category based on its nearest neighbors",
+            "desc": "Classifies records by finding the most similar records in the training "
+                "data and using majority voting. For example, to classify a flower species, "
+                "the model finds the 5 most similar flowers in the training set and picks "
+                "the most common species among them.\n\n"
+                "Records accumulate in a window; when full, the model learns and produces "
+                "predictions. Each record receives:\n"
+                "- `predicted_class` — the category label from majority vote\n"
+                "- `confidence` — proportion of neighbors that agree (e.g., `0.80` means "
+                "4 of 5 neighbors voted the same way)",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_AGGREGATE,
+            "cls": "DataProviderML::QoreKNNClassificationProcessor",
+            "groups": ("ML Analytics",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreKNNClassificationProcessor::ConstructorOptions{
+                    "fields", "target_field", "window_size", "k",
+                }, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreKNNClassificationProcessor::ConstructorOptions{
+                    "metric", "weight_func",
+                }, {
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register knn-regression action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/knn-regression",
+            "action": "knn-regression",
+            "display_name": "Predict Numbers by Similarity",
+            "short_desc": "Predicts a numeric value based on similar records",
+            "desc": "Predicts a numeric value for each record by averaging the target values "
+                "of the most similar records in the training data. For example, to estimate "
+                "a house price, the model finds the 5 most similar houses and averages their "
+                "prices.\n\n"
+                "Records accumulate in a window; when full, the model learns and produces "
+                "predictions. Each record receives:\n"
+                "- `prediction` — the estimated numeric value (weighted average of neighbors)",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_AGGREGATE,
+            "cls": "DataProviderML::QoreKNNRegressionProcessor",
+            "groups": ("ML Analytics",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreKNNRegressionProcessor::ConstructorOptions{
+                    "fields", "target_field", "window_size", "k",
+                }, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreKNNRegressionProcessor::ConstructorOptions{
+                    "metric", "weight_func",
+                }, {
+                    "loc": "constructor",
+                }
+            ),
+        });
     };
 }
 
@@ -533,8 +865,6 @@ public namespace DataProviderML {
     }
 
     #! Isolation Forest anomaly event hashdecl
-    /** @since %DataProviderML 1.0
-    */
     public hashdecl IsolationForestAnomalyEventInfo {
         #! The type of analysis that produced this result (always "isolation-forest")
         string event_type = "isolation-forest";
@@ -550,8 +880,6 @@ public namespace DataProviderML {
     }
 
     #! DBSCAN clustering event hashdecl
-    /** @since %DataProviderML 1.0
-    */
     public hashdecl DBSCANClusteringEventInfo {
         #! The type of analysis that produced this result (always "dbscan-clustering")
         string event_type = "dbscan-clustering";
@@ -568,8 +896,6 @@ public namespace DataProviderML {
     }
 
     #! KMeans clustering event hashdecl
-    /** @since %DataProviderML 1.0
-    */
     public hashdecl KMeansClusteringEventInfo {
         #! The type of analysis that produced this result (always "kmeans-clustering")
         string event_type = "kmeans-clustering";
@@ -586,8 +912,6 @@ public namespace DataProviderML {
     }
 
     #! PCA event hashdecl
-    /** @since %DataProviderML 1.0
-    */
     public hashdecl PCAEventInfo {
         #! The type of analysis that produced this result (always "pca")
         string event_type = "pca";
@@ -603,8 +927,6 @@ public namespace DataProviderML {
     }
 
     #! Holt-Winters forecast event hashdecl
-    /** @since %DataProviderML 1.0
-    */
     public hashdecl HoltWintersForecastEventInfo inherits DataProvider::AnalyticsEventInfo {
         #! Predicted future value(s); one value per forecast step requested
         list<float> forecast;
@@ -623,8 +945,6 @@ public namespace DataProviderML {
     }
 
     #! Linear regression event hashdecl
-    /** @since %DataProviderML 1.0
-    */
     public hashdecl LinearRegressionEventInfo {
         #! The type of analysis that produced this result (always "linear-regression")
         string event_type = "linear-regression";
@@ -651,8 +971,6 @@ public namespace DataProviderML {
     }
 
     #! LOF anomaly event hashdecl
-    /** @since %DataProviderML 1.0
-    */
     public hashdecl LOFAnomalyEventInfo {
         #! The type of analysis that produced this result (always "lof")
         string event_type = "lof";
@@ -670,8 +988,6 @@ public namespace DataProviderML {
     }
 
     #! GMM clustering event hashdecl
-    /** @since %DataProviderML 1.0
-    */
     public hashdecl GMMClusteringEventInfo {
         #! The type of analysis that produced this result (always "gmm")
         string event_type = "gmm";
@@ -694,8 +1010,6 @@ public namespace DataProviderML {
     }
 
     #! ONNX model inference event hashdecl
-    /** @since %DataProviderML 1.0
-    */
     public hashdecl OnnxInferenceEventInfo {
         #! The type of analysis that produced this result (always "onnx-model")
         string event_type = "onnx-model";
@@ -703,8 +1017,6 @@ public namespace DataProviderML {
         string model_path;
         #! The hardware backend used to run the model (e.g., "CPUExecutionProvider" for CPU
         #! or "CUDAExecutionProvider" for GPU acceleration)
-        /** @since %DataProviderML 1.1
-        */
         string execution_provider;
         #! The original input values for the fields that were fed into the model
         hash<auto> record_values;
@@ -715,8 +1027,6 @@ public namespace DataProviderML {
     }
 
     #! Seasonal decomposition event hashdecl
-    /** @since %DataProviderML 1.0
-    */
     public hashdecl SeasonalDecompositionEventInfo inherits DataProvider::AnalyticsEventInfo {
         #! The original data value before decomposition
         float observed;
@@ -738,5 +1048,150 @@ public namespace DataProviderML {
         #! The number of data points in one complete seasonal cycle (e.g., 12 for monthly
         #! data with yearly patterns, 7 for daily data with weekly patterns)
         int period;
+    }
+
+    #! Standard scaler event hashdecl
+    public hashdecl StandardScalerEventInfo {
+        #! The type of analysis that produced this result (always "standard-scaler")
+        string event_type = "standard-scaler";
+        #! The original input values for the fields that were analyzed
+        hash<auto> record_values;
+        #! The scaled values for each field (zero mean, unit variance)
+        hash<auto> scaled_values;
+    }
+
+    #! Min-max scaler event hashdecl
+    public hashdecl MinMaxScalerEventInfo {
+        #! The type of analysis that produced this result (always "min-max-scaler")
+        string event_type = "min-max-scaler";
+        #! The original input values for the fields that were analyzed
+        hash<auto> record_values;
+        #! The scaled values for each field in the target range [feature_min, feature_max]
+        hash<auto> scaled_values;
+        #! The lower bound of the target range used for scaling
+        float feature_min;
+        #! The upper bound of the target range used for scaling
+        float feature_max;
+    }
+
+    #! Imputer event hashdecl
+    public hashdecl ImputerEventInfo {
+        #! The type of analysis that produced this result (always "imputer")
+        string event_type = "imputer";
+        #! The original input values for the fields that were analyzed; NOTHING values
+        #! indicate fields that were missing and have been filled
+        hash<auto> record_values;
+        #! The imputed values for each field with missing values replaced
+        hash<auto> imputed_values;
+        #! The number of fields that had missing (NOTHING) values in this record
+        int missing_count;
+        #! The imputation strategy used (mean, median, most_frequent, or constant)
+        string strategy;
+    }
+
+    #! Classification metrics event hashdecl
+    public hashdecl ClassificationMetricsEventInfo {
+        #! The type of analysis that produced this result (always "classification-metrics")
+        string event_type = "classification-metrics";
+        #! The fraction of predictions that were correct, from 0.0 (none correct) to
+        #! 1.0 (all correct); for example, 0.85 means 85%% of predictions matched the
+        #! true class
+        float accuracy;
+        #! The unweighted average F1 score across all classes; treats every class equally
+        #! regardless of how many samples it has; ranges from 0.0 to 1.0
+        float macro_f1;
+        #! The support-weighted average F1 score across all classes; gives more weight to
+        #! classes with more samples; ranges from 0.0 to 1.0
+        float weighted_f1;
+        #! Per-class breakdown with precision, recall, F1, and support for each class
+        list<hash<auto>> per_class;
+        #! The number of records evaluated in this batch
+        int sample_count;
+    }
+
+    #! Regression metrics event hashdecl
+    public hashdecl RegressionMetricsEventInfo {
+        #! The type of analysis that produced this result (always "regression-metrics")
+        string event_type = "regression-metrics";
+        #! Mean Squared Error: the average of squared differences between predicted and
+        #! actual values; lower is better; 0.0 means perfect predictions
+        float mse;
+        #! Root Mean Squared Error: the square root of MSE, in the same units as the
+        #! data; easier to interpret than MSE
+        float rmse;
+        #! Mean Absolute Error: the average absolute difference between predicted and
+        #! actual values; in the same units as the data; less sensitive to outliers
+        #! than MSE
+        float mae;
+        #! R-squared (coefficient of determination): how much of the variance in the
+        #! data the model explains; 1.0 = perfect, 0.0 = no better than predicting
+        #! the mean; can be negative for very poor models
+        float r2;
+        #! Explained variance: similar to R² but accounts for bias in predictions;
+        #! ranges from negative infinity to 1.0
+        float explained_variance;
+        #! The number of records evaluated in this batch
+        int sample_count;
+    }
+
+    #! Clustering metrics event hashdecl
+    public hashdecl ClusteringMetricsEventInfo {
+        #! The type of analysis that produced this result (always "clustering-metrics")
+        string event_type = "clustering-metrics";
+        #! Silhouette score: measures how similar each point is to its own cluster vs.
+        #! other clusters; ranges from -1.0 (poor) to 1.0 (excellent); above 0.5 is
+        #! generally considered good clustering
+        float silhouette_score;
+        #! Davies-Bouldin index: measures the average similarity between clusters;
+        #! lower is better; 0.0 means perfect separation between clusters
+        float davies_bouldin_score;
+        #! Calinski-Harabasz index: the ratio of between-cluster dispersion to
+        #! within-cluster dispersion; higher values indicate better-defined clusters
+        float calinski_harabasz_score;
+        #! The number of records evaluated in this batch
+        int sample_count;
+        #! The number of distinct clusters found in the batch
+        int n_clusters;
+    }
+
+    #! Logistic regression classification event hashdecl
+    public hashdecl LogisticRegressionEventInfo {
+        #! The type of analysis that produced this result (always "logistic-regression")
+        string event_type = "logistic-regression";
+        #! The class label the model predicted for this record based on the input fields
+        float predicted_class;
+        #! How confident the model is in the prediction, from 0.0 (uncertain) to
+        #! 1.0 (very confident)
+        float max_probability;
+        #! The probability that this record belongs to each class; for example, with 3
+        #! classes the list might be (0.7, 0.2, 0.1) meaning 70%% chance of class 0
+        list<float> probabilities;
+        #! The original input values for the fields that were analyzed
+        hash<auto> record_values;
+    }
+
+    #! KNN classification event hashdecl
+    public hashdecl KNNClassificationEventInfo {
+        #! The type of analysis that produced this result (always "knn-classification")
+        string event_type = "knn-classification";
+        #! The class label predicted by majority vote of the nearest neighbors
+        int predicted_class;
+        #! How confident the prediction is, from 0.0 (no consensus) to 1.0 (all
+        #! neighbors agree); represents the proportion of voting weight for the
+        #! predicted class
+        float confidence;
+        #! The original input values for the fields that were analyzed
+        hash<auto> record_values;
+    }
+
+    #! KNN regression event hashdecl
+    public hashdecl KNNRegressionEventInfo {
+        #! The type of analysis that produced this result (always "knn-regression")
+        string event_type = "knn-regression";
+        #! The predicted numeric value, computed as the (optionally weighted) average
+        #! of the k nearest neighbors' target values
+        float prediction;
+        #! The original input values for the fields that were analyzed
+        hash<auto> record_values;
     }
 }

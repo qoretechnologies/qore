@@ -36,6 +36,7 @@
 
 %requires(reexport) Mime >= 1.3
 %requires(reexport) RestClient >= 1.3.1
+%requires(reexport) RestClientIo
 %requires(reexport) ConnectionProvider >= 1.4
 
 module NetSuiteRestClient {
@@ -91,16 +92,8 @@ printf("%N\n", ans.body);
 
 #! the NetSuiteRestClient namespace contains all the objects in the NetSuiteRestClient module
 public namespace NetSuiteRestClient {
-#! this class provides the REST client API for communication with NetSuite servers
-/** You must use an OAuth2 token by setting the \c token and \c oauth2_refresh_token options; the following options
-    need to be set as well:
-    - \c oauth2_client_id: the OAuth2 client ID
-    - \c oauth2_client_secret: the OAuth2 client secret
-
-    Then an external program has to guide the user through using the authorization_grant flow to get a token to use;
-    this module does not implement that flow.
-*/
-public class NetSuiteRestClient inherits RestClient::RestClient {
+#! Common base class for NetSuiteRestClient functionality
+public class NetSuiteRestClientBase {
     public {
         #! Default REST URL
         const DefaultUrl = "https://{{account_id}}.suitetalk.api.netsuite.com/services/rest/record";
@@ -140,6 +133,23 @@ public class NetSuiteRestClient inherits RestClient::RestClient {
         };
     }
 
+    #! returns options for NetSuiteRestClient constructors
+    static hash<auto> getOptions(hash<auto> opts) {
+        return DefaultOptions + opts;
+    }
+}
+
+#! this class provides the REST client API for communication with NetSuite servers
+/** You must use an OAuth2 token by setting the \c token and \c oauth2_refresh_token options; the following options
+    need to be set as well:
+    - \c oauth2_client_id: the OAuth2 client ID
+    - \c oauth2_client_secret: the OAuth2 client secret
+
+    Then an external program has to guide the user through using the authorization_grant flow to get a token to use;
+    this module does not implement that flow.
+*/
+public class NetSuiteRestClient inherits RestClient::RestClient, NetSuiteRestClientBase {
+
     private {
         #! NetSuite account ID; can be auto-discovered
         string account_id;
@@ -162,7 +172,7 @@ NetSuiteRestClient rest(opts);
 
         @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data serialization, etc
     */
-    constructor(hash<auto> opts, *softbool do_not_connect) : RestClient(NetSuiteRestClient::getOptions(opts), True) {
+    constructor(hash<auto> opts, *softbool do_not_connect) : RestClient(NetSuiteRestClientBase::getOptions(opts), True) {
         if (opts.account_id.val()) {
             account_id = opts.account_id;
             string url = replace(DefaultUrl, "{{account_id}}", account_id);
@@ -246,10 +256,6 @@ NetSuiteRestClient rest(opts);
         return new_opts;
     }
 
-    #! returns options for @ref NetSuiteRestClient::NetSuiteRestClient::constructor()
-    private static hash<auto> getOptions(hash<auto> opts) {
-        return DefaultOptions + opts;
-    }
 }
 
 #! Class for NetSuite REST connections; returns @ref NetSuiteRestClient objects
@@ -292,7 +298,7 @@ public class NetSuiteRestConnection inherits RestClient::RestConnection {
                 },
                 "oauth2_grant_type": RestConnection::ConnectionScheme.options.oauth2_grant_type
                         + <ConnectionOptionInfo>{
-                    "default_value": NetSuiteRestClient::DefaultGrantType,
+                    "default_value": NetSuiteRestClientBase::DefaultGrantType,
                 },
                 "oauth2_logout_url": <ConnectionOptionInfo>{
                     "display_name": "OAuth2 Logout URL",
@@ -303,7 +309,7 @@ public class NetSuiteRestConnection inherits RestClient::RestConnection {
                 },
                 "oauth2_scopes": RestConnection::ConnectionScheme.options.oauth2_scopes
                         + <ConnectionOptionInfo>{
-                    "default_value": NetSuiteRestClient::DefaultOAuth2Scopes,
+                    "default_value": NetSuiteRestClientBase::DefaultOAuth2Scopes,
                 },
                 "oauth2_token_url": RestConnection::ConnectionScheme.options.oauth2_token_url
                     + <ConnectionOptionInfo>{
@@ -364,7 +370,7 @@ public class NetSuiteRestConnection inherits RestClient::RestConnection {
     */
     string getAuthUrl(*bool allow_relative) {
         if (opts.oauth2_auth_url == "auto") {
-            return replace(NetSuiteRestClient::DefaultAuthUrl, "{{account_id}}",
+            return replace(NetSuiteRestClientBase::DefaultAuthUrl, "{{account_id}}",
                 (opts.account_id ? opts.account_id + ".app" : "system"));
         }
         return RestConnection::getAuthUrl(allow_relative);
@@ -376,7 +382,7 @@ public class NetSuiteRestConnection inherits RestClient::RestConnection {
     */
     string getTokenUrl(*bool allow_relative) {
         if (opts.oauth2_token_url == "auto" && opts.account_id) {
-            return replace(NetSuiteRestClient::DefaultTokenUrl, "{{account_id}}", opts.account_id);
+            return replace(NetSuiteRestClientBase::DefaultTokenUrl, "{{account_id}}", opts.account_id);
         }
         return RestConnection::getTokenUrl(allow_relative);
     }
@@ -430,7 +436,14 @@ public class NetSuiteRestConnection inherits RestClient::RestConnection {
         @return a @ref NetSuiteRestClient object
     */
     private NetSuiteRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
-        return new NetSuiteRestClient(getConnectionOptions(), !connect);
+        return new NetSuiteRestClient(getConnectionOptions(rtopts), !connect);
+    }
+
+    #! Returns an async-I/O-capable connection object
+    /** @since NetSuiteRestClient 1.1
+    */
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new NetSuiteRestClientIo(getConnectionOptions(rtopts));
     }
 
     #! Returns the ConnectionSchemeInfo hash for this object
@@ -445,10 +458,23 @@ public class NetSuiteRestConnection inherits RestClient::RestConnection {
     */
     private setRealUrl(*string url) {
         if (exists url && exists opts.account_id) {
-            real_url = replace(NetSuiteRestClient::DefaultUrl, "{{account_id}}", opts.account_id);
+            real_url = replace(NetSuiteRestClientBase::DefaultUrl, "{{account_id}}", opts.account_id);
         } else {
             RestConnection::setRealUrl(url);
         }
+    }
+}
+
+#! REST client for Oracle NetSuite REST API using multiplexed HTTP connections
+/** @see NetSuiteRestClient for more information
+*/
+public class NetSuiteRestClientIo inherits RestClientIo::RestClientIo, NetSuiteRestClientBase {
+    #! Creates the object with the given options
+    /** @param opts constructor options
+        @param shared_mgr optional shared connection manager
+    */
+    constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+            : RestClientIo(NetSuiteRestClientBase::getOptions(opts), shared_mgr) {
     }
 }
 }

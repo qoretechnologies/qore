@@ -29,6 +29,7 @@
     - sendChunked (InputStream) POST over HTTP/2 — verify body received
     - Empty body via callback over HTTP/2 — verify immediate EOF
     - Callback exception mid-stream over HTTP/2 — verify graceful error handling
+    - body_streaming resume: multiplexed GET succeeds while slow POST handler is processing
 */
 
 %modern
@@ -41,6 +42,7 @@
 %requires ../../../../qlib/AsyncSocketIo
 %requires ../../../../qlib/HttpServerAsyncIo
 %requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/HttpClientIo
 
 %exec-class HttpServerH2H3StreamingUploadTest
 
@@ -56,6 +58,46 @@ class EchoHandler inherits AbstractHttpRequestHandler {
             }
         }
         return makeResponse(200, body_str, {"Content-Type": MimeTypeText});
+    }
+}
+
+#! Handler that blocks after body reading to simulate a long-running request.
+/** Uses Counter gates for deterministic synchronization with the test:
+    - processing_gate: signals when the handler has received the body and is "processing"
+    - release_gate: blocks the handler until the test releases it
+*/
+class SlowEchoHandler inherits AbstractHttpRequestHandler {
+    private {
+        Counter processing_gate(1);
+        Counter release_gate(1);
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        # Signal that we've received the body and are now "processing"
+        processing_gate.dec();
+        # Block until the test releases us — simulates a long-running handler (e.g., bulk
+        # object creation).  While blocked, the h2/h3 connection must remain alive for
+        # PING, SETTINGS, WINDOW_UPDATE etc.
+        release_gate.waitForZero(30s);
+        string body_str = "";
+        if (exists body) {
+            if (body.typeCode() == NT_BINARY) {
+                body_str = binary_to_string(body);
+            } else if (body.typeCode() == NT_STRING) {
+                body_str = body;
+            }
+        }
+        return makeResponse(200, body_str, {"Content-Type": MimeTypeText});
+    }
+
+    #! Waits until the handler has started processing (body read complete)
+    int waitForProcessing(timeout t = 10s) {
+        return processing_gate.waitForZero(t);
+    }
+
+    #! Releases the handler so it can return a response
+    release() {
+        release_gate.dec();
     }
 }
 
@@ -127,6 +169,10 @@ l50Xb2GWQesIt9k5jF5IOw==
         addTestCase("sendChunked InputStream POST over HTTP/2", \testH2InputStream());
         addTestCase("empty body via sendWithSendCallback over HTTP/2", \testH2EmptyCallback());
         addTestCase("callback exception over HTTP/2", \testH2CallbackException());
+        addTestCase("H2 body_streaming resume enables multiplexing during slow handler",
+            \testH2BodyStreamingResumeMultiplexing());
+        addTestCase("H3 body_streaming resume enables multiplexing during slow handler",
+            \testH3BodyStreamingResumeMultiplexing());
 
         set_return_value(main());
     }
@@ -269,5 +315,124 @@ l50Xb2GWQesIt9k5jF5IOw==
             @debug(printf("Expected callback exception: %s: %s\n", ex.err, ex.desc));
         }
         assertTrue(caught, "callback exception should propagate to caller");
+    }
+
+    #! Verify that multiplexed HTTP/2 requests work while a body_streaming handler is processing.
+    testH2BodyStreamingResumeMultiplexing() {
+        bodyStreamingResumeMultiplexingImpl("h2");
+    }
+
+    #! Same test over HTTP/3 (QUIC) — skipped if QUIC is not available.
+    testH3BodyStreamingResumeMultiplexing() {
+        bodyStreamingResumeMultiplexingImpl("h3");
+    }
+
+    #! Shared implementation for the body_streaming resume multiplexing test.
+    /** Tests the fix where resume_body_streaming() is called from HttpServer after body
+        reading completes, rather than after the handler returns.  Without this fix, the h2/h3
+        poll operation stays paused during handler processing, stalling the connection (PING,
+        SETTINGS, WINDOW_UPDATE cannot be processed) and blocking multiplexed requests.
+
+        @param proto "h2" for HTTP/2, "h3" for HTTP/3 (QUIC)
+    */
+    private bodyStreamingResumeMultiplexingImpl(string proto) {
+        SlowEchoHandler slow_handler();
+
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": mLogger,
+            "debug": True,
+            "async_mode": True,
+        });
+        on_exit delete server;
+
+        server.setHandler("slow-echo", "/slow-echo", NOTHING, slow_handler);
+        server.setHandler("echo", "/echo", NOTHING, new EchoHandler());
+        server.waitForAsyncIo();
+
+        string url;
+        if (proto == "h3") {
+            try {
+                int port = server.addQuicListener(<HttpListenerOptionInfo>{
+                    "cert": new SSLCertificate(CertPem),
+                    "key": new SSLPrivateKey(KeyPem),
+                }).port;
+                url = sprintf("https://127.0.0.1:%d", port);
+            } catch (hash<ExceptionInfo> ex) {
+                testSkip(sprintf("QUIC listener not available: %s: %s", ex.err, ex.desc));
+            }
+        } else {
+            int port = server.addListener(<HttpListenerOptionInfo>{
+                "service": 0,
+                "cert": new SSLCertificate(CertPem),
+                "key": new SSLPrivateKey(KeyPem),
+                "enable_h3": False,
+            }).port;
+            url = sprintf("https://localhost:%d", port);
+        }
+        server.waitForAsyncIo();
+
+        # Use a single connection for multiplexing
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "protocol": proto,
+            "max_connections_per_host": 1,
+            "logger": mLogger,
+        });
+        on_exit delete mgr;
+
+        # Acquire two streams on the same connection
+        HttpClientIo::HttpClientStreamHandle slow_stream = mgr.acquireStream(url);
+        HttpClientIo::HttpClientStreamHandle fast_stream = mgr.acquireStream(url);
+
+        # Start the slow POST in a background thread — sends body via DATA frames,
+        # triggering body_streaming on the server
+        hash<auto> slow_result;
+        *hash<ExceptionInfo> slow_error;
+        Counter done(1);
+        background sub () {
+            on_exit done.dec();
+            try {
+                slow_result = slow_stream.request("POST", "/slow-echo",
+                    {"Content-Type": MimeTypeText}, "test-body-data");
+            } catch (hash<ExceptionInfo> ex) {
+                slow_error = ex;
+            }
+        }();
+
+        # Wait for the slow handler to start processing (body has been fully read by the
+        # framework, and resume_body_streaming() has been called)
+        int rc = slow_handler.waitForProcessing(10s);
+        assertEq(0, rc, proto + " slow handler should start processing within timeout");
+
+        # Now send a fast GET on the same connection — this exercises the fix:
+        # the poll operation was resumed by resume_body_streaming() after body reading,
+        # so the I/O thread can process new requests while the slow handler is blocked
+        hash<auto> fast_result = fast_stream.request("GET", "/echo", NOTHING, NOTHING, 10s);
+        assertTrue(fast_result.status_code == 200 || fast_result.status_code == 204,
+            sprintf("%s multiplexed GET should succeed while slow handler is processing (got %d)",
+                proto, fast_result.status_code));
+
+        # Verify we used a single multiplexed connection
+        hash<auto> stats = mgr.getStats();
+        assertEq(1, stats.total_connections,
+            proto + " should use 1 multiplexed connection, not separate connections");
+
+        # Release the slow handler and verify it completes successfully
+        slow_handler.release();
+        int remaining = done.waitForZero(10s);
+        assertEq(0, remaining, proto + " slow POST should complete after release");
+        if (slow_error) {
+            fail(sprintf("%s slow POST failed: %s: %s", proto, slow_error.err, slow_error.desc));
+        }
+        assertEq(200, slow_result.status_code, proto + " slow POST should return 200");
+        # Verify the body was echoed back
+        string resp_body;
+        if (slow_result.body.typeCode() == NT_BINARY) {
+            resp_body = binary_to_string(slow_result.body);
+        } else {
+            resp_body = slow_result.body;
+        }
+        assertEq("test-body-data", resp_body, proto + " slow POST body should be echoed back");
     }
 }

@@ -147,6 +147,12 @@ void ThreadPool::worker(ExceptionSink* xsink) {
             ThreadPoolThread* tpt = getThreadUnlocked(xsink);
             if (!tpt) {
                 xsink->handleExceptions();
+                // release the lock and wait before retrying to avoid a livelock;
+                // this allows worker threads to call done() and submit() to proceed
+                printd(1, "ThreadPool::worker() this: %p failed to get thread; waiting %d ms before retry "
+                    "(q: %ld fh: %ld ah: %ld)\n", this, release_ms ? release_ms : QTP_DEFAULT_RELEASE_MS,
+                    q.size(), fh.size(), ah.size());
+                cond.wait(m, release_ms ? release_ms : QTP_DEFAULT_RELEASE_MS);
                 break;
             }
             tpt->submit(q.front());

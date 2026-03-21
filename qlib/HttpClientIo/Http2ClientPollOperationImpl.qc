@@ -47,14 +47,45 @@ public class Http2ClientPollOperation inherits HttpClientPollOperation {
     public {
         #! SSL upgrade state (HTTP/2-specific; QUIC bundles TLS in the handshake)
         const STATE_SSL_UPGRADE = "ssl_upgrade";
+        #! Proxy CONNECT send state
+        const STATE_PROXY_CONNECT_SEND = "proxy_connect_send";
+        #! Proxy CONNECT recv state
+        const STATE_PROXY_CONNECT_RECV = "proxy_connect_recv";
 
         #! Maximum completed outputs to drain per continuePoll() call
         const MAX_DRAIN_ITERATIONS = 100;
+
+        #! Maximum empty reads during h2c probe before declaring failure
+        /** Much lower than MAX_EMPTY_READS to quickly detect servers that
+            don't support HTTP/2 prior knowledge on plain HTTP connections.
+        */
+        const H2C_PROBE_MAX_EMPTY_READS = 5;
     }
 
     private {
         #! Whether SSL is required
         bool ssl_required;
+
+        #! Proxy info (host, port, protocol, ssl)
+        *hash<auto> proxy_info;
+
+        #! True when HTTPS target through proxy (requires CONNECT tunnel)
+        bool proxy_tunnel = False;
+
+        #! Whether the H2 protocol has been confirmed (via ALPN or SETTINGS exchange)
+        /** For HTTPS, H2 is confirmed by ALPN negotiation during the TLS handshake.
+            For plain HTTP (h2c prior knowledge), H2 is only confirmed after the
+            server responds with valid H2 data (SETTINGS frame). Until confirmed,
+            the readyCallback is deferred so that waitForReady() blocks.
+        */
+        bool h2_confirmed = False;
+
+        #! Number of successful continuePoll() cycles in READING state
+        /** Used for h2c confirmation: the first cycle sends our preface (POLLOUT);
+            a second successful cycle with poll_info means the server responded
+            with valid H2 data.
+        */
+        int reading_cycle_count = 0;
     }
 
     #! Creates the poll operation for a new connection
@@ -65,11 +96,13 @@ public class Http2ClientPollOperation inherits HttpClientPollOperation {
         @param accept_all_certs if True, accept all SSL certificates including self-signed
     */
     constructor(hash<auto> url_info, timeout connect_timeout = DefaultConnectTimeout, *LoggerInterface logger,
-            *int ssl_verify_mode, bool accept_all_certs = False) {
+            *int ssl_verify_mode, bool accept_all_certs = False,
+            *hash<auto> proxy_info) {
         self.url_info = url_info;
         self.connect_timeout = connect_timeout;
         self.logger = logger;
         self.ssl_required = url_info.protocol == "https";
+        self.proxy_info = proxy_info;
 
         sock = new Socket();
 
@@ -101,6 +134,14 @@ public class Http2ClientPollOperation inherits HttpClientPollOperation {
     #! Returns the current state
     string getState() {
         return state;
+    }
+
+    #! Hook: for plain HTTP (h2c), requires confirmation that the server supports HTTP/2
+    /** For HTTPS, h2_confirmed is set during startMultiplex() (ALPN confirmed H2).
+        For plain HTTP, h2_confirmed is set when the first valid H2 output is received.
+    */
+    private bool isReadyImpl() {
+        return h2_confirmed;
     }
 
     #! Always returns False; this is a long-running multiplexed operation
@@ -185,19 +226,16 @@ public class Http2ClientPollOperation inherits HttpClientPollOperation {
             throw "HTTP2-STATE-ERROR", sprintf("cannot send data in state: %y", current_state);
         }
 
-        string sid = string(stream_id);
-        {
-            AutoLock al(stream_lock);
-            if (!stream_callbacks.hasKey(sid)) {
-                throw "HTTP2-STREAM-ERROR", sprintf("stream %d not found", stream_id);
-            }
-        }
-
         binary bin_data = data.typeCode() == NT_BINARY ? data : binary(data);
 
         log(LoggerLevel::DEBUG, "sending %d bytes on stream %d (end_stream=%y)",
             bin_data.size(), stream_id, end_stream);
 
+        # Send directly via C++ — the stream may still be open for writing even
+        # after the server sent END_STREAM (half-closed remote per RFC 7540 §5.1).
+        # The stream_callbacks check was removed because callbacks track response
+        # delivery, not stream existence.  If the stream doesn't exist at the
+        # nghttp2 level, sendHttp2StreamData() will raise an appropriate error.
         sock.sendHttp2StreamData(stream_id, bin_data, end_stream);
     }
 
@@ -247,6 +285,14 @@ public class Http2ClientPollOperation inherits HttpClientPollOperation {
                     return handleSslUpgrade();
                 }
 
+                case STATE_PROXY_CONNECT_SEND: {
+                    return handleProxyConnectSend();
+                }
+
+                case STATE_PROXY_CONNECT_RECV: {
+                    return handleProxyConnectRecv();
+                }
+
                 case STATE_READING: {
                     return handleReading();
                 }
@@ -290,8 +336,16 @@ public class Http2ClientPollOperation inherits HttpClientPollOperation {
 
     #! Internal: starts the connection
     private startConnect() {
-        string target = sprintf("%s:%d", url_info.host, url_info.port);
-        log(LoggerLevel::DEBUG, "connecting to %s (ssl=%y)", target, ssl_required);
+        string target;
+        if (proxy_info) {
+            target = sprintf("%s:%d", proxy_info.host, proxy_info.port);
+            proxy_tunnel = ssl_required;
+            log(LoggerLevel::DEBUG, "connecting to proxy %s (target=%s:%d ssl=%y tunnel=%y)",
+                target, url_info.host, url_info.port, ssl_required, proxy_tunnel);
+        } else {
+            target = sprintf("%s:%d", url_info.host, url_info.port);
+            log(LoggerLevel::DEBUG, "connecting to %s (ssl=%y)", target, ssl_required);
+        }
         current_op = sock.startPollConnect(target);
         state = STATE_CONNECTING;
     }
@@ -311,7 +365,10 @@ public class Http2ClientPollOperation inherits HttpClientPollOperation {
 
             if (current_op.goalReached()) {
                 log(LoggerLevel::DEBUG, "TCP connection established");
-                if (ssl_required) {
+                if (proxy_tunnel) {
+                    # HTTPS through proxy: send CONNECT request first
+                    startProxyConnect();
+                } else if (ssl_required) {
                     startSslUpgrade();
                 } else {
                     startMultiplex();
@@ -319,6 +376,80 @@ public class Http2ClientPollOperation inherits HttpClientPollOperation {
                 return continuePoll();
             } else {
                 setError("HTTP2-CONNECT-ERROR", "connection failed");
+                return NOTHING;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            setError(ex.err, ex.desc);
+            return NOTHING;
+        }
+    }
+
+    #! Internal: builds and sends a CONNECT request to the proxy
+    private startProxyConnect() {
+        string target = sprintf("%s:%d", url_info.host, url_info.port);
+        string connect_req = sprintf("CONNECT %s HTTP/1.1\r\nHost: %s\r\n\r\n", target, target);
+        log(LoggerLevel::DEBUG, "sending CONNECT %s to proxy", target);
+        current_op = sock.startPollSend(binary(connect_req));
+        state = STATE_PROXY_CONNECT_SEND;
+    }
+
+    #! Internal: handles proxy CONNECT send state
+    private *hash<SocketPollInfo> handleProxyConnectSend() {
+        if (!current_op) {
+            setError("HTTP2-CONNECT-ERROR", "proxy CONNECT send not initialized");
+            return NOTHING;
+        }
+
+        try {
+            auto poll_info = current_op.continuePoll();
+            if (poll_info) {
+                return poll_info;
+            }
+
+            if (current_op.goalReached()) {
+                log(LoggerLevel::DEBUG, "proxy CONNECT sent, reading response");
+                current_op = sock.startPollReadHttpHeader();
+                state = STATE_PROXY_CONNECT_RECV;
+                return handleProxyConnectRecv();
+            } else {
+                setError("HTTP2-CONNECT-ERROR", "proxy CONNECT send failed");
+                return NOTHING;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            setError(ex.err, ex.desc);
+            return NOTHING;
+        }
+    }
+
+    #! Internal: handles proxy CONNECT response
+    private *hash<SocketPollInfo> handleProxyConnectRecv() {
+        if (!current_op) {
+            setError("HTTP2-CONNECT-ERROR", "proxy CONNECT recv not initialized");
+            return NOTHING;
+        }
+
+        try {
+            auto poll_info = current_op.continuePoll();
+            if (poll_info) {
+                return poll_info;
+            }
+
+            if (current_op.goalReached()) {
+                hash<auto> output = current_op.getOutput();
+                hash<auto> hdr = output.hdr;
+                int status = hdr.status_code;
+                if (status < 200 || status >= 300) {
+                    setError("HTTP2-CONNECT-ERROR",
+                        sprintf("proxy CONNECT failed with HTTP %d: %s", status,
+                            hdr.status_message ?? "unknown"));
+                    return NOTHING;
+                }
+                log(LoggerLevel::DEBUG, "proxy CONNECT tunnel established (status=%d)", status);
+                # Tunnel established — start TLS+ALPN through the tunnel
+                startSslUpgrade();
+                return continuePoll();
+            } else {
+                setError("HTTP2-CONNECT-ERROR", "proxy CONNECT response read failed");
                 return NOTHING;
             }
         } catch (hash<ExceptionInfo> ex) {
@@ -373,7 +504,13 @@ public class Http2ClientPollOperation inherits HttpClientPollOperation {
         current_op = sock.startPollHttp2ClientMultiplex();
         state = STATE_READING;
 
-        fireReadyCallback();
+        if (ssl_required) {
+            # HTTPS: ALPN already confirmed H2 during TLS handshake
+            h2_confirmed = True;
+            fireReadyCallback();
+        }
+        # Plain HTTP (h2c): defer readyCallback until we see valid H2 output
+        # from the server, confirming it supports HTTP/2 prior knowledge
     }
 
     #! Internal: handles reading state
@@ -385,6 +522,18 @@ public class Http2ClientPollOperation inherits HttpClientPollOperation {
 
         try {
             auto poll_info = current_op.continuePoll();
+
+            # h2c confirmation: after the initial preface send (cycle 0), if we get
+            # a successful poll cycle with valid poll_info, the server has responded
+            # with valid H2 data (SETTINGS frame).  This confirms h2c support.
+            if (!h2_confirmed && poll_info) {
+                ++reading_cycle_count;
+                if (reading_cycle_count > 1) {
+                    h2_confirmed = True;
+                    log(LoggerLevel::DEBUG, "h2c confirmed: server supports HTTP/2 prior knowledge");
+                    fireReadyCallback();
+                }
+            }
 
             # Process ALL available outputs from the C++ layer in a loop
             int drain_count = 0;
@@ -467,9 +616,14 @@ public class Http2ClientPollOperation inherits HttpClientPollOperation {
             }
 
             ++empty_read_count;
-            if (empty_read_count > MAX_EMPTY_READS) {
+            # Use a much shorter limit during h2c probing — if the server
+            # doesn't respond with valid H2 frames quickly, it likely doesn't
+            # support HTTP/2 prior knowledge
+            int max_reads = h2_confirmed ? MAX_EMPTY_READS : H2C_PROBE_MAX_EMPTY_READS;
+            if (empty_read_count > max_reads) {
                 setError("HTTP2-EMPTY-READ",
-                    sprintf("max consecutive empty reads (%d) exceeded", MAX_EMPTY_READS));
+                    sprintf("max consecutive empty reads (%d) exceeded%s", max_reads,
+                        h2_confirmed ? "" : " (h2c probe failed — server likely doesn't support HTTP/2)"));
                 return NOTHING;
             }
 

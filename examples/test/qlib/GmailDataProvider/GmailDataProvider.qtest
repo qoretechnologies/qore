@@ -10,6 +10,7 @@
 %requires ../../../../qlib/DataProvider
 %requires ../../../../qlib/ConnectionProvider
 %requires ../../../../qlib/RestClient.qm
+%requires ../../../../qlib/RestClientIo.qm
 %requires ../../../../qlib/GoogleRestClient.qm
 %requires ../../../../qlib/GoogleDataProvider
 %requires ../../../../qlib/GmailDataProvider
@@ -59,8 +60,12 @@ public class GmailDataProviderTest inherits QUnit::Test {
         hash opts = {
             "api_profile": "gmail",
             "url": "https://example.com",
+            "oauth2_client_id": "test",
+            "oauth2_client_secret": "test",
+            "oauth2_redirect_url": "https://localhost",
+            "token": "test",
         };
-        GoogleRestClient rest = new GoogleRestClient(opts, True);
+        GoogleRestClientIo rest(opts);
         {
             DataProviderDataContextHelper dc({
                 "poll_interval": 30,
@@ -76,8 +81,12 @@ public class GmailDataProviderTest inherits QUnit::Test {
         hash opts = {
             "api_profile": "gmail",
             "url": "https://example.com",
+            "oauth2_client_id": "test",
+            "oauth2_client_secret": "test",
+            "oauth2_redirect_url": "https://localhost",
+            "token": "test",
         };
-        GoogleRestClient rest = new GoogleRestClient(opts, True);
+        GoogleRestClientIo rest(opts);
         GmailMessageWatchDataProvider provider = new GmailMessageWatchDataProvider(rest, (
             "q": "in:inbox",
         ));

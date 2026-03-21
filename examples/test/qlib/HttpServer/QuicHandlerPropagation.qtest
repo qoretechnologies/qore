@@ -1,0 +1,159 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+# Test that addHandlerToListenerID propagates handlers to paired QUIC listeners
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/AsyncSocketIo
+%requires ../../../../qlib/HttpServerAsyncIo
+%requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/HttpClientIo
+%requires ../../../../qlib/RestClientIo.qm
+
+%exec-class QuicHandlerPropagationTest
+
+class TestApiHandler inherits AbstractHttpRequestHandler {
+    private {
+        string response_body;
+    }
+
+    constructor(string body) {
+        response_body = body;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, response_body);
+    }
+}
+
+public class QuicHandlerPropagationTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        int https_port;
+        int quic_port;
+        SSLCertificate cert;
+        SSLPrivateKey key;
+    }
+
+    constructor() : Test("QuicHandlerPropagationTest", "1.0") {
+        addTestCase("addHandlerToListenerID propagates to QUIC listener", \quicHandlerPropagationTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        Logger logger("test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+
+        server = new HttpServer(<HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+            "async_mode": True,
+        });
+
+        # add a default handler that returns "default"
+        server.setDefaultHandler("default", new TestApiHandler("default"));
+
+        # generate a self-signed cert for testing
+        string pem;
+        try {
+            pem = backquote("openssl req -x509 -newkey rsa:2048 -keyout /dev/stdout "
+                "-out /dev/stdout -days 1 -nodes -subj /CN=localhost 2>/dev/null");
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip("openssl not available: " + ex.desc);
+            return;
+        }
+        if (!pem.val()) {
+            testSkip("openssl produced no output");
+            return;
+        }
+        string key_pem = (pem =~ x/(-----BEGIN PRIVATE KEY-----[\s\S]+?-----END PRIVATE KEY-----)/)[0];
+        string cert_pem = (pem =~ x/(-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----)/)[0];
+        key = new SSLPrivateKey(key_pem);
+        cert = new SSLCertificate(cert_pem);
+
+        # add an HTTPS listener with QUIC enabled (enable_h3 defaults to True)
+        hash<auto> listener_info = server.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": cert,
+            "key": key,
+            "enable_h3": True,
+        });
+        https_port = listener_info.port;
+
+        # find the QUIC listener (same port as HTTPS, different listener ID)
+        hash<auto> listeners = server.getListeners();
+        foreach hash<auto> l in (listeners.pairIterator()) {
+            if (l.value.name =~ /^quic-/) {
+                quic_port = l.value.port;
+                break;
+            }
+        }
+
+        server.waitForAsyncIo();
+
+        if (!quic_port) {
+            printf("WARNING: no QUIC listener found (QUIC may not be available on this platform); "
+                "skipping QUIC tests\n");
+        } else {
+            printf("HTTPS port: %d, QUIC port: %d\n", https_port, quic_port);
+        }
+    }
+
+    globalTearDown() {
+        delete server;
+    }
+
+    quicHandlerPropagationTest() {
+        if (!quic_port) {
+            testSkip("no QUIC listener available");
+        }
+
+        string https_url = "https://127.0.0.1:" + https_port;
+
+        # 1. Add a handler to the HTTPS listener via addHandlerToListenerID
+        hash<auto> listeners = server.getListeners();
+        *int https_lid;
+        foreach hash<auto> l in (listeners.pairIterator()) {
+            if (l.value.port == https_port && l.value.name !~ /^quic-/) {
+                https_lid = l.value.id;
+                break;
+            }
+        }
+        @assert(exists https_lid);
+
+        server.addHandlerToListenerID(https_lid, "test-api",
+            <HttpHandlerConfigInfo>{
+                "path": "/test-api",
+                "isregex": False,
+                "handler": new TestApiHandler("test-api-response"),
+            });
+
+        # 2. Verify the handler works via HTTP/2 (TCP/TLS)
+        RestClientIo::RestClientIo h2_client({"url": https_url, "data": "auto",
+            "error_passthru": True, "allow_any_response": True, "protocol": "h2"});
+        hash<auto> h2_resp = h2_client.restGet("/test-api");
+        assertEq(200, h2_resp.status_code, "HTTP/2 handler responds with 200");
+        assertEq("test-api-response", h2_resp.body, "HTTP/2 handler returns correct body");
+
+        # 3. Verify the handler also works via HTTP/3 (QUIC)
+        RestClientIo::RestClientIo h3_client({"url": https_url, "data": "auto",
+            "error_passthru": True, "allow_any_response": True, "protocol": "h3"});
+        hash<auto> h3_resp = h3_client.restGet("/test-api");
+        assertEq(200, h3_resp.status_code, "HTTP/3 handler responds with 200");
+        assertEq("test-api-response", h3_resp.body.typeCode() == NT_BINARY ? binary_to_string(h3_resp.body) : h3_resp.body,
+            "HTTP/3 handler returns correct body (propagated from HTTPS listener)");
+
+        # 4. Verify the default handler is NOT returned (would indicate handler wasn't propagated)
+        assertNeq("default", h3_resp.body.typeCode() == NT_BINARY ? binary_to_string(h3_resp.body) : h3_resp.body,
+            "HTTP/3 does not fall through to default handler");
+    }
+}

@@ -2520,8 +2520,18 @@ struct qore_socket_private {
         }
 #ifndef _Q_WINDOWS
         else if (addr.ss_family == AF_UNIX) {
-            assert(!socketname.empty());
-            QoreStringNode* addrstr = new QoreStringNode(socketname);
+            QoreStringNode* addrstr;
+            if (!socketname.empty()) {
+                addrstr = new QoreStringNode(socketname);
+            } else {
+                // for accepted connections, get the address from the sockaddr_un structure
+                struct sockaddr_un* sun = (struct sockaddr_un*)&addr;
+                if (len > offsetof(struct sockaddr_un, sun_path) && sun->sun_path[0]) {
+                    addrstr = new QoreStringNode(sun->sun_path);
+                } else {
+                    addrstr = new QoreStringNode("<anonymous unix socket>");
+                }
+            }
             h->setKeyValue("address", addrstr, 0);
             h->setKeyValue("address_desc", QoreAddrInfo::getAddressDesc(addr.ss_family, addrstr->c_str()), 0);
         }

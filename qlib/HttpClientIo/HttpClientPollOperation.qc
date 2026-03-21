@@ -102,9 +102,23 @@ public class HttpClientPollOperation inherits AbstractPollOperation {
     }
 
     #! Returns True if the connection is ready for requests
+    /** Subclasses can override isReadyImpl() to add additional readiness checks
+        (e.g., h2c protocol confirmation for plain HTTP).
+    */
     bool isReady() {
         string s = state;
-        return s == STATE_READING || s == STATE_WAIT_READ;
+        if (s != STATE_READING && s != STATE_WAIT_READ) {
+            return False;
+        }
+        return isReadyImpl();
+    }
+
+    #! Hook for subclass-specific readiness checks
+    /** Default returns True (no additional checks). Override to add protocol-specific
+        readiness conditions (e.g., h2c confirmation for plain HTTP).
+    */
+    private bool isReadyImpl() {
+        return True;
     }
 
     #! Returns True if a callback was dispatched during the last continuePoll() call, then clears the flag

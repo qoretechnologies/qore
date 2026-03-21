@@ -30,7 +30,6 @@ public namespace DataProviderML {
 
     Inherits AbstractAnalyticsProcessor with ANALYTICS_MODE_WINDOW.
 
-    @since %DataProviderML 1.0
 */
 public class QoreSeasonalDecompositionProcessor inherits DataProvider::AbstractAnalyticsProcessor {
     public {

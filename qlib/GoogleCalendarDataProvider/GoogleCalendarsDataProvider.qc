@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore GoogleCalendarDataProvider module definition
 
-/** GoogleCalendarsDataProvider.qc Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/** GoogleCalendarsDataProvider.qc Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -60,7 +60,7 @@ public class GoogleCalendarsDataProvider inherits GoogleDataProvider::GoogleData
     }
 
     #! Creates the object from a REST connection
-    constructor(GoogleRestClient::GoogleRestClient rest) : GoogleDataProvider::GoogleDataProviderBase(rest) {
+    constructor(GoogleRestClient::GoogleRestClientIo rest) : GoogleDataProvider::GoogleDataProviderBase(rest) {
     }
 
     #! Returns the data provider name
@@ -70,7 +70,7 @@ public class GoogleCalendarsDataProvider inherits GoogleDataProvider::GoogleData
 
     #! Returns the data provider description
     *string getDesc() {
-        return sprintf("Google data %s provider for `%s`", ProviderInfo.name, rest.getSafeURL());
+        return sprintf("Google data %s provider for `%s`", ProviderInfo.name, rest.getSafeUrl());
     }
 
     #! Return data provider summary info
@@ -121,17 +121,19 @@ public class GoogleCalendarsDataProvider inherits GoogleDataProvider::GoogleData
             return calendars;
         }
 
-        hash<auto> info;
         try {
             calendars = cast<hash<string, bool>>({
                 "primary": True,
             } + (
-                map {$1.id: True}, rest.get("/calendar/v3/users/me/calendarList").body.items
+                map {$1.id: True}, rest.restGet("/calendar/v3/users/me/calendarList").body.items
             ));
         } catch (hash<ExceptionInfo> ex) {
             # ensure that any error response body is included in the exception
-            *hash<auto> ex_arg = info{"request-uri", "response-code", "response-body"};
-            rethrow ex.err, ex.desc, ex.arg + ex_arg;
+            rethrow ex.err, ex.desc, ex.arg + {
+                "request-uri": ex.arg.request_path,
+                "response-code": ex.arg.status_code,
+                "response-body": ex.arg.response_body_raw,
+            };
         }
 
         return calendars;

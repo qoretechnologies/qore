@@ -32,13 +32,16 @@ extern const TypedHashDecl* hashdeclDBSCANResult;
 
 // NOTE: Computes and stores the full n x n distance matrix, requiring O(n^2) memory.
 // This is suitable for small-to-medium datasets; for large n consider a spatial index approach.
-MatrixXd QoreDBSCAN::computeDistanceMatrix(const MatrixXd& data) const {
+MatrixXd QoreDBSCAN::computeDistanceMatrix(const MatrixXd& data, ExceptionSink* xsink) const {
     int n = static_cast<int>(data.rows());
     MatrixXd dist(n, n);
     dist.setZero();
 
     if (metric == "euclidean") {
         for (int i = 0; i < n; ++i) {
+            if (i % 100 == 0 && qore_check_cancel(xsink, "DBSCAN computeDistanceMatrix")) {
+                return MatrixXd();
+            }
             for (int j = i + 1; j < n; ++j) {
                 double d = (data.row(i) - data.row(j)).norm();
                 dist(i, j) = d;
@@ -47,6 +50,9 @@ MatrixXd QoreDBSCAN::computeDistanceMatrix(const MatrixXd& data) const {
         }
     } else if (metric == "manhattan") {
         for (int i = 0; i < n; ++i) {
+            if (i % 100 == 0 && qore_check_cancel(xsink, "DBSCAN computeDistanceMatrix")) {
+                return MatrixXd();
+            }
             for (int j = i + 1; j < n; ++j) {
                 double d = (data.row(i) - data.row(j)).cwiseAbs().sum();
                 dist(i, j) = d;
@@ -62,6 +68,9 @@ MatrixXd QoreDBSCAN::computeDistanceMatrix(const MatrixXd& data) const {
             norms(i) = data.row(i).norm();
         }
         for (int i = 0; i < n; ++i) {
+            if (i % 100 == 0 && qore_check_cancel(xsink, "DBSCAN computeDistanceMatrix")) {
+                return MatrixXd();
+            }
             for (int j = i + 1; j < n; ++j) {
                 double d;
                 if (norms(i) == 0.0 || norms(j) == 0.0) {
@@ -101,13 +110,19 @@ QoreListNode* QoreDBSCAN::cluster(const MatrixXd& data, ExceptionSink* xsink) {
     }
 
     // Compute distance matrix
-    MatrixXd dist_matrix = computeDistanceMatrix(data);
+    MatrixXd dist_matrix = computeDistanceMatrix(data, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
 
     // Find neighbors and identify core points
     std::vector<std::vector<int>> all_neighbors(n);
     std::vector<bool> is_core(n, false);
 
     for (int i = 0; i < n; ++i) {
+        if (i % 100 == 0 && qore_check_cancel(xsink, "DBSCAN cluster")) {
+            return nullptr;
+        }
         all_neighbors[i] = findNeighbors(dist_matrix, i);
         // MinPts includes the point itself; findNeighbors() excludes it
         if (static_cast<int>(all_neighbors[i].size()) + 1 >= min_points) {

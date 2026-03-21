@@ -28,7 +28,6 @@ public namespace DataProviderML {
 /** Accumulates records in windows and uses the ML::DBSCAN algorithm to
     cluster records when the window is full or on flush.
 
-    @since %DataProviderML 1.0
 */
 public class QoreDBSCANClusteringProcessor inherits DataProvider::AbstractDataProvider {
     public {

@@ -1,0 +1,361 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_MLPipeline.qpp
+
+    Qore ml module - MLPipeline class definition
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+#include "qore/Qore.h"
+#include "QC_MLPipeline.h"
+
+//! The MLPipeline class chains preprocessing steps and an estimator into a single unit
+/** MLPipeline ensures that the same data transformations are applied consistently
+    during both training and prediction.
+
+    @par Example:
+    @code{.py}
+MLPipeline p();
+p.addStandardScaler("scaler", new StandardScaler());
+p.addEstimator("model", new LinearRegression({"fit_intercept": True}));
+p.fitMatrix(X_train, y_train);
+hash<auto> result = p.predictMatrix(X_test);
+    @endcode
+
+*/
+qclass MLPipeline [arg=QoreMLPipeline* pipeline; ns=Qore::ML; flags=final];
+
+//! Creates an empty MLPipeline
+/** Create a pipeline and add steps with addStandardScaler(), addMinMaxScaler(),
+    addImputer(), addPCA(), and estimator methods like addLinearRegression().
+
+    @par Example:
+    @code{.py}
+MLPipeline p();
+p.addStandardScaler("scaler", new StandardScaler());
+p.addLinearRegression("model", new LinearRegression({"fit_intercept": True}));
+    @endcode
+*/
+MLPipeline::constructor() {
+    self->setPrivate(CID_MLPIPELINE, new QoreMLPipeline());
+}
+
+//! Creates a copy of the MLPipeline instance
+/** @throw COPY-ERROR MLPipeline objects cannot be copied
+*/
+MLPipeline::copy() {
+    xsink->raiseException("COPY-ERROR", "MLPipeline objects cannot be copied");
+}
+
+//! Adds a StandardScaler step to the pipeline
+/** @param name a unique step name
+    @param obj a StandardScaler instance
+
+    @par Example:
+    @code{.py}
+p.addStandardScaler("scaler", new StandardScaler());
+    @endcode
+
+    @throw ML-PIPELINE-ERROR invalid object type
+*/
+nothing MLPipeline::addStandardScaler(string name, object obj) {
+    // Verify the object is a StandardScaler
+    QoreStandardScaler* s = static_cast<QoreStandardScaler*>(
+        obj->getReferencedPrivateData(CID_STANDARDSCALER, xsink));
+    if (*xsink) {
+        return QoreValue();
+    }
+    s->deref(xsink);
+    pipeline->addStep(name->c_str(), PipelineStepType::STANDARD_SCALER,
+        const_cast<QoreObject*>(obj));
+}
+
+//! Adds a MinMaxScaler step to the pipeline
+/** @param name a unique step name
+    @param obj a MinMaxScaler instance
+
+    @throw ML-PIPELINE-ERROR invalid object type
+*/
+nothing MLPipeline::addMinMaxScaler(string name, object obj) {
+    QoreMinMaxScaler* s = static_cast<QoreMinMaxScaler*>(
+        obj->getReferencedPrivateData(CID_MINMAXSCALER, xsink));
+    if (*xsink) {
+        return QoreValue();
+    }
+    s->deref(xsink);
+    pipeline->addStep(name->c_str(), PipelineStepType::MINMAX_SCALER,
+        const_cast<QoreObject*>(obj));
+}
+
+//! Adds an Imputer step to the pipeline
+/** @param name a unique step name
+    @param obj an Imputer instance
+
+    @throw ML-PIPELINE-ERROR invalid object type
+*/
+nothing MLPipeline::addImputer(string name, object obj) {
+    QoreImputer* s = static_cast<QoreImputer*>(
+        obj->getReferencedPrivateData(CID_IMPUTER, xsink));
+    if (*xsink) {
+        return QoreValue();
+    }
+    s->deref(xsink);
+    pipeline->addStep(name->c_str(), PipelineStepType::IMPUTER,
+        const_cast<QoreObject*>(obj));
+}
+
+//! Adds a PCA transformer step to the pipeline
+/** @param name a unique step name
+    @param obj a PCA instance
+
+    @throw ML-PIPELINE-ERROR invalid object type
+*/
+nothing MLPipeline::addPCA(string name, object obj) {
+    QorePCA* s = static_cast<QorePCA*>(
+        obj->getReferencedPrivateData(CID_PCA, xsink));
+    if (*xsink) {
+        return QoreValue();
+    }
+    s->deref(xsink);
+    pipeline->addStep(name->c_str(), PipelineStepType::PCA,
+        const_cast<QoreObject*>(obj));
+}
+
+//! Adds a LinearRegression estimator (must be the last step)
+/** @param name a unique step name
+    @param obj a LinearRegression instance
+
+    @throw ML-PIPELINE-ERROR invalid object type
+*/
+nothing MLPipeline::addLinearRegression(string name, object obj) {
+    QoreLinearRegression* s = static_cast<QoreLinearRegression*>(
+        obj->getReferencedPrivateData(CID_LINEARREGRESSION, xsink));
+    if (*xsink) {
+        return QoreValue();
+    }
+    s->deref(xsink);
+    pipeline->addStep(name->c_str(), PipelineStepType::LINEAR_REGRESSION,
+        const_cast<QoreObject*>(obj));
+}
+
+//! Adds a KMeans estimator (must be the last step)
+/** @param name a unique step name
+    @param obj a KMeans instance
+
+    @throw ML-PIPELINE-ERROR invalid object type
+*/
+nothing MLPipeline::addKMeans(string name, object obj) {
+    QoreKMeans* s = static_cast<QoreKMeans*>(
+        obj->getReferencedPrivateData(CID_KMEANS, xsink));
+    if (*xsink) {
+        return QoreValue();
+    }
+    s->deref(xsink);
+    pipeline->addStep(name->c_str(), PipelineStepType::KMEANS,
+        const_cast<QoreObject*>(obj));
+}
+
+//! Adds an IsolationForest estimator (must be the last step)
+/** @param name a unique step name
+    @param obj an IsolationForest instance
+
+    @throw ML-PIPELINE-ERROR invalid object type
+*/
+nothing MLPipeline::addIsolationForest(string name, object obj) {
+    QoreIsolationForest* s = static_cast<QoreIsolationForest*>(
+        obj->getReferencedPrivateData(CID_ISOLATIONFOREST, xsink));
+    if (*xsink) {
+        return QoreValue();
+    }
+    s->deref(xsink);
+    pipeline->addStep(name->c_str(), PipelineStepType::ISOLATION_FOREST,
+        const_cast<QoreObject*>(obj));
+}
+
+//! Adds an LOF estimator (must be the last step)
+/** @param name a unique step name
+    @param obj an LOF instance
+
+    @throw ML-PIPELINE-ERROR invalid object type
+*/
+nothing MLPipeline::addLOF(string name, object obj) {
+    QoreLOF* s = static_cast<QoreLOF*>(
+        obj->getReferencedPrivateData(CID_LOF, xsink));
+    if (*xsink) {
+        return QoreValue();
+    }
+    s->deref(xsink);
+    pipeline->addStep(name->c_str(), PipelineStepType::LOF,
+        const_cast<QoreObject*>(obj));
+}
+
+//! Adds a GMM estimator (must be the last step)
+/** @param name a unique step name
+    @param obj a GMM instance
+
+    @throw ML-PIPELINE-ERROR invalid object type
+*/
+nothing MLPipeline::addGMM(string name, object obj) {
+    QoreGMM* s = static_cast<QoreGMM*>(
+        obj->getReferencedPrivateData(CID_GMM, xsink));
+    if (*xsink) {
+        return QoreValue();
+    }
+    s->deref(xsink);
+    pipeline->addStep(name->c_str(), PipelineStepType::GMM,
+        const_cast<QoreObject*>(obj));
+}
+
+//! Adds a LogisticRegression estimator (must be the last step)
+/** @param name a unique step name
+    @param obj a LogisticRegression instance
+
+    @throw ML-PIPELINE-ERROR invalid object type
+*/
+nothing MLPipeline::addLogisticRegression(string name, object obj) {
+    QoreLogisticRegression* s = static_cast<QoreLogisticRegression*>(
+        obj->getReferencedPrivateData(CID_LOGISTICREGRESSION, xsink));
+    if (*xsink) {
+        return QoreValue();
+    }
+    s->deref(xsink);
+    pipeline->addStep(name->c_str(), PipelineStepType::LOGISTIC_REGRESSION,
+        const_cast<QoreObject*>(obj));
+}
+
+//! Adds a KNN classification estimator (must be the last step)
+/** @param name a unique step name
+    @param obj a KNN instance configured for classification
+
+    @throw ML-PIPELINE-ERROR invalid object type
+*/
+nothing MLPipeline::addKNNClassification(string name, object obj) {
+    QoreKNN* s = static_cast<QoreKNN*>(
+        obj->getReferencedPrivateData(CID_KNN, xsink));
+    if (*xsink) {
+        return QoreValue();
+    }
+    s->deref(xsink);
+    pipeline->addStep(name->c_str(), PipelineStepType::KNN_CLASSIFICATION,
+        const_cast<QoreObject*>(obj));
+}
+
+//! Fits the pipeline on a numeric matrix (no target vector)
+/** @param matrix a list of lists of numeric values
+
+    Use this for unsupervised estimators (KMeans, IsolationForest, etc.) or for
+    transformer-only pipelines.
+
+    @throw ML-PIPELINE-ERROR pipeline has no steps or step errors
+    @throw ML-DATA-ERROR data format errors
+*/
+nothing MLPipeline::fitMatrix(list<auto> matrix) {
+    MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    pipeline->fitMatrix(mat, nullptr, xsink);
+}
+
+//! Fits the pipeline on a numeric matrix with a target vector
+/** @param matrix a list of lists of numeric values (features)
+    @param target a list of numeric values (targets)
+
+    Use this for supervised estimators (LinearRegression, etc.).
+
+    @throw ML-PIPELINE-ERROR pipeline has no steps or step errors
+    @throw ML-DATA-ERROR data format errors
+*/
+nothing MLPipeline::fitMatrixWithTarget(list<auto> matrix, list<auto> target) {
+    MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    VectorXd y = qoreListToVector(target, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    pipeline->fitMatrix(mat, &y, xsink);
+}
+
+//! Transforms data through all transformer steps (no estimator applied)
+/** @param matrix a list of lists of numeric values
+    @return a list of lists of transformed values
+
+    @throw ML-PIPELINE-ERROR pipeline not fitted
+    @throw ML-DATA-ERROR data format errors
+*/
+list<list<float>> MLPipeline::transformMatrix(list<auto> matrix) {
+    MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    MatrixXd result = pipeline->transformMatrix(mat, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(autoTypeInfo), xsink);
+    for (Eigen::Index i = 0; i < result.rows(); ++i) {
+        ReferenceHolder<QoreListNode> row(new QoreListNode(floatTypeInfo), xsink);
+        for (Eigen::Index j = 0; j < result.cols(); ++j) {
+            row->push(result(i, j), xsink);
+        }
+        rv->push(row.release(), xsink);
+    }
+    return rv.release();
+}
+
+//! Predicts on a numeric matrix (transform + estimator predict)
+/** @param matrix a list of lists of numeric values
+    @return a list of estimator-specific result hashes
+
+    @throw ML-PIPELINE-ERROR pipeline not fitted or last step is not an estimator
+    @throw ML-DATA-ERROR data format errors
+*/
+list<hash<auto>> MLPipeline::predictMatrix(list<auto> matrix) {
+    MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return pipeline->predictMatrix(mat, xsink);
+}
+
+//! Returns True if the pipeline has been fitted
+/** @return True if fitMatrix() has been called successfully
+*/
+bool MLPipeline::isFitted() [flags=CONSTANT] {
+    return pipeline->isFitted();
+}
+
+//! Returns the number of steps in the pipeline
+/** @return the number of steps
+*/
+int MLPipeline::getNumSteps() [flags=CONSTANT] {
+    return pipeline->getNumSteps();
+}
+
+//! Returns the step names
+/** @return a list of step name strings
+*/
+list<string> MLPipeline::getStepNames() {
+    return pipeline->getStepNames(xsink);
+}
