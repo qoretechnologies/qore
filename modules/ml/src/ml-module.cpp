@@ -27,6 +27,7 @@
 
 #include "qore/Qore.h"
 
+#include "ml_serialization.h"
 #include "QC_IsolationForest.h"
 #include "QC_DBSCAN.h"
 #include "QC_KMeans.h"
@@ -192,6 +193,56 @@ static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
 
     // Add namespace-level functions
     init_ml_functions(MLNS);
+
+    // Register algorithm deserializers for model persistence
+    MLSerialization::registerAlgorithm("KMeans", [](const uint8_t* data, size_t len,
+        ExceptionSink* xsink) -> AbstractPrivateData* {
+        return QoreKMeans::deserializeState(data, len, xsink);
+    });
+    MLSerialization::registerAlgorithm("LinearRegression", [](const uint8_t* data, size_t len,
+        ExceptionSink* xsink) -> AbstractPrivateData* {
+        return QoreLinearRegression::deserializeState(data, len, xsink);
+    });
+    MLSerialization::registerAlgorithm("LogisticRegression", [](const uint8_t* data, size_t len,
+        ExceptionSink* xsink) -> AbstractPrivateData* {
+        return QoreLogisticRegression::deserializeState(data, len, xsink);
+    });
+    MLSerialization::registerAlgorithm("PCA", [](const uint8_t* data, size_t len,
+        ExceptionSink* xsink) -> AbstractPrivateData* {
+        return QorePCA::deserializeState(data, len, xsink);
+    });
+    MLSerialization::registerAlgorithm("IsolationForest", [](const uint8_t* data, size_t len,
+        ExceptionSink* xsink) -> AbstractPrivateData* {
+        return QoreIsolationForest::deserializeState(data, len, xsink);
+    });
+    MLSerialization::registerAlgorithm("LOF", [](const uint8_t* data, size_t len,
+        ExceptionSink* xsink) -> AbstractPrivateData* {
+        return QoreLOF::deserializeState(data, len, xsink);
+    });
+    MLSerialization::registerAlgorithm("GMM", [](const uint8_t* data, size_t len,
+        ExceptionSink* xsink) -> AbstractPrivateData* {
+        return QoreGMM::deserializeState(data, len, xsink);
+    });
+    MLSerialization::registerAlgorithm("HoltWinters", [](const uint8_t* data, size_t len,
+        ExceptionSink* xsink) -> AbstractPrivateData* {
+        return QoreHoltWinters::deserializeState(data, len, xsink);
+    });
+    MLSerialization::registerAlgorithm("KNN", [](const uint8_t* data, size_t len,
+        ExceptionSink* xsink) -> AbstractPrivateData* {
+        return QoreKNN::deserializeState(data, len, xsink);
+    });
+    MLSerialization::registerAlgorithm("StandardScaler", [](const uint8_t* data, size_t len,
+        ExceptionSink* xsink) -> AbstractPrivateData* {
+        return QoreStandardScaler::deserializeState(data, len, xsink);
+    });
+    MLSerialization::registerAlgorithm("MinMaxScaler", [](const uint8_t* data, size_t len,
+        ExceptionSink* xsink) -> AbstractPrivateData* {
+        return QoreMinMaxScaler::deserializeState(data, len, xsink);
+    });
+    MLSerialization::registerAlgorithm("Imputer", [](const uint8_t* data, size_t len,
+        ExceptionSink* xsink) -> AbstractPrivateData* {
+        return QoreImputer::deserializeState(data, len, xsink);
+    });
 }
 
 static void ml_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink) {

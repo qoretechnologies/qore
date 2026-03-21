@@ -26,6 +26,7 @@
 */
 
 #include "QC_MinMaxScaler.h"
+#include "ml_serialization.h"
 
 extern const TypedHashDecl* hashdeclMinMaxScalerInfo;
 
@@ -179,4 +180,52 @@ QoreHashNode* QoreMinMaxScaler::getInfo(ExceptionSink* xsink) const {
     rv->setKeyValue("n_features", static_cast<int64>(n_features), xsink);
 
     return rv.release();
+}
+
+std::vector<uint8_t> QoreMinMaxScaler::serializeState() const {
+    std::vector<uint8_t> buf;
+    // Hyperparameters
+    MLSerialization::writeScalar(buf, feature_min);
+    MLSerialization::writeScalar(buf, feature_max);
+    // Model state
+    MLSerialization::writeInt32(buf, n_features);
+    MLSerialization::writeVector(buf, data_min);
+    MLSerialization::writeVector(buf, data_max);
+    MLSerialization::writeVector(buf, scale);
+    MLSerialization::writeVector(buf, min_adj);
+    MLSerialization::writeStringVector(buf, field_names);
+    return buf;
+}
+
+QoreMinMaxScaler* QoreMinMaxScaler::deserializeState(const uint8_t* data, size_t len,
+    ExceptionSink* xsink) {
+    const uint8_t* ptr = data;
+    size_t remaining = len;
+
+    double feature_min = MLSerialization::readScalar(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    double feature_max = MLSerialization::readScalar(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    int32_t n_features = MLSerialization::readInt32(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    VectorXd data_min_v = MLSerialization::readVector(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    VectorXd data_max_v = MLSerialization::readVector(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    VectorXd scale_v = MLSerialization::readVector(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    VectorXd min_adj_v = MLSerialization::readVector(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    std::vector<std::string> field_names = MLSerialization::readStringVector(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+
+    std::unique_ptr<QoreMinMaxScaler> obj(new QoreMinMaxScaler(feature_min, feature_max));
+    obj->n_features = n_features;
+    obj->data_min = std::move(data_min_v);
+    obj->data_max = std::move(data_max_v);
+    obj->scale = std::move(scale_v);
+    obj->min_adj = std::move(min_adj_v);
+    obj->field_names = std::move(field_names);
+    obj->fitted = true;
+    return obj.release();
 }

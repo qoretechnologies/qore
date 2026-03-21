@@ -26,6 +26,7 @@
 */
 
 #include "QC_LogisticRegression.h"
+#include "ml_serialization.h"
 
 #include <algorithm>
 #include <set>
@@ -358,4 +359,70 @@ QoreListNode* QoreLogisticRegression::predictMatrix(const MatrixXd& X,
         rv->push(result, xsink);
     }
     return rv.release();
+}
+
+std::vector<uint8_t> QoreLogisticRegression::serializeState() const {
+    std::vector<uint8_t> buf;
+    // Hyperparameters
+    MLSerialization::writeScalar(buf, learning_rate);
+    MLSerialization::writeInt32(buf, max_iterations);
+    MLSerialization::writeScalar(buf, tolerance);
+    MLSerialization::writeScalar(buf, regularization);
+    MLSerialization::writeString(buf, penalty);
+    MLSerialization::writeBool(buf, fit_intercept);
+    // Model state
+    MLSerialization::writeMatrix(buf, weights);
+    MLSerialization::writeVector(buf, intercepts);
+    MLSerialization::writeDoubleVector(buf, classes);
+    MLSerialization::writeBool(buf, is_binary);
+    MLSerialization::writeInt32(buf, n_features);
+    MLSerialization::writeStringVector(buf, field_names);
+    MLSerialization::writeString(buf, target_field);
+    return buf;
+}
+
+QoreLogisticRegression* QoreLogisticRegression::deserializeState(const uint8_t* data,
+    size_t len, ExceptionSink* xsink) {
+    const uint8_t* ptr = data;
+    size_t remaining = len;
+
+    double learning_rate = MLSerialization::readScalar(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    int32_t max_iterations = MLSerialization::readInt32(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    double tolerance = MLSerialization::readScalar(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    double regularization = MLSerialization::readScalar(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    std::string penalty = MLSerialization::readString(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    bool fit_intercept = MLSerialization::readBool(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+
+    MatrixXd weights = MLSerialization::readMatrix(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    VectorXd intercepts = MLSerialization::readVector(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    std::vector<double> classes = MLSerialization::readDoubleVector(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    bool is_binary = MLSerialization::readBool(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    int32_t n_features = MLSerialization::readInt32(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    std::vector<std::string> field_names = MLSerialization::readStringVector(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    std::string target_field = MLSerialization::readString(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+
+    std::unique_ptr<QoreLogisticRegression> obj(new QoreLogisticRegression(
+        learning_rate, max_iterations, tolerance, regularization, penalty, fit_intercept));
+    obj->weights = std::move(weights);
+    obj->intercepts = std::move(intercepts);
+    obj->classes = std::move(classes);
+    obj->is_binary = is_binary;
+    obj->n_features = n_features;
+    obj->field_names = std::move(field_names);
+    obj->target_field = std::move(target_field);
+    obj->fitted = true;
+    return obj.release();
 }

@@ -26,6 +26,7 @@
 */
 
 #include "QC_GMM.h"
+#include "ml_serialization.h"
 
 #include <algorithm>
 #include <numeric>
@@ -496,4 +497,86 @@ double QoreGMM::getLogLikelihood(ExceptionSink* xsink) const {
         return 0.0;
     }
     return log_likelihood;
+}
+
+std::vector<uint8_t> QoreGMM::serializeState() const {
+    std::vector<uint8_t> buf;
+    // Hyperparameters
+    MLSerialization::writeInt32(buf, n_components);
+    MLSerialization::writeInt32(buf, max_iterations);
+    MLSerialization::writeScalar(buf, tolerance);
+    MLSerialization::writeString(buf, covariance_type);
+    // Model state
+    MLSerialization::writeInt32(buf, n_features);
+    MLSerialization::writeInt32(buf, batch_count);
+    MLSerialization::writeScalar(buf, log_likelihood);
+    // Means: n_components vectors
+    MLSerialization::writeInt32(buf, static_cast<int32_t>(means.size()));
+    for (const auto& m : means) {
+        MLSerialization::writeVector(buf, m);
+    }
+    // Covariances: n_components matrices
+    MLSerialization::writeInt32(buf, static_cast<int32_t>(covariances.size()));
+    for (const auto& cov : covariances) {
+        MLSerialization::writeMatrix(buf, cov);
+    }
+    // Weights
+    MLSerialization::writeVector(buf, weights);
+    MLSerialization::writeStringVector(buf, field_names);
+    return buf;
+}
+
+QoreGMM* QoreGMM::deserializeState(const uint8_t* data, size_t len, ExceptionSink* xsink) {
+    const uint8_t* ptr = data;
+    size_t remaining = len;
+
+    int32_t n_components = MLSerialization::readInt32(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    int32_t max_iterations = MLSerialization::readInt32(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    double tolerance = MLSerialization::readScalar(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    std::string covariance_type = MLSerialization::readString(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    int32_t n_features = MLSerialization::readInt32(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    int32_t batch_count = MLSerialization::readInt32(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    double log_likelihood = MLSerialization::readScalar(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+
+    int32_t means_count = MLSerialization::readInt32(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    std::vector<VectorXd> means;
+    means.reserve(means_count);
+    for (int32_t i = 0; i < means_count; ++i) {
+        means.push_back(MLSerialization::readVector(ptr, remaining, xsink));
+        if (*xsink) { return nullptr; }
+    }
+
+    int32_t cov_count = MLSerialization::readInt32(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    std::vector<MatrixXd> covariances;
+    covariances.reserve(cov_count);
+    for (int32_t i = 0; i < cov_count; ++i) {
+        covariances.push_back(MLSerialization::readMatrix(ptr, remaining, xsink));
+        if (*xsink) { return nullptr; }
+    }
+
+    VectorXd weights = MLSerialization::readVector(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    std::vector<std::string> field_names = MLSerialization::readStringVector(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+
+    std::unique_ptr<QoreGMM> obj(new QoreGMM(n_components, max_iterations, tolerance,
+        1, covariance_type));
+    obj->n_features = n_features;
+    obj->batch_count = batch_count;
+    obj->log_likelihood = log_likelihood;
+    obj->means = std::move(means);
+    obj->covariances = std::move(covariances);
+    obj->weights = std::move(weights);
+    obj->field_names = std::move(field_names);
+    obj->fitted = true;
+    return obj.release();
 }

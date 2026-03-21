@@ -26,6 +26,7 @@
 */
 
 #include "QC_KMeans.h"
+#include "ml_serialization.h"
 
 #include <numeric>
 
@@ -344,4 +345,56 @@ QoreListNode* QoreKMeans::getCentroids(ExceptionSink* xsink) {
         rv->push(row.release(), xsink);
     }
     return rv.release();
+}
+
+std::vector<uint8_t> QoreKMeans::serializeState() const {
+    std::vector<uint8_t> buf;
+    // Hyperparameters
+    MLSerialization::writeInt32(buf, k);
+    MLSerialization::writeInt32(buf, max_iterations);
+    MLSerialization::writeScalar(buf, tolerance);
+    MLSerialization::writeString(buf, init_method);
+    // Model state
+    MLSerialization::writeMatrix(buf, centroids);
+    MLSerialization::writeIntVector(buf, centroid_counts);
+    MLSerialization::writeInt32(buf, n_features);
+    MLSerialization::writeScalar(buf, inertia);
+    MLSerialization::writeStringVector(buf, field_names);
+    return buf;
+}
+
+QoreKMeans* QoreKMeans::deserializeState(const uint8_t* data, size_t len,
+    ExceptionSink* xsink) {
+    const uint8_t* ptr = data;
+    size_t remaining = len;
+
+    int32_t k = MLSerialization::readInt32(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    int32_t max_iterations = MLSerialization::readInt32(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    double tolerance = MLSerialization::readScalar(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    std::string init_method = MLSerialization::readString(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+
+    MatrixXd centroids = MLSerialization::readMatrix(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    std::vector<int> centroid_counts = MLSerialization::readIntVector(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    int32_t n_features = MLSerialization::readInt32(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    double inertia = MLSerialization::readScalar(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    std::vector<std::string> field_names = MLSerialization::readStringVector(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+
+    std::unique_ptr<QoreKMeans> obj(new QoreKMeans(k, max_iterations, tolerance, 1,
+        init_method.c_str()));
+    obj->centroids = std::move(centroids);
+    obj->centroid_counts = std::move(centroid_counts);
+    obj->n_features = n_features;
+    obj->inertia = inertia;
+    obj->field_names = std::move(field_names);
+    obj->fitted = true;
+    return obj.release();
 }

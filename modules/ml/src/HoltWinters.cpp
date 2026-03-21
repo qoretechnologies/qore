@@ -26,6 +26,7 @@
 */
 
 #include "QC_HoltWinters.h"
+#include "ml_serialization.h"
 
 // Extern declaration for hashdecl (defined in ml-module.cpp)
 extern const TypedHashDecl* hashdeclHoltWintersResult;
@@ -289,4 +290,61 @@ QoreListNode* QoreHoltWinters::getSeasonal(ExceptionSink* xsink) {
         rv->push(seasonal[i], xsink);
     }
     return rv.release();
+}
+
+std::vector<uint8_t> QoreHoltWinters::serializeState() const {
+    std::vector<uint8_t> buf;
+    // Hyperparameters
+    MLSerialization::writeInt32(buf, period);
+    MLSerialization::writeScalar(buf, alpha);
+    MLSerialization::writeScalar(buf, beta);
+    MLSerialization::writeScalar(buf, gamma);
+    MLSerialization::writeString(buf, seasonal_type);
+    MLSerialization::writeBool(buf, damped);
+    MLSerialization::writeScalar(buf, phi);
+    // Model state
+    MLSerialization::writeScalar(buf, level);
+    MLSerialization::writeScalar(buf, trend);
+    MLSerialization::writeDoubleVector(buf, seasonal);
+    MLSerialization::writeInt32(buf, t);
+    return buf;
+}
+
+QoreHoltWinters* QoreHoltWinters::deserializeState(const uint8_t* data, size_t len,
+    ExceptionSink* xsink) {
+    const uint8_t* ptr = data;
+    size_t remaining = len;
+
+    int32_t period = MLSerialization::readInt32(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    double alpha = MLSerialization::readScalar(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    double beta = MLSerialization::readScalar(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    double gamma = MLSerialization::readScalar(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    std::string seasonal_type = MLSerialization::readString(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    bool damped = MLSerialization::readBool(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    double phi = MLSerialization::readScalar(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+
+    double hw_level = MLSerialization::readScalar(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    double hw_trend = MLSerialization::readScalar(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    std::vector<double> seasonal = MLSerialization::readDoubleVector(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    int32_t t = MLSerialization::readInt32(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+
+    std::unique_ptr<QoreHoltWinters> obj(new QoreHoltWinters(
+        period, alpha, beta, gamma, seasonal_type.c_str(), damped, phi));
+    obj->level = hw_level;
+    obj->trend = hw_trend;
+    obj->seasonal = std::move(seasonal);
+    obj->t = t;
+    obj->fitted = true;
+    return obj.release();
 }

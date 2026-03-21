@@ -26,6 +26,7 @@
 */
 
 #include "QC_StandardScaler.h"
+#include "ml_serialization.h"
 
 extern const TypedHashDecl* hashdeclStandardScalerInfo;
 
@@ -198,4 +199,44 @@ QoreHashNode* QoreStandardScaler::getInfo(ExceptionSink* xsink) const {
     rv->setKeyValue("with_std", with_std, xsink);
 
     return rv.release();
+}
+
+std::vector<uint8_t> QoreStandardScaler::serializeState() const {
+    std::vector<uint8_t> buf;
+    // Hyperparameters
+    MLSerialization::writeBool(buf, with_mean);
+    MLSerialization::writeBool(buf, with_std);
+    // Model state
+    MLSerialization::writeInt32(buf, n_features);
+    MLSerialization::writeVector(buf, mean_vec);
+    MLSerialization::writeVector(buf, std_vec);
+    MLSerialization::writeStringVector(buf, field_names);
+    return buf;
+}
+
+QoreStandardScaler* QoreStandardScaler::deserializeState(const uint8_t* data, size_t len,
+    ExceptionSink* xsink) {
+    const uint8_t* ptr = data;
+    size_t remaining = len;
+
+    bool with_mean = MLSerialization::readBool(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    bool with_std = MLSerialization::readBool(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    int32_t n_features = MLSerialization::readInt32(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    VectorXd mean_vec = MLSerialization::readVector(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    VectorXd std_vec = MLSerialization::readVector(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    std::vector<std::string> field_names = MLSerialization::readStringVector(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+
+    std::unique_ptr<QoreStandardScaler> obj(new QoreStandardScaler(with_mean, with_std));
+    obj->n_features = n_features;
+    obj->mean_vec = std::move(mean_vec);
+    obj->std_vec = std::move(std_vec);
+    obj->field_names = std::move(field_names);
+    obj->fitted = true;
+    return obj.release();
 }

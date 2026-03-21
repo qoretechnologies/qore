@@ -90,6 +90,13 @@ public:
     DLLLOCAL void setFieldNames(const std::vector<std::string>& names) { field_names = names; }
     DLLLOCAL const std::vector<std::string>& getFieldNames() const { return field_names; }
 
+    //! Serialize model state to binary
+    DLLLOCAL std::vector<uint8_t> serializeState() const;
+
+    //! Deserialize model state from binary
+    DLLLOCAL static QoreIsolationForest* deserializeState(const uint8_t* data, size_t len,
+        ExceptionSink* xsink);
+
 private:
     int n_trees;
     int sample_size;

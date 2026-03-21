@@ -26,6 +26,7 @@
 */
 
 #include "QC_Imputer.h"
+#include "ml_serialization.h"
 
 #include <algorithm>
 #include <map>
@@ -219,4 +220,40 @@ QoreHashNode* QoreImputer::getInfo(ExceptionSink* xsink) const {
     rv->setKeyValue("n_features", static_cast<int64>(n_features), xsink);
 
     return rv.release();
+}
+
+std::vector<uint8_t> QoreImputer::serializeState() const {
+    std::vector<uint8_t> buf;
+    // Hyperparameters
+    MLSerialization::writeString(buf, strategy);
+    MLSerialization::writeScalar(buf, constant_value);
+    // Model state
+    MLSerialization::writeInt32(buf, n_features);
+    MLSerialization::writeVector(buf, fill_values);
+    MLSerialization::writeStringVector(buf, field_names);
+    return buf;
+}
+
+QoreImputer* QoreImputer::deserializeState(const uint8_t* data, size_t len,
+    ExceptionSink* xsink) {
+    const uint8_t* ptr = data;
+    size_t remaining = len;
+
+    std::string strategy = MLSerialization::readString(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    double constant_value = MLSerialization::readScalar(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    int32_t n_features = MLSerialization::readInt32(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    VectorXd fill_values = MLSerialization::readVector(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    std::vector<std::string> field_names = MLSerialization::readStringVector(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+
+    std::unique_ptr<QoreImputer> obj(new QoreImputer(strategy, constant_value));
+    obj->n_features = n_features;
+    obj->fill_values = std::move(fill_values);
+    obj->field_names = std::move(field_names);
+    obj->fitted = true;
+    return obj.release();
 }

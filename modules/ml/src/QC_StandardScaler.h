@@ -82,6 +82,13 @@ public:
     //! Get the std vector (for serialization)
     DLLLOCAL const VectorXd& getStd() const { return std_vec; }
 
+    //! Serialize model state to binary
+    DLLLOCAL std::vector<uint8_t> serializeState() const;
+
+    //! Deserialize model state from binary
+    DLLLOCAL static QoreStandardScaler* deserializeState(const uint8_t* data, size_t len,
+        ExceptionSink* xsink);
+
 private:
     bool with_mean;
     bool with_std;

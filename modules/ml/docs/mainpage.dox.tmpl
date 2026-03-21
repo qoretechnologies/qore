@@ -195,6 +195,40 @@ if (caps.has_onnx) {
 }
     @endcode
 
+    @section mlpersistence Model Persistence
+
+    Save trained models so they survive restarts and can be shared between systems.
+
+    @subsection mlpersist_inmemory In-Memory Serialization
+
+    Serialize a fitted model to binary and deserialize it back — useful for caching,
+    sending over the network, or storing in a database:
+
+    @code{.py}
+# Serialize a trained model to binary
+binary data = Qore::ML::ml_serialize(trained_model);
+
+# Later, reconstruct it (ready for prediction immediately)
+auto restored = Qore::ML::ml_deserialize(data);
+hash<auto> result = restored.predict(new_record);
+    @endcode
+
+    @subsection mlpersist_file File-Based Persistence
+
+    Save models to disk and load them back:
+
+    @code{.py}
+# Save a trained KMeans model
+Qore::ML::ml_save_model(km, "/models/customer_segments.qml");
+
+# Load it in another process or after restart
+auto km2 = Qore::ML::ml_load_model("/models/customer_segments.qml");
+hash<Qore::ML::KMeansResult> result = km2.predict(customer_data);
+    @endcode
+
+    The native \c .qml format is a compact binary format with CRC-32 integrity checking.
+    All 12 algorithm types are supported.
+
     @section mlchoosing Choosing the Right Algorithm
 
     <b>"I need to find bad or unusual records"</b>
@@ -493,6 +527,8 @@ if (!caps.has_onnx) {
       - Clustering metrics: \c ml_silhouette_score(), \c ml_davies_bouldin_score(), \c ml_calinski_harabasz_score()
       - @ref Qore::ML::CrossValidator "CrossValidator" — k-fold cross-validation split utility
     - Optional @ref Qore::ML::OnnxModel "OnnxModel" for ONNX Runtime inference (requires libonnxruntime)
+    - Model persistence: \c ml_serialize() / \c ml_deserialize() for in-memory round-trip,
+      \c ml_save_model() / \c ml_load_model() for file-based persistence (.qml native format)
     - Online learning (incremental updates) for KMeans, LinearRegression, GMM, and LogisticRegression
     - All algorithms use Eigen3 for efficient matrix operations
     - All algorithms support cooperative cancellation for responsive interrupt handling

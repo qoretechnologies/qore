@@ -79,6 +79,13 @@ public:
     DLLLOCAL void setTargetField(const std::string& name) { target_field = name; }
     DLLLOCAL const std::string& getTargetField() const { return target_field; }
 
+    //! Serialize model state to binary
+    DLLLOCAL std::vector<uint8_t> serializeState() const;
+
+    //! Deserialize model state from binary
+    DLLLOCAL static QoreLinearRegression* deserializeState(const uint8_t* data, size_t len,
+        ExceptionSink* xsink);
+
 private:
     bool fit_intercept;
     bool do_normalize;

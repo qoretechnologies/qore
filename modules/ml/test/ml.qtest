@@ -170,6 +170,23 @@ public class MlTest inherits QUnit::Test {
         addTestCase("CrossValidator error cases", \cvErrorTest());
         addTestCase("metrics integration with LR", \metricsIntegrationLRTest());
         addTestCase("metrics integration with KMeans", \metricsIntegrationKMeansTest());
+        # Phase: Serialization
+        addTestCase("serialize KMeans round-trip", \serializeKMeansTest());
+        addTestCase("serialize LinearRegression round-trip", \serializeLRTest());
+        addTestCase("serialize LogisticRegression round-trip", \serializeLogRegTest());
+        addTestCase("serialize PCA round-trip", \serializePCATest());
+        addTestCase("serialize IsolationForest round-trip", \serializeIForestTest());
+        addTestCase("serialize LOF round-trip", \serializeLOFTest());
+        addTestCase("serialize GMM round-trip", \serializeGMMTest());
+        addTestCase("serialize HoltWinters round-trip", \serializeHWTest());
+        addTestCase("serialize KNN round-trip", \serializeKNNTest());
+        addTestCase("serialize StandardScaler round-trip", \serializeStdScalerTest());
+        addTestCase("serialize MinMaxScaler round-trip", \serializeMMScalerTest());
+        addTestCase("serialize Imputer round-trip", \serializeImputerTest());
+        addTestCase("serialize file save/load KMeans", \serializeFileKMeansTest());
+        addTestCase("serialize file save/load LinearRegression", \serializeFileLRTest());
+        addTestCase("serialize file save/load StandardScaler", \serializeFileStdScalerTest());
+        addTestCase("serialize error cases", \serializeErrorTest());
         set_return_value(main());
     }
 
@@ -3467,6 +3484,285 @@ public class MlTest inherits QUnit::Test {
         assertThrows("COPY-ERROR", sub() {
             ML::KNN knn2 = knn.copy();
         });
+    }
+
+    # --- Serialization tests ---
+
+    serializeKMeansTest() {
+        ML::KMeans km({"k": 3, "seed": 42});
+        km.fitMatrix(((1.0, 1.0), (1.1, 1.1), (5.0, 5.0), (5.1, 5.1), (9.0, 9.0), (9.1, 9.1)));
+
+        # Get predictions from original using matrix API
+        list<hash<ML::KMeansResult>> orig = km.predictMatrix(((1.05, 1.05),));
+
+        # Serialize and deserialize
+        binary blob = ML::ml_serialize(km);
+        assertGt(0, blob.size());
+
+        auto restored = ML::ml_deserialize(blob);
+        assertTrue(restored instanceof ML::KMeans);
+
+        # Predict with restored model
+        list<hash<ML::KMeansResult>> res = restored.predictMatrix(((1.05, 1.05),));
+        assertEq(orig[0].cluster, res[0].cluster);
+        assertFloat(orig[0].distance, res[0].distance, 1e-10);
+    }
+
+    serializeLRTest() {
+        ML::LinearRegression lr({"fit_intercept": True});
+        lr.fitMatrix(((1.0,), (2.0,), (3.0,), (4.0,), (5.0,)), (2.0, 4.0, 6.0, 8.0, 10.0));
+
+        list<hash<ML::LinearRegressionResult>> orig = lr.predictMatrix(((3.5,),));
+
+        binary blob = ML::ml_serialize(lr);
+        auto restored = ML::ml_deserialize(blob);
+        assertTrue(restored instanceof ML::LinearRegression);
+
+        list<hash<ML::LinearRegressionResult>> res = restored.predictMatrix(((3.5,),));
+        assertFloat(orig[0].prediction, res[0].prediction, 1e-10);
+        assertFloat(orig[0].intercept, res[0].intercept, 1e-10);
+        assertFloat(orig[0].r_squared, res[0].r_squared, 1e-10);
+    }
+
+    serializeLogRegTest() {
+        ML::LogisticRegression logr({"learning_rate": 0.5, "max_iterations": 200, "seed": 42});
+        logr.fitMatrix(
+            ((0.0, 0.0), (0.1, 0.1), (0.2, 0.2), (5.0, 5.0), (5.1, 5.1), (5.2, 5.2)),
+            (0, 0, 0, 1, 1, 1)
+        );
+
+        list<hash<ML::LogisticRegressionResult>> orig = logr.predictMatrix(((0.15, 0.15),));
+
+        binary blob = ML::ml_serialize(logr);
+        auto restored = ML::ml_deserialize(blob);
+        assertTrue(restored instanceof ML::LogisticRegression);
+
+        list<hash<ML::LogisticRegressionResult>> res = restored.predictMatrix(((0.15, 0.15),));
+        assertFloat(orig[0].predicted_class, res[0].predicted_class, 1e-10);
+        assertFloat(orig[0].max_probability, res[0].max_probability, 1e-10);
+    }
+
+    serializePCATest() {
+        ML::PCA pca({"n_components": 1});
+        pca.fitMatrix(((1.0, 2.0), (3.0, 4.0), (5.0, 6.0), (7.0, 8.0)));
+
+        list<hash<ML::PCAResult>> orig = pca.transformMatrix(((4.0, 5.0),));
+
+        binary blob = ML::ml_serialize(pca);
+        auto restored = ML::ml_deserialize(blob);
+        assertTrue(restored instanceof ML::PCA);
+
+        list<hash<ML::PCAResult>> res = restored.transformMatrix(((4.0, 5.0),));
+        assertFloat(orig[0].components[0], res[0].components[0], 1e-10);
+        assertFloat(orig[0].total_explained_variance, res[0].total_explained_variance, 1e-10);
+    }
+
+    serializeIForestTest() {
+        ML::IsolationForest iforest({"n_trees": 10, "seed": 42});
+        iforest.fitMatrix(
+            ((1.0, 1.0), (1.1, 1.0), (1.0, 1.1), (1.1, 1.1),
+             (0.9, 0.9), (1.2, 1.2), (0.8, 1.0), (1.0, 0.8))
+        );
+
+        list<hash<ML::IsolationForestResult>> orig = iforest.scoreMatrix(((1.05, 1.05),));
+
+        binary blob = ML::ml_serialize(iforest);
+        auto restored = ML::ml_deserialize(blob);
+        assertTrue(restored instanceof ML::IsolationForest);
+
+        list<hash<ML::IsolationForestResult>> res = restored.scoreMatrix(((1.05, 1.05),));
+        assertFloat(orig[0].anomaly_score, res[0].anomaly_score, 1e-10);
+        assertFloat(orig[0].average_path_length, res[0].average_path_length, 1e-10);
+    }
+
+    serializeLOFTest() {
+        ML::LOF lof({"k": 2});
+        lof.fitMatrix(
+            ((1.0, 1.0), (1.1, 1.0), (1.0, 1.1), (1.1, 1.1),
+             (0.9, 0.9), (1.2, 1.2))
+        );
+
+        list<hash<ML::LOFResult>> orig = lof.scoreMatrix(((1.05, 1.05),));
+
+        binary blob = ML::ml_serialize(lof);
+        auto restored = ML::ml_deserialize(blob);
+        assertTrue(restored instanceof ML::LOF);
+
+        list<hash<ML::LOFResult>> res = restored.scoreMatrix(((1.05, 1.05),));
+        assertFloat(orig[0].lof_score, res[0].lof_score, 1e-10);
+        assertFloat(orig[0].k_distance, res[0].k_distance, 1e-10);
+    }
+
+    serializeGMMTest() {
+        ML::GMM gmm({"n_components": 2, "seed": 42});
+        gmm.fitMatrix(
+            ((1.0, 1.0), (1.1, 1.0), (1.0, 1.1), (5.0, 5.0), (5.1, 5.0), (5.0, 5.1))
+        );
+
+        list<hash<ML::GMMResult>> orig = gmm.predictMatrix(((1.05, 1.05),));
+
+        binary blob = ML::ml_serialize(gmm);
+        auto restored = ML::ml_deserialize(blob);
+        assertTrue(restored instanceof ML::GMM);
+
+        list<hash<ML::GMMResult>> res = restored.predictMatrix(((1.05, 1.05),));
+        assertEq(orig[0].cluster, res[0].cluster);
+        assertFloat(orig[0].max_probability, res[0].max_probability, 1e-10);
+    }
+
+    serializeHWTest() {
+        ML::HoltWinters hw({"period": 4, "alpha": 0.3, "beta": 0.1, "gamma": 0.1});
+        hw.fit((10.0, 15.0, 12.0, 8.0, 11.0, 16.0, 13.0, 9.0));
+
+        list<float> orig = hw.forecast(4);
+
+        binary blob = ML::ml_serialize(hw);
+        auto restored = ML::ml_deserialize(blob);
+        assertTrue(restored instanceof ML::HoltWinters);
+
+        list<float> res = restored.forecast(4);
+        assertEq(orig.size(), res.size());
+        for (int i = 0; i < orig.size(); ++i) {
+            assertFloat(orig[i], res[i], 1e-10);
+        }
+    }
+
+    serializeKNNTest() {
+        ML::KNN knn({"k": 3, "task": "classification"});
+        knn.fitMatrix(
+            ((1.0, 1.0), (1.1, 1.0), (1.0, 1.1), (5.0, 5.0), (5.1, 5.0), (5.0, 5.1)),
+            (0, 0, 0, 1, 1, 1)
+        );
+
+        list<hash<auto>> orig = knn.predictMatrix(((1.05, 1.05),));
+
+        binary blob = ML::ml_serialize(knn);
+        auto restored = ML::ml_deserialize(blob);
+        assertTrue(restored instanceof ML::KNN);
+
+        list<hash<auto>> res = restored.predictMatrix(((1.05, 1.05),));
+        assertEq(orig[0].predicted_class, res[0].predicted_class);
+        assertFloat(orig[0].confidence, res[0].confidence, 1e-10);
+    }
+
+    serializeStdScalerTest() {
+        ML::StandardScaler ss();
+        ss.fitMatrix(((1.0, 100.0), (2.0, 200.0), (3.0, 300.0), (4.0, 400.0)));
+
+        list<auto> orig_t = ss.transformMatrix(((2.5, 250.0),));
+
+        binary blob = ML::ml_serialize(ss);
+        auto restored = ML::ml_deserialize(blob);
+        assertTrue(restored instanceof ML::StandardScaler);
+
+        list<auto> res_t = restored.transformMatrix(((2.5, 250.0),));
+        assertEq(orig_t.size(), res_t.size());
+        for (int i = 0; i < orig_t[0].size(); ++i) {
+            assertFloat(orig_t[0][i], res_t[0][i], 1e-10);
+        }
+    }
+
+    serializeMMScalerTest() {
+        ML::MinMaxScaler mms({"feature_min": 0.0, "feature_max": 1.0});
+        mms.fitMatrix(((1.0, 10.0), (2.0, 20.0), (3.0, 30.0)));
+
+        list<auto> orig_t = mms.transformMatrix(((2.0, 20.0),));
+
+        binary blob = ML::ml_serialize(mms);
+        auto restored = ML::ml_deserialize(blob);
+        assertTrue(restored instanceof ML::MinMaxScaler);
+
+        list<auto> res_t = restored.transformMatrix(((2.0, 20.0),));
+        for (int i = 0; i < orig_t[0].size(); ++i) {
+            assertFloat(orig_t[0][i], res_t[0][i], 1e-10);
+        }
+    }
+
+    serializeImputerTest() {
+        ML::Imputer imp({"strategy": "mean"});
+        imp.fitMatrix(((1.0, 2.0), (3.0, 4.0), (5.0, 6.0)));
+
+        hash<ML::ImputerInfo> orig_info = imp.getInfo();
+
+        binary blob = ML::ml_serialize(imp);
+        auto restored = ML::ml_deserialize(blob);
+        assertTrue(restored instanceof ML::Imputer);
+
+        hash<ML::ImputerInfo> res_info = restored.getInfo();
+        assertEq(orig_info.strategy, res_info.strategy);
+        assertEq(orig_info.n_features, res_info.n_features);
+        for (int i = 0; i < orig_info.fill_values.size(); ++i) {
+            assertFloat(orig_info.fill_values[i], res_info.fill_values[i], 1e-10);
+        }
+    }
+
+    serializeFileKMeansTest() {
+        ML::KMeans km({"k": 2, "seed": 42});
+        km.fitMatrix(((1.0, 1.0), (1.1, 1.1), (5.0, 5.0), (5.1, 5.1)));
+
+        list<hash<ML::KMeansResult>> orig = km.predictMatrix(((1.05, 1.05),));
+
+        string tmpfile = "/tmp/test_ml_kmeans.qml";
+        on_exit { unlink(tmpfile); }
+        ML::ml_save_model(km, tmpfile);
+
+        auto restored = ML::ml_load_model(tmpfile);
+        assertTrue(restored instanceof ML::KMeans);
+
+        list<hash<ML::KMeansResult>> res = restored.predictMatrix(((1.05, 1.05),));
+        assertEq(orig[0].cluster, res[0].cluster);
+        assertFloat(orig[0].distance, res[0].distance, 1e-10);
+    }
+
+    serializeFileLRTest() {
+        ML::LinearRegression lr({"fit_intercept": True});
+        lr.fitMatrix(((1.0,), (2.0,), (3.0,)), (3.0, 5.0, 7.0));
+
+        list<hash<ML::LinearRegressionResult>> orig = lr.predictMatrix(((2.5,),));
+
+        string tmpfile = "/tmp/test_ml_lr.qml";
+        on_exit { unlink(tmpfile); }
+        ML::ml_save_model(lr, tmpfile);
+
+        auto restored = ML::ml_load_model(tmpfile);
+        assertTrue(restored instanceof ML::LinearRegression);
+
+        list<hash<ML::LinearRegressionResult>> res = restored.predictMatrix(((2.5,),));
+        assertFloat(orig[0].prediction, res[0].prediction, 1e-10);
+    }
+
+    serializeFileStdScalerTest() {
+        ML::StandardScaler ss();
+        ss.fitMatrix(((10.0, 200.0), (20.0, 400.0), (30.0, 600.0)));
+
+        list<auto> orig_t = ss.transformMatrix(((20.0, 400.0),));
+
+        string tmpfile = "/tmp/test_ml_stdscaler.qml";
+        on_exit { unlink(tmpfile); }
+        ML::ml_save_model(ss, tmpfile);
+
+        auto restored = ML::ml_load_model(tmpfile);
+        assertTrue(restored instanceof ML::StandardScaler);
+
+        list<auto> res_t = restored.transformMatrix(((20.0, 400.0),));
+        for (int i = 0; i < orig_t[0].size(); ++i) {
+            assertFloat(orig_t[0][i], res_t[0][i], 1e-10);
+        }
+    }
+
+    serializeErrorTest() {
+        # Serialize unfitted model
+        ML::KMeans km_unfitted({"k": 3});
+        assertThrows("ML-SERIALIZE-ERROR", sub() { ML::ml_serialize(km_unfitted); });
+
+        # Deserialize corrupted data
+        assertThrows("ML-DESERIALIZE-ERROR", sub() { ML::ml_deserialize(<abcdef>); });
+
+        # Deserialize truncated data (valid magic but too short)
+        assertThrows("ML-DESERIALIZE-ERROR", sub() { ML::ml_deserialize(<514d4c01>); });
+
+        # Load nonexistent file
+        assertThrows("FILE-OPEN2-ERROR", sub() { ML::ml_load_model("/nonexistent/path/model.qml"); });
     }
 
     private assertFloat(float expected, auto actual, float tolerance) {

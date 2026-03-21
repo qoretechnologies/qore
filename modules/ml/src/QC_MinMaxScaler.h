@@ -78,6 +78,13 @@ public:
     DLLLOCAL double getFeatureMin() const { return feature_min; }
     DLLLOCAL double getFeatureMax() const { return feature_max; }
 
+    //! Serialize model state to binary
+    DLLLOCAL std::vector<uint8_t> serializeState() const;
+
+    //! Deserialize model state from binary
+    DLLLOCAL static QoreMinMaxScaler* deserializeState(const uint8_t* data, size_t len,
+        ExceptionSink* xsink);
+
 private:
     double feature_min;
     double feature_max;

@@ -27,6 +27,20 @@
 
 #include "qore/Qore.h"
 #include "ml_metrics.h"
+#include "ml_serialization.h"
+
+#include "QC_KMeans.h"
+#include "QC_LinearRegression.h"
+#include "QC_LogisticRegression.h"
+#include "QC_PCA.h"
+#include "QC_IsolationForest.h"
+#include "QC_LOF.h"
+#include "QC_GMM.h"
+#include "QC_HoltWinters.h"
+#include "QC_KNN.h"
+#include "QC_StandardScaler.h"
+#include "QC_MinMaxScaler.h"
+#include "QC_Imputer.h"
 
 #include <Eigen/Dense>
 #ifdef HAVE_ONNXRUNTIME
@@ -747,6 +761,505 @@ float ml_calinski_harabasz_score(list<auto> data, list<auto> labels) [dom=DEFAUL
     VectorXd lbl = qoreListToVector(labels, xsink);
     if (*xsink) { return QoreValue(); }
     return mlCalinskiHarabaszScore(mat, lbl, xsink);
+}
+
+//! Serializes a fitted ML model to binary format
+/** @param model a fitted ML model object (KMeans, LinearRegression, etc.)
+    @return binary data containing the serialized model
+
+    @par Example:
+    @code{.py}
+KMeans km({"k": 3, "seed": 42});
+km.fitMatrix(data);
+binary blob = ml_serialize(km);
+    @endcode
+
+    @throw ML-SERIALIZE-ERROR if the model is not fitted or the object type is unknown
+*/
+binary ml_serialize(object model) [dom=DEFAULT] {
+    // Try each known algorithm CID
+    std::string algorithm;
+    std::vector<uint8_t> model_data;
+    std::vector<std::string> field_names;
+
+    QoreKMeans* km = dynamic_cast<QoreKMeans*>(
+        model->getReferencedPrivateData(CID_KMEANS, xsink));
+    if (km) {
+        if (!km->isFitted()) {
+            km->deref(xsink);
+            xsink->raiseException("ML-SERIALIZE-ERROR",
+                "model has not been fitted: call fit() before serializing");
+            return QoreValue();
+        }
+        algorithm = "KMeans";
+        model_data = km->serializeState();
+        field_names = km->getFieldNames();
+        km->deref(xsink);
+        return MLSerialization::serializeModel(algorithm, model_data, "{}", field_names, xsink);
+    }
+    if (*xsink) { xsink->clear(); }
+
+    QoreLinearRegression* lr = dynamic_cast<QoreLinearRegression*>(
+        model->getReferencedPrivateData(CID_LINEARREGRESSION, xsink));
+    if (lr) {
+        if (!lr->isFitted()) {
+            lr->deref(xsink);
+            xsink->raiseException("ML-SERIALIZE-ERROR",
+                "model has not been fitted: call fit() before serializing");
+            return QoreValue();
+        }
+        algorithm = "LinearRegression";
+        model_data = lr->serializeState();
+        field_names = lr->getFieldNames();
+        lr->deref(xsink);
+        return MLSerialization::serializeModel(algorithm, model_data, "{}", field_names, xsink);
+    }
+    if (*xsink) { xsink->clear(); }
+
+    QoreLogisticRegression* logr = dynamic_cast<QoreLogisticRegression*>(
+        model->getReferencedPrivateData(CID_LOGISTICREGRESSION, xsink));
+    if (logr) {
+        if (!logr->isFitted()) {
+            logr->deref(xsink);
+            xsink->raiseException("ML-SERIALIZE-ERROR",
+                "model has not been fitted: call fit() before serializing");
+            return QoreValue();
+        }
+        algorithm = "LogisticRegression";
+        model_data = logr->serializeState();
+        field_names = logr->getFieldNames();
+        logr->deref(xsink);
+        return MLSerialization::serializeModel(algorithm, model_data, "{}", field_names, xsink);
+    }
+    if (*xsink) { xsink->clear(); }
+
+    QorePCA* pca = dynamic_cast<QorePCA*>(
+        model->getReferencedPrivateData(CID_PCA, xsink));
+    if (pca) {
+        if (!pca->isFitted()) {
+            pca->deref(xsink);
+            xsink->raiseException("ML-SERIALIZE-ERROR",
+                "model has not been fitted: call fit() before serializing");
+            return QoreValue();
+        }
+        algorithm = "PCA";
+        model_data = pca->serializeState();
+        field_names = pca->getFieldNames();
+        pca->deref(xsink);
+        return MLSerialization::serializeModel(algorithm, model_data, "{}", field_names, xsink);
+    }
+    if (*xsink) { xsink->clear(); }
+
+    QoreIsolationForest* iforest = dynamic_cast<QoreIsolationForest*>(
+        model->getReferencedPrivateData(CID_ISOLATIONFOREST, xsink));
+    if (iforest) {
+        if (!iforest->isFitted()) {
+            iforest->deref(xsink);
+            xsink->raiseException("ML-SERIALIZE-ERROR",
+                "model has not been fitted: call fit() before serializing");
+            return QoreValue();
+        }
+        algorithm = "IsolationForest";
+        model_data = iforest->serializeState();
+        field_names = iforest->getFieldNames();
+        iforest->deref(xsink);
+        return MLSerialization::serializeModel(algorithm, model_data, "{}", field_names, xsink);
+    }
+    if (*xsink) { xsink->clear(); }
+
+    QoreLOF* lof = dynamic_cast<QoreLOF*>(
+        model->getReferencedPrivateData(CID_LOF, xsink));
+    if (lof) {
+        if (!lof->isFitted()) {
+            lof->deref(xsink);
+            xsink->raiseException("ML-SERIALIZE-ERROR",
+                "model has not been fitted: call fit() before serializing");
+            return QoreValue();
+        }
+        algorithm = "LOF";
+        model_data = lof->serializeState();
+        field_names = lof->getFieldNames();
+        lof->deref(xsink);
+        return MLSerialization::serializeModel(algorithm, model_data, "{}", field_names, xsink);
+    }
+    if (*xsink) { xsink->clear(); }
+
+    QoreGMM* gmm = dynamic_cast<QoreGMM*>(
+        model->getReferencedPrivateData(CID_GMM, xsink));
+    if (gmm) {
+        if (!gmm->isFitted()) {
+            gmm->deref(xsink);
+            xsink->raiseException("ML-SERIALIZE-ERROR",
+                "model has not been fitted: call fit() before serializing");
+            return QoreValue();
+        }
+        algorithm = "GMM";
+        model_data = gmm->serializeState();
+        field_names = gmm->getFieldNames();
+        gmm->deref(xsink);
+        return MLSerialization::serializeModel(algorithm, model_data, "{}", field_names, xsink);
+    }
+    if (*xsink) { xsink->clear(); }
+
+    QoreHoltWinters* hw = dynamic_cast<QoreHoltWinters*>(
+        model->getReferencedPrivateData(CID_HOLTWINTERS, xsink));
+    if (hw) {
+        if (!hw->isFitted()) {
+            hw->deref(xsink);
+            xsink->raiseException("ML-SERIALIZE-ERROR",
+                "model has not been fitted: call fit() before serializing");
+            return QoreValue();
+        }
+        algorithm = "HoltWinters";
+        model_data = hw->serializeState();
+        hw->deref(xsink);
+        return MLSerialization::serializeModel(algorithm, model_data, "{}", field_names, xsink);
+    }
+    if (*xsink) { xsink->clear(); }
+
+    QoreKNN* knn = dynamic_cast<QoreKNN*>(
+        model->getReferencedPrivateData(CID_KNN, xsink));
+    if (knn) {
+        if (!knn->isFitted()) {
+            knn->deref(xsink);
+            xsink->raiseException("ML-SERIALIZE-ERROR",
+                "model has not been fitted: call fit() before serializing");
+            return QoreValue();
+        }
+        algorithm = "KNN";
+        model_data = knn->serializeState();
+        field_names = knn->getFieldNames();
+        knn->deref(xsink);
+        return MLSerialization::serializeModel(algorithm, model_data, "{}", field_names, xsink);
+    }
+    if (*xsink) { xsink->clear(); }
+
+    QoreStandardScaler* ss = dynamic_cast<QoreStandardScaler*>(
+        model->getReferencedPrivateData(CID_STANDARDSCALER, xsink));
+    if (ss) {
+        if (!ss->isFitted()) {
+            ss->deref(xsink);
+            xsink->raiseException("ML-SERIALIZE-ERROR",
+                "model has not been fitted: call fit() before serializing");
+            return QoreValue();
+        }
+        algorithm = "StandardScaler";
+        model_data = ss->serializeState();
+        field_names = ss->getFieldNames();
+        ss->deref(xsink);
+        return MLSerialization::serializeModel(algorithm, model_data, "{}", field_names, xsink);
+    }
+    if (*xsink) { xsink->clear(); }
+
+    QoreMinMaxScaler* mms = dynamic_cast<QoreMinMaxScaler*>(
+        model->getReferencedPrivateData(CID_MINMAXSCALER, xsink));
+    if (mms) {
+        if (!mms->isFitted()) {
+            mms->deref(xsink);
+            xsink->raiseException("ML-SERIALIZE-ERROR",
+                "model has not been fitted: call fit() before serializing");
+            return QoreValue();
+        }
+        algorithm = "MinMaxScaler";
+        model_data = mms->serializeState();
+        field_names = mms->getFieldNames();
+        mms->deref(xsink);
+        return MLSerialization::serializeModel(algorithm, model_data, "{}", field_names, xsink);
+    }
+    if (*xsink) { xsink->clear(); }
+
+    QoreImputer* imp = dynamic_cast<QoreImputer*>(
+        model->getReferencedPrivateData(CID_IMPUTER, xsink));
+    if (imp) {
+        if (!imp->isFitted()) {
+            imp->deref(xsink);
+            xsink->raiseException("ML-SERIALIZE-ERROR",
+                "model has not been fitted: call fit() before serializing");
+            return QoreValue();
+        }
+        algorithm = "Imputer";
+        model_data = imp->serializeState();
+        field_names = imp->getFieldNames();
+        imp->deref(xsink);
+        return MLSerialization::serializeModel(algorithm, model_data, "{}", field_names, xsink);
+    }
+    if (*xsink) { xsink->clear(); }
+
+    xsink->raiseException("ML-SERIALIZE-ERROR",
+        "unknown model type: object is not a supported ML algorithm");
+    return QoreValue();
+}
+
+//! Deserializes a binary blob back to an ML model object
+/** @param data binary data previously produced by ml_serialize()
+    @return the deserialized ML model object
+
+    @par Example:
+    @code{.py}
+binary blob = ml_serialize(km);
+object restored = ml_deserialize(blob);
+    @endcode
+
+    @throw ML-DESERIALIZE-ERROR if the data is invalid or corrupted
+*/
+object ml_deserialize(binary data) [dom=DEFAULT] {
+    const void* raw = data->getPtr();
+    size_t len = data->size();
+
+    MLSerialization::ModelHeader header = MLSerialization::parseModel(raw, len, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    auto deserializer = MLSerialization::getDeserializer(header.algorithm);
+    if (!deserializer) {
+        xsink->raiseException("ML-DESERIALIZE-ERROR",
+            "unknown algorithm '%s'", header.algorithm.c_str());
+        return QoreValue();
+    }
+
+    AbstractPrivateData* priv = deserializer(header.model_data, header.model_data_len, xsink);
+    if (*xsink || !priv) {
+        return QoreValue();
+    }
+
+    // Create the appropriate QoreObject
+    QoreObject* obj = nullptr;
+    if (header.algorithm == "KMeans") {
+        obj = new QoreObject(QC_KMEANS, getProgram());
+        obj->setPrivate(CID_KMEANS, priv);
+    } else if (header.algorithm == "LinearRegression") {
+        obj = new QoreObject(QC_LINEARREGRESSION, getProgram());
+        obj->setPrivate(CID_LINEARREGRESSION, priv);
+    } else if (header.algorithm == "LogisticRegression") {
+        obj = new QoreObject(QC_LOGISTICREGRESSION, getProgram());
+        obj->setPrivate(CID_LOGISTICREGRESSION, priv);
+    } else if (header.algorithm == "PCA") {
+        obj = new QoreObject(QC_PCA, getProgram());
+        obj->setPrivate(CID_PCA, priv);
+    } else if (header.algorithm == "IsolationForest") {
+        obj = new QoreObject(QC_ISOLATIONFOREST, getProgram());
+        obj->setPrivate(CID_ISOLATIONFOREST, priv);
+    } else if (header.algorithm == "LOF") {
+        obj = new QoreObject(QC_LOF, getProgram());
+        obj->setPrivate(CID_LOF, priv);
+    } else if (header.algorithm == "GMM") {
+        obj = new QoreObject(QC_GMM, getProgram());
+        obj->setPrivate(CID_GMM, priv);
+    } else if (header.algorithm == "HoltWinters") {
+        obj = new QoreObject(QC_HOLTWINTERS, getProgram());
+        obj->setPrivate(CID_HOLTWINTERS, priv);
+    } else if (header.algorithm == "KNN") {
+        obj = new QoreObject(QC_KNN, getProgram());
+        obj->setPrivate(CID_KNN, priv);
+    } else if (header.algorithm == "StandardScaler") {
+        obj = new QoreObject(QC_STANDARDSCALER, getProgram());
+        obj->setPrivate(CID_STANDARDSCALER, priv);
+    } else if (header.algorithm == "MinMaxScaler") {
+        obj = new QoreObject(QC_MINMAXSCALER, getProgram());
+        obj->setPrivate(CID_MINMAXSCALER, priv);
+    } else if (header.algorithm == "Imputer") {
+        obj = new QoreObject(QC_IMPUTER, getProgram());
+        obj->setPrivate(CID_IMPUTER, priv);
+    } else {
+        priv->deref(xsink);
+        xsink->raiseException("ML-DESERIALIZE-ERROR",
+            "unknown algorithm '%s'", header.algorithm.c_str());
+        return QoreValue();
+    }
+
+    return obj;
+}
+
+//! Saves a fitted ML model to a file in native binary (.qml) format
+/** @param model a fitted ML model object
+    @param path the file path to save to
+    @param options optional hash (reserved for future use)
+
+    @par Example:
+    @code{.py}
+KMeans km({"k": 3, "seed": 42});
+km.fitMatrix(data);
+ml_save_model(km, "/tmp/model.qml");
+    @endcode
+
+    @throw ML-SERIALIZE-ERROR if serialization fails
+    @throw FILE-ERROR if the file cannot be written
+*/
+nothing ml_save_model(object model, string path, *hash<auto> options) [dom=FILESYSTEM] {
+    // Serialize to binary
+    // We need to call the same logic as ml_serialize
+    // Try each known algorithm CID
+    std::string algorithm;
+    std::vector<uint8_t> model_data;
+    std::vector<std::string> field_names;
+    bool found = false;
+
+#define TRY_SERIALIZE_ALGO(CID_VAR, TYPE, NAME) \
+    if (!found) { \
+        TYPE* p = dynamic_cast<TYPE*>( \
+            model->getReferencedPrivateData(CID_VAR, xsink)); \
+        if (p) { \
+            if (!p->isFitted()) { \
+                p->deref(xsink); \
+                xsink->raiseException("ML-SERIALIZE-ERROR", \
+                    "model has not been fitted: call fit() before saving"); \
+                return QoreValue(); \
+            } \
+            algorithm = NAME; \
+            model_data = p->serializeState(); \
+            field_names = p->getFieldNames(); \
+            p->deref(xsink); \
+            found = true; \
+        } else if (*xsink) { xsink->clear(); } \
+    }
+
+    TRY_SERIALIZE_ALGO(CID_KMEANS, QoreKMeans, "KMeans")
+    TRY_SERIALIZE_ALGO(CID_LINEARREGRESSION, QoreLinearRegression, "LinearRegression")
+    TRY_SERIALIZE_ALGO(CID_LOGISTICREGRESSION, QoreLogisticRegression, "LogisticRegression")
+    TRY_SERIALIZE_ALGO(CID_PCA, QorePCA, "PCA")
+    TRY_SERIALIZE_ALGO(CID_ISOLATIONFOREST, QoreIsolationForest, "IsolationForest")
+    TRY_SERIALIZE_ALGO(CID_LOF, QoreLOF, "LOF")
+    TRY_SERIALIZE_ALGO(CID_GMM, QoreGMM, "GMM")
+    TRY_SERIALIZE_ALGO(CID_KNN, QoreKNN, "KNN")
+    TRY_SERIALIZE_ALGO(CID_STANDARDSCALER, QoreStandardScaler, "StandardScaler")
+    TRY_SERIALIZE_ALGO(CID_MINMAXSCALER, QoreMinMaxScaler, "MinMaxScaler")
+    TRY_SERIALIZE_ALGO(CID_IMPUTER, QoreImputer, "Imputer")
+
+    // HoltWinters has no field_names getter in the pattern above
+    if (!found) {
+        QoreHoltWinters* hw = dynamic_cast<QoreHoltWinters*>(
+            model->getReferencedPrivateData(CID_HOLTWINTERS, xsink));
+        if (hw) {
+            if (!hw->isFitted()) {
+                hw->deref(xsink);
+                xsink->raiseException("ML-SERIALIZE-ERROR",
+                    "model has not been fitted: call fit() before saving");
+                return QoreValue();
+            }
+            algorithm = "HoltWinters";
+            model_data = hw->serializeState();
+            hw->deref(xsink);
+            found = true;
+        } else if (*xsink) { xsink->clear(); }
+    }
+
+#undef TRY_SERIALIZE_ALGO
+
+    if (!found) {
+        xsink->raiseException("ML-SERIALIZE-ERROR",
+            "unknown model type: object is not a supported ML algorithm");
+        return QoreValue();
+    }
+
+    SimpleRefHolder<BinaryNode> blob(MLSerialization::serializeModel(
+        algorithm, model_data, "{}", field_names, xsink));
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    // Write to file
+    QoreFile f;
+    if (f.open2(xsink, path->c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644)) {
+        return QoreValue();
+    }
+    if (f.write(blob->getPtr(), blob->size(), xsink) < 0) {
+        return QoreValue();
+    }
+    return QoreValue();
+}
+
+//! Loads an ML model from a file
+/** @param path the file path to load from
+    @return the deserialized ML model object
+
+    @par Example:
+    @code{.py}
+object model = ml_load_model("/tmp/model.qml");
+    @endcode
+
+    @throw ML-DESERIALIZE-ERROR if the data is invalid or corrupted
+    @throw FILE-ERROR if the file cannot be read
+*/
+object ml_load_model(string path) [dom=FILESYSTEM] {
+    // Read file into binary
+    QoreFile f;
+    if (f.open2(xsink, path->c_str(), O_RDONLY)) {
+        return QoreValue();
+    }
+
+    // Read all data
+    SimpleRefHolder<BinaryNode> bin(f.readBinary(-1, -1, xsink));
+    if (*xsink || !bin) {
+        return QoreValue();
+    }
+
+    const void* raw = bin->getPtr();
+    size_t len = bin->size();
+
+    MLSerialization::ModelHeader header = MLSerialization::parseModel(raw, len, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    auto deserializer = MLSerialization::getDeserializer(header.algorithm);
+    if (!deserializer) {
+        xsink->raiseException("ML-DESERIALIZE-ERROR",
+            "unknown algorithm '%s'", header.algorithm.c_str());
+        return QoreValue();
+    }
+
+    AbstractPrivateData* priv = deserializer(header.model_data, header.model_data_len, xsink);
+    if (*xsink || !priv) {
+        return QoreValue();
+    }
+
+    // Create the appropriate QoreObject
+    QoreObject* obj = nullptr;
+    if (header.algorithm == "KMeans") {
+        obj = new QoreObject(QC_KMEANS, getProgram());
+        obj->setPrivate(CID_KMEANS, priv);
+    } else if (header.algorithm == "LinearRegression") {
+        obj = new QoreObject(QC_LINEARREGRESSION, getProgram());
+        obj->setPrivate(CID_LINEARREGRESSION, priv);
+    } else if (header.algorithm == "LogisticRegression") {
+        obj = new QoreObject(QC_LOGISTICREGRESSION, getProgram());
+        obj->setPrivate(CID_LOGISTICREGRESSION, priv);
+    } else if (header.algorithm == "PCA") {
+        obj = new QoreObject(QC_PCA, getProgram());
+        obj->setPrivate(CID_PCA, priv);
+    } else if (header.algorithm == "IsolationForest") {
+        obj = new QoreObject(QC_ISOLATIONFOREST, getProgram());
+        obj->setPrivate(CID_ISOLATIONFOREST, priv);
+    } else if (header.algorithm == "LOF") {
+        obj = new QoreObject(QC_LOF, getProgram());
+        obj->setPrivate(CID_LOF, priv);
+    } else if (header.algorithm == "GMM") {
+        obj = new QoreObject(QC_GMM, getProgram());
+        obj->setPrivate(CID_GMM, priv);
+    } else if (header.algorithm == "HoltWinters") {
+        obj = new QoreObject(QC_HOLTWINTERS, getProgram());
+        obj->setPrivate(CID_HOLTWINTERS, priv);
+    } else if (header.algorithm == "KNN") {
+        obj = new QoreObject(QC_KNN, getProgram());
+        obj->setPrivate(CID_KNN, priv);
+    } else if (header.algorithm == "StandardScaler") {
+        obj = new QoreObject(QC_STANDARDSCALER, getProgram());
+        obj->setPrivate(CID_STANDARDSCALER, priv);
+    } else if (header.algorithm == "MinMaxScaler") {
+        obj = new QoreObject(QC_MINMAXSCALER, getProgram());
+        obj->setPrivate(CID_MINMAXSCALER, priv);
+    } else if (header.algorithm == "Imputer") {
+        obj = new QoreObject(QC_IMPUTER, getProgram());
+        obj->setPrivate(CID_IMPUTER, priv);
+    } else {
+        priv->deref(xsink);
+        xsink->raiseException("ML-DESERIALIZE-ERROR",
+            "unknown algorithm '%s'", header.algorithm.c_str());
+        return QoreValue();
+    }
+
+    return obj;
 }
 
 ///@}

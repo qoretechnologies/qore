@@ -26,6 +26,7 @@
 */
 
 #include "QC_KNN.h"
+#include "ml_serialization.h"
 
 #include <algorithm>
 #include <numeric>
@@ -218,4 +219,53 @@ QoreListNode* QoreKNN::predictMatrix(const MatrixXd& X, ExceptionSink* xsink) co
         rv->push(result, xsink);
     }
     return rv.release();
+}
+
+std::vector<uint8_t> QoreKNN::serializeState() const {
+    std::vector<uint8_t> buf;
+    // Hyperparameters
+    MLSerialization::writeInt32(buf, k);
+    MLSerialization::writeString(buf, metric);
+    MLSerialization::writeString(buf, task);
+    MLSerialization::writeString(buf, weight_func);
+    // Model state
+    MLSerialization::writeInt32(buf, n_features);
+    MLSerialization::writeMatrix(buf, ref_data);
+    MLSerialization::writeVector(buf, ref_labels);
+    MLSerialization::writeStringVector(buf, field_names);
+    MLSerialization::writeString(buf, target_field);
+    return buf;
+}
+
+QoreKNN* QoreKNN::deserializeState(const uint8_t* data, size_t len, ExceptionSink* xsink) {
+    const uint8_t* ptr = data;
+    size_t remaining = len;
+
+    int32_t k = MLSerialization::readInt32(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    std::string metric = MLSerialization::readString(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    std::string task = MLSerialization::readString(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    std::string weight_func = MLSerialization::readString(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    int32_t n_features = MLSerialization::readInt32(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    MatrixXd ref_data = MLSerialization::readMatrix(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    VectorXd ref_labels = MLSerialization::readVector(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    std::vector<std::string> field_names = MLSerialization::readStringVector(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    std::string target_field = MLSerialization::readString(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+
+    std::unique_ptr<QoreKNN> obj(new QoreKNN(k, metric, task, weight_func));
+    obj->n_features = n_features;
+    obj->ref_data = std::move(ref_data);
+    obj->ref_labels = std::move(ref_labels);
+    obj->field_names = std::move(field_names);
+    obj->target_field = std::move(target_field);
+    obj->fitted = true;
+    return obj.release();
 }

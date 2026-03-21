@@ -93,6 +93,7 @@ set(ML_QPP_SRC
 set(ML_CPP_SRC
     src/ml-module.cpp
     src/ml_common.cpp
+    src/ml_serialization.cpp
     src/IsolationForest.cpp
     src/DBSCAN.cpp
     src/KMeans.cpp

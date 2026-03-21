@@ -72,6 +72,13 @@ public:
     DLLLOCAL int getNumFeatures() const { return n_features; }
     DLLLOCAL const std::string& getStrategy() const { return strategy; }
 
+    //! Serialize model state to binary
+    DLLLOCAL std::vector<uint8_t> serializeState() const;
+
+    //! Deserialize model state from binary
+    DLLLOCAL static QoreImputer* deserializeState(const uint8_t* data, size_t len,
+        ExceptionSink* xsink);
+
 private:
     std::string strategy;       // "mean", "median", "most_frequent", "constant"
     double constant_value;

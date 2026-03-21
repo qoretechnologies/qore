@@ -26,6 +26,7 @@
 */
 
 #include "QC_LinearRegression.h"
+#include "ml_serialization.h"
 
 // Extern declarations for hashdecls (defined in ml-module.cpp)
 extern const TypedHashDecl* hashdeclLinearRegressionResult;
@@ -281,4 +282,60 @@ double QoreLinearRegression::getRSquared(ExceptionSink* xsink) const {
         return 0.0;
     }
     return r_squared;
+}
+
+std::vector<uint8_t> QoreLinearRegression::serializeState() const {
+    std::vector<uint8_t> buf;
+    // Hyperparameters
+    MLSerialization::writeBool(buf, fit_intercept);
+    MLSerialization::writeBool(buf, do_normalize);
+    // Model state
+    MLSerialization::writeInt32(buf, n_features);
+    MLSerialization::writeVector(buf, coefficients);
+    MLSerialization::writeScalar(buf, intercept);
+    MLSerialization::writeScalar(buf, r_squared);
+    MLSerialization::writeVector(buf, feature_means);
+    MLSerialization::writeVector(buf, feature_stds);
+    MLSerialization::writeStringVector(buf, field_names);
+    MLSerialization::writeString(buf, target_field);
+    return buf;
+}
+
+QoreLinearRegression* QoreLinearRegression::deserializeState(const uint8_t* data, size_t len,
+    ExceptionSink* xsink) {
+    const uint8_t* ptr = data;
+    size_t remaining = len;
+
+    bool fit_intercept = MLSerialization::readBool(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    bool do_normalize = MLSerialization::readBool(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    int32_t n_features = MLSerialization::readInt32(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    VectorXd coefficients = MLSerialization::readVector(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    double intercept = MLSerialization::readScalar(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    double r_squared = MLSerialization::readScalar(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    VectorXd feature_means = MLSerialization::readVector(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    VectorXd feature_stds = MLSerialization::readVector(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    std::vector<std::string> field_names = MLSerialization::readStringVector(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    std::string target_field = MLSerialization::readString(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+
+    std::unique_ptr<QoreLinearRegression> obj(new QoreLinearRegression(fit_intercept, do_normalize));
+    obj->n_features = n_features;
+    obj->coefficients = std::move(coefficients);
+    obj->intercept = intercept;
+    obj->r_squared = r_squared;
+    obj->feature_means = std::move(feature_means);
+    obj->feature_stds = std::move(feature_stds);
+    obj->field_names = std::move(field_names);
+    obj->target_field = std::move(target_field);
+    obj->fitted = true;
+    return obj.release();
 }
