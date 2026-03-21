@@ -547,6 +547,27 @@ constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::Spri
 static_assert(QORE_IR_MAX_OPCODE == 348, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
+//! PHASE 4: Opcode Coverage Documentation
+//! When adding a new opcode, MUST update ALL of the following files:
+//!
+//! COMPILATION WILL FAIL if missed (static_assert guards):
+//!   1. QoreIR.h: QoreIROpcode enum + assign next sequential opcode ID
+//!   2. QoreIRInterpreter.cpp: main dispatch switch (static_assert guard on QORE_IR_MAX_OPCODE)
+//!   3. QoreIRToLLVM.cpp: JIT emit switch (static_assert guard on QORE_IR_MAX_OPCODE)
+//!
+//! SILENT BUGS if missed (no compile error — conservatively defaults to safe behavior):
+//!   4. lib/QoreIRLowering.cpp: opcodeCanReturnNothing() or opcodeNeverReturnsNothing()
+//!      (affects guard insertion logic — defaults to "may return nothing")
+//!   5. lib/QoreIRVerifier.cpp: requiresResult(), expectedOperands()
+//!      (affects IR validation — defaults to permissive behavior)
+//!   6. lib/QoreIRPrinter.cpp: opcodeName()
+//!      (affects debugging output — shows generic name)
+//!   7. QoreIR.h: isTerminator() if the opcode ends a basic block
+//!      (affects control flow analysis — defaults to non-terminator)
+//!
+//! The static_assert guards on QORE_IR_MAX_OPCODE ensure property functions are reviewed
+//! when opcodes are added, preventing silent bugs from property omissions.
+
 //! Returns true if the opcode is a unary computation op (used by Invoke dispatch)
 inline bool isUnaryInvokeOpcode(QoreIROpcode op) {
     switch (op) {

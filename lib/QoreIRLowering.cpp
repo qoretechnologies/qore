@@ -3175,6 +3175,21 @@ bool QoreIRLowering::storeVarRef(const VarRefNode* var, QoreIRValue value, std::
             }
             return true;
         case VT_CLOSURE:
+            if (!var->ref.id) {
+                error = std::string("unresolved closure variable reference in IR lowering (") + context + ")";
+                return false;
+            }
+            {
+                auto* store_inst = builder.createStoreClosure(var->ref.id, value, var->loc, weak);
+                if (!exception_stack.empty()) {
+                    store_inst->exception_target = exception_stack.back();
+                }
+            }
+            // PHASE 3: Track closure variable assignment for guard suppression
+            if (parse_context) {
+                parse_context->markLocalAssignment(var->ref.id, true, target_type);
+            }
+            return true;
         case VT_LOCAL_TS:
             if (!var->ref.id) {
                 error = std::string("unresolved closure variable reference in IR lowering (") + context + ")";
@@ -3272,6 +3287,10 @@ const QoreTypeInfo* QoreIRLowering::getGuaranteedTypeForValue(const QoreValue* e
 // Returns true if the given opcode is guaranteed to produce a non-NOTHING result
 static bool opcodeCanReturnNothing(QoreIROpcode op) {
     switch (op) {
+        // PHASE 2: Variable loads can return nothing when the variable is optional-typed or uninitialized
+        case QoreIROpcode::LoadLocal:
+        case QoreIROpcode::LoadClosure:
+        case QoreIROpcode::LoadGlobal:
         // Function/method calls can return nothing if the function has optional return type
         case QoreIROpcode::Call:
         case QoreIROpcode::CallDirect:
@@ -3292,6 +3311,9 @@ static bool opcodeCanReturnNothing(QoreIROpcode op) {
         case QoreIROpcode::ListIndexAccess:
             return true;
         default:
+            // UNKNOWN OPCODE: conservatively treat as potentially returning NOTHING.
+            // If adding a new opcode and it can return nothing, add it explicitly above.
+            // See opcode coverage documentation in QoreIR.h.
             return false;
     }
 }
@@ -3392,6 +3414,9 @@ static bool opcodeNeverReturnsNothing(QoreIROpcode op) {
         case QoreIROpcode::IncrementLocalInt:
             return true;
         default:
+            // UNKNOWN OPCODE: conservatively assume it might return NOTHING.
+            // If adding a new opcode that provably never returns NOTHING, add it explicitly above.
+            // See opcode coverage documentation in QoreIR.h.
             return false;
     }
 }
@@ -3436,6 +3461,25 @@ bool QoreIRLowering::needsNotNothingGuard(const QoreValue* expr, const QoreTypeI
             fflush(stderr);
         }
         return false;
+    }
+
+    // PHASE 1: Check VarRefNode for optional type BEFORE any getAnalysis calls
+    // This catches optional-typed variables early and prevents deopt on legitimate NOTHING values
+    // But only return early if we DEFINITELY don't need a guard; let other cases fall through
+    if (expr && expr->hasNode()) {
+        const AbstractQoreNode* node = expr->getInternalNode();
+        if (node && dynamic_cast<const ParseNode*>(node) && node->getType() == NT_VARREF) {
+            const VarRefNode* var_ref = static_cast<const VarRefNode*>(node);
+            const QoreTypeInfo* var_type = var_ref->getTypeInfo();
+            // If variable has optional type (*Type), it can legitimately return NOTHING
+            if (var_type && QoreTypeInfo::parseReturns(var_type, NT_NOTHING) != QTI_NOT_EQUAL) {
+                if (debug_guard_entry) {
+                    fprintf(stderr, "[GUARD-SKIP-OPTIONAL-VAR-PHASE1] Variable is optional type, skipping guard\n");
+                    fflush(stderr);
+                }
+                return false;  // Variable can be nothing - no guard needed, return early
+            }
+        }
     }
 
     // Check if the expression itself can return nothing (e.g., optional return type)
@@ -3500,21 +3544,8 @@ bool QoreIRLowering::needsNotNothingGuard(const QoreValue* expr, const QoreTypeI
         return false;  // Not a parse node - not a guard candidate
     }
 
-    // CRITICAL FIX: Check if expression is a variable reference with optional type
-    // If the variable itself has an optional type (*Type), it can legitimately return nothing
-    // even if the target type expects non-nothing. This prevents guards on LoadLocal for
-    // optional-typed variables, which would cause incorrect deopt.
-    if (node->getType() == NT_VARREF) {
-        const VarRefNode* var_ref = static_cast<const VarRefNode*>(node);
-        const QoreTypeInfo* var_type = var_ref->getTypeInfo();
-        if (var_type && QoreTypeInfo::parseReturns(var_type, NT_NOTHING) != QTI_NOT_EQUAL) {
-            if (debug_guard_entry) {
-                fprintf(stderr, "[GUARD-SKIP-OPTIONAL-VAR] Variable is optional type, skipping guard\n");
-                fflush(stderr);
-            }
-            return false;  // Variable can be nothing - no guard needed
-        }
-    }
+    // Note: VarRefNode optional type check already handled in Phase 1 above
+    // This fallback section deals with other ParseNode types
 
     QoreParseAnalysis expr_analysis;
     bool got_analysis = false;
