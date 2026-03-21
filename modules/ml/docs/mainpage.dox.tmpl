@@ -70,7 +70,7 @@
     - @ref Qore::ML::GMM "GMM" — Assigns each record a probability for each group rather than a hard
       label. A customer might be 70%% "budget shopper" and 30%% "impulse buyer," reflecting
       genuine overlap. Uses Gaussian mixtures (EM algorithm) and supports full, diagonal, and
-      spherical covariance types.
+      spherical covariance types. Supports online learning via incremental EM updates.
 
     @subsection mlalgo_classification Classification
 
@@ -82,7 +82,8 @@
       score, and debt ratio. Handles two categories (binary) or many categories (multiclass via
       one-vs-rest). Reports the probability of each category, not just the prediction — so you
       can flag borderline cases (e.g., 52%% approve) for manual review. Supports L2
-      regularization to prevent overfitting.
+      regularization to prevent overfitting. Supports online learning via mini-batch
+      SGD updates for continuous model refinement on streaming data.
     - @ref Qore::ML::KNN "KNN" — Classifies each record based on its most similar neighbors in
       the training data. For example, if 4 of the 5 most similar past customers churned, predict
       this customer will too. Also works for regression (predict a number as the average of
@@ -97,7 +98,8 @@
     - @ref Qore::ML::LinearRegression "LinearRegression" — Learns the best straight-line relationship
       between inputs and a target. For example, predict a property's price from square footage,
       number of bedrooms, and neighborhood — the model reports which features matter most
-      (coefficients), the baseline (intercept), and prediction accuracy (R-squared).
+      (coefficients), the baseline (intercept), and prediction accuracy (R-squared). Supports
+      online learning via SGD updates for continuous model refinement.
 
     @subsection mlalgo_timeseries Time Series
 
@@ -491,6 +493,7 @@ if (!caps.has_onnx) {
       - Clustering metrics: \c ml_silhouette_score(), \c ml_davies_bouldin_score(), \c ml_calinski_harabasz_score()
       - @ref Qore::ML::CrossValidator "CrossValidator" — k-fold cross-validation split utility
     - Optional @ref Qore::ML::OnnxModel "OnnxModel" for ONNX Runtime inference (requires libonnxruntime)
+    - Online learning (incremental updates) for KMeans, LinearRegression, GMM, and LogisticRegression
     - All algorithms use Eigen3 for efficient matrix operations
     - All algorithms support cooperative cancellation for responsive interrupt handling
     - \c NOTHING values in input data are treated as missing values for Imputer compatibility

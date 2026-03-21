@@ -78,6 +78,17 @@ public class QoreGMMProcessor inherits DataProvider::AbstractDataProvider {
                 "required": True,
                 "example_value": 3,
             },
+            "online": <DataProviderOptionInfo>{
+                "display_name": "Incremental Learning",
+                "short_desc": "Continuously improve groupings with new data",
+                "desc": "When enabled, the first batch of records creates the initial groups "
+                    "and each subsequent batch refines them, allowing group definitions to "
+                    "evolve as new data arrives. For example, customer segments can shift "
+                    "gradually as buying patterns change.\n\n"
+                    "When disabled, each batch creates completely new groups from scratch.\n\n"
+                    "Default: `True` (enabled)",
+                "type": AbstractDataProviderTypeMap."*bool",
+            },
             "covariance_type": <DataProviderOptionInfo>{
                 "display_name": "Covariance Type",
                 "short_desc": "How cluster shapes are modeled",
@@ -116,6 +127,12 @@ public class QoreGMMProcessor inherits DataProvider::AbstractDataProvider {
         #! Covariance type
         string covariance_type = "full";
 
+        #! Online learning mode
+        bool online = True;
+
+        #! Retained GMM instance for online learning
+        *ML::GMM gmm_model;
+
         #! Accumulated records
         list<hash<auto>> buffer;
 
@@ -151,6 +168,9 @@ public class QoreGMMProcessor inherits DataProvider::AbstractDataProvider {
         }
         if (exists copts.covariance_type) {
             covariance_type = copts.covariance_type;
+        }
+        if (exists copts.online) {
+            online = copts.online;
         }
         buffer = ();
         configured = True;
@@ -218,15 +238,25 @@ public class QoreGMMProcessor inherits DataProvider::AbstractDataProvider {
             push matrix, row;
         }
 
-        # create and fit GMM
-        ML::GMM gmm({
-            "n_components": n_components,
-            "covariance_type": covariance_type,
-        });
-        gmm.fitMatrix(matrix);
+        # fit or update the model
+        if (!gmm_model) {
+            gmm_model = new ML::GMM({
+                "n_components": n_components,
+                "covariance_type": covariance_type,
+            });
+            gmm_model.fitMatrix(matrix);
+        } else if (online) {
+            gmm_model.updateMatrix(matrix);
+        } else {
+            gmm_model = new ML::GMM({
+                "n_components": n_components,
+                "covariance_type": covariance_type,
+            });
+            gmm_model.fitMatrix(matrix);
+        }
 
         # predict cluster assignments
-        list<hash<ML::GMMResult>> predictions = gmm.predictMatrix(matrix);
+        list<hash<ML::GMMResult>> predictions = gmm_model.predictMatrix(matrix);
 
         # emit one event per record
         list<auto> events;

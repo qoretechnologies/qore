@@ -249,6 +249,81 @@ nothing LogisticRegression::fitMatrix(list<auto> matrix, list<auto> target) {
     lr->fit(mat, y, xsink);
 }
 
+//! Performs a SGD online update with new hash-based data
+/** @param data a list of hashes with numeric fields plus the target field
+    @param learning_rate the step size for the gradient update
+
+    @par Example:
+    @code{.py}
+clf.fit(initial_data, "category");
+clf.update(new_labeled_data, 0.01);  # refine with new examples
+    @endcode
+
+    @throw ML-LOGISTIC-REGRESSION-ERROR model not fitted or dimension mismatch
+    @throw ML-DATA-ERROR data format errors
+*/
+nothing LogisticRegression::update(list<auto> data, float learning_rate) {
+    const std::vector<std::string>& feat_names = lr->getFieldNames();
+    const std::string& target_name = lr->getTargetField();
+    if (feat_names.empty() || target_name.empty()) {
+        xsink->raiseException("ML-LOGISTIC-REGRESSION-ERROR",
+            "model was fitted with fitMatrix(); use updateMatrix() or fit() with hash records first");
+        return QoreValue();
+    }
+
+    if (!data || data->empty()) {
+        xsink->raiseException("ML-DATA-ERROR", "empty data list provided");
+        return QoreValue();
+    }
+
+    size_t n_rows = data->size();
+    size_t n_cols = feat_names.size();
+    MatrixXd X(n_rows, n_cols);
+    VectorXd y(n_rows);
+
+    for (size_t i = 0; i < n_rows; ++i) {
+        QoreValue row_val = data->retrieveEntry(i);
+        if (row_val.getType() != NT_HASH) {
+            xsink->raiseException("ML-DATA-ERROR", "data element %zu is not a hash", i);
+            return QoreValue();
+        }
+        const QoreHashNode* row = row_val.get<const QoreHashNode>();
+        for (size_t j = 0; j < n_cols; ++j) {
+            QoreValue v = row->getKeyValue(feat_names[j].c_str());
+            X(i, j) = v.getAsFloat();
+        }
+        QoreValue target_v = row->getKeyValue(target_name.c_str());
+        y(i) = target_v.getAsFloat();
+    }
+
+    lr->update(X, y, learning_rate, xsink);
+}
+
+//! Performs a SGD online update with a numeric matrix and target vector
+/** @param matrix a list of lists of numeric feature values
+    @param target a list of target values
+    @param learning_rate the step size for the gradient update
+
+    @par Example:
+    @code{.py}
+clf.updateMatrix(((5.1, 3.5), (6.2, 2.8)), (0, 1), 0.01);
+    @endcode
+
+    @throw ML-LOGISTIC-REGRESSION-ERROR model not fitted or dimension mismatch
+    @throw ML-DATA-ERROR data format errors
+*/
+nothing LogisticRegression::updateMatrix(list<auto> matrix, list<auto> target, float learning_rate) {
+    MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    VectorXd y = qoreListToVector(target, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    lr->update(mat, y, learning_rate, xsink);
+}
+
 //! Predicts the class for a single record
 /** @param record a hash with the same numeric fields used during training
 

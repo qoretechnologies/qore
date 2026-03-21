@@ -92,6 +92,17 @@ public class QoreLinearRegressionProcessor inherits DataProvider::AbstractDataPr
                     "default: `False` (disabled)",
                 "type": AbstractDataProviderTypeMap."*bool",
             },
+            "online": <DataProviderOptionInfo>{
+                "display_name": "Incremental Learning",
+                "short_desc": "Continuously improve predictions with new data",
+                "desc": "When enabled, the first batch of records creates the initial model "
+                    "and each subsequent batch fine-tunes it, allowing predictions to improve "
+                    "as more data flows through the pipeline. For example, a price prediction "
+                    "model can adapt to market changes over time.\n\n"
+                    "When disabled, each batch trains a completely new model from scratch.\n\n"
+                    "Default: `True` (enabled)",
+                "type": AbstractDataProviderTypeMap."*bool",
+            },
         };
     }
 
@@ -110,6 +121,12 @@ public class QoreLinearRegressionProcessor inherits DataProvider::AbstractDataPr
 
         #! Normalize option
         bool do_normalize = False;
+
+        #! Online learning mode
+        bool online = True;
+
+        #! Retained LinearRegression instance for online learning
+        *ML::LinearRegression model;
 
         #! Accumulated records
         list<hash<auto>> buffer;
@@ -143,6 +160,9 @@ public class QoreLinearRegressionProcessor inherits DataProvider::AbstractDataPr
         }
         if (exists copts.normalize) {
             do_normalize = copts.normalize;
+        }
+        if (exists copts.online) {
+            online = copts.online;
         }
         buffer = ();
         configured = True;
@@ -208,15 +228,25 @@ public class QoreLinearRegressionProcessor inherits DataProvider::AbstractDataPr
             push targets, DataProvider::AbstractDataProvider::getFieldValue(rec, target_field).toFloat();
         }
 
-        # create and fit model
-        ML::LinearRegression lr({
-            "fit_intercept": fit_intercept,
-            "normalize": do_normalize,
-        });
-        lr.fitMatrix(matrix, targets);
+        # fit or update the model
+        if (!model) {
+            model = new ML::LinearRegression({
+                "fit_intercept": fit_intercept,
+                "normalize": do_normalize,
+            });
+            model.fitMatrix(matrix, targets);
+        } else if (online) {
+            model.updateMatrix(matrix, targets, 0.01);
+        } else {
+            model = new ML::LinearRegression({
+                "fit_intercept": fit_intercept,
+                "normalize": do_normalize,
+            });
+            model.fitMatrix(matrix, targets);
+        }
 
         # predict all records
-        list<hash<ML::LinearRegressionResult>> predictions = lr.predictMatrix(matrix);
+        list<hash<ML::LinearRegressionResult>> predictions = model.predictMatrix(matrix);
 
         # emit one event per record
         list<auto> events;

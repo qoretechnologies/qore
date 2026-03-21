@@ -168,6 +168,99 @@ void QoreLogisticRegression::fit(const MatrixXd& X, const VectorXd& y, Exception
     fitted = true;
 }
 
+void QoreLogisticRegression::update(const MatrixXd& X, const VectorXd& y,
+    double lr, ExceptionSink* xsink) {
+    std::lock_guard<std::mutex> lk(mtx);
+    if (!fitted) {
+        xsink->raiseException("ML-LOGISTIC-REGRESSION-ERROR",
+            "model has not been fitted: call fit() or fitMatrix() before update()");
+        return;
+    }
+    if (X.cols() != n_features) {
+        xsink->raiseException("ML-LOGISTIC-REGRESSION-ERROR",
+            "input has %d features but model was trained with %d features",
+            static_cast<int>(X.cols()), n_features);
+        return;
+    }
+    if (X.rows() != y.size()) {
+        xsink->raiseException("ML-LOGISTIC-REGRESSION-ERROR",
+            "X has %d rows but y has %d elements; they must match",
+            static_cast<int>(X.rows()), static_cast<int>(y.size()));
+        return;
+    }
+    if (X.rows() == 0) {
+        xsink->raiseException("ML-LOGISTIC-REGRESSION-ERROR",
+            "cannot update on empty data");
+        return;
+    }
+
+    // Verify y contains only known classes
+    for (Eigen::Index i = 0; i < y.size(); ++i) {
+        bool found = false;
+        for (size_t c = 0; c < classes.size(); ++c) {
+            if (y(i) == classes[c]) {
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            xsink->raiseException("ML-LOGISTIC-REGRESSION-ERROR",
+                "target value %f at index %d is not a known class from training",
+                y(i), static_cast<int>(i));
+            return;
+        }
+    }
+
+    if (qore_check_cancel(xsink, "LogisticRegression update")) {
+        return;
+    }
+
+    int n_samples = static_cast<int>(X.rows());
+    int n_models = is_binary ? 1 : static_cast<int>(classes.size());
+
+    for (int m = 0; m < n_models; ++m) {
+        // Create binary target vector for this model
+        VectorXd y_binary(n_samples);
+        if (is_binary) {
+            for (int i = 0; i < n_samples; ++i) {
+                y_binary(i) = (y(i) == classes[1]) ? 1.0 : 0.0;
+            }
+        } else {
+            for (int i = 0; i < n_samples; ++i) {
+                y_binary(i) = (y(i) == classes[m]) ? 1.0 : 0.0;
+            }
+        }
+
+        // Compute predictions: sigmoid(X * w^T + b)
+        RowVectorXd w = weights.row(m);
+        double b = intercepts(m);
+
+        VectorXd z = (X * w.transpose()).array() + b;
+        VectorXd predictions(n_samples);
+        for (int i = 0; i < n_samples; ++i) {
+            predictions(i) = sigmoid(z(i));
+        }
+
+        // Compute error and gradient
+        VectorXd error = predictions - y_binary;
+        RowVectorXd gradient_w = (X.transpose() * error).transpose() / n_samples;
+        if (penalty == "l2") {
+            gradient_w += regularization * w;
+        }
+
+        double gradient_b = 0.0;
+        if (fit_intercept) {
+            gradient_b = error.mean();
+        }
+
+        // Update weights
+        weights.row(m) -= lr * gradient_w;
+        if (fit_intercept) {
+            intercepts(m) -= lr * gradient_b;
+        }
+    }
+}
+
 QoreHashNode* QoreLogisticRegression::predictInternal(const RowVectorXd& point,
     ExceptionSink* xsink) const {
     if (point.size() != n_features) {

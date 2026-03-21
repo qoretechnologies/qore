@@ -124,6 +124,17 @@ public class QoreLogisticRegressionProcessor inherits DataProvider::AbstractData
                     },
                 ),
             },
+            "online": <DataProviderOptionInfo>{
+                "display_name": "Incremental Learning",
+                "short_desc": "Continuously improve categorization with new data",
+                "desc": "When enabled, the first batch of records creates the initial model "
+                    "and each subsequent batch refines it, allowing the categorization to "
+                    "improve as more labeled examples flow through the pipeline. For example, "
+                    "a spam filter can learn from newly labeled emails over time.\n\n"
+                    "When disabled, each batch trains a completely new model from scratch.\n\n"
+                    "Default: `True` (enabled)",
+                "type": AbstractDataProviderTypeMap."*bool",
+            },
             "fit_intercept": <DataProviderOptionInfo>{
                 "display_name": "Include Baseline",
                 "short_desc": "Include a baseline value in the model",
@@ -162,6 +173,9 @@ public class QoreLogisticRegressionProcessor inherits DataProvider::AbstractData
         #! Fit intercept option
         *bool fit_intercept;
 
+        #! Online learning mode
+        bool online = True;
+
         #! Retained model instance
         *ML::LogisticRegression model;
 
@@ -191,6 +205,9 @@ public class QoreLogisticRegressionProcessor inherits DataProvider::AbstractData
         if (window_size < 2) {
             throw "CONSTRUCTOR-ERROR",
                 sprintf("window_size must be >= 2; got %d", window_size);
+        }
+        if (exists copts.online) {
+            online = copts.online;
         }
         learning_rate = copts.learning_rate;
         max_iterations = copts.max_iterations;
@@ -279,12 +296,16 @@ public class QoreLogisticRegressionProcessor inherits DataProvider::AbstractData
             model_opts.fit_intercept = fit_intercept;
         }
 
-        # fit the model on the first window or if no model exists
+        # fit or update the model
         if (!model) {
             model = new ML::LogisticRegression(model_opts);
             model.fitMatrix(matrix, targets);
+        } else if (online) {
+            float lr = learning_rate ?? 0.01;
+            model.updateMatrix(matrix, targets, lr);
         } else {
-            # predict with existing model
+            model = new ML::LogisticRegression(model_opts);
+            model.fitMatrix(matrix, targets);
         }
 
         # predict all records

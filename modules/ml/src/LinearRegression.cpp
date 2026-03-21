@@ -107,6 +107,62 @@ void QoreLinearRegression::fit(const MatrixXd& X, const VectorXd& y, ExceptionSi
     fitted = true;
 }
 
+void QoreLinearRegression::update(const MatrixXd& X, const VectorXd& y,
+    double lr, ExceptionSink* xsink) {
+    std::lock_guard<std::mutex> lk(mtx);
+    if (!fitted) {
+        xsink->raiseException("ML-LINEAR-REGRESSION-ERROR",
+            "model has not been fitted: call fit() or fitMatrix() before update()");
+        return;
+    }
+    if (X.cols() != n_features) {
+        xsink->raiseException("ML-LINEAR-REGRESSION-ERROR",
+            "input has %d features but model was trained with %d features",
+            static_cast<int>(X.cols()), n_features);
+        return;
+    }
+    if (X.rows() != y.size()) {
+        xsink->raiseException("ML-LINEAR-REGRESSION-ERROR",
+            "X has %d rows but y has %d elements; they must match",
+            static_cast<int>(X.rows()), static_cast<int>(y.size()));
+        return;
+    }
+    if (X.rows() == 0) {
+        xsink->raiseException("ML-LINEAR-REGRESSION-ERROR",
+            "cannot update on empty data");
+        return;
+    }
+
+    int n = static_cast<int>(X.rows());
+
+    // SGD update: for each row adjust coefficients and intercept
+    for (int i = 0; i < n; ++i) {
+        if (i % 100 == 0 && qore_check_cancel(xsink, "LinearRegression update")) {
+            return;
+        }
+        double predicted = X.row(i).dot(coefficients) + intercept;
+        double error = predicted - y(i);
+        coefficients -= lr * error * X.row(i).transpose();
+        if (fit_intercept) {
+            intercept -= lr * error;
+        }
+    }
+
+    // Recompute R-squared on the new batch
+    VectorXd y_pred = X * coefficients;
+    if (fit_intercept) {
+        y_pred.array() += intercept;
+    }
+    double ss_res = (y - y_pred).squaredNorm();
+    double y_mean = y.mean();
+    double ss_tot = (y.array() - y_mean).square().sum();
+    if (ss_tot > 1e-10) {
+        r_squared = 1.0 - ss_res / ss_tot;
+    } else {
+        r_squared = (ss_res < 1e-10) ? 1.0 : 0.0;
+    }
+}
+
 QoreHashNode* QoreLinearRegression::predictInternal(const RowVectorXd& point, ExceptionSink* xsink) const {
     if (point.size() != n_features) {
         xsink->raiseException("ML-LINEAR-REGRESSION-ERROR",

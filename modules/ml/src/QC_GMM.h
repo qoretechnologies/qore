@@ -50,6 +50,9 @@ public:
     //! Fit on an Eigen matrix
     DLLLOCAL void fit(const MatrixXd& data, ExceptionSink* xsink);
 
+    //! Online EM update with new data (thread-safe)
+    DLLLOCAL void update(const MatrixXd& data, ExceptionSink* xsink);
+
     //! Predict cluster membership for a single point
     DLLLOCAL QoreHashNode* predict(const RowVectorXd& point, ExceptionSink* xsink) const;
 
@@ -80,6 +83,7 @@ private:
     std::mt19937 rng;
     bool fitted = false;
     int n_features = 0;
+    int batch_count = 0;
 
     //! Model parameters
     std::vector<VectorXd> means;         // n_components means

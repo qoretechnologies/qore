@@ -179,6 +179,46 @@ nothing GMM::fitMatrix(list<auto> matrix) {
     gmm->fit(mat, xsink);
 }
 
+//! Performs an online EM update with new hash-based data
+/** @param data a list of hashes with numeric fields
+
+    @par Example:
+    @code{.py}
+gmm.fit(initial_data);
+gmm.update(new_observations);  # refine clusters with new data
+    @endcode
+
+    @throw ML-GMM-ERROR model not fitted or dimension mismatch
+    @throw ML-DATA-ERROR data format errors
+*/
+nothing GMM::update(list<auto> data) {
+    std::vector<std::string> field_names;
+    MatrixXd matrix = qoreListOfHashesToMatrix(data, field_names, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    gmm->update(matrix, xsink);
+}
+
+//! Performs an online EM update with a numeric matrix
+/** @param matrix a list of lists of numeric values
+
+    @par Example:
+    @code{.py}
+gmm.updateMatrix(((1.5, 2.0), (3.0, 4.5)));
+    @endcode
+
+    @throw ML-GMM-ERROR model not fitted or dimension mismatch
+    @throw ML-DATA-ERROR data format errors
+*/
+nothing GMM::updateMatrix(list<auto> matrix) {
+    MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    gmm->update(mat, xsink);
+}
+
 //! Predicts cluster membership for a single record
 /** @param record a hash with the same numeric fields used during training
 

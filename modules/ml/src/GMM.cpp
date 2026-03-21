@@ -286,6 +286,98 @@ void QoreGMM::fit(const MatrixXd& data, ExceptionSink* xsink) {
     }
 
     fitted = true;
+    batch_count = 1;
+}
+
+void QoreGMM::update(const MatrixXd& data, ExceptionSink* xsink) {
+    std::lock_guard<std::mutex> lk(mtx);
+    if (!fitted) {
+        xsink->raiseException("ML-GMM-ERROR",
+            "model has not been fitted: call fit() or fitMatrix() before update()");
+        return;
+    }
+    if (data.cols() != n_features) {
+        xsink->raiseException("ML-GMM-ERROR",
+            "input has %d features but model was trained with %d features",
+            static_cast<int>(data.cols()), n_features);
+        return;
+    }
+    if (data.rows() == 0) {
+        xsink->raiseException("ML-GMM-ERROR",
+            "cannot update on empty data");
+        return;
+    }
+
+    if (qore_check_cancel(xsink, "GMM update")) {
+        return;
+    }
+
+    ++batch_count;
+    double eta = 1.0 / (batch_count + 1);
+
+    // E-step: compute responsibilities on new data using current parameters
+    MatrixXd responsibilities = eStep(data);
+
+    // Compute new parameters from the new batch only
+    int n = static_cast<int>(data.rows());
+    int d = n_features;
+    double reg = 1e-6;
+
+    std::vector<VectorXd> new_means(n_components);
+    std::vector<MatrixXd> new_covariances(n_components);
+    VectorXd new_weights(n_components);
+
+    for (int c = 0; c < n_components; ++c) {
+        double resp_sum = responsibilities.col(c).sum();
+
+        // New weight from this batch
+        new_weights(c) = resp_sum / n;
+        if (new_weights(c) < 1e-10) {
+            new_weights(c) = 1e-10;
+        }
+
+        // New mean from this batch
+        VectorXd nm = VectorXd::Zero(d);
+        for (int i = 0; i < n; ++i) {
+            nm += responsibilities(i, c) * data.row(i).transpose();
+        }
+        new_means[c] = nm / resp_sum;
+
+        // New covariance from this batch
+        if (covariance_type == "diagonal") {
+            VectorXd diag = VectorXd::Zero(d);
+            for (int i = 0; i < n; ++i) {
+                VectorXd diff = data.row(i).transpose() - new_means[c];
+                diag += responsibilities(i, c) * diff.array().square().matrix();
+            }
+            diag /= resp_sum;
+            diag.array() += reg;
+            new_covariances[c] = diag.asDiagonal();
+        } else {
+            MatrixXd cov = MatrixXd::Zero(d, d);
+            for (int i = 0; i < n; ++i) {
+                VectorXd diff = data.row(i).transpose() - new_means[c];
+                cov += responsibilities(i, c) * (diff * diff.transpose());
+            }
+            cov /= resp_sum;
+            cov += MatrixXd::Identity(d, d) * reg;
+            new_covariances[c] = cov;
+        }
+    }
+
+    // Blend old and new parameters
+    for (int c = 0; c < n_components; ++c) {
+        means[c] = (1.0 - eta) * means[c] + eta * new_means[c];
+        covariances[c] = (1.0 - eta) * covariances[c] + eta * new_covariances[c];
+        weights(c) = (1.0 - eta) * weights(c) + eta * new_weights(c);
+    }
+
+    // Normalize weights to sum to 1
+    double weight_sum = weights.sum();
+    weights /= weight_sum;
+
+    // Recompute log-likelihood on this batch
+    log_likelihood = computeLogLikelihood(data);
 }
 
 QoreHashNode* QoreGMM::predictInternal(const RowVectorXd& point, ExceptionSink* xsink) const {

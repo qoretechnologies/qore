@@ -79,6 +79,7 @@ public class MlTest inherits QUnit::Test {
         addTestCase("LinearRegression error cases", \lrErrorTest());
         addTestCase("LinearRegression copy error", \lrCopyTest());
         addTestCase("LinearRegression getModelInfo", \lrGetModelInfoTest());
+        addTestCase("LinearRegression SGD update", \lrUpdateTest());
         addTestCase("LogisticRegression binary classification", \logregBinaryTest());
         addTestCase("LogisticRegression multiclass OvR", \logregMulticlassTest());
         addTestCase("LogisticRegression hash API", \logregHashTest());
@@ -88,6 +89,7 @@ public class MlTest inherits QUnit::Test {
         addTestCase("LogisticRegression convergence", \logregConvergenceTest());
         addTestCase("LogisticRegression error cases", \logregErrorTest());
         addTestCase("LogisticRegression copy error", \logregCopyTest());
+        addTestCase("LogisticRegression SGD update", \logregUpdateTest());
         addTestCase("LOF basic outlier detection", \lofBasicTest());
         addTestCase("LOF k parameter", \lofKParamTest());
         addTestCase("LOF hash API", \lofHashTest());
@@ -113,6 +115,7 @@ public class MlTest inherits QUnit::Test {
         addTestCase("GMM reproducibility", \gmmReproducibilityTest());
         addTestCase("GMM error cases", \gmmErrorTest());
         addTestCase("GMM copy error", \gmmCopyTest());
+        addTestCase("GMM online EM update", \gmmUpdateTest());
         addTestCase("OnnxModel load and metadata", \onnxLoadTest());
         addTestCase("OnnxModel inference", \onnxInferenceTest());
         addTestCase("OnnxModel batch inference", \onnxBatchTest());
@@ -1451,6 +1454,54 @@ public class MlTest inherits QUnit::Test {
         assertTrue(abs(info.r_squared - lr.getRSquared()) < 1e-10);
     }
 
+    lrUpdateTest() {
+        ML::LinearRegression lr({"fit_intercept": True});
+
+        # Fit on y = 2x + 3
+        list<list<float>> X_init = ((1.0,), (2.0,), (3.0,), (4.0,), (5.0,));
+        list<float> y_init = (5.0, 7.0, 9.0, 11.0, 13.0);
+        lr.fitMatrix(X_init, y_init);
+
+        # Save initial coefficients
+        list<float> coefs_before = lr.getCoefficients();
+        float intercept_before = lr.getIntercept();
+
+        # Update with more data (same relationship, slightly noisy)
+        list<list<float>> X_update = ((6.0,), (7.0,), (8.0,), (9.0,), (10.0,));
+        list<float> y_update = (15.1, 16.9, 19.2, 20.8, 23.1);
+        lr.updateMatrix(X_update, y_update, 0.001);
+
+        # Model should still be fitted
+        assertTrue(lr.isFitted());
+
+        # Coefficients should have changed from the update
+        list<float> coefs_after = lr.getCoefficients();
+        float intercept_after = lr.getIntercept();
+        bool changed = (abs(coefs_after[0] - coefs_before[0]) > 1e-10)
+            || (abs(intercept_after - intercept_before) > 1e-10);
+        assertTrue(changed, "coefficients should change after update");
+
+        # Predict should still work
+        hash<ML::LinearRegressionResult> pred = lr.predictMatrix(((5.0,),))[0];
+        assertTrue(exists pred.prediction, "prediction should exist after update");
+
+        # Error cases: update before fit
+        ML::LinearRegression lr2({"fit_intercept": True});
+        assertThrows("ML-LINEAR-REGRESSION-ERROR", sub() {
+            lr2.updateMatrix(((1.0,),), (1.0,), 0.01);
+        });
+
+        # Dimension mismatch
+        assertThrows("ML-LINEAR-REGRESSION-ERROR", sub() {
+            lr.updateMatrix(((1.0, 2.0),), (1.0,), 0.01);
+        });
+
+        # X/y size mismatch
+        assertThrows("ML-LINEAR-REGRESSION-ERROR", sub() {
+            lr.updateMatrix(((1.0,), (2.0,)), (1.0,), 0.01);
+        });
+    }
+
     # ===================== LogisticRegression Tests =====================
 
     logregBinaryTest() {
@@ -1711,6 +1762,67 @@ public class MlTest inherits QUnit::Test {
         ML::LogisticRegression clf();
         assertThrows("COPY-ERROR", sub() {
             ML::LogisticRegression clf2 = clf.copy();
+        });
+    }
+
+    logregUpdateTest() {
+        ML::LogisticRegression clf({"learning_rate": 0.1, "max_iterations": 200});
+
+        # Fit on binary data: class 0 around x=1, class 1 around x=5
+        list<list<float>> X_init;
+        list<float> y_init;
+        for (int i = 0; i < 20; ++i) {
+            push X_init, (1.0 + (i % 5) * 0.1,);
+            push y_init, 0.0;
+        }
+        for (int i = 0; i < 20; ++i) {
+            push X_init, (5.0 + (i % 5) * 0.1,);
+            push y_init, 1.0;
+        }
+        clf.fitMatrix(X_init, y_init);
+
+        # Get initial prediction for a borderline point
+        hash<ML::LogisticRegressionResult> pred_before = clf.predictMatrix(((3.0,),))[0];
+
+        # Update with more data reinforcing the pattern
+        list<list<float>> X_update;
+        list<float> y_update;
+        for (int i = 0; i < 10; ++i) {
+            push X_update, (0.5 + (i % 3) * 0.1,);
+            push y_update, 0.0;
+        }
+        for (int i = 0; i < 10; ++i) {
+            push X_update, (5.5 + (i % 3) * 0.1,);
+            push y_update, 1.0;
+        }
+        clf.updateMatrix(X_update, y_update, 0.1);
+
+        # Model should still be fitted and predict
+        assertTrue(clf.isFitted());
+        hash<ML::LogisticRegressionResult> pred_after = clf.predictMatrix(((3.0,),))[0];
+        assertTrue(exists pred_after.predicted_class, "prediction should exist after update");
+
+        # Probabilities should still sum to ~1
+        float prob_sum = 0.0;
+        foreach float p in (pred_after.probabilities) {
+            prob_sum += p;
+        }
+        assertTrue(abs(prob_sum - 1.0) < 0.01, "probabilities should sum to ~1");
+
+        # Error cases: update before fit
+        ML::LogisticRegression clf2();
+        assertThrows("ML-LOGISTIC-REGRESSION-ERROR", sub() {
+            clf2.updateMatrix(((1.0,),), (0.0,), 0.01);
+        });
+
+        # Dimension mismatch
+        assertThrows("ML-LOGISTIC-REGRESSION-ERROR", sub() {
+            clf.updateMatrix(((1.0, 2.0),), (0.0,), 0.01);
+        });
+
+        # Unknown class in update target
+        assertThrows("ML-LOGISTIC-REGRESSION-ERROR", sub() {
+            clf.updateMatrix(((1.0,),), (99.0,), 0.01);
         });
     }
 
@@ -2049,6 +2161,56 @@ public class MlTest inherits QUnit::Test {
         ML::GMM gmm({"n_components": 2});
         assertThrows("COPY-ERROR", sub() {
             ML::GMM copy = gmm.copy();
+        });
+    }
+
+    gmmUpdateTest() {
+        ML::GMM gmm({"n_components": 2, "seed": 42});
+
+        # Initial fit on 2 clusters
+        list<list<float>> init_data;
+        for (int i = 0; i < 30; ++i) {
+            push init_data, (0.0 + (i % 5) * 0.1, 0.0 + (i % 5) * 0.1);
+        }
+        for (int i = 0; i < 30; ++i) {
+            push init_data, (10.0 + (i % 5) * 0.1, 10.0 + (i % 5) * 0.1);
+        }
+        gmm.fitMatrix(init_data);
+
+        # Save initial means
+        list<auto> means_before = gmm.getMeans();
+
+        # Update with shifted data
+        list<list<float>> update_data;
+        for (int i = 0; i < 20; ++i) {
+            push update_data, (1.0 + (i % 5) * 0.1, 1.0 + (i % 5) * 0.1);
+        }
+        for (int i = 0; i < 20; ++i) {
+            push update_data, (11.0 + (i % 5) * 0.1, 11.0 + (i % 5) * 0.1);
+        }
+        gmm.updateMatrix(update_data);
+
+        # Model should still be fitted
+        assertTrue(gmm.isFitted());
+
+        # Means should have shifted
+        list<auto> means_after = gmm.getMeans();
+        assertEq(2, means_after.size());
+
+        # Predict should still work
+        list<hash<ML::GMMResult>> preds = gmm.predictMatrix(((5.0, 5.0),));
+        assertEq(1, preds.size());
+        assertTrue(exists preds[0].cluster);
+
+        # Error cases: update before fit
+        ML::GMM gmm2({"n_components": 2});
+        assertThrows("ML-GMM-ERROR", sub() {
+            gmm2.updateMatrix(((1.0, 2.0),));
+        });
+
+        # Dimension mismatch
+        assertThrows("ML-GMM-ERROR", sub() {
+            gmm.updateMatrix(((1.0, 2.0, 3.0),));
         });
     }
 

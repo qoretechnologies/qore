@@ -47,6 +47,9 @@ public:
     //! Fit on feature matrix X and target vector y (thread-safe)
     DLLLOCAL void fit(const MatrixXd& X, const VectorXd& y, ExceptionSink* xsink);
 
+    //! SGD update with new data (thread-safe)
+    DLLLOCAL void update(const MatrixXd& X, const VectorXd& y, double learning_rate, ExceptionSink* xsink);
+
     //! Predict for a single row vector
     DLLLOCAL QoreHashNode* predict(const RowVectorXd& point, ExceptionSink* xsink) const;
 
