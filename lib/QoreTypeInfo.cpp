@@ -1838,11 +1838,6 @@ bool QoreTypeSpec::acceptInputComplexHash(ExceptionSink* xsink, const QoreTypeIn
         // Use the base complex type, not the optional field type
         const QoreTypeInfo* complex_type = qore_get_complex_hash_type(u.ti);
         qore_hash_private* hp = qore_hash_private::get(*h);
-        if (hp->hashdecl && strcmp(hp->hashdecl->getName(), "DataProviderExpressionInfo") == 0) {
-            fprintf(stderr, "TRACE_acceptInputComplexHash: hash_id=%p, setting complexTypeInfo=%p (was %p)\n",
-                (void*)hp, (void*)complex_type, (void*)hp->complexTypeInfo);
-            fflush(stderr);
-        }
         hp->complexTypeInfo = complex_type;
     }
 
@@ -2183,6 +2178,13 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValue(const QoreValue& n, bool ex
             }
             if (u.ti == autoTypeInfo) {
                 return QTI_NEAR;
+            }
+            // CRITICAL: A hasddecl-typed hash (with a specific structure) cannot match a complex hash type
+            // with a SPECIFIC value type (a flexible map with string keys). They are mutually exclusive types.
+            // This prevents incorrect variant selection when a hasddecl is passed where a complex hash
+            // with specific value type is expected. However, hash<auto> should accept any hash including hasddecls.
+            if (h->getHashDecl() && u.ti != autoTypeInfo) {
+                return QTI_NOT_EQUAL;
             }
             if (ti && QoreTypeInfo::hasType(ti) && QoreTypeInfo::parseAccepts(u.ti, ti)) {
                 return exact ? QTI_IDENT : QTI_AMBIGUOUS;
