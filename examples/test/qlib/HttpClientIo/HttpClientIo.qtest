@@ -1966,18 +1966,25 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             {"accept": "text/plain"});
         assertTrue(stream_id >= 0, "streaming stream_id should be >= 0");
 
-        # Read all body data — readData() blocks deterministically until
-        # headers arrive (no sleep needed), then reads body from QUIC stream
+        # Read all body data — same pattern as H2 streaming tests
+        # readData() returns: binary (body), hash with end_stream (done), NOTHING (timeout)
         binary received = binary();
-        while (True) {
-            *binary data = h3stream.readData(10s);
+        date end_time = now_us() + 30s;
+        while (now_us() < end_time) {
+            auto data = h3stream.readData(5s);
             if (!exists data) {
-                if (h3stream.isDone()) {
-                    break;  # stream complete
-                }
                 continue;  # timeout, retry
             }
-            received += data;
+            if (data.typeCode() == NT_HASH && data.end_stream) {
+                break;  # stream complete — same sentinel as H2
+            }
+            if (data.typeCode() == NT_HASH && data.error) {
+                fail(sprintf("streaming error: %y", data.error));
+                break;
+            }
+            if (data.typeCode() == NT_BINARY) {
+                received += data;
+            }
         }
 
         assertTrue(h3stream.isDone(), "stream should be done after reading all data");

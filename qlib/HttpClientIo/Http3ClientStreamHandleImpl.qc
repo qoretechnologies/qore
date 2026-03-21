@@ -264,19 +264,28 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
     }
 
     #! Reads data from a streaming connection
-    /** Reads the next chunk of body data from the server on this streaming
-        HTTP/3 request. Data is read directly from the QUIC stream via
-        readQuicStreamDataBlock().
+    /** Reads the next chunk of data from this streaming HTTP/3 request.
+
+        The return value follows the same convention as the HTTP/2 streaming
+        API for unified handling:
+        - \c binary or \c string: body data chunk
+        - \c hash with \c end_stream key: stream is complete
+        - \c hash with \c error key: stream error
+        - \c NOTHING: timeout (no data within \a timeout_ms)
+
+        On the first call, blocks deterministically until response headers
+        arrive from the server. Subsequent calls read body data directly
+        from the QUIC stream.
 
         @param timeout_ms timeout for waiting for data
 
-        @return the data received, or NOTHING when the stream is complete
-        (END_STREAM received and all buffered data consumed)
+        @return data chunk, end_stream sentinel hash, error hash, or NOTHING on timeout
 
         @throw HTTPCLIENT-STATE-ERROR if not in streaming mode
-        @throw HTTPCLIENT-STREAM-CLOSED if the stream is in error or cancelled state
+        @throw HTTPCLIENT-STREAM-CLOSED if the stream is in error/cancelled state
+        and no more data is available
     */
-    *binary readData(*timeout timeout_ms) {
+    auto readData(*timeout timeout_ms) {
         timeout wait_timeout = timeout_ms ?? request_timeout;
 
         {
@@ -284,8 +293,12 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
             if (!streaming) {
                 throw "HTTPCLIENT-STATE-ERROR", "not in streaming mode";
             }
-            if (state == HttpClientStreamState::Error
-                    || state == HttpClientStreamState::Cancelled) {
+            if ((state == HttpClientStreamState::Error
+                    || state == HttpClientStreamState::Cancelled)
+                    && data_channel.empty()) {
+                throw "HTTPCLIENT-STREAM-CLOSED", "stream is closed";
+            }
+            if (state == HttpClientStreamState::Complete && headers_received) {
                 throw "HTTPCLIENT-STREAM-CLOSED", "stream is closed";
             }
         }
@@ -296,18 +309,23 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
             try {
                 auto signal = data_channel.recv(wait_timeout);
                 if (!exists signal) {
-                    # Channel timeout waiting for headers
-                    return NOTHING;
+                    return NOTHING;  # timeout
                 }
                 headers_received = True;
-                if (signal.end_stream) {
-                    # Headers-only response (END_STREAM on HEADERS frame)
-                    AutoLock al(lock);
-                    if (state < HttpClientStreamState::Complete) {
-                        state = HttpClientStreamState::Complete;
-                    }
-                    return NOTHING;
+                if (signal.typeCode() == NT_HASH && signal.error) {
+                    return signal;  # error from callback
                 }
+                if (signal.typeCode() == NT_HASH && signal.end_stream) {
+                    # Headers-only response (END_STREAM on HEADERS frame)
+                    {
+                        AutoLock al(lock);
+                        if (state < HttpClientStreamState::Complete) {
+                            state = HttpClientStreamState::Complete;
+                        }
+                    }
+                    return {"end_stream": True};
+                }
+                # Headers received, body data follows — fall through to QUIC read
             } catch (hash<ExceptionInfo> ex) {
                 if (ex.err == "CHANNEL-TIMEOUT") {
                     return NOTHING;
@@ -339,11 +357,14 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
             *binary chunk = h3conn.getSocket().readQuicStreamDataBlock(session_id, sid,
                 wait_timeout);
             if (!exists chunk) {
-                # Stream complete — update state
-                AutoLock al(lock);
-                if (state < HttpClientStreamState::Complete) {
-                    state = HttpClientStreamState::Complete;
+                # Stream complete — return end_stream sentinel (same as H2)
+                {
+                    AutoLock al(lock);
+                    if (state < HttpClientStreamState::Complete) {
+                        state = HttpClientStreamState::Complete;
+                    }
                 }
+                return {"end_stream": True};
             }
             return chunk;
         } catch (hash<ExceptionInfo> ex) {
