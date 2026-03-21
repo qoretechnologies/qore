@@ -3906,9 +3906,11 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
 
     // Fused local int operations: emit single instruction instead of LoadLocal+op+StoreLocal.
     // Exclude reference-typed locals: they need lvalue semantics to write through to the
-    // target variable.
+    // target variable. Also exclude closure-use variables: they are instantiated on cvstack,
+    // not lvstack, so they need the fallback path.
     if (force_int && left_var && left_var->getType() == VT_LOCAL && left_var->ref.id
-            && !QoreTypeInfo::isReference(left_var->getTypeInfo())) {
+            && !QoreTypeInfo::isReference(left_var->getTypeInfo())
+            && !left_var->ref.id->closureUse()) {
         const AbstractQoreNode* right_node = right_expr.getInternalNode();
         auto* right_var = dynamic_cast<const VarRefNode*>(right_node);
         if (right_var && right_var->getType() == VT_LOCAL && right_var->ref.id) {
@@ -4646,8 +4648,9 @@ QoreIRValue QoreIRLowering::lowerPreIncrement(const QoreValue& expr, std::string
         auto* var = dynamic_cast<const VarRefNode*>(lvexp.getInternalNode());
         if (var && var->getType() != VT_IMMEDIATE && !isRangeLValue(lvexp)
                 && !QoreTypeInfo::isReference(var->getTypeInfo())) {
-            // Fused path: emit single IncrementLocalInt for VT_LOCAL
-            if (var->getType() == VT_LOCAL && var->ref.id) {
+            // Fused path: emit single IncrementLocalInt for VT_LOCAL (but not closure-use vars)
+            // Closure-use variables are instantiated on cvstack, not lvstack, so they need the fallback path
+            if (var->getType() == VT_LOCAL && var->ref.id && !var->ref.id->closureUse()) {
                 auto* inst = builder.createIncrementLocalInt(var->ref.id, 1, op->loc);
                 if (parse_context) {
                     parse_context->markLocalAssignment(var->ref.id, true,

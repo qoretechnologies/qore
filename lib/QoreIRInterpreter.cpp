@@ -3470,7 +3470,10 @@ load_local_done:
                 }
                 // Write through to thread-local variable only if not IR-only
                 if (!fused_inst->target_ir_only) {
-                    if (fused_inst->target_slot_id < locals_lvar_cache.size()) {
+                    if (fused_inst->target->closureUse()) {
+                        // Closure-use variable: write through cvstack, not lvstack
+                        assignClosureVarValue(fused_inst->target, QoreValue(result_val), xsink);
+                    } else if (fused_inst->target_slot_id < locals_lvar_cache.size()) {
                         // Use cached LocalVarValue* for direct write-through (avoids TLS lookup)
                         LocalVarValue*& lvv = locals_lvar_cache[fused_inst->target_slot_id];
                         if (!lvv) {
@@ -3525,7 +3528,10 @@ load_local_done:
                 }
                 // Write through to thread-local variable only if not IR-only
                 if (!fused_inst->ir_only) {
-                    if (fused_inst->slot_id < locals_lvar_cache.size()) {
+                    if (fused_inst->local->closureUse()) {
+                        // Closure-use variable: write through cvstack, not lvstack
+                        assignClosureVarValue(fused_inst->local, QoreValue(result_val), xsink);
+                    } else if (fused_inst->slot_id < locals_lvar_cache.size()) {
                         // Use cached LocalVarValue* for direct write-through (avoids TLS lookup)
                         LocalVarValue*& lvv = locals_lvar_cache[fused_inst->slot_id];
                         if (!lvv) {
