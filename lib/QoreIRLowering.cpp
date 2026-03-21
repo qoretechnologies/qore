@@ -3390,18 +3390,24 @@ bool QoreIRLowering::needsNotNothingGuard(const QoreValue* expr, const QoreTypeI
                         }
                         return false;  // Optional types can return nothing - no guard
                     }
-                    // Type is known and doesn't allow nothing - guard likely needed
-                    // Fall through to other checks
-                    return true;
+                    // Expression type is known and non-optional
+                    // BUT: must still check target_type before deciding to insert guard
+                    // If target_type allows NOTHING, we don't need a guard
+                    // Store type for target_type check below, don't return yet
+                    if (debug_guard) {
+                        fprintf(stderr, "[GUARD-EXPR-TYPE-NON-OPTIONAL] Expression type is non-optional, checking target_type\n");
+                        fflush(stderr);
+                    }
+                    // Fall through to target_type check at line 3463
+                } else {
+                    // Analysis succeeded but no KnownTypeInfo
+                    // Be conservative: don't insert guard for operations we can't fully understand
+                    if (debug_guard) {
+                        fprintf(stderr, "[GUARD-SKIP-INCOMPLETE-ANALYSIS] Analysis present but no type info - skip guard\n");
+                        fflush(stderr);
+                    }
+                    return false;
                 }
-
-                // Analysis succeeded but no KnownTypeInfo
-                // Be conservative: don't insert guard for operations we can't fully understand
-                if (debug_guard) {
-                    fprintf(stderr, "[GUARD-SKIP-INCOMPLETE-ANALYSIS] Analysis present but no type info - skip guard\n");
-                    fflush(stderr);
-                }
-                return false;
             }
         }
     }
@@ -3488,12 +3494,26 @@ bool QoreIRLowering::needsNotNothingGuard(const QoreValue* expr, const QoreTypeI
                 }
                 return true;
             }
-            if (got_analysis && analysis.hasFlag(QoreParseAnalysis::NeverNothing)) {
-                if (debug_guard_entry) {
-                    fprintf(stderr, "[GUARD-SKIP-NEVER-NOTHING-ANALYSIS] Analysis shows NeverNothing\n");
-                    fflush(stderr);
+            if (got_analysis) {
+                // Use analysis to check expression's actual type and behavior
+                if (analysis.hasFlag(QoreParseAnalysis::NeverNothing)) {
+                    if (debug_guard_entry) {
+                        fprintf(stderr, "[GUARD-SKIP-NEVER-NOTHING-ANALYSIS] Analysis shows NeverNothing\n");
+                        fflush(stderr);
+                    }
+                    return false;
                 }
-                return false;
+                // Check if analysis has type info showing expression allows NOTHING
+                if (analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo) && analysis.known_type) {
+                    const QoreTypeInfo* expr_type = analysis.known_type;
+                    if (QoreTypeInfo::parseReturns(expr_type, NT_NOTHING) != QTI_NOT_EQUAL) {
+                        if (debug_guard_entry) {
+                            fprintf(stderr, "[GUARD-SKIP-ANALYSIS-SHOWS-OPTIONAL] Analysis shows expression type is optional\n");
+                            fflush(stderr);
+                        }
+                        return false;  // Expression type allows NOTHING - no guard needed
+                    }
+                }
             }
         }
         if (LocalVar* local = expr ? getLocalVarFromValue(*expr) : nullptr) {
@@ -3505,10 +3525,13 @@ bool QoreIRLowering::needsNotNothingGuard(const QoreValue* expr, const QoreTypeI
             return result;
         }
         if (debug_guard_entry) {
-            fprintf(stderr, "[GUARD-RETURN-TRUE-DEFAULT] Returning true by default for non-nothing target\n");
+            fprintf(stderr, "[GUARD-SKIP-CANNOT-PROVE-GUARD-NEEDED] Cannot prove guard is needed; skip to avoid deopt risk\n");
             fflush(stderr);
         }
-        return true;
+        // Be conservative: if we can't prove a guard is needed (can't find LocalVar, can't determine
+        // that target value is definitely assigned), don't insert a guard that might fail at runtime
+        // and cause unnecessary IR->AST deopt causing side effect re-execution.
+        return false;
     }
     // If the type is known and explicitly allows NOTHING, don't generate a speculative
     // guard based on profiling.  NOTHING is a valid value for such types, and a guard
