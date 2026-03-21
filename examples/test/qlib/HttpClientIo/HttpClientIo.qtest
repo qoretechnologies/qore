@@ -1966,17 +1966,16 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             {"accept": "text/plain"});
         assertTrue(stream_id >= 0, "streaming stream_id should be >= 0");
 
-        # Give the I/O thread time to receive response headers
-        # The stream handle's readData() blocks until data is available
-        usleep(500ms);
-
-        # Read all body data from the streaming response
+        # Read all body data — readData() blocks deterministically until
+        # headers arrive (no sleep needed), then reads body from QUIC stream
         binary received = binary();
-        date end_time = now_us() + 30s;
-        while (now_us() < end_time) {
-            *binary data = h3stream.readData(5s);
+        while (True) {
+            *binary data = h3stream.readData(10s);
             if (!exists data) {
-                break;  # stream complete
+                if (h3stream.isDone()) {
+                    break;  # stream complete
+                }
+                continue;  # timeout, retry
             }
             received += data;
         }
