@@ -486,6 +486,9 @@ QoreValue SocketQuicClientPollOperation::getOutput() const {
         h->setKeyValue("body", body.release(), nullptr);
     }
 
+    // Flag whether response is complete (body_complete) or headers-only (streaming)
+    h->setKeyValue("end_stream", cached_stream->body_complete, nullptr);
+
     // Consume the cached stream so subsequent calls return NOTHING
     cached_stream.reset();
 
@@ -855,6 +858,22 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                         return nullptr;  // goal reached
                     }
 
+                    // Check for headers-ready streaming streams (headers-only mode)
+                    {
+                        auto hdr_stream = quic_session->takeHeadersReadyStreamCopy();
+                        if (hdr_stream) {
+                            cached_stream = std::move(hdr_stream);
+                            qcs_state = QCS::RESPONSE_READY;
+                            {
+                                QoreHashNode* flush_info = flushAndReturnPollInfo(xsink);
+                                if (flush_info) {
+                                    flush_info->deref(xsink);
+                                }
+                            }
+                            return nullptr;  // goal reached (headers only)
+                        }
+                    }
+
                     // After sending (e.g. HTTP/3 request frames), try a
                     // non-blocking recv before falling back to poll().  On
                     // low-latency paths (localhost, same-host), the server
@@ -884,6 +903,21 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                                 }
                             }
                             return nullptr;  // goal reached
+                        }
+                        // Check for headers-ready streaming streams
+                        {
+                            auto hdr_stream = quic_session->takeHeadersReadyStreamCopy();
+                            if (hdr_stream) {
+                                cached_stream = std::move(hdr_stream);
+                                qcs_state = QCS::RESPONSE_READY;
+                                {
+                                    QoreHashNode* flush_info = flushAndReturnPollInfo(xsink);
+                                    if (flush_info) {
+                                        flush_info->deref(xsink);
+                                    }
+                                }
+                                return nullptr;  // goal reached (headers only)
+                            }
                         }
                     }
                     if (packets_processed >= QUIC_CLIENT_RECV_BUDGET) {
@@ -970,6 +1004,19 @@ int64_t SocketQuicClientPollOperation::submitRequest(
         return -1;
     }
     return quic_session->submitRequest(method, path, headers, body, body_len, xsink);
+}
+
+int64_t SocketQuicClientPollOperation::submitRequestStreaming(
+    const char* method, const char* path,
+    const strcase_str_map_t& headers,
+    ExceptionSink* xsink) {
+    if (!quic_session) {
+        xsink->raiseException("QUIC-ERROR", "QUIC session not initialized");
+        return -1;
+    }
+    // Enable headers-only mode so streaming responses are dispatched incrementally
+    quic_session->setHeadersOnlyMode(true);
+    return quic_session->submitRequestStreaming(method, path, headers, xsink);
 }
 
 int SocketQuicClientPollOperation::migrateConnection(ExceptionSink* xsink) {
