@@ -7,6 +7,7 @@
 
 
 #include <qore/intern/QoreIRLowering.h>
+#include <qore/intern/QoreOpcodeRegistry.h>
 
 #include <qore/DateTimeNode.h>
 #include <qore/QoreObject.h>
@@ -3284,141 +3285,18 @@ const QoreTypeInfo* QoreIRLowering::getGuaranteedTypeForValue(const QoreValue* e
     return nullptr;
 }
 
-// Returns true if the given opcode is guaranteed to produce a non-NOTHING result
+// PHASE 3: Delegate to centralized opcode registry instead of maintaining separate switch statement
+//! Returns true if the given opcode can legitimately produce a NOTHING result
+//! Queries the centralized registry (QoreOpcodeRegistry.h) for opcode properties
 static bool opcodeCanReturnNothing(QoreIROpcode op) {
-    switch (op) {
-        // PHASE 2: Variable loads can return nothing when the variable is optional-typed or uninitialized
-        case QoreIROpcode::LoadLocal:
-        case QoreIROpcode::LoadClosure:
-        case QoreIROpcode::LoadGlobal:
-        // Function/method calls can return nothing if the function has optional return type
-        case QoreIROpcode::Call:
-        case QoreIROpcode::CallDirect:
-        case QoreIROpcode::CallIndirect:
-        case QoreIROpcode::CallMethod:
-        case QoreIROpcode::CallMethodDirect:
-        case QoreIROpcode::InvokeMethodDirect:
-        case QoreIROpcode::CallStatic:
-        case QoreIROpcode::CallStaticDirect:
-        case QoreIROpcode::InvokeDotEvalMethodDirect:
-        case QoreIROpcode::CallClosureDirect:
-        case QoreIROpcode::Invoke:
-        // Exception handling can return nothing (no exception caught)
-        case QoreIROpcode::CatchException:
-        // Hash/list member access can return nothing (key not found, index out of bounds, etc.)
-        case QoreIROpcode::HashKeyAccess:
-        case QoreIROpcode::HashKeyAccessInt:
-        case QoreIROpcode::ListIndexAccess:
-            return true;
-        default:
-            // UNKNOWN OPCODE: conservatively treat as potentially returning NOTHING.
-            // If adding a new opcode and it can return nothing, add it explicitly above.
-            // See opcode coverage documentation in QoreIR.h.
-            return false;
-    }
+    return getOpcodeCanReturnNothing(static_cast<int>(op));
 }
 
+// PHASE 3: Delegate to centralized opcode registry instead of maintaining separate switch statement
+//! Returns true if the given opcode is guaranteed to never return NOTHING
+//! Queries the centralized registry (QoreOpcodeRegistry.h) for opcode properties
 static bool opcodeNeverReturnsNothing(QoreIROpcode op) {
-    switch (op) {
-        // Typed arithmetic always produces int/float values
-        case QoreIROpcode::AddInt:
-        case QoreIROpcode::AddFloat:
-        case QoreIROpcode::SubInt:
-        case QoreIROpcode::SubFloat:
-        case QoreIROpcode::MulInt:
-        case QoreIROpcode::MulFloat:
-        case QoreIROpcode::DivInt:
-        case QoreIROpcode::DivFloat:
-        case QoreIROpcode::ModInt:
-        case QoreIROpcode::AndInt:
-        case QoreIROpcode::OrInt:
-        case QoreIROpcode::XorInt:
-        case QoreIROpcode::ShlInt:
-        case QoreIROpcode::ShrInt:
-        // Typed compound assignment always produces int/float values
-        case QoreIROpcode::AddAssignInt:
-        case QoreIROpcode::AddAssignFloat:
-        case QoreIROpcode::SubAssignInt:
-        case QoreIROpcode::SubAssignFloat:
-        case QoreIROpcode::MulAssignInt:
-        case QoreIROpcode::MulAssignFloat:
-        case QoreIROpcode::DivAssignInt:
-        case QoreIROpcode::DivAssignFloat:
-        case QoreIROpcode::ModAssignInt:
-        case QoreIROpcode::AndAssignInt:
-        case QoreIROpcode::OrAssignInt:
-        case QoreIROpcode::XorAssignInt:
-        case QoreIROpcode::ShlAssignInt:
-        case QoreIROpcode::ShrAssignInt:
-        // Typed unary always produces values
-        case QoreIROpcode::UnaryMinusInt:
-        case QoreIROpcode::UnaryMinusFloat:
-        // All comparisons always produce bool/int values
-        case QoreIROpcode::EqInt:
-        case QoreIROpcode::EqFloat:
-        case QoreIROpcode::EqAny:
-        case QoreIROpcode::NeInt:
-        case QoreIROpcode::NeFloat:
-        case QoreIROpcode::NeAny:
-        case QoreIROpcode::EqHard:
-        case QoreIROpcode::NeHard:
-        case QoreIROpcode::LtInt:
-        case QoreIROpcode::LtFloat:
-        case QoreIROpcode::LtAny:
-        case QoreIROpcode::LeInt:
-        case QoreIROpcode::LeFloat:
-        case QoreIROpcode::LeAny:
-        case QoreIROpcode::GtInt:
-        case QoreIROpcode::GtFloat:
-        case QoreIROpcode::GtAny:
-        case QoreIROpcode::GeInt:
-        case QoreIROpcode::GeFloat:
-        case QoreIROpcode::GeAny:
-        case QoreIROpcode::CmpInt:
-        case QoreIROpcode::CmpFloat:
-        case QoreIROpcode::CmpAny:
-        case QoreIROpcode::LtString:
-        case QoreIROpcode::LeString:
-        case QoreIROpcode::GtString:
-        case QoreIROpcode::GeString:
-        case QoreIROpcode::CmpString:
-        // Boolean operations always produce bool
-        case QoreIROpcode::ToBool:
-        case QoreIROpcode::Not:
-        case QoreIROpcode::IsNullOrNothing:
-        case QoreIROpcode::InstanceOfBool:
-        case QoreIROpcode::ExistsBool:
-        case QoreIROpcode::RegexMatchBool:
-        case QoreIROpcode::RegexNMatchBool:
-        // Typed results from method/member evaluation
-        case QoreIROpcode::DotEvalInt:
-        case QoreIROpcode::DotEvalFloat:
-        case QoreIROpcode::DotEvalString:
-        case QoreIROpcode::DotEvalDate:
-        case QoreIROpcode::DotEvalList:
-        case QoreIROpcode::DotEvalHash:
-        case QoreIROpcode::DotEvalObject:
-        // Integer-typed operations
-        case QoreIROpcode::ElementsInt:
-        case QoreIROpcode::BackgroundInt:
-        // String-typed operations
-        case QoreIROpcode::RegexSubstString:
-        case QoreIROpcode::TrimString:
-        case QoreIROpcode::ChompString:
-        case QoreIROpcode::TransliterateString:
-        // Constants always produce values
-        case QoreIROpcode::ConstInt:
-        case QoreIROpcode::ConstFloat:
-        // Fused local int operations always produce int values
-        case QoreIROpcode::AddAssignLocalInt:
-        case QoreIROpcode::IncrementLocalInt:
-            return true;
-        default:
-            // UNKNOWN OPCODE: conservatively assume it might return NOTHING.
-            // If adding a new opcode that provably never returns NOTHING, add it explicitly above.
-            // See opcode coverage documentation in QoreIR.h.
-            return false;
-    }
+    return getOpcodeNeverReturnsNothing(static_cast<int>(op));
 }
 
 bool QoreIRLowering::needsNotNothingGuard(const QoreValue* expr, const QoreTypeInfo* target_type,

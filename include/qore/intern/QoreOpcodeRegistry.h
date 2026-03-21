@@ -375,4 +375,58 @@ constexpr OpcodeInfo OPCODE_REGISTRY[349] = {
     { "Sprintf                             ", false, false, false, -1 }, // 348
 };
 
+//! Static assertion to verify registry completeness
+static_assert(
+    sizeof(OPCODE_REGISTRY) / sizeof(OPCODE_REGISTRY[0]) == 349,
+    "OPCODE_REGISTRY has incorrect entry count - should be exactly 349"
+);
+
+//! ============================================================================
+//! PHASE 2: Lookup Functions - Query registry by opcode ID
+//! ============================================================================
+
+//! Get opcode info by opcode enum value
+//! Returns pointer to registry entry, or nullptr for invalid opcode
+inline const OpcodeInfo* getOpcodeInfo(int opcode_id) {
+    if (opcode_id >= 0 && opcode_id < 349) {
+        const OpcodeInfo* info = &OPCODE_REGISTRY[opcode_id];
+        // Check for null entry (removed opcode IDs: 134, 141, 142)
+        if (info->name == nullptr) {
+            return nullptr;
+        }
+        return info;
+    }
+    return nullptr;
+}
+
+//! Check if opcode can legitimately return NOTHING
+inline bool getOpcodeCanReturnNothing(int opcode_id) {
+    const OpcodeInfo* info = getOpcodeInfo(opcode_id);
+    return info ? info->can_return_nothing : false;  // conservative: assume safe
+}
+
+//! Check if opcode is guaranteed to never return NOTHING
+inline bool getOpcodeNeverReturnsNothing(int opcode_id) {
+    const OpcodeInfo* info = getOpcodeInfo(opcode_id);
+    return info ? info->never_returns_nothing : false;
+}
+
+//! Check if opcode is a block terminator (control flow)
+inline bool getOpcodeIsTerminator(int opcode_id) {
+    const OpcodeInfo* info = getOpcodeInfo(opcode_id);
+    return info ? info->is_terminator : false;
+}
+
+//! Get human-readable name of opcode
+inline const char* getOpcodeName(int opcode_id) {
+    const OpcodeInfo* info = getOpcodeInfo(opcode_id);
+    return info ? info->name : "<UNKNOWN>";
+}
+
+//! Get expected operand count for opcode
+inline int getOpcodeExpectedOperands(int opcode_id) {
+    const OpcodeInfo* info = getOpcodeInfo(opcode_id);
+    return info ? info->expected_operands : -1;  // -1 = variable/context-dependent
+}
+
 #endif
