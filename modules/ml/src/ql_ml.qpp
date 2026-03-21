@@ -42,8 +42,11 @@ extern const TypedHashDecl* hashdeclPCAResult;
 extern const TypedHashDecl* hashdeclSeasonalDecompositionResult;
 extern const TypedHashDecl* hashdeclLinearRegressionResult;
 extern const TypedHashDecl* hashdeclLinearRegressionModelInfo;
+extern const TypedHashDecl* hashdeclLogisticRegressionResult;
 extern const TypedHashDecl* hashdeclLOFResult;
 extern const TypedHashDecl* hashdeclGMMResult;
+extern const TypedHashDecl* hashdeclKNNClassificationResult;
+extern const TypedHashDecl* hashdeclKNNRegressionResult;
 extern const TypedHashDecl* hashdeclMLCapabilities;
 extern const TypedHashDecl* hashdeclOnnxTensorInfo;
 extern const TypedHashDecl* hashdeclOnnxModelInfo;
@@ -165,6 +168,20 @@ hashdecl LinearRegressionModelInfo {
     int n_features;
 }
 
+//! Result of logistic regression prediction
+/** Result of logistic regression prediction
+*/
+hashdecl LogisticRegressionResult {
+    //! predicted class label
+    float predicted_class;
+    //! probability of the predicted class
+    float max_probability;
+    //! probabilities for each class (in the same order as \c classes)
+    list<float> probabilities;
+    //! sorted list of class labels
+    list<float> classes;
+}
+
 //! Result of Local Outlier Factor scoring
 /** Result of Local Outlier Factor scoring
 */
@@ -191,6 +208,28 @@ hashdecl GMMResult {
     list<float> probabilities;
     //! log-likelihood of the data point
     float log_likelihood;
+}
+
+//! Result of KNN classification prediction
+/** Result of KNN classification prediction
+*/
+hashdecl KNNClassificationResult {
+    //! predicted class label
+    int predicted_class;
+    //! confidence (proportion of voting weight for the predicted class)
+    float confidence;
+    //! list of k nearest neighbor details (index, distance, label)
+    list<hash<auto>> neighbors;
+}
+
+//! Result of KNN regression prediction
+/** Result of KNN regression prediction
+*/
+hashdecl KNNRegressionResult {
+    //! predicted target value (weighted mean of k nearest neighbors)
+    float prediction;
+    //! list of k nearest neighbor details (index, distance, label)
+    list<hash<auto>> neighbors;
 }
 
 //! ONNX tensor metadata
@@ -429,7 +468,9 @@ hash<MLCapabilities> ml_get_capabilities() [flags=CONSTANT; dom=DEFAULT] {
     algos->push(new QoreStringNode("PCA"), xsink);
     algos->push(new QoreStringNode("SeasonalDecomposition"), xsink);
     algos->push(new QoreStringNode("LinearRegression"), xsink);
+    algos->push(new QoreStringNode("LogisticRegression"), xsink);
     algos->push(new QoreStringNode("LOF"), xsink);
+    algos->push(new QoreStringNode("KNN"), xsink);
     algos->push(new QoreStringNode("GMM"), xsink);
     algos->push(new QoreStringNode("StandardScaler"), xsink);
     algos->push(new QoreStringNode("MinMaxScaler"), xsink);

@@ -76,7 +76,9 @@ set(ML_QPP_SRC
     src/QC_PCA.qpp
     src/QC_SeasonalDecomposition.qpp
     src/QC_LinearRegression.qpp
+    src/QC_LogisticRegression.qpp
     src/QC_LOF.qpp
+    src/QC_KNN.qpp
     src/QC_GMM.qpp
     src/QC_OnnxModel.qpp
     src/QC_StandardScaler.qpp
@@ -98,7 +100,9 @@ set(ML_CPP_SRC
     src/PCA.cpp
     src/SeasonalDecomposition.cpp
     src/LinearRegression.cpp
+    src/LogisticRegression.cpp
     src/LOF.cpp
+    src/KNN.cpp
     src/GMM.cpp
     src/StandardScaler.cpp
     src/MinMaxScaler.cpp

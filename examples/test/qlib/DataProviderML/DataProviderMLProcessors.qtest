@@ -1456,13 +1456,16 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         assertTrue(children.contains("classification-metrics"));
         assertTrue(children.contains("regression-metrics"));
         assertTrue(children.contains("clustering-metrics"));
+        assertTrue(children.contains("logistic-regression"));
+        assertTrue(children.contains("knn-classification"));
+        assertTrue(children.contains("knn-regression"));
 
         hash<ML::MLCapabilities> caps = ML::ml_get_capabilities();
         if (caps.has_onnx) {
             assertTrue(children.contains("onnx-model"));
-            assertEq(16, children.lsize());
+            assertEq(19, children.lsize());
         } else {
-            assertEq(15, children.lsize());
+            assertEq(18, children.lsize());
         }
 
         # check that each child can be retrieved

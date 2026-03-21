@@ -275,6 +275,38 @@ void QoreMLPipeline::fitMatrix(const MatrixXd& X, const VectorXd* y, ExceptionSi
                 gmm->deref(xsink);
                 break;
             }
+            case PipelineStepType::LOGISTIC_REGRESSION: {
+                if (!y) {
+                    xsink->raiseException("ML-PIPELINE-ERROR",
+                        "LogisticRegression estimator requires target vector y; "
+                        "use fitMatrix(X, y)");
+                    return;
+                }
+                QoreLogisticRegression* lr = static_cast<QoreLogisticRegression*>(
+                    last.obj->getReferencedPrivateData(CID_LOGISTICREGRESSION, xsink));
+                if (*xsink) {
+                    return;
+                }
+                lr->fit(current, *y, xsink);
+                lr->deref(xsink);
+                break;
+            }
+            case PipelineStepType::KNN_CLASSIFICATION: {
+                if (!y) {
+                    xsink->raiseException("ML-PIPELINE-ERROR",
+                        "KNN estimator requires target vector y; "
+                        "use fitMatrix(X, y)");
+                    return;
+                }
+                QoreKNN* knn = static_cast<QoreKNN*>(
+                    last.obj->getReferencedPrivateData(CID_KNN, xsink));
+                if (*xsink) {
+                    return;
+                }
+                knn->fit(current, *y, xsink);
+                knn->deref(xsink);
+                break;
+            }
             default:
                 xsink->raiseException("ML-PIPELINE-ERROR",
                     "unknown estimator type for step '%s'", last.name.c_str());
@@ -390,6 +422,26 @@ QoreHashNode* QoreMLPipeline::predict(const RowVectorXd& point, ExceptionSink* x
             gmm->deref(xsink);
             return result;
         }
+        case PipelineStepType::LOGISTIC_REGRESSION: {
+            QoreLogisticRegression* lr = static_cast<QoreLogisticRegression*>(
+                last.obj->getReferencedPrivateData(CID_LOGISTICREGRESSION, xsink));
+            if (*xsink) {
+                return nullptr;
+            }
+            QoreHashNode* result = lr->predict(transformed, xsink);
+            lr->deref(xsink);
+            return result;
+        }
+        case PipelineStepType::KNN_CLASSIFICATION: {
+            QoreKNN* knn = static_cast<QoreKNN*>(
+                last.obj->getReferencedPrivateData(CID_KNN, xsink));
+            if (*xsink) {
+                return nullptr;
+            }
+            QoreHashNode* result = knn->predict(transformed, xsink);
+            knn->deref(xsink);
+            return result;
+        }
         default:
             xsink->raiseException("ML-PIPELINE-ERROR",
                 "unknown estimator type for step '%s'", last.name.c_str());
@@ -471,6 +523,26 @@ QoreListNode* QoreMLPipeline::predictMatrix(const MatrixXd& X, ExceptionSink* xs
             }
             QoreListNode* result = gmm->predictMatrix(current, xsink);
             gmm->deref(xsink);
+            return result;
+        }
+        case PipelineStepType::LOGISTIC_REGRESSION: {
+            QoreLogisticRegression* lr = static_cast<QoreLogisticRegression*>(
+                last.obj->getReferencedPrivateData(CID_LOGISTICREGRESSION, xsink));
+            if (*xsink) {
+                return nullptr;
+            }
+            QoreListNode* result = lr->predictMatrix(current, xsink);
+            lr->deref(xsink);
+            return result;
+        }
+        case PipelineStepType::KNN_CLASSIFICATION: {
+            QoreKNN* knn = static_cast<QoreKNN*>(
+                last.obj->getReferencedPrivateData(CID_KNN, xsink));
+            if (*xsink) {
+                return nullptr;
+            }
+            QoreListNode* result = knn->predictMatrix(current, xsink);
+            knn->deref(xsink);
             return result;
         }
         default:

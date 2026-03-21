@@ -43,6 +43,9 @@ public class MLProcessorsDataProvider inherits DataProvider::AbstractDataProvide
             "holt-winters": "QoreHoltWintersProcessor",
             "seasonal-decomposition": "QoreSeasonalDecompositionProcessor",
             "linear-regression": "QoreLinearRegressionProcessor",
+            "logistic-regression": "QoreLogisticRegressionProcessor",
+            "knn-classification": "QoreKNNClassificationProcessor",
+            "knn-regression": "QoreKNNRegressionProcessor",
             "lof": "QoreLOFProcessor",
             "gmm": "QoreGMMProcessor",
             "standard-scaler": "QoreStandardScalerProcessor",
@@ -104,6 +107,12 @@ public class MLProcessorsDataProvider inherits DataProvider::AbstractDataProvide
                 return new QoreSeasonalDecompositionProcessor();
             case "linear-regression":
                 return new QoreLinearRegressionProcessor();
+            case "logistic-regression":
+                return new QoreLogisticRegressionProcessor();
+            case "knn-classification":
+                return new QoreKNNClassificationProcessor();
+            case "knn-regression":
+                return new QoreKNNRegressionProcessor();
             case "lof":
                 return new QoreLOFProcessor();
             case "gmm":

@@ -38,6 +38,8 @@
 #include "QC_IsolationForest.h"
 #include "QC_LOF.h"
 #include "QC_GMM.h"
+#include "QC_LogisticRegression.h"
+#include "QC_KNN.h"
 
 #include <mutex>
 #include <string>
@@ -60,7 +62,9 @@ enum class PipelineStepType {
     KMEANS,
     ISOLATION_FOREST,
     LOF,
-    GMM
+    GMM,
+    LOGISTIC_REGRESSION,
+    KNN_CLASSIFICATION
 };
 
 //! A single pipeline step

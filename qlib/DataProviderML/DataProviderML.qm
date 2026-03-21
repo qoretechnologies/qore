@@ -632,6 +632,117 @@ module DataProviderML {
                 }
             ),
         });
+
+        # register logistic-regression action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/logistic-regression",
+            "action": "logistic-regression",
+            "display_name": "Categorize Records",
+            "short_desc": "Predicts which category each record belongs to based on its features",
+            "desc": "Classifies records into categories — such as spam vs. not spam, risk levels, "
+                "or product types — by learning from labeled examples. For example, given customer "
+                "attributes like age, income, and spending score, the model learns which segment "
+                "each customer belongs to and predicts segments for new records.\n\n"
+                "Records accumulate in a window; when full, the model learns and produces "
+                "predictions. Each record receives:\n"
+                "- `predicted_class` — the category label\n"
+                "- `max_probability` — confidence in the prediction (e.g., `0.92` means 92%% "
+                "sure)\n"
+                "- `probabilities` — breakdown across all categories",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_AGGREGATE,
+            "cls": "DataProviderML::QoreLogisticRegressionProcessor",
+            "groups": ("ML Analytics",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreLogisticRegressionProcessor::ConstructorOptions{
+                    "fields", "target_field", "window_size",
+                }, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreLogisticRegressionProcessor::ConstructorOptions{
+                    "learning_rate", "max_iterations", "regularization",
+                    "penalty", "fit_intercept",
+                }, {
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register knn-classification action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/knn-classification",
+            "action": "knn-classification",
+            "display_name": "Classify by Similarity",
+            "short_desc": "Predicts each record's category based on its nearest neighbors",
+            "desc": "Classifies records by finding the most similar records in the training "
+                "data and using majority voting. For example, to classify a flower species, "
+                "the model finds the 5 most similar flowers in the training set and picks "
+                "the most common species among them.\n\n"
+                "Records accumulate in a window; when full, the model learns and produces "
+                "predictions. Each record receives:\n"
+                "- `predicted_class` — the category label from majority vote\n"
+                "- `confidence` — proportion of neighbors that agree (e.g., `0.80` means "
+                "4 of 5 neighbors voted the same way)",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_AGGREGATE,
+            "cls": "DataProviderML::QoreKNNClassificationProcessor",
+            "groups": ("ML Analytics",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreKNNClassificationProcessor::ConstructorOptions{
+                    "fields", "target_field", "window_size", "k",
+                }, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreKNNClassificationProcessor::ConstructorOptions{
+                    "metric", "weight_func",
+                }, {
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register knn-regression action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/knn-regression",
+            "action": "knn-regression",
+            "display_name": "Predict Numbers by Similarity",
+            "short_desc": "Predicts a numeric value based on similar records",
+            "desc": "Predicts a numeric value for each record by averaging the target values "
+                "of the most similar records in the training data. For example, to estimate "
+                "a house price, the model finds the 5 most similar houses and averages their "
+                "prices.\n\n"
+                "Records accumulate in a window; when full, the model learns and produces "
+                "predictions. Each record receives:\n"
+                "- `prediction` — the estimated numeric value (weighted average of neighbors)",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_AGGREGATE,
+            "cls": "DataProviderML::QoreKNNRegressionProcessor",
+            "groups": ("ML Analytics",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreKNNRegressionProcessor::ConstructorOptions{
+                    "fields", "target_field", "window_size", "k",
+                }, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreKNNRegressionProcessor::ConstructorOptions{
+                    "metric", "weight_func",
+                }, {
+                    "loc": "constructor",
+                }
+            ),
+        });
     };
 }
 
@@ -1041,5 +1152,46 @@ public namespace DataProviderML {
         int sample_count;
         #! The number of distinct clusters found in the batch
         int n_clusters;
+    }
+
+    #! Logistic regression classification event hashdecl
+    public hashdecl LogisticRegressionEventInfo {
+        #! The type of analysis that produced this result (always "logistic-regression")
+        string event_type = "logistic-regression";
+        #! The class label the model predicted for this record based on the input fields
+        float predicted_class;
+        #! How confident the model is in the prediction, from 0.0 (uncertain) to
+        #! 1.0 (very confident)
+        float max_probability;
+        #! The probability that this record belongs to each class; for example, with 3
+        #! classes the list might be (0.7, 0.2, 0.1) meaning 70%% chance of class 0
+        list<float> probabilities;
+        #! The original input values for the fields that were analyzed
+        hash<auto> record_values;
+    }
+
+    #! KNN classification event hashdecl
+    public hashdecl KNNClassificationEventInfo {
+        #! The type of analysis that produced this result (always "knn-classification")
+        string event_type = "knn-classification";
+        #! The class label predicted by majority vote of the nearest neighbors
+        int predicted_class;
+        #! How confident the prediction is, from 0.0 (no consensus) to 1.0 (all
+        #! neighbors agree); represents the proportion of voting weight for the
+        #! predicted class
+        float confidence;
+        #! The original input values for the fields that were analyzed
+        hash<auto> record_values;
+    }
+
+    #! KNN regression event hashdecl
+    public hashdecl KNNRegressionEventInfo {
+        #! The type of analysis that produced this result (always "knn-regression")
+        string event_type = "knn-regression";
+        #! The predicted numeric value, computed as the (optionally weighted) average
+        #! of the k nearest neighbors' target values
+        float prediction;
+        #! The original input values for the fields that were analyzed
+        hash<auto> record_values;
     }
 }

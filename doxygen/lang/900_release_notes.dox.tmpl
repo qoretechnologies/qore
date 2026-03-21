@@ -791,6 +791,8 @@ cargo install tree-sitter-cli@0.26.5
       - StandardScaler for zero-mean unit-variance feature normalization
       - MinMaxScaler for configurable-range feature scaling
       - Imputer for missing value replacement (mean, median, most_frequent, constant strategies)
+      - LogisticRegression for binary and multiclass classification with L2 regularization
+      - KNN (k-Nearest Neighbors) for classification and regression by similarity
       - MLPipeline for chaining preprocessing steps and estimators into a single fit/predict unit
       - Model evaluation: classification metrics (accuracy, precision, recall, F1, confusion matrix),
         regression metrics (MSE, RMSE, MAE, R², explained variance), clustering metrics (silhouette,
@@ -800,6 +802,7 @@ cargo install tree-sitter-cli@0.26.5
       - 9 core ML pipeline processors: isolation-forest, dbscan-clustering, kmeans-clustering, pca,
         holt-winters, seasonal-decomposition, linear-regression, lof, and gmm
       - 3 preprocessing pipeline processors: standard-scaler, min-max-scaler, imputer
+      - 3 classification/regression pipeline processors: logistic-regression, knn-classification, knn-regression
       - 3 evaluation pipeline processors: classification-metrics, regression-metrics, clustering-metrics
       - optional onnx-model pipeline processor for ONNX Runtime inference
       - action catalog integration with the "ML Analytics" app

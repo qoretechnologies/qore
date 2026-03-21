@@ -24,6 +24,8 @@
     |@ref Qore::ML::DBSCAN "DBSCAN"|Clustering|Discover delivery zones, support ticket themes, or traffic hotspots|
     |@ref Qore::ML::KMeans "KMeans"|Clustering|Segment customers into tiers or classify products into categories|
     |@ref Qore::ML::GMM "GMM"|Clustering|Identify overlapping segments (e.g., 70%% budget / 30%% impulse buyer)|
+    |@ref Qore::ML::LogisticRegression "LogisticRegression"|Classification|Categorize emails as spam/not-spam, approve/deny loan applications|
+    |@ref Qore::ML::KNN "KNN"|Classification/Regression|Classify or predict based on the most similar historical records|
     |@ref Qore::ML::LinearRegression "LinearRegression"|Regression|Predict property prices, delivery times, or demand from features|
     |@ref Qore::ML::HoltWinters "HoltWinters"|Time Series|Forecast monthly revenue, daily server load, or weekly inventory|
     |@ref Qore::ML::SeasonalDecomposition "SeasonalDecomposition"|Time Series|Separate sales into growth trend, holiday spikes, and noise|
@@ -69,6 +71,23 @@
       label. A customer might be 70%% "budget shopper" and 30%% "impulse buyer," reflecting
       genuine overlap. Uses Gaussian mixtures (EM algorithm) and supports full, diagonal, and
       spherical covariance types.
+
+    @subsection mlalgo_classification Classification
+
+    Assign records to categories — approve or deny, spam or legitimate, which product
+    category, which risk tier. Classification is the most common supervised ML task.
+
+    - @ref Qore::ML::LogisticRegression "LogisticRegression" — Learns a decision boundary to
+      separate categories. For example, approve or deny loan applications based on income, credit
+      score, and debt ratio. Handles two categories (binary) or many categories (multiclass via
+      one-vs-rest). Reports the probability of each category, not just the prediction — so you
+      can flag borderline cases (e.g., 52%% approve) for manual review. Supports L2
+      regularization to prevent overfitting.
+    - @ref Qore::ML::KNN "KNN" — Classifies each record based on its most similar neighbors in
+      the training data. For example, if 4 of the 5 most similar past customers churned, predict
+      this customer will too. Also works for regression (predict a number as the average of
+      neighbors' values). Simple, interpretable, and no training phase — but slower on large
+      datasets since it compares against every training record.
 
     @subsection mlalgo_regression Regression
 
@@ -188,6 +207,12 @@ if (caps.has_onnx) {
       - No → Use @ref Qore::ML::DBSCAN "DBSCAN"
     - Do records need probability scores for multiple groups (soft assignment)?
       → Use @ref Qore::ML::GMM "GMM"
+
+    <b>"I need to assign records to categories"</b>
+    - Do your categories have a clear boundary (e.g., approve/deny based on rules)?
+      → Use @ref Qore::ML::LogisticRegression "LogisticRegression"
+    - Do you want to classify based on what similar past records looked like?
+      → Use @ref Qore::ML::KNN "KNN" (classification mode)
 
     <b>"I need to predict or forecast values"</b>
     - Is your data a time series with seasonal patterns (daily, weekly, monthly)?
@@ -443,7 +468,7 @@ if (!caps.has_onnx) {
     @section mlreleasenotes ml Module Release Notes
 
     @subsection ml_1_0 ml Module Version 1.0
-    - Initial release with 9 native ML algorithms and 4 preprocessing tools:
+    - Initial release with 11 native ML algorithms and 4 preprocessing tools:
       - @ref Qore::ML::IsolationForest "IsolationForest" — anomaly detection using isolation trees
       - @ref Qore::ML::LOF "LOF" — Local Outlier Factor density-based anomaly detection
       - @ref Qore::ML::DBSCAN "DBSCAN" — density-based clustering
@@ -453,6 +478,8 @@ if (!caps.has_onnx) {
       - @ref Qore::ML::HoltWinters "HoltWinters" — triple exponential smoothing forecasting
       - @ref Qore::ML::SeasonalDecomposition "SeasonalDecomposition" — time series decomposition
       - @ref Qore::ML::PCA "PCA" — principal component analysis
+      - @ref Qore::ML::LogisticRegression "LogisticRegression" — binary and multiclass classification
+      - @ref Qore::ML::KNN "KNN" — k-nearest neighbors for classification and regression
     - Data preprocessing:
       - @ref Qore::ML::StandardScaler "StandardScaler" — put fields on the same scale (zero mean, unit variance)
       - @ref Qore::ML::MinMaxScaler "MinMaxScaler" — normalize values to a configurable range (e.g., 0 to 1)

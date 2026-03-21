@@ -1,0 +1,311 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_LogisticRegression.qpp
+
+    Qore ml module - LogisticRegression class definition
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+#include "qore/Qore.h"
+#include "QC_LogisticRegression.h"
+
+extern const TypedHashDecl* hashdeclLogisticRegressionResult;
+
+//! The LogisticRegression class implements logistic regression for binary and multiclass classification
+/** LogisticRegression fits a logistic model using gradient descent. For binary classification, it uses
+    the sigmoid function. For multiclass classification, it uses a one-vs-rest (OvR) strategy with
+    softmax normalization of the output probabilities.
+
+    Supports L2 regularization to prevent overfitting.
+
+    Each instance is independent and thread-safe for concurrent prediction after fitting.
+
+    @par Example:
+    @code{.py}
+# Create a logistic regression classifier
+LogisticRegression clf({"learning_rate": 0.01, "max_iterations": 100});
+
+# Train on data with a target field
+list<hash<auto>> training_data = (
+    {"sepal_length": 5.1, "sepal_width": 3.5, "species": 0},
+    {"sepal_length": 7.0, "sepal_width": 3.2, "species": 1},
+    {"sepal_length": 6.3, "sepal_width": 3.3, "species": 2},
+);
+clf.fit(training_data, "species");
+
+# Predict
+hash<LogisticRegressionResult> result = clf.predict({"sepal_length": 5.9, "sepal_width": 3.0});
+printf("Predicted class: %f, Probability: %f\n", result.predicted_class, result.max_probability);
+    @endcode
+
+*/
+qclass LogisticRegression [arg=QoreLogisticRegression* lr; ns=Qore::ML; flags=final];
+
+//! Creates a LogisticRegression with the given options
+/** @param options a hash with the following optional keys:
+    - \c learning_rate (float, default 0.01): step size for gradient descent
+    - \c max_iterations (int, default 100): maximum number of gradient descent iterations
+    - \c tolerance (float, default 1e-4): convergence tolerance on weight changes
+    - \c regularization (float, default 1.0): regularization strength (only used when penalty is "l2")
+    - \c penalty (string, default "l2"): regularization type; "l2" or "none"
+    - \c fit_intercept (bool, default True): whether to fit an intercept (bias) term
+
+    @par Example:
+    @code{.py}
+LogisticRegression clf({"learning_rate": 0.1, "penalty": "none"});
+    @endcode
+
+    @throw ML-LOGISTIC-REGRESSION-ERROR invalid option values
+*/
+LogisticRegression::constructor(*hash<auto> options) {
+    double learning_rate = 0.01;
+    int64 max_iterations = 100;
+    double tolerance = 1e-4;
+    double regularization_val = 1.0;
+    const char* penalty_str = "l2";
+    bool fit_intercept = true;
+
+    if (options) {
+        QoreValue v;
+        v = options->getKeyValue("learning_rate");
+        if (!v.isNullOrNothing()) {
+            learning_rate = v.getAsFloat();
+        }
+        v = options->getKeyValue("max_iterations");
+        if (!v.isNullOrNothing()) {
+            max_iterations = v.getAsBigInt();
+        }
+        v = options->getKeyValue("tolerance");
+        if (!v.isNullOrNothing()) {
+            tolerance = v.getAsFloat();
+        }
+        v = options->getKeyValue("regularization");
+        if (!v.isNullOrNothing()) {
+            regularization_val = v.getAsFloat();
+        }
+        v = options->getKeyValue("penalty");
+        if (!v.isNullOrNothing() && v.getType() == NT_STRING) {
+            penalty_str = v.get<const QoreStringNode>()->c_str();
+        }
+        v = options->getKeyValue("fit_intercept");
+        if (!v.isNullOrNothing()) {
+            fit_intercept = v.getAsBool();
+        }
+    }
+
+    if (learning_rate <= 0.0) {
+        xsink->raiseException("ML-LOGISTIC-REGRESSION-ERROR",
+            "learning_rate must be > 0; got %f", learning_rate);
+        return;
+    }
+    if (max_iterations < 1) {
+        xsink->raiseException("ML-LOGISTIC-REGRESSION-ERROR",
+            "max_iterations must be >= 1; got " QLLD, max_iterations);
+        return;
+    }
+    if (tolerance < 0.0) {
+        xsink->raiseException("ML-LOGISTIC-REGRESSION-ERROR",
+            "tolerance must be >= 0; got %f", tolerance);
+        return;
+    }
+    if (regularization_val < 0.0) {
+        xsink->raiseException("ML-LOGISTIC-REGRESSION-ERROR",
+            "regularization must be >= 0; got %f", regularization_val);
+        return;
+    }
+    if (strcmp(penalty_str, "l2") != 0 && strcmp(penalty_str, "none") != 0) {
+        xsink->raiseException("ML-LOGISTIC-REGRESSION-ERROR",
+            "penalty must be 'l2' or 'none'; got '%s'", penalty_str);
+        return;
+    }
+
+    self->setPrivate(CID_LOGISTICREGRESSION,
+        new QoreLogisticRegression(learning_rate, static_cast<int>(max_iterations),
+            tolerance, regularization_val, penalty_str, fit_intercept));
+}
+
+//! Creates a copy of the LogisticRegression
+/** @throw COPY-ERROR LogisticRegression objects cannot be copied
+*/
+LogisticRegression::copy() {
+    xsink->raiseException("COPY-ERROR", "LogisticRegression objects cannot be copied");
+}
+
+//! Trains the model on a list of hash records with a target field
+/** Extracts numeric fields (excluding the target) from the records as features,
+    and uses the target field as the class label.
+
+    @param data a list of hashes where each hash represents a record
+    @param target_field the name of the field containing the class labels
+
+    @par Example:
+    @code{.py}
+clf.fit(training_data, "species");
+    @endcode
+
+    @throw ML-DATA-ERROR if data is empty or has no numeric fields
+    @throw ML-LOGISTIC-REGRESSION-ERROR if fitting fails
+*/
+nothing LogisticRegression::fit(list<auto> data, string target_field) {
+    // Extract field names from first record, excluding target
+    if (!data || data->empty()) {
+        xsink->raiseException("ML-DATA-ERROR", "empty data list provided");
+        return QoreValue();
+    }
+
+    QoreValue first = data->retrieveEntry(0);
+    if (first.getType() != NT_HASH) {
+        xsink->raiseException("ML-DATA-ERROR", "data list must contain hash elements");
+        return QoreValue();
+    }
+    const QoreHashNode* first_hash = first.get<const QoreHashNode>();
+    const char* target_str = target_field->c_str();
+
+    // Collect numeric field names excluding target
+    std::vector<std::string> feat_names;
+    ConstHashIterator hi(first_hash);
+    while (hi.next()) {
+        if (strcmp(hi.getKey(), target_str) == 0) {
+            continue;
+        }
+        QoreValue val = hi.get();
+        qore_type_t vt = val.getType();
+        if (vt == NT_INT || vt == NT_FLOAT || vt == NT_NUMBER) {
+            feat_names.push_back(hi.getKey());
+        }
+    }
+
+    if (feat_names.empty()) {
+        xsink->raiseException("ML-DATA-ERROR",
+            "no numeric feature fields found in data (excluding target '%s')", target_str);
+        return QoreValue();
+    }
+
+    size_t n_rows = data->size();
+    size_t n_cols = feat_names.size();
+    MatrixXd X(n_rows, n_cols);
+    VectorXd y(n_rows);
+
+    for (size_t i = 0; i < n_rows; ++i) {
+        QoreValue row_val = data->retrieveEntry(i);
+        if (row_val.getType() != NT_HASH) {
+            xsink->raiseException("ML-DATA-ERROR", "data element %zu is not a hash", i);
+            return QoreValue();
+        }
+        const QoreHashNode* row = row_val.get<const QoreHashNode>();
+        for (size_t j = 0; j < n_cols; ++j) {
+            QoreValue v = row->getKeyValue(feat_names[j].c_str());
+            X(i, j) = v.getAsFloat();
+        }
+        QoreValue target_v = row->getKeyValue(target_str);
+        y(i) = target_v.getAsFloat();
+    }
+
+    lr->setFieldNames(feat_names);
+    lr->setTargetField(target_str);
+    lr->fit(X, y, xsink);
+}
+
+//! Trains the model on a numeric feature matrix and target vector
+/** @param matrix a list of lists where each inner list is a row of feature values
+    @param target a list of class labels (numeric values)
+
+    @par Example:
+    @code{.py}
+clf.fitMatrix(((5.1, 3.5), (7.0, 3.2), (6.3, 3.3)), (0, 1, 2));
+    @endcode
+
+    @throw ML-DATA-ERROR if the matrix is empty or malformed
+    @throw ML-LOGISTIC-REGRESSION-ERROR if fitting fails
+*/
+nothing LogisticRegression::fitMatrix(list<auto> matrix, list<auto> target) {
+    MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    VectorXd y = qoreListToVector(target, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    lr->fit(mat, y, xsink);
+}
+
+//! Predicts the class for a single record
+/** @param record a hash with the same numeric fields used during training
+
+    @return a @ref LogisticRegressionResult hash with prediction details
+
+    @par Example:
+    @code{.py}
+hash<LogisticRegressionResult> result = clf.predict({"sepal_length": 5.9, "sepal_width": 3.0});
+printf("Class: %f, Probability: %f\n", result.predicted_class, result.max_probability);
+    @endcode
+
+    @throw ML-LOGISTIC-REGRESSION-ERROR if the model has not been fitted or input dimensions mismatch
+*/
+hash<LogisticRegressionResult> LogisticRegression::predict(hash<auto> record) {
+    const std::vector<std::string>& feat_names = lr->getFieldNames();
+    if (feat_names.empty()) {
+        xsink->raiseException("ML-LOGISTIC-REGRESSION-ERROR",
+            "model was fitted with fitMatrix(); use predictMatrix() or fit() with hash records");
+        return QoreValue();
+    }
+    RowVectorXd point = qoreHashToRowVector(record, feat_names, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return lr->predict(point, xsink);
+}
+
+//! Predicts classes for multiple rows in matrix form
+/** @param matrix a list of lists where each inner list is a row of feature values
+
+    @return a list of @ref LogisticRegressionResult hashes
+
+    @par Example:
+    @code{.py}
+list<hash<LogisticRegressionResult>> results = clf.predictMatrix(((5.1, 3.5), (7.0, 3.2)));
+    @endcode
+
+    @throw ML-LOGISTIC-REGRESSION-ERROR if the model has not been fitted or input dimensions mismatch
+*/
+list<hash<LogisticRegressionResult>> LogisticRegression::predictMatrix(list<auto> matrix) {
+    MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return lr->predictMatrix(mat, xsink);
+}
+
+//! Returns True if the model has been trained
+/** @return True if fit() or fitMatrix() has been called successfully
+
+    @par Example:
+    @code{.py}
+if (!clf.isFitted()) {
+    clf.fit(data, "target");
+}
+    @endcode
+*/
+bool LogisticRegression::isFitted() [flags=CONSTANT] {
+    return lr->isFitted();
+}

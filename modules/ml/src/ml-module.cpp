@@ -34,7 +34,9 @@
 #include "QC_PCA.h"
 #include "QC_SeasonalDecomposition.h"
 #include "QC_LinearRegression.h"
+#include "QC_LogisticRegression.h"
 #include "QC_LOF.h"
+#include "QC_KNN.h"
 #include "QC_GMM.h"
 #include "QC_OnnxModel.h"
 #include "QC_StandardScaler.h"
@@ -74,8 +76,11 @@ DLLLOCAL TypedHashDecl* init_hashdecl_PCAResult(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_SeasonalDecompositionResult(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_LinearRegressionResult(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_LinearRegressionModelInfo(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_LogisticRegressionResult(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_LOFResult(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_GMMResult(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_KNNClassificationResult(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_KNNRegressionResult(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_OnnxTensorInfo(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_OnnxProviderConfig(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_OnnxSessionConfig(QoreNamespace& ns);
@@ -98,8 +103,11 @@ const TypedHashDecl* hashdeclPCAResult;
 const TypedHashDecl* hashdeclSeasonalDecompositionResult;
 const TypedHashDecl* hashdeclLinearRegressionResult;
 const TypedHashDecl* hashdeclLinearRegressionModelInfo;
+const TypedHashDecl* hashdeclLogisticRegressionResult;
 const TypedHashDecl* hashdeclLOFResult;
 const TypedHashDecl* hashdeclGMMResult;
+const TypedHashDecl* hashdeclKNNClassificationResult;
+const TypedHashDecl* hashdeclKNNRegressionResult;
 const TypedHashDecl* hashdeclOnnxTensorInfo;
 const TypedHashDecl* hashdeclOnnxProviderConfig;
 const TypedHashDecl* hashdeclOnnxSessionConfig;
@@ -125,7 +133,9 @@ static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     preinitPCAClass();
     preinitSeasonalDecompositionClass();
     preinitLinearRegressionClass();
+    preinitLogisticRegressionClass();
     preinitLOFClass();
+    preinitKNNClass();
     preinitGMMClass();
     preinitOnnxModelClass();
     preinitStandardScalerClass();
@@ -143,8 +153,11 @@ static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     hashdeclSeasonalDecompositionResult = init_hashdecl_SeasonalDecompositionResult(MLNS);
     hashdeclLinearRegressionResult = init_hashdecl_LinearRegressionResult(MLNS);
     hashdeclLinearRegressionModelInfo = init_hashdecl_LinearRegressionModelInfo(MLNS);
+    hashdeclLogisticRegressionResult = init_hashdecl_LogisticRegressionResult(MLNS);
     hashdeclLOFResult = init_hashdecl_LOFResult(MLNS);
     hashdeclGMMResult = init_hashdecl_GMMResult(MLNS);
+    hashdeclKNNClassificationResult = init_hashdecl_KNNClassificationResult(MLNS);
+    hashdeclKNNRegressionResult = init_hashdecl_KNNRegressionResult(MLNS);
     hashdeclOnnxTensorInfo = init_hashdecl_OnnxTensorInfo(MLNS);
     hashdeclOnnxProviderConfig = init_hashdecl_OnnxProviderConfig(MLNS);
     hashdeclOnnxSessionConfig = init_hashdecl_OnnxSessionConfig(MLNS);
@@ -166,7 +179,9 @@ static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     MLNS.addSystemClass(initPCAClass(MLNS));
     MLNS.addSystemClass(initSeasonalDecompositionClass(MLNS));
     MLNS.addSystemClass(initLinearRegressionClass(MLNS));
+    MLNS.addSystemClass(initLogisticRegressionClass(MLNS));
     MLNS.addSystemClass(initLOFClass(MLNS));
+    MLNS.addSystemClass(initKNNClass(MLNS));
     MLNS.addSystemClass(initGMMClass(MLNS));
     MLNS.addSystemClass(initOnnxModelClass(MLNS));
     MLNS.addSystemClass(initStandardScalerClass(MLNS));

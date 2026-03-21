@@ -225,6 +225,40 @@ nothing MLPipeline::addGMM(string name, object obj) {
         const_cast<QoreObject*>(obj));
 }
 
+//! Adds a LogisticRegression estimator (must be the last step)
+/** @param name a unique step name
+    @param obj a LogisticRegression instance
+
+    @throw ML-PIPELINE-ERROR invalid object type
+*/
+nothing MLPipeline::addLogisticRegression(string name, object obj) {
+    QoreLogisticRegression* s = static_cast<QoreLogisticRegression*>(
+        obj->getReferencedPrivateData(CID_LOGISTICREGRESSION, xsink));
+    if (*xsink) {
+        return QoreValue();
+    }
+    s->deref(xsink);
+    pipeline->addStep(name->c_str(), PipelineStepType::LOGISTIC_REGRESSION,
+        const_cast<QoreObject*>(obj));
+}
+
+//! Adds a KNN classification estimator (must be the last step)
+/** @param name a unique step name
+    @param obj a KNN instance configured for classification
+
+    @throw ML-PIPELINE-ERROR invalid object type
+*/
+nothing MLPipeline::addKNNClassification(string name, object obj) {
+    QoreKNN* s = static_cast<QoreKNN*>(
+        obj->getReferencedPrivateData(CID_KNN, xsink));
+    if (*xsink) {
+        return QoreValue();
+    }
+    s->deref(xsink);
+    pipeline->addStep(name->c_str(), PipelineStepType::KNN_CLASSIFICATION,
+        const_cast<QoreObject*>(obj));
+}
+
 //! Fits the pipeline on a numeric matrix (no target vector)
 /** @param matrix a list of lists of numeric values
 
