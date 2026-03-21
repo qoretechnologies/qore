@@ -239,7 +239,7 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
                 throw "HTTPCLIENT-STATE-ERROR",
                     sprintf("cannot send data in state: %y", state);
             }
-            if (!stream_id) {
+            if (!exists stream_id) {
                 throw "HTTPCLIENT-STATE-ERROR", "stream not yet established";
             }
             sid = stream_id;
@@ -293,7 +293,7 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
         int sid;
         {
             AutoLock al(lock);
-            if (!stream_id) {
+            if (!exists stream_id) {
                 throw "HTTPCLIENT-STATE-ERROR", "stream not yet established";
             }
             sid = stream_id;
