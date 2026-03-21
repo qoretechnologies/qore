@@ -1435,11 +1435,32 @@ void QoreIRToLLVM::emitExceptionCheck(llvm::Module& module, llvm::Function* llvm
         }
         exception_block = error_return_block;
     }
-    auto has_ex = module.getOrInsertFunction("qore_rt_has_exception",
-            llvm::FunctionType::get(i64_type, {ptr_type}, false));
-    llvm::Value* ex_check = builder->CreateCall(has_ex, {xsink_arg});
-    llvm::Value* has_exception = builder->CreateICmpNE(ex_check,
-            llvm::ConstantInt::get(i64_type, 0));
+    // Inline exception check as direct memory loads instead of function call
+    // ExceptionSink::priv at offset 0 -> qore_es_private*
+    // qore_es_private::head at offset 0 within priv -> QoreException*
+    // qore_es_private::thread_exit at offset 20 within priv -> bool
+
+    // Load priv pointer from xsink at offset 0
+    auto* xsink_priv_ptr = builder->CreateLoad(ptr_type, xsink_arg, "xsink_priv_ptr");
+
+    // Load head pointer from priv at offset 0
+    auto* head_ptr = builder->CreateLoad(ptr_type, xsink_priv_ptr, "priv_head");
+
+    // Check if head != nullptr
+    auto* has_exception_head = builder->CreateICmpNE(head_ptr,
+            llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type)),
+            "has_exception_head");
+
+    // Also check thread_exit at offset 20 within priv
+    // thread_exit is a bool at offset 20 in qore_es_private
+    auto* thread_exit_ptr = builder->CreateGEP(llvm::Type::getInt8Ty(ctx),
+            xsink_priv_ptr, {llvm::ConstantInt::get(i64_type, 20)}, "thread_exit_ptr");
+    auto* thread_exit_byte = builder->CreateLoad(llvm::Type::getInt8Ty(ctx), thread_exit_ptr, "thread_exit_byte");
+    auto* has_exception_thread_exit = builder->CreateICmpNE(thread_exit_byte,
+            llvm::ConstantInt::get(llvm::Type::getInt8Ty(ctx), 0), "has_thread_exit");
+
+    // Combine: exception exists if (head != nullptr) OR (thread_exit)
+    auto* has_exception = builder->CreateOr(has_exception_head, has_exception_thread_exit, "has_exception");
     llvm::BasicBlock* cont = llvm::BasicBlock::Create(ctx, "no_exception", llvm_func);
     if (getenv("QORE_LLVM_DEBUG")) {
         fprintf(stderr, "LLVM-EXCEPT-CHECK: creating no_exception block, moving from %s to %s\n",
