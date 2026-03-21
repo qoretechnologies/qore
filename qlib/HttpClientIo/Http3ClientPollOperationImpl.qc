@@ -224,6 +224,8 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
         @param callback callback to invoke when response is ready
         @param ctx optional context to pass to callback
         @param max_streams maximum concurrent streams allowed on this connection
+        @param streaming if True, submit without END_STREAM (for bidirectional streaming);
+        the caller sends body data incrementally via sendStreamData()
 
         @return the stream ID assigned to this request
 
@@ -231,7 +233,8 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
         @throw HTTP3-CAPACITY-ERROR if the connection is at capacity
     */
     int submitRequest(string method, string path, *hash<auto> headers, *data body,
-            HttpResponseCallback callback, *hash<auto> ctx, int max_streams) {
+            HttpResponseCallback callback, *hash<auto> ctx, int max_streams,
+            bool streaming = False) {
         string current_state = state;
         if (current_state != STATE_READING && current_state != STATE_WAIT_READ) {
             throw "HTTP3-STATE-ERROR", sprintf("cannot submit request in state: %y", current_state);
@@ -274,7 +277,11 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
         int retries = 0;
         while (True) {
             try {
-                stream_id = sock.submitQuicRequest(method, path, req_headers, body);
+                if (streaming) {
+                    stream_id = sock.submitQuicRequestStreaming(method, path, req_headers);
+                } else {
+                    stream_id = sock.submitQuicRequest(method, path, req_headers, body);
+                }
                 break;
             } catch (hash<ExceptionInfo> ex) {
                 if (ex.err == "QUIC-ERROR" && ex.desc =~ /STREAM_ID_BLOCKED/
@@ -376,6 +383,27 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
         }
 
         return stream_id;
+    }
+
+    #! Sends data on a streaming HTTP/3 request
+    /** @param stream_id the stream ID to send data on
+        @param data the data to send (can be NOTHING to send END_STREAM only)
+        @param end_stream if True, signals end of stream
+
+        @return 0 on success, 1 if buffer full (backpressure), -1 on error
+
+        @throw HTTP3-STATE-ERROR if not in ready state
+    */
+    int sendStreamData(int stream_id, *data data, bool end_stream = False) {
+        string current_state = state;
+        if (current_state != STATE_READING && current_state != STATE_WAIT_READ) {
+            throw "HTTP3-STATE-ERROR", sprintf("cannot send data in state: %y", current_state);
+        }
+
+        log(LoggerLevel::DEBUG, "sending %d bytes on stream %d (end_stream=%y)",
+            data ? data.size() : 0, stream_id, end_stream);
+
+        return sock.sendQuicClientStreamData(stream_id, data, end_stream);
     }
 
     #! Cancels a pending request
@@ -562,6 +590,7 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
 
                 int stream_id = output.stream_id;
                 string sid = string(stream_id);
+                bool is_end = output.end_stream.toBool();
                 *HttpResponseCallback cb;
                 *hash<auto> stream_ctx;
                 {
@@ -574,7 +603,7 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
                 }
                 if (cb) {
                     try {
-                        cb(output + {"ctx": stream_ctx, "end_stream": True, "protocol": "h3"}, NOTHING);
+                        cb(output + {"ctx": stream_ctx, "protocol": "h3"}, NOTHING);
                     } catch (hash<ExceptionInfo> ex) {
                         log(LoggerLevel::ERROR, "stream callback exception: %s: %s",
                             ex.err, ex.desc);
@@ -584,8 +613,11 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
                         stream_id);
                 }
                 # Remove stream AFTER callback completes so the stream handle's
-                # state is already updated before the stream becomes unavailable
-                if (cb) {
+                # state is already updated before the stream becomes unavailable.
+                # For streaming requests (end_stream=false), keep the callback
+                # registered — body data is read directly via readQuicStreamDataBlock(),
+                # but we need to keep the stream active.
+                if (is_end && cb) {
                     AutoLock al(stream_lock);
                     remove stream_callbacks{sid};
                     remove stream_ctxs{sid};
