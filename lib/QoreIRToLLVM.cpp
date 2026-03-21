@@ -130,8 +130,13 @@ void QoreIRToLLVM::declareRuntimeHelpers(llvm::Module& module) {
             llvm::FunctionType::get(void_type, {ptr_type, ptr_type, ptr_type}, false));
     module.getOrInsertFunction("qore_rt_throw_value",
             llvm::FunctionType::get(void_type, {ptr_type, i64_type}, false));
-    module.getOrInsertFunction("qore_rt_has_exception",
+    auto has_ex = module.getOrInsertFunction("qore_rt_has_exception",
             llvm::FunctionType::get(i64_type, {ptr_type}, false));
+    // Mark as nounwind to enable CSE (common subexpression elimination)
+    // Combined with the __attribute__((pure)) on the C++ function, this allows LLVM
+    // to eliminate redundant exception checks in tight loops
+    auto* has_ex_fn = llvm::cast<llvm::Function>(has_ex.getCallee());
+    has_ex_fn->addFnAttr(llvm::Attribute::NoUnwind);
 
     // Guard helpers
     module.getOrInsertFunction("qore_rt_guard_not_nothing",

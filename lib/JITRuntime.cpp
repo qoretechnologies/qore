@@ -336,7 +336,7 @@ extern "C" DLLEXPORT void qore_rt_throw_value(ExceptionSink* xsink, uint64_t val
     }
 }
 
-extern "C" DLLEXPORT int64_t qore_rt_has_exception(ExceptionSink* xsink) {
+extern "C" DLLEXPORT __attribute__((pure)) int64_t qore_rt_has_exception(ExceptionSink* xsink) {
     return (xsink && *xsink) ? 1 : 0;
 }
 
