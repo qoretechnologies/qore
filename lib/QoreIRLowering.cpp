@@ -3675,30 +3675,90 @@ QoreIRLowering::GuardExceptionTargetOverrideScope::~GuardExceptionTargetOverride
 }
 
 bool QoreIRLowering::needsNotNothingGuard(const QoreValue& expr) const {
+    static bool debug_guard = [] {
+        const char* debug_env = getenv("QORE_IR_DEBUG");
+        return debug_env && strstr(debug_env, "guard");
+    }();
+
+    if (debug_guard) {
+        fprintf(stderr, "[GUARD-SINGLE-ARG] Entry: expr type=%s, has_node=%d, parse_context=%p\n",
+                expr.getTypeName(), expr.hasNode(), (void*)parse_context);
+        fflush(stderr);
+    }
+
     if (parse_context) {
-        if (LocalVar* local = getLocalVarFromValue(expr)) {
-            return parse_context->needsGuardForLocal(local);
+        LocalVar* local = getLocalVarFromValue(expr);
+        if (debug_guard) {
+            fprintf(stderr, "[GUARD-SINGLE-ARG-GETLVAR] getLocalVarFromValue returned %p\n", (void*)local);
+            fflush(stderr);
+        }
+        if (local) {
+            bool result = parse_context->needsGuardForLocal(local);
+            if (debug_guard) {
+                fprintf(stderr, "[GUARD-SINGLE-ARG-LVAR-RESULT] needsGuardForLocal returned %d\n", result);
+                fflush(stderr);
+            }
+            return result;
         }
     }
+
+    if (debug_guard) {
+        fprintf(stderr, "[GUARD-SINGLE-ARG-NO-LVAR] No LocalVar found, attempting analysis\n");
+        fflush(stderr);
+    }
+
     QoreParseAnalysis analysis;
     bool got_analysis = false;
     try {
         got_analysis = getAnalysis(expr, analysis);
     } catch (...) {
+        if (debug_guard) {
+            fprintf(stderr, "[GUARD-SINGLE-ARG-EXCEPTION] Exception in getAnalysis, returning true\n");
+            fflush(stderr);
+        }
         return true;
     }
+
     if (got_analysis) {
+        if (debug_guard) {
+            fprintf(stderr, "[GUARD-SINGLE-ARG-ANALYSIS] Got analysis: KnownTypeInfo=%d, NeverNothing=%d, known_type=%p\n",
+                    analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo),
+                    analysis.hasFlag(QoreParseAnalysis::NeverNothing),
+                    (void*)analysis.known_type);
+            fflush(stderr);
+        }
+
         if (analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
                 && !analysis.hasFlag(QoreParseAnalysis::NeverNothing)) {
             if (analysis.known_type && QoreTypeInfo::parseReturns(analysis.known_type, NT_NOTHING) == QTI_NOT_EQUAL) {
+                if (debug_guard) {
+                    fprintf(stderr, "[GUARD-SINGLE-ARG-RETURNING-TRUE] Type is non-optional and not NeverNothing\n");
+                    fflush(stderr);
+                }
                 return true;
             }
         }
     }
+
     if (parse_context) {
-        if (LocalVar* local = getLocalVarFromValue(expr)) {
-            return parse_context->needsGuardForLocal(local);
+        LocalVar* local = getLocalVarFromValue(expr);
+        if (debug_guard) {
+            fprintf(stderr, "[GUARD-SINGLE-ARG-FINAL-LVAR] getLocalVarFromValue returned %p (2nd try)\n", (void*)local);
+            fflush(stderr);
         }
+        if (local) {
+            bool result = parse_context->needsGuardForLocal(local);
+            if (debug_guard) {
+                fprintf(stderr, "[GUARD-SINGLE-ARG-FINAL-RESULT] needsGuardForLocal returned %d (2nd try)\n", result);
+                fflush(stderr);
+            }
+            return result;
+        }
+    }
+
+    if (debug_guard) {
+        fprintf(stderr, "[GUARD-SINGLE-ARG-RETURNING-FALSE] Default case\n");
+        fflush(stderr);
     }
     return false;
 }
