@@ -1629,7 +1629,7 @@ const QoreProgramLocation* get_runtime_location() {
 }
 
 int swap_runtime_statement_location(ExceptionSink* xsink, const AbstractStatement* stmt, const QoreProgramLocation* loc,
-        const QoreParseOptions& po, const AbstractStatement*& old_stmt, const QoreProgramLocation*& old_loc, QoreParseOptions& old_po) {
+        QoreParseOptions po, const AbstractStatement*& old_stmt, const QoreProgramLocation*& old_loc, QoreParseOptions& old_po) {
     ThreadData* td = thread_data.get();
     old_stmt = td->runtime_statement;
     old_loc = td->runtime_loc;
@@ -1666,6 +1666,14 @@ void update_runtime_statement_location(const AbstractStatement* stmt, const Qore
     ThreadData* td = thread_data.get();
     td->runtime_statement = stmt;
     td->runtime_loc = loc;
+}
+
+RuntimeLocationCache get_runtime_location_cache() {
+    ThreadData* td = thread_data.get();
+    return RuntimeLocationCache{
+        &td->runtime_loc,
+        &td->runtime_statement
+    };
 }
 
 void set_parse_file_info(QoreProgramLocation& loc) {
@@ -2197,6 +2205,10 @@ SingleArgvContextHelper::~SingleArgvContextHelper() {
 const QoreListNode* thread_get_implicit_args() {
     //printd(5, "thread_get_implicit_args() returning %p\n", thread_data.get()->current_implicit_arg);
     return thread_data.get()->current_implicit_arg;
+}
+
+void thread_set_implicit_args(QoreListNode* argv) {
+    thread_data.get()->current_implicit_arg = argv;
 }
 
 bool runtime_in_object_method(const char* name, const QoreObject* o) {
