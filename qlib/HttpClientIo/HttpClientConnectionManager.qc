@@ -118,10 +118,11 @@ public class HttpClientConnectionManager {
         #! Last H3 probe times: "host:port" -> timestamp
         hash<string, date> h3_probe_times;
 
-        #! Pending Alt-Svc discoveries from async callbacks (lock-free queue)
-        /** The I/O thread pushes {url, alt_svc} entries here; user threads
-            drain and process them in acquireStream() before pool lookup.
-            This avoids acquiring pool_lock (write) from the I/O thread.
+        #! Pending Alt-Svc discoveries from async callbacks
+        /** Thread-safe unlimited Queue: the I/O thread pushes {url, alt_svc}
+            entries here (non-blocking because the queue has no size limit);
+            user threads drain and process them in acquireStream() before pool
+            lookup.  This avoids acquiring pool_lock from the I/O thread.
         */
         Queue pending_alt_svc();
     }
@@ -966,9 +967,17 @@ public class HttpClientConnectionManager {
         pool_lock (write), which would block the I/O thread.
     */
     private drainPendingAltSvc() {
-        while (pending_alt_svc.size() > 0) {
-            *hash<auto> item = pending_alt_svc.get(0);
-            if (!item) {
+        while (True) {
+            # Non-blocking get: negative timeout returns NOTHING immediately
+            # when the queue is empty (avoids TOCTOU race between size() and get())
+            *hash<auto> item;
+            try {
+                item = pending_alt_svc.get(-1);
+            } catch () {
+                # QUEUE-TIMEOUT — queue was empty
+                break;
+            }
+            if (!exists item) {
                 break;
             }
             checkAltSvc(item.url, {"headers": {"alt-svc": item.alt_svc}});
@@ -1013,6 +1022,9 @@ public class HttpClientConnectionManager {
         if (!url_info.port) {
             url_info.port = 443;
         }
+        # Normalize the origin host: parse_url() strips brackets from IPv6
+        # (e.g. "[::1]" → "::1"), so the pool key uses the bare form.
+        string origin_host = url_info.host;
         # Parse comma-separated Alt-Svc alternatives, e.g.:
         #   h3=":443"; ma=2592000, h3-29=":443"; ma=2592000
         # RFC 7838 §3: alt-authority = [host] ":" port
@@ -1029,20 +1041,28 @@ public class HttpClientConnectionManager {
                 continue;
             }
             # Empty host means same as origin host (RFC 7838 §2.1)
-            string alt_host = m[0].val() ? m[0] : url_info.host;
-            # Strip brackets from IPv6 for key comparison
-            if (alt_host.size() > 2 && alt_host[0] == "[") {
-                alt_host = alt_host.substr(1, alt_host.size() - 2);
+            # Normalize: strip brackets from IPv6 alt-authority to match
+            # parse_url()'s bracket-stripping behavior (e.g. "[::1]" → "::1")
+            string alt_host;
+            if (!m[0].val()) {
+                alt_host = origin_host;
+            } else {
+                alt_host = m[0];
+                if (alt_host.size() > 2 && alt_host[0] == "[") {
+                    alt_host = alt_host.substr(1, alt_host.size() - 2);
+                }
             }
             int alt_port = int(m[1]);
             # Only honour same-origin Alt-Svc (host match or empty host)
-            if (alt_host != url_info.host) {
+            if (alt_host != origin_host) {
                 log(LoggerLevel::DEBUG,
                     "Alt-Svc: ignoring cross-origin h3 alternative %s:%d (origin %s)",
-                    alt_host, alt_port, url_info.host);
+                    alt_host, alt_port, origin_host);
                 continue;
             }
-            string key = sprintf("%s:%d", url_info.host, alt_port);
+            # Use the origin host for the pool key — this is the same format
+            # used by acquireStream() → getConnection() for pool lookups
+            string key = sprintf("%s:%d", origin_host, alt_port);
             log(LoggerLevel::DEBUG, "Alt-Svc: H3 advertised at %s, caching h3", key);
             AutoWriteLock al(pool_lock);
             cacheProtocol(key, "h3");

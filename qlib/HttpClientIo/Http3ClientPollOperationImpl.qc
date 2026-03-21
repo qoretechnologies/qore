@@ -344,27 +344,35 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
 
         # Phase 3: register callback under lock; re-check state in case the
         # connection died between the submit and this registration
+        bool need_cancel = False;
+        string post_state;
         {
             AutoLock al(stream_lock);
-            string post_state = state;
+            post_state = state;
             if (post_state != STATE_READING && post_state != STATE_WAIT_READ) {
-                # Stream was submitted to QUIC but connection is now dead; cancel
-                # the dangling stream so the peer is notified and resources freed
-                try {
-                    if (session_id) {
-                        sock.cancelQuicStream(session_id, stream_id);
-                    }
-                } catch () {}
-                throw "HTTP3-STATE-ERROR",
-                    sprintf("connection closed during request submission (state: %y)",
-                        post_state);
+                # Stream was submitted to QUIC but connection is now dead;
+                # capture the need to cancel and release stream_lock first
+                # to avoid lock-order inversion (stream_lock → sock->priv->m
+                # vs I/O thread's sock->priv->m → stream_lock)
+                need_cancel = True;
+            } else {
+                string sid = string(stream_id);
+                stream_callbacks{sid} = callback;
+                if (ctx) {
+                    stream_ctxs{sid} = ctx;
+                }
+                ++active_stream_count;
             }
-            string sid = string(stream_id);
-            stream_callbacks{sid} = callback;
-            if (ctx) {
-                stream_ctxs{sid} = ctx;
-            }
-            ++active_stream_count;
+        }
+        if (need_cancel) {
+            try {
+                if (session_id) {
+                    sock.cancelQuicStream(session_id, stream_id);
+                }
+            } catch () {}
+            throw "HTTP3-STATE-ERROR",
+                sprintf("connection closed during request submission (state: %y)",
+                    post_state);
         }
 
         return stream_id;
