@@ -3489,10 +3489,11 @@ bool QoreIRLowering::needsNotNothingGuard(const QoreValue* expr, const QoreTypeI
                 got_analysis = getAnalysis(*expr, analysis);
             } catch (...) {
                 if (debug_guard_entry) {
-                    fprintf(stderr, "[GUARD-RETURN-TRUE-EXCEPTION] Exception in getAnalysis\n");
+                    fprintf(stderr, "[GUARD-SKIP-EXCEPTION] Exception in getAnalysis, skip guard to avoid deopt risk\n");
                     fflush(stderr);
                 }
-                return true;
+                // If analysis fails, don't insert guard speculatively to avoid deopt-causing guard failures
+                return false;
             }
             if (got_analysis) {
                 // Use analysis to check expression's actual type and behavior
