@@ -55,10 +55,12 @@ public class QoreLogisticRegressionProcessor inherits DataProvider::AbstractData
             },
             "target_field": <DataProviderOptionInfo>{
                 "display_name": "Category Field",
-                "short_desc": "Which field contains the correct category",
-                "desc": "The field that says what category each record actually belongs to. "
-                    "For example, `status` (with values like `\"approved\"` or `\"denied\"`), "
-                    "or `risk_level` (with values like `1`, `2`, `3`)",
+                "short_desc": "Which numeric field contains the category code",
+                "desc": "The field that contains a **numeric** category code for each record. "
+                    "For example, `risk_level` with values `1`, `2`, `3` or `approved` "
+                    "with values `0` (denied) and `1` (approved).\n\n"
+                    "**Note**: categories must be numeric; use a numeric code for text "
+                    "categories (e.g., `0` = denied, `1` = approved)",
                 "type": AbstractDataProviderTypeMap."string",
                 "required": True,
                 "input_field_names": True,

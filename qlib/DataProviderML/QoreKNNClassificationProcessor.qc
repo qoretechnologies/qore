@@ -55,10 +55,13 @@ public class QoreKNNClassificationProcessor inherits DataProvider::AbstractDataP
             },
             "target_field": <DataProviderOptionInfo>{
                 "display_name": "Category Field",
-                "short_desc": "Which field contains the correct category",
-                "desc": "The field that says what category each record belongs to. For "
-                    "example, `customer_segment` or `risk_level`. The model looks at this "
-                    "field on the most similar records and picks the most common category",
+                "short_desc": "Which numeric field contains the category code",
+                "desc": "The field that contains a **numeric** category code for each record. "
+                    "For example, `risk_level` with values `0`, `1`, `2` or `segment_id` "
+                    "with values `1`, `2`, `3`. The model looks at this field on the most "
+                    "similar records and picks the most common value.\n\n"
+                    "**Note**: categories must be numeric (integers); use a numeric code "
+                    "for text categories (e.g., `0` = low, `1` = medium, `2` = high)",
                 "type": AbstractDataProviderTypeMap."string",
                 "required": True,
                 "input_field_names": True,
