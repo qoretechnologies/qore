@@ -3639,9 +3639,12 @@ void QoreIRLowering::maybeInsertNotNothingGuard(QoreIRValue value, const QoreVal
         }
     } else {
         if (debug_guard) {
-            fprintf(stderr, "[GUARD-CHECK-LAST] Value slot %d, no current block or empty instructions\n", value.id);
+            fprintf(stderr, "[GUARD-CHECK-LAST] Value slot %d, no current block or empty instructions - NOT inserting guard\n", value.id);
             fflush(stderr);
         }
+        // No current block or empty instructions - can't verify the opcode, so don't insert
+        // a guard that might fail. This is conservative but correct.
+        return;
     }
     const QoreProgramLocation* guard_loc = loc;
     if (!guard_loc && expr) {
