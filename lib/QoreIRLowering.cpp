@@ -3597,50 +3597,73 @@ void QoreIRLowering::maybeInsertNotNothingGuard(QoreIRValue value, const QoreVal
         }
         return;
     }
-    // Check the last instruction in the current block
+    // Find the instruction that produced this value and check its properties
     QoreIRBasicBlock* current_block = builder.getBlock();
     if (current_block && !current_block->instructions.empty()) {
-        const auto& last = current_block->instructions.back();
+        // Search for the instruction that produces this value
+        QoreIRInstruction* producer = nullptr;
+        for (auto it = current_block->instructions.rbegin(); it != current_block->instructions.rend(); ++it) {
+            if ((*it)->result.id == value.id) {
+                producer = it->get();
+                break;
+            }
+        }
+
+        if (!producer) {
+            // Value wasn't produced in this block (maybe from a previous block or argument)
+            // Don't insert a guard in this case to be safe
+            if (debug_guard) {
+                fprintf(stderr, "[GUARD-SKIP-NOT-PRODUCED] Value slot %d not produced in current block - skipping guard\n", value.id);
+                fflush(stderr);
+            }
+            return;
+        }
+
         if (debug_guard) {
-            fprintf(stderr, "[GUARD-CHECK-LAST] Value slot %d, last instr opcode=%d result=%d (match=%d)\n",
-                    value.id, static_cast<int>(last->opcode), last->result.id, (last->result.id == value.id));
+            fprintf(stderr, "[GUARD-CHECK-PRODUCER] Value slot %d produced by opcode=%d\n",
+                    value.id, static_cast<int>(producer->opcode));
             fflush(stderr);
         }
+
         // Skip duplicate guard on the same value
-        if (last->opcode == QoreIROpcode::GuardNotNothing
-                && !last->operands.empty() && last->operands[0].id == value.id) {
+        if (producer->opcode == QoreIROpcode::GuardNotNothing
+                && !producer->operands.empty() && producer->operands[0].id == value.id) {
             if (debug_guard) {
                 fprintf(stderr, "[GUARD-SKIP-DUPLICATE] Skipping duplicate guard on value slot %d\n", value.id);
                 fflush(stderr);
             }
             return;
         }
+
         // Skip guard if the value was produced by an opcode that never returns NOTHING
-        if (last->result.id == value.id && opcodeNeverReturnsNothing(last->opcode)) {
+        if (opcodeNeverReturnsNothing(producer->opcode)) {
             if (debug_guard) {
                 fprintf(stderr, "[GUARD-SKIP-NEVER-NOTHING] Skipping guard - opcode never returns nothing\n");
                 fflush(stderr);
             }
             return;
         }
+
         // Skip guard if the value was produced by an operation that CAN return nothing
-        // (e.g., function calls, hash member access). Optional return types should be
+        // (e.g., function calls, hash member access, variable loads). Optional return types should be
         // allowed to return nothing without triggering IR->AST deopt.
-        if (last->result.id == value.id && opcodeCanReturnNothing(last->opcode)) {
+        if (opcodeCanReturnNothing(producer->opcode)) {
             if (debug_guard) {
-                fprintf(stderr, "[GUARD-SKIP-CAN-RETURN-NOTHING] Skipping guard on value slot %d from opcode that can return nothing (opcode=%d)\n", value.id, static_cast<int>(last->opcode));
+                fprintf(stderr, "[GUARD-SKIP-CAN-RETURN-NOTHING] Skipping guard on value slot %d from opcode that can return nothing (opcode=%d)\n", value.id, static_cast<int>(producer->opcode));
                 fflush(stderr);
             }
             return;
         }
-        if (debug_guard && last->result.id == value.id) {
-            fprintf(stderr, "[GUARD-WILL-INSERT] Value slot %d is last instruction result (opcode=%d, can_return=%d)\n",
-                    value.id, static_cast<int>(last->opcode), opcodeCanReturnNothing(last->opcode));
+
+        if (debug_guard) {
+            fprintf(stderr, "[GUARD-WILL-INSERT] Value slot %d produced by opcode=%d (can_return=%d, never_return=%d)\n",
+                    value.id, static_cast<int>(producer->opcode), opcodeCanReturnNothing(producer->opcode),
+                    opcodeNeverReturnsNothing(producer->opcode));
             fflush(stderr);
         }
     } else {
         if (debug_guard) {
-            fprintf(stderr, "[GUARD-CHECK-LAST] Value slot %d, no current block or empty instructions - NOT inserting guard\n", value.id);
+            fprintf(stderr, "[GUARD-SKIP-NO-BLOCK] Value slot %d, no current block or empty instructions - NOT inserting guard\n", value.id);
             fflush(stderr);
         }
         // No current block or empty instructions - can't verify the opcode, so don't insert
