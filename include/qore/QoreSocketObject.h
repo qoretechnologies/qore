@@ -576,6 +576,51 @@ public:
     DLLEXPORT int64_t submitQuicRequest(const char* method, const char* path,
         const QoreHashNode* headers, const void* body, size_t body_len, ExceptionSink* xsink);
 
+    //! Submits a streaming HTTP/3 request (headers only, no END_STREAM) on the client QUIC session
+    /** Opens a bidirectional stream for incremental data exchange.  Data is provided
+        via sendQuicClientStreamData() and read via readQuicStreamDataBlock().
+
+        @param method HTTP method (POST, etc.)
+        @param path request path
+        @param headers optional request headers
+        @param xsink exception sink
+
+        @return the stream ID on success, -1 on error
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT int64_t submitQuicRequestStreaming(const char* method, const char* path,
+        const QoreHashNode* headers, ExceptionSink* xsink);
+
+    //! Sends body data on an open client-side HTTP/3 streaming request
+    /** @param stream_id the stream ID returned by submitQuicRequestStreaming()
+        @param data body data (may be nullptr with len 0 to send empty DATA + END_STREAM)
+        @param len length of data
+        @param end_stream true to signal the end of the request body
+        @param xsink exception sink
+
+        @return 0 on success, 1 if buffer full (backpressure), -1 on error
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT int sendQuicClientStreamData(int64_t stream_id, const void* data, size_t len,
+        bool end_stream, ExceptionSink* xsink);
+
+    //! Waits for a client-side HTTP/3 streaming body buffer to drain
+    /** Blocks until the stream's buffered data drops below the backpressure threshold,
+        the stream is closed, or the timeout expires.
+
+        @param stream_id the stream ID
+        @param timeout_ms maximum wait time in milliseconds (0 = no wait, -1 = infinite)
+        @param xsink exception sink
+
+        @return 0 if buffer drained, 1 if timed out, -1 if stream not found or closed
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT int waitForQuicClientStreamDrain(int64_t stream_id, int timeout_ms,
+        ExceptionSink* xsink);
+
     //! Returns the first QUIC session ID for this socket (for client connections with one session)
     /** @return the session ID of the first (or only) QUIC session, 0 if no session is active
 

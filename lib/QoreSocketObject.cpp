@@ -1232,6 +1232,75 @@ int64_t QoreSocketObject::submitQuicRequest(const char* method, const char* path
     return session->submitRequest(method, path, hdr_map, body, body_len, xsink);
 }
 
+int64_t QoreSocketObject::submitQuicRequestStreaming(const char* method, const char* path,
+        const QoreHashNode* headers, ExceptionSink* xsink) {
+    AutoLocker al(priv->m);
+    // Get the first QUIC session (client connections have exactly one)
+    std::shared_ptr<QuicSession> session;
+    {
+        qore_socket_private* sp = qore_socket_private::get(*priv->socket);
+        AutoLocker al2(sp->quic_sessions_lock);
+        if (!sp->quic_sessions.empty()) {
+            session = sp->quic_sessions.begin()->second;
+        }
+    }
+    if (!session) {
+        xsink->raiseException("QUIC-ERROR", "no active QUIC session on this socket; "
+            "use startPollQuicConnect() first");
+        return -1;
+    }
+
+    // Convert headers hash to std::map
+    strcase_str_map_t hdr_map;
+    if (headers) {
+        ConstHashIterator hi(headers);
+        while (hi.next()) {
+            QoreStringValueHelper val(hi.get());
+            hdr_map[hi.getKey()] = val->c_str();
+        }
+    }
+
+    return session->submitRequestStreaming(method, path, hdr_map, xsink);
+}
+
+int QoreSocketObject::sendQuicClientStreamData(int64_t stream_id, const void* data,
+        size_t len, bool end_stream, ExceptionSink* xsink) {
+    // Brief lock for session lookup; release before calling session method
+    std::shared_ptr<QuicSession> session;
+    {
+        AutoLocker al(priv->m);
+        qore_socket_private* sp = qore_socket_private::get(*priv->socket);
+        if (!sp->quic_sessions.empty()) {
+            session = sp->quic_sessions.begin()->second;
+        }
+    }
+    if (!session) {
+        xsink->raiseException("QUIC-ERROR", "no active QUIC session on this socket");
+        return -1;
+    }
+
+    return session->sendStreamData(stream_id, data, len, end_stream, xsink);
+}
+
+int QoreSocketObject::waitForQuicClientStreamDrain(int64_t stream_id, int timeout_ms,
+        ExceptionSink* xsink) {
+    // Brief lock for session lookup; release before blocking wait
+    std::shared_ptr<QuicSession> session;
+    {
+        AutoLocker al(priv->m);
+        qore_socket_private* sp = qore_socket_private::get(*priv->socket);
+        if (!sp->quic_sessions.empty()) {
+            session = sp->quic_sessions.begin()->second;
+        }
+    }
+    if (!session) {
+        xsink->raiseException("QUIC-ERROR", "no active QUIC session on this socket");
+        return -1;
+    }
+
+    return session->waitForStreamDrain(stream_id, timeout_ms);
+}
+
 void QoreSocketObject::cancelQuicStream(int64_t session_id, int64_t stream_id, ExceptionSink* xsink) {
     // Brief lock for session lookup; release before calling session method to avoid
     // contention with the I/O thread's continuePoll() which also holds priv->m
