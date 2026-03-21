@@ -112,6 +112,19 @@ public class HttpAcceptPollOperation inherits AbstractPollOperation {
         self.ssl_accept_all_certs = ssl_accept_all_certs;
         self.http_version = http_version;
         self.do_ssl_handshake = do_ssl_handshake;
+        # Set ALPN protocols on the listener socket before accepting, so that SSL handshakes
+        # performed automatically during startPollAccept() will negotiate the correct protocol
+        if (ssl) {
+            list<string> alpn;
+            if (http_version == "auto") {
+                alpn = ("h2", "http/1.1");
+            } else if (http_version == "2.0" || http_version == "2") {
+                alpn = ("h2",);
+            } else {
+                alpn = ("http/1.1",);
+            }
+            listener.setAlpnProtocols(alpn);
+        }
         # Start the accept poll operation
         spop = listener.startPollAccept();
         @assert(spop, "startPollAccept must return poll operation");

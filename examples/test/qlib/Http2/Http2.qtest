@@ -197,6 +197,8 @@ public class Http2Test inherits QUnit::Test {
             \testHttp2ClientMultiplexStreaming());
         addTestCase("HTTP/2 RST_STREAM during InputStream streaming test",
             \testHttp2RstStreamDuringInputStreamStreaming());
+        addTestCase("HTTP/2 ALPN via HttpAcceptPollOperation auto-SSL test",
+            \testAlpnViaAcceptPollAutoSsl());
 
         set_return_value(main());
     }
@@ -4730,5 +4732,146 @@ public class Http2Test inherits QUnit::Test {
             "server should have received the second request path");
         assertEq(200, test_results.client_resp2_status,
             "response to request 2 should be 200 OK");
+    }
+
+    testAlpnViaAcceptPollAutoSsl() {
+        # Test that HttpAcceptPollOperation correctly sets ALPN on the listener socket
+        # so that startPollAccept() auto-SSL connections negotiate h2.
+        # This verifies the fix where ALPN was only set on the manual SSL upgrade path
+        # but not on the auto-SSL path (when the listener already has SSL configured).
+
+        if (skip_complex_tests) {
+            testSkip("Skipping complex HTTP/2 test on Alpine");
+            return;
+        }
+
+        # Create SSL-configured listener socket (auto-SSL during accept)
+        Socket listener();
+        SSLCertificate cert(CertPem);
+        SSLPrivateKey key(KeyPem);
+        listener.setCertificate(cert);
+        listener.setPrivateKey(key);
+        listener.bind("localhost:0");
+        listener.listen();
+        int test_port = listener.getPort();
+
+        hash<auto> test_results;
+        Mutex result_mutex();
+
+        # Server thread: use HttpAcceptPollOperation with auto-SSL listener
+        Counter server_done(1);
+        background sub() {
+            on_exit server_done.dec();
+            try {
+                # HttpAcceptPollOperation sets ALPN on the listener before startPollAccept()
+                HttpServerAsyncIo::HttpAcceptPollOperation accept_op(listener, True, cert, key);
+
+                # Drive the accept poll operation
+                int iterations = 0;
+                while (!accept_op.goalReached() && iterations < 500) {
+                    *hash<SocketPollInfo> info = accept_op.continuePoll();
+                    if (!info) {
+                        break;
+                    }
+                    usleep(10ms);
+                    ++iterations;
+                }
+
+                if (!accept_op.goalReached()) {
+                    AutoLock al(result_mutex);
+                    test_results.server_error = "accept poll did not reach goal";
+                    return;
+                }
+
+                hash<auto> output = accept_op.getOutput();
+                {
+                    AutoLock al(result_mutex);
+                    test_results.server_alpn = output.negotiated_protocol;
+                    test_results.server_is_http2 = output.is_http2;
+                    test_results.server_ssl = output.ssl;
+                }
+
+                # Read the HTTP request and send a response to complete the test
+                Socket client = output.sock;
+                if (output.is_http2) {
+                    # Use HTTP/2 poll to read and respond
+                    HttpServerAsyncIo::Http2PollOperation h2op(client);
+                    iterations = 0;
+                    while (!h2op.goalReached() && !h2op.isClosed() && iterations < 200) {
+                        *hash<SocketPollInfo> info = h2op.continuePoll();
+                        if (!info) {
+                            break;
+                        }
+                        usleep(10ms);
+                        ++iterations;
+                    }
+                    if (h2op.goalReached()) {
+                        h2op.startSendResponse(200, {"content-type": "text/plain"}, binary("h2-ok"));
+                        iterations = 0;
+                        while (h2op.getState() == "sending" && iterations < 100) {
+                            h2op.continuePoll();
+                            usleep(10ms);
+                            ++iterations;
+                        }
+                    }
+                } else {
+                    client.readHTTPHeader(10s);
+                    client.sendHTTPResponse(200, "OK", "1.1", {"Content-Type": "text/plain"}, "h1-fallback");
+                }
+                client.close();
+            } catch (hash<ExceptionInfo> ex) {
+                AutoLock al(result_mutex);
+                test_results.server_error = sprintf("%s: %s", ex.err, ex.desc);
+            }
+        }();
+
+        # Client: connect with h2 ALPN and send a request
+        Counter client_done(1);
+        background sub() {
+            on_exit client_done.dec();
+            try {
+                HTTPClient client({
+                    "url": sprintf("https://localhost:%d", test_port),
+                });
+                client.acceptAllCertificates(True);
+                client.setHttp2Mode("auto");
+
+                hash<auto> info;
+                string body = client.get("/alpn-auto-ssl-test", NOTHING, \info);
+                {
+                    AutoLock al(result_mutex);
+                    test_results.client_http_version = info."response-headers".http_version;
+                    test_results.client_body = body;
+                    test_results.client_status = info."response-headers".status_code;
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                AutoLock al(result_mutex);
+                test_results.client_error = sprintf("%s: %s", ex.err, ex.desc);
+            }
+        }();
+
+        # Wait for both threads
+        server_done.waitForZero(30s);
+        client_done.waitForZero(30s);
+
+        # Verify results
+        if (test_results.server_error) {
+            fail("server error: " + test_results.server_error);
+        }
+        if (test_results.client_error) {
+            fail("client error: " + test_results.client_error);
+        }
+
+        # The key assertion: ALPN should have negotiated h2 through auto-SSL
+        assertEq("h2", test_results.server_alpn,
+            "ALPN should negotiate h2 via HttpAcceptPollOperation auto-SSL path");
+        assertTrue(test_results.server_is_http2,
+            "server should report HTTP/2 connection");
+        assertTrue(test_results.server_ssl,
+            "connection should be SSL");
+        assertEq("2", test_results.client_http_version,
+            "client should see HTTP/2 response");
+        assertEq(200, test_results.client_status,
+            "response should be 200 OK");
     }
 }

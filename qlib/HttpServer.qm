@@ -2625,6 +2625,18 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             if (cx."header-info".body_streaming && !want_streaming) {
                 # Handler doesn't support streaming — buffer body on handler thread
                 # for backward compatibility (body was previously read by I/O thread)
+                #
+                # Resume the h2/h3 poll operation on the I/O thread when this block exits
+                # (normal flow, early return on error, or exception).  This ensures the
+                # connection stays alive (PING, SETTINGS, WINDOW_UPDATE) while the handler
+                # processes the request — critical for long-running handlers like bulk
+                # object creation.  The controller also has a safety-net resume after
+                # handler return to cover wantsBodyStreaming() handlers that skip this block.
+                on_exit {
+                    if (cx."header-info".resume_body_streaming) {
+                        cx."header-info".resume_body_streaming();
+                    }
+                }
                 int sid = cx."header-info".stream_id;
                 binary body_data = binary();
                 if (cx."header-info".http3) {

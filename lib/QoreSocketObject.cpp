@@ -49,6 +49,11 @@ QoreSocketObject::QoreSocketObject(QoreSocketObject& orig, int descriptor)
             orig.priv->socket->priv->sprot, orig.priv->socket->priv->enc),
             orig.priv->cert ? orig.priv->cert->certRefSelf() : nullptr,
             orig.priv->pk ? orig.priv->pk->pkRefSelf() : nullptr)) {
+    // Copy ALPN protocols from the listener socket to the accepted socket so that
+    // SSL handshakes on the accepted socket correctly negotiate HTTP/2 via ALPN
+    if (!orig.priv->socket->priv->alpn_protocols.empty()) {
+        priv->socket->priv->alpn_protocols = orig.priv->socket->priv->alpn_protocols;
+    }
 }
 
 QoreSocketObject::QoreSocketObject() : priv(new my_socket_priv) {
