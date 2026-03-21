@@ -27,6 +27,7 @@
 
 #include "qore/Qore.h"
 
+#include "ml_serialization.h"
 #include "QC_IsolationForest.h"
 #include "QC_DBSCAN.h"
 #include "QC_KMeans.h"
@@ -34,9 +35,16 @@
 #include "QC_PCA.h"
 #include "QC_SeasonalDecomposition.h"
 #include "QC_LinearRegression.h"
+#include "QC_LogisticRegression.h"
 #include "QC_LOF.h"
+#include "QC_KNN.h"
 #include "QC_GMM.h"
 #include "QC_OnnxModel.h"
+#include "QC_StandardScaler.h"
+#include "QC_MinMaxScaler.h"
+#include "QC_Imputer.h"
+#include "QC_MLPipeline.h"
+#include "QC_CrossValidator.h"
 
 static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink);
 static void ml_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink);
@@ -69,12 +77,22 @@ DLLLOCAL TypedHashDecl* init_hashdecl_PCAResult(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_SeasonalDecompositionResult(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_LinearRegressionResult(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_LinearRegressionModelInfo(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_LogisticRegressionResult(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_LOFResult(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_GMMResult(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_KNNClassificationResult(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_KNNRegressionResult(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_OnnxTensorInfo(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_OnnxProviderConfig(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_OnnxSessionConfig(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_OnnxModelInfo(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_StandardScalerInfo(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_MinMaxScalerInfo(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_ImputerInfo(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_ConfusionMatrixResult(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_ClassMetrics(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_ClassificationReport(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_CrossValidationFold(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_MLCapabilities(QoreNamespace& ns);
 
 // Global hashdecl pointers (referenced by generated QPP code)
@@ -86,12 +104,22 @@ const TypedHashDecl* hashdeclPCAResult;
 const TypedHashDecl* hashdeclSeasonalDecompositionResult;
 const TypedHashDecl* hashdeclLinearRegressionResult;
 const TypedHashDecl* hashdeclLinearRegressionModelInfo;
+const TypedHashDecl* hashdeclLogisticRegressionResult;
 const TypedHashDecl* hashdeclLOFResult;
 const TypedHashDecl* hashdeclGMMResult;
+const TypedHashDecl* hashdeclKNNClassificationResult;
+const TypedHashDecl* hashdeclKNNRegressionResult;
 const TypedHashDecl* hashdeclOnnxTensorInfo;
 const TypedHashDecl* hashdeclOnnxProviderConfig;
 const TypedHashDecl* hashdeclOnnxSessionConfig;
 const TypedHashDecl* hashdeclOnnxModelInfo;
+const TypedHashDecl* hashdeclStandardScalerInfo;
+const TypedHashDecl* hashdeclMinMaxScalerInfo;
+const TypedHashDecl* hashdeclImputerInfo;
+const TypedHashDecl* hashdeclConfusionMatrixResult;
+const TypedHashDecl* hashdeclClassMetrics;
+const TypedHashDecl* hashdeclClassificationReport;
+const TypedHashDecl* hashdeclCrossValidationFold;
 const TypedHashDecl* hashdeclMLCapabilities;
 
 // Forward declarations for function init (generated from ql_ml.qpp)
@@ -106,9 +134,16 @@ static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     preinitPCAClass();
     preinitSeasonalDecompositionClass();
     preinitLinearRegressionClass();
+    preinitLogisticRegressionClass();
     preinitLOFClass();
+    preinitKNNClass();
     preinitGMMClass();
     preinitOnnxModelClass();
+    preinitStandardScalerClass();
+    preinitMinMaxScalerClass();
+    preinitImputerClass();
+    preinitMLPipelineClass();
+    preinitCrossValidatorClass();
 
     // Initialize hashdecls (store in globals for generated QPP code)
     hashdeclIsolationForestResult = init_hashdecl_IsolationForestResult(MLNS);
@@ -119,12 +154,22 @@ static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     hashdeclSeasonalDecompositionResult = init_hashdecl_SeasonalDecompositionResult(MLNS);
     hashdeclLinearRegressionResult = init_hashdecl_LinearRegressionResult(MLNS);
     hashdeclLinearRegressionModelInfo = init_hashdecl_LinearRegressionModelInfo(MLNS);
+    hashdeclLogisticRegressionResult = init_hashdecl_LogisticRegressionResult(MLNS);
     hashdeclLOFResult = init_hashdecl_LOFResult(MLNS);
     hashdeclGMMResult = init_hashdecl_GMMResult(MLNS);
+    hashdeclKNNClassificationResult = init_hashdecl_KNNClassificationResult(MLNS);
+    hashdeclKNNRegressionResult = init_hashdecl_KNNRegressionResult(MLNS);
     hashdeclOnnxTensorInfo = init_hashdecl_OnnxTensorInfo(MLNS);
     hashdeclOnnxProviderConfig = init_hashdecl_OnnxProviderConfig(MLNS);
     hashdeclOnnxSessionConfig = init_hashdecl_OnnxSessionConfig(MLNS);
     hashdeclOnnxModelInfo = init_hashdecl_OnnxModelInfo(MLNS);
+    hashdeclStandardScalerInfo = init_hashdecl_StandardScalerInfo(MLNS);
+    hashdeclMinMaxScalerInfo = init_hashdecl_MinMaxScalerInfo(MLNS);
+    hashdeclImputerInfo = init_hashdecl_ImputerInfo(MLNS);
+    hashdeclConfusionMatrixResult = init_hashdecl_ConfusionMatrixResult(MLNS);
+    hashdeclClassMetrics = init_hashdecl_ClassMetrics(MLNS);
+    hashdeclClassificationReport = init_hashdecl_ClassificationReport(MLNS);
+    hashdeclCrossValidationFold = init_hashdecl_CrossValidationFold(MLNS);
     hashdeclMLCapabilities = init_hashdecl_MLCapabilities(MLNS);
 
     // Add classes to namespace (adds methods that may reference other classes)
@@ -135,12 +180,69 @@ static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     MLNS.addSystemClass(initPCAClass(MLNS));
     MLNS.addSystemClass(initSeasonalDecompositionClass(MLNS));
     MLNS.addSystemClass(initLinearRegressionClass(MLNS));
+    MLNS.addSystemClass(initLogisticRegressionClass(MLNS));
     MLNS.addSystemClass(initLOFClass(MLNS));
+    MLNS.addSystemClass(initKNNClass(MLNS));
     MLNS.addSystemClass(initGMMClass(MLNS));
     MLNS.addSystemClass(initOnnxModelClass(MLNS));
+    MLNS.addSystemClass(initStandardScalerClass(MLNS));
+    MLNS.addSystemClass(initMinMaxScalerClass(MLNS));
+    MLNS.addSystemClass(initImputerClass(MLNS));
+    MLNS.addSystemClass(initMLPipelineClass(MLNS));
+    MLNS.addSystemClass(initCrossValidatorClass(MLNS));
 
     // Add namespace-level functions
     init_ml_functions(MLNS);
+
+    // Register algorithm deserializers for model persistence
+    MLSerialization::registerAlgorithm("KMeans", [](const uint8_t* data, size_t len,
+        ExceptionSink* xsink) -> AbstractPrivateData* {
+        return QoreKMeans::deserializeState(data, len, xsink);
+    });
+    MLSerialization::registerAlgorithm("LinearRegression", [](const uint8_t* data, size_t len,
+        ExceptionSink* xsink) -> AbstractPrivateData* {
+        return QoreLinearRegression::deserializeState(data, len, xsink);
+    });
+    MLSerialization::registerAlgorithm("LogisticRegression", [](const uint8_t* data, size_t len,
+        ExceptionSink* xsink) -> AbstractPrivateData* {
+        return QoreLogisticRegression::deserializeState(data, len, xsink);
+    });
+    MLSerialization::registerAlgorithm("PCA", [](const uint8_t* data, size_t len,
+        ExceptionSink* xsink) -> AbstractPrivateData* {
+        return QorePCA::deserializeState(data, len, xsink);
+    });
+    MLSerialization::registerAlgorithm("IsolationForest", [](const uint8_t* data, size_t len,
+        ExceptionSink* xsink) -> AbstractPrivateData* {
+        return QoreIsolationForest::deserializeState(data, len, xsink);
+    });
+    MLSerialization::registerAlgorithm("LOF", [](const uint8_t* data, size_t len,
+        ExceptionSink* xsink) -> AbstractPrivateData* {
+        return QoreLOF::deserializeState(data, len, xsink);
+    });
+    MLSerialization::registerAlgorithm("GMM", [](const uint8_t* data, size_t len,
+        ExceptionSink* xsink) -> AbstractPrivateData* {
+        return QoreGMM::deserializeState(data, len, xsink);
+    });
+    MLSerialization::registerAlgorithm("HoltWinters", [](const uint8_t* data, size_t len,
+        ExceptionSink* xsink) -> AbstractPrivateData* {
+        return QoreHoltWinters::deserializeState(data, len, xsink);
+    });
+    MLSerialization::registerAlgorithm("KNN", [](const uint8_t* data, size_t len,
+        ExceptionSink* xsink) -> AbstractPrivateData* {
+        return QoreKNN::deserializeState(data, len, xsink);
+    });
+    MLSerialization::registerAlgorithm("StandardScaler", [](const uint8_t* data, size_t len,
+        ExceptionSink* xsink) -> AbstractPrivateData* {
+        return QoreStandardScaler::deserializeState(data, len, xsink);
+    });
+    MLSerialization::registerAlgorithm("MinMaxScaler", [](const uint8_t* data, size_t len,
+        ExceptionSink* xsink) -> AbstractPrivateData* {
+        return QoreMinMaxScaler::deserializeState(data, len, xsink);
+    });
+    MLSerialization::registerAlgorithm("Imputer", [](const uint8_t* data, size_t len,
+        ExceptionSink* xsink) -> AbstractPrivateData* {
+        return QoreImputer::deserializeState(data, len, xsink);
+    });
 }
 
 static void ml_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink) {

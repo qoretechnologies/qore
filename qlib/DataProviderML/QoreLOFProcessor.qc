@@ -28,7 +28,6 @@ public namespace DataProviderML {
 /** Accumulates records in windows and uses the ML::LOF algorithm to
     score each record for anomalousness based on local density.
 
-    @since %DataProviderML 1.0
 */
 public class QoreLOFProcessor inherits DataProvider::AbstractDataProvider {
     public {

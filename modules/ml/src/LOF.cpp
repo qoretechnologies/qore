@@ -26,6 +26,7 @@
 */
 
 #include "QC_LOF.h"
+#include "ml_serialization.h"
 
 #include <algorithm>
 #include <numeric>
@@ -101,6 +102,10 @@ void QoreLOF::fit(const MatrixXd& data, ExceptionSink* xsink) {
     ref_k_distances.resize(n);
 
     for (int i = 0; i < n; ++i) {
+        if (i % 100 == 0 && qore_check_cancel(xsink, "LOF fit")) {
+            return;
+        }
+
         // Compute distances from point i to all other points
         VectorXd distances(n);
         for (int j = 0; j < n; ++j) {
@@ -209,6 +214,9 @@ QoreListNode* QoreLOF::scoreMatrix(const MatrixXd& data, ExceptionSink* xsink) c
 
     ReferenceHolder<QoreListNode> rv(new QoreListNode(hashdeclLOFResult->getTypeInfo()), xsink);
     for (Eigen::Index i = 0; i < data.rows(); ++i) {
+        if (i % 100 == 0 && qore_check_cancel(xsink, "LOF scoreMatrix")) {
+            return nullptr;
+        }
         RowVectorXd row = data.row(i);
         QoreHashNode* result = scoreInternal(row, xsink);
         if (*xsink) {
@@ -217,4 +225,63 @@ QoreListNode* QoreLOF::scoreMatrix(const MatrixXd& data, ExceptionSink* xsink) c
         rv->push(result, xsink);
     }
     return rv.release();
+}
+
+std::vector<uint8_t> QoreLOF::serializeState() const {
+    std::vector<uint8_t> buf;
+    // Hyperparameters
+    MLSerialization::writeInt32(buf, k);
+    MLSerialization::writeScalar(buf, threshold);
+    // Model state
+    MLSerialization::writeInt32(buf, n_features);
+    MLSerialization::writeMatrix(buf, ref_data);
+    MLSerialization::writeDoubleVector(buf, ref_k_distances);
+    MLSerialization::writeDoubleVector(buf, ref_lrds);
+    // ref_knn_indices: vector of vector of int
+    MLSerialization::writeUint32(buf, static_cast<uint32_t>(ref_knn_indices.size()));
+    for (const auto& knn : ref_knn_indices) {
+        MLSerialization::writeIntVector(buf, knn);
+    }
+    MLSerialization::writeStringVector(buf, field_names);
+    return buf;
+}
+
+QoreLOF* QoreLOF::deserializeState(const uint8_t* data, size_t len, ExceptionSink* xsink) {
+    const uint8_t* ptr = data;
+    size_t remaining = len;
+
+    int32_t k = MLSerialization::readInt32(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    double threshold = MLSerialization::readScalar(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    int32_t n_features = MLSerialization::readInt32(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    MatrixXd ref_data = MLSerialization::readMatrix(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    std::vector<double> ref_k_distances = MLSerialization::readDoubleVector(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    std::vector<double> ref_lrds = MLSerialization::readDoubleVector(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+
+    uint32_t knn_count = MLSerialization::readUint32(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    std::vector<std::vector<int>> ref_knn_indices;
+    ref_knn_indices.reserve(knn_count);
+    for (uint32_t i = 0; i < knn_count; ++i) {
+        ref_knn_indices.push_back(MLSerialization::readIntVector(ptr, remaining, xsink));
+        if (*xsink) { return nullptr; }
+    }
+
+    std::vector<std::string> field_names = MLSerialization::readStringVector(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+
+    std::unique_ptr<QoreLOF> obj(new QoreLOF(k, threshold));
+    obj->n_features = n_features;
+    obj->ref_data = std::move(ref_data);
+    obj->ref_k_distances = std::move(ref_k_distances);
+    obj->ref_lrds = std::move(ref_lrds);
+    obj->ref_knn_indices = std::move(ref_knn_indices);
+    obj->field_names = std::move(field_names);
+    obj->fitted = true;
+    return obj.release();
 }

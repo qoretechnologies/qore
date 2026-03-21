@@ -28,7 +28,6 @@ public namespace DataProviderML {
 /** Accumulates records in windows and uses the ML::IsolationForest algorithm to
     score each record for anomalousness when the window is full or on flush.
 
-    @since %DataProviderML 1.0
 */
 public class QoreIsolationForestProcessor inherits DataProvider::AbstractDataProvider {
     public {

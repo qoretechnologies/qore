@@ -26,6 +26,7 @@
 */
 
 #include "QC_PCA.h"
+#include "ml_serialization.h"
 
 #include <Eigen/Eigenvalues>
 
@@ -237,6 +238,9 @@ QoreListNode* QorePCA::doTransformMatrix(const MatrixXd& data, ExceptionSink* xs
 
     ReferenceHolder<QoreListNode> rv(new QoreListNode(hashdeclPCAResult->getTypeInfo()), xsink);
     for (Eigen::Index r = 0; r < data.rows(); ++r) {
+        if (r % 100 == 0 && qore_check_cancel(xsink, "PCA transformMatrix")) {
+            return nullptr;
+        }
         ReferenceHolder<QoreListNode> comp_list(new QoreListNode(floatTypeInfo), xsink);
         for (int i = 0; i < actual_n_components; ++i) {
             comp_list->push(projected(r, i), xsink);
@@ -301,4 +305,62 @@ QoreListNode* QorePCA::getMean(ExceptionSink* xsink) {
     }
 
     return eigenVectorToQoreList(mean_vec);
+}
+
+std::vector<uint8_t> QorePCA::serializeState() const {
+    std::vector<uint8_t> buf;
+    // Hyperparameters
+    MLSerialization::writeInt32(buf, n_components);
+    MLSerialization::writeScalar(buf, variance_threshold);
+    MLSerialization::writeBool(buf, center);
+    MLSerialization::writeBool(buf, scale);
+    // Model state
+    MLSerialization::writeInt32(buf, actual_n_components);
+    MLSerialization::writeInt32(buf, n_features);
+    MLSerialization::writeMatrix(buf, components);
+    MLSerialization::writeVector(buf, mean_vec);
+    MLSerialization::writeVector(buf, stddev_vec);
+    MLSerialization::writeVector(buf, explained_variance_ratio_vec);
+    MLSerialization::writeStringVector(buf, field_names);
+    return buf;
+}
+
+QorePCA* QorePCA::deserializeState(const uint8_t* data, size_t len, ExceptionSink* xsink) {
+    const uint8_t* ptr = data;
+    size_t remaining = len;
+
+    int32_t n_components = MLSerialization::readInt32(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    double variance_threshold = MLSerialization::readScalar(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    bool center = MLSerialization::readBool(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    bool pca_scale = MLSerialization::readBool(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+
+    int32_t actual_n_components = MLSerialization::readInt32(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    int32_t n_features = MLSerialization::readInt32(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    MatrixXd components = MLSerialization::readMatrix(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    VectorXd mean_vec = MLSerialization::readVector(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    VectorXd stddev_vec = MLSerialization::readVector(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    VectorXd explained_variance_ratio_vec = MLSerialization::readVector(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    std::vector<std::string> field_names = MLSerialization::readStringVector(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+
+    std::unique_ptr<QorePCA> obj(new QorePCA(n_components, variance_threshold, center, pca_scale));
+    obj->actual_n_components = actual_n_components;
+    obj->n_features = n_features;
+    obj->components = std::move(components);
+    obj->mean_vec = std::move(mean_vec);
+    obj->stddev_vec = std::move(stddev_vec);
+    obj->explained_variance_ratio_vec = std::move(explained_variance_ratio_vec);
+    obj->field_names = std::move(field_names);
+    obj->fitted = true;
+    return obj.release();
 }

@@ -29,7 +29,6 @@ public namespace DataProviderML {
     assign each record to a cluster centroid. Supports online learning:
     the first window fits the model, subsequent windows update it incrementally.
 
-    @since %DataProviderML 1.0
 */
 public class QoreKMeansProcessor inherits DataProvider::AbstractDataProvider {
     public {

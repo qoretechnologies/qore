@@ -29,7 +29,6 @@ public namespace DataProviderML {
     transform each record into principal components when the window is full
     or on flush.
 
-    @since %DataProviderML 1.0
 */
 public class QorePCAProcessor inherits DataProvider::AbstractDataProvider {
     public {

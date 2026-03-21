@@ -76,9 +76,16 @@ set(ML_QPP_SRC
     src/QC_PCA.qpp
     src/QC_SeasonalDecomposition.qpp
     src/QC_LinearRegression.qpp
+    src/QC_LogisticRegression.qpp
     src/QC_LOF.qpp
+    src/QC_KNN.qpp
     src/QC_GMM.qpp
     src/QC_OnnxModel.qpp
+    src/QC_StandardScaler.qpp
+    src/QC_MinMaxScaler.qpp
+    src/QC_Imputer.qpp
+    src/QC_MLPipeline.qpp
+    src/QC_CrossValidator.qpp
     src/ql_ml.qpp
 )
 
@@ -86,6 +93,7 @@ set(ML_QPP_SRC
 set(ML_CPP_SRC
     src/ml-module.cpp
     src/ml_common.cpp
+    src/ml_serialization.cpp
     src/IsolationForest.cpp
     src/DBSCAN.cpp
     src/KMeans.cpp
@@ -93,8 +101,16 @@ set(ML_CPP_SRC
     src/PCA.cpp
     src/SeasonalDecomposition.cpp
     src/LinearRegression.cpp
+    src/LogisticRegression.cpp
     src/LOF.cpp
+    src/KNN.cpp
     src/GMM.cpp
+    src/StandardScaler.cpp
+    src/MinMaxScaler.cpp
+    src/Imputer.cpp
+    src/MLPipeline.cpp
+    src/ml_metrics.cpp
+    src/CrossValidator.cpp
 )
 
 # Conditional ONNX Runtime support

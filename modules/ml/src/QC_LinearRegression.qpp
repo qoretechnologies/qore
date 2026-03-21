@@ -57,7 +57,6 @@ hash<LinearRegressionResult> result = lr.predict({"x1": 4.0, "x2": 5.0});
 printf("Prediction: %f, R-squared: %f\n", result.prediction, result.r_squared);
     @endcode
 
-    @since ml 1.0
 */
 qclass LinearRegression [arg=QoreLinearRegression* lr; ns=Qore::ML; flags=final];
 
@@ -194,6 +193,83 @@ nothing LinearRegression::fitMatrix(list<auto> X, list<auto> y) {
         return QoreValue();
     }
     lr->fit(mat, target, xsink);
+}
+
+//! Performs a SGD online update with new hash-based data
+/** @param data a list of hashes with numeric fields plus the target field
+    @param learning_rate the step size for the gradient update
+
+    @par Example:
+    @code{.py}
+# Initial fit
+lr.fit(initial_data, "price");
+# Update with new data as it arrives
+lr.update(new_batch, 0.01);
+    @endcode
+
+    @throw ML-LINEAR-REGRESSION-ERROR model not fitted or dimension mismatch
+    @throw ML-DATA-ERROR data format errors
+*/
+nothing LinearRegression::update(list<auto> data, float learning_rate) {
+    const std::vector<std::string>& feat_names = lr->getFieldNames();
+    const std::string& target_name = lr->getTargetField();
+    if (feat_names.empty() || target_name.empty()) {
+        xsink->raiseException("ML-LINEAR-REGRESSION-ERROR",
+            "model was fitted with fitMatrix(); use updateMatrix() or fit() with hash records first");
+        return QoreValue();
+    }
+
+    if (!data || data->empty()) {
+        xsink->raiseException("ML-DATA-ERROR", "empty data list provided");
+        return QoreValue();
+    }
+
+    size_t n_rows = data->size();
+    size_t n_cols = feat_names.size();
+    MatrixXd X(n_rows, n_cols);
+    VectorXd y(n_rows);
+
+    for (size_t i = 0; i < n_rows; ++i) {
+        QoreValue row_val = data->retrieveEntry(i);
+        if (row_val.getType() != NT_HASH) {
+            xsink->raiseException("ML-DATA-ERROR", "data element %zu is not a hash", i);
+            return QoreValue();
+        }
+        const QoreHashNode* row = row_val.get<const QoreHashNode>();
+        for (size_t j = 0; j < n_cols; ++j) {
+            QoreValue v = row->getKeyValue(feat_names[j].c_str());
+            X(i, j) = v.getAsFloat();
+        }
+        QoreValue target_v = row->getKeyValue(target_name.c_str());
+        y(i) = target_v.getAsFloat();
+    }
+
+    lr->update(X, y, learning_rate, xsink);
+}
+
+//! Performs a SGD online update with a numeric matrix and target vector
+/** @param matrix a list of lists of numeric feature values
+    @param target a list of target values
+    @param learning_rate the step size for the gradient update
+
+    @par Example:
+    @code{.py}
+lr.updateMatrix(((1.0,), (2.0,), (3.0,)), (3.1, 5.2, 6.8), 0.01);
+    @endcode
+
+    @throw ML-LINEAR-REGRESSION-ERROR model not fitted or dimension mismatch
+    @throw ML-DATA-ERROR data format errors
+*/
+nothing LinearRegression::updateMatrix(list<auto> matrix, list<auto> target, float learning_rate) {
+    MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    VectorXd y = qoreListToVector(target, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    lr->update(mat, y, learning_rate, xsink);
 }
 
 //! Predicts the target value for a single record

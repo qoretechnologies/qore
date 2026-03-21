@@ -1,0 +1,302 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_MinMaxScaler.qpp
+
+    Qore ml module - MinMaxScaler class definition
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+#include "qore/Qore.h"
+#include "QC_MinMaxScaler.h"
+
+extern const TypedHashDecl* hashdeclMinMaxScalerInfo;
+
+//! The MinMaxScaler class scales features to a configurable range
+/** MinMaxScaler transforms features by scaling each feature to a given range,
+    typically [0, 1]. This is useful for algorithms that expect bounded input
+    (e.g., neural networks, distance-based algorithms).
+
+    @par Example:
+    @code{.py}
+MinMaxScaler scaler({"feature_min": 0.0, "feature_max": 1.0});
+scaler.fit(training_data);
+list<auto> scaled = scaler.transformMatrix(new_data);
+    @endcode
+
+*/
+qclass MinMaxScaler [arg=QoreMinMaxScaler* scaler; ns=Qore::ML; flags=final];
+
+//! Creates a MinMaxScaler instance
+/** @param options a hash with the following optional keys:
+    - \c feature_min (float, default 0.0): lower bound of the target range
+    - \c feature_max (float, default 1.0): upper bound of the target range
+
+    @throw ML-MIN-MAX-SCALER-ERROR feature_min >= feature_max
+*/
+MinMaxScaler::constructor(*hash<auto> options) {
+    double fmin = 0.0;
+    double fmax = 1.0;
+
+    if (options) {
+        QoreValue v = options->getKeyValue("feature_min");
+        if (!v.isNullOrNothing()) {
+            fmin = v.getAsFloat();
+        }
+        v = options->getKeyValue("feature_max");
+        if (!v.isNullOrNothing()) {
+            fmax = v.getAsFloat();
+        }
+    }
+
+    if (fmin >= fmax) {
+        xsink->raiseException("ML-MIN-MAX-SCALER-ERROR",
+            "feature_min (%.6f) must be less than feature_max (%.6f)", fmin, fmax);
+        return;
+    }
+
+    self->setPrivate(CID_MINMAXSCALER, new QoreMinMaxScaler(fmin, fmax));
+}
+
+//! Creates a copy of the MinMaxScaler instance
+/** @throw COPY-ERROR MinMaxScaler objects cannot be copied
+*/
+MinMaxScaler::copy() {
+    xsink->raiseException("COPY-ERROR", "MinMaxScaler objects cannot be copied");
+}
+
+//! Fits the scaler on a list of hash records
+/** @param data a list of hashes with numeric fields
+
+    @throw ML-MIN-MAX-SCALER-ERROR empty data
+    @throw ML-DATA-ERROR data format errors
+*/
+nothing MinMaxScaler::fit(list<auto> data) {
+    std::vector<std::string> field_names;
+    MatrixXd matrix = qoreListOfHashesToMatrix(data, field_names, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    scaler->setFieldNames(field_names);
+    scaler->fit(matrix, xsink);
+}
+
+//! Fits the scaler on a numeric matrix
+/** @param matrix a list of lists of numeric values
+
+    @throw ML-MIN-MAX-SCALER-ERROR empty data
+    @throw ML-DATA-ERROR data format errors
+*/
+nothing MinMaxScaler::fitMatrix(list<auto> matrix) {
+    MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    scaler->fit(mat, xsink);
+}
+
+//! Transforms a single record
+/** @param record a hash with numeric fields
+    @return a hash with scaled values in [feature_min, feature_max]
+
+    @throw ML-MIN-MAX-SCALER-ERROR scaler not fitted or dimension mismatch
+*/
+hash<auto> MinMaxScaler::transform(hash<auto> record) {
+    const std::vector<std::string>& field_names = scaler->getFieldNames();
+    if (field_names.empty()) {
+        xsink->raiseException("ML-MIN-MAX-SCALER-ERROR",
+            "scaler was fitted with fitMatrix(); use transformMatrix() or fit() with hash records");
+        return QoreValue();
+    }
+    RowVectorXd point = qoreHashToRowVector(record, field_names, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    // Use matrix API for thread safety (holds the lock internally)
+    MatrixXd mat(1, point.size());
+    mat.row(0) = point;
+    MatrixXd result_mat = scaler->transform(mat, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    for (size_t i = 0; i < field_names.size(); ++i) {
+        rv->setKeyValue(field_names[i].c_str(), result_mat(0, i), xsink);
+    }
+    return rv.release();
+}
+
+//! Transforms a numeric matrix
+/** @param matrix a list of lists of numeric values
+    @return a list of lists of scaled values
+
+    @throw ML-MIN-MAX-SCALER-ERROR scaler not fitted or dimension mismatch
+    @throw ML-DATA-ERROR data format errors
+*/
+list<list<float>> MinMaxScaler::transformMatrix(list<auto> matrix) {
+    MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    MatrixXd result = scaler->transform(mat, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(autoTypeInfo), xsink);
+    for (Eigen::Index i = 0; i < result.rows(); ++i) {
+        ReferenceHolder<QoreListNode> row(new QoreListNode(floatTypeInfo), xsink);
+        for (Eigen::Index j = 0; j < result.cols(); ++j) {
+            row->push(result(i, j), xsink);
+        }
+        rv->push(row.release(), xsink);
+    }
+    return rv.release();
+}
+
+//! Inverse-transforms a single record
+/** @param record a hash with numeric fields
+    @return a hash with original-scale values
+
+    @throw ML-MIN-MAX-SCALER-ERROR scaler not fitted or dimension mismatch
+*/
+hash<auto> MinMaxScaler::inverseTransform(hash<auto> record) {
+    const std::vector<std::string>& field_names = scaler->getFieldNames();
+    if (field_names.empty()) {
+        xsink->raiseException("ML-MIN-MAX-SCALER-ERROR",
+            "scaler was fitted with fitMatrix(); use inverseTransformMatrix()");
+        return QoreValue();
+    }
+    RowVectorXd point = qoreHashToRowVector(record, field_names, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    // Use matrix API for thread safety (holds the lock internally)
+    MatrixXd mat(1, point.size());
+    mat.row(0) = point;
+    MatrixXd result_mat = scaler->inverseTransform(mat, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    for (size_t i = 0; i < field_names.size(); ++i) {
+        rv->setKeyValue(field_names[i].c_str(), result_mat(0, i), xsink);
+    }
+    return rv.release();
+}
+
+//! Inverse-transforms a numeric matrix
+/** @param matrix a list of lists of scaled values
+    @return a list of lists of original-scale values
+
+    @throw ML-MIN-MAX-SCALER-ERROR scaler not fitted or dimension mismatch
+    @throw ML-DATA-ERROR data format errors
+*/
+list<list<float>> MinMaxScaler::inverseTransformMatrix(list<auto> matrix) {
+    MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    MatrixXd result = scaler->inverseTransform(mat, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(autoTypeInfo), xsink);
+    for (Eigen::Index i = 0; i < result.rows(); ++i) {
+        ReferenceHolder<QoreListNode> row(new QoreListNode(floatTypeInfo), xsink);
+        for (Eigen::Index j = 0; j < result.cols(); ++j) {
+            row->push(result(i, j), xsink);
+        }
+        rv->push(row.release(), xsink);
+    }
+    return rv.release();
+}
+
+//! Fits and transforms in a single step
+/** @param data a list of hashes with numeric fields
+    @return a list of hashes with scaled values
+
+    @throw ML-MIN-MAX-SCALER-ERROR empty data
+    @throw ML-DATA-ERROR data format errors
+*/
+list<hash<auto>> MinMaxScaler::fitTransform(list<auto> data) {
+    std::vector<std::string> field_names;
+    MatrixXd matrix = qoreListOfHashesToMatrix(data, field_names, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    scaler->setFieldNames(field_names);
+    MatrixXd result = scaler->fitTransform(matrix, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(autoTypeInfo), xsink);
+    for (Eigen::Index i = 0; i < result.rows(); ++i) {
+        ReferenceHolder<QoreHashNode> row(new QoreHashNode(autoTypeInfo), xsink);
+        for (size_t j = 0; j < field_names.size(); ++j) {
+            row->setKeyValue(field_names[j].c_str(), result(i, j), xsink);
+        }
+        rv->push(row.release(), xsink);
+    }
+    return rv.release();
+}
+
+//! Fits and transforms a numeric matrix in a single step
+/** @param matrix a list of lists of numeric values
+    @return a list of lists of scaled values
+
+    @throw ML-MIN-MAX-SCALER-ERROR empty data
+    @throw ML-DATA-ERROR data format errors
+*/
+list<list<float>> MinMaxScaler::fitTransformMatrix(list<auto> matrix) {
+    MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    MatrixXd result = scaler->fitTransform(mat, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(autoTypeInfo), xsink);
+    for (Eigen::Index i = 0; i < result.rows(); ++i) {
+        ReferenceHolder<QoreListNode> row(new QoreListNode(floatTypeInfo), xsink);
+        for (Eigen::Index j = 0; j < result.cols(); ++j) {
+            row->push(result(i, j), xsink);
+        }
+        rv->push(row.release(), xsink);
+    }
+    return rv.release();
+}
+
+//! Returns True if the scaler has been fitted
+/** @return True if fit() or fitMatrix() has been called successfully
+*/
+bool MinMaxScaler::isFitted() [flags=CONSTANT] {
+    return scaler->isFitted();
+}
+
+//! Returns scaler information
+/** @return a @ref MinMaxScalerInfo hash with the scaler's parameters
+
+    @throw ML-MIN-MAX-SCALER-ERROR scaler not fitted
+*/
+hash<MinMaxScalerInfo> MinMaxScaler::getInfo() {
+    return scaler->getInfo(xsink);
+}

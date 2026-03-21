@@ -49,7 +49,6 @@ QoreOnnxModelProcessor gpu_proc({
 });
     @endcode
 
-    @since %DataProviderML 1.0
 */
 public class QoreOnnxModelProcessor inherits DataProvider::AbstractDataProvider {
     public {

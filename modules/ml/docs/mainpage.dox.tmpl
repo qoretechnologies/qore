@@ -24,11 +24,21 @@
     |@ref Qore::ML::DBSCAN "DBSCAN"|Clustering|Discover delivery zones, support ticket themes, or traffic hotspots|
     |@ref Qore::ML::KMeans "KMeans"|Clustering|Segment customers into tiers or classify products into categories|
     |@ref Qore::ML::GMM "GMM"|Clustering|Identify overlapping segments (e.g., 70%% budget / 30%% impulse buyer)|
+    |@ref Qore::ML::LogisticRegression "LogisticRegression"|Classification|Categorize emails as spam/not-spam, approve/deny loan applications|
+    |@ref Qore::ML::KNN "KNN"|Classification/Regression|Classify or predict based on the most similar historical records|
     |@ref Qore::ML::LinearRegression "LinearRegression"|Regression|Predict property prices, delivery times, or demand from features|
     |@ref Qore::ML::HoltWinters "HoltWinters"|Time Series|Forecast monthly revenue, daily server load, or weekly inventory|
     |@ref Qore::ML::SeasonalDecomposition "SeasonalDecomposition"|Time Series|Separate sales into growth trend, holiday spikes, and noise|
     |@ref Qore::ML::PCA "PCA"|Dimensionality Reduction|Compress 50 sensor readings into 3 key values for analysis|
     |@ref Qore::ML::OnnxModel "OnnxModel"|Inference|Run neural networks or gradient-boosted models trained in Python|
+    |@ref Qore::ML::StandardScaler "StandardScaler"|Preprocessing|Normalize features to zero mean and unit variance|
+    |@ref Qore::ML::MinMaxScaler "MinMaxScaler"|Preprocessing|Scale features to a configurable range (e.g., 0 to 1)|
+    |@ref Qore::ML::Imputer "Imputer"|Preprocessing|Fill missing values using mean, median, mode, or constant|
+    |@ref Qore::ML::MLPipeline "MLPipeline"|Pipeline|Chain preprocessing steps and an estimator into one unit|
+    |@ref Qore::ML::CrossValidator "CrossValidator"|Evaluation|Split data into training/test folds for cross-validation|
+    |\c ml_accuracy(), \c ml_classification_report()|Evaluation|Measure classification accuracy, precision, recall, F1|
+    |\c ml_mse(), \c ml_rmse(), \c ml_mae(), \c ml_r2_score()|Evaluation|Measure regression prediction quality|
+    |\c ml_silhouette_score(), \c ml_davies_bouldin_score()|Evaluation|Measure clustering quality|
 
     @subsection mlalgo_anomaly Anomaly Detection
 
@@ -60,7 +70,25 @@
     - @ref Qore::ML::GMM "GMM" — Assigns each record a probability for each group rather than a hard
       label. A customer might be 70%% "budget shopper" and 30%% "impulse buyer," reflecting
       genuine overlap. Uses Gaussian mixtures (EM algorithm) and supports full, diagonal, and
-      spherical covariance types.
+      spherical covariance types. Supports online learning via incremental EM updates.
+
+    @subsection mlalgo_classification Classification
+
+    Assign records to categories — approve or deny, spam or legitimate, which product
+    category, which risk tier. Classification is the most common supervised ML task.
+
+    - @ref Qore::ML::LogisticRegression "LogisticRegression" — Learns a decision boundary to
+      separate categories. For example, approve or deny loan applications based on income, credit
+      score, and debt ratio. Handles two categories (binary) or many categories (multiclass via
+      one-vs-rest). Reports the probability of each category, not just the prediction — so you
+      can flag borderline cases (e.g., 52%% approve) for manual review. Supports L2
+      regularization to prevent overfitting. Supports online learning via mini-batch
+      SGD updates for continuous model refinement on streaming data.
+    - @ref Qore::ML::KNN "KNN" — Classifies each record based on its most similar neighbors in
+      the training data. For example, if 4 of the 5 most similar past customers churned, predict
+      this customer will too. Also works for regression (predict a number as the average of
+      neighbors' values). Simple, interpretable, and no training phase — but slower on large
+      datasets since it compares against every training record.
 
     @subsection mlalgo_regression Regression
 
@@ -70,7 +98,8 @@
     - @ref Qore::ML::LinearRegression "LinearRegression" — Learns the best straight-line relationship
       between inputs and a target. For example, predict a property's price from square footage,
       number of bedrooms, and neighborhood — the model reports which features matter most
-      (coefficients), the baseline (intercept), and prediction accuracy (R-squared).
+      (coefficients), the baseline (intercept), and prediction accuracy (R-squared). Supports
+      online learning via SGD updates for continuous model refinement.
 
     @subsection mlalgo_timeseries Time Series
 
@@ -94,6 +123,58 @@
       explain 95%% of the variance, making it practical to visualize equipment health on a 3D
       plot. Supports fixed component count or automatic selection via variance threshold.
 
+    @subsection mlalgo_preprocess Data Preprocessing
+
+    Clean and prepare data before analysis. Most ML algorithms give poor results when fields
+    have very different ranges or when records have missing values — preprocessing fixes both.
+
+    - @ref Qore::ML::StandardScaler "StandardScaler" — Makes fields with different ranges
+      directly comparable by adjusting each one so it centers around zero with similar spread.
+      For example, if "age" ranges from 18–65 and "income" ranges from 20,000–200,000,
+      standardizing them prevents income from dominating the analysis. Use before clustering
+      (KMeans, DBSCAN), anomaly detection (IsolationForest, LOF), or dimensionality reduction
+      (PCA).
+    - @ref Qore::ML::MinMaxScaler "MinMaxScaler" — Converts field values to fit within a
+      specific range (default 0.0 to 1.0). For example, temperatures from -20°C to 45°C become
+      0.0 to 1.0, making them easy to compare with humidity or wind speed. Useful for heat maps,
+      scoring dashboards, or feeding data into pre-trained ONNX models that expect normalized
+      input. Supports inverse transformation to recover original values.
+    - @ref Qore::ML::Imputer "Imputer" — Automatically fills in missing values so downstream
+      analysis can process complete records. Strategies: \c "mean" (average — best for
+      temperatures, response times), \c "median" (middle value — better when outliers are present,
+      e.g., transaction amounts), \c "most_frequent" (most common value — best for status codes
+      or ratings), \c "constant" (a fixed number you choose, e.g., 0 or -1 as a sentinel).
+    - @ref Qore::ML::MLPipeline "MLPipeline" — Chains multiple preprocessing steps and an
+      analysis algorithm into one unit that you fit and predict with in a single call. For
+      example, chain a StandardScaler with KMeans so that new data is always scaled the same
+      way before being assigned to a cluster. Prevents inconsistencies between training and
+      production.
+
+    @subsection mlalgo_evaluation Model Evaluation
+
+    Measure how well your models perform — without objective metrics you can't know whether
+    a model is good enough for production or which of two models is better.
+
+    <b>Classification metrics</b> (for models that predict categories):
+    - \c ml_accuracy() — fraction of correct predictions (e.g., 0.95 = 95%% right)
+    - \c ml_classification_report() — detailed breakdown with precision, recall, and F1 per class
+    - \c ml_confusion_matrix() — shows where the model confuses one class for another
+
+    <b>Regression metrics</b> (for models that predict numbers):
+    - \c ml_mse() / \c ml_rmse() — average squared/root error (lower is better)
+    - \c ml_mae() — average absolute error, in the same units as your data
+    - \c ml_r2_score() — how much of the variation your model explains (1.0 = perfect)
+    - \c ml_explained_variance() — similar to R² but accounts for bias
+
+    <b>Clustering metrics</b> (for models that group data):
+    - \c ml_silhouette_score() — how well-separated the groups are (-1 to 1; above 0.5 is good)
+    - \c ml_davies_bouldin_score() — how compact and separated the groups are (lower is better)
+    - \c ml_calinski_harabasz_score() — ratio of between-group to within-group variance (higher is better)
+
+    <b>Cross-validation</b>:
+    - @ref Qore::ML::CrossValidator "CrossValidator" — splits your data into k folds for
+      train/test evaluation, so you can check whether a model generalizes to unseen data
+
     @subsection mlalgo_onnx ONNX Model Inference
 
     Run complex models (neural networks, gradient-boosted trees, etc.) trained in Python, R, or
@@ -114,6 +195,40 @@ if (caps.has_onnx) {
 }
     @endcode
 
+    @section mlpersistence Model Persistence
+
+    Save trained models so they survive restarts and can be shared between systems.
+
+    @subsection mlpersist_inmemory In-Memory Serialization
+
+    Serialize a fitted model to binary and deserialize it back — useful for caching,
+    sending over the network, or storing in a database:
+
+    @code{.py}
+# Serialize a trained model to binary
+binary data = Qore::ML::ml_serialize(trained_model);
+
+# Later, reconstruct it (ready for prediction immediately)
+auto restored = Qore::ML::ml_deserialize(data);
+hash<auto> result = restored.predict(new_record);
+    @endcode
+
+    @subsection mlpersist_file File-Based Persistence
+
+    Save models to disk and load them back:
+
+    @code{.py}
+# Save a trained KMeans model
+Qore::ML::ml_save_model(km, "/models/customer_segments.qml");
+
+# Load it in another process or after restart
+auto km2 = Qore::ML::ml_load_model("/models/customer_segments.qml");
+hash<Qore::ML::KMeansResult> result = km2.predict(customer_data);
+    @endcode
+
+    The native \c .qml format is a compact binary format with CRC-32 integrity checking.
+    All 12 algorithm types are supported.
+
     @section mlchoosing Choosing the Right Algorithm
 
     <b>"I need to find bad or unusual records"</b>
@@ -129,6 +244,12 @@ if (caps.has_onnx) {
     - Do records need probability scores for multiple groups (soft assignment)?
       → Use @ref Qore::ML::GMM "GMM"
 
+    <b>"I need to assign records to categories"</b>
+    - Do your categories have a clear boundary (e.g., approve/deny based on rules)?
+      → Use @ref Qore::ML::LogisticRegression "LogisticRegression"
+    - Do you want to classify based on what similar past records looked like?
+      → Use @ref Qore::ML::KNN "KNN" (classification mode)
+
     <b>"I need to predict or forecast values"</b>
     - Is your data a time series with seasonal patterns (daily, weekly, monthly)?
       → Use @ref Qore::ML::HoltWinters "HoltWinters"
@@ -140,6 +261,26 @@ if (caps.has_onnx) {
       → Use @ref Qore::ML::SeasonalDecomposition "SeasonalDecomposition"
     - Do you want to compress many fields into fewer meaningful values?
       → Use @ref Qore::ML::PCA "PCA"
+
+    <b>"I need to know how good my model is"</b>
+    - Predicting categories (fraud/not fraud, customer segment)?
+      → Use \c ml_classification_report() for accuracy, precision, recall, F1
+    - Predicting numbers (prices, delivery times)?
+      → Use \c ml_r2_score() and \c ml_rmse() to measure prediction quality
+    - Evaluating cluster quality?
+      → Use \c ml_silhouette_score() — above 0.5 means good separation
+    - Want to test on data the model hasn't seen?
+      → Use @ref Qore::ML::CrossValidator "CrossValidator" for k-fold cross-validation
+
+    <b>"My data has different scales or missing values"</b>
+    - Do your fields have very different ranges (e.g., age 18–65 vs income 20,000–200,000)?
+      → Use @ref Qore::ML::StandardScaler "StandardScaler" to put them on the same scale
+    - Do you need values in a fixed range like 0 to 1?
+      → Use @ref Qore::ML::MinMaxScaler "MinMaxScaler"
+    - Do you have gaps in your data (missing sensor readings, incomplete records)?
+      → Use @ref Qore::ML::Imputer "Imputer" to fill them in automatically
+    - Do you want to preprocess <i>and</i> analyze in one step?
+      → Use @ref Qore::ML::MLPipeline "MLPipeline" to chain preprocessing with analysis
 
     <b>"I have a pre-trained model from Python or R"</b>
     - Export it to ONNX format and use @ref Qore::ML::OnnxModel "OnnxModel"
@@ -230,6 +371,115 @@ if (result.is_anomaly) {
 }
     @endcode
 
+    @subsection mlexample_scaler Preparing Data with StandardScaler
+
+    @code{.py}
+%requires ml
+
+# Employee data: salary (20K-200K) and years_experience (0-40)
+# Without scaling, salary would dominate any clustering or anomaly detection
+list<hash<auto>> employees = (
+    {"salary": 45000, "years_experience": 2},
+    {"salary": 85000, "years_experience": 12},
+    {"salary": 150000, "years_experience": 25},
+);
+
+# Put both fields on the same scale
+Qore::ML::StandardScaler scaler();
+scaler.fit(employees);
+
+# Now transform new data using the same learned scale
+hash<auto> scaled = scaler.transform({"salary": 95000, "years_experience": 15});
+printf("Scaled: %y\n", scaled);
+# Both values now center around 0 — ready for clustering or anomaly detection
+    @endcode
+
+    @subsection mlexample_imputer Filling Missing Sensor Data with Imputer
+
+    @code{.py}
+%requires ml
+
+# IoT sensor readings — some are missing due to connectivity issues
+list<auto> readings = (
+    (22.5, 65.0, 1013.0),  # temp, humidity, pressure
+    (23.1, NOTHING, 1012.5),  # humidity reading missing
+    (NOTHING, 63.0, 1014.0),  # temperature reading missing
+    (22.8, 64.0, 1013.5),
+);
+
+# Fill gaps with the average of available readings
+Qore::ML::Imputer imp({"strategy": "mean"});
+imp.fitMatrix(readings);
+list<list<float>> complete = imp.transformMatrix(readings);
+# Missing values are now filled with column averages
+    @endcode
+
+    @subsection mlexample_pipeline End-to-End Pipeline: Scale + Cluster
+
+    @code{.py}
+%requires ml
+
+# Build a pipeline that scales data then clusters customers
+Qore::ML::MLPipeline pipeline();
+pipeline.addStandardScaler("scale", new Qore::ML::StandardScaler());
+pipeline.addKMeans("cluster", new Qore::ML::KMeans({"k": 3, "seed": 42}));
+
+# Fit on customer data (features have different scales)
+list<list<float>> customer_data = (
+    (25000, 2, 580),   # income, purchases_per_month, credit_score
+    (75000, 8, 720),
+    (150000, 15, 800),
+    # ... more customers
+);
+pipeline.fitMatrix(customer_data);
+
+# Predict segments for new customers — scaling is applied automatically
+list<hash<auto>> results = pipeline.predictMatrix(((55000, 5, 650),));
+printf("Customer segment: %d\n", results[0].cluster);
+    @endcode
+
+    @subsection mlexample_minmax Normalizing for a Dashboard with MinMaxScaler
+
+    @code{.py}
+%requires ml
+
+# Normalize KPIs to 0-100 for a performance dashboard
+Qore::ML::MinMaxScaler scaler({"feature_min": 0.0, "feature_max": 100.0});
+scaler.fit(historical_kpi_data);
+
+# Convert today's raw KPIs to dashboard percentages
+hash<auto> dashboard = scaler.transform(
+    {"response_time_ms": 45, "throughput_rps": 1200, "error_rate": 0.02}
+);
+printf("Response time score: %.0f/100\n", dashboard.response_time_ms);
+printf("Throughput score: %.0f/100\n", dashboard.throughput_rps);
+    @endcode
+
+    @subsection mlexample_evaluate Evaluating a Model with Cross-Validation
+
+    @code{.py}
+%requires ml
+
+# Split 200 samples into 5 folds for cross-validation
+Qore::ML::CrossValidator cv({"n_folds": 5, "shuffle": True, "seed": 42});
+list<hash<Qore::ML::CrossValidationFold>> folds = cv.split(200);
+
+foreach hash<Qore::ML::CrossValidationFold> fold in (folds) {
+    # Train on fold's training indices, predict on test indices
+    # ... (build X_train, y_train, X_test, y_test from indices) ...
+
+    # Measure regression quality
+    float r2 = Qore::ML::ml_r2_score(y_test, predictions);
+    float rmse = Qore::ML::ml_rmse(y_test, predictions);
+    printf("Fold %d: R²=%.3f, RMSE=%.2f\n", fold.fold, r2, rmse);
+}
+
+# For classification, use the full report
+hash<Qore::ML::ClassificationReport> report =
+    Qore::ML::ml_classification_report(all_true_labels, all_predictions);
+printf("Overall: accuracy=%.2f, macro F1=%.2f\n", report.accuracy, report.macro_f1);
+    @endcode
+
     @subsection mlexample_onnx Credit Scoring with an ONNX Model
 
     @code{.py}
@@ -254,7 +504,7 @@ if (!caps.has_onnx) {
     @section mlreleasenotes ml Module Release Notes
 
     @subsection ml_1_0 ml Module Version 1.0
-    - Initial release with 9 native ML algorithms:
+    - Initial release with 11 native ML algorithms and 4 preprocessing tools:
       - @ref Qore::ML::IsolationForest "IsolationForest" — anomaly detection using isolation trees
       - @ref Qore::ML::LOF "LOF" — Local Outlier Factor density-based anomaly detection
       - @ref Qore::ML::DBSCAN "DBSCAN" — density-based clustering
@@ -264,7 +514,24 @@ if (!caps.has_onnx) {
       - @ref Qore::ML::HoltWinters "HoltWinters" — triple exponential smoothing forecasting
       - @ref Qore::ML::SeasonalDecomposition "SeasonalDecomposition" — time series decomposition
       - @ref Qore::ML::PCA "PCA" — principal component analysis
+      - @ref Qore::ML::LogisticRegression "LogisticRegression" — binary and multiclass classification
+      - @ref Qore::ML::KNN "KNN" — k-nearest neighbors for classification and regression
+    - Data preprocessing:
+      - @ref Qore::ML::StandardScaler "StandardScaler" — put fields on the same scale (zero mean, unit variance)
+      - @ref Qore::ML::MinMaxScaler "MinMaxScaler" — normalize values to a configurable range (e.g., 0 to 1)
+      - @ref Qore::ML::Imputer "Imputer" — fill missing values using average, median, most common, or fixed value
+      - @ref Qore::ML::MLPipeline "MLPipeline" — chain preprocessing and analysis into a single fit/predict unit
+    - Model evaluation:
+      - Classification metrics: \c ml_accuracy(), \c ml_confusion_matrix(), \c ml_classification_report()
+      - Regression metrics: \c ml_mse(), \c ml_rmse(), \c ml_mae(), \c ml_r2_score(), \c ml_explained_variance()
+      - Clustering metrics: \c ml_silhouette_score(), \c ml_davies_bouldin_score(), \c ml_calinski_harabasz_score()
+      - @ref Qore::ML::CrossValidator "CrossValidator" — k-fold cross-validation split utility
     - Optional @ref Qore::ML::OnnxModel "OnnxModel" for ONNX Runtime inference (requires libonnxruntime)
+    - Model persistence: \c ml_serialize() / \c ml_deserialize() for in-memory round-trip,
+      \c ml_save_model() / \c ml_load_model() for file-based persistence (.qml native format)
+    - Online learning (incremental updates) for KMeans, LinearRegression, GMM, and LogisticRegression
     - All algorithms use Eigen3 for efficient matrix operations
+    - All algorithms support cooperative cancellation for responsive interrupt handling
+    - \c NOTHING values in input data are treated as missing values for Imputer compatibility
     - \c ml_get_capabilities() function for runtime capability and ONNX support discovery
 */

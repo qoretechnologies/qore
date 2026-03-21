@@ -26,6 +26,7 @@
 */
 
 #include "QC_GMM.h"
+#include "ml_serialization.h"
 
 #include <algorithm>
 #include <numeric>
@@ -265,6 +266,10 @@ void QoreGMM::fit(const MatrixXd& data, ExceptionSink* xsink) {
     // EM iterations
     double prev_ll = -std::numeric_limits<double>::max();
     for (int iter = 0; iter < max_iterations; ++iter) {
+        if (qore_check_cancel(xsink, "GMM fit")) {
+            return;
+        }
+
         // E-step
         MatrixXd responsibilities = eStep(data);
 
@@ -282,6 +287,98 @@ void QoreGMM::fit(const MatrixXd& data, ExceptionSink* xsink) {
     }
 
     fitted = true;
+    batch_count = 1;
+}
+
+void QoreGMM::update(const MatrixXd& data, ExceptionSink* xsink) {
+    std::lock_guard<std::mutex> lk(mtx);
+    if (!fitted) {
+        xsink->raiseException("ML-GMM-ERROR",
+            "model has not been fitted: call fit() or fitMatrix() before update()");
+        return;
+    }
+    if (data.cols() != n_features) {
+        xsink->raiseException("ML-GMM-ERROR",
+            "input has %d features but model was trained with %d features",
+            static_cast<int>(data.cols()), n_features);
+        return;
+    }
+    if (data.rows() == 0) {
+        xsink->raiseException("ML-GMM-ERROR",
+            "cannot update on empty data");
+        return;
+    }
+
+    if (qore_check_cancel(xsink, "GMM update")) {
+        return;
+    }
+
+    ++batch_count;
+    double eta = 1.0 / (batch_count + 1);
+
+    // E-step: compute responsibilities on new data using current parameters
+    MatrixXd responsibilities = eStep(data);
+
+    // Compute new parameters from the new batch only
+    int n = static_cast<int>(data.rows());
+    int d = n_features;
+    double reg = 1e-6;
+
+    std::vector<VectorXd> new_means(n_components);
+    std::vector<MatrixXd> new_covariances(n_components);
+    VectorXd new_weights(n_components);
+
+    for (int c = 0; c < n_components; ++c) {
+        double resp_sum = responsibilities.col(c).sum();
+
+        // New weight from this batch
+        new_weights(c) = resp_sum / n;
+        if (new_weights(c) < 1e-10) {
+            new_weights(c) = 1e-10;
+        }
+
+        // New mean from this batch
+        VectorXd nm = VectorXd::Zero(d);
+        for (int i = 0; i < n; ++i) {
+            nm += responsibilities(i, c) * data.row(i).transpose();
+        }
+        new_means[c] = nm / resp_sum;
+
+        // New covariance from this batch
+        if (covariance_type == "diagonal") {
+            VectorXd diag = VectorXd::Zero(d);
+            for (int i = 0; i < n; ++i) {
+                VectorXd diff = data.row(i).transpose() - new_means[c];
+                diag += responsibilities(i, c) * diff.array().square().matrix();
+            }
+            diag /= resp_sum;
+            diag.array() += reg;
+            new_covariances[c] = diag.asDiagonal();
+        } else {
+            MatrixXd cov = MatrixXd::Zero(d, d);
+            for (int i = 0; i < n; ++i) {
+                VectorXd diff = data.row(i).transpose() - new_means[c];
+                cov += responsibilities(i, c) * (diff * diff.transpose());
+            }
+            cov /= resp_sum;
+            cov += MatrixXd::Identity(d, d) * reg;
+            new_covariances[c] = cov;
+        }
+    }
+
+    // Blend old and new parameters
+    for (int c = 0; c < n_components; ++c) {
+        means[c] = (1.0 - eta) * means[c] + eta * new_means[c];
+        covariances[c] = (1.0 - eta) * covariances[c] + eta * new_covariances[c];
+        weights(c) = (1.0 - eta) * weights(c) + eta * new_weights(c);
+    }
+
+    // Normalize weights to sum to 1
+    double weight_sum = weights.sum();
+    weights /= weight_sum;
+
+    // Recompute log-likelihood on this batch
+    log_likelihood = computeLogLikelihood(data);
 }
 
 QoreHashNode* QoreGMM::predictInternal(const RowVectorXd& point, ExceptionSink* xsink) const {
@@ -360,6 +457,9 @@ QoreListNode* QoreGMM::predictMatrix(const MatrixXd& data, ExceptionSink* xsink)
 
     ReferenceHolder<QoreListNode> rv(new QoreListNode(hashdeclGMMResult->getTypeInfo()), xsink);
     for (Eigen::Index i = 0; i < data.rows(); ++i) {
+        if (i % 100 == 0 && qore_check_cancel(xsink, "GMM predictMatrix")) {
+            return nullptr;
+        }
         RowVectorXd row = data.row(i);
         QoreHashNode* result = predictInternal(row, xsink);
         if (*xsink) {
@@ -397,4 +497,86 @@ double QoreGMM::getLogLikelihood(ExceptionSink* xsink) const {
         return 0.0;
     }
     return log_likelihood;
+}
+
+std::vector<uint8_t> QoreGMM::serializeState() const {
+    std::vector<uint8_t> buf;
+    // Hyperparameters
+    MLSerialization::writeInt32(buf, n_components);
+    MLSerialization::writeInt32(buf, max_iterations);
+    MLSerialization::writeScalar(buf, tolerance);
+    MLSerialization::writeString(buf, covariance_type);
+    // Model state
+    MLSerialization::writeInt32(buf, n_features);
+    MLSerialization::writeInt32(buf, batch_count);
+    MLSerialization::writeScalar(buf, log_likelihood);
+    // Means: n_components vectors
+    MLSerialization::writeInt32(buf, static_cast<int32_t>(means.size()));
+    for (const auto& m : means) {
+        MLSerialization::writeVector(buf, m);
+    }
+    // Covariances: n_components matrices
+    MLSerialization::writeInt32(buf, static_cast<int32_t>(covariances.size()));
+    for (const auto& cov : covariances) {
+        MLSerialization::writeMatrix(buf, cov);
+    }
+    // Weights
+    MLSerialization::writeVector(buf, weights);
+    MLSerialization::writeStringVector(buf, field_names);
+    return buf;
+}
+
+QoreGMM* QoreGMM::deserializeState(const uint8_t* data, size_t len, ExceptionSink* xsink) {
+    const uint8_t* ptr = data;
+    size_t remaining = len;
+
+    int32_t n_components = MLSerialization::readInt32(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    int32_t max_iterations = MLSerialization::readInt32(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    double tolerance = MLSerialization::readScalar(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    std::string covariance_type = MLSerialization::readString(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    int32_t n_features = MLSerialization::readInt32(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    int32_t batch_count = MLSerialization::readInt32(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    double log_likelihood = MLSerialization::readScalar(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+
+    int32_t means_count = MLSerialization::readInt32(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    std::vector<VectorXd> means;
+    means.reserve(means_count);
+    for (int32_t i = 0; i < means_count; ++i) {
+        means.push_back(MLSerialization::readVector(ptr, remaining, xsink));
+        if (*xsink) { return nullptr; }
+    }
+
+    int32_t cov_count = MLSerialization::readInt32(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    std::vector<MatrixXd> covariances;
+    covariances.reserve(cov_count);
+    for (int32_t i = 0; i < cov_count; ++i) {
+        covariances.push_back(MLSerialization::readMatrix(ptr, remaining, xsink));
+        if (*xsink) { return nullptr; }
+    }
+
+    VectorXd weights = MLSerialization::readVector(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    std::vector<std::string> field_names = MLSerialization::readStringVector(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+
+    std::unique_ptr<QoreGMM> obj(new QoreGMM(n_components, max_iterations, tolerance,
+        1, covariance_type));
+    obj->n_features = n_features;
+    obj->batch_count = batch_count;
+    obj->log_likelihood = log_likelihood;
+    obj->means = std::move(means);
+    obj->covariances = std::move(covariances);
+    obj->weights = std::move(weights);
+    obj->field_names = std::move(field_names);
+    obj->fitted = true;
+    return obj.release();
 }

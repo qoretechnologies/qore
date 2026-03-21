@@ -60,7 +60,6 @@ hash<auto> result = model.run({"input": ((1.0, 2.0, 3.0),)});
 printf("Output: %y\n", result);
     @endcode
 
-    @since ml 1.0
 */
 qclass OnnxModel [arg=QoreOnnxModel* model; ns=Qore::ML; flags=final; dom=FILESYSTEM];
 
@@ -112,7 +111,6 @@ OnnxModel model("/path/to/model.onnx", config);
     @throw ML-ONNX-ERROR if the model cannot be loaded or config is invalid
     @throw ML-ONNX-PROVIDER-ERROR if an execution provider cannot be initialized
 
-    @since ml 1.1
 */
 OnnxModel::constructor(string model_path, hash<OnnxSessionConfig> options) {
 #ifdef HAVE_ONNXRUNTIME
@@ -238,7 +236,6 @@ string provider = model.getProviderInfo();
 printf("Configured provider: %s\n", provider);
     @endcode
 
-    @since ml 1.1
 */
 string OnnxModel::getProviderInfo() [flags=CONSTANT] {
     return new QoreStringNode(model->getActiveProvider());

@@ -41,7 +41,6 @@ hw.fit(historical_monthly_values);
 list<float> next_year = hw.forecast(12);
     @endcode
 
-    @since ml 1.0
 */
 qclass HoltWinters [arg=QoreHoltWinters* hw; ns=Qore::ML; flags=final];
 

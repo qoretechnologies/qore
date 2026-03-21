@@ -1,0 +1,309 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_KNN.qpp
+
+    Qore ml module - KNN class definition
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+#include "qore/Qore.h"
+#include "QC_KNN.h"
+
+// Extern declarations for hashdecls (defined in ml-module.cpp)
+extern const TypedHashDecl* hashdeclKNNClassificationResult;
+extern const TypedHashDecl* hashdeclKNNRegressionResult;
+
+//! The KNN class implements the K-Nearest Neighbors algorithm for classification and regression
+/** KNN is a lazy learner that stores training data and makes predictions by finding the k
+    closest data points to a query point. For classification, it uses majority voting (optionally
+    weighted by distance). For regression, it computes the (optionally weighted) mean of the
+    k nearest neighbors' target values.
+
+    Supports three distance metrics: Euclidean, Manhattan, and cosine distance.
+
+    @par Example:
+    @code{.py}
+# Classification
+KNN knn({"k": 5, "task": "classification", "weight_func": "distance"});
+knn.fit(training_data, "species");
+hash<auto> result = knn.predict({"sepal_length": 5.1, "sepal_width": 3.5});
+printf("Predicted class: %d, Confidence: %.2f\n", result.predicted_class, result.confidence);
+
+# Regression
+KNN knn_reg({"k": 3, "task": "regression", "metric": "manhattan"});
+knn_reg.fit(training_data, "price");
+hash<auto> result = knn_reg.predict({"sqft": 1500, "bedrooms": 3});
+printf("Predicted price: %.2f\n", result.prediction);
+    @endcode
+
+*/
+qclass KNN [arg=QoreKNN* knn; ns=Qore::ML; flags=final];
+
+//! Creates a KNN instance with the given options
+/** @param options a hash with the following keys:
+    - \c k (int, required): number of nearest neighbors to use; must be >= 1
+    - \c metric (string, default "euclidean"): distance metric; allowed values: "euclidean", "manhattan", "cosine"
+    - \c task (string, default "classification"): prediction task; allowed values: "classification", "regression"
+    - \c weight_func (string, default "uniform"): neighbor weighting; allowed values: "uniform", "distance"
+
+    @par Example:
+    @code{.py}
+KNN knn({"k": 5, "metric": "euclidean", "task": "classification", "weight_func": "distance"});
+    @endcode
+
+    @throw ML-KNN-ERROR invalid option values
+*/
+KNN::constructor(hash<auto> options) {
+    int64 k = 0;
+    const char* metric = "euclidean";
+    const char* task = "classification";
+    const char* weight_func = "uniform";
+
+    QoreValue v = options->getKeyValue("k");
+    if (v.isNullOrNothing()) {
+        xsink->raiseException("ML-KNN-ERROR",
+            "required option 'k' not provided");
+        return;
+    }
+    k = v.getAsBigInt();
+
+    v = options->getKeyValue("metric");
+    if (!v.isNullOrNothing() && v.getType() == NT_STRING) {
+        metric = v.get<const QoreStringNode>()->c_str();
+    }
+
+    v = options->getKeyValue("task");
+    if (!v.isNullOrNothing() && v.getType() == NT_STRING) {
+        task = v.get<const QoreStringNode>()->c_str();
+    }
+
+    v = options->getKeyValue("weight_func");
+    if (!v.isNullOrNothing() && v.getType() == NT_STRING) {
+        weight_func = v.get<const QoreStringNode>()->c_str();
+    }
+
+    if (k < 1) {
+        xsink->raiseException("ML-KNN-ERROR",
+            "k must be >= 1; got " QLLD, k);
+        return;
+    }
+
+    if (strcmp(metric, "euclidean") != 0 && strcmp(metric, "manhattan") != 0
+        && strcmp(metric, "cosine") != 0) {
+        xsink->raiseException("ML-KNN-ERROR",
+            "metric must be 'euclidean', 'manhattan', or 'cosine'; got '%s'", metric);
+        return;
+    }
+
+    if (strcmp(task, "classification") != 0 && strcmp(task, "regression") != 0) {
+        xsink->raiseException("ML-KNN-ERROR",
+            "task must be 'classification' or 'regression'; got '%s'", task);
+        return;
+    }
+
+    if (strcmp(weight_func, "uniform") != 0 && strcmp(weight_func, "distance") != 0) {
+        xsink->raiseException("ML-KNN-ERROR",
+            "weight_func must be 'uniform' or 'distance'; got '%s'", weight_func);
+        return;
+    }
+
+    self->setPrivate(CID_KNN,
+        new QoreKNN(static_cast<int>(k), metric, task, weight_func));
+}
+
+//! Creates a copy of the KNN instance
+/** @throw COPY-ERROR KNN objects cannot be copied
+*/
+KNN::copy() {
+    xsink->raiseException("COPY-ERROR", "KNN objects cannot be copied");
+}
+
+//! Trains the model on a list of hash records with a target field
+/** Extracts numeric fields (excluding the target) from the records as features,
+    and uses the target field as the label/target variable.
+
+    @param data a list of hashes where each hash represents a record
+    @param target_field the name of the field to predict
+
+    @par Example:
+    @code{.py}
+knn.fit(training_data, "species");
+    @endcode
+
+    @throw ML-DATA-ERROR if data is empty or has no numeric fields
+    @throw ML-KNN-ERROR if fitting fails
+*/
+nothing KNN::fit(list<auto> data, string target_field) {
+    // Extract field names from first record, excluding target
+    if (!data || data->empty()) {
+        xsink->raiseException("ML-DATA-ERROR", "empty data list provided");
+        return QoreValue();
+    }
+
+    QoreValue first = data->retrieveEntry(0);
+    if (first.getType() != NT_HASH) {
+        xsink->raiseException("ML-DATA-ERROR", "data list must contain hash elements");
+        return QoreValue();
+    }
+    const QoreHashNode* first_hash = first.get<const QoreHashNode>();
+    const char* target_str = target_field->c_str();
+
+    // Collect numeric field names excluding target
+    std::vector<std::string> feat_names;
+    ConstHashIterator hi(first_hash);
+    while (hi.next()) {
+        if (strcmp(hi.getKey(), target_str) == 0) {
+            continue;
+        }
+        QoreValue val = hi.get();
+        qore_type_t vt = val.getType();
+        if (vt == NT_INT || vt == NT_FLOAT || vt == NT_NUMBER) {
+            feat_names.push_back(hi.getKey());
+        }
+    }
+
+    if (feat_names.empty()) {
+        xsink->raiseException("ML-DATA-ERROR",
+            "no numeric feature fields found in data (excluding target '%s')",
+            target_str);
+        return QoreValue();
+    }
+
+    size_t n_rows = data->size();
+    size_t n_cols = feat_names.size();
+    MatrixXd X(n_rows, n_cols);
+    VectorXd y(n_rows);
+
+    for (size_t i = 0; i < n_rows; ++i) {
+        QoreValue row_val = data->retrieveEntry(i);
+        if (row_val.getType() != NT_HASH) {
+            xsink->raiseException("ML-DATA-ERROR", "data element %zu is not a hash", i);
+            return QoreValue();
+        }
+        const QoreHashNode* row = row_val.get<const QoreHashNode>();
+        for (size_t j = 0; j < n_cols; ++j) {
+            QoreValue fv = row->getKeyValue(feat_names[j].c_str());
+            X(i, j) = fv.getAsFloat();
+        }
+        QoreValue target_v = row->getKeyValue(target_str);
+        y(i) = target_v.getAsFloat();
+    }
+
+    knn->setFieldNames(feat_names);
+    knn->setTargetField(target_str);
+    knn->fit(X, y, xsink);
+}
+
+//! Trains the model on a numeric feature matrix and target vector
+/** @param matrix a list of lists where each inner list is a row of feature values
+    @param target a list of target values (class labels for classification, numeric values for regression)
+
+    @par Example:
+    @code{.py}
+knn.fitMatrix(((1.0, 2.0), (3.0, 4.0), (5.0, 6.0)), (0, 1, 0));
+    @endcode
+
+    @throw ML-DATA-ERROR if the matrix is empty or malformed
+    @throw ML-KNN-ERROR if fitting fails
+*/
+nothing KNN::fitMatrix(list<auto> matrix, list<auto> target) {
+    MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    VectorXd y = qoreListToVector(target, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    knn->fit(mat, y, xsink);
+}
+
+//! Predicts the class or target value for a single record
+/** @param record a hash with the same numeric fields used during training
+
+    @return a hash with prediction results; the concrete type depends on the \c task option:
+    - for \c "classification": a @ref KNNClassificationResult hash with \c predicted_class,
+      \c confidence, and \c neighbors
+    - for \c "regression": a @ref KNNRegressionResult hash with \c prediction and \c neighbors
+
+    @par Example:
+    @code{.py}
+hash<auto> result = knn.predict({"sepal_length": 5.1, "sepal_width": 3.5});
+    @endcode
+
+    @throw ML-KNN-ERROR if the model has not been fitted or input dimensions mismatch
+*/
+hash<auto> KNN::predict(hash<auto> record) {
+    const std::vector<std::string>& feat_names = knn->getFieldNames();
+    if (feat_names.empty()) {
+        xsink->raiseException("ML-KNN-ERROR",
+            "model was fitted with fitMatrix(); use predictMatrix() or fit() with hash records");
+        return QoreValue();
+    }
+    RowVectorXd point = qoreHashToRowVector(record, feat_names, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return knn->predict(point, xsink);
+}
+
+//! Predicts class or target values for multiple rows in matrix form
+/** @param matrix a list of lists where each inner list is a row of feature values
+
+    @return a list of result hashes (see predict() for the hash structure)
+
+    @par Example:
+    @code{.py}
+list<hash<auto>> results = knn.predictMatrix(((5.1, 3.5), (6.2, 2.8)));
+    @endcode
+
+    @throw ML-KNN-ERROR if the model has not been fitted or input dimensions mismatch
+    @throw ML-DATA-ERROR data format errors
+*/
+list<hash<auto>> KNN::predictMatrix(list<auto> matrix) {
+    MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return knn->predictMatrix(mat, xsink);
+}
+
+//! Returns True if the model has been fitted
+/** @return True if fit() or fitMatrix() has been called successfully
+
+    @par Example:
+    @code{.py}
+if (!knn.isFitted()) {
+    knn.fit(data, "target");
+}
+    @endcode
+*/
+bool KNN::isFitted() [flags=CONSTANT] {
+    return knn->isFitted();
+}
+
+//! Returns the k (number of neighbors) parameter
+/** @return the k parameter value
+*/
+int KNN::getK() [flags=CONSTANT] {
+    return knn->getK();
+}

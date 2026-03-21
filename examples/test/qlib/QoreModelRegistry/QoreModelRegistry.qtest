@@ -1,0 +1,386 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  QoreModelRegistry.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+%strict-args
+%require-types
+%enable-all-warnings
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/QoreModelRegistry
+%requires ml
+
+%exec-class ModelRegistryTest
+
+class ModelRegistryTest inherits QUnit::Test {
+    constructor() : Test("ModelRegistryTest", "1.0") {
+        addTestCase("registrationRoundTrip", \registrationRoundTripTest());
+        addTestCase("multipleVersions", \multipleVersionsTest());
+        addTestCase("tagging", \taggingTest());
+        addTestCase("pruning", \pruningTest());
+        addTestCase("listModels", \listModelsTest());
+        addTestCase("deleteModel", \deleteModelTest());
+        addTestCase("errorCases", \errorCasesTest());
+        addTestCase("untagging", \untaggingTest());
+        addTestCase("getVersionMetadata", \getVersionMetadataTest());
+
+        set_return_value(main());
+    }
+
+    private string getTestDir() {
+        string dir = tmp_location() + DirSep + "qore_model_registry_test_"
+            + get_random_bytes(4).toHex();
+        mkdir_ex(dir, 0755, True);
+        return dir;
+    }
+
+    private nothing cleanupDir(string dir) {
+        # Recursively delete directory contents
+        if (!is_dir(dir)) {
+            return;
+        }
+        Dir d();
+        d.chdir(dir);
+        # Delete subdirectories first
+        foreach string subdir in (d.listDirs()) {
+            cleanupDir(dir + DirSep + subdir);
+        }
+        # Delete files
+        foreach string f in (d.listFiles()) {
+            unlink(dir + DirSep + f);
+        }
+        rmdir(dir);
+    }
+
+    private ML::KMeans createFittedKMeans() {
+        ML::KMeans km({"k": 2, "seed": 42});
+        km.fitMatrix(((1.0, 1.0), (1.1, 1.1), (5.0, 5.0), (5.1, 5.1)));
+        return km;
+    }
+
+    private ML::LinearRegression createFittedLR() {
+        ML::LinearRegression lr({"fit_intercept": True});
+        lr.fitMatrix(((1.0,), (2.0,), (3.0,), (4.0,), (5.0,)), (2.0, 4.0, 6.0, 8.0, 10.0));
+        return lr;
+    }
+
+    registrationRoundTripTest() {
+        string dir = getTestDir();
+        on_exit { cleanupDir(dir); }
+
+        QoreModelRegistry::ModelRegistry registry({"path": dir});
+
+        # Create and register a fitted KMeans model
+        ML::KMeans km = createFittedKMeans();
+        list<hash<ML::KMeansResult>> orig = km.predictMatrix(((1.05, 1.05),));
+
+        string version_id = registry.register(km, {
+            "name": "test_kmeans",
+            "description": "test model",
+            "metrics": {"silhouette": 0.95},
+        });
+        assertTrue(version_id.val(), "version_id should be non-empty");
+
+        # List versions
+        list<hash<auto>> versions = registry.listVersions("test_kmeans");
+        assertEq(1, versions.size(), "should have 1 version");
+        assertEq(version_id, versions[0].version_id, "version_id should match");
+        assertEq("test_kmeans", versions[0].name, "name should match");
+        assertEq("KMeans", versions[0].algorithm, "algorithm should be KMeans");
+        assertEq("test model", versions[0].description, "description should match");
+
+        # Load and predict
+        object loaded = registry.load("test_kmeans", version_id);
+        assertTrue(loaded instanceof ML::KMeans, "loaded model should be KMeans");
+        list<hash<ML::KMeansResult>> res = loaded.predictMatrix(((1.05, 1.05),));
+        assertEq(orig[0].cluster, res[0].cluster, "cluster prediction should match");
+    }
+
+    multipleVersionsTest() {
+        string dir = getTestDir();
+        on_exit { cleanupDir(dir); }
+
+        QoreModelRegistry::ModelRegistry registry({"path": dir});
+
+        # Register 3 versions
+        list<string> version_ids();
+        for (int i = 0; i < 3; ++i) {
+            ML::KMeans km({"k": 2, "seed": 42 + i});
+            km.fitMatrix(((1.0, 1.0), (1.1, 1.1), (5.0, 5.0), (5.1, 5.1)));
+            string vid = registry.register(km, {"name": "multi_model"});
+            push version_ids, vid;
+        }
+
+        # List versions
+        list<hash<auto>> versions = registry.listVersions("multi_model");
+        assertEq(3, versions.size(), "should have 3 versions");
+
+        # Verify order (oldest first)
+        for (int i = 0; i < 3; ++i) {
+            assertEq(version_ids[i], versions[i].version_id,
+                sprintf("version %d should match", i));
+        }
+
+        # Load latest (should be the last registered)
+        object latest = registry.load("multi_model");
+        assertTrue(latest instanceof ML::KMeans, "latest should be KMeans");
+
+        # Load latest explicitly
+        object latest2 = registry.load("multi_model", "latest");
+        assertTrue(latest2 instanceof ML::KMeans, "latest explicit should be KMeans");
+    }
+
+    taggingTest() {
+        string dir = getTestDir();
+        on_exit { cleanupDir(dir); }
+
+        QoreModelRegistry::ModelRegistry registry({"path": dir});
+
+        # Register two versions
+        ML::KMeans km1 = createFittedKMeans();
+        string v1 = registry.register(km1, {"name": "tag_model"});
+
+        ML::LinearRegression lr = createFittedLR();
+        string v2 = registry.register(lr, {"name": "tag_model"});
+
+        # Tag first version as "production"
+        registry.tag("tag_model", v1, "production");
+
+        # Verify tag is persisted
+        list<hash<auto>> versions = registry.listVersions("tag_model");
+        assertTrue(versions[0].tags.contains("production"),
+            "first version should have 'production' tag");
+        assertEq(0, versions[1].tags.size(), "second version should have no tags");
+
+        # Tag with duplicate (should not add twice)
+        registry.tag("tag_model", v1, "production");
+        versions = registry.listVersions("tag_model");
+        assertEq(1, versions[0].tags.size(), "duplicate tag should not be added");
+
+        # Load by tag
+        object tagged = registry.loadByTag("tag_model", "production");
+        assertTrue(tagged instanceof ML::KMeans, "production-tagged model should be KMeans");
+
+        # Tag second version as "staging"
+        registry.tag("tag_model", v2, "staging");
+        object staging = registry.loadByTag("tag_model", "staging");
+        assertTrue(staging instanceof ML::LinearRegression,
+            "staging-tagged model should be LinearRegression");
+
+        # Verify loadByTag gets latest tagged if multiple have same tag
+        registry.tag("tag_model", v2, "production");
+        object latest_prod = registry.loadByTag("tag_model", "production");
+        assertTrue(latest_prod instanceof ML::LinearRegression,
+            "latest production-tagged should be LinearRegression");
+    }
+
+    pruningTest() {
+        string dir = getTestDir();
+        on_exit { cleanupDir(dir); }
+
+        QoreModelRegistry::ModelRegistry registry({"path": dir});
+
+        # Register 5 versions
+        list<string> version_ids();
+        for (int i = 0; i < 5; ++i) {
+            ML::KMeans km({"k": 2, "seed": 42 + i});
+            km.fitMatrix(((1.0, 1.0), (1.1, 1.1), (5.0, 5.0), (5.1, 5.1)));
+            string vid = registry.register(km, {"name": "prune_model"});
+            push version_ids, vid;
+        }
+
+        # Tag version 1 (index 0) as "important"
+        registry.tag("prune_model", version_ids[0], "important");
+
+        # Prune keeping latest 2, with keep_tagged=True
+        int deleted = registry.prune("prune_model", {
+            "keep_latest": 2,
+            "keep_tagged": True,
+        });
+        assertEq(2, deleted, "should delete 2 (v2 and v3, keeping v1-tagged + v4,v5)");
+
+        # Verify remaining versions
+        list<hash<auto>> remaining = registry.listVersions("prune_model");
+        assertEq(3, remaining.size(), "should have 3 remaining (1 tagged + 2 latest)");
+
+        # The tagged version should be preserved
+        bool has_tagged = False;
+        foreach hash<auto> v in (remaining) {
+            if (v.version_id == version_ids[0]) {
+                has_tagged = True;
+            }
+        }
+        assertTrue(has_tagged, "tagged version should be preserved");
+
+        # The latest 2 should be preserved
+        assertEq(version_ids[3], remaining[1].version_id, "4th version should remain");
+        assertEq(version_ids[4], remaining[2].version_id, "5th version should remain");
+
+        # Prune with keep_tagged=False
+        deleted = registry.prune("prune_model", {
+            "keep_latest": 2,
+            "keep_tagged": False,
+        });
+        assertEq(1, deleted, "should delete 1 (the tagged version)");
+
+        remaining = registry.listVersions("prune_model");
+        assertEq(2, remaining.size(), "should have 2 remaining");
+
+        # Prune when fewer versions than keep_latest
+        deleted = registry.prune("prune_model", {"keep_latest": 5});
+        assertEq(0, deleted, "should delete 0 when fewer than keep_latest");
+    }
+
+    listModelsTest() {
+        string dir = getTestDir();
+        on_exit { cleanupDir(dir); }
+
+        QoreModelRegistry::ModelRegistry registry({"path": dir});
+
+        # Register models with different names
+        ML::KMeans km = createFittedKMeans();
+        registry.register(km, {"name": "alpha_model"});
+        registry.register(km, {"name": "beta_model"});
+        registry.register(km, {"name": "gamma_model"});
+
+        # List models
+        list<string> models = registry.listModels();
+        assertEq(3, models.size(), "should have 3 models");
+        # Should be sorted
+        assertEq("alpha_model", models[0], "first should be alpha");
+        assertEq("beta_model", models[1], "second should be beta");
+        assertEq("gamma_model", models[2], "third should be gamma");
+    }
+
+    deleteModelTest() {
+        string dir = getTestDir();
+        on_exit { cleanupDir(dir); }
+
+        QoreModelRegistry::ModelRegistry registry({"path": dir});
+
+        # Register a model
+        ML::KMeans km = createFittedKMeans();
+        registry.register(km, {"name": "delete_me"});
+
+        # Verify it exists
+        list<string> models = registry.listModels();
+        assertTrue(models.contains("delete_me"), "model should exist before deletion");
+
+        # Delete it
+        registry.deleteModel("delete_me");
+
+        # Verify it's gone
+        models = registry.listModels();
+        assertFalse(models.contains("delete_me"), "model should not exist after deletion");
+
+        # Deleting again should throw
+        assertThrows("ML-REGISTRY-ERROR", \registry.deleteModel(), "delete_me");
+    }
+
+    errorCasesTest() {
+        string dir = getTestDir();
+        on_exit { cleanupDir(dir); }
+
+        QoreModelRegistry::ModelRegistry registry({"path": dir});
+
+        # Load nonexistent model
+        assertThrows("ML-REGISTRY-ERROR", \registry.load(), ("nonexistent",));
+
+        # Register with missing name
+        ML::KMeans km = createFittedKMeans();
+        assertThrows("ML-REGISTRY-ERROR", \registry.register(), (km, {}));
+
+        # Constructor with missing path
+        assertThrows("ML-REGISTRY-ERROR", sub() {
+            new QoreModelRegistry::ModelRegistry({});
+        });
+
+        # loadByTag with nonexistent tag
+        registry.register(km, {"name": "error_model"});
+        assertThrows("ML-REGISTRY-ERROR", \registry.loadByTag(), ("error_model", "no_such_tag"));
+
+        # tag nonexistent version
+        assertThrows("ML-REGISTRY-ERROR", \registry.tag(),
+            ("error_model", "fake_version", "sometag"));
+
+        # Load nonexistent version
+        assertThrows("ML-REGISTRY-ERROR", \registry.load(),
+            ("error_model", "nonexistent_version"));
+    }
+
+    untaggingTest() {
+        string dir = getTestDir();
+        on_exit { cleanupDir(dir); }
+
+        QoreModelRegistry::ModelRegistry registry({"path": dir});
+
+        ML::KMeans km = createFittedKMeans();
+        string vid = registry.register(km, {"name": "untag_model"});
+
+        # Tag and verify
+        registry.tag("untag_model", vid, "production");
+        list<hash<auto>> versions = registry.listVersions("untag_model");
+        assertTrue(versions[0].tags.contains("production"), "tag should be present");
+
+        # Untag and verify
+        registry.untag("untag_model", vid, "production");
+        versions = registry.listVersions("untag_model");
+        assertFalse(versions[0].tags.contains("production"), "tag should be removed");
+
+        # Untag nonexistent version
+        assertThrows("ML-REGISTRY-ERROR", \registry.untag(),
+            ("untag_model", "fake_version", "sometag"));
+    }
+
+    getVersionMetadataTest() {
+        string dir = getTestDir();
+        on_exit { cleanupDir(dir); }
+
+        QoreModelRegistry::ModelRegistry registry({"path": dir});
+
+        ML::KMeans km = createFittedKMeans();
+        string vid = registry.register(km, {
+            "name": "meta_model",
+            "description": "metadata test",
+            "metrics": {"accuracy": 0.99},
+        });
+
+        hash<auto> meta = registry.getVersionMetadata("meta_model", vid);
+        assertEq(vid, meta.version_id, "version_id should match");
+        assertEq("meta_model", meta.name, "name should match");
+        assertEq("KMeans", meta.algorithm, "algorithm should match");
+        assertEq("metadata test", meta.description, "description should match");
+        assertEq(0.99, meta.metrics.accuracy, "metrics should match");
+        assertEq("qml", meta.format, "format should be qml");
+        assertTrue(meta.file_size > 0, "file_size should be positive");
+        assertTrue(meta.created.val(), "created should be non-empty");
+
+        # Nonexistent version
+        assertThrows("ML-REGISTRY-ERROR", \registry.getVersionMetadata(),
+            ("meta_model", "nonexistent"));
+    }
+}

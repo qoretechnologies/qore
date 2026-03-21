@@ -42,7 +42,6 @@ km.fitMatrix(training_data);
 hash<KMeansResult> result = km.predict({"x": 1.0, "y": 2.0});
     @endcode
 
-    @since ml 1.0
 */
 qclass KMeans [arg=QoreKMeans* kmeans; ns=Qore::ML; flags=final];
 

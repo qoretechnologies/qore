@@ -41,7 +41,6 @@ pca.fitMatrix(training_data);
 hash<PCAResult> result = pca.transform({"x": 1.0, "y": 2.0, "z": 3.0});
     @endcode
 
-    @since ml 1.0
 */
 qclass PCA [arg=QorePCA* pca; ns=Qore::ML; flags=final];
 

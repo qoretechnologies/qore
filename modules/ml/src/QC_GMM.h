@@ -50,6 +50,9 @@ public:
     //! Fit on an Eigen matrix
     DLLLOCAL void fit(const MatrixXd& data, ExceptionSink* xsink);
 
+    //! Online EM update with new data (thread-safe)
+    DLLLOCAL void update(const MatrixXd& data, ExceptionSink* xsink);
+
     //! Predict cluster membership for a single point
     DLLLOCAL QoreHashNode* predict(const RowVectorXd& point, ExceptionSink* xsink) const;
 
@@ -72,6 +75,13 @@ public:
     DLLLOCAL void setFieldNames(const std::vector<std::string>& names) { field_names = names; }
     DLLLOCAL const std::vector<std::string>& getFieldNames() const { return field_names; }
 
+    //! Serialize model state to binary
+    DLLLOCAL std::vector<uint8_t> serializeState() const;
+
+    //! Deserialize model state from binary
+    DLLLOCAL static QoreGMM* deserializeState(const uint8_t* data, size_t len,
+        ExceptionSink* xsink);
+
 private:
     int n_components;
     int max_iterations;
@@ -80,6 +90,7 @@ private:
     std::mt19937 rng;
     bool fitted = false;
     int n_features = 0;
+    int batch_count = 0;
 
     //! Model parameters
     std::vector<VectorXd> means;         // n_components means
