@@ -1459,6 +1459,10 @@ public:
     const AbstractQoreFunctionVariant* variant = nullptr; //!< The resolved variant (for fast call path)
     QoreValue expr;                         //!< Original AST expression (for AOT)
     bool has_ref_args = false;              //!< True if any operand is a reference type (may be modified by callee)
+
+    // Phase 3: Aggressive inlining fields
+    mutable std::atomic<int8_t> inline_ir_state{0};  //!< 0=unchecked, 1=eligible, -1=ineligible
+    mutable const QoreIRFunction* cached_callee_ir = nullptr; //!< Cached callee IR for inlining
     //!< operands[0..n-1] are the method arguments (self is obtained from runtime)
 };
 
@@ -1514,6 +1518,10 @@ public:
     const AbstractQoreFunctionVariant* variant = nullptr; //!< The resolved variant
     QoreValue expr;                         //!< Original AST expression (for AOT)
     bool has_ref_args = false;              //!< True if any operand is a reference type (may be modified by callee)
+
+    // Phase 3: Aggressive inlining fields
+    mutable std::atomic<int8_t> inline_ir_state{0};  //!< 0=unchecked, 1=eligible, -1=ineligible
+    mutable const QoreIRFunction* cached_callee_ir = nullptr; //!< Cached callee IR for inlining
     //!< operands[0..n-1] are the pre-evaluated method arguments
 };
 

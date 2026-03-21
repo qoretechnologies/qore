@@ -6904,6 +6904,95 @@ QoreIRValue QoreIRLowering::lowerCallReference(const QoreValue& expr, std::strin
     return lowerExprOpOrInvoke(QoreIROpcode::CallClosureDirect, expr, operands, call->loc, error);
 }
 
+// Helper function for Phase 3: Check if a callee is eligible for inlining and cache its IR
+static void tryCacheCalleeIRForInlining(const AbstractQoreFunctionVariant* variant,
+        QoreIRCallMethodDirectInstruction* inst) {
+    if (!variant || !inst) {
+        return;
+    }
+
+    const UserVariantBase* uvb = variant->getUserVariantBase();
+    if (!uvb) {
+        return;
+    }
+
+    // Get the cached IR function from the variant
+    const QoreIRFunction* callee_ir = uvb->getCachedIR();
+    if (!callee_ir) {
+        return;
+    }
+
+    // Check inlining thresholds: ≤20 instructions, ≤2 blocks
+    // Count basic blocks and instructions
+    unsigned block_count = 0;
+    unsigned total_instructions = 0;
+
+    for (const auto& block_ptr : callee_ir->blocks) {
+        block_count++;
+        if (block_count > 2) {
+            // Too many blocks, don't inline
+            inst->inline_ir_state = -1;
+            return;
+        }
+        for (const auto& instr : block_ptr->instructions) {
+            total_instructions++;
+            if (total_instructions > 20) {
+                // Too many instructions, don't inline
+                inst->inline_ir_state = -1;
+                return;
+            }
+        }
+    }
+
+    // Callee is eligible for inlining
+    inst->cached_callee_ir = callee_ir;
+    inst->inline_ir_state = 1;
+}
+
+// Helper function for static method calls
+static void tryCacheCalleeIRForInlining(const AbstractQoreFunctionVariant* variant,
+        QoreIRCallStaticDirectInstruction* inst) {
+    if (!variant || !inst) {
+        return;
+    }
+
+    const UserVariantBase* uvb = variant->getUserVariantBase();
+    if (!uvb) {
+        return;
+    }
+
+    // Get the cached IR function from the variant
+    const QoreIRFunction* callee_ir = uvb->getCachedIR();
+    if (!callee_ir) {
+        return;
+    }
+
+    // Check inlining thresholds: ≤20 instructions, ≤2 blocks
+    unsigned block_count = 0;
+    unsigned total_instructions = 0;
+
+    for (const auto& block_ptr : callee_ir->blocks) {
+        block_count++;
+        if (block_count > 2) {
+            // Too many blocks, don't inline
+            inst->inline_ir_state = -1;
+            return;
+        }
+        for (const auto& instr : block_ptr->instructions) {
+            total_instructions++;
+            if (total_instructions > 20) {
+                // Too many instructions, don't inline
+                inst->inline_ir_state = -1;
+                return;
+            }
+        }
+    }
+
+    // Callee is eligible for inlining
+    inst->cached_callee_ir = callee_ir;
+    inst->inline_ir_state = 1;
+}
+
 QoreIRValue QoreIRLowering::lowerSelfCall(const QoreValue& expr, std::string& error) {
     const AbstractQoreNode* node = expr.getInternalNode();
     auto* call = dynamic_cast<const SelfFunctionCallNode*>(node);
@@ -6935,12 +7024,20 @@ QoreIRValue QoreIRLowering::lowerSelfCall(const QoreValue& expr, std::string& er
                 return QoreIRValue();
             }
             QoreIRBasicBlock* handler = exception_stack.back();
-            auto* inst = builder.createInvokeMethodDirect(method, qc, variant, operands,
+            auto* invoke_inst = builder.createInvokeMethodDirect(method, qc, variant, operands,
                     normal_block, handler, expr, call->loc);
+            // Phase 3: Try to cache the callee IR for inlining
+            auto* call_inst = dynamic_cast<QoreIRCallMethodDirectInstruction*>(invoke_inst);
+            if (call_inst) {
+                tryCacheCalleeIRForInlining(variant, call_inst);
+            }
             builder.setBlock(normal_block);
-            result = inst->result;
+            result = invoke_inst->result;
         } else {
-            result = builder.createCallMethodDirect(method, qc, variant, operands, expr, call->loc)->result;
+            auto* call_inst = builder.createCallMethodDirect(method, qc, variant, operands, expr, call->loc);
+            // Phase 3: Try to cache the callee IR for inlining
+            tryCacheCalleeIRForInlining(variant, call_inst);
+            result = call_inst->result;
         }
         return result;
     }
@@ -6973,14 +7070,21 @@ QoreIRValue QoreIRLowering::lowerStaticCall(const QoreValue& expr, std::string& 
                 return QoreIRValue();
             }
             QoreIRBasicBlock* handler = exception_stack.back();
-            auto* inst = builder.createInvoke(expr, lowered_args, normal_block, handler, call->loc);
-            inst->invoke_opcode = QoreIROpcode::CallStaticDirect;
+            auto* invoke_inst = builder.createInvoke(expr, lowered_args, normal_block, handler, call->loc);
+            invoke_inst->invoke_opcode = QoreIROpcode::CallStaticDirect;
+            // Phase 3: Try to cache the callee IR for inlining
+            auto* call_static_inst = dynamic_cast<QoreIRCallStaticDirectInstruction*>(invoke_inst);
+            if (call_static_inst) {
+                tryCacheCalleeIRForInlining(variant, call_static_inst);
+            }
             builder.setBlock(normal_block);
-            result = inst->result;
+            result = invoke_inst->result;
         } else {
-            auto* inst = builder.createCallStaticDirect(call->getMethod(), variant, expr,
+            auto* call_static_inst = builder.createCallStaticDirect(call->getMethod(), variant, expr,
                 lowered_args, call->loc);
-            result = inst->result;
+            // Phase 3: Try to cache the callee IR for inlining
+            tryCacheCalleeIRForInlining(variant, call_static_inst);
+            result = call_static_inst->result;
         }
         return result;
     }
