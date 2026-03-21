@@ -3270,6 +3270,32 @@ const QoreTypeInfo* QoreIRLowering::getGuaranteedTypeForValue(const QoreValue* e
 }
 
 // Returns true if the given opcode is guaranteed to produce a non-NOTHING result
+static bool opcodeCanReturnNothing(QoreIROpcode op) {
+    switch (op) {
+        // Function/method calls can return nothing if the function has optional return type
+        case QoreIROpcode::Call:
+        case QoreIROpcode::CallDirect:
+        case QoreIROpcode::CallIndirect:
+        case QoreIROpcode::CallMethod:
+        case QoreIROpcode::CallMethodDirect:
+        case QoreIROpcode::InvokeMethodDirect:
+        case QoreIROpcode::CallStatic:
+        case QoreIROpcode::CallStaticDirect:
+        case QoreIROpcode::InvokeDotEvalMethodDirect:
+        case QoreIROpcode::CallClosureDirect:
+        case QoreIROpcode::Invoke:
+        // Exception handling can return nothing (no exception caught)
+        case QoreIROpcode::CatchException:
+        // Hash/list member access can return nothing (key not found, index out of bounds, etc.)
+        case QoreIROpcode::HashKeyAccess:
+        case QoreIROpcode::HashKeyAccessInt:
+        case QoreIROpcode::ListIndexAccess:
+            return true;
+        default:
+            return false;
+    }
+}
+
 static bool opcodeNeverReturnsNothing(QoreIROpcode op) {
     switch (op) {
         // Typed arithmetic always produces int/float values
@@ -3384,42 +3410,100 @@ bool QoreIRLowering::needsNotNothingGuard(const QoreValue* expr, const QoreTypeI
         }
     }
 
-    // CRITICAL FIX: Check if the expression itself allows NOTHING (e.g., optional return type)
-    // If expr returns *Type (can be nothing), don't insert a guard even if target expects non-nothing
-    // This prevents guard failures in IR->AST deopt that cause re-execution of side effects
+    // CRITICAL FIX: Prevent deopt-causing guards
+    // When allow_maybe_nothing is true, skip guard even if target expects non-nothing
+    // This handles optional returns that are being assigned to non-optional variables
+    // and prevents IR->AST deopt that causes side effect re-execution
+    if (allow_maybe_nothing) {
+        static bool debug_guard = [] {
+            const char* debug_env = getenv("QORE_IR_DEBUG");
+            return debug_env && strstr(debug_env, "guard");
+        }();
+        if (debug_guard) {
+            fprintf(stderr, "[GUARD-SKIP-DEOPT-RISK] Skipping guard to prevent deopt: allow_maybe_nothing=true\n");
+            fflush(stderr);
+        }
+        return false;
+    }
+
+    // Check if the expression itself can return nothing (e.g., optional return type)
+    // If so, skip the guard - optional types are allowed to return nothing
     if (expr && expr->hasNode()) {
         const AbstractQoreNode* node = expr->getInternalNode();
-        // Analyze the expression to get its actual return type
         if (node && dynamic_cast<const ParseNode*>(node)) {
+            QoreParseAnalysis expr_analysis;
+            bool got_analysis = false;
             try {
-                QoreParseAnalysis expr_analysis;
-                if (getAnalysis(*expr, expr_analysis)) {
-                    // Check if expression's type explicitly allows nothing
-                    if (expr_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)) {
-                        const QoreTypeInfo* expr_type = expr_analysis.known_type;
-                        // If the expression type allows nothing (optional return), skip guard
-                        // even if the target type expects non-nothing
-                        if (expr_type && QoreTypeInfo::parseReturns(expr_type, NT_NOTHING) != QTI_NOT_EQUAL) {
-                            static bool debug_guard_skip = [] {
-                                const char* debug_env = getenv("QORE_IR_DEBUG");
-                                return debug_env && strstr(debug_env, "guard");
-                            }();
-                            if (debug_guard_skip) {
-                                fprintf(stderr, "[GUARD-SKIP-OPTIONAL] Skipping guard for optional type: %s\n",
-                                        expr_type ? QoreTypeInfo::getName(expr_type) : "<unknown>");
-                                fflush(stderr);
-                            }
-                            return false;
-                        }
-                    }
-                }
+                got_analysis = getAnalysis(*expr, expr_analysis);
             } catch (...) {
-                // Fall through to normal logic on analysis failure
+                got_analysis = false;
+            }
+
+            static bool debug_guard = [] {
+                const char* debug_env = getenv("QORE_IR_DEBUG");
+                return debug_env && strstr(debug_env, "guard");
+            }();
+
+            if (got_analysis) {
+                // Use actual type information from analysis if available
+                if (expr_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo) && expr_analysis.known_type) {
+                    const QoreTypeInfo* expr_type = expr_analysis.known_type;
+                    // Check if the expression's type allows nothing (is optional like *string)
+                    if (QoreTypeInfo::parseReturns(expr_type, NT_NOTHING) != QTI_NOT_EQUAL) {
+                        if (debug_guard) {
+                            fprintf(stderr, "[GUARD-SKIP-OPTIONAL-TYPE] Expression type is optional\n");
+                            fflush(stderr);
+                        }
+                        return false;  // Optional types can return nothing - no guard
+                    }
+                    // Type is known and doesn't allow nothing - guard likely needed
+                    // Fall through to other checks
+                    return true;
+                }
+
+                // Analysis succeeded but no KnownTypeInfo
+                // Be conservative: don't insert guard for operations we can't fully understand
+                if (debug_guard) {
+                    fprintf(stderr, "[GUARD-SKIP-INCOMPLETE-ANALYSIS] Analysis present but no type info - skip guard\n");
+                    fflush(stderr);
+                }
+                return false;
             }
         }
     }
 
-    const QoreTypeInfo* type = getGuaranteedTypeForValue(expr, target_type);
+    // CRITICAL: Only require non-nothing when we have reliable type information
+    // Don't insert guards speculatively based on target_type alone,
+    // since the actual expression return type might be different.
+
+    // Get the most reliable type information available
+    const QoreTypeInfo* type = nullptr;
+    bool has_reliable_type = false;
+
+    if (expr && expr->hasNode()) {
+        const AbstractQoreNode* node = expr->getInternalNode();
+        if (node && dynamic_cast<const ParseNode*>(node)) {
+            QoreParseAnalysis expr_analysis;
+            bool got_analysis = false;
+            try {
+                got_analysis = getAnalysis(*expr, expr_analysis);
+            } catch (...) {
+                got_analysis = false;
+            }
+            if (got_analysis && expr_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)) {
+                type = expr_analysis.known_type;
+                has_reliable_type = true;
+            }
+        }
+    }
+
+    // Only proceed if we have reliable type information about the expression
+    if (!has_reliable_type) {
+        // Don't insert guard without knowing the actual expression type
+        // This prevents false guards on operations like remove, keys, values, etc.
+        return false;
+    }
+
     if (type && QoreTypeInfo::parseReturns(type, NT_NOTHING) == QTI_NOT_EQUAL) {
         if (expr && expr->hasNode()) {
             if (LocalVar* local = getLocalVarFromValue(*expr)) {
@@ -3458,25 +3542,100 @@ bool QoreIRLowering::needsNotNothingGuard(const QoreValue* expr, const QoreTypeI
 
 void QoreIRLowering::maybeInsertNotNothingGuard(QoreIRValue value, const QoreValue* expr,
         const QoreProgramLocation* loc, const QoreTypeInfo* target_type, bool allow_maybe_nothing) {
+    static bool debug_guard = [] {
+        const char* debug_env = getenv("QORE_IR_DEBUG");
+        return debug_env && strstr(debug_env, "guard");
+    }();
+
     if (!value.isValid() || !needsNotNothingGuard(expr, target_type, allow_maybe_nothing)) {
         return;
     }
+
+    if (debug_guard) {
+        fprintf(stderr, "[GUARD-INSERT] About to insert GuardNotNothing for value slot %d, expr=%s, target_type=%s\n",
+                value.id, expr ? "present" : "nullptr", target_type ? "present" : "nullptr");
+        fflush(stderr);
+    }
+
+    // Check expression's analysis for assignment state and never-nothing guarantees
+    // Don't insert guard if: (1) expr never returns nothing, OR (2) target wasn't definitely assigned
+    if (expr && expr->hasNode()) {
+        const AbstractQoreNode* node = expr->getInternalNode();
+        if (node && dynamic_cast<const ParseNode*>(node)) {
+            QoreParseAnalysis expr_analysis;
+            bool got_analysis = false;
+            try {
+                got_analysis = getAnalysis(*expr, expr_analysis);
+            } catch (...) {
+                got_analysis = false;
+            }
+
+            if (got_analysis) {
+                static bool debug_guard_type = [] {
+                    const char* debug_env = getenv("QORE_IR_DEBUG");
+                    return debug_env && strstr(debug_env, "guard");
+                }();
+
+                // Note: These checks are handled in needsNotNothingGuard()
+                // which returns bool, not here in maybeInsertNotNothingGuard() which is void
+                // The actual logic is checked before calling this function
+            }
+        }
+    }
+
     // Skip guard if the value is known to never be NOTHING (tracks across block boundaries)
     if (never_nothing_values.count(value.id)) {
+        if (debug_guard) {
+            fprintf(stderr, "[GUARD-SKIP-NEVER-NOTHING-TRACKED] Skipping guard - value known to never be nothing\n");
+            fflush(stderr);
+        }
         return;
     }
     // Check the last instruction in the current block
     QoreIRBasicBlock* current_block = builder.getBlock();
     if (current_block && !current_block->instructions.empty()) {
         const auto& last = current_block->instructions.back();
+        if (debug_guard) {
+            fprintf(stderr, "[GUARD-CHECK-LAST] Value slot %d, last instr opcode=%d result=%d (match=%d)\n",
+                    value.id, static_cast<int>(last->opcode), last->result.id, (last->result.id == value.id));
+            fflush(stderr);
+        }
         // Skip duplicate guard on the same value
         if (last->opcode == QoreIROpcode::GuardNotNothing
                 && !last->operands.empty() && last->operands[0].id == value.id) {
+            if (debug_guard) {
+                fprintf(stderr, "[GUARD-SKIP-DUPLICATE] Skipping duplicate guard on value slot %d\n", value.id);
+                fflush(stderr);
+            }
             return;
         }
         // Skip guard if the value was produced by an opcode that never returns NOTHING
         if (last->result.id == value.id && opcodeNeverReturnsNothing(last->opcode)) {
+            if (debug_guard) {
+                fprintf(stderr, "[GUARD-SKIP-NEVER-NOTHING] Skipping guard - opcode never returns nothing\n");
+                fflush(stderr);
+            }
             return;
+        }
+        // Skip guard if the value was produced by an operation that CAN return nothing
+        // (e.g., function calls, hash member access). Optional return types should be
+        // allowed to return nothing without triggering IR->AST deopt.
+        if (last->result.id == value.id && opcodeCanReturnNothing(last->opcode)) {
+            if (debug_guard) {
+                fprintf(stderr, "[GUARD-SKIP-CAN-RETURN-NOTHING] Skipping guard on value slot %d from opcode that can return nothing (opcode=%d)\n", value.id, static_cast<int>(last->opcode));
+                fflush(stderr);
+            }
+            return;
+        }
+        if (debug_guard && last->result.id == value.id) {
+            fprintf(stderr, "[GUARD-WILL-INSERT] Value slot %d is last instruction result (opcode=%d, can_return=%d)\n",
+                    value.id, static_cast<int>(last->opcode), opcodeCanReturnNothing(last->opcode));
+            fflush(stderr);
+        }
+    } else {
+        if (debug_guard) {
+            fprintf(stderr, "[GUARD-CHECK-LAST] Value slot %d, no current block or empty instructions\n", value.id);
+            fflush(stderr);
         }
     }
     const QoreProgramLocation* guard_loc = loc;
