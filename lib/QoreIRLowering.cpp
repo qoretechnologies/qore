@@ -3404,8 +3404,9 @@ bool QoreIRLowering::needsNotNothingGuard(const QoreValue* expr, const QoreTypeI
         return debug_env && strstr(debug_env, "guard");
     }();
 
-    if (debug_guard_entry && target_type) {
-        fprintf(stderr, "[GUARD-NEED-CHECK] target_type present, allow_maybe=%d\n", allow_maybe_nothing);
+    if (debug_guard_entry) {
+        fprintf(stderr, "[GUARD-NEED-CHECK-ENTRY] expr=%p has_node=%d, target_type=%p, allow_maybe=%d\n",
+                expr, expr && expr->hasNode(), target_type, allow_maybe_nothing);
         fflush(stderr);
     }
 
@@ -3499,6 +3500,22 @@ bool QoreIRLowering::needsNotNothingGuard(const QoreValue* expr, const QoreTypeI
         return false;  // Not a parse node - not a guard candidate
     }
 
+    // CRITICAL FIX: Check if expression is a variable reference with optional type
+    // If the variable itself has an optional type (*Type), it can legitimately return nothing
+    // even if the target type expects non-nothing. This prevents guards on LoadLocal for
+    // optional-typed variables, which would cause incorrect deopt.
+    if (node->getType() == NT_VARREF) {
+        const VarRefNode* var_ref = static_cast<const VarRefNode*>(node);
+        const QoreTypeInfo* var_type = var_ref->getTypeInfo();
+        if (var_type && QoreTypeInfo::parseReturns(var_type, NT_NOTHING) != QTI_NOT_EQUAL) {
+            if (debug_guard_entry) {
+                fprintf(stderr, "[GUARD-SKIP-OPTIONAL-VAR] Variable is optional type, skipping guard\n");
+                fflush(stderr);
+            }
+            return false;  // Variable can be nothing - no guard needed
+        }
+    }
+
     QoreParseAnalysis expr_analysis;
     bool got_analysis = false;
     try {
@@ -3535,26 +3552,52 @@ bool QoreIRLowering::needsNotNothingGuard(const QoreValue* expr, const QoreTypeI
     type = target_type;
 
     if (type && QoreTypeInfo::parseReturns(type, NT_NOTHING) == QTI_NOT_EQUAL) {
+        if (debug_guard_entry) {
+            fprintf(stderr, "[GUARD-TARGET-TYPE-CHECK] target_type doesn't allow nothing\n");
+            fflush(stderr);
+        }
         if (expr && expr->hasNode()) {
             if (LocalVar* local = getLocalVarFromValue(*expr)) {
                 if (allow_maybe_nothing) {
                     return false;
                 }
-                return parse_context ? parse_context->needsGuardForLocal(local) : true;
+                bool result = parse_context ? parse_context->needsGuardForLocal(local) : true;
+                if (debug_guard_entry) {
+                    fprintf(stderr, "[GUARD-RETURN-TRUE-LVAR] needsGuardForLocal returned %d\n", result);
+                    fflush(stderr);
+                }
+                return result;
             }
             QoreParseAnalysis analysis;
             bool got_analysis = false;
             try {
                 got_analysis = getAnalysis(*expr, analysis);
             } catch (...) {
+                if (debug_guard_entry) {
+                    fprintf(stderr, "[GUARD-RETURN-TRUE-EXCEPTION] Exception in getAnalysis\n");
+                    fflush(stderr);
+                }
                 return true;
             }
             if (got_analysis && analysis.hasFlag(QoreParseAnalysis::NeverNothing)) {
+                if (debug_guard_entry) {
+                    fprintf(stderr, "[GUARD-SKIP-NEVER-NOTHING-ANALYSIS] Analysis shows NeverNothing\n");
+                    fflush(stderr);
+                }
                 return false;
             }
         }
         if (LocalVar* local = expr ? getLocalVarFromValue(*expr) : nullptr) {
-            return parse_context ? parse_context->needsGuardForLocal(local) : true;
+            bool result = parse_context ? parse_context->needsGuardForLocal(local) : true;
+            if (debug_guard_entry) {
+                fprintf(stderr, "[GUARD-RETURN-TRUE-LVAR2] needsGuardForLocal returned %d\n", result);
+                fflush(stderr);
+            }
+            return result;
+        }
+        if (debug_guard_entry) {
+            fprintf(stderr, "[GUARD-RETURN-TRUE-DEFAULT] Returning true by default for non-nothing target\n");
+            fflush(stderr);
         }
         return true;
     }
