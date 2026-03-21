@@ -998,8 +998,9 @@ public class HttpAsyncSocketIoController {
         log(LoggerLevel::DEBUG, "HTTP/3 request ready: session=%d stream=%d %s %s",
             session_id, stream_id, request.method, request.path);
 
-        # Continue reading on h3op for next request (multiplexed)
-        h3op.continueReading();
+        # NOTE: h3op is already in STATE_READING — getOutput() atomically
+        # transitions from STATE_REQUEST_READY to STATE_READING when it
+        # extracts the request.  No separate continueReading() call needed.
 
         # Submit h3op back to I/O controller for continued reading.
         # Use a socket-level key: there is exactly one h3op per QUIC listener
@@ -1134,10 +1135,12 @@ public class HttpAsyncSocketIoController {
                 "deregister_persistent_queue": sub (string key) {
                     self.deregisterPersistentQueue(key);
                 },
-                "resume_body_streaming": body_streaming ? sub () {
-                    resumeMultiplexedReading(h3op, uh,
-                        HttpConnectionState::Http3);
-                } : NOTHING,
+                # NOTE: resume_body_streaming is NOTHING for HTTP/3 because
+                # the h3op is already resumed during dispatch (getOutput()
+                # atomically transitions to STATE_READING).  Calling
+                # resumeMultiplexedReading() from a handler thread races with
+                # the I/O thread's dispatch of subsequent requests.
+                "resume_body_streaming": NOTHING,
             },
             "listener": linfo.http_listener,
             "cx": new_cinfo.cx,
@@ -1192,18 +1195,16 @@ public class HttpAsyncSocketIoController {
                 }
                 try {
                     hash<HttpRequestResultInfo> result = target.onHttpRequest(conn_info);
-                    if (body_streaming) {
-                        resumeMultiplexedReading(h3op, uh,
-                            HttpConnectionState::Http3);
-                    }
+                    # NOTE: no resumeMultiplexedReading() needed here — the h3op
+                    # was already resumed during dispatch (getOutput() atomically
+                    # transitions to STATE_READING + submitConnectionOp() resubmits
+                    # it to the I/O controller).  Calling resumeMultiplexedReading()
+                    # from this handler thread races with the I/O thread's dispatch
+                    # of subsequent requests, causing lost requests and 30s timeouts.
                     handleHttp3MultiplexedResult(uh, new_cinfo, session_id, stream_id, result);
                 } catch (hash<ExceptionInfo> ex) {
                     log(LoggerLevel::ERROR, "Error handling HTTP/3 request session=%d stream=%d: %s: %s",
                         session_id, stream_id, ex.err, ex.desc);
-                    if (body_streaming) {
-                        resumeMultiplexedReading(h3op, uh,
-                            HttpConnectionState::Http3);
-                    }
                     try {
                         listener.submitQuicResponse(session_id, stream_id, 500,
                             {"content-type": "text/plain"},
@@ -1536,8 +1537,8 @@ public class HttpAsyncSocketIoController {
         try {
             call_object_method(stream_op, "continueReading");
         } catch () {
-            # already resumed (HTTP2-STATE-ERROR / HTTP3-STATE-ERROR) — the other
-            # resume path already updated connection state, so nothing to do here
+            # Already in STATE_READING (getOutput() transitioned atomically)
+            # or request pending dispatch — nothing to do here
             return;
         }
         hash<HttpActiveConnectionInfo> resumed_cinfo;

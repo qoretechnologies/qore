@@ -28,7 +28,7 @@ public namespace HttpClientIo {
 #! Unified connection pool manager with protocol auto-selection
 /** This class manages a pool of HTTP/1.1, HTTP/2, and HTTP/3 connections, providing:
 
-    - **Protocol auto-selection**: Try HTTP/3 first, fall back to HTTP/2
+    - **Protocol auto-selection**: Start with HTTP/2, upgrade to HTTP/3 via Alt-Svc discovery
     - **Connection pooling**: Reuse connections across requests
     - **Load balancing**: Distribute streams across connections
     - **Automatic connection creation**: Create new connections as needed
@@ -79,6 +79,9 @@ public class HttpClientConnectionManager {
             fallback.  This timeout is a safety net for servers that don't respond.
         */
         const H2C_PROBE_TIMEOUT = 1s;
+
+        #! Maximum retry count for connection and capacity errors in request() and submitRequestAsync()
+        const MaxRequestRetries = 3;
     }
 
     private {
@@ -114,6 +117,13 @@ public class HttpClientConnectionManager {
 
         #! Last H3 probe times: "host:port" -> timestamp
         hash<string, date> h3_probe_times;
+
+        #! Pending Alt-Svc discoveries from async callbacks (lock-free queue)
+        /** The I/O thread pushes {url, alt_svc} entries here; user threads
+            drain and process them in acquireStream() before pool lookup.
+            This avoids acquiring pool_lock (write) from the I/O thread.
+        */
+        Queue pending_alt_svc();
     }
 
     #! Creates a new connection manager with the given options
@@ -198,6 +208,11 @@ public class HttpClientConnectionManager {
         @throw HTTPCLIENT-CAPACITY-ERROR if no connection can be acquired
     */
     HttpClientStreamHandle acquireStream(string url) {
+        # Process any Alt-Svc discoveries from async callbacks before
+        # resolving the protocol — ensures async-discovered H3 capability
+        # takes effect on the next connection
+        drainPendingAltSvc();
+
         hash<UrlInfo> url_info;
         try {
             url_info = parse_url(url);
@@ -254,7 +269,21 @@ public class HttpClientConnectionManager {
             *HttpClientStreamHandle stream;
             try {
                 stream = acquireStream(url);
-                stream.submitAsync(method, path, headers, body, callback);
+                # Wrap callback to capture Alt-Svc for deferred processing.
+                # The callback runs on the I/O thread, so we must NOT acquire
+                # pool_lock or do any blocking work.  Instead, push the
+                # alt-svc value to a lock-free queue; drainPendingAltSvc()
+                # processes it on the next user-thread call.
+                HttpResponseCallback wrapped_cb = sub (hash<auto> resp, *hash<auto> err) {
+                    if (!err && resp.headers) {
+                        *string alt_svc = resp.headers."alt-svc" ?? resp.headers."Alt-Svc";
+                        if (alt_svc) {
+                            pending_alt_svc.push({"url": url, "alt_svc": alt_svc});
+                        }
+                    }
+                    callback(resp, err);
+                };
+                stream.submitAsync(method, path, headers, body, wrapped_cb);
                 return stream;
             } catch (hash<ExceptionInfo> ex) {
                 # NOTE: no manual reservation release needed here — submitAsync()
@@ -262,10 +291,10 @@ public class HttpClientConnectionManager {
                 # (waitForReady timeout, cancel, submitAsyncImpl exception), and
                 # the destructor is a final safety net
                 if ((isCapacityError(ex.err) || isConnectionError(ex.err))
-                        && ++retries <= 3) {
+                        && ++retries <= MaxRequestRetries) {
                     if (isConnectionError(ex.err)) {
-                        log(LoggerLevel::DEBUG, "connection error %s, evicting and retrying (%d/3)",
-                            ex.err, retries);
+                        log(LoggerLevel::DEBUG, "connection error %s, evicting and retrying (%d/%d)",
+                            ex.err, retries, MaxRequestRetries);
                         evictDeadConnections(url);
                         # h2c failure on plain HTTP → fall back to h1 for this host
                         handleProtocolFallback(url, ex.err);
@@ -296,20 +325,23 @@ public class HttpClientConnectionManager {
             *HttpClientStreamHandle stream;
             try {
                 stream = acquireStream(url);
-                return stream.request(method, path, headers, body, timeout_ms);
+                hash<auto> resp = stream.request(method, path, headers, body, timeout_ms);
+                checkAltSvc(url, resp);
+                return resp;
             } catch (hash<ExceptionInfo> ex) {
                 # NOTE: no manual reservation release needed — request() calls
                 # submitAsync() internally which releases on all failure paths
                 if ((isCapacityError(ex.err) || isConnectionError(ex.err))
-                        && ++retries <= 3) {
+                        && ++retries <= MaxRequestRetries) {
                     if (isConnectionError(ex.err)) {
-                        log(LoggerLevel::DEBUG, "connection error %s, evicting and retrying (%d/3)",
-                            ex.err, retries);
+                        log(LoggerLevel::DEBUG, "connection error %s, evicting and retrying (%d/%d)",
+                            ex.err, retries, MaxRequestRetries);
                         evictDeadConnections(url);
                         # h2c failure on plain HTTP → fall back to h1 for this host
                         handleProtocolFallback(url, ex.err);
                     } else {
-                        log(LoggerLevel::DEBUG, "capacity error %s (retry %d/3)", ex.err, retries);
+                        log(LoggerLevel::DEBUG, "capacity error %s (retry %d/%d)",
+                            ex.err, retries, MaxRequestRetries);
                     }
                     continue;
                 }
@@ -330,14 +362,19 @@ public class HttpClientConnectionManager {
             list<HttpClientConnection> conns = pool{key};
             int host_connections = conns.size();
             int host_streams = 0;
+            int host_draining = 0;
             foreach HttpClientConnection conn in (conns) {
                 host_streams += conn.getActiveStreamCount();
+                if (conn.isDraining()) {
+                    ++host_draining;
+                }
             }
             total_connections += host_connections;
             total_active_streams += host_streams;
             per_host{key} = {
                 "connections": host_connections,
                 "active_streams": host_streams,
+                "draining": host_draining,
             };
         }
 
@@ -463,9 +500,10 @@ public class HttpClientConnectionManager {
     }
 
     #! Internal: resolves the protocol to use for a given URL
-    /** In auto mode: HTTPS tries H3 first (with H2 fallback), plain HTTP tries
-        H2 prior knowledge (h2c) first (with H1 fallback).  The protocol cache
-        stores the result of previous fallbacks to avoid repeated failures.
+    /** In auto mode: HTTPS starts with HTTP/2 and upgrades to HTTP/3 only when
+        an @c Alt-Svc response header advertises H3 support (RFC 7838).  Plain
+        HTTP uses HTTP/2 prior knowledge (h2c) first with HTTP/1.1 fallback.
+        The protocol cache persists negotiation results to avoid repeated probes.
 
         @param url_info parsed URL info
         @param key the pool key "host:port"
@@ -503,30 +541,31 @@ public class HttpClientConnectionManager {
             return "h2";
         }
 
-        # Check cache
+        # Check cache — "h3" is set by checkAltSvc() when an Alt-Svc response
+        # header advertises H3 support; "h2" is set after H3 fallback
         if (protocol_cache.hasKey(key)) {
             string cached = protocol_cache{key};
             if (cached == "h3") {
-                return "h3";
-            }
-            # Cached as "h2" — check if we should re-probe for H3
-            if (h3_probe_times.hasKey(key)) {
-                date elapsed = now_us() - h3_probe_times{key};
-                if (elapsed < H3_REPROBE_INTERVAL) {
+                # QUIC cannot tunnel through HTTP proxies — downgrade to H2
+                if (proxy_info) {
                     return "h2";
                 }
+                return "h3";
             }
-            # Time to re-probe
-        }
-
-        # QUIC cannot tunnel through HTTP proxies — downgrade to H2
-        if (proxy_info) {
-            log(LoggerLevel::DEBUG, "proxy configured, skipping H3 (QUIC cannot tunnel)");
+            # Cached as "h2" (after an H3 fallback) — re-probe H3 after
+            # H3_REPROBE_INTERVAL if this host previously confirmed H3 support
+            if (!proxy_info && h3_probe_times.hasKey(key)) {
+                date elapsed = now_us() - h3_probe_times{key};
+                if (elapsed >= H3_REPROBE_INTERVAL) {
+                    log(LoggerLevel::DEBUG, "re-probing HTTP/3 for %s after %y elapsed", key, elapsed);
+                    return "h3";
+                }
+            }
             return "h2";
         }
 
-        # Try H3 first
-        return "h3";
+        # No cache: start with HTTP/2 and discover H3 capability via Alt-Svc
+        return "h2";
     }
 
     #! Internal: gets or creates a connection for the given URL info
@@ -707,13 +746,10 @@ public class HttpClientConnectionManager {
                     conn.setControllerRef(controller);
                     submitConnectionToController(key, conn);
                 }
-            }
 
-            {
-                AutoWriteLock al(pool_lock);
-
-                # Reserve a stream slot for the creator thread — same as
-                # the pool-scan path which calls tryReserveStream()
+                # Reserve a stream slot for the creator thread under the same lock
+                # so the pool-scan path (holding only the read lock) cannot grab the
+                # sole available slot between pool insertion and reservation
                 conn.tryReserveStream();
                 return conn;
             }
@@ -923,9 +959,117 @@ public class HttpClientConnectionManager {
             || err == "HTTPCLIENT-CONNECT-ERROR";
     }
 
+    #! Internal: drains pending Alt-Svc discoveries from async callbacks
+    /** Called on user threads (from acquireStream) to process Alt-Svc headers
+        that were captured by async response callbacks on the I/O thread.
+        The I/O thread cannot call checkAltSvc() directly because it acquires
+        pool_lock (write), which would block the I/O thread.
+    */
+    private drainPendingAltSvc() {
+        while (pending_alt_svc.size() > 0) {
+            *hash<auto> item = pending_alt_svc.get(0);
+            if (!item) {
+                break;
+            }
+            checkAltSvc(item.url, {"headers": {"alt-svc": item.alt_svc}});
+        }
+    }
+
+    #! Internal: checks the @c Alt-Svc response header for HTTP/3 advertisement
+    /** When a server response includes an @c alt-svc header with an @c h3= entry,
+        this method caches "h3" for the advertised host:port so subsequent connections
+        to that endpoint use HTTP/3 (per RFC 7838).
+
+        The advertised host defaults to the origin host when empty; the advertised
+        port is parsed from the header value (e.g. @c h3=\":443\").
+
+        @note Acquires pool_lock (write).  Must be called on a user thread only.
+        Called from request() (sync path) and drainPendingAltSvc() (async path,
+        drains I/O-thread-captured headers on the next user-thread call).
+
+        @param url the origin URL (used for host/port defaults when Alt-Svc omits them)
+        @param resp the response hash (checked for @c alt-svc header)
+    */
+    private checkAltSvc(string url, hash<auto> resp) {
+        # Only applicable to HTTPS in auto mode without a proxy
+        if (opts.protocol != "auto") {
+            return;
+        }
+        # QUIC cannot tunnel through HTTP proxies — ignore Alt-Svc when proxied
+        if (proxy_info) {
+            return;
+        }
+        # HTTP/2 headers are lowercase; HTTP/1.1 headers preserve case — check both.
+        # Check for the header before parse_url() to avoid the parse on the common
+        # case where no Alt-Svc header is present.
+        *string alt_svc = resp.headers."alt-svc" ?? resp.headers."Alt-Svc";
+        if (!alt_svc) {
+            return;
+        }
+        hash<UrlInfo> url_info = parse_url(url);
+        if (url_info.protocol != "https") {
+            return;
+        }
+        if (!url_info.port) {
+            url_info.port = 443;
+        }
+        # Parse comma-separated Alt-Svc alternatives, e.g.:
+        #   h3=":443"; ma=2592000, h3-29=":443"; ma=2592000
+        # RFC 7838 §3: alt-authority = [host] ":" port
+        # Per RFC 7838 §2.1, the alt-authority host MUST be within the origin's
+        # authority scope.  We only honour Alt-Svc when the advertised host is
+        # empty (same origin) or matches the origin host — cross-host alternatives
+        # are ignored to prevent cache-poisoning and connection-pool confusion.
+        foreach string entry in (alt_svc.split(",")) {
+            entry = trim(entry);
+            # Match h3="[host]:port" — host may be empty, a hostname, an IPv4
+            # address, or a bracketed IPv6 address (e.g. h3="[::1]:443")
+            *list<*string> m = (entry =~ x/^h3="(\[[^\]]*\]|[^":]*):(\d+)"/);
+            if (!m) {
+                continue;
+            }
+            # Empty host means same as origin host (RFC 7838 §2.1)
+            string alt_host = m[0].val() ? m[0] : url_info.host;
+            # Strip brackets from IPv6 for key comparison
+            if (alt_host.size() > 2 && alt_host[0] == "[") {
+                alt_host = alt_host.substr(1, alt_host.size() - 2);
+            }
+            int alt_port = int(m[1]);
+            # Only honour same-origin Alt-Svc (host match or empty host)
+            if (alt_host != url_info.host) {
+                log(LoggerLevel::DEBUG,
+                    "Alt-Svc: ignoring cross-origin h3 alternative %s:%d (origin %s)",
+                    alt_host, alt_port, url_info.host);
+                continue;
+            }
+            string key = sprintf("%s:%d", url_info.host, alt_port);
+            log(LoggerLevel::DEBUG, "Alt-Svc: H3 advertised at %s, caching h3", key);
+            AutoWriteLock al(pool_lock);
+            cacheProtocol(key, "h3");
+            # Drain existing non-H3 connections so subsequent requests use H3.
+            # setDraining() prevents new streams while in-flight streams complete.
+            if (pool.hasKey(key)) {
+                foreach HttpClientConnection conn in (pool{key}) {
+                    if (!conn.isClosed() && !conn.isDraining() && conn.getProtocol() != "h3") {
+                        log(LoggerLevel::DEBUG,
+                            "Alt-Svc: draining %s connection %d to %s to force H3 upgrade",
+                            conn.getProtocol(), conn.getConnectionId(), key);
+                        try {
+                            conn.setDraining();
+                        } catch () {
+                        }
+                    }
+                }
+            }
+            return;
+        }
+    }
+
     #! Internal: handles protocol fallback after a connection error
     /** For plain HTTP connections where h2c fails, caches "h1" so subsequent
-        connections use HTTP/1.1 directly. For HTTPS H3 failures, caches "h2".
+        connections use HTTP/1.1 directly.  For HTTPS connections, falls back
+        from H3 to H2 on any H3-specific error or on a generic connection error
+        while H3 is cached (e.g., from Alt-Svc discovery).
     */
     private handleProtocolFallback(string url, string err) {
         hash<UrlInfo> url_info = parse_url(url);
@@ -939,13 +1083,25 @@ public class HttpClientConnectionManager {
             log(LoggerLevel::DEBUG, "h2c failed for %s (%s), falling back to HTTP/1.1", key, err);
             AutoWriteLock al(pool_lock);
             cacheProtocol(key, "h1");
-        } else if (url_info.protocol == "https" && (err == "HTTP3-CONNECT-ERROR"
-                || err == "HTTP3-STATE-ERROR" || err == "HTTP3-ABORT"
-                || err == "QUIC-HTTP3-ERROR")) {
-            # HTTPS: H3 failed → fall back to H2
-            log(LoggerLevel::DEBUG, "H3 failed for %s (%s), falling back to HTTP/2", key, err);
-            AutoWriteLock al(pool_lock);
-            cacheProtocol(key, "h2");
+        } else if (url_info.protocol == "https") {
+            bool is_h3_err = err == "HTTP3-CONNECT-ERROR" || err == "HTTP3-STATE-ERROR"
+                || err == "HTTP3-ABORT" || err == "QUIC-HTTP3-ERROR";
+            # HTTPCLIENT-CONNECT-ERROR is raised when the connection closes with an error
+            # while waiting for readiness (waitForReady()).  When H3 is currently cached
+            # (from a prior Alt-Svc response), this means the QUIC connection failed —
+            # fall back to H2.  Use a read lock to check the cache first to avoid the
+            # write-lock overhead on the common (H2, non-H3) path.
+            bool is_h3_conn_err = False;
+            if (!is_h3_err && err == "HTTPCLIENT-CONNECT-ERROR") {
+                AutoReadLock al(pool_lock);
+                is_h3_conn_err = protocol_cache{key} == "h3";
+            }
+            if (is_h3_err || is_h3_conn_err) {
+                # HTTPS: H3 failed → fall back to H2
+                log(LoggerLevel::DEBUG, "H3 failed for %s (%s), falling back to HTTP/2", key, err);
+                AutoWriteLock al(pool_lock);
+                cacheProtocol(key, "h2");
+            }
         }
     }
 

@@ -103,6 +103,11 @@ public class Http3ServerPollOperation inherits AbstractPollOperation {
         #! Headers-only mode: dispatch on HEADERS before full body
         bool headers_only = False;
 
+        #! Set to True by continuePoll() when a request is stored; cleared by getOutput().
+        #! Prevents handler threads from calling continueReading() between continuePoll()
+        #! returning STATE_REQUEST_READY and the dispatch callback calling getOutput().
+        bool request_pending = False;
+
         #! Mutex for thread safety between I/O thread (continuePoll) and handler
         #! thread (startSendResponse)
         Mutex op_lock();
@@ -205,6 +210,7 @@ public class Http3ServerPollOperation inherits AbstractPollOperation {
                         request = current_op.getOutput();
                         if (request) {
                             empty_read_count = 0;
+                            request_pending = True;
                             state = STATE_REQUEST_READY;
                             return;
                         }
@@ -360,14 +366,30 @@ public class Http3ServerPollOperation inherits AbstractPollOperation {
         - \c authority: the :authority pseudo-header value (if present)
         - \c scheme: the :scheme pseudo-header value (if present)
     */
-    #! Returns the completed request (if any)
-    /** @note No lock needed: the poll framework serializes continuePoll() (which writes
-        \c request under op_lock) and getOutput() — they never run concurrently.
-        continuePoll() returns NOTHING when a request is ready, then the framework
-        calls getOutput() on the same thread.
+    #! Returns the completed request (if any) and atomically resumes reading
+    /** When a request is available, atomically extracts it and transitions to
+        STATE_READING in a single lock acquisition.  This eliminates the race
+        window between getOutput() and the separate continueReading() call:
+        without this, a handler thread (via resumeMultiplexedReading) could call
+        continueReading() between getOutput() and the dispatch path's
+        continueReading(), stealing the STATE_REQUEST_READY → STATE_READING
+        transition and leaving the h3op un-resumed.
+
+        When no request is available, the state is left unchanged so the caller
+        can call continueReading() explicitly.
     */
     *hash<auto> getOutput() {
-        return request;
+        AutoLock al(op_lock);
+        # Always clear the pending flag — getOutput() is the dispatch callback's
+        # entry point, so the request is now being processed (or was never set).
+        request_pending = False;
+        if (exists request) {
+            auto rv = request;
+            remove request;
+            empty_read_count = 0;
+            state = STATE_READING;
+            return rv;
+        }
     }
 
     #! Returns the socket
@@ -459,13 +481,31 @@ public class Http3ServerPollOperation inherits AbstractPollOperation {
         underlying C++ SocketQuicServerPollOperation continues reading packets.
         This avoids the overhead of creating a new operation and preserves the
         QUIC/HTTP/3 session state.
+
+        @note Thread safety: rejects the call if state is STATE_REQUEST_READY but
+        the request hasn't been consumed via getOutput() yet.  This prevents a
+        handler thread (calling resumeMultiplexedReading after body streaming)
+        from racing with the I/O controller dispatch: the I/O thread's
+        continuePoll() sets STATE_REQUEST_READY, then the controller callback
+        calls getOutput() + continueReading() to dispatch.  Without this guard,
+        a handler thread could call continueReading() between continuePoll()
+        returning and the callback firing, clearing the pending request and
+        causing the I/O controller to see goalReached()=false (lost request).
     */
     continueReading() {
         AutoLock al(op_lock);
+        if (state == STATE_REQUEST_READY && request_pending) {
+            # A request was found by continuePoll() but not yet consumed by
+            # getOutput().  A handler thread (via resumeMultiplexedReading) is
+            # racing with the I/O controller's dispatch callback.  Reject to
+            # prevent clearing the pending request.
+            throw "HTTP3-STATE-ERROR", "cannot continue reading: request pending dispatch";
+        }
         if (state != STATE_REQUEST_READY) {
             throw "HTTP3-STATE-ERROR", sprintf("cannot continue reading in state: %y", state);
         }
         remove request;
+        request_pending = False;
         empty_read_count = 0;
         state = STATE_READING;
     }

@@ -2149,8 +2149,11 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
     static string getDateHeader() {
         int now = clock_getseconds();
         if (now != cached_date_epoch) {
-            cached_date_epoch = now;
+            # Update header BEFORE epoch to avoid a race: if epoch is set first,
+            # a concurrent thread sees epoch == now and returns the stale (or
+            # uninitialized NOTHING) cached_date_header before we assign it.
             cached_date_header = gmtime().format("Dy, DD Mon YYYY HH:mm:SS") + " GMT";
+            cached_date_epoch = now;
         }
         return cached_date_header;
     }
