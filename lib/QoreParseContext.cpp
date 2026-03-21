@@ -15,30 +15,45 @@ bool QoreParseContext::needsGuardForLocal(LocalVar* local) const {
     if (!local) {
         return false;
     }
-    // Check the variable's declared type
+
+    // Variables with non-optional types CAN be NOTHING until assigned
+    // Parse analysis tells us if variable is definitely assigned
+    // If NOT definitely assigned: variable can legitimately be NOTHING, don't guard
+    // If definitively assigned: check if type allows NOTHING
+
+    if (!local->isAssigned()) {
+        if (debug) {
+            fprintf(stderr, "[GUARD-NEEDSGUARD-LOCAL-UNASSIGNED] Variable not assigned, can be NOTHING, no guard\n");
+            fflush(stderr);
+        }
+        // Unassigned variables CAN be NOTHING - no guard needed (NOTHING is valid state)
+        return false;
+    }
+
+    // Variable IS definitely assigned - check if type allows NOTHING
     const QoreTypeInfo* type = local->parseGetTypeInfo();
     if (debug) {
-        fprintf(stderr, "[GUARD-NEEDSGUARD-LOCAL] Checking local var, type=%p, assigned=%d\n",
-                type, local->isAssigned());
+        fprintf(stderr, "[GUARD-NEEDSGUARD-LOCAL-ASSIGNED] Variable is assigned, type=%p\n", type);
         fflush(stderr);
     }
-    // If type allows NOTHING (is optional like *Type), guard is not needed
-    // NOTHING is a valid value for optional types
+
+    // If type allows NOTHING (is optional like *Type), no guard needed
     if (type && QoreTypeInfo::parseReturns(type, NT_NOTHING) != QTI_NOT_EQUAL) {
         if (debug) {
-            fprintf(stderr, "[GUARD-NEEDSGUARD-LOCAL-OPTIONAL] Local var type allows NOTHING, no guard needed\n");
+            fprintf(stderr, "[GUARD-NEEDSGUARD-LOCAL-OPTIONAL] Type allows NOTHING, no guard needed\n");
             fflush(stderr);
         }
         return false;
     }
+
+    // Variable is assigned AND type doesn't allow NOTHING
+    // This case shouldn't need a guard because value was assigned from non-NOTHING source
+    // But we must be conservative about what gets assigned
     if (debug) {
-        fprintf(stderr, "[GUARD-NEEDSGUARD-LOCAL-NON-OPTIONAL] Local var type is non-optional, assigned=%d\n",
-                local->isAssigned());
+        fprintf(stderr, "[GUARD-NEEDSGUARD-LOCAL-ASSIGNED-NON-OPTIONAL] Assigned non-optional var, no guard needed\n");
         fflush(stderr);
     }
-    // Type doesn't allow NOTHING - need guard only if not definitely assigned
-    // (uninitialized variable would be NOTHING, violating the type contract)
-    return !local->isAssigned();
+    return false;
 }
 
 const QoreTypeInfo* QoreParseContext::guaranteedType(LocalVar* local) const {
