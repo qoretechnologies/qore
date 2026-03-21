@@ -3483,52 +3483,56 @@ bool QoreIRLowering::needsNotNothingGuard(const QoreValue* expr, const QoreTypeI
         }
     }
 
-    // CRITICAL: Only require non-nothing when we have reliable type information
-    // Don't insert guards speculatively based on target_type alone,
-    // since the actual expression return type might be different.
+    // CRITICAL: Check if the expression can legitimately return nothing
+    // Operations like "remove" can return nothing even on non-optional types.
+    // Only require non-nothing when we can prove the expression type never allows it.
 
-    // Get the most reliable type information available
-    const QoreTypeInfo* type = nullptr;
-    bool has_reliable_type = false;
-
-    if (expr && expr->hasNode()) {
-        const AbstractQoreNode* node = expr->getInternalNode();
-        if (node && dynamic_cast<const ParseNode*>(node)) {
-            QoreParseAnalysis expr_analysis;
-            bool got_analysis = false;
-            try {
-                got_analysis = getAnalysis(*expr, expr_analysis);
-            } catch (...) {
-                got_analysis = false;
-            }
-
-            static bool debug_guard_analysis = [] {
-                const char* debug_env = getenv("QORE_IR_DEBUG");
-                return debug_env && strstr(debug_env, "guard");
-            }();
-
-            if (got_analysis) {
-                if (debug_guard_analysis) {
-                    fprintf(stderr, "[GUARD-ANALYSIS-DEBUG] expr_analysis flags: KnownTypeInfo=%d NeverNothing=%d\n",
-                            expr_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo),
-                            expr_analysis.hasFlag(QoreParseAnalysis::NeverNothing));
-                    fflush(stderr);
-                }
-
-                if (expr_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)) {
-                    type = expr_analysis.known_type;
-                    has_reliable_type = true;
-                }
-            }
-        }
-    }
-
-    // Only proceed if we have reliable type information about the expression
-    if (!has_reliable_type) {
-        // Don't insert guard without knowing the actual expression type
-        // This prevents false guards on operations like remove, keys, values, etc.
+    // If expr is not available, we can't reliably determine if guard is needed
+    if (!expr || !expr->hasNode()) {
+        // Without expression information, don't insert guard speculatively
         return false;
     }
+
+    const QoreTypeInfo* type = nullptr;
+    const AbstractQoreNode* node = expr->getInternalNode();
+    if (!node || !dynamic_cast<const ParseNode*>(node)) {
+        return false;  // Not a parse node - not a guard candidate
+    }
+
+    QoreParseAnalysis expr_analysis;
+    bool got_analysis = false;
+    try {
+        got_analysis = getAnalysis(*expr, expr_analysis);
+    } catch (...) {
+        got_analysis = false;
+    }
+
+    if (!got_analysis) {
+        // No analysis available - can't prove guard is needed
+        return false;
+    }
+
+    // Check if expression can return nothing
+    if (expr_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo) && expr_analysis.known_type) {
+        type = expr_analysis.known_type;
+        // If expression type allows nothing, no guard needed
+        if (QoreTypeInfo::parseReturns(type, NT_NOTHING) != QTI_NOT_EQUAL) {
+            return false;  // Optional type - can return nothing
+        }
+        // Expression type is known and doesn't allow nothing
+        // Continue to check target type as well
+    } else if (expr_analysis.hasFlag(QoreParseAnalysis::NeverNothing)) {
+        // Expression is guaranteed to never return nothing
+        return false;
+    } else {
+        // Analysis available but no definitive type information
+        // Be conservative - don't insert guard for operations we can't fully understand
+        return false;
+    }
+
+    // At this point: expression type is known, doesn't allow nothing
+    // Check target type for additional constraint
+    type = target_type;
 
     if (type && QoreTypeInfo::parseReturns(type, NT_NOTHING) == QTI_NOT_EQUAL) {
         if (expr && expr->hasNode()) {
