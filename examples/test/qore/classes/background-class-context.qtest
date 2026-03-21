@@ -1,0 +1,67 @@
+#!/usr/bin/env qore
+
+%requires ../../../../qlib/QUnit.qm
+
+%modern
+
+%exec-class BackgroundClassContextTest
+
+class TestClass {
+    public {
+        int counter;
+        string name;
+    }
+
+    constructor() {
+        counter = 100;
+        name = "test";
+    }
+
+    setCounter(int c) {
+        counter = c;
+    }
+
+    int getCounterValue() {
+        return counter;
+    }
+}
+
+class BackgroundClassContextTest inherits QUnit::Test {
+    constructor() : QUnit::Test("BackgroundClassContextTest", "1.0", \ARGV) {
+        addTestCase("test background modify instance", \testBackgroundModifyInstance());
+        addTestCase("test background read instance", \testBackgroundReadInstance());
+        addTestCase("test background call method", \testBackgroundCallMethod());
+        set_return_value(main());
+    }
+
+    testBackgroundModifyInstance() {
+        TestClass tc();
+        # Test: Background operator modifies instance variable
+        background tc.setCounter(999);
+        usleep(100ms);
+        assertEq(999, tc.getCounterValue(), "background should modify instance var");
+    }
+
+    testBackgroundReadInstance() {
+        TestClass tc();
+        # Test: Background operator reads instance variable via method
+        # Use a Queue to get the result from the background operation
+        Queue resultQueue();
+        Counter c(1);
+        background sub() {
+            on_exit c.dec();
+            resultQueue.push(tc.getCounterValue());
+        }();
+        c.waitForZero();
+        int result = resultQueue.get();
+        assertEq(100, result, "background should read instance variable");
+    }
+
+    testBackgroundCallMethod() {
+        TestClass tc();
+        # Test: Background operator calls instance method
+        background tc.setCounter(777);
+        usleep(100ms);
+        assertEq(777, tc.counter, "background should call method that modifies instance var");
+    }
+}
