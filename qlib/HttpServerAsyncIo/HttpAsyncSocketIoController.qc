@@ -1171,6 +1171,14 @@ public class HttpAsyncSocketIoController {
         }
 
         # Dispatch to handler thread pool
+        # NOTE: for body_streaming requests, HttpServer calls resume_body_streaming (in
+        # header-info) as an *early* resume right after the framework finishes reading the
+        # body.  This keeps the QUIC session alive (PING, SETTINGS, other streams) during
+        # long-running handlers.  The resumeMultiplexedReading() calls below are a *safety
+        # net* that guarantee the h3op is resumed even when the early resume was not called:
+        #   - wantsBodyStreaming() handlers that read the body themselves
+        #   - error paths during framework body reading (timeout, max_body, etc.)
+        # resumeMultiplexedReading() silently handles double-resume (catches STATE-ERROR).
         try {
             handler_pool.submit(sub () {
                 # Clean up dispatched stream state after handler completes
@@ -1184,10 +1192,18 @@ public class HttpAsyncSocketIoController {
                 }
                 try {
                     hash<HttpRequestResultInfo> result = target.onHttpRequest(conn_info);
+                    if (body_streaming) {
+                        resumeMultiplexedReading(h3op, uh,
+                            HttpConnectionState::Http3);
+                    }
                     handleHttp3MultiplexedResult(uh, new_cinfo, session_id, stream_id, result);
                 } catch (hash<ExceptionInfo> ex) {
                     log(LoggerLevel::ERROR, "Error handling HTTP/3 request session=%d stream=%d: %s: %s",
                         session_id, stream_id, ex.err, ex.desc);
+                    if (body_streaming) {
+                        resumeMultiplexedReading(h3op, uh,
+                            HttpConnectionState::Http3);
+                    }
                     try {
                         listener.submitQuicResponse(session_id, stream_id, 500,
                             {"content-type": "text/plain"},
@@ -2460,6 +2476,14 @@ public class HttpAsyncSocketIoController {
         }
 
         # Dispatch to handler thread pool
+        # NOTE: for body_streaming requests, HttpServer calls resume_body_streaming (in
+        # header-info) as an *early* resume right after the framework finishes reading the
+        # body.  This keeps the connection alive (PING, SETTINGS, WINDOW_UPDATE) during
+        # long-running handlers.  The resumeMultiplexedReading() calls below are a *safety
+        # net* that guarantee the h2op is resumed even when the early resume was not called:
+        #   - wantsBodyStreaming() handlers that read the body themselves
+        #   - error paths during framework body reading (timeout, max_body, etc.)
+        # resumeMultiplexedReading() silently handles double-resume (catches STATE-ERROR).
         try {
             handler_pool.submit(sub () {
                 try {
