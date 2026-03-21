@@ -5454,6 +5454,37 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_method_direct_aot(QoreAOTContext* ctx
     return qore_rt_call_method_direct(method, args, nargs, xsink);
 }
 
+//! Fast path for AOT method calls: uses pre-resolved variant when available (avoids overload resolution)
+extern "C" DLLEXPORT uint64_t qore_rt_call_method_fast_aot(
+        QoreAOTContext* ctx, int32_t slot, uint64_t* args, int nargs, ExceptionSink* xsink) {
+    assert(ctx && slot >= 0 && slot < ctx->num_exprs);
+
+    const QoreAOTCallTarget& target = ctx->call_targets[slot];
+    // Use fast path if variant is available and statically eligible for fast calls
+    if (target.uvb && target.uvb->isStaticallyFastCallEligible()) {
+        return qore_rt_call_method_fast(target.method, target.variant, args, nargs, xsink);
+    }
+
+    // Fall back to standard method dispatch (with overload resolution)
+    return qore_rt_call_method_direct(target.method, args, nargs, xsink);
+}
+
+//! Fast path for AOT static method calls: uses pre-resolved variant when available
+extern "C" DLLEXPORT uint64_t qore_rt_call_static_method_fast_aot(
+        QoreAOTContext* ctx, int32_t slot, uint64_t* args, int nargs, ExceptionSink* xsink) {
+    assert(ctx && slot >= 0 && slot < ctx->num_exprs);
+
+    const QoreAOTCallTarget& target = ctx->call_targets[slot];
+    // Check if the variant is statically eligible for fast calls (not synchronized, no default args)
+    if (target.uvb && target.uvb->isStaticallyFastCallEligible()) {
+        // Use fast call path directly
+        return qore_rt_call_static_method_direct(target.method, target.variant, args, nargs, xsink);
+    }
+
+    // Fall back to standard static method dispatch
+    return qore_rt_call_static_method_direct(target.method, target.variant, args, nargs, xsink);
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_switch_case_match(const void* case_node_ptr, uint64_t switch_val_bits,
         ExceptionSink* xsink) {
     const CaseNode* cn = reinterpret_cast<const CaseNode*>(case_node_ptr);

@@ -5174,7 +5174,17 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 uint64_t expr_bits;
                 std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
                 int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
-                auto helper = module.getOrInsertFunction("qore_rt_call_method_direct_aot",
+
+                // Use fast path if variant is compile-time known and eligible
+                const char* helper_name = "qore_rt_call_method_direct_aot";
+                if (direct_inst->variant) {
+                    const UserVariantBase* uvb = direct_inst->variant->getUserVariantBase();
+                    if (uvb && uvb->isStaticallyFastCallEligible()) {
+                        helper_name = "qore_rt_call_method_fast_aot";
+                    }
+                }
+
+                auto helper = module.getOrInsertFunction(helper_name,
                         llvm::FunctionType::get(i64_type,
                             {ptr_type, i32_type, ptr_type, i32_type, ptr_type}, false));
                 call_result = builder->CreateCall(helper, {aot_ctx_arg,
@@ -5245,7 +5255,17 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 uint64_t expr_bits;
                 std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
                 int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
-                auto helper = module.getOrInsertFunction("qore_rt_call_method_direct_aot",
+
+                // Use fast path if variant is compile-time known and eligible
+                const char* helper_name = "qore_rt_call_method_direct_aot";
+                if (invoke_inst->variant) {
+                    const UserVariantBase* uvb = invoke_inst->variant->getUserVariantBase();
+                    if (uvb && uvb->isStaticallyFastCallEligible()) {
+                        helper_name = "qore_rt_call_method_fast_aot";
+                    }
+                }
+
+                auto helper = module.getOrInsertFunction(helper_name,
                         llvm::FunctionType::get(i64_type,
                             {ptr_type, i32_type, ptr_type, i32_type, ptr_type}, false));
                 call_result = builder->CreateCall(helper, {aot_ctx_arg,
@@ -5336,7 +5356,17 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 uint64_t expr_bits;
                 std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
                 int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
-                auto helper = module.getOrInsertFunction("qore_rt_call_static_method_direct_aot",
+
+                // Use fast path if variant is compile-time known and eligible
+                const char* helper_name = "qore_rt_call_static_method_direct_aot";
+                if (direct_inst->variant) {
+                    const UserVariantBase* uvb = direct_inst->variant->getUserVariantBase();
+                    if (uvb && uvb->isStaticallyFastCallEligible()) {
+                        helper_name = "qore_rt_call_static_method_fast_aot";
+                    }
+                }
+
+                auto helper = module.getOrInsertFunction(helper_name,
                         llvm::FunctionType::get(i64_type,
                             {ptr_type, i32_type, ptr_type, i32_type, ptr_type}, false));
                 call_result = builder->CreateCall(helper, {aot_ctx_arg,
