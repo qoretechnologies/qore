@@ -27,6 +27,8 @@
 
 #include "ml_common.h"
 
+#include <limits>
+
 MatrixXd qoreListOfHashesToMatrix(const QoreListNode* data,
     std::vector<std::string>& field_names, ExceptionSink* xsink) {
 
@@ -116,7 +118,12 @@ MatrixXd qoreListOfListsToMatrix(const QoreListNode* data, ExceptionSink* xsink)
             return MatrixXd();
         }
         for (size_t j = 0; j < n_cols; ++j) {
-            matrix(i, j) = row->retrieveEntry(j).getAsFloat();
+            QoreValue v = row->retrieveEntry(j);
+            if (v.isNullOrNothing()) {
+                matrix(i, j) = std::numeric_limits<double>::quiet_NaN();
+            } else {
+                matrix(i, j) = v.getAsFloat();
+            }
         }
     }
 
@@ -159,7 +166,11 @@ RowVectorXd qoreHashToRowVector(const QoreHashNode* hash,
     RowVectorXd row(field_names.size());
     for (size_t j = 0; j < field_names.size(); ++j) {
         QoreValue v = hash->getKeyValue(field_names[j].c_str());
-        row(j) = v.getAsFloat();
+        if (v.isNullOrNothing()) {
+            row(j) = std::numeric_limits<double>::quiet_NaN();
+        } else {
+            row(j) = v.getAsFloat();
+        }
     }
     return row;
 }

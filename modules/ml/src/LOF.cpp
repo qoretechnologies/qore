@@ -101,6 +101,10 @@ void QoreLOF::fit(const MatrixXd& data, ExceptionSink* xsink) {
     ref_k_distances.resize(n);
 
     for (int i = 0; i < n; ++i) {
+        if (i % 100 == 0 && qore_check_cancel(xsink, "LOF fit")) {
+            return;
+        }
+
         // Compute distances from point i to all other points
         VectorXd distances(n);
         for (int j = 0; j < n; ++j) {
@@ -209,6 +213,9 @@ QoreListNode* QoreLOF::scoreMatrix(const MatrixXd& data, ExceptionSink* xsink) c
 
     ReferenceHolder<QoreListNode> rv(new QoreListNode(hashdeclLOFResult->getTypeInfo()), xsink);
     for (Eigen::Index i = 0; i < data.rows(); ++i) {
+        if (i % 100 == 0 && qore_check_cancel(xsink, "LOF scoreMatrix")) {
+            return nullptr;
+        }
         RowVectorXd row = data.row(i);
         QoreHashNode* result = scoreInternal(row, xsink);
         if (*xsink) {

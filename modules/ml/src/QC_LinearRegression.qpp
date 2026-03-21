@@ -57,7 +57,6 @@ hash<LinearRegressionResult> result = lr.predict({"x1": 4.0, "x2": 5.0});
 printf("Prediction: %f, R-squared: %f\n", result.prediction, result.r_squared);
     @endcode
 
-    @since ml 1.0
 */
 qclass LinearRegression [arg=QoreLinearRegression* lr; ns=Qore::ML; flags=final];
 

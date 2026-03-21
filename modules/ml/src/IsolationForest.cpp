@@ -87,6 +87,10 @@ void QoreIsolationForest::fit(const MatrixXd& data, ExceptionSink* xsink) {
     std::iota(all_indices.begin(), all_indices.end(), 0);
 
     for (int t = 0; t < n_trees; ++t) {
+        if (qore_check_cancel(xsink, "IsolationForest fit")) {
+            return;
+        }
+
         // Random subsample without replacement
         std::vector<int> sample_indices(all_indices);
         for (int i = static_cast<int>(sample_indices.size()) - 1; i > 0; --i) {
@@ -268,6 +272,9 @@ QoreListNode* QoreIsolationForest::scoreMatrix(const MatrixXd& data, ExceptionSi
 
     ReferenceHolder<QoreListNode> rv(new QoreListNode(hashdeclIsolationForestResult->getTypeInfo()), xsink);
     for (Eigen::Index i = 0; i < data.rows(); ++i) {
+        if (i % 100 == 0 && qore_check_cancel(xsink, "IsolationForest scoreMatrix")) {
+            return nullptr;
+        }
         RowVectorXd row = data.row(i);
         QoreHashNode* result = scoreInternal(row, xsink);
         if (*xsink) {

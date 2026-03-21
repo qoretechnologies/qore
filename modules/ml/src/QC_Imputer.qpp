@@ -1,0 +1,249 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_Imputer.qpp
+
+    Qore ml module - Imputer class definition
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+#include "qore/Qore.h"
+#include "QC_Imputer.h"
+
+extern const TypedHashDecl* hashdeclImputerInfo;
+
+//! The Imputer class fills missing values (NaN) using a configurable strategy
+/** Imputer replaces missing values (NaN or NOTHING) in numeric data with computed
+    fill values. Strategies include mean, median, most frequent, and constant.
+
+    @par Example:
+    @code{.py}
+Imputer imp({"strategy": "mean"});
+imp.fitMatrix(training_data);
+list<auto> filled = imp.transformMatrix(data_with_missing);
+    @endcode
+
+*/
+qclass Imputer [arg=QoreImputer* imputer; ns=Qore::ML; flags=final];
+
+//! Creates an Imputer instance
+/** @param options a hash with the following optional keys:
+    - \c strategy (string, default "mean"): imputation strategy — one of:
+      - \c "mean": replace with column mean
+      - \c "median": replace with column median
+      - \c "most_frequent": replace with most common value
+      - \c "constant": replace with a fixed value
+    - \c constant_value (float, default 0.0): fill value when strategy is "constant"
+
+    @throw ML-IMPUTER-ERROR invalid strategy
+*/
+Imputer::constructor(*hash<auto> options) {
+    const char* strategy = "mean";
+    double constant_value = 0.0;
+
+    if (options) {
+        QoreValue v = options->getKeyValue("strategy");
+        if (!v.isNullOrNothing() && v.getType() == NT_STRING) {
+            strategy = v.get<const QoreStringNode>()->c_str();
+        }
+        v = options->getKeyValue("constant_value");
+        if (!v.isNullOrNothing()) {
+            constant_value = v.getAsFloat();
+        }
+    }
+
+    if (strcmp(strategy, "mean") != 0 && strcmp(strategy, "median") != 0
+            && strcmp(strategy, "most_frequent") != 0 && strcmp(strategy, "constant") != 0) {
+        xsink->raiseException("ML-IMPUTER-ERROR",
+            "invalid strategy '%s': must be 'mean', 'median', 'most_frequent', or 'constant'",
+            strategy);
+        return;
+    }
+
+    self->setPrivate(CID_IMPUTER, new QoreImputer(strategy, constant_value));
+}
+
+//! Creates a copy of the Imputer instance
+/** @throw COPY-ERROR Imputer objects cannot be copied
+*/
+Imputer::copy() {
+    xsink->raiseException("COPY-ERROR", "Imputer objects cannot be copied");
+}
+
+//! Fits the imputer on a list of hash records
+/** @param data a list of hashes with numeric fields (NOTHING values treated as missing)
+
+    @throw ML-IMPUTER-ERROR empty data
+    @throw ML-DATA-ERROR data format errors
+*/
+nothing Imputer::fit(list<auto> data) {
+    std::vector<std::string> field_names;
+    MatrixXd matrix = qoreListOfHashesToMatrix(data, field_names, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    imputer->setFieldNames(field_names);
+    imputer->fit(matrix, xsink);
+}
+
+//! Fits the imputer on a numeric matrix
+/** @param matrix a list of lists of numeric values (NaN values treated as missing)
+
+    @throw ML-IMPUTER-ERROR empty data
+    @throw ML-DATA-ERROR data format errors
+*/
+nothing Imputer::fitMatrix(list<auto> matrix) {
+    MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    imputer->fit(mat, xsink);
+}
+
+//! Transforms a single record by filling missing values
+/** @param record a hash with numeric fields
+    @return a hash with missing values replaced
+
+    @throw ML-IMPUTER-ERROR imputer not fitted or dimension mismatch
+*/
+hash<auto> Imputer::transform(hash<auto> record) {
+    const std::vector<std::string>& field_names = imputer->getFieldNames();
+    if (field_names.empty()) {
+        xsink->raiseException("ML-IMPUTER-ERROR",
+            "imputer was fitted with fitMatrix(); use transformMatrix() or fit() with hash records");
+        return QoreValue();
+    }
+    RowVectorXd point = qoreHashToRowVector(record, field_names, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    // Use matrix API for thread safety (holds the lock internally)
+    MatrixXd mat(1, point.size());
+    mat.row(0) = point;
+    MatrixXd result_mat = imputer->transform(mat, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    for (size_t i = 0; i < field_names.size(); ++i) {
+        rv->setKeyValue(field_names[i].c_str(), result_mat(0, i), xsink);
+    }
+    return rv.release();
+}
+
+//! Transforms a numeric matrix by filling NaN values
+/** @param matrix a list of lists of numeric values
+    @return a list of lists with NaN values replaced
+
+    @throw ML-IMPUTER-ERROR imputer not fitted or dimension mismatch
+    @throw ML-DATA-ERROR data format errors
+*/
+list<list<float>> Imputer::transformMatrix(list<auto> matrix) {
+    MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    MatrixXd result = imputer->transform(mat, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(autoTypeInfo), xsink);
+    for (Eigen::Index i = 0; i < result.rows(); ++i) {
+        ReferenceHolder<QoreListNode> row(new QoreListNode(floatTypeInfo), xsink);
+        for (Eigen::Index j = 0; j < result.cols(); ++j) {
+            row->push(result(i, j), xsink);
+        }
+        rv->push(row.release(), xsink);
+    }
+    return rv.release();
+}
+
+//! Fits and transforms in a single step
+/** @param data a list of hashes with numeric fields
+    @return a list of hashes with missing values replaced
+
+    @throw ML-IMPUTER-ERROR empty data
+    @throw ML-DATA-ERROR data format errors
+*/
+list<hash<auto>> Imputer::fitTransform(list<auto> data) {
+    std::vector<std::string> field_names;
+    MatrixXd matrix = qoreListOfHashesToMatrix(data, field_names, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    imputer->setFieldNames(field_names);
+    MatrixXd result = imputer->fitTransform(matrix, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(autoTypeInfo), xsink);
+    for (Eigen::Index i = 0; i < result.rows(); ++i) {
+        ReferenceHolder<QoreHashNode> row(new QoreHashNode(autoTypeInfo), xsink);
+        for (size_t j = 0; j < field_names.size(); ++j) {
+            row->setKeyValue(field_names[j].c_str(), result(i, j), xsink);
+        }
+        rv->push(row.release(), xsink);
+    }
+    return rv.release();
+}
+
+//! Fits and transforms a numeric matrix in a single step
+/** @param matrix a list of lists of numeric values
+    @return a list of lists with NaN values replaced
+
+    @throw ML-IMPUTER-ERROR empty data
+    @throw ML-DATA-ERROR data format errors
+*/
+list<list<float>> Imputer::fitTransformMatrix(list<auto> matrix) {
+    MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    MatrixXd result = imputer->fitTransform(mat, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(autoTypeInfo), xsink);
+    for (Eigen::Index i = 0; i < result.rows(); ++i) {
+        ReferenceHolder<QoreListNode> row(new QoreListNode(floatTypeInfo), xsink);
+        for (Eigen::Index j = 0; j < result.cols(); ++j) {
+            row->push(result(i, j), xsink);
+        }
+        rv->push(row.release(), xsink);
+    }
+    return rv.release();
+}
+
+//! Returns True if the imputer has been fitted
+/** @return True if fit() or fitMatrix() has been called successfully
+*/
+bool Imputer::isFitted() [flags=CONSTANT] {
+    return imputer->isFitted();
+}
+
+//! Returns imputer information
+/** @return a @ref ImputerInfo hash with the imputer's parameters
+
+    @throw ML-IMPUTER-ERROR imputer not fitted
+*/
+hash<ImputerInfo> Imputer::getInfo() {
+    return imputer->getInfo(xsink);
+}

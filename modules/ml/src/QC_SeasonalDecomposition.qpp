@@ -40,7 +40,6 @@ SeasonalDecomposition sd({"period": 12, "type": "additive"});
 list<hash<SeasonalDecompositionResult>> results = sd.decompose(monthly_values);
     @endcode
 
-    @since ml 1.0
 */
 qclass SeasonalDecomposition [arg=QoreSeasonalDecomposition* sd; ns=Qore::ML; flags=final];
 

@@ -788,10 +788,19 @@ cargo install tree-sitter-cli@0.26.5
       - Holt-Winters triple exponential smoothing for time series forecasting
       - Seasonal Decomposition for decomposing time series into trend, seasonal, and residual components
       - optional ONNX Runtime support for running pre-trained models (OnnxModel class)
+      - StandardScaler for zero-mean unit-variance feature normalization
+      - MinMaxScaler for configurable-range feature scaling
+      - Imputer for missing value replacement (mean, median, most_frequent, constant strategies)
+      - MLPipeline for chaining preprocessing steps and estimators into a single fit/predict unit
+      - Model evaluation: classification metrics (accuracy, precision, recall, F1, confusion matrix),
+        regression metrics (MSE, RMSE, MAE, R², explained variance), clustering metrics (silhouette,
+        Davies-Bouldin, Calinski-Harabasz), and CrossValidator for k-fold cross-validation
     - @ref dataprovidermlintro "DataProviderML" module
       - new module providing data pipeline processors wrapping the ml binary module
       - 9 core ML pipeline processors: isolation-forest, dbscan-clustering, kmeans-clustering, pca,
         holt-winters, seasonal-decomposition, linear-regression, lof, and gmm
+      - 3 preprocessing pipeline processors: standard-scaler, min-max-scaler, imputer
+      - 3 evaluation pipeline processors: classification-metrics, regression-metrics, clustering-metrics
       - optional onnx-model pipeline processor for ONNX Runtime inference
       - action catalog integration with the "ML Analytics" app
     - @ref mongodbintro "mongodb" module

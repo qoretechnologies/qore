@@ -26,6 +26,7 @@
 */
 
 #include "qore/Qore.h"
+#include "ml_metrics.h"
 
 #include <Eigen/Dense>
 #ifdef HAVE_ONNXRUNTIME
@@ -48,9 +49,16 @@ extern const TypedHashDecl* hashdeclOnnxTensorInfo;
 extern const TypedHashDecl* hashdeclOnnxModelInfo;
 extern const TypedHashDecl* hashdeclOnnxProviderConfig;
 extern const TypedHashDecl* hashdeclOnnxSessionConfig;
+extern const TypedHashDecl* hashdeclStandardScalerInfo;
+extern const TypedHashDecl* hashdeclMinMaxScalerInfo;
+extern const TypedHashDecl* hashdeclImputerInfo;
+extern const TypedHashDecl* hashdeclConfusionMatrixResult;
+extern const TypedHashDecl* hashdeclClassMetrics;
+extern const TypedHashDecl* hashdeclClassificationReport;
+extern const TypedHashDecl* hashdeclCrossValidationFold;
 
 //! Result of Isolation Forest anomaly scoring
-/** @since ml 1.0
+/** Result of Isolation Forest anomaly scoring
 */
 hashdecl IsolationForestResult {
     //! anomaly score (0.0 = normal, 1.0 = anomalous)
@@ -64,7 +72,7 @@ hashdecl IsolationForestResult {
 }
 
 //! Result of DBSCAN clustering
-/** @since ml 1.0
+/** Result of DBSCAN clustering
 */
 hashdecl DBSCANResult {
     //! cluster label (-1 = noise/outlier)
@@ -76,7 +84,7 @@ hashdecl DBSCANResult {
 }
 
 //! Result of K-Means clustering
-/** @since ml 1.0
+/** Result of K-Means clustering
 */
 hashdecl KMeansResult {
     //! assigned cluster index (0-based)
@@ -88,7 +96,7 @@ hashdecl KMeansResult {
 }
 
 //! Holt-Winters forecast result
-/** @since ml 1.0
+/** Holt-Winters forecast result
 */
 hashdecl HoltWintersResult {
     //! forecasted value
@@ -102,7 +110,7 @@ hashdecl HoltWintersResult {
 }
 
 //! PCA transformation result
-/** @since ml 1.0
+/** PCA transformation result
 */
 hashdecl PCAResult {
     //! transformed values (principal components)
@@ -114,7 +122,7 @@ hashdecl PCAResult {
 }
 
 //! Seasonal decomposition result
-/** @since ml 1.0
+/** Seasonal decomposition result
 */
 hashdecl SeasonalDecompositionResult {
     //! trend component (NOTHING at edges where the moving average cannot be computed)
@@ -128,7 +136,7 @@ hashdecl SeasonalDecompositionResult {
 }
 
 //! Result of linear regression prediction
-/** @since ml 1.0
+/** Result of linear regression prediction
 */
 hashdecl LinearRegressionResult {
     //! predicted target value
@@ -145,7 +153,6 @@ hashdecl LinearRegressionResult {
 /** Use getModelInfo() to retrieve model parameters once, instead of extracting them from each
     individual @ref LinearRegressionResult returned by predict() or predictMatrix().
 
-    @since ml 1.0
 */
 hashdecl LinearRegressionModelInfo {
     //! model coefficients (one per feature)
@@ -159,7 +166,7 @@ hashdecl LinearRegressionModelInfo {
 }
 
 //! Result of Local Outlier Factor scoring
-/** @since ml 1.0
+/** Result of Local Outlier Factor scoring
 */
 hashdecl LOFResult {
     //! local outlier factor score (> 1.0 indicates anomaly)
@@ -173,7 +180,7 @@ hashdecl LOFResult {
 }
 
 //! Result of Gaussian Mixture Model prediction
-/** @since ml 1.0
+/** Result of Gaussian Mixture Model prediction
 */
 hashdecl GMMResult {
     //! most likely cluster assignment
@@ -187,7 +194,7 @@ hashdecl GMMResult {
 }
 
 //! ONNX tensor metadata
-/** @since ml 1.0
+/** ONNX tensor metadata
 */
 hashdecl OnnxTensorInfo {
     //! tensor name
@@ -213,7 +220,6 @@ hash<OnnxProviderConfig> cuda_cfg = <OnnxProviderConfig>{
 };
     @endcode
 
-    @since ml 1.1
 */
 hashdecl OnnxProviderConfig {
     //! provider name (e.g. "CUDA", "TensorRT", "OpenVINO", "CoreML", "DirectML", "CPU")
@@ -236,7 +242,6 @@ hash<OnnxSessionConfig> config = <OnnxSessionConfig>{
 ML::OnnxModel model("/path/to/model.onnx", config);
     @endcode
 
-    @since ml 1.1
 */
 hashdecl OnnxSessionConfig {
     //! execution providers in priority order; CPU is always available as fallback
@@ -259,7 +264,7 @@ hashdecl OnnxSessionConfig {
 }
 
 //! ONNX model metadata
-/** @since ml 1.0
+/** ONNX model metadata
 */
 hashdecl OnnxModelInfo {
     //! producer framework name (e.g. "pytorch", "sklearn")
@@ -273,13 +278,111 @@ hashdecl OnnxModelInfo {
     //! output tensor metadata
     list<hash<OnnxTensorInfo>> outputs;
     //! active execution provider name (e.g. "CPUExecutionProvider")
-    /** @since ml 1.1
-    */
     *string active_provider;
 }
 
+//! StandardScaler model information
+/** StandardScaler model information
+*/
+hashdecl StandardScalerInfo {
+    //! per-feature mean values
+    list<float> mean;
+    //! per-feature standard deviation values
+    list<float> std;
+    //! number of features
+    int n_features;
+    //! whether centering (mean subtraction) is enabled
+    bool with_mean;
+    //! whether scaling (std division) is enabled
+    bool with_std;
+}
+
+//! MinMaxScaler model information
+/** MinMaxScaler model information
+*/
+hashdecl MinMaxScalerInfo {
+    //! per-feature minimum values from training data
+    list<float> data_min;
+    //! per-feature maximum values from training data
+    list<float> data_max;
+    //! lower bound of target range
+    float feature_min;
+    //! upper bound of target range
+    float feature_max;
+    //! number of features
+    int n_features;
+}
+
+//! Imputer model information
+/** Imputer model information
+*/
+hashdecl ImputerInfo {
+    //! imputation strategy ("mean", "median", "most_frequent", "constant")
+    string strategy;
+    //! computed fill values per feature
+    list<float> fill_values;
+    //! number of features
+    int n_features;
+}
+
+//! Confusion matrix result
+/** Contains the n_classes x n_classes confusion matrix and the class labels
+*/
+hashdecl ConfusionMatrixResult {
+    //! the confusion matrix (rows = true labels, columns = predicted labels)
+    list<list<int>> matrix;
+    //! sorted class labels corresponding to matrix rows/columns
+    list<float> labels;
+}
+
+//! Per-class classification metrics
+/** Precision, recall, F1, and support for a single class
+*/
+hashdecl ClassMetrics {
+    //! class label as a string
+    string label;
+    //! precision (true positives / predicted positives)
+    float precision;
+    //! recall (true positives / actual positives)
+    float recall;
+    //! F1 score (harmonic mean of precision and recall)
+    float f1;
+    //! number of true instances of this class
+    int support;
+}
+
+//! Full classification report with per-class and aggregate metrics
+/** Contains accuracy, per-class metrics, and macro/weighted averages
+*/
+hashdecl ClassificationReport {
+    //! overall accuracy (fraction of correct predictions)
+    float accuracy;
+    //! per-class precision, recall, F1, and support
+    list<hash<ClassMetrics>> per_class;
+    //! unweighted mean of per-class precision
+    float macro_precision;
+    //! unweighted mean of per-class recall
+    float macro_recall;
+    //! unweighted mean of per-class F1
+    float macro_f1;
+    //! support-weighted mean of per-class F1
+    float weighted_f1;
+}
+
+//! Cross-validation fold with train and test indices
+/** Returned by CrossValidator::split()
+*/
+hashdecl CrossValidationFold {
+    //! indices of training samples for this fold
+    list<int> train_indices;
+    //! indices of test samples for this fold
+    list<int> test_indices;
+    //! fold number (0-based)
+    int fold;
+}
+
 //! ML module capability information
-/** @since ml 1.0
+/** ML module capability information
 */
 hashdecl MLCapabilities {
     //! whether ONNX Runtime support is compiled in
@@ -289,8 +392,6 @@ hashdecl MLCapabilities {
     //! Eigen version string
     string eigen_version;
     //! available ONNX execution providers (empty if no ONNX Runtime)
-    /** @since ml 1.1
-    */
     list<string> onnx_providers;
 }
 
@@ -309,7 +410,6 @@ printf("Eigen version: %s\n", caps.eigen_version);
 printf("ONNX support: %y\n", caps.has_onnx);
     @endcode
 
-    @since ml 1.0
 */
 hash<MLCapabilities> ml_get_capabilities() [flags=CONSTANT; dom=DEFAULT] {
     ReferenceHolder<QoreHashNode> rv(new QoreHashNode(hashdeclMLCapabilities, xsink), xsink);
@@ -331,6 +431,11 @@ hash<MLCapabilities> ml_get_capabilities() [flags=CONSTANT; dom=DEFAULT] {
     algos->push(new QoreStringNode("LinearRegression"), xsink);
     algos->push(new QoreStringNode("LOF"), xsink);
     algos->push(new QoreStringNode("GMM"), xsink);
+    algos->push(new QoreStringNode("StandardScaler"), xsink);
+    algos->push(new QoreStringNode("MinMaxScaler"), xsink);
+    algos->push(new QoreStringNode("Imputer"), xsink);
+    algos->push(new QoreStringNode("MLPipeline"), xsink);
+    algos->push(new QoreStringNode("CrossValidator"), xsink);
 #ifdef HAVE_ONNXRUNTIME
     algos->push(new QoreStringNode("OnnxModel"), xsink);
 #endif
@@ -366,7 +471,6 @@ list<string> providers = ml_get_onnx_providers();
 printf("Available providers: %y\n", providers);
     @endcode
 
-    @since ml 1.1
 */
 list<string> ml_get_onnx_providers() [flags=CONSTANT; dom=DEFAULT] {
 #ifdef HAVE_ONNXRUNTIME
@@ -380,6 +484,228 @@ list<string> ml_get_onnx_providers() [flags=CONSTANT; dom=DEFAULT] {
     return xsink->raiseException("MISSING-FEATURE-ERROR", "the ml module was not compiled with ONNX Runtime "
         "support; check MLCapabilities.has_onnx before calling this function");
 #endif
+}
+
+//! Computes classification accuracy (fraction of correct predictions)
+/** @param y_true a list of true class labels
+    @param y_pred a list of predicted class labels
+    @return accuracy from 0.0 (all wrong) to 1.0 (all correct)
+
+    @par Example:
+    @code{.py}
+float acc = ml_accuracy((1, 0, 1, 1, 0), (1, 0, 0, 1, 0));
+printf("Accuracy: %.1f%%\n", acc * 100);  # 80.0%
+    @endcode
+
+    @throw ML-METRICS-ERROR empty or mismatched inputs
+*/
+float ml_accuracy(list<auto> y_true, list<auto> y_pred) [dom=DEFAULT] {
+    VectorXd yt = qoreListToVector(y_true, xsink);
+    if (*xsink) { return QoreValue(); }
+    VectorXd yp = qoreListToVector(y_pred, xsink);
+    if (*xsink) { return QoreValue(); }
+    return mlAccuracy(yt, yp, xsink);
+}
+
+//! Computes a confusion matrix
+/** @param y_true a list of true class labels
+    @param y_pred a list of predicted class labels
+    @return a @ref ConfusionMatrixResult hash
+
+    @par Example:
+    @code{.py}
+hash<ConfusionMatrixResult> cm = ml_confusion_matrix((0, 0, 1, 1), (0, 1, 0, 1));
+printf("Matrix: %y\n", cm.matrix);  # ((1, 1), (1, 1))
+    @endcode
+
+    @throw ML-METRICS-ERROR empty or mismatched inputs
+*/
+hash<ConfusionMatrixResult> ml_confusion_matrix(list<auto> y_true, list<auto> y_pred) [dom=DEFAULT] {
+    VectorXd yt = qoreListToVector(y_true, xsink);
+    if (*xsink) { return QoreValue(); }
+    VectorXd yp = qoreListToVector(y_pred, xsink);
+    if (*xsink) { return QoreValue(); }
+    return mlConfusionMatrix(yt, yp, xsink);
+}
+
+//! Computes a full classification report with per-class and aggregate metrics
+/** @param y_true a list of true class labels
+    @param y_pred a list of predicted class labels
+    @return a @ref ClassificationReport hash
+
+    @par Example:
+    @code{.py}
+hash<ClassificationReport> report = ml_classification_report(y_true, y_pred);
+printf("Accuracy: %.2f, Macro F1: %.2f\n", report.accuracy, report.macro_f1);
+foreach hash<ClassMetrics> cls in (report.per_class) {
+    printf("  Class %s: precision=%.2f recall=%.2f f1=%.2f (n=%d)\n",
+        cls.label, cls.precision, cls.recall, cls.f1, cls.support);
+}
+    @endcode
+
+    @throw ML-METRICS-ERROR empty or mismatched inputs
+*/
+hash<ClassificationReport> ml_classification_report(list<auto> y_true, list<auto> y_pred) [dom=DEFAULT] {
+    VectorXd yt = qoreListToVector(y_true, xsink);
+    if (*xsink) { return QoreValue(); }
+    VectorXd yp = qoreListToVector(y_pred, xsink);
+    if (*xsink) { return QoreValue(); }
+    return mlClassificationReport(yt, yp, xsink);
+}
+
+//! Computes Mean Squared Error between true and predicted values
+/** @param y_true a list of true values
+    @param y_pred a list of predicted values
+    @return the MSE (0.0 = perfect predictions)
+
+    @par Example:
+    @code{.py}
+float mse = ml_mse((3.0, 5.0, 7.0), (2.8, 5.2, 7.1));
+    @endcode
+
+    @throw ML-METRICS-ERROR empty or mismatched inputs
+*/
+float ml_mse(list<auto> y_true, list<auto> y_pred) [dom=DEFAULT] {
+    VectorXd yt = qoreListToVector(y_true, xsink);
+    if (*xsink) { return QoreValue(); }
+    VectorXd yp = qoreListToVector(y_pred, xsink);
+    if (*xsink) { return QoreValue(); }
+    return mlMSE(yt, yp, xsink);
+}
+
+//! Computes Root Mean Squared Error
+/** @param y_true a list of true values
+    @param y_pred a list of predicted values
+    @return the RMSE (in the same units as the data)
+
+    @par Example:
+    @code{.py}
+float rmse = ml_rmse(actual_prices, predicted_prices);
+printf("Average prediction error: $%.2f\n", rmse);
+    @endcode
+
+    @throw ML-METRICS-ERROR empty or mismatched inputs
+*/
+float ml_rmse(list<auto> y_true, list<auto> y_pred) [dom=DEFAULT] {
+    VectorXd yt = qoreListToVector(y_true, xsink);
+    if (*xsink) { return QoreValue(); }
+    VectorXd yp = qoreListToVector(y_pred, xsink);
+    if (*xsink) { return QoreValue(); }
+    return mlRMSE(yt, yp, xsink);
+}
+
+//! Computes Mean Absolute Error
+/** @param y_true a list of true values
+    @param y_pred a list of predicted values
+    @return the MAE (in the same units as the data)
+
+    @par Example:
+    @code{.py}
+float mae = ml_mae(actual_delivery_days, predicted_delivery_days);
+printf("Predictions are off by %.1f days on average\n", mae);
+    @endcode
+
+    @throw ML-METRICS-ERROR empty or mismatched inputs
+*/
+float ml_mae(list<auto> y_true, list<auto> y_pred) [dom=DEFAULT] {
+    VectorXd yt = qoreListToVector(y_true, xsink);
+    if (*xsink) { return QoreValue(); }
+    VectorXd yp = qoreListToVector(y_pred, xsink);
+    if (*xsink) { return QoreValue(); }
+    return mlMAE(yt, yp, xsink);
+}
+
+//! Computes the R² (coefficient of determination) score
+/** @param y_true a list of true values
+    @param y_pred a list of predicted values
+    @return R² from -infinity to 1.0 (1.0 = perfect prediction)
+
+    @par Example:
+    @code{.py}
+float r2 = ml_r2_score(actual_prices, predicted_prices);
+printf("Model explains %.0f%% of the variance\n", r2 * 100);
+    @endcode
+
+    @throw ML-METRICS-ERROR empty or mismatched inputs
+*/
+float ml_r2_score(list<auto> y_true, list<auto> y_pred) [dom=DEFAULT] {
+    VectorXd yt = qoreListToVector(y_true, xsink);
+    if (*xsink) { return QoreValue(); }
+    VectorXd yp = qoreListToVector(y_pred, xsink);
+    if (*xsink) { return QoreValue(); }
+    return mlR2Score(yt, yp, xsink);
+}
+
+//! Computes the explained variance score
+/** @param y_true a list of true values
+    @param y_pred a list of predicted values
+    @return explained variance from -infinity to 1.0
+
+    @par Example:
+    @code{.py}
+float ev = ml_explained_variance(actual_values, predicted_values);
+printf("Model explains %.0f%% of the variance\n", ev * 100);
+    @endcode
+
+    @throw ML-METRICS-ERROR empty or mismatched inputs
+*/
+float ml_explained_variance(list<auto> y_true, list<auto> y_pred) [dom=DEFAULT] {
+    VectorXd yt = qoreListToVector(y_true, xsink);
+    if (*xsink) { return QoreValue(); }
+    VectorXd yp = qoreListToVector(y_pred, xsink);
+    if (*xsink) { return QoreValue(); }
+    return mlExplainedVariance(yt, yp, xsink);
+}
+
+//! Computes the silhouette score for clustering quality
+/** @param data a list of lists of numeric values (the data points)
+    @param labels a list of cluster assignments (one per data point)
+    @return silhouette score from -1.0 (poor) to 1.0 (excellent clustering)
+
+    @par Example:
+    @code{.py}
+float score = ml_silhouette_score(data_matrix, cluster_labels);
+printf("Clustering quality: %.2f\n", score);  # > 0.5 is generally good
+    @endcode
+
+    @throw ML-METRICS-ERROR empty data, mismatched sizes, or fewer than 2 clusters
+*/
+float ml_silhouette_score(list<auto> data, list<auto> labels) [dom=DEFAULT] {
+    MatrixXd mat = qoreListOfListsToMatrix(data, xsink);
+    if (*xsink) { return QoreValue(); }
+    VectorXd lbl = qoreListToVector(labels, xsink);
+    if (*xsink) { return QoreValue(); }
+    return mlSilhouetteScore(mat, lbl, xsink);
+}
+
+//! Computes the Davies-Bouldin index for clustering quality
+/** @param data a list of lists of numeric values (the data points)
+    @param labels a list of cluster assignments (one per data point)
+    @return Davies-Bouldin index (lower is better; 0.0 = perfect separation)
+
+    @throw ML-METRICS-ERROR empty data, mismatched sizes, or fewer than 2 clusters
+*/
+float ml_davies_bouldin_score(list<auto> data, list<auto> labels) [dom=DEFAULT] {
+    MatrixXd mat = qoreListOfListsToMatrix(data, xsink);
+    if (*xsink) { return QoreValue(); }
+    VectorXd lbl = qoreListToVector(labels, xsink);
+    if (*xsink) { return QoreValue(); }
+    return mlDaviesBouldinScore(mat, lbl, xsink);
+}
+
+//! Computes the Calinski-Harabasz index for clustering quality
+/** @param data a list of lists of numeric values (the data points)
+    @param labels a list of cluster assignments (one per data point)
+    @return Calinski-Harabasz index (higher is better)
+
+    @throw ML-METRICS-ERROR empty data, mismatched sizes, or fewer than 2 clusters
+*/
+float ml_calinski_harabasz_score(list<auto> data, list<auto> labels) [dom=DEFAULT] {
+    MatrixXd mat = qoreListOfListsToMatrix(data, xsink);
+    if (*xsink) { return QoreValue(); }
+    VectorXd lbl = qoreListToVector(labels, xsink);
+    if (*xsink) { return QoreValue(); }
+    return mlCalinskiHarabaszScore(mat, lbl, xsink);
 }
 
 ///@}

@@ -265,6 +265,10 @@ void QoreGMM::fit(const MatrixXd& data, ExceptionSink* xsink) {
     // EM iterations
     double prev_ll = -std::numeric_limits<double>::max();
     for (int iter = 0; iter < max_iterations; ++iter) {
+        if (qore_check_cancel(xsink, "GMM fit")) {
+            return;
+        }
+
         // E-step
         MatrixXd responsibilities = eStep(data);
 
@@ -360,6 +364,9 @@ QoreListNode* QoreGMM::predictMatrix(const MatrixXd& data, ExceptionSink* xsink)
 
     ReferenceHolder<QoreListNode> rv(new QoreListNode(hashdeclGMMResult->getTypeInfo()), xsink);
     for (Eigen::Index i = 0; i < data.rows(); ++i) {
+        if (i % 100 == 0 && qore_check_cancel(xsink, "GMM predictMatrix")) {
+            return nullptr;
+        }
         RowVectorXd row = data.row(i);
         QoreHashNode* result = predictInternal(row, xsink);
         if (*xsink) {

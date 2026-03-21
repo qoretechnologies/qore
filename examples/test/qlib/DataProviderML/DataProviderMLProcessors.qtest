@@ -102,6 +102,26 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         addTestCase("onnx-model - capabilities", \onnxModelCapabilities());
         addTestCase("onnx-model - constructor validation", \onnxModelConstructorValidation());
 
+        # StandardScaler tests
+        addTestCase("standard-scaler - basic window", \stdScalerBasicWindow());
+        addTestCase("standard-scaler - subsequent windows", \stdScalerSubsequentWindows());
+        addTestCase("standard-scaler - capabilities", \stdScalerCapabilities());
+
+        # MinMaxScaler tests
+        addTestCase("min-max-scaler - basic window", \mmScalerBasicWindow());
+        addTestCase("min-max-scaler - custom range", \mmScalerCustomRange());
+        addTestCase("min-max-scaler - capabilities", \mmScalerCapabilities());
+
+        # Imputer tests
+        addTestCase("imputer - mean strategy", \imputerMeanStrategy());
+        addTestCase("imputer - constant strategy", \imputerConstantStrategy());
+        addTestCase("imputer - capabilities", \imputerCapabilities());
+
+        # Metric processors
+        addTestCase("classification-metrics - basic", \classMetricsBasic());
+        addTestCase("regression-metrics - basic", \regMetricsBasic());
+        addTestCase("clustering-metrics - basic", \clusterMetricsBasic());
+
         # Integration tests
         addTestCase("integration - factory registration", \integrationFactory());
         addTestCase("integration - navigation children", \integrationNavigation());
@@ -1171,6 +1191,241 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         });
     }
 
+    # ===================== StandardScaler Tests =====================
+
+    stdScalerBasicWindow() {
+        DataProviderML::QoreStandardScalerProcessor proc({
+            "fields": "x,y",
+            "window_size": 5,
+        });
+
+        list<auto> results;
+        # Feed 5 records to fill the window
+        list<hash<auto>> data = (
+            {"x": 1.0, "y": 10.0},
+            {"x": 2.0, "y": 20.0},
+            {"x": 3.0, "y": 30.0},
+            {"x": 4.0, "y": 40.0},
+            {"x": 5.0, "y": 50.0},
+        );
+        foreach hash<auto> rec in (data) {
+            collectResult(\results, proc.processRecord(rec));
+        }
+        # Should get 5 events when window is full
+        assertEq(5, results.lsize());
+        assertEq("standard-scaler", results[0].event_type);
+        assertTrue(exists results[0].scaled_values);
+        assertTrue(exists results[0].record_values);
+        # Middle point (mean) should have scaled values near 0
+        assertFloat(0.0, results[2].scaled_values.x, 0.01);
+        assertFloat(0.0, results[2].scaled_values.y, 0.01);
+    }
+
+    stdScalerSubsequentWindows() {
+        DataProviderML::QoreStandardScalerProcessor proc({
+            "fields": "x",
+            "window_size": 3,
+        });
+
+        # First window: fits the scaler
+        list<auto> results;
+        foreach hash<auto> rec in (({"x": 1.0}, {"x": 2.0}, {"x": 3.0})) {
+            collectResult(\results, proc.processRecord(rec));
+        }
+        assertEq(3, results.lsize());
+
+        # Second window: uses the already-fitted scaler
+        list<auto> results2;
+        foreach hash<auto> rec in (({"x": 1.0}, {"x": 2.0}, {"x": 3.0})) {
+            collectResult(\results2, proc.processRecord(rec));
+        }
+        assertEq(3, results2.lsize());
+        # Results should be same as first window (same data, same scaler)
+        assertFloat(results[0].scaled_values.x, results2[0].scaled_values.x, 1e-10);
+    }
+
+    stdScalerCapabilities() {
+        DataProviderML::QoreStandardScalerProcessor proc();
+        hash<DataProviderInfo> info = proc.getInfo();
+        assertEq("QoreStandardScalerProcessor", info.type);
+        assertTrue(info.supports_pipeline_processor);
+    }
+
+    # ===================== MinMaxScaler Tests =====================
+
+    mmScalerBasicWindow() {
+        DataProviderML::QoreMinMaxScalerProcessor proc({
+            "fields": "x",
+            "window_size": 3,
+        });
+
+        list<auto> results;
+        foreach hash<auto> rec in (({"x": 0.0}, {"x": 5.0}, {"x": 10.0})) {
+            collectResult(\results, proc.processRecord(rec));
+        }
+        assertEq(3, results.lsize());
+        assertEq("min-max-scaler", results[0].event_type);
+        # min → 0.0, mid → 0.5, max → 1.0
+        assertFloat(0.0, results[0].scaled_values.x, 1e-10);
+        assertFloat(0.5, results[1].scaled_values.x, 1e-10);
+        assertFloat(1.0, results[2].scaled_values.x, 1e-10);
+    }
+
+    mmScalerCustomRange() {
+        DataProviderML::QoreMinMaxScalerProcessor proc({
+            "fields": "x",
+            "window_size": 3,
+            "feature_min": -1.0,
+            "feature_max": 1.0,
+        });
+
+        list<auto> results;
+        foreach hash<auto> rec in (({"x": 0.0}, {"x": 5.0}, {"x": 10.0})) {
+            collectResult(\results, proc.processRecord(rec));
+        }
+        assertEq(3, results.lsize());
+        assertFloat(-1.0, results[0].scaled_values.x, 1e-10);
+        assertFloat(0.0, results[1].scaled_values.x, 1e-10);
+        assertFloat(1.0, results[2].scaled_values.x, 1e-10);
+    }
+
+    mmScalerCapabilities() {
+        DataProviderML::QoreMinMaxScalerProcessor proc();
+        hash<DataProviderInfo> info = proc.getInfo();
+        assertEq("QoreMinMaxScalerProcessor", info.type);
+        assertTrue(info.supports_pipeline_processor);
+    }
+
+    # ===================== Imputer Tests =====================
+
+    imputerMeanStrategy() {
+        DataProviderML::QoreImputerProcessor proc({
+            "fields": "x,y",
+            "window_size": 4,
+            "strategy": "mean",
+        });
+
+        list<auto> results;
+        # Feed data with missing values
+        list<hash<auto>> data = (
+            {"x": 1.0, "y": 10.0},
+            {"x": 2.0, "y": NOTHING},
+            {"x": NOTHING, "y": 30.0},
+            {"x": 4.0, "y": 40.0},
+        );
+        foreach hash<auto> rec in (data) {
+            collectResult(\results, proc.processRecord(rec));
+        }
+        assertEq(4, results.lsize());
+        assertEq("imputer", results[0].event_type);
+        assertTrue(exists results[0].imputed_values);
+        # Row 0: no missing values — imputed values same as original
+        assertFloat(1.0, results[0].imputed_values.x, 1e-10);
+        assertFloat(10.0, results[0].imputed_values.y, 1e-10);
+    }
+
+    imputerConstantStrategy() {
+        DataProviderML::QoreImputerProcessor proc({
+            "fields": "x",
+            "window_size": 3,
+            "strategy": "constant",
+            "constant_value": -999.0,
+        });
+
+        list<auto> results;
+        foreach hash<auto> rec in (({"x": 1.0}, {"x": NOTHING}, {"x": 3.0})) {
+            collectResult(\results, proc.processRecord(rec));
+        }
+        assertEq(3, results.lsize());
+        # Row 1 had missing x — should be filled with -999.0
+        assertFloat(-999.0, results[1].imputed_values.x, 1e-10);
+        # Row 0 and 2 should be unchanged
+        assertFloat(1.0, results[0].imputed_values.x, 1e-10);
+        assertFloat(3.0, results[2].imputed_values.x, 1e-10);
+    }
+
+    imputerCapabilities() {
+        DataProviderML::QoreImputerProcessor proc();
+        hash<DataProviderInfo> info = proc.getInfo();
+        assertEq("QoreImputerProcessor", info.type);
+        assertTrue(info.supports_pipeline_processor);
+    }
+
+    # ===================== Metric Processor Tests =====================
+
+    classMetricsBasic() {
+        DataProviderML::QoreClassificationMetricsProcessor proc({
+            "predicted_field": "pred",
+            "true_field": "actual",
+            "window_size": 5,
+        });
+
+        list<auto> results;
+        # 4 correct out of 5
+        list<hash<auto>> data = (
+            {"pred": 1, "actual": 1},
+            {"pred": 0, "actual": 0},
+            {"pred": 1, "actual": 0},
+            {"pred": 1, "actual": 1},
+            {"pred": 0, "actual": 0},
+        );
+        foreach hash<auto> rec in (data) {
+            collectResult(\results, proc.processRecord(rec));
+        }
+        assertEq(1, results.size());
+        assertEq("classification-metrics", results[0].event_type);
+        assertFloat(0.8, results[0].accuracy, 1e-10);
+        assertEq(5, results[0].sample_count);
+    }
+
+    regMetricsBasic() {
+        DataProviderML::QoreRegressionMetricsProcessor proc({
+            "predicted_field": "pred",
+            "true_field": "actual",
+            "window_size": 3,
+        });
+
+        list<auto> results;
+        list<hash<auto>> data = (
+            {"pred": 1.0, "actual": 1.0},
+            {"pred": 2.0, "actual": 2.0},
+            {"pred": 3.0, "actual": 3.0},
+        );
+        foreach hash<auto> rec in (data) {
+            collectResult(\results, proc.processRecord(rec));
+        }
+        assertEq(1, results.size());
+        assertEq("regression-metrics", results[0].event_type);
+        assertFloat(0.0, results[0].mse, 1e-10);
+        assertFloat(1.0, results[0].r2, 1e-10);
+    }
+
+    clusterMetricsBasic() {
+        DataProviderML::QoreClusteringMetricsProcessor proc({
+            "fields": "x,y",
+            "cluster_field": "cluster",
+            "window_size": 6,
+        });
+
+        list<auto> results;
+        list<hash<auto>> data = (
+            {"x": 0.0, "y": 0.0, "cluster": 0},
+            {"x": 0.1, "y": 0.0, "cluster": 0},
+            {"x": 0.0, "y": 0.1, "cluster": 0},
+            {"x": 10.0, "y": 10.0, "cluster": 1},
+            {"x": 10.1, "y": 10.0, "cluster": 1},
+            {"x": 10.0, "y": 10.1, "cluster": 1},
+        );
+        foreach hash<auto> rec in (data) {
+            collectResult(\results, proc.processRecord(rec));
+        }
+        assertEq(1, results.size());
+        assertEq("clustering-metrics", results[0].event_type);
+        assertTrue(results[0].silhouette_score > 0.9);
+        assertEq(2, results[0].n_clusters);
+        assertEq(6, results[0].sample_count);
+    }
+
     # ===================== Integration Tests =====================
 
     integrationFactory() {
@@ -1195,13 +1450,19 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         assertTrue(children.contains("linear-regression"));
         assertTrue(children.contains("lof"));
         assertTrue(children.contains("gmm"));
+        assertTrue(children.contains("standard-scaler"));
+        assertTrue(children.contains("min-max-scaler"));
+        assertTrue(children.contains("imputer"));
+        assertTrue(children.contains("classification-metrics"));
+        assertTrue(children.contains("regression-metrics"));
+        assertTrue(children.contains("clustering-metrics"));
 
         hash<ML::MLCapabilities> caps = ML::ml_get_capabilities();
         if (caps.has_onnx) {
             assertTrue(children.contains("onnx-model"));
-            assertEq(10, children.lsize());
+            assertEq(16, children.lsize());
         } else {
-            assertEq(9, children.lsize());
+            assertEq(15, children.lsize());
         }
 
         # check that each child can be retrieved
@@ -1246,6 +1507,30 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
             {"fields": "x", "window_size": 10, "n_components": 2});
         assertTrue(exists gmm.getPipelineProcessorOutputType());
 
+        DataProviderML::QoreStandardScalerProcessor stdscaler(
+            {"fields": "x,y", "window_size": 10});
+        assertTrue(exists stdscaler.getPipelineProcessorOutputType());
+
+        DataProviderML::QoreMinMaxScalerProcessor mmscaler(
+            {"fields": "x,y", "window_size": 10});
+        assertTrue(exists mmscaler.getPipelineProcessorOutputType());
+
+        DataProviderML::QoreImputerProcessor imputer(
+            {"fields": "x,y", "window_size": 10});
+        assertTrue(exists imputer.getPipelineProcessorOutputType());
+
+        DataProviderML::QoreClassificationMetricsProcessor clsm(
+            {"predicted_field": "pred", "true_field": "actual", "window_size": 10});
+        assertTrue(exists clsm.getPipelineProcessorOutputType());
+
+        DataProviderML::QoreRegressionMetricsProcessor regm(
+            {"predicted_field": "pred", "true_field": "actual", "window_size": 10});
+        assertTrue(exists regm.getPipelineProcessorOutputType());
+
+        DataProviderML::QoreClusteringMetricsProcessor clusm(
+            {"fields": "x,y", "cluster_field": "c", "window_size": 10});
+        assertTrue(exists clusm.getPipelineProcessorOutputType());
+
         if (ML::ml_get_capabilities().has_onnx) {
             DataProviderML::QoreOnnxModelProcessor onnx({
                 "model_path": getTestModelPath(),
@@ -1254,5 +1539,12 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
             });
             assertTrue(exists onnx.getPipelineProcessorOutputType());
         }
+    }
+
+    private assertFloat(float expected, auto actual, float tolerance) {
+        float diff = abs(expected - actual.toFloat());
+        assertTrue(diff < tolerance,
+            sprintf("expected %f, got %f (diff=%f, tolerance=%f)", expected, actual, diff,
+                tolerance));
     }
 }

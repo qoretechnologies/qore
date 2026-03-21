@@ -158,6 +158,9 @@ QoreListNode* QoreLinearRegression::predictMatrix(const MatrixXd& X, ExceptionSi
 
     ReferenceHolder<QoreListNode> rv(new QoreListNode(hashdeclLinearRegressionResult->getTypeInfo()), xsink);
     for (Eigen::Index i = 0; i < X.rows(); ++i) {
+        if (i % 100 == 0 && qore_check_cancel(xsink, "LinearRegression predictMatrix")) {
+            return nullptr;
+        }
         RowVectorXd row = X.row(i);
         QoreHashNode* result = predictInternal(row, xsink);
         if (*xsink) {

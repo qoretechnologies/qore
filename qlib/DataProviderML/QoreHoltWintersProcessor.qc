@@ -31,7 +31,6 @@ public namespace DataProviderML {
 
     Inherits AbstractAnalyticsProcessor with ANALYTICS_MODE_RECORD.
 
-    @since %DataProviderML 1.0
 */
 public class QoreHoltWintersProcessor inherits DataProvider::AbstractAnalyticsProcessor {
     public {

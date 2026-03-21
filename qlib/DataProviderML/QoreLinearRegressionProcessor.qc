@@ -28,7 +28,6 @@ public namespace DataProviderML {
 /** Accumulates records in windows and uses the ML::LinearRegression algorithm to
     fit a model and predict target values for each record.
 
-    @since %DataProviderML 1.0
 */
 public class QoreLinearRegressionProcessor inherits DataProvider::AbstractDataProvider {
     public {

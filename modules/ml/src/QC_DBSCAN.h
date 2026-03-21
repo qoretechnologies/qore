@@ -58,7 +58,7 @@ private:
     std::string metric;
 
     //! Compute pairwise distance matrix
-    DLLLOCAL MatrixXd computeDistanceMatrix(const MatrixXd& data) const;
+    DLLLOCAL MatrixXd computeDistanceMatrix(const MatrixXd& data, ExceptionSink* xsink) const;
 
     //! Find neighbors of a point within epsilon
     DLLLOCAL std::vector<int> findNeighbors(const MatrixXd& dist_matrix, int point_idx) const;

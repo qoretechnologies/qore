@@ -237,6 +237,9 @@ QoreListNode* QorePCA::doTransformMatrix(const MatrixXd& data, ExceptionSink* xs
 
     ReferenceHolder<QoreListNode> rv(new QoreListNode(hashdeclPCAResult->getTypeInfo()), xsink);
     for (Eigen::Index r = 0; r < data.rows(); ++r) {
+        if (r % 100 == 0 && qore_check_cancel(xsink, "PCA transformMatrix")) {
+            return nullptr;
+        }
         ReferenceHolder<QoreListNode> comp_list(new QoreListNode(floatTypeInfo), xsink);
         for (int i = 0; i < actual_n_components; ++i) {
             comp_list->push(projected(r, i), xsink);

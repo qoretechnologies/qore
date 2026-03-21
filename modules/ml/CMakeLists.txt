@@ -79,6 +79,11 @@ set(ML_QPP_SRC
     src/QC_LOF.qpp
     src/QC_GMM.qpp
     src/QC_OnnxModel.qpp
+    src/QC_StandardScaler.qpp
+    src/QC_MinMaxScaler.qpp
+    src/QC_Imputer.qpp
+    src/QC_MLPipeline.qpp
+    src/QC_CrossValidator.qpp
     src/ql_ml.qpp
 )
 
@@ -95,6 +100,12 @@ set(ML_CPP_SRC
     src/LinearRegression.cpp
     src/LOF.cpp
     src/GMM.cpp
+    src/StandardScaler.cpp
+    src/MinMaxScaler.cpp
+    src/Imputer.cpp
+    src/MLPipeline.cpp
+    src/ml_metrics.cpp
+    src/CrossValidator.cpp
 )
 
 # Conditional ONNX Runtime support

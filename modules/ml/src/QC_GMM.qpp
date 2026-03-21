@@ -58,7 +58,6 @@ hash<GMMResult> result = gmm.predict({"x": 1.05, "y": 0.95});
 printf("Cluster: %d, Probability: %f\n", result.cluster, result.max_probability);
     @endcode
 
-    @since ml 1.0
 */
 qclass GMM [arg=QoreGMM* gmm; ns=Qore::ML; flags=final];
 

@@ -66,7 +66,6 @@ hash<LOFResult> result = lof.score({"x": 10.0, "y": 10.0});
 printf("LOF score: %f, is anomaly: %y\n", result.lof_score, result.is_anomaly);
     @endcode
 
-    @since ml 1.0
 */
 qclass LOF [arg=QoreLOF* lof; ns=Qore::ML; flags=final];
 

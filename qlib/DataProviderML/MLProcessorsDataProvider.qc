@@ -45,6 +45,12 @@ public class MLProcessorsDataProvider inherits DataProvider::AbstractDataProvide
             "linear-regression": "QoreLinearRegressionProcessor",
             "lof": "QoreLOFProcessor",
             "gmm": "QoreGMMProcessor",
+            "standard-scaler": "QoreStandardScalerProcessor",
+            "min-max-scaler": "QoreMinMaxScalerProcessor",
+            "imputer": "QoreImputerProcessor",
+            "classification-metrics": "QoreClassificationMetricsProcessor",
+            "regression-metrics": "QoreRegressionMetricsProcessor",
+            "clustering-metrics": "QoreClusteringMetricsProcessor",
         };
 
         #! Full child processor names including optional ones
@@ -102,6 +108,18 @@ public class MLProcessorsDataProvider inherits DataProvider::AbstractDataProvide
                 return new QoreLOFProcessor();
             case "gmm":
                 return new QoreGMMProcessor();
+            case "standard-scaler":
+                return new QoreStandardScalerProcessor();
+            case "min-max-scaler":
+                return new QoreMinMaxScalerProcessor();
+            case "imputer":
+                return new QoreImputerProcessor();
+            case "classification-metrics":
+                return new QoreClassificationMetricsProcessor();
+            case "regression-metrics":
+                return new QoreRegressionMetricsProcessor();
+            case "clustering-metrics":
+                return new QoreClusteringMetricsProcessor();
             case "onnx-model":
                 if (ML::ml_get_capabilities().has_onnx) {
                     return new QoreOnnxModelProcessor();

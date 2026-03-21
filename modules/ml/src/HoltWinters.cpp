@@ -120,6 +120,10 @@ void QoreHoltWinters::fit(const VectorXd& series, ExceptionSink* xsink) {
 
     // Run through the historical series to warm up the model
     for (int i = 0; i < n; ++i) {
+        if (i % 100 == 0 && qore_check_cancel(xsink, "HoltWinters fit")) {
+            return;
+        }
+
         double value = series(i);
         int season_idx = i % period;
         double prev_level = level;

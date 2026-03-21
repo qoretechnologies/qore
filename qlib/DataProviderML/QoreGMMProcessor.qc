@@ -28,7 +28,6 @@ public namespace DataProviderML {
 /** Accumulates records in windows and uses the ML::GMM algorithm to
     assign each record to a cluster with probability scores.
 
-    @since %DataProviderML 1.0
 */
 public class QoreGMMProcessor inherits DataProvider::AbstractDataProvider {
     public {

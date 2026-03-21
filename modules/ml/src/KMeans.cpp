@@ -174,6 +174,10 @@ void QoreKMeans::fit(const MatrixXd& data, ExceptionSink* xsink) {
 
     // Lloyd's algorithm
     for (int iter = 0; iter < max_iterations; ++iter) {
+        if (qore_check_cancel(xsink, "KMeans fit")) {
+            return;
+        }
+
         MatrixXd old_centroids = centroids;
 
         std::vector<int> assignments = assignClusters(data);
@@ -220,6 +224,9 @@ void QoreKMeans::update(const MatrixXd& data, ExceptionSink* xsink) {
 
     // Mini-batch update (Sculley 2010)
     for (int i = 0; i < n; ++i) {
+        if (i % 100 == 0 && qore_check_cancel(xsink, "KMeans update")) {
+            return;
+        }
         // Find nearest centroid
         double min_dist = std::numeric_limits<double>::max();
         int best = 0;
@@ -307,6 +314,9 @@ QoreListNode* QoreKMeans::predictMatrix(const MatrixXd& data, ExceptionSink* xsi
 
     ReferenceHolder<QoreListNode> rv(new QoreListNode(hashdeclKMeansResult->getTypeInfo()), xsink);
     for (Eigen::Index i = 0; i < data.rows(); ++i) {
+        if (i % 100 == 0 && qore_check_cancel(xsink, "KMeans predict")) {
+            return nullptr;
+        }
         RowVectorXd row = data.row(i);
         QoreHashNode* result = predictInternal(row, xsink);
         if (*xsink) {

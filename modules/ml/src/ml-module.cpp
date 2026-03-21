@@ -37,6 +37,11 @@
 #include "QC_LOF.h"
 #include "QC_GMM.h"
 #include "QC_OnnxModel.h"
+#include "QC_StandardScaler.h"
+#include "QC_MinMaxScaler.h"
+#include "QC_Imputer.h"
+#include "QC_MLPipeline.h"
+#include "QC_CrossValidator.h"
 
 static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink);
 static void ml_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink);
@@ -75,6 +80,13 @@ DLLLOCAL TypedHashDecl* init_hashdecl_OnnxTensorInfo(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_OnnxProviderConfig(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_OnnxSessionConfig(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_OnnxModelInfo(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_StandardScalerInfo(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_MinMaxScalerInfo(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_ImputerInfo(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_ConfusionMatrixResult(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_ClassMetrics(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_ClassificationReport(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_CrossValidationFold(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_MLCapabilities(QoreNamespace& ns);
 
 // Global hashdecl pointers (referenced by generated QPP code)
@@ -92,6 +104,13 @@ const TypedHashDecl* hashdeclOnnxTensorInfo;
 const TypedHashDecl* hashdeclOnnxProviderConfig;
 const TypedHashDecl* hashdeclOnnxSessionConfig;
 const TypedHashDecl* hashdeclOnnxModelInfo;
+const TypedHashDecl* hashdeclStandardScalerInfo;
+const TypedHashDecl* hashdeclMinMaxScalerInfo;
+const TypedHashDecl* hashdeclImputerInfo;
+const TypedHashDecl* hashdeclConfusionMatrixResult;
+const TypedHashDecl* hashdeclClassMetrics;
+const TypedHashDecl* hashdeclClassificationReport;
+const TypedHashDecl* hashdeclCrossValidationFold;
 const TypedHashDecl* hashdeclMLCapabilities;
 
 // Forward declarations for function init (generated from ql_ml.qpp)
@@ -109,6 +128,11 @@ static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     preinitLOFClass();
     preinitGMMClass();
     preinitOnnxModelClass();
+    preinitStandardScalerClass();
+    preinitMinMaxScalerClass();
+    preinitImputerClass();
+    preinitMLPipelineClass();
+    preinitCrossValidatorClass();
 
     // Initialize hashdecls (store in globals for generated QPP code)
     hashdeclIsolationForestResult = init_hashdecl_IsolationForestResult(MLNS);
@@ -125,6 +149,13 @@ static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     hashdeclOnnxProviderConfig = init_hashdecl_OnnxProviderConfig(MLNS);
     hashdeclOnnxSessionConfig = init_hashdecl_OnnxSessionConfig(MLNS);
     hashdeclOnnxModelInfo = init_hashdecl_OnnxModelInfo(MLNS);
+    hashdeclStandardScalerInfo = init_hashdecl_StandardScalerInfo(MLNS);
+    hashdeclMinMaxScalerInfo = init_hashdecl_MinMaxScalerInfo(MLNS);
+    hashdeclImputerInfo = init_hashdecl_ImputerInfo(MLNS);
+    hashdeclConfusionMatrixResult = init_hashdecl_ConfusionMatrixResult(MLNS);
+    hashdeclClassMetrics = init_hashdecl_ClassMetrics(MLNS);
+    hashdeclClassificationReport = init_hashdecl_ClassificationReport(MLNS);
+    hashdeclCrossValidationFold = init_hashdecl_CrossValidationFold(MLNS);
     hashdeclMLCapabilities = init_hashdecl_MLCapabilities(MLNS);
 
     // Add classes to namespace (adds methods that may reference other classes)
@@ -138,6 +169,11 @@ static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     MLNS.addSystemClass(initLOFClass(MLNS));
     MLNS.addSystemClass(initGMMClass(MLNS));
     MLNS.addSystemClass(initOnnxModelClass(MLNS));
+    MLNS.addSystemClass(initStandardScalerClass(MLNS));
+    MLNS.addSystemClass(initMinMaxScalerClass(MLNS));
+    MLNS.addSystemClass(initImputerClass(MLNS));
+    MLNS.addSystemClass(initMLPipelineClass(MLNS));
+    MLNS.addSystemClass(initCrossValidatorClass(MLNS));
 
     // Add namespace-level functions
     init_ml_functions(MLNS);

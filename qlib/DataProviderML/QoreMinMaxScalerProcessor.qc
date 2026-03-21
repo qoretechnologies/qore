@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
-#! Qore QoreLOFProcessor class definition
+#! Qore QoreMinMaxScalerProcessor class definition
 
-/** QoreLOFProcessor.qc Copyright 2026 Qore Technologies, s.r.o.
+/** QoreMinMaxScalerProcessor.qc Copyright 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -24,16 +24,18 @@
 
 #! Contains all public definitions in the DataProviderML module
 public namespace DataProviderML {
-#! Pipeline processor that detects anomalies using Local Outlier Factor
-/** Accumulates records in windows and uses the ML::LOF algorithm to
-    score each record for anomalousness based on local density.
+#! Pipeline processor that scales numeric features to a configurable range
+/** Accumulates records in windows and uses the ML::MinMaxScaler to transform
+    each record's selected fields into a bounded range (default [0, 1]). The first
+    window fits the scaler (learning per-feature min/max); subsequent windows apply
+    the already-fitted scaler.
 
 */
-public class QoreLOFProcessor inherits DataProvider::AbstractDataProvider {
+public class QoreMinMaxScalerProcessor inherits DataProvider::AbstractDataProvider {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
-            "type": "QoreLOFProcessor",
+            "type": "QoreMinMaxScalerProcessor",
             "supports_pipeline_processor": True,
             "processor_capabilities": DPC_AGGREGATE,
             "pipeline_processor_options": ConstructorOptions,
@@ -42,51 +44,45 @@ public class QoreLOFProcessor inherits DataProvider::AbstractDataProvider {
         #! Constructor options
         const ConstructorOptions = {
             "fields": <DataProviderOptionInfo>{
-                "display_name": "Field Names",
-                "short_desc": "Numeric fields to analyze for anomalies",
-                "desc": "A comma-separated list of numeric field names from the input records "
-                    "to analyze; the algorithm compares each point's local neighborhood "
-                    "density to detect outliers; for example: \"temperature,pressure\"; "
-                    "at least 1 field is required",
+                "display_name": "Fields to Normalize",
+                "short_desc": "Which numeric fields to convert to the target range",
+                "desc": "The numeric fields from your data to normalize. For example, select "
+                    "`temperature`, `humidity`, and `wind_speed` to convert them all to the "
+                    "same range for easy comparison.\n\n"
+                    "At least 1 field is required",
                 "type": new SoftListDataType(AbstractDataProviderTypeMap."string", True),
                 "required": True,
                 "input_field_names": True,
             },
             "window_size": <DataProviderOptionInfo>{
-                "display_name": "Window Size",
-                "short_desc": "Number of records to analyze together",
-                "desc": "The number of records to collect before analyzing them for local "
-                    "anomalies; all records in a window are compared against each other; "
-                    "must be larger than the number of neighbors; must be at least 2.\n\n"
-                    "**Sizing guidance**: use at least `50`; should be several times larger "
-                    "than `k` (neighborhood size) for reliable results",
+                "display_name": "Batch Size",
+                "short_desc": "How many records to collect before processing",
+                "desc": "How many records to collect before processing them as a batch. The "
+                    "first batch is used to learn the minimum and maximum of each field; all "
+                    "subsequent batches are normalized using those learned values.\n\n"
+                    "**Tip**: use at least `50` for reliable results; `200`+ if your data "
+                    "has occasional extreme values (outliers)",
                 "type": AbstractDataProviderTypeMap."int",
                 "required": True,
                 "example_value": 100,
             },
-            "k": <DataProviderOptionInfo>{
-                "display_name": "Neighborhood Size",
-                "short_desc": "How many nearby points to compare against",
-                "desc": "The number of closest data points used to define each point's local "
-                    "neighborhood; larger values consider wider neighborhoods, making the "
-                    "algorithm less sensitive to small local variations; must be smaller "
-                    "than the window size.\n\n"
-                    "**Typical values**: `10`\u2013`20` for most use cases; increase for noisy "
-                    "data, decrease for small datasets; default: `20`",
-                "type": AbstractDataProviderTypeMap."*int",
-                "example_value": 20,
-            },
-            "threshold": <DataProviderOptionInfo>{
-                "display_name": "Anomaly Threshold",
-                "short_desc": "Score cutoff for flagging anomalies",
-                "desc": "The outlier score cutoff; a score of `1.0` means a point has the "
-                    "same density as its neighbors (normal); scores significantly above "
-                    "`1.0` indicate the point is in a less dense region than its neighbors "
-                    "(anomalous); lower thresholds flag more records.\n\n"
-                    "**Typical values**: `1.5` (standard \u2014 catches moderate outliers), "
-                    "`2.0` (conservative \u2014 only strong outliers); default: `1.5`",
+            "feature_min": <DataProviderOptionInfo>{
+                "display_name": "Target Minimum",
+                "short_desc": "Lowest value in the output range",
+                "desc": "The lowest value that normalized output will have. For example, set "
+                    "to `0.0` to have all values start at zero, or `-1.0` for a range centered "
+                    "around zero; default: `0.0`",
                 "type": AbstractDataProviderTypeMap."*float",
-                "example_value": 1.5,
+                "example_value": 0.0,
+            },
+            "feature_max": <DataProviderOptionInfo>{
+                "display_name": "Target Maximum",
+                "short_desc": "Highest value in the output range",
+                "desc": "The highest value that normalized output will have. For example, set "
+                    "to `1.0` for a 0-to-1 range, or `100.0` for a percentage scale; must be "
+                    "greater than the target minimum; default: `1.0`",
+                "type": AbstractDataProviderTypeMap."*float",
+                "example_value": 1.0,
             },
         };
     }
@@ -98,11 +94,14 @@ public class QoreLOFProcessor inherits DataProvider::AbstractDataProvider {
         #! Configured window size
         int window_size;
 
-        #! Number of neighbors
-        int k = 20;
+        #! Target range minimum
+        float feature_min = 0.0;
 
-        #! Anomaly threshold
-        float threshold = 1.5;
+        #! Target range maximum
+        float feature_max = 1.0;
+
+        #! Retained MinMaxScaler instance (fitted on first window)
+        *ML::MinMaxScaler scaler;
 
         #! Accumulated records
         list<hash<auto>> buffer;
@@ -127,16 +126,16 @@ public class QoreLOFProcessor inherits DataProvider::AbstractDataProvider {
             throw "CONSTRUCTOR-ERROR",
                 sprintf("window_size must be >= 2; got %d", window_size);
         }
-        if (exists copts.k) {
-            k = copts.k;
+        if (exists copts.feature_min) {
+            feature_min = copts.feature_min;
         }
-        if (window_size <= k) {
+        if (exists copts.feature_max) {
+            feature_max = copts.feature_max;
+        }
+        if (feature_min >= feature_max) {
             throw "CONSTRUCTOR-ERROR",
-                sprintf("window_size (%d) must be greater than k (%d); LOF requires at least "
-                    "k + 1 data points", window_size, k);
-        }
-        if (exists copts.threshold) {
-            threshold = copts.threshold;
+                sprintf("feature_min (%.6f) must be less than feature_max (%.6f)",
+                    feature_min, feature_max);
         }
         buffer = ();
         configured = True;
@@ -144,14 +143,14 @@ public class QoreLOFProcessor inherits DataProvider::AbstractDataProvider {
 
     #! Returns the name of this data provider
     string getName() {
-        return "lof";
+        return "min-max-scaler";
     }
 
     #! Returns the data provider description
     *string getDesc() {
-        return "Detects anomalous data points using the Local Outlier Factor algorithm; "
-            "scores each record based on the local density deviation relative to "
-            "its neighbors";
+        return "Scales numeric features to a configurable range (default [0, 1]); "
+            "accumulates records in windows, fits the scaler on the first window, "
+            "and applies it to all subsequent windows";
     }
 
     #! Returns data provider static info
@@ -159,11 +158,11 @@ public class QoreLOFProcessor inherits DataProvider::AbstractDataProvider {
         return ProviderInfo;
     }
 
-    #! Accumulates records; emits scored records when window is full
+    #! Accumulates records; emits scaled records when window is full
     private *auto processRecordImpl(auto record) {
         if (!configured) {
             throw "PROCESSOR-ERROR",
-                "QoreLOFProcessor: not configured; provide constructor options";
+                "QoreMinMaxScalerProcessor: not configured; provide constructor options";
         }
         push buffer, record;
         if (buffer.lsize() >= window_size) {
@@ -175,16 +174,11 @@ public class QoreLOFProcessor inherits DataProvider::AbstractDataProvider {
     }
 
     #! Flushes remaining buffered data
-    /** @note If the buffer contains \c k or fewer records, the records are
-        discarded because LOF requires at least \a k + 1 data points
-        (k neighbors plus the query point). No results are emitted in this case.
-    */
     private *list<auto> flushRecordsImpl() {
         if (!configured || !buffer) {
             return;
         }
-        # need at least k+1 records to compute LOF
-        if (buffer.lsize() > k) {
+        if (buffer.lsize() >= 2) {
             list<auto> results = processWindow(buffer);
             buffer = ();
             return results;
@@ -193,7 +187,7 @@ public class QoreLOFProcessor inherits DataProvider::AbstractDataProvider {
         return;
     }
 
-    #! Processes a window of records through LOF
+    #! Processes a window of records through MinMaxScaler
     private list<auto> processWindow(list<hash<auto>> records) {
         # extract matrix from fields
         list<list<float>> matrix;
@@ -205,30 +199,36 @@ public class QoreLOFProcessor inherits DataProvider::AbstractDataProvider {
             push matrix, row;
         }
 
-        # create and fit LOF model
-        int actual_k = k < matrix.lsize() ? k : matrix.lsize() - 1;
-        ML::LOF lof({
-            "k": actual_k,
-            "threshold": threshold,
-        });
-        lof.fitMatrix(matrix);
-
-        # score all records
-        list<hash<ML::LOFResult>> scores = lof.scoreMatrix(matrix);
+        list<list<float>> scaled;
+        if (!scaler) {
+            # first window: create scaler with range options, fit and transform
+            scaler = new ML::MinMaxScaler({
+                "feature_min": feature_min,
+                "feature_max": feature_max,
+            });
+            scaler.fitMatrix(matrix);
+            scaled = scaler.transformMatrix(matrix);
+        } else {
+            # subsequent windows: apply the already-fitted scaler
+            scaled = scaler.transformMatrix(matrix);
+        }
 
         # emit one event per record
         list<auto> events;
         for (int i = 0; i < records.lsize(); ++i) {
             hash<auto> record_values;
-            foreach string f in (fields) {
+            hash<auto> scaled_values;
+            for (int j = 0; j < fields.lsize(); ++j) {
+                string f = fields[j];
                 record_values{f} = DataProvider::AbstractDataProvider::getFieldValue(records[i], f);
+                scaled_values{f} = scaled[i][j];
             }
-            push events, <LOFAnomalyEventInfo>{
-                "event_type": "lof",
-                "lof_score": scores[i].lof_score,
-                "is_anomaly": scores[i].is_anomaly,
-                "k_distance": scores[i].k_distance,
+            push events, <MinMaxScalerEventInfo>{
+                "event_type": "min-max-scaler",
                 "record_values": record_values,
+                "scaled_values": scaled_values,
+                "feature_min": feature_min,
+                "feature_max": feature_max,
             };
         }
         return events;
@@ -246,7 +246,8 @@ public class QoreLOFProcessor inherits DataProvider::AbstractDataProvider {
 
     #! Returns the output type
     private *DataProvider::AbstractDataProviderType getPipelineProcessorOutputTypeImpl() {
-        return new HashDeclDataType(TypedHash::forName("DataProviderML::LOFAnomalyEventInfo"));
+        return new HashDeclDataType(
+            TypedHash::forName("DataProviderML::MinMaxScalerEventInfo"));
     }
 }
 }

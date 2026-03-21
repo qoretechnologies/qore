@@ -109,6 +109,45 @@ public class MlTest inherits QUnit::Test {
         addTestCase("OnnxModel backward compat", \onnxBackwardCompatTest());
         addTestCase("OnnxModel empty providers", \onnxEmptyProvidersTest());
         addTestCase("OnnxModel CUDA conditional", \onnxCudaTest());
+        addTestCase("StandardScaler basic", \stdScalerBasicTest());
+        addTestCase("StandardScaler matrix API", \stdScalerMatrixTest());
+        addTestCase("StandardScaler inverse round-trip", \stdScalerInverseTest());
+        addTestCase("StandardScaler fitTransform", \stdScalerFitTransformTest());
+        addTestCase("StandardScaler options", \stdScalerOptionsTest());
+        addTestCase("StandardScaler error cases", \stdScalerErrorTest());
+        addTestCase("StandardScaler edge cases", \stdScalerEdgeCasesTest());
+        addTestCase("MinMaxScaler basic", \mmScalerBasicTest());
+        addTestCase("MinMaxScaler custom range", \mmScalerCustomRangeTest());
+        addTestCase("MinMaxScaler inverse round-trip", \mmScalerInverseTest());
+        addTestCase("MinMaxScaler constant feature", \mmScalerConstantFeatureTest());
+        addTestCase("MinMaxScaler error cases", \mmScalerErrorTest());
+        addTestCase("Imputer mean strategy", \imputerMeanTest());
+        addTestCase("Imputer median strategy", \imputerMedianTest());
+        addTestCase("Imputer most_frequent strategy", \imputerMostFrequentTest());
+        addTestCase("Imputer constant strategy", \imputerConstantTest());
+        addTestCase("Imputer error cases", \imputerErrorTest());
+        addTestCase("MLPipeline scaler + kmeans", \pipelineScalerKmeansTest());
+        addTestCase("MLPipeline scaler + linear regression", \pipelineScalerLRTest());
+        addTestCase("MLPipeline error cases", \pipelineErrorTest());
+        # Phase 2: Metrics and CrossValidator
+        addTestCase("ml_accuracy basic", \accuracyBasicTest());
+        addTestCase("ml_accuracy perfect", \accuracyPerfectTest());
+        addTestCase("ml_confusion_matrix", \confusionMatrixTest());
+        addTestCase("ml_classification_report", \classificationReportTest());
+        addTestCase("ml_mse and ml_rmse", \mseRmseTest());
+        addTestCase("ml_mae", \maeTest());
+        addTestCase("ml_r2_score", \r2ScoreTest());
+        addTestCase("ml_r2_score perfect", \r2PerfectTest());
+        addTestCase("ml_explained_variance", \explainedVarianceTest());
+        addTestCase("ml_silhouette_score", \silhouetteTest());
+        addTestCase("ml_davies_bouldin_score", \daviesBouldinTest());
+        addTestCase("ml_calinski_harabasz_score", \calinskiHarabaszTest());
+        addTestCase("metrics error cases", \metricsErrorTest());
+        addTestCase("CrossValidator basic", \cvBasicTest());
+        addTestCase("CrossValidator shuffle", \cvShuffleTest());
+        addTestCase("CrossValidator error cases", \cvErrorTest());
+        addTestCase("metrics integration with LR", \metricsIntegrationLRTest());
+        addTestCase("metrics integration with KMeans", \metricsIntegrationKMeansTest());
         set_return_value(main());
     }
 
@@ -130,11 +169,17 @@ public class MlTest inherits QUnit::Test {
         assertTrue(caps.native_algorithms.contains("LOF"));
         assertTrue(caps.native_algorithms.contains("GMM"));
 
+        assertTrue(caps.native_algorithms.contains("StandardScaler"));
+        assertTrue(caps.native_algorithms.contains("MinMaxScaler"));
+        assertTrue(caps.native_algorithms.contains("Imputer"));
+        assertTrue(caps.native_algorithms.contains("MLPipeline"));
+        assertTrue(caps.native_algorithms.contains("CrossValidator"));
+
         if (caps.has_onnx) {
             assertTrue(caps.native_algorithms.contains("OnnxModel"));
-            assertEq(10, caps.native_algorithms.size());
+            assertEq(15, caps.native_algorithms.size());
         } else {
-            assertEq(9, caps.native_algorithms.size());
+            assertEq(14, caps.native_algorithms.size());
         }
     }
 
@@ -2182,6 +2227,600 @@ public class MlTest inherits QUnit::Test {
         # Verify inference works on CUDA
         hash<auto> result = model.run({"X": ((3.0,),)});
         assertFloat(7.0, result.Y[0], 1e-4);
+    }
+
+    # --- StandardScaler tests ---
+
+    stdScalerBasicTest() {
+        ML::StandardScaler scaler();
+        assertFalse(scaler.isFitted());
+
+        # Known data: features with known mean/std
+        list<hash<auto>> data = (
+            {"a": 1.0, "b": 10.0},
+            {"a": 2.0, "b": 20.0},
+            {"a": 3.0, "b": 30.0},
+            {"a": 4.0, "b": 40.0},
+            {"a": 5.0, "b": 50.0},
+        );
+        scaler.fit(data);
+        assertTrue(scaler.isFitted());
+
+        hash<ML::StandardScalerInfo> info = scaler.getInfo();
+        assertEq(2, info.n_features);
+        assertTrue(info.with_mean);
+        assertTrue(info.with_std);
+        # mean of a = 3.0, mean of b = 30.0
+        assertFloat(3.0, info.mean[0], 1e-10);
+        assertFloat(30.0, info.mean[1], 1e-10);
+
+        # Transform a record — should have approximately zero mean
+        hash<auto> transformed = scaler.transform({"a": 3.0, "b": 30.0});
+        assertFloat(0.0, transformed.a, 1e-10);
+        assertFloat(0.0, transformed.b, 1e-10);
+    }
+
+    stdScalerMatrixTest() {
+        ML::StandardScaler scaler();
+        list<list<float>> data = (
+            (1.0, 10.0),
+            (2.0, 20.0),
+            (3.0, 30.0),
+            (4.0, 40.0),
+            (5.0, 50.0),
+        );
+        scaler.fitMatrix(data);
+        assertTrue(scaler.isFitted());
+
+        list<list<float>> result = scaler.transformMatrix(data);
+        assertEq(5, result.size());
+        # Mean point (3.0, 30.0) should transform to (0.0, 0.0)
+        assertFloat(0.0, result[2][0], 1e-10);
+        assertFloat(0.0, result[2][1], 1e-10);
+
+        # First point should be negative (below mean)
+        assertTrue(result[0][0] < 0.0);
+        # Last point should be positive (above mean)
+        assertTrue(result[4][0] > 0.0);
+    }
+
+    stdScalerInverseTest() {
+        ML::StandardScaler scaler();
+        list<list<float>> data = (
+            (1.0, 10.0),
+            (2.0, 20.0),
+            (3.0, 30.0),
+        );
+        scaler.fitMatrix(data);
+
+        list<list<float>> transformed = scaler.transformMatrix(data);
+        list<list<float>> recovered = scaler.inverseTransformMatrix(transformed);
+
+        # Round-trip should recover original data
+        for (int i = 0; i < 3; ++i) {
+            for (int j = 0; j < 2; ++j) {
+                assertFloat(data[i][j], recovered[i][j], 1e-10);
+            }
+        }
+    }
+
+    stdScalerFitTransformTest() {
+        ML::StandardScaler scaler();
+        list<hash<auto>> data = (
+            {"x": 1.0, "y": 100.0},
+            {"x": 3.0, "y": 300.0},
+            {"x": 5.0, "y": 500.0},
+        );
+        list<hash<auto>> result = scaler.fitTransform(data);
+        assertTrue(scaler.isFitted());
+        assertEq(3, result.size());
+        # Middle point should be zero
+        assertFloat(0.0, result[1].x, 1e-10);
+        assertFloat(0.0, result[1].y, 1e-10);
+    }
+
+    stdScalerOptionsTest() {
+        # with_mean=False: only scale, don't center
+        ML::StandardScaler scaler({"with_mean": False, "with_std": True});
+        list<list<float>> data = ((1.0,), (2.0,), (3.0,));
+        scaler.fitMatrix(data);
+        list<list<float>> result = scaler.transformMatrix(data);
+        # Not centered, but scaled by std
+        hash<ML::StandardScalerInfo> info = scaler.getInfo();
+        assertFalse(info.with_mean);
+        assertTrue(info.with_std);
+        # Values should not be centered but should be scaled
+        assertTrue(result[0][0] > 0.0);  # 1.0 / std > 0
+
+        # with_std=False: only center, don't scale
+        ML::StandardScaler scaler2({"with_mean": True, "with_std": False});
+        scaler2.fitMatrix(data);
+        list<list<float>> result2 = scaler2.transformMatrix(data);
+        # Centered but not scaled: mean is 2.0, so first point = 1.0 - 2.0 = -1.0
+        assertFloat(-1.0, result2[0][0], 1e-10);
+    }
+
+    stdScalerErrorTest() {
+        ML::StandardScaler scaler();
+        # Transform before fit
+        assertThrows("ML-STANDARD-SCALER-ERROR", sub() { scaler.transformMatrix(((1.0,),)); });
+        # Inverse before fit
+        assertThrows("ML-STANDARD-SCALER-ERROR", sub() { scaler.inverseTransformMatrix(((1.0,),)); });
+        # Copy error
+        assertThrows("COPY-ERROR", sub() { ML::StandardScaler s2 = scaler.copy(); });
+        # Empty data
+        assertThrows("ML-DATA-ERROR", sub() { scaler.fitMatrix(list()); });
+    }
+
+    stdScalerEdgeCasesTest() {
+        # Single sample
+        ML::StandardScaler scaler();
+        scaler.fitMatrix(((5.0, 10.0),));
+        assertTrue(scaler.isFitted());
+        list<list<float>> result = scaler.transformMatrix(((5.0, 10.0),));
+        # With single sample, std is 0 → treated as 1.0, so transform subtracts mean
+        assertFloat(0.0, result[0][0], 1e-10);
+
+        # Constant feature (zero variance)
+        ML::StandardScaler scaler2();
+        scaler2.fitMatrix(((3.0, 1.0), (3.0, 2.0), (3.0, 3.0)));
+        list<list<float>> result2 = scaler2.transformMatrix(((3.0, 2.0),));
+        assertFloat(0.0, result2[0][0], 1e-10);  # constant feature → 0 after centering
+    }
+
+    # --- MinMaxScaler tests ---
+
+    mmScalerBasicTest() {
+        ML::MinMaxScaler scaler();
+        assertFalse(scaler.isFitted());
+
+        list<hash<auto>> data = (
+            {"a": 0.0, "b": 100.0},
+            {"a": 5.0, "b": 200.0},
+            {"a": 10.0, "b": 300.0},
+        );
+        scaler.fit(data);
+        assertTrue(scaler.isFitted());
+
+        hash<ML::MinMaxScalerInfo> info = scaler.getInfo();
+        assertEq(2, info.n_features);
+        assertFloat(0.0, info.feature_min, 1e-10);
+        assertFloat(1.0, info.feature_max, 1e-10);
+
+        # Min values → 0.0
+        hash<auto> t1 = scaler.transform({"a": 0.0, "b": 100.0});
+        assertFloat(0.0, t1.a, 1e-10);
+        assertFloat(0.0, t1.b, 1e-10);
+
+        # Max values → 1.0
+        hash<auto> t2 = scaler.transform({"a": 10.0, "b": 300.0});
+        assertFloat(1.0, t2.a, 1e-10);
+        assertFloat(1.0, t2.b, 1e-10);
+
+        # Midpoint → 0.5
+        hash<auto> t3 = scaler.transform({"a": 5.0, "b": 200.0});
+        assertFloat(0.5, t3.a, 1e-10);
+        assertFloat(0.5, t3.b, 1e-10);
+    }
+
+    mmScalerCustomRangeTest() {
+        ML::MinMaxScaler scaler({"feature_min": -1.0, "feature_max": 1.0});
+        scaler.fitMatrix(((0.0,), (10.0,)));
+        list<list<float>> result = scaler.transformMatrix(((0.0,), (5.0,), (10.0,)));
+        assertFloat(-1.0, result[0][0], 1e-10);
+        assertFloat(0.0, result[1][0], 1e-10);
+        assertFloat(1.0, result[2][0], 1e-10);
+    }
+
+    mmScalerInverseTest() {
+        ML::MinMaxScaler scaler();
+        list<list<float>> data = ((1.0, 50.0), (3.0, 150.0), (5.0, 250.0));
+        scaler.fitMatrix(data);
+
+        list<list<float>> transformed = scaler.transformMatrix(data);
+        list<list<float>> recovered = scaler.inverseTransformMatrix(transformed);
+        for (int i = 0; i < 3; ++i) {
+            for (int j = 0; j < 2; ++j) {
+                assertFloat(data[i][j], recovered[i][j], 1e-10);
+            }
+        }
+    }
+
+    mmScalerConstantFeatureTest() {
+        # Feature with zero range → maps to feature_min
+        ML::MinMaxScaler scaler();
+        scaler.fitMatrix(((5.0, 1.0), (5.0, 2.0), (5.0, 3.0)));
+        list<list<float>> result = scaler.transformMatrix(((5.0, 2.0),));
+        assertFloat(0.0, result[0][0], 1e-10);  # constant feature → 0.0 (feature_min)
+        assertFloat(0.5, result[0][1], 1e-10);  # normal feature
+    }
+
+    mmScalerErrorTest() {
+        ML::MinMaxScaler scaler();
+        # Transform before fit
+        assertThrows("ML-MIN-MAX-SCALER-ERROR", sub() { scaler.transformMatrix(((1.0,),)); });
+        # Invalid range
+        assertThrows("ML-MIN-MAX-SCALER-ERROR", sub() { ML::MinMaxScaler s({"feature_min": 1.0, "feature_max": 0.0}); });
+        # Copy error
+        assertThrows("COPY-ERROR", sub() { ML::MinMaxScaler s2 = scaler.copy(); });
+    }
+
+    # --- Imputer tests ---
+
+    imputerMeanTest() {
+        ML::Imputer imp({"strategy": "mean"});
+        assertFalse(imp.isFitted());
+
+        # NOTHING in matrix data → treated as NaN, should be replaced with column mean
+        list<auto> data = (
+            (1.0, 10.0),
+            (2.0, NOTHING),
+            (3.0, 30.0),
+        );
+        imp.fitMatrix(data);
+        assertTrue(imp.isFitted());
+
+        hash<ML::ImputerInfo> info = imp.getInfo();
+        assertEq("mean", info.strategy);
+        assertEq(2, info.n_features);
+        # Mean of col 0 = 2.0, mean of col 1 (non-NaN) = (10+30)/2 = 20.0
+        assertFloat(2.0, info.fill_values[0], 1e-10);
+        assertFloat(20.0, info.fill_values[1], 1e-10);
+
+        list<list<float>> result = imp.transformMatrix(((NOTHING, NOTHING),));
+        assertFloat(2.0, result[0][0], 1e-10);
+        assertFloat(20.0, result[0][1], 1e-10);
+    }
+
+    imputerMedianTest() {
+        ML::Imputer imp({"strategy": "median"});
+        # Data: 1, 2, 3, 4, 5 → median = 3
+        list<list<float>> data = ((1.0,), (2.0,), (3.0,), (4.0,), (5.0,));
+        imp.fitMatrix(data);
+
+        list<list<float>> result = imp.transformMatrix(((NOTHING,),));
+        assertFloat(3.0, result[0][0], 1e-10);
+
+        # Even count: median of 1, 2, 3, 4 = 2.5
+        ML::Imputer imp2({"strategy": "median"});
+        imp2.fitMatrix(((1.0,), (2.0,), (3.0,), (4.0,)));
+        list<list<float>> result2 = imp2.transformMatrix(((NOTHING,),));
+        assertFloat(2.5, result2[0][0], 1e-10);
+    }
+
+    imputerMostFrequentTest() {
+        ML::Imputer imp({"strategy": "most_frequent"});
+        # Value 2.0 appears most often
+        list<list<float>> data = ((1.0,), (2.0,), (2.0,), (3.0,));
+        imp.fitMatrix(data);
+
+        list<list<float>> result = imp.transformMatrix(((NOTHING,),));
+        assertFloat(2.0, result[0][0], 1e-10);
+    }
+
+    imputerConstantTest() {
+        ML::Imputer imp({"strategy": "constant", "constant_value": -999.0});
+        imp.fitMatrix(((1.0, 2.0), (3.0, 4.0)));
+
+        list<list<float>> result = imp.transformMatrix(((NOTHING, NOTHING),));
+        assertFloat(-999.0, result[0][0], 1e-10);
+        assertFloat(-999.0, result[0][1], 1e-10);
+
+        # Non-NaN values should be preserved
+        list<list<float>> result2 = imp.transformMatrix(((5.0, NOTHING),));
+        assertFloat(5.0, result2[0][0], 1e-10);
+        assertFloat(-999.0, result2[0][1], 1e-10);
+    }
+
+    imputerErrorTest() {
+        ML::Imputer imp();
+        # Transform before fit
+        assertThrows("ML-IMPUTER-ERROR", sub() { imp.transformMatrix(((1.0,),)); });
+        # Invalid strategy
+        assertThrows("ML-IMPUTER-ERROR", sub() { ML::Imputer i({"strategy": "invalid"}); });
+        # Copy error
+        assertThrows("COPY-ERROR", sub() { ML::Imputer i2 = imp.copy(); });
+    }
+
+    # --- MLPipeline tests ---
+
+    pipelineScalerKmeansTest() {
+        ML::MLPipeline p();
+        assertFalse(p.isFitted());
+        assertEq(0, p.getNumSteps());
+
+        ML::StandardScaler scaler();
+        ML::KMeans km({"k": 2, "seed": 42});
+        p.addStandardScaler("scaler", scaler);
+        p.addKMeans("model", km);
+        assertEq(2, p.getNumSteps());
+        assertEq(("scaler", "model"), p.getStepNames());
+
+        # Two well-separated clusters
+        list<list<float>> data = (
+            (1.0, 1.0), (1.5, 1.5), (2.0, 2.0),
+            (10.0, 10.0), (10.5, 10.5), (11.0, 11.0),
+        );
+        p.fitMatrix(data);
+        assertTrue(p.isFitted());
+
+        # Predict should return KMeansResult hashes
+        list<hash<auto>> results = p.predictMatrix(data);
+        assertEq(6, results.size());
+        # First 3 should be same cluster, last 3 should be same cluster
+        assertEq(results[0].cluster, results[1].cluster);
+        assertEq(results[0].cluster, results[2].cluster);
+        assertEq(results[3].cluster, results[4].cluster);
+        assertEq(results[3].cluster, results[5].cluster);
+        # Two clusters should be different
+        assertTrue(results[0].cluster != results[3].cluster);
+    }
+
+    pipelineScalerLRTest() {
+        ML::MLPipeline p();
+        ML::StandardScaler scaler();
+        ML::LinearRegression lr({"fit_intercept": True});
+        p.addStandardScaler("scaler", scaler);
+        p.addLinearRegression("model", lr);
+
+        # y = 2*x + 1
+        list<list<float>> X = ((1.0,), (2.0,), (3.0,), (4.0,), (5.0,));
+        list<float> y = (3.0, 5.0, 7.0, 9.0, 11.0);
+        p.fitMatrixWithTarget(X, y);
+        assertTrue(p.isFitted());
+
+        # Predict on new data
+        list<hash<auto>> results = p.predictMatrix(((3.0,),));
+        assertEq(1, results.size());
+        assertFloat(7.0, results[0].prediction, 0.1);
+    }
+
+    pipelineErrorTest() {
+        ML::MLPipeline p();
+        # Predict before fit
+        assertThrows("ML-PIPELINE-ERROR", sub() { p.predictMatrix(((1.0,),)); });
+        # Fit with no steps
+        assertThrows("ML-PIPELINE-ERROR", sub() { p.fitMatrix(((1.0,),)); });
+        # Copy error
+        assertThrows("COPY-ERROR", sub() { ML::MLPipeline p2 = p.copy(); });
+    }
+
+    # --- Phase 2: Metrics tests ---
+
+    accuracyBasicTest() {
+        # 4 out of 5 correct = 0.8
+        float acc = ML::ml_accuracy((1, 0, 1, 1, 0), (1, 0, 0, 1, 0));
+        assertFloat(0.8, acc, 1e-10);
+    }
+
+    accuracyPerfectTest() {
+        # Perfect predictions
+        float acc = ML::ml_accuracy((0, 1, 2, 0, 1), (0, 1, 2, 0, 1));
+        assertFloat(1.0, acc, 1e-10);
+
+        # All wrong
+        float acc2 = ML::ml_accuracy((0, 0, 0), (1, 1, 1));
+        assertFloat(0.0, acc2, 1e-10);
+    }
+
+    confusionMatrixTest() {
+        # Binary: 2 true positives, 1 false positive, 1 false negative, 1 true negative
+        hash<ML::ConfusionMatrixResult> cm = ML::ml_confusion_matrix(
+            (0, 0, 1, 1, 1), (0, 1, 0, 1, 1));
+        assertEq(2, cm.labels.size());  # 2 classes
+        assertEq(2, cm.matrix.size());  # 2x2
+        # Row 0 (true=0): TN=1, FP=1
+        assertEq(1, cm.matrix[0][0]);
+        assertEq(1, cm.matrix[0][1]);
+        # Row 1 (true=1): FN=1, TP=2
+        assertEq(1, cm.matrix[1][0]);
+        assertEq(2, cm.matrix[1][1]);
+    }
+
+    classificationReportTest() {
+        hash<ML::ClassificationReport> report = ML::ml_classification_report(
+            (0, 0, 1, 1, 1), (0, 1, 0, 1, 1));
+        assertFloat(0.6, report.accuracy, 1e-10);  # 3/5 correct
+        assertEq(2, report.per_class.size());
+
+        # Check per-class metrics exist and are in valid range
+        foreach hash<ML::ClassMetrics> cls in (report.per_class) {
+            assertTrue(cls.precision >= 0.0 && cls.precision <= 1.0);
+            assertTrue(cls.recall >= 0.0 && cls.recall <= 1.0);
+            assertTrue(cls.f1 >= 0.0 && cls.f1 <= 1.0);
+            assertTrue(cls.support > 0);
+        }
+
+        # Macro averages should be in [0, 1]
+        assertTrue(report.macro_precision >= 0.0 && report.macro_precision <= 1.0);
+        assertTrue(report.macro_f1 >= 0.0 && report.macro_f1 <= 1.0);
+        assertTrue(report.weighted_f1 >= 0.0 && report.weighted_f1 <= 1.0);
+    }
+
+    mseRmseTest() {
+        # Known values: y_true = (1, 2, 3), y_pred = (1.1, 2.2, 2.7)
+        # Errors: (0.1, 0.2, -0.3), squared: (0.01, 0.04, 0.09), MSE = 0.14/3
+        float mse = ML::ml_mse((1.0, 2.0, 3.0), (1.1, 2.2, 2.7));
+        assertFloat(0.14 / 3.0, mse, 1e-10);
+
+        float rmse = ML::ml_rmse((1.0, 2.0, 3.0), (1.1, 2.2, 2.7));
+        assertFloat(sqrt(0.14 / 3.0), rmse, 1e-10);
+
+        # Perfect predictions → 0
+        assertFloat(0.0, ML::ml_mse((1.0, 2.0), (1.0, 2.0)), 1e-10);
+    }
+
+    maeTest() {
+        # MAE of (0.1, 0.2, 0.3) = 0.2
+        float mae = ML::ml_mae((1.0, 2.0, 3.0), (1.1, 2.2, 2.7));
+        assertFloat(0.2, mae, 1e-10);
+    }
+
+    r2ScoreTest() {
+        # y_true = (1, 2, 3), mean = 2
+        # SS_tot = 1 + 0 + 1 = 2
+        # y_pred = (1.1, 2.2, 2.7), SS_res = 0.01 + 0.04 + 0.09 = 0.14
+        # R² = 1 - 0.14/2 = 0.93
+        float r2 = ML::ml_r2_score((1.0, 2.0, 3.0), (1.1, 2.2, 2.7));
+        assertFloat(0.93, r2, 1e-10);
+    }
+
+    r2PerfectTest() {
+        # Perfect prediction → R² = 1.0
+        float r2 = ML::ml_r2_score((1.0, 2.0, 3.0), (1.0, 2.0, 3.0));
+        assertFloat(1.0, r2, 1e-10);
+    }
+
+    explainedVarianceTest() {
+        # Perfect prediction → 1.0
+        float ev = ML::ml_explained_variance((1.0, 2.0, 3.0), (1.0, 2.0, 3.0));
+        assertFloat(1.0, ev, 1e-10);
+
+        # Constant prediction of mean → should be near 0
+        float ev2 = ML::ml_explained_variance((1.0, 2.0, 3.0), (2.0, 2.0, 2.0));
+        assertFloat(0.0, ev2, 1e-10);
+    }
+
+    silhouetteTest() {
+        # Two perfectly separated clusters
+        list<list<float>> data = (
+            (0.0, 0.0), (0.1, 0.0), (0.0, 0.1),   # cluster 0
+            (10.0, 10.0), (10.1, 10.0), (10.0, 10.1),  # cluster 1
+        );
+        list<float> labels = (0, 0, 0, 1, 1, 1);
+        float score = ML::ml_silhouette_score(data, labels);
+        # Well-separated clusters should have score near 1.0
+        assertTrue(score > 0.9, sprintf("expected silhouette > 0.9, got %f", score));
+    }
+
+    daviesBouldinTest() {
+        # Well-separated clusters → low DB index
+        list<list<float>> data = (
+            (0.0, 0.0), (0.1, 0.0), (0.0, 0.1),
+            (10.0, 10.0), (10.1, 10.0), (10.0, 10.1),
+        );
+        list<float> labels = (0, 0, 0, 1, 1, 1);
+        float db = ML::ml_davies_bouldin_score(data, labels);
+        # Well-separated → should be near 0
+        assertTrue(db < 0.1, sprintf("expected DB < 0.1, got %f", db));
+    }
+
+    calinskiHarabaszTest() {
+        # Well-separated clusters → high CH index
+        list<list<float>> data = (
+            (0.0, 0.0), (0.1, 0.0), (0.0, 0.1),
+            (10.0, 10.0), (10.1, 10.0), (10.0, 10.1),
+        );
+        list<float> labels = (0, 0, 0, 1, 1, 1);
+        float ch = ML::ml_calinski_harabasz_score(data, labels);
+        # Well-separated → should be high
+        assertTrue(ch > 100.0, sprintf("expected CH > 100, got %f", ch));
+    }
+
+    metricsErrorTest() {
+        # Mismatched lengths
+        assertThrows("ML-METRICS-ERROR", sub() { ML::ml_accuracy((1, 2), (1,)); });
+        # Empty input
+        assertThrows("ML-DATA-ERROR", sub() { ML::ml_mse(list(), list()); });
+        # Silhouette with < 2 clusters
+        assertThrows("ML-METRICS-ERROR", sub() {
+            ML::ml_silhouette_score(((1.0,), (2.0,)), (0, 0));
+        });
+    }
+
+    # --- CrossValidator tests ---
+
+    cvBasicTest() {
+        ML::CrossValidator cv({"n_folds": 5});
+        assertEq(5, cv.getNumFolds());
+
+        list<hash<ML::CrossValidationFold>> folds = cv.split(100);
+        assertEq(5, folds.size());
+
+        # Each sample should appear in exactly one test fold
+        list<int> all_test;
+        foreach hash<ML::CrossValidationFold> fold in (folds) {
+            assertEq(80, fold.train_indices.size());
+            assertEq(20, fold.test_indices.size());
+            all_test += fold.test_indices;
+        }
+        # Sort and verify all 100 indices present
+        all_test = sort(all_test);
+        for (int i = 0; i < 100; ++i) {
+            assertEq(i, all_test[i]);
+        }
+    }
+
+    cvShuffleTest() {
+        # With shuffle + seed, results should be reproducible
+        ML::CrossValidator cv1({"n_folds": 3, "shuffle": True, "seed": 42});
+        ML::CrossValidator cv2({"n_folds": 3, "shuffle": True, "seed": 42});
+        list<hash<ML::CrossValidationFold>> folds1 = cv1.split(30);
+        list<hash<ML::CrossValidationFold>> folds2 = cv2.split(30);
+        assertEq(folds1[0].test_indices, folds2[0].test_indices);
+        assertEq(folds1[1].test_indices, folds2[1].test_indices);
+
+        # Without shuffle, indices are sequential
+        ML::CrossValidator cv3({"n_folds": 3, "shuffle": False});
+        list<hash<ML::CrossValidationFold>> folds3 = cv3.split(9);
+        assertEq((0, 1, 2), folds3[0].test_indices);
+        assertEq((3, 4, 5), folds3[1].test_indices);
+        assertEq((6, 7, 8), folds3[2].test_indices);
+    }
+
+    cvErrorTest() {
+        # n_folds < 2
+        assertThrows("ML-CROSS-VALIDATOR-ERROR", sub() {
+            ML::CrossValidator cv({"n_folds": 1});
+        });
+        # n_samples < n_folds
+        ML::CrossValidator cv({"n_folds": 5});
+        assertThrows("ML-CROSS-VALIDATOR-ERROR", sub() { cv.split(3); });
+        # Copy error
+        assertThrows("COPY-ERROR", sub() { ML::CrossValidator cv2 = cv.copy(); });
+    }
+
+    # --- Integration tests: metrics + algorithms ---
+
+    metricsIntegrationLRTest() {
+        # Train LinearRegression on y = 2x + 1, then evaluate with metrics
+        ML::LinearRegression lr({"fit_intercept": True});
+        list<list<float>> X = ((1.0,), (2.0,), (3.0,), (4.0,), (5.0,));
+        list<float> y = (3.0, 5.0, 7.0, 9.0, 11.0);
+        lr.fitMatrix(X, y);
+
+        # Get predictions
+        list<hash<ML::LinearRegressionResult>> results = lr.predictMatrix(X);
+        list<float> predictions;
+        foreach hash<ML::LinearRegressionResult> r in (results) {
+            push predictions, r.prediction;
+        }
+
+        # R² from metric function should match model's R²
+        float r2 = ML::ml_r2_score(y, predictions);
+        assertFloat(1.0, r2, 0.01);  # Linear fit on linear data → near-perfect
+
+        float mse = ML::ml_mse(y, predictions);
+        assertTrue(mse < 0.01, sprintf("expected MSE near 0, got %f", mse));
+    }
+
+    metricsIntegrationKMeansTest() {
+        # Cluster well-separated data, then evaluate with silhouette
+        ML::KMeans km({"k": 2, "seed": 42});
+        list<list<float>> data = (
+            (1.0, 1.0), (1.5, 1.5), (2.0, 2.0),
+            (10.0, 10.0), (10.5, 10.5), (11.0, 11.0),
+        );
+        km.fitMatrix(data);
+        list<hash<ML::KMeansResult>> results = km.predictMatrix(data);
+
+        list<float> labels;
+        foreach hash<ML::KMeansResult> r in (results) {
+            push labels, r.cluster.toFloat();
+        }
+
+        float sil = ML::ml_silhouette_score(data, labels);
+        assertTrue(sil > 0.8, sprintf("expected silhouette > 0.8, got %f", sil));
     }
 
     private assertFloat(float expected, auto actual, float tolerance) {
