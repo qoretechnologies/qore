@@ -2210,8 +2210,8 @@ void QuicSession::markStreamComplete(int64_t stream_id) {
         // dispatched yet (e.g., HEADERS + DATA + END_STREAM arrived in one batch),
         // keep the stream in the map so takeHeadersReadyStreamCopy() can find it.
         if (headers_only_mode_ && it->second->headers_complete) {
-            printd(5, "QuicSession::markStreamComplete() stream_id=" QLLD " headers-only mode, keeping in map\n",
-                stream_id);
+            printd(5, "QuicSession::markStreamComplete() stream_id=" QLLD " headers-only mode, keeping in map (body_size=%d)\n",
+                stream_id, (int)it->second->body.size());
             return;
         }
 
@@ -2277,7 +2277,10 @@ std::unique_ptr<QuicStreamInfo> QuicSession::takeHeadersReadyStreamCopy(
             auto copy = std::make_unique<QuicStreamInfo>(*info);
             // Clear body on the COPY: any DATA that arrived with HEADERS stays
             // in the original for takeStreamData()/readQuicStreamDataBlock() to return.
+            // Also clear body_complete so getOutput() reports end_stream=false
+            // (the body is still available via the original stream).
             copy->body.clear();
+            copy->body_complete = false;
             info->dispatched = true;
 
             // Create per-stream notifier for targeted wakeup

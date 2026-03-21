@@ -1260,6 +1260,11 @@ int64_t QoreSocketObject::submitQuicRequestStreaming(const char* method, const c
         }
     }
 
+    // Enable headers-only mode so the streaming response's headers are dispatched
+    // before the body is complete. The flag is turned off in the poll operation's
+    // continuePoll() after the headers-ready stream is taken.
+    session->setHeadersOnlyMode(true);
+
     return session->submitRequestStreaming(method, path, hdr_map, xsink);
 }
 

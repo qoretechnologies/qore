@@ -193,7 +193,18 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
                     streaming = False;
                     delete data_channel;
                 }
+                releaseReservationIfHeld();
                 throw "HTTPCLIENT-TIMEOUT", "connection establishment timed out";
+            }
+        }
+
+        # Re-check state after readiness wait — cancel() may have run concurrently
+        {
+            AutoLock al(lock);
+            if (state != HttpClientStreamState::Open) {
+                releaseReservationIfHeld();
+                throw "HTTPCLIENT-CANCELLED",
+                    "stream was cancelled during connection setup";
             }
         }
 
@@ -203,6 +214,8 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
             stream_id = h3conn.submitRequestStreaming(method, path, headers, NOTHING,
                 \handleStreamingResponse(), NOTHING, body_streaming);
             @assert(stream_id >= 0);
+            # Reservation converted to active stream (same as base class submit path)
+            reservation_held = False;
         } catch (hash<ExceptionInfo> ex) {
             {
                 AutoLock al(lock);
@@ -210,6 +223,7 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
                 streaming = False;
                 delete data_channel;
             }
+            releaseReservationIfHeld();
             rethrow;
         }
 
@@ -316,14 +330,11 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
                     return signal;  # error from callback
                 }
                 if (signal.typeCode() == NT_HASH && signal.end_stream) {
-                    # Headers-only response (END_STREAM on HEADERS frame)
-                    {
-                        AutoLock al(lock);
-                        if (state < HttpClientStreamState::Complete) {
-                            state = HttpClientStreamState::Complete;
-                        }
-                    }
-                    return {"end_stream": True};
+                    # Response arrived with headers + body + END_STREAM in one batch.
+                    # Body data is still in the QUIC stream buffer — don't signal
+                    # end_stream yet; let the QUIC read loop below deliver the body.
+                    # If there truly is no body, readQuicStreamDataBlock() will
+                    # return NOTHING immediately and we'll signal end_stream then.
                 }
                 # Headers received, body data follows — fall through to QUIC read
             } catch (hash<ExceptionInfo> ex) {

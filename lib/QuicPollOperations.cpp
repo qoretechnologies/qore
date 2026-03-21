@@ -859,11 +859,15 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                     }
 
                     // Check for headers-ready streaming streams (headers-only mode)
-                    {
+                    { // Check for headers-ready streaming streams
                         auto hdr_stream = quic_session->takeHeadersReadyStreamCopy();
                         if (hdr_stream) {
                             cached_stream = std::move(hdr_stream);
                             qcs_state = QCS::RESPONSE_READY;
+                            // Disable headers-only mode so subsequent non-streaming
+                            // requests are dispatched normally (full response)
+                            quic_session->setHeadersOnlyMode(false);
+                            
                             {
                                 QoreHashNode* flush_info = flushAndReturnPollInfo(xsink);
                                 if (flush_info) {
@@ -905,11 +909,13 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                             return nullptr;  // goal reached
                         }
                         // Check for headers-ready streaming streams
-                        {
+                        { // Check for headers-ready streaming streams
                             auto hdr_stream = quic_session->takeHeadersReadyStreamCopy();
                             if (hdr_stream) {
                                 cached_stream = std::move(hdr_stream);
                                 qcs_state = QCS::RESPONSE_READY;
+                                quic_session->setHeadersOnlyMode(false);
+                                
                                 {
                                     QoreHashNode* flush_info = flushAndReturnPollInfo(xsink);
                                     if (flush_info) {
@@ -1014,8 +1020,11 @@ int64_t SocketQuicClientPollOperation::submitRequestStreaming(
         xsink->raiseException("QUIC-ERROR", "QUIC session not initialized");
         return -1;
     }
-    // Enable headers-only mode so streaming responses are dispatched incrementally
+    // Enable headers-only mode so the streaming response's headers are dispatched
+    // before the body is complete. This flag is turned off in continuePoll() after
+    // the headers-ready stream is taken, so non-streaming requests are unaffected.
     quic_session->setHeadersOnlyMode(true);
+    
     return quic_session->submitRequestStreaming(method, path, headers, xsink);
 }
 
