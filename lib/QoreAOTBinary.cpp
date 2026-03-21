@@ -302,8 +302,9 @@ bool QoreAOTBinaryWriter::finalize(const QoreAOTBinaryHeader& in_header, std::ve
     writeU8LE(header.qore_version_minor);
     // Bytes 32-33: qore_version_patch
     writeU16LE(header.qore_version_patch);
-    // Bytes 34-35: reserved
-    writeU16LE(header.reserved);
+    // Bytes 34: compression, byte 35: reserved (separate writes to preserve layout)
+    writeU8LE(header.compression);
+    writeU8LE(header.reserved);
     // Bytes 36-43: parse_options_hi
     writeI64LE(header.parse_options_hi);
     // Bytes 44-51: source_hash
@@ -358,7 +359,8 @@ bool QoreAOTBinaryReader::open(const uint8_t* in_data, uint32_t in_size, std::st
     header.qore_version_major = readU8(ptr);
     header.qore_version_minor = readU8(ptr);
     header.qore_version_patch = readU16(ptr);
-    header.reserved = readU16(ptr);
+    header.compression = readU8(ptr);
+    header.reserved = readU8(ptr);
     header.parse_options_hi = readI64(ptr);
 
     // Read new v1 fields: source_hash (8) and feature_flags (8)
@@ -408,10 +410,26 @@ bool QoreAOTBinaryReader::open(const uint8_t* in_data, uint32_t in_size, std::st
         return false;
     }
 
+    // Handle decompression if needed (before reading section directory and string pool)
+    // When compressed, the entire post-header region is compressed
+    if (header.compression == 1) {
+        const uint8_t* compressed_start = data + header_size;
+        size_t compressed_len = in_size - header_size;
+        std::string decomp_error;
+        if (!decompressMetadata(compressed_start, compressed_len, decompressed_body, decomp_error)) {
+            error = "failed to decompress metadata: " + decomp_error;
+            return false;
+        }
+        // Use decompressed data as our working buffer
+        data = decompressed_body.data();
+        total_size = static_cast<uint32_t>(decompressed_body.size());
+        ptr = data;  // Reset ptr to start of decompressed data
+    }
+
     // Read section directory
     uint32_t section_dir_size = header.section_count * sizeof(QoreAOTSectionHeader);
     uint32_t needed = header_size + section_dir_size;
-    if (in_size < needed) {
+    if (total_size < needed) {
         error = "binary too small for section directory";
         return false;
     }

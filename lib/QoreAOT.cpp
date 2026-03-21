@@ -1990,21 +1990,29 @@ bool QoreAOT::compile(QoreProgram* pgm,
 
         printf("AOT: metadata blob: %d bytes", (int)metadata.size());
 
-        // Compress metadata to reduce binary size and LLVM compilation overhead
-        std::vector<uint8_t> compressed_metadata;
-        std::string compress_error;
-        if (compressMetadata(metadata, compressed_metadata, compress_error)) {
-            hdr.compression = 1;  // Mark as zlib compressed
-            int original_size = (int)metadata.size();
-            int compressed_size = (int)compressed_metadata.size();
-            printf(" (compressed to %d bytes, %.1f%%)\n", compressed_size,
-                100.0 * compressed_size / original_size);
-            generateMainAndTableV2(ctx, *module, compressed_metadata, label, parse_options, compiled_funcs);
+        // Compress only the post-header data to keep magic/header readable
+        // Skip compression for include-source binaries to preserve source code searchability
+        const uint32_t AOT_HEADER_BYTES = 60;
+        if (!include_source && metadata.size() > AOT_HEADER_BYTES) {
+            std::vector<uint8_t> post_header(metadata.begin() + AOT_HEADER_BYTES, metadata.end());
+            std::vector<uint8_t> compressed_post;
+            std::string compress_error;
+            if (compressMetadata(post_header, compressed_post, compress_error)) {
+                int compressed_total = AOT_HEADER_BYTES + (int)compressed_post.size();
+                printf(" (compressed to %d bytes, %.1f%%)\n", compressed_total,
+                    100.0 * compressed_total / (int)metadata.size());
+                // Patch compression byte in header (byte 34)
+                metadata[34] = 1;
+                // Replace post-header data with compressed version
+                metadata.resize(AOT_HEADER_BYTES);
+                metadata.insert(metadata.end(), compressed_post.begin(), compressed_post.end());
+            } else {
+                printf("\n");
+            }
         } else {
-            printf(" (compression failed: %s, using uncompressed)\n", compress_error.c_str());
-            hdr.compression = 0;  // Not compressed
-            generateMainAndTableV2(ctx, *module, metadata, label, parse_options, compiled_funcs);
+            printf("\n");
         }
+        generateMainAndTableV2(ctx, *module, metadata, label, parse_options, compiled_funcs);
     }
 
     // Finalize shared debug info after all functions are lowered
@@ -3091,21 +3099,29 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
 
         printf("AOT: module metadata blob: %d bytes", (int)metadata.size());
 
-        // Compress metadata
-        std::vector<uint8_t> compressed_metadata;
-        std::string compress_error;
+        // Compress only the post-header data (skip compression for include-source to preserve source searchability)
+        const uint32_t AOT_HEADER_BYTES = 60;
         std::vector<uint8_t>* use_metadata = &metadata;
-        if (compressMetadata(metadata, compressed_metadata, compress_error)) {
-            hdr.compression = 1;
-            int original_size = (int)metadata.size();
-            int compressed_size = (int)compressed_metadata.size();
-            printf(" (compressed to %d bytes, %.1f%%)\n", compressed_size,
-                100.0 * compressed_size / original_size);
-            use_metadata = &compressed_metadata;
+        if (!include_source && metadata.size() > AOT_HEADER_BYTES) {
+            std::vector<uint8_t> post_header(metadata.begin() + AOT_HEADER_BYTES, metadata.end());
+            std::vector<uint8_t> compressed_post;
+            std::string compress_error;
+            if (compressMetadata(post_header, compressed_post, compress_error)) {
+                int compressed_total = AOT_HEADER_BYTES + (int)compressed_post.size();
+                printf(" (compressed to %d bytes, %.1f%%)\n", compressed_total,
+                    100.0 * compressed_total / (int)metadata.size());
+                // Patch compression byte in header (byte 34)
+                metadata[34] = 1;
+                // Replace post-header data with compressed version
+                metadata.resize(AOT_HEADER_BYTES);
+                metadata.insert(metadata.end(), compressed_post.begin(), compressed_post.end());
+            } else {
+                printf("\n");
+            }
         } else {
-            printf(" (compression failed: %s, using uncompressed)\n", compress_error.c_str());
-            hdr.compression = 0;
+            printf("\n");
         }
+        hdr.compression = include_source ? 0 : (use_metadata != &metadata ? 1 : 0);
 
         // Add init functions to the function table so they're available at runtime
         for (auto& cif : compiled_init_funcs) {
@@ -3478,21 +3494,29 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
 
             printf("AOT: split module metadata blob: %d bytes", (int)metadata.size());
 
-            // Compress metadata
-            std::vector<uint8_t> compressed_metadata;
-            std::string compress_error;
+            // Compress only the post-header data (skip compression for include-source to preserve source searchability)
+            const uint32_t AOT_HEADER_BYTES = 60;
             std::vector<uint8_t>* use_metadata = &metadata;
-            if (compressMetadata(metadata, compressed_metadata, compress_error)) {
-                hdr.compression = 1;
-                int original_size = (int)metadata.size();
-                int compressed_size = (int)compressed_metadata.size();
-                printf(" (compressed to %d bytes, %.1f%%)\n", compressed_size,
-                    100.0 * compressed_size / original_size);
-                use_metadata = &compressed_metadata;
+            if (!include_source && metadata.size() > AOT_HEADER_BYTES) {
+                std::vector<uint8_t> post_header(metadata.begin() + AOT_HEADER_BYTES, metadata.end());
+                std::vector<uint8_t> compressed_post;
+                std::string compress_error;
+                if (compressMetadata(post_header, compressed_post, compress_error)) {
+                    int compressed_total = AOT_HEADER_BYTES + (int)compressed_post.size();
+                    printf(" (compressed to %d bytes, %.1f%%)\n", compressed_total,
+                        100.0 * compressed_total / (int)metadata.size());
+                    // Patch compression byte in header (byte 34)
+                    metadata[34] = 1;
+                    // Replace post-header data with compressed version
+                    metadata.resize(AOT_HEADER_BYTES);
+                    metadata.insert(metadata.end(), compressed_post.begin(), compressed_post.end());
+                } else {
+                    printf("\n");
+                }
             } else {
-                printf(" (compression failed: %s, using uncompressed)\n", compress_error.c_str());
-                hdr.compression = 0;
+                printf("\n");
             }
+            hdr.compression = include_source ? 0 : (use_metadata != &metadata ? 1 : 0);
 
             // Add init functions to the function table so they're available at runtime
             for (auto& cif : compiled_init_funcs) {

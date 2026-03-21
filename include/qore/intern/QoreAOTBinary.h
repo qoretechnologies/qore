@@ -357,6 +357,9 @@ class QoreAOTBinaryReader {
     const uint8_t* data_area = nullptr;
     uint32_t data_area_size = 0;
 
+    // Holds decompressed data if compression was used
+    std::vector<uint8_t> decompressed_body;
+
 public:
     //! Open and validate a binary blob
     /** @param data pointer to the binary data
