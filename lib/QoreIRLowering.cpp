@@ -3398,6 +3398,17 @@ static bool opcodeNeverReturnsNothing(QoreIROpcode op) {
 
 bool QoreIRLowering::needsNotNothingGuard(const QoreValue* expr, const QoreTypeInfo* target_type,
         bool allow_maybe_nothing) const {
+
+    static bool debug_guard_entry = [] {
+        const char* debug_env = getenv("QORE_IR_DEBUG");
+        return debug_env && strstr(debug_env, "guard");
+    }();
+
+    if (debug_guard_entry && target_type) {
+        fprintf(stderr, "[GUARD-NEED-CHECK] target_type present, allow_maybe=%d\n", allow_maybe_nothing);
+        fflush(stderr);
+    }
+
     // Constants are never NOTHING - no guard needed
     if (expr && !expr->isNothing() && !expr->hasNode()) {
         return false;
@@ -3490,9 +3501,24 @@ bool QoreIRLowering::needsNotNothingGuard(const QoreValue* expr, const QoreTypeI
             } catch (...) {
                 got_analysis = false;
             }
-            if (got_analysis && expr_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)) {
-                type = expr_analysis.known_type;
-                has_reliable_type = true;
+
+            static bool debug_guard_analysis = [] {
+                const char* debug_env = getenv("QORE_IR_DEBUG");
+                return debug_env && strstr(debug_env, "guard");
+            }();
+
+            if (got_analysis) {
+                if (debug_guard_analysis) {
+                    fprintf(stderr, "[GUARD-ANALYSIS-DEBUG] expr_analysis flags: KnownTypeInfo=%d NeverNothing=%d\n",
+                            expr_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo),
+                            expr_analysis.hasFlag(QoreParseAnalysis::NeverNothing));
+                    fflush(stderr);
+                }
+
+                if (expr_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)) {
+                    type = expr_analysis.known_type;
+                    has_reliable_type = true;
+                }
             }
         }
     }
