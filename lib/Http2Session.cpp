@@ -1176,12 +1176,14 @@ void Http2Session::markStreamComplete(int32_t stream_id) {
                 auto copy = std::make_unique<Http2StreamInfo>(*it->second);
                 completed_streams.push(std::move(copy));
             } else if (!is_server) {
-                // Client non-CONNECT: copy to completed_streams for takeCompletedStream(),
-                // then erase original — the caller reads from the copy, and keeping the
-                // original in the map leaks ~1.4 KiB per request
+                // Client non-CONNECT: copy to completed_streams for takeCompletedStream().
+                // Do NOT erase the original — the stream may be in "half-closed (remote)"
+                // state (server sent END_STREAM but client hasn't yet).  Per RFC 7540
+                // section 5.1, the client can still send DATA on a half-closed (remote)
+                // stream.  The stream is erased later by onStreamCloseCallback() when
+                // both sides have sent END_STREAM (or RST_STREAM).
                 auto copy = std::make_unique<Http2StreamInfo>(*it->second);
                 completed_streams.push(std::move(copy));
-                streams.erase(it);
             } else {
                 completed_streams.push(std::move(it->second));
                 streams.erase(it);

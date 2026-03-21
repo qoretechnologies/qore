@@ -77,6 +77,11 @@ public class Http2PollOperation inherits AbstractPollOperation {
         #! Whether to use headers-only mode for request reading
         bool headers_only = False;
 
+        #! Set to True by continuePoll() when a request is stored; cleared by getOutput().
+        #! Prevents handler threads from calling continueReading() between continuePoll()
+        #! returning STATE_REQUEST_READY and the dispatch callback calling getOutput().
+        bool request_pending = False;
+
         #! Mutex for thread safety between I/O thread (continuePoll) and handler
         #! thread (continueReading, startSendResponse, etc.)
         Mutex op_lock();
@@ -181,6 +186,7 @@ public class Http2PollOperation inherits AbstractPollOperation {
                             request = current_op.getOutput();
                             if (request) {
                                 empty_read_count = 0;
+                                request_pending = True;
                                 state = STATE_REQUEST_READY;
 
                                 return NOTHING;
@@ -276,7 +282,22 @@ public class Http2PollOperation inherits AbstractPollOperation {
         - \c authority: the :authority pseudo-header value (if present)
         - \c scheme: the :scheme pseudo-header value (if present)
     */
+    #! Returns the completed request (if any)
+    /** @note Acquires op_lock to synchronize with continueReading() called from
+        handler threads.  Clears request_pending so that concurrent
+        continueReading() calls correctly throw instead of clearing a request
+        that is being dispatched.
+
+        Unlike Http3ServerPollOperation::getOutput(), this does NOT atomically
+        transition to STATE_READING because HTTP/2 body_streaming defers the
+        resume: the h2op is NOT submitted during dispatch — the handler's
+        resume_body_streaming callback submits it later via continueReading().
+    */
     auto getOutput() {
+        AutoLock al(op_lock);
+        # Clear the pending flag — getOutput() is the dispatch callback's
+        # entry point, so the request is now being processed (or was never set).
+        request_pending = False;
         return request;
     }
 
@@ -445,13 +466,25 @@ if (push) {
         underlying C++ SocketHttp2ServerPollOperation continues reading frames.
         This avoids the overhead of creating a new operation and preserves the
         nghttp2 session state (including any already-received frames).
+
+        @note Thread safety: rejects the call if state is STATE_REQUEST_READY but
+        the request hasn't been consumed via getOutput() yet.  This prevents a
+        handler thread (calling resumeMultiplexedReading after body streaming)
+        from racing with the I/O controller dispatch.
     */
     continueReading() {
         AutoLock al(op_lock);
+        if (state == STATE_REQUEST_READY && request_pending) {
+            # A request was found by continuePoll() but not yet consumed by
+            # getOutput().  A handler thread (via resumeMultiplexedReading) is
+            # racing with the I/O controller's dispatch callback.
+            throw "HTTP2-STATE-ERROR", "cannot continue reading: request pending dispatch";
+        }
         if (state != STATE_REQUEST_READY) {
             throw "HTTP2-STATE-ERROR", sprintf("cannot continue reading in state: %y", state);
         }
         remove request;
+        request_pending = False;
         empty_read_count = 0;
         state = STATE_READING;
     }

@@ -226,19 +226,16 @@ public class Http2ClientPollOperation inherits HttpClientPollOperation {
             throw "HTTP2-STATE-ERROR", sprintf("cannot send data in state: %y", current_state);
         }
 
-        string sid = string(stream_id);
-        {
-            AutoLock al(stream_lock);
-            if (!stream_callbacks.hasKey(sid)) {
-                throw "HTTP2-STREAM-ERROR", sprintf("stream %d not found", stream_id);
-            }
-        }
-
         binary bin_data = data.typeCode() == NT_BINARY ? data : binary(data);
 
         log(LoggerLevel::DEBUG, "sending %d bytes on stream %d (end_stream=%y)",
             bin_data.size(), stream_id, end_stream);
 
+        # Send directly via C++ — the stream may still be open for writing even
+        # after the server sent END_STREAM (half-closed remote per RFC 7540 §5.1).
+        # The stream_callbacks check was removed because callbacks track response
+        # delivery, not stream existence.  If the stream doesn't exist at the
+        # nghttp2 level, sendHttp2StreamData() will raise an appropriate error.
         sock.sendHttp2StreamData(stream_id, bin_data, end_stream);
     }
 
