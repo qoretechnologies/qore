@@ -35,6 +35,7 @@
     |@ref broken-operators "%broken-operators"|Accept spaces in multi-character operators as with pre-0.8.12
     |@ref broken-range "%broken-range"|Include the upper limit in @ref Qore::range() "range()" and @ref Qore::xrange() "xrange()" as with pre-0.9.5
     |@ref broken-references "%broken-references"|Do not enforce @ref reference_type "reference" and @ref reference_or_nothing_type "*reference" type restrictions as with pre-0.8.13
+    |@ref broken-soft-types "%broken-soft-types"|Allow soft types (e.g., @ref softint_type "softint", @ref softnumber_type "softnumber") to accept SQL NULL values and treat them like @ref nothing "NOTHING" as with pre-2.4 behavior. This is an AST-only option for backward compatibility; IR/JIT modes will enforce strict NULL rejection.<br><br>Since %Qore 2.4
     |@ref broken-sprintf "%broken-sprintf"|Use pre-0.9 sprintf format handling where no argument is handled differently than @ref nothing
     |@ref broken-varargs "%broken-varargs"|Assume varargs for all @ref abstract "abstract" methods as with pre-1.17
     |@ref correct-cast "%correct-cast"|revert the effect of the @ref broken-cast "%broken-cast" parse option
@@ -48,6 +49,7 @@
     |@ref correct-operators "%correct-operators"|revert the effect of the @ref broken-operators "%broken-operators" parse option
     |@ref correct-range "%correct-range"|revert the effect of the @ref broken-range "%broken-range" parse option
     |@ref correct-references "%correct-references"|revert the effect of the @ref broken-references "%broken-references" parse option
+    |@ref correct-soft-types "%correct-soft-types"|revert the effect of the @ref broken-soft-types "%broken-soft-types" parse option
     |@ref correct-sprintf "%correct-sprintf"|revert the effect of the @ref broken-sprintf "%broken-sprintf" parse option
     |@ref correct-varargs "%correct-varargs"|revert the effect of the @ref broken-varargs "%broken-varargs" parse option
     |@ref define "%define"|Creates and optionally sets a value for a @ref conditional_parsing "parse define" <br><br>Since %Qore 0.8.3

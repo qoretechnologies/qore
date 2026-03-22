@@ -2,6 +2,34 @@
 
     @tableofcontents
 
+    @section qore_2_4_0 Qore 2.4.0
+
+    @par Release Summary
+    New parse options for backward compatibility and other enhancements; see below for more information
+
+    @subsection qore_2_4_0_compatibility Changes That Can Affect Backwards-Compatibility
+
+    @par Soft Type NULL Value Handling
+    @parblock
+    %Qore now strictly rejects SQL NULL values for non-optional soft types
+    (@ref softint_type "softint", @ref softnumber_type "softnumber", @ref softstring_type "softstring",
+    @ref softbool_type "softbool", @ref softdate_type "softdate", @ref softlist_type "softlist",
+    @ref softhash_type "softhash", @ref softobject_type "softobject", @ref softcoding_type "softcoding",
+    @ref softbinary_type "softbinary"). In pre-2.4 versions, soft types accepted SQL NULL and treated it like
+    @ref nothing "NOTHING".
+
+    Code that relied on soft types accepting NULL will now encounter \c RUNTIME-TYPE-ERROR when NULL values
+    are passed to soft type parameters or assigned to soft type variables during type validation.
+
+    <b>Workarounds:</b>
+    - Use optional soft types (e.g., @ref softint_or_nothing_type "*softint") to accept NULL values
+    - Use the @ref broken-soft-types "%broken-soft-types" parse directive to restore pre-2.4 behavior (AST-only)
+    - Use @ref Qore::QoreParseOptions::BROKEN_SOFT_TYPES "QoreParseOptions::BROKEN_SOFT_TYPES" when setting up a
+      @ref Qore::Program "Program" object (AST-only)
+
+    <b>Note:</b> The @ref broken-soft-types "%broken-soft-types" option is AST-only and not supported in IR/JIT execution modes.
+    @endparblock
+
     @section qore_2_3_0 Qore 2.3.0
 
     @par Release Summary

@@ -1112,6 +1112,8 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
 ^%no-constant-defs{WS}*$                parse_set_parse_options(yylloc, QoreParseOptions::NO_CONSTANT_DEFS);
 ^%no-namespace-defs{WS}*$               parse_set_parse_options(yylloc, QoreParseOptions::NO_NAMESPACE_DEFS);
 ^%no-new{WS}*$                          parse_set_parse_options(yylloc, QoreParseOptions::NO_NEW);
+^%broken-soft-types{WS}*$               parse_set_parse_options(yylloc, QoreParseOptions::BROKEN_SOFT_TYPES);
+^%correct-soft-types{WS}*$              parse_disable_parse_options(yylloc, QoreParseOptions::BROKEN_SOFT_TYPES);
 ^%push-parse-options{WS}*$              push_parse_options();
 ^%append-include-path{WS}*$             { parse_error(*get_loc(yylloc), "missing argument to %%append-include-path"); }
 ^%append-include-path{WS}+              BEGIN(append_path_state);

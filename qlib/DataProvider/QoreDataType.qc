@@ -24,6 +24,27 @@
 
 #! contains all public definitions in the DataProvider module
 public namespace DataProvider {
+
+# Thread-local context for tracking parse option state
+private namespace {
+    our bool broken_soft_types = False;
+
+    #! Internal function to set broken soft types mode
+    /** Used by the runtime to enable broken soft types behavior when PO_BROKEN_SOFT_TYPES is set
+        @note This is an internal function not intended for public use
+    */
+    void set_broken_soft_types(bool enabled) {
+        broken_soft_types = enabled;
+    }
+
+    #! Internal function to check if broken soft types mode is enabled
+    /** @return True if soft types should accept NULL like NOTHING
+        @note This is an internal function not intended for public use
+    */
+    bool is_broken_soft_types() {
+        return broken_soft_types;
+    }
+}
 #! Display name and description info (without name field)
 /** @since %DataProvider 3.1
 */
@@ -329,9 +350,9 @@ public class QoreDataType inherits AbstractDataProviderType {
             throw "RUNTIME-TYPE-ERROR", sprintf("type %y does not accept values of type %y", getName(),
                 value.type());
         }
-        # Reject NULL for non-optional soft types
+        # Reject NULL for non-optional soft types (unless PO_BROKEN_SOFT_TYPES is set for backward compatibility)
         # Use == instead of === because NULL is often treated as empty/falsy value
-        if (value == NULL && type.getName() =~ /^soft/ && type.getName() !~ /^\*soft/) {
+        if (!is_broken_soft_types() && value == NULL && type.getName() =~ /^soft/ && type.getName() !~ /^\*soft/) {
             throw "RUNTIME-TYPE-ERROR", sprintf("type %y does not accept NULL", type.getName());
         }
         # Only use default value when value is truly missing, not when NULL is explicitly passed

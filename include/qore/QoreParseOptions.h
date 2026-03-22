@@ -181,6 +181,14 @@ public:
     */
     DLLEXPORT static const QoreParseOptions NO_NEW;
 
+    //! extended option: allow old behavior where soft types accept NULL like NOTHING (bit 68)
+    /** Enables pre-2.4 behavior where non-optional soft types (softint, softnumber, etc.)
+        accepted SQL NULL values and treated them like NOTHING. This is an AST-only option
+        for backward compatibility.
+        @since %Qore 2.4
+    */
+    DLLEXPORT static const QoreParseOptions BROKEN_SOFT_TYPES;
+
 private:
     int64 lo;  //!< bits 0-63 (compatible with legacy int64 parse options)
     int64 hi;  //!< bits 64-127 (extended parse options)

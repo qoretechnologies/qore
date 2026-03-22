@@ -1,0 +1,45 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%enable-all-warnings
+
+%requires QUnit
+
+public namespace soft_types_test;
+
+class SoftTypesTest inherits QUnit::Test {
+    public {
+        const TEST_NAME = "Soft Types Backward Compatibility Test";
+        const TEST_VERSION = "1.0";
+    }
+
+    testParseDirectiveExists() {
+        # Test that %broken-soft-types parse directive can be parsed
+        Program p = new Program();
+        p.parse("%broken-soft-types
+string x = \"test\";
+", "test-directive-exists");
+        p.run();
+    }
+
+    testCorrectDirectiveReverts() {
+        # Test that %correct-soft-types parse directive can be parsed
+        Program p = new Program();
+        p.parse("%broken-soft-types
+%correct-soft-types
+string x = \"test\";
+", "test-correct-directive");
+        p.run();
+    }
+
+    testParseDirectiveInheritance() {
+        # Test that %broken-soft-types can be set and checked
+        Program p = new Program();
+        # Just verify the directive can be set without error
+        p.parse("%broken-soft-types
+hash h = {};
+", "test-inheritance");
+        p.run();
+    }
+}

@@ -106,6 +106,10 @@
 #define PO_BROKEN_LIST_RANGE                (1LL << 62)  //!< allow for old pre-%Qore 2.0 list range behavior
 #define PO_ENABLE_DEBUG                     (1LL << 63)  //!< enable \@assert and \@debug statements (otherwise ignored at parse time)
 
+// Backward compatibility alias for extended option
+//! @deprecated use QoreParseOptions::BROKEN_SOFT_TYPES instead
+#define PO_BROKEN_SOFT_TYPES                0  //!< allow old behavior where soft types accept NULL (use QoreParseOptions::BROKEN_SOFT_TYPES)
+
 // aliases for old defines
 #define PO_NO_SYSTEM_FUNC_VARIANTS          PO_NO_INHERIT_SYSTEM_FUNC_VARIANTS
 #define PO_NO_SYSTEM_CLASSES                PO_NO_INHERIT_SYSTEM_CLASSES
@@ -156,6 +160,10 @@
     |PO_ALLOW_DEBUGGER|PO_ENABLE_DEBUG|PO_ALLOW_REPARSE)
 
 //! mask of options that have no effect on code access or code safety
+/** @note This macro includes only the 64-bit options; the extended option
+    QoreParseOptions::BROKEN_SOFT_TYPES is also considered a "free option" but
+    is not included in this macro due to its extended-bit nature
+*/
 #define PO_FREE_OPTIONS               (PO_ALLOW_BARE_REFS|PO_ASSUME_LOCAL|PO_STRICT_BOOLEAN_EVAL \
     |PO_BROKEN_LIST_PARSING|PO_BROKEN_LOGIC_PRECEDENCE|PO_BROKEN_INT_ASSIGNMENTS|PO_BROKEN_OPERATORS \
     |PO_BROKEN_LOOP_STATEMENT|PO_BROKEN_REFERENCES|PO_BROKEN_SPRINTF|PO_BROKEN_RANGE|PO_BROKEN_VARARGS \
