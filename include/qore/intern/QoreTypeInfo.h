@@ -545,40 +545,7 @@ public:
     // static version of method, checking for null pointer
     DLLLOCAL static qore_type_result_e parseAccepts(const QoreTypeInfo* first, const QoreTypeInfo* second,
             bool& may_not_match, bool& may_need_filter, qore_type_result_e& max_result,
-            bool known_initial_assignment = false) {
-        /*
-        if (first == second) {
-            // issue
-            max_result = QTI_IDENT;
-            return QTI_IDENT;
-        }
-        */
-        if (first == autoTypeInfo) {
-            max_result = QTI_WILDCARD;
-            return QTI_WILDCARD;
-        }
-        if (!hasType(first)) {
-            if (!may_need_filter && isComplex(second))
-                may_need_filter = true;
-            max_result = QTI_WILDCARD;
-            return QTI_WILDCARD;
-        }
-        if (!hasType(second)) {
-            if (!may_need_filter) {
-                // check if we could need a runtime filter
-                for (auto& i : first->getAcceptSpecs()) {
-                    if (i.map) {
-                        may_need_filter = true;
-                        break;
-                    }
-                }
-            }
-            max_result = QTI_IDENT;
-            may_not_match = true;
-            return QTI_AMBIGUOUS;
-        }
-        return first->parseAccepts(second, may_not_match, may_need_filter, max_result, known_initial_assignment);
-    }
+            bool known_initial_assignment = false);
 
     // static version of method, checking for null pointer
     DLLLOCAL static qore_type_result_e runtimeTypeMatch(const QoreTypeInfo* first, const QoreTypeInfo* second) {
@@ -1056,44 +1023,10 @@ public:
     }
 
     //! returns the element type, if any (nullptr if not applicable)
-    DLLLOCAL static const QoreTypeInfo* getElementType(const QoreTypeInfo* ti) {
-        if (!hasType(ti)) {
-            return nullptr;
-        }
-        assert(!ti->return_vec.empty());
-        if (ti == autoListTypeInfo
-            || ti == autoListOrNothingTypeInfo
-            || ti == softAutoListTypeInfo
-            || ti == softAutoListOrNothingTypeInfo
-            || ti == autoHashTypeInfo
-            || ti == autoHashOrNothingTypeInfo) {
-            return autoTypeInfo;
-        }
-        return ti->return_vec[0].spec.getElementType();
-    }
+    DLLLOCAL static const QoreTypeInfo* getElementType(const QoreTypeInfo* ti);
 
     //! returns the typed hash ptr, if applicable
-    DLLLOCAL static const TypedHashDecl* getTypedHash(const QoreTypeInfo* ti) {
-        if (!hasType(ti)) {
-            return nullptr;
-        }
-        assert(!ti->return_vec.empty());
-        // CRITICAL FIX Phase 2: Don't extract hashdecl from optional complex hash types
-        // For optional types like *hash<string, hash<DataProviderExpressionInfo>>,
-        // return_vec has 2 specs: [actual_type, NOTHING].
-        // Only reject if the base type is a complex hash (not a hashdecl itself)
-        if (ti->return_vec.size() > 1) {
-            // For optional types, check if base type is a complex hash by examining typespec
-            if (ti->return_vec[0].spec.getTypeSpec() == QTS_COMPLEXHASH) {
-                // It's an optional complex hash type - don't extract hashdecl from it
-                // This prevents the inner hashdecl from being incorrectly applied to the outer hash
-                return nullptr;
-            }
-            // It's an optional type but not a complex hash (e.g., *hashdecl)
-            // Fall through to extract the hashdecl
-        }
-        return ti->return_vec[0].spec.getHashDecl();
-    }
+    DLLLOCAL static const TypedHashDecl* getTypedHash(const QoreTypeInfo* ti);
 
     // static version of method, checking for null pointer
     DLLLOCAL static const QoreClass* getReturnClass(const QoreTypeInfo* ti) {
@@ -1114,81 +1047,10 @@ public:
     }
 
     // static version of method, checking for null pointer
-    DLLLOCAL static const QoreTypeInfo* getComplexHashValueType(const QoreTypeInfo* ti) {
-        if (!hasType(ti)) {
-            return nullptr;
-        }
-        assert(!ti->return_vec.empty());
-        if (ti == autoHashTypeInfo || ti == autoHashOrNothingTypeInfo) {
-            return autoTypeInfo;
-        }
-        // Handle or_nothing types which have 2 return specs (actual type + NOTHING)
-        // CRITICAL FIX: Validate structure for optional types
-        if (ti->return_vec.size() > 1) {
-            // Optional type must have exactly 2 specs: [actual_type, NOTHING]
-            if (ti->return_vec.size() != 2 || (ti->return_vec[1].spec.match(NT_NOTHING) != QTI_IDENT)) {
-                // Malformed optional type - reject it to prevent type corruption
-                return nullptr;
-            }
-        }
-        const QoreTypeInfo* result = ti->return_vec[0].spec.getComplexHash();
-
-        // CRITICAL FIX for hash<HashdeclType> cast operations:
-        // When parsing `cast<hash<string, hash<DataProviderExpressionInfo>>>()`,
-        // the parser creates a type where:
-        //   - getName() = "hash<string, hash<DataProviderExpressionInfo>>"
-        //   - getComplexHash() = nullptr (not a QoreComplexHashTypeSpec)
-        //   - getHashDecl() = DataProviderExpressionInfo hashdecl
-        //
-        // The cast operator selection logic uses getComplexHashValueType() to determine
-        // which handler to use. Without this fix, it returns nullptr and selects the
-        // QoreHashDeclCastOperatorNode handler, which incorrectly sets the hashdecl
-        // binding on the cast result. This causes "INVALID-MEMBER" errors when accessing
-        // hash keys later (the hash thinks it's a typed-hash, not a complex hash).
-        //
-        // Solution: Return the hashdecl's type info (which represents the hashdecl-typed
-        // hash, i.e., hash<string, HashdeclType>), so the complex hash handler is selected.
-        //
-        // Note: This is semantically correct because:
-        // - For `hash<string, DataProviderExpressionInfo>`, the "value type" is really
-        //   "DataProviderExpressionInfo as a typed-hash type", which is what hd->getTypeInfo()
-        //   represents in the context of complex hashes.
-        // - The cast operator uses this to determine HOW to cast, not what the final type is.
-        // - The final type is still the full complex hash, set via parse_context.typeInfo.
-        if (!result) {
-            const TypedHashDecl* hd = ti->return_vec[0].spec.getHashDecl();
-            if (hd) {
-                const char* type_name = getName(ti);
-                if (type_name && strstr(type_name, "hash<")) {
-                    // This is hash<HashdeclType> notation - return the hashdecl's type info
-                    // to signal that complex hash handler should be used
-                    return hd->getTypeInfo();
-                }
-            }
-        }
-        return result;
-    }
+    DLLLOCAL static const QoreTypeInfo* getComplexHashValueType(const QoreTypeInfo* ti);
 
     // static version of method, checking for null pointer
-    DLLLOCAL static const QoreTypeInfo* getComplexListValueType(const QoreTypeInfo* ti) {
-        if (!hasType(ti)) {
-            return nullptr;
-        }
-        assert(!ti->return_vec.empty());
-        if (ti == autoListTypeInfo || ti == autoListOrNothingTypeInfo) {
-            return autoTypeInfo;
-        }
-        // Handle or_nothing types which have 2 return specs (actual type + NOTHING)
-        // CRITICAL FIX: Validate structure for optional types
-        if (ti->return_vec.size() > 1) {
-            // Optional type must have exactly 2 specs: [actual_type, NOTHING]
-            if (ti->return_vec.size() != 2 || (ti->return_vec[1].spec.match(NT_NOTHING) != QTI_IDENT)) {
-                // Malformed optional type - reject it to prevent type corruption
-                return nullptr;
-            }
-        }
-        return ti->return_vec[0].spec.getComplexList();
-    }
+    DLLLOCAL static const QoreTypeInfo* getComplexListValueType(const QoreTypeInfo* ti);
 
     DLLLOCAL void getAcceptTypes(ReferenceHolder<QoreHashNode>& h, bool simple = false) const {
         for (auto& i : getAcceptSpecs()) {
@@ -1431,46 +1293,7 @@ protected:
     }
 
     DLLLOCAL qore_type_result_e parseAccepts(const QoreTypeInfo* typeInfo, bool& may_not_match,
-            bool& may_need_filter, qore_type_result_e& max_result, bool known_initial_assignment = false) const {
-        //printd(5, "QoreTypeInfo::parseAccepts() '%s' <- '%s'\n", tname.c_str(), typeInfo->tname.c_str());
-        if (typeInfo->return_vec.size() > accept_vec.size()) {
-            may_not_match = true;
-        }
-
-        bool ok = false;
-        for (auto& rt : typeInfo->return_vec) {
-            bool t_no_match = true;
-            for (auto& at : getAcceptSpecs()) {
-                qore_type_result_e t_max_result = QTI_NOT_EQUAL;
-                qore_type_result_e res = parseAcceptsIntern(at, rt, may_not_match, may_need_filter, t_no_match, ok,
-                    t_max_result, known_initial_assignment);
-                if (res == QTI_IDENT) {
-                    max_result = t_max_result;
-                    return res;
-                } else if (res == QTI_AMBIGUOUS || res == QTI_NEAR || res == QTI_WILDCARD) {
-                    max_result = t_max_result;
-                    assert(ok);
-                    if (may_not_match) {
-                        return res;
-                    }
-                    break;
-                }
-            }
-            if (t_no_match) {
-                if (!may_not_match) {
-                    may_not_match = true;
-                    if (ok) {
-                        return QTI_AMBIGUOUS;
-                    }
-                }
-            }
-        }
-        if (ok) {
-            return QTI_AMBIGUOUS;
-        }
-        may_not_match = false;
-        return QTI_NOT_EQUAL;
-    }
+            bool& may_need_filter, qore_type_result_e& max_result, bool known_initial_assignment = false) const;
 
     // checks that types are near identical at runtime
     /** accept and return types match in the same order and with no match worse than QTI_NEAR
