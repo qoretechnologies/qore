@@ -1175,6 +1175,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             "max_connections_per_host": 1,
             "logger": mLogger,
         });
+        on_exit mgr.closeAll();
 
         list<HttpClientIo::HttpClientStreamHandle> streams = ();
         for (int i = 0; i < 3; i++) {
@@ -1223,10 +1224,8 @@ Do+Sl1gfqlpgpszQaOMjR4M=
                 hash<auto> info = mgr.getConnectionInfo();
                 stderr.printf("  connection info: %y\n", info);
             } catch () {}
-            mgr.closeAll();
             fail(sprintf("H3 concurrent: %d requests did not complete", remaining));
         }
-        on_exit mgr.closeAll();
 
         assertEq(3, responses.size(), "H3 concurrent: all 3 responses received");
         foreach hash<auto> resp in (responses) {

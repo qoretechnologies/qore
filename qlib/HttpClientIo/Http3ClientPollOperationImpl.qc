@@ -70,12 +70,12 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
         #! of response hashes.  Accessed only under stream_lock.
         hash<string, list<hash<auto>>> pending_responses();
 
-        #! Number of submitRequest() calls currently between Phase 2 (QUIC submit,
-        #! outside stream_lock) and Phase 3 (callback registration, under
-        #! stream_lock).  Used by handleReading() to distinguish "callback not yet
-        #! registered" (buffer) from "cancelled/completed stream" (discard).
+        #! Stream IDs currently between Phase 2 (QUIC submit, outside
+        #! stream_lock) and Phase 3 (callback registration, under stream_lock).
+        #! handleReading() only buffers responses for these specific stream IDs;
+        #! responses for other unknown streams are discarded as before.
         #! Accessed only under stream_lock.
-        int pending_registrations = 0;
+        hash<string, bool> pending_stream_ids();
 
         #! True when a GOAWAY has been received from the server
         bool goaway_received = False;
@@ -286,21 +286,6 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
         # inversion and risk deadlock.  submitQuicRequest() is intentionally
         # called outside stream_lock.
         #
-        # Signal that a registration is pending so handleReading() buffers
-        # responses for unknown stream IDs instead of discarding them.
-        # The on_exit guard ensures the counter is decremented if Phase 2
-        # throws before reaching Phase 3.
-        {
-            AutoLock al(stream_lock);
-            ++pending_registrations;
-        }
-        bool phase3_done = False;
-        on_exit {
-            if (!phase3_done) {
-                AutoLock al(stream_lock);
-                --pending_registrations;
-            }
-        }
         int stream_id;
         int retries = 0;
         while (True) {
@@ -377,6 +362,15 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
             }
         }
 
+        # Mark this stream_id as awaiting registration so handleReading()
+        # buffers responses for it instead of discarding them.  This is
+        # safe to do outside stream_lock because the I/O thread can only
+        # see this stream_id AFTER the submit above returned.
+        {
+            AutoLock al(stream_lock);
+            pending_stream_ids{string(stream_id)} = True;
+        }
+
         # Phase 3: register callback under lock; re-check state in case the
         # connection died between the submit and this registration.
         # Also check for responses that arrived during the race window
@@ -386,8 +380,8 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
         *list<hash<auto>> buffered;
         {
             AutoLock al(stream_lock);
-            --pending_registrations;
-            phase3_done = True;
+            string sid = string(stream_id);
+            remove pending_stream_ids{sid};
             post_state = state;
             if (post_state != STATE_READING && post_state != STATE_WAIT_READ) {
                 # Stream was submitted to QUIC but connection is now dead;
@@ -396,9 +390,8 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
                 # vs I/O thread's sock->priv->m → stream_lock)
                 need_cancel = True;
                 # Clean up any buffered responses for this stream
-                remove pending_responses{string(stream_id)};
+                remove pending_responses{sid};
             } else {
-                string sid = string(stream_id);
                 stream_callbacks{sid} = callback;
                 if (ctx) {
                     stream_ctxs{sid} = ctx;
@@ -565,6 +558,7 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
         {
             AutoLock al(stream_lock);
             remove pending_responses;
+            remove pending_stream_ids;
             stream_capacity_cond.broadcast();
         }
         try { sock.close(); } catch () {}
@@ -662,9 +656,9 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
                     stream_ctx = stream_ctxs{sid};
                     if (cb) {
                         callback_dispatched = True;
-                    } else if (pending_registrations > 0) {
-                        # Buffer response — a submitRequest() is between Phase 2
-                        # (QUIC submit) and Phase 3 (callback registration)
+                    } else if (pending_stream_ids{sid}) {
+                        # Buffer response — this specific stream_id is between
+                        # Phase 2 (QUIC submit) and Phase 3 (callback registration)
                         if (!pending_responses.hasKey(sid)) {
                             pending_responses{sid} = ();
                         }

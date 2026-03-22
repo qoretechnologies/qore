@@ -372,21 +372,21 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
 
         bool is_end = resp.end_stream.toBool();
 
-        # Update state based on response content
+        # Update non-terminal states immediately (reader doesn't react to these)
         {
             AutoLock al(lock);
+            # Guard state transitions to be monotonically forward only
             if (resp.headers && state == HttpClientStreamState::Open) {
                 state = HttpClientStreamState::HeadersReceived;
                 response = resp;
             }
-            if (is_end && state < HttpClientStreamState::Complete) {
-                state = HttpClientStreamState::Complete;
-                response = resp;
+            if (resp.body && state < HttpClientStreamState::Complete) {
+                state = HttpClientStreamState::ReceivingBody;
             }
         }
 
-        # Send body data and end_stream sentinel through the channel — same
-        # pattern as H2. readData() reads from the channel.
+        # Send data to channel BEFORE setting Complete state, so readers
+        # cannot see Complete + empty channel and throw HTTPCLIENT-STREAM-CLOSED
         if (resp.body) {
             try {
                 data_channel.send(resp.body);
@@ -398,6 +398,17 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
         }
 
         if (is_end) {
+            # Set Complete state BEFORE enqueuing end_stream so that isDone()
+            # returns True as soon as the reader consumes end_stream from the
+            # channel (avoiding a race where the reader sees end_stream before
+            # the state transition completes)
+            {
+                AutoLock al(lock);
+                if (state < HttpClientStreamState::Complete) {
+                    state = HttpClientStreamState::Complete;
+                    response = resp;
+                }
+            }
             try {
                 data_channel.send({"end_stream": True});
             } catch (hash<ExceptionInfo> ex2) {
