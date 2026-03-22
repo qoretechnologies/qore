@@ -1797,9 +1797,11 @@ if (NOT Eigen3_FOUND)
 endif()
 add_subdirectory(modules/ml)
 # protobuf module (requires libprotobuf)
-find_package(Protobuf CONFIG QUIET)
+# Try MODULE mode first (CMake's FindProtobuf) — avoids broken CONFIG files
+# (e.g., MacPorts protobuf-targets-macports.cmake referencing missing upb targets)
+find_package(Protobuf MODULE QUIET)
 if (NOT Protobuf_FOUND)
-    find_package(Protobuf REQUIRED)
+    find_package(Protobuf CONFIG REQUIRED)
 endif()
 add_subdirectory(modules/protobuf)
 
