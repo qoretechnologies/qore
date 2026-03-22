@@ -2017,37 +2017,8 @@ void QoreProgram::parsePending(const char* code, const char* label, ExceptionSin
     priv->parsePending(code, label, xsink, wS, wm, source, offset);
 }
 
-static void ensureIrExecMode(qore_program_private* priv, ExceptionSink* xsink = nullptr) {
-    // JIT/IR/Tiered exec modes only support PO_MODERN; fallback to AST otherwise.
-    if ((priv->exec_mode == QEM_IR || priv->exec_mode == QEM_JIT || priv->exec_mode == QEM_TIERED)
-        && (priv->pwo.parse_options & PO_MODERN) != PO_MODERN) {
-
-        // If user explicitly requested IR or JIT mode, that's an error condition
-        if (priv->user_requested_exec_mode && priv->exec_mode != QEM_TIERED) {
-            const char* mode_str = priv->exec_mode == QEM_IR ? "IR" : "JIT";
-            if (xsink) {
-                xsink->raiseException("EXEC-MODE-ERROR", "Cannot execute in %s mode: code must use %%modern "
-                    "(requires %%new-style, %%require-types, and %%strict-args). "
-                    "Please add '%%modern' directive to enable optimized execution modes.", mode_str);
-            }
-            return;
-        }
-
-        // For tiered (default) or if not explicitly requested, silently degrade
-        if (!priv->ir_fallback_warned) {
-            printd(5, "IR exec fallback to AST: requires %%modern (PO_MODERN)\n");
-            priv->ir_fallback_warned = true;
-            priv->recordIRFallback("parse: requires %modern (PO_MODERN)");
-        }
-        priv->exec_mode = QEM_AST;
-    }
-}
-
 QoreValue QoreProgram::runTopLevel(ExceptionSink* xsink) {
     ProgramThreadCountContextHelper tch(xsink, this, true);
-    if (*xsink)
-        return QoreValue();
-    ensureIrExecMode(priv, xsink);
     if (*xsink)
         return QoreValue();
 
@@ -2078,10 +2049,6 @@ QoreValue QoreProgram::callFunction(const char* name, const QoreListNode* args, 
     SimpleRefHolder<FunctionCallNode> fc;
 
     printd(5, "QoreProgram::callFunction() creating function call to %s()\n", name);
-
-    ensureIrExecMode(priv, xsink);
-    if (*xsink)
-        return QoreValue();
 
     const FunctionEntry* fe;
 
@@ -2162,9 +2129,6 @@ void QoreProgram::printIRFallbackReport() const {
 
 void QoreProgram::runClass(const char* classname, ExceptionSink* xsink) {
     printd(5, "QoreProgram::runClass('%s') entered\n", classname);
-    ensureIrExecMode(priv, xsink);
-    if (*xsink)
-        return;
     // find class
     const QoreClass* qc = qore_root_ns_private::runtimeFindClass(*priv->RootNS, classname);
     if (!qc) {

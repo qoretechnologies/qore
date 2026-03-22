@@ -1136,6 +1136,34 @@ public:
     // caller must have grabbed the lock and put the current program on the program stack
     DLLLOCAL int internParseCommit(bool standard_parse = true);
 
+    // Validate IR/JIT execution mode requirements (must use PO_MODERN)
+    // Called at parse completion to ensure exec mode doesn't degrade silently at runtime
+    static void ensureIrExecMode(qore_program_private* priv, ExceptionSink* xsink) {
+        // JIT/IR/Tiered exec modes only support PO_MODERN; fallback to AST otherwise.
+        if ((priv->exec_mode == QEM_IR || priv->exec_mode == QEM_JIT || priv->exec_mode == QEM_TIERED)
+            && (priv->pwo.parse_options & PO_MODERN) != PO_MODERN) {
+
+            // If user explicitly requested IR or JIT mode, that's an error condition
+            if (priv->user_requested_exec_mode && priv->exec_mode != QEM_TIERED) {
+                const char* mode_str = priv->exec_mode == QEM_IR ? "IR" : "JIT";
+                if (xsink) {
+                    xsink->raiseException("EXEC-MODE-ERROR", "Cannot execute in %s mode: code must use %%modern "
+                        "(requires %%new-style, %%require-types, and %%strict-args). "
+                        "Please add '%%modern' directive to enable optimized execution modes.", mode_str);
+                }
+                return;
+            }
+
+            // For tiered (default) or if not explicitly requested, silently degrade
+            if (!priv->ir_fallback_warned) {
+                printd(5, "IR exec fallback to AST: requires %%modern (PO_MODERN)\n");
+                priv->ir_fallback_warned = true;
+                priv->recordIRFallback("parse: requires %modern (PO_MODERN)");
+            }
+            priv->exec_mode = QEM_AST;
+        }
+    }
+
     DLLLOCAL int parseCommit(ExceptionSink* xsink, ExceptionSink* wS, int wm) {
         ProgramRuntimeParseCommitContextHelper pch(xsink, pgm);
         assert(xsink);
@@ -1151,6 +1179,12 @@ public:
 
         // finalize parsing, back out or commit all changes
         int rc = internParseCommit();
+
+        // Validate exec mode immediately after parse completion
+        // (IR/JIT modes require PO_MODERN; fail explicitly if user requested but conditions not met)
+        if (!*xsink) {
+            ensureIrExecMode(this, xsink);
+        }
 
 #ifdef DEBUG
         parseSink = nullptr;
