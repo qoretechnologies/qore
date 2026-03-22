@@ -421,9 +421,11 @@ bool QoreAOTBinaryReader::open(const uint8_t* in_data, uint32_t in_size, std::st
             return false;
         }
         // Use decompressed data as our working buffer
+        // IMPORTANT: After decompression, ptr and data must be consistent!
+        // ptr was pointing into section directory, so reset it relative to new buffer
         data = decompressed_body.data();
         total_size = static_cast<uint32_t>(decompressed_body.size());
-        ptr = data;  // Reset ptr to start of decompressed data
+        ptr = data;  // Reset ptr to start of decompressed data (start of section directory)
     }
 
     // Read section directory

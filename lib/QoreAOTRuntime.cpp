@@ -4608,6 +4608,7 @@ static void registerAOTFunctionsFromSlotMaps(
         if (!func_name || !*func_name) {
             // Skip this entry by reading through it
             printd(2, "AOT v2: skipping unnamed slot map entry\n");
+            ptr = entry_start;  // reset: before size prefix for skipSlotMapEntry
             skipSlotMapEntry(reader, ptr, end);
             continue;
         }
@@ -5854,8 +5855,10 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
                         uint32_t sm_count = QoreAOTBinaryReader::readU32(sm_ptr);
                         for (uint32_t fi = 0; fi < sm_count; ++fi) {
                             const uint8_t* entry_start = sm_ptr;
-                            const char* entry_name = deserializer.getReader().readStringRef(sm_ptr);
-                            sm_ptr = entry_start;  // reset for buildContextFromSlotMap
+                            uint32_t entry_size = QoreAOTBinaryReader::readU32(sm_ptr);  // consume size prefix
+                            const char* entry_name = deserializer.getReader().readStringRef(sm_ptr);  // peek at name
+                            const uint8_t* entry_end = entry_start + 4 + entry_size;
+                            sm_ptr = entry_start + 4;  // reset: after size prefix, before name
 
                             if (entry_name && strcmp(entry_name, "_toplevel") == 0) {
                                 QoreAOTContext* ctx = buildContextFromSlotMap(
@@ -5873,6 +5876,7 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
                                 break;
                             } else {
                                 // Skip this entry
+                                sm_ptr = entry_start;  // reset: before size prefix for skipSlotMapEntry
                                 skipSlotMapEntry(deserializer.getReader(), sm_ptr, sm_end);
                             }
                         }
@@ -6509,8 +6513,10 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
                         uint32_t sm_count = QoreAOTBinaryReader::readU32(sm_ptr);
                         for (uint32_t fi = 0; fi < sm_count; ++fi) {
                             const uint8_t* entry_start = sm_ptr;
-                            const char* entry_name = deserializer.getReader().readStringRef(sm_ptr);
-                            sm_ptr = entry_start;  // reset for buildContextFromSlotMap
+                            uint32_t entry_size = QoreAOTBinaryReader::readU32(sm_ptr);  // consume size prefix
+                            const char* entry_name = deserializer.getReader().readStringRef(sm_ptr);  // peek at name
+                            const uint8_t* entry_end = entry_start + 4 + entry_size;
+                            sm_ptr = entry_start + 4;  // reset: after size prefix, before name
 
                             if (entry_name && strcmp(entry_name, "_toplevel") == 0) {
                                 QoreAOTContext* ctx = buildContextFromSlotMap(
@@ -6528,6 +6534,7 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
                                 break;
                             } else {
                                 // Skip this entry
+                                sm_ptr = entry_start;  // reset: before size prefix for skipSlotMapEntry
                                 skipSlotMapEntry(deserializer.getReader(), sm_ptr, sm_end);
                             }
                         }
