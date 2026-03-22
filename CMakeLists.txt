@@ -1599,6 +1599,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreAOT.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreAOTRuntime.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreAOTBinary.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreAOTInstRegistry.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreIRPrinter.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreTermIOS.cpp\"
 ")
