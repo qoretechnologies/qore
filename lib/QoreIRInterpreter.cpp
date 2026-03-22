@@ -762,13 +762,11 @@ static void ensureLocalInstantiated(LocalVar* var, std::unordered_set<const Loca
         // so the current iteration has a fresh CVV to capture.
         bool locally_uninst = locally_uninstantiated && locally_uninstantiated->count(var);
         bool is_pre = pre_instantiated && pre_instantiated->count(var) > 0;
-        // For pre-instantiated closure-use vars explicitly uninstantiated: need new CVV
-        // (the old CVV was popped by UninstantiateLocal, so we must push a fresh one for
-        //  the next loop iteration to capture a unique binding).
-        // For pre-instantiated non-closure vars explicitly uninstantiated: the LVV stays
-        //  on the lvstack (UninstantiateLocal only del()'d the value), so do NOT push
-        //  another one — that would create a double-push and make locals_lvar_cache stale.
-        bool skip_instantiation = is_pre && !(locally_uninst && var->closureUse());
+        // For pre-instantiated closure-use vars: must instantiate on cvstack so closures can
+        // capture them. instantiate() routes to cvstack when closureUse()=true, no lvstack
+        // double-push. For pre-instantiated non-closure vars: skip (already on lvstack).
+        // For locally-uninstantiated closure vars: need new CVV for next loop iteration.
+        bool skip_instantiation = is_pre && !var->closureUse() && !locally_uninst;
 
         if (!skip_instantiation) {
             var->instantiate(QoreParseOptions());
@@ -784,9 +782,12 @@ static void cleanupInstantiatedLocals(const std::unordered_set<const LocalVar*>&
         const std::unordered_set<const LocalVar*>* pre_instantiated = nullptr) {
     for (auto* var : locals) {
         if (var) {
-            // Skip uninstantiation for locals managed by the caller
+            // Skip uninstantiation for locals managed by the caller, except closure-use vars
+            // which were instantiated on cvstack and must be uninstantiated
             if (pre_instantiated && pre_instantiated->find(var) != pre_instantiated->end()) {
-                continue;
+                if (!var->closureUse()) {
+                    continue;   // Only skip non-closure-use pre-instantiated vars
+                }
             }
             var->uninstantiate(xsink);
         }
@@ -2003,6 +2004,18 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         }
     }
 
+    // Pre-instantiate closure-use pre-instantiated locals on cvstack before executing any IR.
+    // This ensures they're available for thread_find_closure_var() when closures are created,
+    // even if they're never accessed in the IR code before the closure creation.
+    // These will be uninstantiated by the local_cleanup handler at function exit.
+    if (pre_instantiated) {
+        for (const LocalVar* lv : *pre_instantiated) {
+            if (lv && lv->closureUse()) {
+                const_cast<LocalVar*>(lv)->instantiate(QoreParseOptions());
+                instantiated_locals.insert(lv);
+            }
+        }
+    }
 
     if (func.blocks.empty()) {
         if (xsink) {

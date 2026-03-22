@@ -48,7 +48,81 @@ QoreClosureParseNode::~QoreClosureParseNode() {
 }
 
 QoreClosureNode* QoreClosureParseNode::evalClosure() const {
-    return new QoreClosureNode(this, nullptr, runtime_get_class());
+    // Before creating the closure, ensure all variables it needs are on cvstack.
+    // Capture variables currently on cvstack (like evalBackground does).
+    fprintf(stderr, "[DEBUG-CLOSURE] evalClosure called, capturing all cvstack vars\n");
+    cvv_vec_t* cvv = thread_get_all_closure_vars();
+    fprintf(stderr, "[DEBUG-CLOSURE] captured %zu vars from cvstack (cvv=%p)\n", cvv ? cvv->size() : 0, cvv);
+
+    // Additionally, for variables in the closure's vlist that are NOT on cvstack,
+    // find them on lvstack and instantiate them on cvstack. Also ensure all closure-used
+    // variables are in the cvv list passed to the constructor.
+    const LVarSet* vlist = getVList();
+    if (vlist) {
+        fprintf(stderr, "[DEBUG-CLOSURE] closure vlist size: %zu\n", vlist->size());
+        for (const LocalVar* lv : *vlist) {
+            if (lv) {
+                ClosureVarValue* existing_cvv = thread_find_closure_var(lv->getName());
+                fprintf(stderr, "[DEBUG-CLOSURE]   var '%s': on_cvstack=%d (cvv=%p)\n", lv->getName(), existing_cvv != nullptr, existing_cvv);
+
+                if (existing_cvv) {
+                    fprintf(stderr, "[DEBUG-CLOSURE]   in existing_cvv branch\n");
+                    // Variable is on cvstack - ensure it's in the captured list
+                    if (!cvv) {
+                        // If cvv was null, create it now
+                        cvv = new cvv_vec_t;
+                        fprintf(stderr, "[DEBUG-CLOSURE]   created new cvv list\n");
+                    }
+                    // Check if variable is already in cvv list
+                    fprintf(stderr, "[DEBUG-CLOSURE]   checking if '%s' is in cvv list (%zu items)\n", lv->getName(), cvv->size());
+                    bool found = false;
+                    for (const auto& v : *cvv) {
+                        if (v == existing_cvv) {
+                            found = true;
+                            fprintf(stderr, "[DEBUG-CLOSURE]   found in cvv at index\n");
+                            break;
+                        }
+                    }
+                    if (!found) {
+                        fprintf(stderr, "[DEBUG-CLOSURE]   adding '%s' to cvv list\n", lv->getName());
+                        cvv->push_back(existing_cvv);
+                    } else {
+                        fprintf(stderr, "[DEBUG-CLOSURE]   '%s' already in cvv list\n", lv->getName());
+                    }
+                } else {
+                    // Variable not on cvstack - check if it's on lvstack and instantiate on cvstack
+                    bool needs_deref = false;
+                    QoreValue val = lv->eval(needs_deref, nullptr);
+                    fprintf(stderr, "[DEBUG-CLOSURE]   val type: %s\n", val.getTypeName());
+                    if (val) {
+                        // Instantiate on cvstack with the current lvstack value
+                        fprintf(stderr, "[DEBUG-CLOSURE]   instantiating on cvstack...\n");
+                        thread_instantiate_closure_var(lv->getName(), lv->getTypeInfo(), val, true);
+                        // Add to captured variables list
+                        if (!cvv) {
+                            cvv = new cvv_vec_t;
+                            fprintf(stderr, "[DEBUG-CLOSURE]   created new cvv list\n");
+                        }
+                        ClosureVarValue* cvv_entry = thread_find_closure_var(lv->getName());
+                        if (cvv_entry) {
+                            fprintf(stderr, "[DEBUG-CLOSURE]   added '%s' to cvv list\n", lv->getName());
+                            cvv->push_back(cvv_entry);
+                        }
+                        // Clean up if needed
+                        if (needs_deref) {
+                            val.discard(nullptr);
+                        }
+                    } else {
+                        fprintf(stderr, "[DEBUG-CLOSURE]   val is null\n");
+                    }
+                }
+            }
+        }
+    } else {
+        fprintf(stderr, "[DEBUG-CLOSURE] vlist is null\n");
+    }
+
+    return new QoreClosureNode(this, cvv, runtime_get_class());
 }
 
 QoreObjectClosureNode* QoreClosureParseNode::evalObjectClosure() const {
