@@ -106,6 +106,10 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
 
         @throw HTTPCLIENT-STATE-ERROR if the stream is already in use
     */
+    bool supportsStreaming() {
+        return True;
+    }
+
     int startStreaming(string method, string path, *hash<auto> headers,
             bool body_streaming = False) {
         {
