@@ -2289,6 +2289,7 @@ static QoreAOTContext* buildContextFromSlotMap(
     // Read the per-function slot map header
     // Format: name_ref(u32), num_locals(u16), num_globals(u16), num_exprs(u16),
     //         num_stmts(u16), num_regex_cases(u16), num_body_locals(u16), has_unsupported(u8), padding(u8)
+    // Note: caller has already positioned ptr after the 4-byte entry-size prefix
     /*const char* func_name =*/ reader.readStringRef(ptr);
     uint16_t num_locals = QoreAOTBinaryReader::readU16(ptr);
     uint16_t num_globals = QoreAOTBinaryReader::readU16(ptr);
@@ -4409,6 +4410,10 @@ static QoreAOTContext* buildContextForVariant(UserVariantBase* uvb, const char* 
 static void skipSlotMapEntry(const QoreAOTBinaryReader& reader, const uint8_t*& ptr,
         const uint8_t* end) {
     const uint8_t* entry_start = ptr;
+    // Read entry size prefix to know where next entry starts
+    uint32_t entry_size = QoreAOTBinaryReader::readU32(ptr);
+    const uint8_t* entry_end = ptr + entry_size;
+
     const char* skip_name = reader.readStringRef(ptr); // name
     uint16_t nl = QoreAOTBinaryReader::readU16(ptr);
     uint16_t ng = QoreAOTBinaryReader::readU16(ptr);
@@ -4558,6 +4563,9 @@ static void skipSlotMapEntry(const QoreAOTBinaryReader& reader, const uint8_t*& 
             ptr += ir_size;
         }
     }
+
+    // Always jump to correct entry boundary regardless of individual read success/failure
+    ptr = entry_end;
 }
 
 //! Collected init function context for later execution
@@ -4610,11 +4618,15 @@ static void registerAOTFunctionsFromSlotMaps(
     }
 
     for (uint32_t f = 0; f < num_funcs; ++f) {
-        // Peek at function name (first field in slot map entry)
         const uint8_t* entry_start = ptr;
+        // Read entry size prefix to know where next entry should end
+        uint32_t entry_size = QoreAOTBinaryReader::readU32(ptr);
+        const uint8_t* entry_end = ptr + entry_size;
+
+        // Peek at function name (comes after size prefix)
         const char* func_name = reader.readStringRef(ptr);
-        // Reset to entry start for buildContextFromSlotMap which reads the full entry
-        ptr = entry_start;
+        // Reset to after size field for buildContextFromSlotMap which reads the full entry
+        ptr = entry_start + 4;
 
         if (!func_name || !*func_name) {
             // Skip this entry by reading through it
@@ -4634,6 +4646,8 @@ static void registerAOTFunctionsFromSlotMaps(
         auto it = func_map.find(func_name);
         if (it == func_map.end()) {
             // No AOT function for this entry — skip it
+            // ptr is already positioned after the size field, so reset to entry_start
+            ptr = entry_start;
             skipSlotMapEntry(reader, ptr, end);
             continue;
         }
@@ -4848,13 +4862,13 @@ static void registerAOTFunctionsFromSlotMaps(
                     func_name, (void*)uvb);
             }
         } else {
-            // buildContextFromSlotMap failed — ptr is only past the header.
-            // Reset to entry_start and skip the entire entry to keep ptr aligned.
-            ptr = entry_start;
-            skipSlotMapEntry(reader, ptr, end);
+            // buildContextFromSlotMap failed or returned null — ensure ptr is at entry boundary
             printd(2, "AOT slot-reg: SKIP '%s' (context build failed) uvb=%p\n",
                 func_name, (void*)uvb);
         }
+
+        // Always advance ptr to end of entry (self-healing with entry-size prefix)
+        ptr = entry_end;
     }
 }
 

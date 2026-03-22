@@ -2208,6 +2208,10 @@ void serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
     writer.writeU32(static_cast<uint32_t>(funcs.size()));
 
     for (auto& func : funcs) {
+        // Save entry start position and write size placeholder
+        uint32_t entry_size_pos = writer.position();
+        writer.writeU32(0);  // placeholder for entry size (patched below)
+
         // Function header
         writer.writeStringRef(func.name.c_str());
         writer.writeU16(static_cast<uint16_t>(func.num_locals));
@@ -2425,6 +2429,10 @@ void serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
                 writer.writeU8(0);
             }
         }
+
+        // Patch the entry size field
+        uint32_t entry_end_pos = writer.position();
+        writer.patchU32(entry_size_pos, entry_end_pos - entry_size_pos - 4);
     }
 
     writer.endSection(sec_idx);
