@@ -1365,6 +1365,28 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         log("HTTP listener %d started on %s", id, sinfo.desc);
     }
 
+    #! Removes a listener from the async I/O controller before the socket is closed
+    /** Called from HttpListener::stop() to cancel pending accept operations on
+        the listener's fd BEFORE the fd is closed.  This ensures the I/O thread
+        sees clean cancellation (canceled=True callbacks) rather than error
+        callbacks on a closed fd that trigger failed replenishment attempts.
+
+        Safe to call multiple times — listenerStopped() handles the redundant
+        removeListener() gracefully.
+    */
+    removeAsyncListener(HttpListener l) {
+        if (asyncIo) {
+            try {
+                asyncIo.removeListener(l);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "CONTROLLER-REMOVE-LISTENER-ERROR"
+                        && ex.err != "ASYNCSOCKETIO-CANCEL-ERROR") {
+                    rethrow;
+                }
+            }
+        }
+    }
+
     # only called from the listeners - do not call externally
     listenerStopped(HttpListener l) {
         # decrement listener count
@@ -4251,19 +4273,25 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         # wait for all connection threads to terminate
         cThreads.wait();
 
-        # Close the listener socket explicitly to release the bound port.
+        # Cancel async accept operations BEFORE closing the listener socket.
         #
+        # In async mode, the I/O controller has pending accept operations on this
+        # listener's fd.  If we close the fd first, the I/O thread sees errors on
+        # the closed fd and fires error callbacks that attempt to replenish accept
+        # ops on the dead socket.  Those replenishments fail, but the error path
+        # runs on the shared I/O thread and can interfere with operations for OTHER
+        # listeners on the same controller.
+        #
+        # By cancelling first, the callbacks fire with canceled=True (clean path,
+        # no replenishment), and the fd is removed from the event loop before close.
+        # listenerStopped() will skip the redundant removeListener() call.
+        if (serv) {
+            serv.removeAsyncListener(self);
+        }
+
+        # Close the listener socket to release the bound port.
         # In non-async mode, mainThread() already called shutdown()/close() before
         # cThreads reached zero, so this is a safe no-op.
-        #
-        # In async mode, mainThread() never runs (no_start_main_thread = True), so the
-        # socket fd is only closed when the HttpListener destructor runs.  However,
-        # after listenerStopped() -> asyncIo.removeListener() -> cancel(), the cancel
-        # result pushed to the coordinator's resultQueue holds a Socket reference to
-        # this listener (SocketPollResultInfo.sock).  That keeps the HttpListener alive
-        # (and the port bound) until the coordinator thread consumes the queue entry.
-        # Without this explicit close, a subsequent addListener() on the same port can
-        # fail with EADDRINUSE/EBADF depending on getaddrinfo() address order.
         shutdown();
         close();
 
@@ -5205,6 +5233,9 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                                 cx.id);
                             if (!cx.close && s.isOpen()) {
                                 serv.returnConnectionToAsyncIo(s, cx, self);
+                                # Release the socket from RequestHelper so its
+                                # destructor doesn't close it — async I/O owns it now
+                                request_helper.releaseSocket();
                             }
                             return;
                         }
@@ -5288,6 +5319,9 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                         "OK");
                     if (!cx.close && s.isOpen()) {
                         serv.returnConnectionToAsyncIo(s, cx, self);
+                        # Release the socket from RequestHelper so its
+                        # destructor doesn't close it — async I/O owns it now
+                        request_helper.releaseSocket();
                     }
                     return;
                 }
@@ -6563,6 +6597,17 @@ class RequestHelper {
     */
     bool isDedicatedExternal() {
         return dedicated_external;
+    }
+
+    #! Releases the socket reference so the destructor won't close it
+    /** Called when the socket has been returned to the async I/O pool
+        via returnConnectionToAsyncIo() — the async I/O controller now
+        owns the socket lifecycle.
+
+        @since HttpServer 1.5
+    */
+    releaseSocket() {
+        delete s;
     }
 }
 }
