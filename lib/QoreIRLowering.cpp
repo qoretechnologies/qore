@@ -2142,6 +2142,12 @@ static bool isRangeLValue(const QoreValue& value) {
     return node && dynamic_cast<const QoreSquareBracketsRangeOperatorNode*>(node);
 }
 
+// Check if a variable is a local (not global) and not captured by a closure.
+// Used for fused integer operations (++, --, +=) that can only be applied to lvstack locals.
+static bool isLocalNonClosureVar(const VarRefNode* var) {
+    return var && var->getType() == VT_LOCAL && var->ref.id && !var->ref.id->closureUse();
+}
+
 static bool getLValueBaseValue(const QoreValue& value, QoreValue& base) {
     const AbstractQoreNode* node = value.getInternalNode();
     if (!node) {
@@ -3908,9 +3914,8 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
     // Exclude reference-typed locals: they need lvalue semantics to write through to the
     // target variable. Also exclude closure-use variables: they are instantiated on cvstack,
     // not lvstack, so they need the fallback path.
-    if (force_int && left_var && left_var->getType() == VT_LOCAL && left_var->ref.id
-            && !QoreTypeInfo::isReference(left_var->getTypeInfo())
-            && !left_var->ref.id->closureUse()) {
+    if (force_int && isLocalNonClosureVar(left_var)
+            && !QoreTypeInfo::isReference(left_var->getTypeInfo())) {
         const AbstractQoreNode* right_node = right_expr.getInternalNode();
         auto* right_var = dynamic_cast<const VarRefNode*>(right_node);
         if (right_var && right_var->getType() == VT_LOCAL && right_var->ref.id) {
@@ -4650,7 +4655,7 @@ QoreIRValue QoreIRLowering::lowerPreIncrement(const QoreValue& expr, std::string
                 && !QoreTypeInfo::isReference(var->getTypeInfo())) {
             // Fused path: emit single IncrementLocalInt for VT_LOCAL (but not closure-use vars)
             // Closure-use variables are instantiated on cvstack, not lvstack, so they need the fallback path
-            if (var->getType() == VT_LOCAL && var->ref.id && !var->ref.id->closureUse()) {
+            if (isLocalNonClosureVar(var)) {
                 auto* inst = builder.createIncrementLocalInt(var->ref.id, 1, op->loc);
                 if (parse_context) {
                     parse_context->markLocalAssignment(var->ref.id, true,
@@ -4786,8 +4791,9 @@ QoreIRValue QoreIRLowering::lowerPreDecrement(const QoreValue& expr, std::string
         auto* var = dynamic_cast<const VarRefNode*>(lvexp.getInternalNode());
         if (var && var->getType() != VT_IMMEDIATE && !isRangeLValue(lvexp)
                 && !QoreTypeInfo::isReference(var->getTypeInfo())) {
-            // Fused path: emit single IncrementLocalInt(delta=-1) for VT_LOCAL
-            if (var->getType() == VT_LOCAL && var->ref.id) {
+            // Fused path: emit single IncrementLocalInt(delta=-1) for VT_LOCAL (but not closure-use vars)
+            // Closure-use variables are instantiated on cvstack, not lvstack, so they need the fallback path
+            if (isLocalNonClosureVar(var)) {
                 auto* inst = builder.createIncrementLocalInt(var->ref.id, -1, op->loc);
                 if (parse_context) {
                     parse_context->markLocalAssignment(var->ref.id, true,
