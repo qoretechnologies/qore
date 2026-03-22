@@ -41,21 +41,24 @@ public class OnnxGraphBuilder {
         @param data the float data values
         @return a TensorProto-compatible hash
     */
-    static hash<auto> makeTensorFloat(string name, list<int> dims, list<auto> data) {
+    static hash<auto> makeTensorFloat(string name, list<softint> dims, list<auto> data) {
+        # coerce all elements to float for protobuf
+        list<float> fdata = map float($1), data;
         return {
             "dims": dims,
             "data_type": ONNX_FLOAT,
-            "float_data": data,
+            "float_data": fdata,
             "name": name,
         };
     }
 
     #! Creates a TensorProto hash for int64 data
-    static hash<auto> makeTensorInt64(string name, list<int> dims, list<auto> data) {
+    static hash<auto> makeTensorInt64(string name, list<softint> dims, list<auto> data) {
+        list<int> idata = map int($1), data;
         return {
             "dims": dims,
             "data_type": ONNX_INT64,
-            "int64_data": data,
+            "int64_data": idata,
             "name": name,
         };
     }
@@ -168,20 +171,19 @@ public class OnnxGraphBuilder {
 
     #! Creates a repeated float attribute
     static hash<auto> makeAttrFloats(string name, list<auto> values) {
-        return {"name": name, "type": ONNX_ATTR_FLOATS, "floats": values};
+        list<float> fvalues = map float($1), values;
+        return {"name": name, "type": ONNX_ATTR_FLOATS, "floats": fvalues};
     }
 
     #! Creates a repeated int attribute
     static hash<auto> makeAttrInts(string name, list<auto> values) {
-        return {"name": name, "type": ONNX_ATTR_INTS, "ints": values};
+        list<int> ivalues = map int($1), values;
+        return {"name": name, "type": ONNX_ATTR_INTS, "ints": ivalues};
     }
 
     #! Creates a repeated string attribute
     static hash<auto> makeAttrStrings(string name, list<auto> values) {
-        list<binary> bvalues();
-        foreach auto v in (values) {
-            push bvalues, binary(string(v));
-        }
+        list<binary> bvalues = map binary(string($1)), values;
         return {"name": name, "type": ONNX_ATTR_STRINGS, "strings": bvalues};
     }
 

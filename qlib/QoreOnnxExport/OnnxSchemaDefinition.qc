@@ -135,16 +135,37 @@ public const OnnxProtoDefinition =
     "}\n"
 ;
 
-#! Cached ProtobufSchema for ONNX encoding
-/** Lazily initialized on first use. Thread-safe via Qore's atomic reference
-    counting — multiple threads can read concurrently after initialization.
+#! Thread-safe lazy singleton for the ONNX ProtobufSchema
+class OnnxSchemaHolder {
+    private {
+        static Mutex mtx();
+        static Protobuf::ProtobufSchema schema;
+    }
+
+    #! Returns the cached ONNX ProtobufSchema, creating it on first call
+    /** Thread-safe: uses double-checked locking to ensure exactly one
+        schema is created even under concurrent access.
+    */
+    static Protobuf::ProtobufSchema get() {
+        # Fast path: already initialized
+        if (schema) {
+            return schema;
+        }
+        # Slow path: initialize under lock
+        mtx.lock();
+        on_exit mtx.unlock();
+        if (!schema) {
+            schema = new Protobuf::ProtobufSchema(OnnxProtoDefinition);
+        }
+        return schema;
+    }
+}
+
+#! Returns the cached ONNX ProtobufSchema
+/** @return the ProtobufSchema for ONNX ModelProto encoding/decoding
 */
 public Protobuf::ProtobufSchema sub getOnnxSchema() {
-    our Protobuf::ProtobufSchema onnx_schema;
-    if (!onnx_schema) {
-        onnx_schema = new Protobuf::ProtobufSchema(OnnxProtoDefinition);
-    }
-    return onnx_schema;
+    return OnnxSchemaHolder::get();
 }
 
 #! ONNX TensorProto DataType constants
