@@ -181,6 +181,75 @@ public class Http3ClientConnection inherits HttpClientConnection {
         }
     }
 
+    #! Sends data on a streaming HTTP/3 request
+    /** @param stream_id the stream ID to send data on
+        @param data the data to send (can be NOTHING to send END_STREAM only)
+        @param end_stream if True, signals end of stream
+
+        @return 0 on success, 1 if buffer full (backpressure), -1 on error
+
+        @throw HTTP3-STATE-ERROR if the connection is not ready
+    */
+    int sendStreamData(int stream_id, *data data, bool end_stream = False) {
+        *object ctl;
+        {
+            AutoLock al(lock);
+            if (state != HttpClientConnectionState::Ready) {
+                throw "HTTP3-STATE-ERROR",
+                    sprintf("cannot send data in state: %y", state);
+            }
+            last_activity = now_us();
+            ctl = controller_ref;
+        }
+
+        log(LoggerLevel::DEBUG, "sending data on stream %d", stream_id);
+        int rv = poll_op.sendStreamData(stream_id, data, end_stream);
+
+        if (ctl) {
+            ctl.wake();
+        }
+
+        return rv;
+    }
+
+    #! Submits a request with streaming support (HTTP/3-specific)
+    /** @param method HTTP method
+        @param path request path
+        @param headers request headers
+        @param body request body (optional)
+        @param callback response callback
+        @param ctx optional context
+        @param streaming if True, enable streaming mode (HEADERS without END_STREAM)
+
+        @return the stream ID
+
+        @note The capacity check is performed atomically inside
+        poll_op.submitRequest() under stream_lock, so there is no TOCTOU gap.
+    */
+    int submitRequestStreaming(string method, string path, *hash<auto> headers, *data body,
+            HttpResponseCallback callback, *hash<auto> ctx, bool streaming = False) {
+        *object ctl;
+        {
+            AutoLock al(lock);
+            if (state != HttpClientConnectionState::Ready) {
+                throw "HTTPCLIENT-STATE-ERROR",
+                    sprintf("connection not ready: state=%y", state);
+            }
+            last_activity = now_us();
+            ctl = controller_ref;
+        }
+
+        log(LoggerLevel::DEBUG, "submitting request: %s %s (streaming=%y)", method, path, streaming);
+        int stream_id = poll_op.submitRequest(method, path, headers, body, callback, ctx,
+            max_concurrent_streams, streaming);
+
+        if (ctl) {
+            ctl.wake();
+        }
+
+        return stream_id;
+    }
+
     #! Protocol-specific poll result hook, called under lock
     /** Checks for GOAWAY received from server atomically with the base state update.
         @note Called while \c lock is held — do not re-acquire.

@@ -1235,6 +1235,11 @@ public:
                                    const void* body, size_t body_len,
                                    ExceptionSink* xsink);
 
+    //! Submit a streaming HTTP/3 request (headers only, no END_STREAM)
+    DLLLOCAL int64_t submitRequestStreaming(const char* method, const char* path,
+                                            const strcase_str_map_t& headers,
+                                            ExceptionSink* xsink);
+
     //! Get the QuicSession
     DLLLOCAL std::shared_ptr<QuicSession> getSession() const { return quic_session; }
 

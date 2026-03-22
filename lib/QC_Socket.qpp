@@ -5611,6 +5611,97 @@ int Socket::submitQuicRequest(string method, string path, *hash<auto> headers, *
     return s->submitQuicRequest(method->c_str(), path->c_str(), headers, body_ptr, body_len, xsink);
 }
 
+//! Submits a streaming HTTP/3 request (headers only, no END_STREAM) on the client QUIC session
+/** @par Example:
+    @code{.py}
+    int stream_id = sock.submitQuicRequestStreaming("POST", "/api/stream", headers);
+    sock.sendQuicClientStreamData(stream_id, chunk1);
+    sock.sendQuicClientStreamData(stream_id, chunk2);
+    sock.sendQuicClientStreamData(stream_id, NOTHING, True);  # end stream
+    @endcode
+
+    Opens a bidirectional HTTP/3 stream for incremental data exchange.  The request
+    headers are sent without END_STREAM; body data is provided incrementally via
+    @ref sendQuicClientStreamData().
+
+    @param method HTTP method (POST, etc.)
+    @param path request path
+    @param headers optional request headers
+
+    @return the stream ID assigned to this request
+
+    @throw QUIC-ERROR if no QUIC session is active or an error occurs
+
+    @since %Qore 2.3
+*/
+int Socket::submitQuicRequestStreaming(string method, string path, *hash<auto> headers) {
+    return s->submitQuicRequestStreaming(method->c_str(), path->c_str(), headers, xsink);
+}
+
+//! Sends body data on a client-side streaming HTTP/3 request
+/** @par Example:
+    @code{.py}
+    int rv = sock.sendQuicClientStreamData(stream_id, chunk_data);
+    if (rv == 1) {
+        # buffer full — wait for drain before retrying
+        sock.waitForQuicClientStreamDrain(stream_id, 5s);
+    }
+    sock.sendQuicClientStreamData(stream_id, NOTHING, True);  # end stream
+    @endcode
+
+    @param stream_id the stream ID from submitQuicRequestStreaming()
+    @param body optional body data to send
+    @param end_stream set to True to signal the end of the request body
+
+    @return 0 on success, 1 if buffer full (backpressure), -1 on error
+
+    @throw QUIC-ERROR if no QUIC session is active
+
+    @since %Qore 2.3
+*/
+int Socket::sendQuicClientStreamData(int stream_id, *data body, softbool end_stream = False) {
+    if (stream_id < 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid stream_id %lld: must be >= 0",
+            (long long)stream_id);
+        return -1;
+    }
+    const void* body_ptr = nullptr;
+    size_t body_len = 0;
+    if (extractQuicBodyPtrLen(body, body_ptr, body_len, xsink)) {
+        return -1;
+    }
+    return s->sendQuicClientStreamData(stream_id, body_ptr, body_len, (bool)end_stream, xsink);
+}
+
+//! Waits for a client-side HTTP/3 streaming body buffer to drain
+/** @par Example:
+    @code{.py}
+    while (sock.sendQuicClientStreamData(stream_id, chunk, False) == 1) {
+        sock.waitForQuicClientStreamDrain(stream_id, 5s);
+    }
+    @endcode
+
+    Blocks until the stream's buffered data drops below the backpressure threshold,
+    the stream is closed, or the timeout expires.
+
+    @param stream_id the stream ID
+    @param timeout_ms maximum wait time (0 = no wait, -1 = infinite)
+
+    @return 0 if buffer drained, 1 if timed out, -1 if stream not found or closed
+
+    @throw QUIC-ERROR if no QUIC session is active
+
+    @since %Qore 2.3
+*/
+int Socket::waitForQuicClientStreamDrain(int stream_id, timeout timeout_ms = 5s) {
+    if (stream_id < 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid stream_id %lld: must be >= 0",
+            (long long)stream_id);
+        return -1;
+    }
+    return s->waitForQuicClientStreamDrain(stream_id, (int)timeout_ms, xsink);
+}
+
 //! Returns the first QUIC session ID for this socket
 /** @par Example:
     @code{.py}

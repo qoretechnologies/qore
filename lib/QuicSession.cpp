@@ -3433,7 +3433,6 @@ int QuicSession::h3RecvDataCallback(nghttp3_conn* /* conn */, int64_t stream_id,
 int QuicSession::h3EndStreamCallback(nghttp3_conn* /* conn */, int64_t stream_id,
                                       void* conn_user_data, void* /* stream_user_data */) {
     auto* session = static_cast<QuicSession*>(conn_user_data);
-    printd(5, "QuicSession::h3EndStreamCallback() stream_id=" QLLD " - marking complete\n", stream_id);
 
     // For CONNECT tunnel streams, set body_complete directly without calling
     // markStreamComplete() — the stream was already dispatched via h3EndHeaders
