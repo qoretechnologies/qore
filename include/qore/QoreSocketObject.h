@@ -779,6 +779,36 @@ public:
     DLLEXPORT QoreValue readQuicConnectStreamData(int64_t session_id, int64_t stream_id,
         ExceptionSink* xsink);
 
+    //! Register a Queue for direct CONNECT stream data delivery
+    /** Data arriving on the CONNECT tunnel is pushed directly to the Queue
+        from the QUIC receive callback, bypassing the intermediate buffer.
+        Any pre-buffered data is flushed to the Queue on registration.
+
+        Ownership: the caller transfers ownership of one reference (+1 ref) to
+        the underlying QuicSession.  The reference will be released when the
+        registration ends (END_STREAM, stream close, cleanup, or session
+        destruction).
+
+        @param session_id the QUIC session ID
+        @param stream_id the HTTP/3 stream ID
+        @param queue the Queue; ownership of one reference is transferred
+        @param xsink exception sink
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT void registerQuicConnectStreamQueue(int64_t session_id, int64_t stream_id,
+        Queue* queue, ExceptionSink* xsink);
+
+    //! Deregister a Queue for a CONNECT stream
+    /** @param session_id the QUIC session ID
+        @param stream_id the HTTP/3 stream ID
+        @param xsink exception sink
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT void deregisterQuicConnectStreamQueue(int64_t session_id, int64_t stream_id,
+        ExceptionSink* xsink);
+
     //! Read body data from a dispatched HTTP/3 stream (headers-only mode)
     /** Blocks until body data is available, the stream completes, or the timeout expires.
         @param session_id the QUIC session ID

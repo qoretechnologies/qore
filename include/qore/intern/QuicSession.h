@@ -35,6 +35,7 @@
 #include "qore/common.h"
 #include "qore/intern/QuicCommon.h"
 #include <qore/InputStream.h>
+#include <qore/QoreQueue.h>  // includes Queue class (AbstractPrivateData + QoreQueue)
 
 #include <ngtcp2/ngtcp2.h>
 #include <ngtcp2/ngtcp2_crypto.h>
@@ -715,6 +716,27 @@ public:
     */
     DLLLOCAL QoreValue readConnectStreamData(int64_t stream_id, ExceptionSink* xsink);
 
+    //! Register a Queue for direct data delivery on a CONNECT stream
+    /** Once registered, h3RecvDataCallback pushes data directly to the Queue
+        instead of buffering in connect_stream_data_.  Any data already buffered
+        is flushed to the Queue immediately.  When END_STREAM arrives, a NOTHING
+        sentinel is pushed and the registration is automatically removed.
+
+        Ownership: the caller transfers ownership of one reference (+1 ref) to
+        QuicSession.  QuicSession will call deref() when the registration ends
+        (END_STREAM, stream close, cleanup, or session destruction).
+
+        @param stream_id the HTTP/3 stream ID
+        @param queue pointer to the Queue; ownership of one reference is transferred
+    */
+    DLLLOCAL void registerConnectStreamQueue(int64_t stream_id, Queue* queue);
+
+    //! Deregister a Queue for a CONNECT stream without pushing a sentinel
+    /** Called during stream cleanup when the handler has already exited.
+        @param stream_id the HTTP/3 stream ID
+    */
+    DLLLOCAL void deregisterConnectStreamQueue(int64_t stream_id);
+
     //! Returns true if extended CONNECT protocol is enabled locally (server)
     DLLLOCAL bool isExtendedConnectSupported() const {
         return is_server_;  // Server always enables via setupHttp3()
@@ -1205,11 +1227,23 @@ private:
     std::atomic<bool> has_active_input_streams_{false};
 
     //! Per-stream receive buffer for extended CONNECT bidirectional tunnel data
-    /** WebSocket frames received from client, separate from normal request body.
+    /** Fallback buffer for data that arrives before a Queue is registered.
+        Once a Queue is registered via registerConnectStreamQueue(), data bypasses
+        this buffer and is pushed directly to the Queue.
         Protected by connect_data_mutex_.
     */
     std::unordered_map<int64_t, std::vector<uint8_t>> connect_stream_data_;
-    std::mutex connect_data_mutex_;  //!< protects connect_stream_data_
+
+    //! Per-stream Queue for direct data delivery to CONNECT handlers
+    /** When registered, h3RecvDataCallback pushes data directly to the Queue
+        instead of buffering in connect_stream_data_.  Eliminates dependency on
+        the I/O poll loop for data delivery, making CONNECT tunnel data available
+        to the handler immediately when QUIC packets are processed.
+        Protected by connect_data_mutex_.
+    */
+    std::unordered_map<int64_t, Queue*> connect_stream_queues_;
+
+    std::mutex connect_data_mutex_;  //!< protects connect_stream_data_ and connect_stream_queues_
 
     //! Per-stream incoming datagram queue (RFC 9221/9297)
     /** Keyed by stream_id.  recvDatagramCallback routes datagrams here based on
