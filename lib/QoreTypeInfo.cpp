@@ -3426,3 +3426,115 @@ qore_type_result_e QoreTypeInfo::runtimeTypeMatch(const QoreTypeInfo* typeInfo) 
 
     return rc;
 }
+
+bool QoreTypeInfo::matchCommonType(const QoreTypeInfo*& ctype, const QoreTypeInfo* ntype) {
+    // issue #3005: if the first element had no type, then there is no common type
+    if (!ctype || ctype == anyTypeInfo) {
+        ctype = nullptr;
+        return false;
+    }
+    if (ctype == ntype) {
+        return true;
+    }
+    if (!QoreTypeInfo::hasType(ntype)) {
+        // issue #2791: when performing type folding, do not set to type "any" but rather use "auto"
+        ctype = ntype == anyTypeInfo ? nullptr : ntype;
+        return false;
+    }
+
+    // ctype |* NOTHING -> *type
+    if (!QoreTypeInfo::parseReturns(ctype, NT_NOTHING) && QoreTypeInfo::isType(ntype, NT_NOTHING)) {
+        const QoreTypeInfo* ti = get_or_nothing_type(ctype);
+        ctype = ti;
+        return ctype != autoTypeInfo ? true : false;
+    }
+
+    // ctype==NOTHING | type -> *type
+    if (QoreTypeInfo::isType(ctype, NT_NOTHING)) {
+        ctype = get_or_nothing_type_check(ntype);
+        return ctype != autoTypeInfo ? true : false;
+    }
+
+    // ctype |* *ctype -> *ctype
+    // if the new type is a superset of the existing common type, then use the new type
+    if (ntype->superSetOf(ctype)) {
+        ctype = ntype;
+        return true;
+    }
+
+    // try to find a common base type
+    // if we're dealing with types that return multiple types, then they are not compatible
+    if (ctype->return_vec.size() > 1 || ntype->return_vec.size() > 1) {
+        // issue #2791: when performing type folding, do not set to type "any" but rather use "auto"
+        ctype = autoTypeInfo;
+        return false;
+    }
+
+    // see if we have a complex type
+    const QoreTypeInfo* bti = ctype->return_vec[0].spec.getBaseTypeInfo();
+    if (bti == ntype->return_vec[0].spec.getBaseTypeInfo()) {
+        // issue #3429: when performing type folding with complex types, do not use subtype "any" but rather use "auto"
+        if (bti == hashTypeInfo) {
+            // Check if both are hashdecls before degrading to autoHashTypeInfo
+            // Fixes issue where hashdecl type infos from different module load instances are incorrectly
+            // degraded to hash<auto>, causing overload resolution failures and type checking errors
+            const TypedHashDecl* hd1 = ctype->return_vec[0].spec.getHashDecl();
+            const TypedHashDecl* hd2 = ntype->return_vec[0].spec.getHashDecl();
+            if (hd1 && hd2) {
+                // Both are hashdecls - preserve the typed structure instead of degrading to auto
+                // Structural equality will be checked at runtime if needed
+                return true;
+            }
+            ctype = autoHashTypeInfo;
+        } else if (bti == listTypeInfo) {
+            ctype = autoListTypeInfo;
+        } else if (bti == softListTypeInfo) {
+            ctype = softAutoListTypeInfo;
+        } else if (bti == hashOrNothingTypeInfo) {
+            ctype = autoHashOrNothingTypeInfo;
+        } else if (bti == listOrNothingTypeInfo) {
+            ctype = autoListOrNothingTypeInfo;
+        } else if (bti == softListOrNothingTypeInfo) {
+            ctype = softAutoListOrNothingTypeInfo;
+        } else {
+            ctype = bti;
+        }
+        return true;
+    }
+    // issue #2791: when performing type folding, do not set to type "any" but rather use "auto"
+    ctype = autoTypeInfo;
+    return false;
+}
+
+bool QoreTypeInfo::superSetOf(const QoreTypeInfo* t) const {
+    if (getAcceptVecSize() < t->getAcceptVecSize() || return_vec.size() < t->return_vec.size())
+        return false;
+
+    for (unsigned i = 0; i < t->getAcceptVecSize(); ++i) {
+        if (t->getAcceptSpec(i).spec != getAcceptSpec(i).spec)
+            return false;
+    }
+
+    for (unsigned i = 0; i < t->return_vec.size(); ++i) {
+        if (t->return_vec[i].spec != return_vec[i].spec)
+            return false;
+    }
+
+    return true;
+}
+
+bool QoreTypeInfo::outputSuperSetOf(const QoreTypeInfo* t) const {
+    if (return_vec.size() < t->return_vec.size())
+        return false;
+
+    for (unsigned i = 0; i < t->return_vec.size(); ++i) {
+        bool may_not_match = false;
+        bool may_need_filter = false;
+        if (!return_vec[i].spec.match(t->return_vec[i].spec, may_not_match, may_need_filter))
+            return false;
+        if (may_not_match)
+            return false;
+    }
+
+    return true;
+}
