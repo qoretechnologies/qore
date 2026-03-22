@@ -5275,14 +5275,20 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 cx.close = header_info.close;
 
                 # Check for end-persistent signal — client is explicitly ending
-                # the persistent session.  Send a 200 OK response and exit;
-                # the on_exit block will call phi.clear() → persistentClosed()
+                # the persistent session.  Send a 200 OK response and return
+                # the connection to async I/O so it can be reused for new
+                # requests (e.g., a new streaming session on the same
+                # keep-alive connection).
+                # The on_exit block will call phi.clear() → persistentClosed()
                 # → rollback any open transaction.
                 if (hdr."qorus-connection" =~ /^end-persistent$/i) {
                     log("cid %d: received end-persistent signal, terminating "
                         "persistent session", cx.id);
                     s.sendHTTPResponse(200, "OK", "1.1", {"Content-Type": "text/plain"},
                         "OK");
+                    if (!cx.close && s.isOpen()) {
+                        serv.returnConnectionToAsyncIo(s, cx, self);
+                    }
                     return;
                 }
 
