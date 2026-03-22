@@ -247,3 +247,20 @@ bool Imputer::isFitted() [flags=CONSTANT] {
 hash<ImputerInfo> Imputer::getInfo() {
     return imputer->getInfo(xsink);
 }
+
+//! Returns the computed fill values
+/** @return a list of float values, one per feature, containing the values used to fill
+    missing data (computed based on the strategy during fitting)
+
+    @throw ML-IMPUTER-ERROR if the imputer has not been fitted
+*/
+list<float> Imputer::getFillValues() {
+    return imputer->getFillValuesList(xsink);
+}
+
+//! Returns the imputation strategy
+/** @return the strategy string: "mean", "median", "most_frequent", or "constant"
+*/
+string Imputer::getStrategy() [flags=CONSTANT] {
+    return new QoreStringNode(imputer->getStrategy());
+}

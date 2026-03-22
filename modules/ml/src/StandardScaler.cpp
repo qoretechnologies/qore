@@ -201,6 +201,34 @@ QoreHashNode* QoreStandardScaler::getInfo(ExceptionSink* xsink) const {
     return rv.release();
 }
 
+QoreListNode* QoreStandardScaler::getMeanAsList(ExceptionSink* xsink) const {
+    std::lock_guard<std::mutex> lk(mtx);
+    if (!fitted) {
+        xsink->raiseException("ML-STANDARD-SCALER-ERROR",
+            "scaler has not been fitted: call fit() or fitMatrix() first");
+        return nullptr;
+    }
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(autoTypeInfo), xsink);
+    for (int j = 0; j < n_features; ++j) {
+        rv->push(mean_vec(j), xsink);
+    }
+    return rv.release();
+}
+
+QoreListNode* QoreStandardScaler::getStdAsList(ExceptionSink* xsink) const {
+    std::lock_guard<std::mutex> lk(mtx);
+    if (!fitted) {
+        xsink->raiseException("ML-STANDARD-SCALER-ERROR",
+            "scaler has not been fitted: call fit() or fitMatrix() first");
+        return nullptr;
+    }
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(autoTypeInfo), xsink);
+    for (int j = 0; j < n_features; ++j) {
+        rv->push(std_vec(j), xsink);
+    }
+    return rv.release();
+}
+
 std::vector<uint8_t> QoreStandardScaler::serializeState() const {
     std::vector<uint8_t> buf;
     // Hyperparameters

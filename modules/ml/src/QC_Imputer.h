@@ -72,6 +72,9 @@ public:
     DLLLOCAL int getNumFeatures() const { return n_features; }
     DLLLOCAL const std::string& getStrategy() const { return strategy; }
 
+    //! Get fill values as a Qore list
+    DLLLOCAL QoreListNode* getFillValuesList(ExceptionSink* xsink) const;
+
     //! Serialize model state to binary
     DLLLOCAL std::vector<uint8_t> serializeState() const;
 

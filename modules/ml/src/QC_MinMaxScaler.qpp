@@ -300,3 +300,35 @@ bool MinMaxScaler::isFitted() [flags=CONSTANT] {
 hash<MinMaxScalerInfo> MinMaxScaler::getInfo() {
     return scaler->getInfo(xsink);
 }
+
+//! Returns the per-feature data minimum values from the training set
+/** @return a list of float values, one per feature
+
+    @throw ML-MIN-MAX-SCALER-ERROR if the scaler has not been fitted
+*/
+list<float> MinMaxScaler::getDataMin() {
+    return scaler->getDataMinList(xsink);
+}
+
+//! Returns the per-feature data maximum values from the training set
+/** @return a list of float values, one per feature
+
+    @throw ML-MIN-MAX-SCALER-ERROR if the scaler has not been fitted
+*/
+list<float> MinMaxScaler::getDataMax() {
+    return scaler->getDataMaxList(xsink);
+}
+
+//! Returns the lower bound of the target range
+/** @return the feature_min value
+*/
+float MinMaxScaler::getFeatureMin() [flags=CONSTANT] {
+    return scaler->getFeatureMin();
+}
+
+//! Returns the upper bound of the target range
+/** @return the feature_max value
+*/
+float MinMaxScaler::getFeatureMax() [flags=CONSTANT] {
+    return scaler->getFeatureMax();
+}

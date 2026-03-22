@@ -313,3 +313,21 @@ bool StandardScaler::isFitted() [flags=CONSTANT] {
 hash<StandardScalerInfo> StandardScaler::getInfo() {
     return scaler->getInfo(xsink);
 }
+
+//! Returns the per-feature mean values
+/** @return a list of float values, one per feature
+
+    @throw ML-STANDARD-SCALER-ERROR if the scaler has not been fitted
+*/
+list<float> StandardScaler::getMean() {
+    return scaler->getMeanAsList(xsink);
+}
+
+//! Returns the per-feature standard deviation values
+/** @return a list of float values, one per feature
+
+    @throw ML-STANDARD-SCALER-ERROR if the scaler has not been fitted
+*/
+list<float> StandardScaler::getStd() {
+    return scaler->getStdAsList(xsink);
+}

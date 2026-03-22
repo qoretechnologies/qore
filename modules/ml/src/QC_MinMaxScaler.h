@@ -78,6 +78,12 @@ public:
     DLLLOCAL double getFeatureMin() const { return feature_min; }
     DLLLOCAL double getFeatureMax() const { return feature_max; }
 
+    //! Get per-feature data minimum values as a Qore list
+    DLLLOCAL QoreListNode* getDataMinList(ExceptionSink* xsink) const;
+
+    //! Get per-feature data maximum values as a Qore list
+    DLLLOCAL QoreListNode* getDataMaxList(ExceptionSink* xsink) const;
+
     //! Serialize model state to binary
     DLLLOCAL std::vector<uint8_t> serializeState() const;
 

@@ -1883,6 +1883,14 @@ if (NOT Eigen3_FOUND)
     endif()
 endif()
 add_subdirectory(modules/ml)
+# protobuf module (requires libprotobuf)
+# Try MODULE mode first (CMake's FindProtobuf) — avoids broken CONFIG files
+# (e.g., MacPorts protobuf-targets-macports.cmake referencing missing upb targets)
+find_package(Protobuf MODULE QUIET)
+if (NOT Protobuf_FOUND)
+    find_package(Protobuf CONFIG REQUIRED)
+endif()
+add_subdirectory(modules/protobuf)
 
 # HACK: we need to simulate QORE_USER_MODULES_DIR as the versioned one
 #       for qore core qlib modules.
@@ -1957,6 +1965,7 @@ qore_user_module("qlib/EdifactUtil" "Util;DataProvider;FileLocationHandler")
 qore_user_module("qlib/DataProvider" "MapperUtil;Mime;Util" "DataProvider-Full.svg;Qore-Q-square.svg")
 qore_user_module("qlib/DataProviderML" "DataProvider;modules/ml/ml")
 qore_user_module("qlib/QoreModelRegistry" "DataProvider;modules/ml/ml;Mime;Util")
+qore_user_module("qlib/QoreOnnxExport" "modules/protobuf/protobuf;modules/ml/ml;Util")
 qore_user_module("qlib/DpqlWebSocket" "DataProvider;HttpServerUtil;WebSocketHandler")
 qore_user_module("qlib/DebugProgramControl.qm" "DebugUtil")
 qore_user_module("qlib/HttpServerUtil.qm" "Mime;Util;FileLocationHandler;Logger;modules/logger_bin/logger_bin")

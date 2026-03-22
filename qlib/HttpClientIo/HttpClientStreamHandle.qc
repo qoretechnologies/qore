@@ -44,6 +44,32 @@ stream.submitAsync("GET", "/api/users", NOTHING, NOTHING,
         printf("Response: %y\n", response);
     });
     @endcode
+
+    @par Streaming Usage (SSE, gRPC, etc.)
+    @code{.py}
+HttpClientStreamHandle stream = manager.acquireStream("https://example.com");
+if (stream.supportsStreaming()) {
+    stream.startStreaming("POST", "/events",
+        {"Accept": "text/event-stream", "Content-Type": "application/json"});
+    while (True) {
+        auto data = stream.readData(30s);
+        if (!exists data) {
+            continue;  # timeout, retry
+        }
+        if (data.typeCode() == NT_HASH) {
+            if (data.end_stream) {
+                break;  # stream complete
+            }
+            if (data.error) {
+                throw "STREAM-ERROR", sprintf("%y", data.error);
+            }
+            continue;
+        }
+        # data is binary or string — process it
+        printf("Received: %y\n", data);
+    }
+}
+    @endcode
 */
 public class HttpClientStreamHandle {
     private {
@@ -532,6 +558,102 @@ public class HttpClientStreamHandle {
                 try { p.set(resp); } catch () {}
             }
         }
+    }
+
+    #! Starts a streaming request on this stream handle
+    /** Opens an HTTP stream for incremental data delivery. For response-only streaming
+        (e.g., SSE), set \c body_streaming to \c False (default); the request is sent with
+        END_STREAM and the server streams back data. For bidirectional streaming (e.g., gRPC,
+        WebSocket), set \c body_streaming to \c True.
+
+        @param method HTTP method (e.g., "GET", "POST", "CONNECT")
+        @param path request path
+        @param headers request headers (optional)
+        @param body_streaming if \c True, keep the request body stream open for bidirectional
+        communication; if \c False (default), submit with END_STREAM for response-only streaming
+
+        @return the stream ID
+
+        @throw HTTPCLIENT-STREAMING-NOT-SUPPORTED if the protocol does not support streaming
+        @throw HTTPCLIENT-STATE-ERROR if the stream is already in use
+        @throw HTTPCLIENT-TIMEOUT if connection establishment times out
+
+
+        @see readData(), sendData(), writesDone()
+    */
+    int startStreaming(string method, string path, *hash<auto> headers, bool body_streaming = False) {
+        throw "HTTPCLIENT-STREAMING-NOT-SUPPORTED",
+            "streaming is not supported by " + conn.getProtocol();
+    }
+
+    #! Reads data from a streaming connection
+    /** Returns the next chunk of data from the stream. The return value depends on the stream
+        state:
+        - \c binary or \c string: actual body data
+        - \c hash with \c "end_stream": \c True: signals that the stream is complete
+        - \c hash with \c "error": stream error information
+        - \c NOTHING: timeout (no data within \c timeout_ms)
+
+        @param timeout_ms timeout for waiting for data; if not specified, blocks indefinitely
+
+        @return data chunk, end-of-stream sentinel, error hash, or NOTHING on timeout
+
+        @throw HTTPCLIENT-STREAMING-NOT-SUPPORTED if the protocol does not support streaming
+        @throw HTTPCLIENT-STREAM-CLOSED if the stream has already been closed
+
+
+        @see startStreaming()
+    */
+    auto readData(*timeout timeout_ms) {
+        throw "HTTPCLIENT-STREAMING-NOT-SUPPORTED",
+            "streaming is not supported by " + conn.getProtocol();
+    }
+
+    #! Sends data on a streaming connection
+    /** Sends data on the write side of a bidirectional stream. Only meaningful when
+        \c startStreaming() was called with \c body_streaming = \c True.
+
+        @param data the data to send (string or binary)
+        @param end_stream if \c True, signals end of the write side (half-close)
+
+        @throw HTTPCLIENT-STREAMING-NOT-SUPPORTED if the protocol does not support streaming
+        @throw HTTPCLIENT-STATE-ERROR if the stream is not in streaming mode
+
+
+        @see startStreaming(), writesDone()
+    */
+    sendData(data data, bool end_stream = False) {
+        throw "HTTPCLIENT-STREAMING-NOT-SUPPORTED",
+            "streaming is not supported by " + conn.getProtocol();
+    }
+
+    #! Closes the write side of a streaming connection
+    /** Convenience method that sends an empty payload with \c end_stream = \c True.
+        Override if the protocol has a dedicated half-close mechanism.
+
+
+        @see sendData()
+    */
+    writesDone() {
+        sendData(binary(), True);
+    }
+
+    #! Returns trailers from the completed response
+    /** @return trailers hash, or NOTHING if no trailers or not yet complete
+
+        @since HttpClientIo 1.3
+    */
+    *hash<string, string> getTrailers() {
+        return NOTHING;
+    }
+
+    #! Returns True if this stream handle supports streaming
+    /** @return \c True if \c startStreaming(), \c readData(), and \c sendData() are available
+
+        @since HttpClientIo 1.3
+    */
+    bool supportsStreaming() {
+        return False;
     }
 
     #! Send a QUIC DATAGRAM frame on this stream's datagram channel (RFC 9221/9297)

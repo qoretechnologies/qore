@@ -47,6 +47,13 @@ class ModelRegistryTest inherits QUnit::Test {
         addTestCase("errorCases", \errorCasesTest());
         addTestCase("untagging", \untaggingTest());
         addTestCase("getVersionMetadata", \getVersionMetadataTest());
+        addTestCase("multiTenantIsolation", \multiTenantIsolationTest());
+        addTestCase("multiTenantListTenants", \multiTenantListTenantsTest());
+        addTestCase("multiTenantMetadata", \multiTenantMetadataTest());
+        addTestCase("multiTenantTagging", \multiTenantTaggingTest());
+        addTestCase("multiTenantPruning", \multiTenantPruningTest());
+        addTestCase("multiTenantGetTenantId", \multiTenantGetTenantIdTest());
+        addTestCase("multiTenantInvalidTenantId", \multiTenantInvalidTenantIdTest());
 
         set_return_value(main());
     }
@@ -382,5 +389,248 @@ class ModelRegistryTest inherits QUnit::Test {
         # Nonexistent version
         assertThrows("ML-REGISTRY-ERROR", \registry.getVersionMetadata(),
             ("meta_model", "nonexistent"));
+    }
+
+    #
+    # Multi-tenant tests
+    #
+
+    multiTenantIsolationTest() {
+        string dir = getTestDir();
+        on_exit { cleanupDir(dir); }
+
+        # Create two tenant-scoped registries sharing the same base path
+        QoreModelRegistry::ModelRegistry tenant_a({"path": dir, "tenant_id": "acme"});
+        QoreModelRegistry::ModelRegistry tenant_b({"path": dir, "tenant_id": "globex"});
+
+        ML::KMeans km = createFittedKMeans();
+        ML::LinearRegression lr = createFittedLR();
+
+        # Both tenants register a model with the same name
+        string vid_a = tenant_a.register(km, {"name": "shared-name"});
+        string vid_b = tenant_b.register(lr, {"name": "shared-name"});
+
+        # Each tenant only sees its own models
+        list<string> a_models = tenant_a.listModels();
+        assertEq(1, a_models.size(), "tenant A should have 1 model");
+        assertEq("shared-name", a_models[0], "tenant A model name");
+
+        list<string> b_models = tenant_b.listModels();
+        assertEq(1, b_models.size(), "tenant B should have 1 model");
+        assertEq("shared-name", b_models[0], "tenant B model name");
+
+        # Tenant A loads a KMeans, tenant B loads a LinearRegression
+        object loaded_a = tenant_a.load("shared-name");
+        assertTrue(loaded_a instanceof ML::KMeans,
+            "tenant A should load KMeans");
+
+        object loaded_b = tenant_b.load("shared-name");
+        assertTrue(loaded_b instanceof ML::LinearRegression,
+            "tenant B should load LinearRegression");
+
+        # Tenant A cannot see tenant B's versions
+        list<hash<auto>> a_versions = tenant_a.listVersions("shared-name");
+        assertEq(1, a_versions.size(), "tenant A should have 1 version");
+        assertEq(vid_a, a_versions[0].version_id, "tenant A version_id");
+
+        list<hash<auto>> b_versions = tenant_b.listVersions("shared-name");
+        assertEq(1, b_versions.size(), "tenant B should have 1 version");
+        assertEq(vid_b, b_versions[0].version_id, "tenant B version_id");
+
+        # Tenant A cannot load models that only exist in tenant B's namespace
+        tenant_b.register(lr, {"name": "b-only-model"});
+        assertThrows("ML-REGISTRY-ERROR", \tenant_a.load(), ("b-only-model",));
+    }
+
+    multiTenantListTenantsTest() {
+        string dir = getTestDir();
+        on_exit { cleanupDir(dir); }
+
+        # Create tenant registries and register models to create directory structure
+        ML::KMeans km = createFittedKMeans();
+
+        QoreModelRegistry::ModelRegistry t1({"path": dir, "tenant_id": "alpha"});
+        t1.register(km, {"name": "model1"});
+
+        QoreModelRegistry::ModelRegistry t2({"path": dir, "tenant_id": "beta"});
+        t2.register(km, {"name": "model2"});
+
+        QoreModelRegistry::ModelRegistry t3({"path": dir, "tenant_id": "gamma"});
+        t3.register(km, {"name": "model3"});
+
+        # Admin registry (no tenant_id) can list all tenants
+        QoreModelRegistry::ModelRegistry admin({"path": dir});
+        list<string> tenants = admin.listTenants();
+        assertEq(3, tenants.size(), "should have 3 tenants");
+        assertEq("alpha", tenants[0], "first tenant");
+        assertEq("beta", tenants[1], "second tenant");
+        assertEq("gamma", tenants[2], "third tenant");
+
+        # Empty registry has no tenants
+        string dir2 = getTestDir();
+        on_exit { cleanupDir(dir2); }
+        QoreModelRegistry::ModelRegistry empty({"path": dir2});
+        assertEq(0, empty.listTenants().size(), "empty registry should have no tenants");
+    }
+
+    multiTenantMetadataTest() {
+        string dir = getTestDir();
+        on_exit { cleanupDir(dir); }
+
+        QoreModelRegistry::ModelRegistry tenant_reg({
+            "path": dir,
+            "tenant_id": "acme-corp",
+        });
+
+        ML::KMeans km = createFittedKMeans();
+        string vid = tenant_reg.register(km, {
+            "name": "tenant_model",
+            "description": "tenant test",
+        });
+
+        # Verify tenant_id is in the metadata
+        hash<auto> meta = tenant_reg.getVersionMetadata("tenant_model", vid);
+        assertEq("acme-corp", meta.tenant_id, "tenant_id should be in metadata");
+        assertEq("tenant_model", meta.name, "name should match");
+
+        # Non-tenant registry should NOT have tenant_id in metadata
+        QoreModelRegistry::ModelRegistry plain_reg({"path": dir});
+        string vid2 = plain_reg.register(km, {"name": "plain_model"});
+        hash<auto> meta2 = plain_reg.getVersionMetadata("plain_model", vid2);
+        assertNothing(meta2.tenant_id, "plain registry should not have tenant_id");
+    }
+
+    multiTenantTaggingTest() {
+        string dir = getTestDir();
+        on_exit { cleanupDir(dir); }
+
+        QoreModelRegistry::ModelRegistry tenant_a({"path": dir, "tenant_id": "acme"});
+        QoreModelRegistry::ModelRegistry tenant_b({"path": dir, "tenant_id": "globex"});
+
+        ML::KMeans km = createFittedKMeans();
+        ML::LinearRegression lr = createFittedLR();
+
+        string vid_a = tenant_a.register(km, {"name": "tagged-model"});
+        tenant_b.register(lr, {"name": "tagged-model"});
+
+        # Tag in tenant A
+        tenant_a.tag("tagged-model", vid_a, "production");
+
+        # Tenant B's model should not have the tag
+        list<hash<auto>> b_versions = tenant_b.listVersions("tagged-model");
+        assertEq(0, b_versions[0].tags.size(),
+            "tenant B model should have no tags");
+
+        # Load by tag in tenant A returns KMeans
+        object prod_a = tenant_a.loadByTag("tagged-model", "production");
+        assertTrue(prod_a instanceof ML::KMeans,
+            "tenant A production should be KMeans");
+
+        # Load by tag in tenant B should throw (no "production" tag)
+        assertThrows("ML-REGISTRY-ERROR", \tenant_b.loadByTag(),
+            ("tagged-model", "production"));
+    }
+
+    multiTenantPruningTest() {
+        string dir = getTestDir();
+        on_exit { cleanupDir(dir); }
+
+        QoreModelRegistry::ModelRegistry tenant_a({"path": dir, "tenant_id": "acme"});
+        QoreModelRegistry::ModelRegistry tenant_b({"path": dir, "tenant_id": "globex"});
+
+        ML::KMeans km = createFittedKMeans();
+
+        # Register 3 versions in tenant A
+        for (int i = 0; i < 3; ++i) {
+            tenant_a.register(km, {"name": "prune-test"});
+        }
+
+        # Register 1 version in tenant B
+        string vid_b = tenant_b.register(km, {"name": "prune-test"});
+
+        # Prune tenant A keeping 1
+        int deleted = tenant_a.prune("prune-test", {"keep_latest": 1});
+        assertEq(2, deleted, "tenant A should prune 2 versions");
+
+        # Tenant A should have 1 remaining
+        list<hash<auto>> a_versions = tenant_a.listVersions("prune-test");
+        assertEq(1, a_versions.size(), "tenant A should have 1 version left");
+
+        # Tenant B should be completely unaffected
+        list<hash<auto>> b_versions = tenant_b.listVersions("prune-test");
+        assertEq(1, b_versions.size(), "tenant B should still have 1 version");
+        assertEq(vid_b, b_versions[0].version_id,
+            "tenant B version should be unchanged");
+    }
+
+    multiTenantGetTenantIdTest() {
+        string dir = getTestDir();
+        on_exit { cleanupDir(dir); }
+
+        # Tenant registry returns its tenant ID
+        QoreModelRegistry::ModelRegistry tenant_reg({
+            "path": dir,
+            "tenant_id": "my-tenant",
+        });
+        assertEq("my-tenant", tenant_reg.getTenantId(),
+            "getTenantId should return tenant_id");
+
+        # Non-tenant registry returns NOTHING
+        QoreModelRegistry::ModelRegistry plain_reg({"path": dir});
+        assertNothing(plain_reg.getTenantId(),
+            "getTenantId should return NOTHING for non-tenant registry");
+    }
+
+    multiTenantInvalidTenantIdTest() {
+        string dir = getTestDir();
+        on_exit { cleanupDir(dir); }
+
+        # Path separator in tenant_id should be rejected
+        assertThrows("ML-REGISTRY-ERROR", sub() {
+            new QoreModelRegistry::ModelRegistry({
+                "path": dir,
+                "tenant_id": "bad/tenant",
+            });
+        });
+
+        # Backslash in tenant_id should be rejected
+        assertThrows("ML-REGISTRY-ERROR", sub() {
+            new QoreModelRegistry::ModelRegistry({
+                "path": dir,
+                "tenant_id": "bad\\tenant",
+            });
+        });
+
+        # Double-dot traversal should be rejected
+        assertThrows("ML-REGISTRY-ERROR", sub() {
+            new QoreModelRegistry::ModelRegistry({
+                "path": dir,
+                "tenant_id": "../escape",
+            });
+        });
+
+        # Single dot should be rejected (resolves to base_path itself)
+        assertThrows("ML-REGISTRY-ERROR", sub() {
+            new QoreModelRegistry::ModelRegistry({
+                "path": dir,
+                "tenant_id": ".",
+            });
+        });
+
+        # Spaces should be rejected
+        assertThrows("ML-REGISTRY-ERROR", sub() {
+            new QoreModelRegistry::ModelRegistry({
+                "path": dir,
+                "tenant_id": "has space",
+            });
+        });
+
+        # Valid tenant IDs should work
+        auto reg = new QoreModelRegistry::ModelRegistry({
+            "path": dir,
+            "tenant_id": "valid-tenant_123",
+        });
+        assertEq("valid-tenant_123", reg.getTenantId(),
+            "valid tenant_id should be accepted");
     }
 }

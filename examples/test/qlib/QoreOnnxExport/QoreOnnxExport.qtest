@@ -1,0 +1,221 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  QoreOnnxExport.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+%strict-args
+%require-types
+%enable-all-warnings
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/QoreOnnxExport
+%requires ml
+%requires protobuf
+
+%exec-class OnnxExportTest
+
+class OnnxExportTest inherits QUnit::Test {
+    constructor() : Test("OnnxExportTest", "1.0") {
+        addTestCase("exportStandardScaler", \exportStandardScalerTest());
+        addTestCase("exportImputer", \exportImputerTest());
+        addTestCase("exportLinearRegression", \exportLinearRegressionTest());
+        addTestCase("exportMinMaxScaler", \exportMinMaxScalerTest());
+        addTestCase("exportPCA", \exportPCATest());
+        addTestCase("exportLogisticRegression", \exportLogisticRegressionTest());
+        addTestCase("exportKMeans", \exportKMeansTest());
+        addTestCase("exportIsolationForest", \exportIsolationForestTest());
+        addTestCase("exportToFile", \exportToFileTest());
+        addTestCase("errorCases", \errorCasesTest());
+
+        set_return_value(main());
+    }
+
+    #! Helper: verify export produces valid ONNX ModelProto binary
+    private hash<auto> verifyOnnxBinary(binary data, string algo_name) {
+        assertTrue(data.size() > 0, algo_name + " should produce non-empty binary");
+
+        # Decode as ModelProto to verify structure
+        Protobuf::ProtobufSchema schema = QoreOnnxExport::getOnnxSchema();
+        hash<auto> model = schema.decode("onnx.ModelProto", data);
+        assertTrue(model.ir_version > 0, algo_name + " should have valid ir_version");
+        assertTrue(model.graph instanceof hash, algo_name + " should have a graph");
+        assertTrue(model.graph.node instanceof list, algo_name + " should have nodes");
+        assertTrue(model.graph.node.size() > 0, algo_name + " should have at least 1 node");
+        assertEq("qore-ml", model.producer_name, algo_name + " producer_name");
+        return model;
+    }
+
+    exportStandardScalerTest() {
+        ML::StandardScaler scaler({"with_mean": True, "with_std": True});
+        scaler.fitMatrix(((1.0, 2.0), (3.0, 4.0), (5.0, 6.0), (7.0, 8.0)));
+
+        binary data = QoreOnnxExport::OnnxExporter::export(scaler, "test_scaler");
+        hash<auto> model = verifyOnnxBinary(data, "StandardScaler");
+
+        # Should have Sub + Div nodes
+        assertEq(2, model.graph.node.size(), "StandardScaler should have 2 nodes");
+        assertEq("Sub", model.graph.node[0].op_type, "first node should be Sub");
+        assertEq("Div", model.graph.node[1].op_type, "second node should be Div");
+    }
+
+    exportImputerTest() {
+        ML::Imputer imp({"strategy": "mean"});
+        imp.fitMatrix(((1.0, 2.0), (3.0, NOTHING), (5.0, 6.0)));
+
+        binary data = QoreOnnxExport::OnnxExporter::export(imp, "test_imputer");
+        hash<auto> model = verifyOnnxBinary(data, "Imputer");
+
+        # Should have IsNaN + Where nodes
+        assertEq(2, model.graph.node.size(), "Imputer should have 2 nodes");
+        assertEq("IsNaN", model.graph.node[0].op_type, "first node should be IsNaN");
+        assertEq("Where", model.graph.node[1].op_type, "second node should be Where");
+    }
+
+    exportLinearRegressionTest() {
+        ML::LinearRegression lr({"fit_intercept": True});
+        lr.fitMatrix(((1.0,), (2.0,), (3.0,), (4.0,), (5.0,)),
+            (2.0, 4.0, 6.0, 8.0, 10.0));
+
+        binary data = QoreOnnxExport::OnnxExporter::export(lr, "test_lr");
+        hash<auto> model = verifyOnnxBinary(data, "LinearRegression");
+
+        # Should have MatMul + Add nodes
+        assertEq(2, model.graph.node.size(), "LR should have 2 nodes");
+        assertEq("MatMul", model.graph.node[0].op_type, "first node should be MatMul");
+        assertEq("Add", model.graph.node[1].op_type, "second node should be Add");
+    }
+
+    exportMinMaxScalerTest() {
+        ML::MinMaxScaler scaler({"feature_min": 0.0, "feature_max": 1.0});
+        scaler.fitMatrix(((0.0, 10.0), (5.0, 20.0), (10.0, 30.0)));
+
+        binary data = QoreOnnxExport::OnnxExporter::export(scaler, "test_minmax");
+        hash<auto> model = verifyOnnxBinary(data, "MinMaxScaler");
+
+        # Should have Sub + Div + Mul + Add nodes
+        assertEq(4, model.graph.node.size(), "MinMaxScaler should have 4 nodes");
+    }
+
+    exportPCATest() {
+        ML::PCA pca({"n_components": 2});
+        pca.fitMatrix(((1.0, 2.0, 3.0), (4.0, 5.0, 6.0), (7.0, 8.0, 9.0),
+            (10.0, 11.0, 12.0)));
+
+        binary data = QoreOnnxExport::OnnxExporter::export(pca, "test_pca");
+        hash<auto> model = verifyOnnxBinary(data, "PCA");
+
+        # Should have Sub + MatMul nodes (no scaling by default)
+        assertTrue(model.graph.node.size() >= 2, "PCA should have at least 2 nodes");
+        assertEq("Sub", model.graph.node[0].op_type, "first node should be Sub");
+    }
+
+    exportLogisticRegressionTest() {
+        # Binary classification
+        ML::LogisticRegression lr_bin({"learning_rate": 0.1, "max_iterations": 100});
+        lr_bin.fitMatrix(((1.0, 0.0), (0.0, 1.0), (1.0, 1.0), (0.0, 0.0)),
+            (1.0, 1.0, 1.0, 0.0));
+
+        binary data_bin = QoreOnnxExport::OnnxExporter::export(lr_bin, "test_logreg_bin");
+        hash<auto> model_bin = verifyOnnxBinary(data_bin, "LogReg-Binary");
+
+        # Should end with Sigmoid for binary
+        int last_idx = model_bin.graph.node.size() - 1;
+        assertEq("Sigmoid", model_bin.graph.node[last_idx].op_type,
+            "binary should end with Sigmoid");
+    }
+
+    exportKMeansTest() {
+        ML::KMeans km({"k": 2, "seed": 42});
+        km.fitMatrix(((1.0, 1.0), (1.1, 1.1), (5.0, 5.0), (5.1, 5.1)));
+
+        binary data = QoreOnnxExport::OnnxExporter::export(km, "test_kmeans");
+        hash<auto> model = verifyOnnxBinary(data, "KMeans");
+
+        # Last node should be ArgMin
+        int last_idx = model.graph.node.size() - 1;
+        assertEq("ArgMin", model.graph.node[last_idx].op_type,
+            "KMeans should end with ArgMin");
+    }
+
+    exportIsolationForestTest() {
+        ML::IsolationForest iforest({"n_trees": 10, "sample_size": 8, "seed": 42});
+        iforest.fitMatrix(((1.0, 2.0), (3.0, 4.0), (5.0, 6.0), (7.0, 8.0),
+            (1.1, 2.1), (3.1, 4.1), (5.1, 6.1), (100.0, 200.0)));
+
+        binary data = QoreOnnxExport::OnnxExporter::export(iforest, "test_iforest");
+        hash<auto> model = verifyOnnxBinary(data, "IsolationForest");
+
+        # Should have TreeEnsembleRegressor + post-processing
+        assertEq("TreeEnsembleRegressor", model.graph.node[0].op_type,
+            "first node should be TreeEnsembleRegressor");
+        assertTrue(model.graph.node.size() >= 4,
+            "should have tree + post-processing nodes");
+
+        # Should import ai.onnx.ml opset
+        bool has_ml_opset = False;
+        foreach hash<auto> opset in (model.opset_import) {
+            if (opset.domain == "ai.onnx.ml") {
+                has_ml_opset = True;
+            }
+        }
+        assertTrue(has_ml_opset, "should import ai.onnx.ml opset");
+    }
+
+    exportToFileTest() {
+        string path = tmp_location() + DirSep + "onnx_test_"
+            + get_random_bytes(4).toHex() + ".onnx";
+        on_exit {
+            if (is_file(path)) {
+                unlink(path);
+            }
+        }
+
+        ML::StandardScaler scaler({"with_mean": True, "with_std": True});
+        scaler.fitMatrix(((1.0, 2.0), (3.0, 4.0)));
+
+        QoreOnnxExport::OnnxExporter::exportToFile(scaler, path);
+        assertTrue(is_file(path), "file should be created");
+
+        # Read back and verify
+        binary data = ReadOnlyFile::readBinaryFile(path);
+        assertTrue(data.size() > 0, "file should be non-empty");
+
+        Protobuf::ProtobufSchema schema = QoreOnnxExport::getOnnxSchema();
+        hash<auto> model = schema.decode("onnx.ModelProto", data);
+        assertEq("qore-ml", model.producer_name, "producer_name from file");
+    }
+
+    errorCasesTest() {
+        # Unfitted model
+        ML::StandardScaler unfitted();
+        assertThrows("ONNX-EXPORT-ERROR", \QoreOnnxExport::OnnxExporter::export(),
+            (unfitted,));
+
+        # Unsupported algorithm
+        ML::HoltWinters hw({"alpha": 0.5, "beta": 0.1, "gamma": 0.1, "period": 4});
+        hw.fit((1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0));
+        assertThrows("ONNX-EXPORT-ERROR", \QoreOnnxExport::OnnxExporter::export(),
+            (hw,));
+    }
+}

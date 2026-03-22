@@ -349,7 +349,7 @@ test-macos:
   stage: test
   needs: []
   tags:
-    - macos
+    - macos-host
   services: []
   variables:
     QORE_TEST_OPTS: '-penable-debug'

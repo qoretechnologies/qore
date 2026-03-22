@@ -937,6 +937,12 @@ Production ML requires tracking which models are in use, comparing versions, and
 managing the lifecycle from training to deployment. The QoreModelRegistry module provides
 this without external dependencies (filesystem or database-backed).
 
+**Multi-tenancy** is a first-class design requirement. The registry is designed from
+the start to support multi-tenant deployments where a single shared registry instance
+serves multiple independent tenants with full data isolation. This is critical for
+SaaS/platform scenarios (e.g., Qorus) where multiple customers or business units
+share infrastructure but must not see each other's models.
+
 ### Components
 
 #### 6.1 QoreModelRegistry Module (Qore)
@@ -946,17 +952,17 @@ A new Qore user module (`qlib/QoreModelRegistry/`) that builds on Phase 5's pers
 ```
 qlib/QoreModelRegistry/
 ├── QoreModelRegistry.qm                 # Main module
-├── ModelRegistry.qc                     # Core registry class
+├── ModelRegistry.qc                     # Core registry class (multi-tenant aware)
 ├── ModelVersion.qc                      # Version tracking
 ├── ModelComparison.qc                   # Side-by-side model comparison
 ├── ModelRegistryDataProvider.qc         # DataProvider integration
 └── ModelRegistryDataProviderFactory.qc  # Factory
 ```
 
-**Core API**:
+**Core API** (single-tenant):
 
 ```qore
-# Registry backed by filesystem
+# Registry backed by filesystem (single-tenant — no tenant_id)
 auto reg = new ModelRegistry({"path": "/var/models"});
 
 # Register a trained model
@@ -980,11 +986,51 @@ auto model = reg.load("fraud-detector", "latest");
 hash<ModelComparisonResult> cmp = reg.compare("fraud-detector", v1_id, v2_id, test_data);
 
 # Promote a version (tag as "production")
-reg.tag(version_id, "production");
+reg.tag("fraud-detector", version_id, "production");
 
 # Delete old versions (keeps tagged versions)
 reg.prune("fraud-detector", {"keep_tagged": True, "keep_latest": 5});
 ```
+
+**Multi-tenant API**:
+
+```qore
+# Tenant-scoped registries — each sees only its own models
+auto reg_a = new ModelRegistry({"path": "/var/models", "tenant_id": "acme-corp"});
+auto reg_b = new ModelRegistry({"path": "/var/models", "tenant_id": "globex-inc"});
+
+# Both tenants can register models with the same name — no conflict
+reg_a.register(model_a, {"name": "fraud-detector"});
+reg_b.register(model_b, {"name": "fraud-detector"});
+
+# Each tenant only sees its own models
+reg_a.listModels();  # ("fraud-detector",) — only acme-corp's
+reg_b.listModels();  # ("fraud-detector",) — only globex-inc's
+
+# Metadata includes tenant_id
+hash<auto> meta = reg_a.getVersionMetadata("fraud-detector", vid);
+# meta.tenant_id == "acme-corp"
+
+# Admin registry (no tenant_id) can list all tenants
+auto admin = new ModelRegistry({"path": "/var/models"});
+list<string> tenants = admin.listTenants();  # ("acme-corp", "globex-inc")
+
+# getTenantId() returns the tenant context
+reg_a.getTenantId();   # "acme-corp"
+admin.getTenantId();   # NOTHING
+```
+
+**Multi-tenancy design principles**:
+- **Tenant isolation**: All storage and API operations are scoped by `tenant_id` when
+  present. A tenant cannot see, load, modify, or delete another tenant's models.
+- **Path-safe tenant IDs**: Tenant IDs are validated on construction — path separators
+  (`/`, `\`) and traversal patterns (`..`) are rejected to prevent directory escape.
+- **Metadata carries tenant context**: `tenant_id` is stored in version metadata,
+  making it possible to audit which tenant owns each model version.
+- **Admin operations**: A registry created without `tenant_id` operates at the global
+  level and can enumerate tenants via `listTenants()`.
+- **Backward compatible**: Single-tenant mode (no `tenant_id`) works exactly as before
+  — the tenant layer is fully optional.
 
 **Hashdecls**:
 
@@ -994,6 +1040,7 @@ hashdecl ModelVersionInfo {
     string name;                # model name
     string algorithm;           # algorithm type
     date created;               # registration timestamp
+    *string tenant_id;          # tenant identifier (multi-tenant deployments)
     *string description;
     *hash<auto> metrics;        # stored evaluation metrics
     *hash<auto> hyperparameters;
@@ -1012,6 +1059,8 @@ hashdecl ModelComparisonResult {
 ```
 
 **Storage layout** (filesystem backend):
+
+Single-tenant:
 ```
 /var/models/
 ├── fraud-detector/
@@ -1024,17 +1073,49 @@ hashdecl ModelComparisonResult {
     └── ...
 ```
 
+Multi-tenant:
+```
+/var/models/
+├── acme-corp/                          # tenant directory
+│   ├── fraud-detector/
+│   │   ├── registry.json
+│   │   ├── v_20260320_abc123.qml
+│   │   └── v_20260320_abc123.meta.json
+│   └── churn-predictor/
+│       └── ...
+├── globex-inc/                         # another tenant
+│   ├── fraud-detector/                 # same model name, different tenant
+│   │   ├── registry.json
+│   │   └── ...
+│   └── ...
+```
+
 #### 6.2 Database Backend (optional)
 
 For production deployments with multiple instances, the registry can be backed by a
 database using Qore's SqlUtil/DatasourcePool:
 
 ```qore
-auto reg = new ModelRegistry({"datasource": ds, "table_prefix": "ml_"});
+auto reg = new ModelRegistry({
+    "datasource": ds,
+    "table_prefix": "ml_",
+    "tenant_id": "acme-corp",  # optional — scopes all queries
+});
 ```
 
-Tables: `ml_models` (name, algorithm), `ml_versions` (version_id, model_id, created,
-metadata JSON), `ml_tags` (version_id, tag), `ml_blobs` (version_id, data BLOB).
+Tables (all include `tenant_id` from day one):
+- `ml_models` (`tenant_id`, name, algorithm) — unique constraint on (`tenant_id`, `name`)
+- `ml_versions` (`tenant_id`, version_id, model_id, created, metadata JSON)
+- `ml_tags` (`tenant_id`, version_id, tag)
+- `ml_blobs` (`tenant_id`, version_id, data BLOB)
+
+All queries include `WHERE tenant_id = :tenant_id` to enforce isolation. The database
+backend uses row-level tenant scoping rather than separate schemas, keeping deployment
+simple while ensuring strict isolation.
+
+**Resource quotas** (future): Per-tenant limits on model count, total storage, and
+version count can be enforced at the registry level without schema changes — the
+`ml_models` and `ml_blobs` tables already carry the `tenant_id` needed for aggregation.
 
 This is an optional add-on and depends on existing SqlUtil infrastructure.
 
@@ -1043,13 +1124,15 @@ This is an optional add-on and depends on existing SqlUtil infrastructure.
 - `model-registry` data provider: browse registered models, list versions
 - Supports DataProvider search/navigation for Qorus integration
 - Actions: register, load, compare, prune — accessible via DataProviderActionCatalog
+- **Tenant scoping**: DataProvider paths are tenant-scoped when `tenant_id` is set,
+  e.g., `model-registry/acme-corp/fraud-detector/versions`
 
 ### Files to Create
 
 | File | Action |
 |------|--------|
 | `qlib/QoreModelRegistry/QoreModelRegistry.qm` | New — main module |
-| `qlib/QoreModelRegistry/ModelRegistry.qc` | New — core registry class |
+| `qlib/QoreModelRegistry/ModelRegistry.qc` | New — core registry class (multi-tenant) |
 | `qlib/QoreModelRegistry/ModelVersion.qc` | New — version tracking |
 | `qlib/QoreModelRegistry/ModelComparison.qc` | New — comparison utilities |
 | `qlib/QoreModelRegistry/ModelRegistryDataProvider.qc` | New |
@@ -1085,6 +1168,23 @@ This is an optional add-on and depends on existing SqlUtil infrastructure.
 
 9. **Error handling**: Load non-existent model → `ML-REGISTRY-ERROR`. Load corrupted
    file → `ML-DESERIALIZE-ERROR`. Register unfitted model → `ML-REGISTRY-ERROR`.
+
+10. **Multi-tenant isolation**: Two tenant registries sharing the same base path can
+    register models with the same name without conflict. Each tenant's `listModels()`,
+    `listVersions()`, `load()`, `tag()`, and `prune()` operations are scoped to that
+    tenant only. One tenant cannot see, load, or modify another tenant's models.
+
+11. **Tenant enumeration**: `listTenants()` on an admin registry returns all tenants
+    that have registered models.
+
+12. **Tenant metadata**: Version metadata includes `tenant_id` when registered via a
+    tenant-scoped registry. Non-tenant registries do not include `tenant_id`.
+
+13. **Invalid tenant IDs**: Constructor rejects tenant IDs containing path separators
+    or traversal patterns (`/`, `\`, `..`) with `ML-REGISTRY-ERROR`.
+
+14. **Cross-tenant tag isolation**: Tagging a model in tenant A does not affect
+    the same-named model in tenant B.
 
 ---
 

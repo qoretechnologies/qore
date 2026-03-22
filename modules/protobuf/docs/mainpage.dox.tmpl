@@ -1,0 +1,396 @@
+/** @mainpage Qore protobuf Module
+
+    @tableofcontents
+
+    @section protobufintro protobuf Module Introduction
+
+    The \c protobuf module provides dynamic Protocol Buffer schema loading, encoding,
+    and decoding for Qore. It wraps Google's libprotobuf library to provide:
+
+    - Loading schemas from \c .proto files, strings, serialized descriptors, or
+      programmatic hash definitions
+    - Encoding Qore hashes to protobuf binary format
+    - Decoding protobuf binary data to Qore hashes
+    - JSON conversion via protobuf's canonical JSON format
+    - Schema introspection (message types, field metadata, enum values, services)
+    - File descriptor serialization for schema transport and reconstruction
+
+    @section protobufclasses protobuf Module Classes
+
+    - @ref Qore::Protobuf::ProtobufSchema "ProtobufSchema" — the core class for
+      schema loading and message encoding/decoding
+
+    @section protobufhashdecls protobuf Module Hashdecls
+
+    - @ref Qore::Protobuf::ProtobufServiceInfo "ProtobufServiceInfo" — service metadata
+    - @ref Qore::Protobuf::ProtobufMethodInfo "ProtobufMethodInfo" — method metadata
+
+    @section protobuftype Type Mapping
+
+    Protobuf types are automatically converted to and from Qore types:
+
+    | Protobuf Type | Qore Type | Notes |
+    |---------------|-----------|-------|
+    | \c double | \c float | 64-bit floating point |
+    | \c float | \c float | 32-bit; precision may be reduced |
+    | \c int32, \c sint32, \c sfixed32 | \c int | Signed 32-bit integer |
+    | \c int64, \c sint64, \c sfixed64 | \c int | Signed 64-bit integer |
+    | \c uint32, \c fixed32 | \c int | Unsigned 32-bit (stored as Qore int) |
+    | \c uint64, \c fixed64 | \c int | Unsigned 64-bit (stored as Qore int) |
+    | \c bool | \c bool | |
+    | \c string | \c string | UTF-8 encoded |
+    | \c bytes | \c binary | Raw binary data |
+    | \c enum | \c int | Enum values are integers |
+    | \c message | \c hash | Nested message as a Qore hash |
+    | \c repeated T | \c list | List of the element type |
+    | \c map<K,V> | \c hash | Hash with string keys (numeric keys converted to strings) |
+
+    @section protobuferrors Error Reference
+
+    | Exception | Description |
+    |-----------|-------------|
+    | \c PROTOBUF-SCHEMA-ERROR | Schema loading, parsing, or building failed |
+    | \c PROTOBUF-TYPE-ERROR | Message or enum type not found in schema |
+    | \c PROTOBUF-FIELD-ERROR | Unknown field name in hash during encoding |
+    | \c PROTOBUF-ENCODE-ERROR | Protobuf serialization failed |
+    | \c PROTOBUF-DECODE-ERROR | Protobuf binary parsing failed |
+    | \c PROTOBUF-JSON-ERROR | JSON conversion or parsing failed |
+    | \c PROTOBUF-SYMBOL-NOT-FOUND | Symbol not found in schema (descriptor serialization) |
+    | \c PROTOBUF-FILE-NOT-FOUND | Proto file not found in schema (descriptor serialization) |
+
+    @section protobufexamples protobuf Module Examples
+
+    @subsection protobufexfile Loading from a .proto File
+
+    @code{.py}
+%requires protobuf
+
+# Load schema from filesystem (supports imports between .proto files)
+ProtobufSchema schema("./proto/", "service.proto");
+
+# List available message types
+list<string> types = schema.messageTypes();
+printf("types: %y\n", types);
+
+# Encode a request
+binary data = schema.encode("mypackage.Request", {"name": "World", "id": 42});
+
+# Decode a response
+hash<auto> response = schema.decode("mypackage.Response", response_data);
+    @endcode
+
+    @subsection protobufexstring Loading from a String
+
+    @code{.py}
+%requires protobuf
+
+string proto = "syntax = \"proto3\";\n"
+    "package example;\n"
+    "message Person {\n"
+    "  string name = 1;\n"
+    "  int32 age = 2;\n"
+    "  repeated string emails = 3;\n"
+    "}\n";
+
+ProtobufSchema schema(proto);
+
+# Encode
+binary data = schema.encode("example.Person", {
+    "name": "Alice",
+    "age": 30,
+    "emails": ("alice@example.com", "alice@work.com"),
+});
+
+# Decode
+hash<auto> person = schema.decode("example.Person", data);
+# person = {"name": "Alice", "age": 30, "emails": ("alice@example.com", "alice@work.com")}
+    @endcode
+
+    @subsection protobufexprog Programmatic Schema Definition
+
+    Define schemas entirely from Qore data structures — no \c .proto files needed:
+
+    @code{.py}
+%requires protobuf
+
+ProtobufSchema schema({
+    "syntax": "proto3",
+    "package": "sensor",
+    "messages": {
+        "Reading": {
+            "fields": (
+                {"name": "sensor_id", "type": "string", "number": 1},
+                {"name": "timestamp", "type": "int64", "number": 2},
+                {"name": "value", "type": "double", "number": 3},
+                {"name": "tags", "type": "string", "number": 4, "label": "repeated"},
+            ),
+        },
+    },
+});
+
+binary data = schema.encode("sensor.Reading", {
+    "sensor_id": "temp-001",
+    "timestamp": 1711100000,
+    "value": 23.5,
+    "tags": ("floor-3", "zone-a"),
+});
+
+hash<auto> reading = schema.decode("sensor.Reading", data);
+    @endcode
+
+    @subsection protobufexnested Nested Messages
+
+    @code{.py}
+%requires protobuf
+
+string proto = "syntax = \"proto3\";\n"
+    "message Address {\n"
+    "  string street = 1;\n"
+    "  string city = 2;\n"
+    "  string country = 3;\n"
+    "}\n"
+    "message Company {\n"
+    "  string name = 1;\n"
+    "  Address headquarters = 2;\n"
+    "  repeated Address offices = 3;\n"
+    "}";
+
+ProtobufSchema schema(proto);
+
+binary data = schema.encode("Company", {
+    "name": "Qore Technologies",
+    "headquarters": {"street": "Main St 1", "city": "Prague", "country": "CZ"},
+    "offices": (
+        {"street": "Broadway 100", "city": "New York", "country": "US"},
+        {"street": "Unter den Linden 5", "city": "Berlin", "country": "DE"},
+    ),
+});
+
+hash<auto> company = schema.decode("Company", data);
+# company.headquarters.city == "Prague"
+# company.offices[0].city == "New York"
+    @endcode
+
+    @subsection protobufexmap Map Fields
+
+    @code{.py}
+%requires protobuf
+
+string proto = "syntax = \"proto3\";\n"
+    "message Config {\n"
+    "  map<string, string> settings = 1;\n"
+    "  map<string, int32> limits = 2;\n"
+    "}";
+
+ProtobufSchema schema(proto);
+
+binary data = schema.encode("Config", {
+    "settings": {"theme": "dark", "language": "en"},
+    "limits": {"max_retries": 3, "timeout_ms": 5000},
+});
+
+hash<auto> config = schema.decode("Config", data);
+# config.settings.theme == "dark"
+# config.limits.max_retries == 3
+    @endcode
+
+    @subsection protobufexoneof Oneof Fields
+
+    @code{.py}
+%requires protobuf
+
+ProtobufSchema schema({
+    "syntax": "proto3",
+    "messages": {
+        "Event": {
+            "fields": (
+                {"name": "id", "type": "int64", "number": 1},
+            ),
+            "oneofs": {
+                "payload": {
+                    "fields": (
+                        {"name": "text", "type": "string", "number": 2},
+                        {"name": "error_code", "type": "int32", "number": 3},
+                    ),
+                },
+            },
+        },
+    },
+});
+
+# Set the "text" alternative
+binary data = schema.encode("Event", {"id": 1, "text": "hello"});
+hash<auto> evt = schema.decode("Event", data);
+# evt.text == "hello", evt.error_code == 0 (default)
+
+# Set the "error_code" alternative
+binary data2 = schema.encode("Event", {"id": 2, "error_code": 404});
+hash<auto> evt2 = schema.decode("Event", data2);
+# evt2.error_code == 404, evt2.text == "" (default)
+    @endcode
+
+    @subsection protobufexenum Enum Fields
+
+    @code{.py}
+%requires protobuf
+
+ProtobufSchema schema({
+    "syntax": "proto3",
+    "messages": {
+        "Task": {
+            "fields": (
+                {"name": "title", "type": "string", "number": 1},
+                {"name": "priority", "type": "Priority", "number": 2},
+            ),
+            "enums": {
+                "Priority": {
+                    "values": {"LOW": 0, "MEDIUM": 1, "HIGH": 2, "CRITICAL": 3},
+                },
+            },
+        },
+    },
+});
+
+# Look up enum values
+hash<auto> priorities = schema.enumValues("Task.Priority");
+# priorities = {"LOW": 0, "MEDIUM": 1, "HIGH": 2, "CRITICAL": 3}
+
+# Encode with enum value
+binary data = schema.encode("Task", {"title": "Fix bug", "priority": priorities.HIGH});
+hash<auto> task = schema.decode("Task", data);
+# task.priority == 2 (HIGH)
+    @endcode
+
+    @subsection protobufexjson JSON Conversion
+
+    @code{.py}
+%requires protobuf
+
+string proto = "syntax = \"proto3\";\n"
+    "message Event { string type = 1; int64 timestamp = 2; string data = 3; }";
+
+ProtobufSchema schema(proto);
+
+# Qore hash -> JSON (via protobuf's canonical JSON format)
+string json = schema.toJson("Event", {
+    "type": "click",
+    "timestamp": 1711100000,
+    "data": "button-submit",
+});
+# json = '{"type":"click","timestamp":"1711100000","data":"button-submit"}'
+
+# JSON -> Qore hash (via protobuf)
+hash<auto> event = schema.fromJson("Event", json);
+    @endcode
+
+    @subsection protobufexintrospect Schema Introspection
+
+    @code{.py}
+%requires protobuf
+
+string proto = "syntax = \"proto3\";\n"
+    "package api;\n"
+    "enum Status { UNKNOWN = 0; ACTIVE = 1; DELETED = 2; }\n"
+    "message Item {\n"
+    "  string name = 1;\n"
+    "  int32 quantity = 2;\n"
+    "  repeated string tags = 3;\n"
+    "  Status status = 4;\n"
+    "}";
+
+ProtobufSchema schema(proto);
+
+# List all message types
+list<string> types = schema.messageTypes();
+# types = ("api.Item",)
+
+# Get field-level metadata
+hash<auto> info = schema.messageSchema("api.Item");
+# info.name == "api.Item"
+# info.fields.name.type == "string"
+# info.fields.quantity.type == "int32"
+# info.fields.tags.label == "repeated"
+# info.fields.status.type == "enum"
+# info.fields.status.enum_type == "api.Status"
+# info.fields.status.enum_values == {"UNKNOWN": 0, "ACTIVE": 1, "DELETED": 2}
+
+# Get default (zero-valued) message
+hash<auto> defaults = schema.defaultMessage("api.Item");
+# defaults = {"name": "", "quantity": 0, "tags": (), "status": 0}
+
+# Get enum values directly
+hash<auto> statuses = schema.enumValues("api.Status");
+# statuses = {"UNKNOWN": 0, "ACTIVE": 1, "DELETED": 2}
+    @endcode
+
+    @subsection protobufexservices Service Discovery
+
+    @code{.py}
+%requires protobuf
+
+string proto = "syntax = \"proto3\";\n"
+    "package myapi;\n"
+    "message Request { string query = 1; }\n"
+    "message Response { string result = 1; }\n"
+    "service SearchService {\n"
+    "  rpc Search (Request) returns (Response);\n"
+    "  rpc StreamResults (Request) returns (stream Response);\n"
+    "}";
+
+ProtobufSchema schema(proto);
+
+list<auto> services = schema.services();
+# services[0].name == "SearchService"
+# services[0].methods[0].name == "Search"
+# services[0].methods[0].input_type == "myapi.Request"
+# services[0].methods[0].output_type == "myapi.Response"
+# services[0].methods[0].client_streaming == False
+# services[0].methods[0].server_streaming == False
+# services[0].methods[1].server_streaming == True
+    @endcode
+
+    @subsection protobufexdesc Descriptor Serialization and Reconstruction
+
+    Serialize schema descriptors for transport (e.g., gRPC reflection) and
+    reconstruct a \c ProtobufSchema from them:
+
+    @code{.py}
+%requires protobuf
+
+# Original schema
+ProtobufSchema original("./proto/", "service.proto");
+
+# Serialize all file descriptors (including transitive dependencies)
+list<binary> descriptors = original.serializeFileDescriptors();
+
+# ... transport descriptors over the network ...
+
+# Reconstruct schema from descriptors
+ProtobufSchema reconstructed(descriptors);
+
+# Encode with original, decode with reconstructed — works identically
+binary data = original.encode("mypackage.Request", {"name": "test"});
+hash<auto> msg = reconstructed.decode("mypackage.Request", data);
+    @endcode
+
+    You can also serialize descriptors for a specific symbol or filename:
+
+    @code{.py}
+# Get descriptors for the file containing a specific symbol
+list<binary> fds = schema.serializeFileDescriptorForSymbol("mypackage.MyService");
+
+# Get descriptors for a specific .proto filename
+list<binary> fds2 = schema.serializeFileDescriptorByName("service.proto");
+    @endcode
+
+    @section protobufrelnotes protobuf Module Release Notes
+
+    @subsection protobuf_1_0 protobuf Module Version 1.0
+    - Initial release
+    - Schema loading from files, strings, serialized descriptors, and programmatic hashes
+    - Encode/decode, JSON conversion, schema introspection
+    - Map fields, oneof fields, nested messages, repeated fields, all scalar types
+    - Service and method definitions with streaming flag support
+    - File descriptor serialization for schema transport
+    - Sandbox-aware: filesystem access checks and cooperative cancellation
+*/

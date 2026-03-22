@@ -175,6 +175,10 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
         @throw HTTPCLIENT-STATE-ERROR if the stream is already in use
         @throw HTTPCLIENT-TIMEOUT if connection establishment timed out
     */
+    bool supportsStreaming() {
+        return True;
+    }
+
     int startStreaming(string method, string path, *hash<auto> headers,
             bool body_streaming = False) {
         {

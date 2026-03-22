@@ -361,6 +361,52 @@ QoreListNode* QoreLogisticRegression::predictMatrix(const MatrixXd& X,
     return rv.release();
 }
 
+QoreListNode* QoreLogisticRegression::getWeights(ExceptionSink* xsink) const {
+    std::lock_guard<std::mutex> lk(mtx);
+    if (!fitted) {
+        xsink->raiseException("ML-LOGISTIC-REGRESSION-ERROR",
+            "model has not been fitted: call fit() or fitMatrix() first");
+        return nullptr;
+    }
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(autoTypeInfo), xsink);
+    for (Eigen::Index i = 0; i < weights.rows(); ++i) {
+        ReferenceHolder<QoreListNode> row(new QoreListNode(autoTypeInfo), xsink);
+        for (Eigen::Index j = 0; j < weights.cols(); ++j) {
+            row->push(weights(i, j), xsink);
+        }
+        rv->push(row.release(), xsink);
+    }
+    return rv.release();
+}
+
+QoreListNode* QoreLogisticRegression::getIntercepts(ExceptionSink* xsink) const {
+    std::lock_guard<std::mutex> lk(mtx);
+    if (!fitted) {
+        xsink->raiseException("ML-LOGISTIC-REGRESSION-ERROR",
+            "model has not been fitted: call fit() or fitMatrix() first");
+        return nullptr;
+    }
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(autoTypeInfo), xsink);
+    for (Eigen::Index j = 0; j < intercepts.size(); ++j) {
+        rv->push(intercepts(j), xsink);
+    }
+    return rv.release();
+}
+
+QoreListNode* QoreLogisticRegression::getClasses(ExceptionSink* xsink) const {
+    std::lock_guard<std::mutex> lk(mtx);
+    if (!fitted) {
+        xsink->raiseException("ML-LOGISTIC-REGRESSION-ERROR",
+            "model has not been fitted: call fit() or fitMatrix() first");
+        return nullptr;
+    }
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(autoTypeInfo), xsink);
+    for (size_t i = 0; i < classes.size(); ++i) {
+        rv->push(classes[i], xsink);
+    }
+    return rv.release();
+}
+
 std::vector<uint8_t> QoreLogisticRegression::serializeState() const {
     std::vector<uint8_t> buf;
     // Hyperparameters

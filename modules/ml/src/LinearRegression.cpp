@@ -284,6 +284,44 @@ double QoreLinearRegression::getRSquared(ExceptionSink* xsink) const {
     return r_squared;
 }
 
+QoreListNode* QoreLinearRegression::getFeatureMeans(ExceptionSink* xsink) const {
+    std::lock_guard<std::mutex> lk(mtx);
+    if (!fitted) {
+        xsink->raiseException("ML-LINEAR-REGRESSION-ERROR",
+            "model has not been fitted: call fit() or fitMatrix() first");
+        return nullptr;
+    }
+    if (!do_normalize) {
+        xsink->raiseException("ML-LINEAR-REGRESSION-ERROR",
+            "model was not fitted with normalization; feature means are not available");
+        return nullptr;
+    }
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(autoTypeInfo), xsink);
+    for (int j = 0; j < feature_means.size(); ++j) {
+        rv->push(feature_means(j), xsink);
+    }
+    return rv.release();
+}
+
+QoreListNode* QoreLinearRegression::getFeatureStds(ExceptionSink* xsink) const {
+    std::lock_guard<std::mutex> lk(mtx);
+    if (!fitted) {
+        xsink->raiseException("ML-LINEAR-REGRESSION-ERROR",
+            "model has not been fitted: call fit() or fitMatrix() first");
+        return nullptr;
+    }
+    if (!do_normalize) {
+        xsink->raiseException("ML-LINEAR-REGRESSION-ERROR",
+            "model was not fitted with normalization; feature standard deviations are not available");
+        return nullptr;
+    }
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(autoTypeInfo), xsink);
+    for (int j = 0; j < feature_stds.size(); ++j) {
+        rv->push(feature_stds(j), xsink);
+    }
+    return rv.release();
+}
+
 std::vector<uint8_t> QoreLinearRegression::serializeState() const {
     std::vector<uint8_t> buf;
     // Hyperparameters

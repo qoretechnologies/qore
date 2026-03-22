@@ -379,3 +379,39 @@ float LinearRegression::getIntercept() {
 float LinearRegression::getRSquared() {
     return lr->getRSquared(xsink);
 }
+
+//! Returns True if the model was fitted with normalization
+/** @return True if the \c normalize option was set to True during construction
+
+    @par Example:
+    @code{.py}
+if (lr.isNormalized()) {
+    list<float> means = lr.getFeatureMeans();
+}
+    @endcode
+*/
+bool LinearRegression::isNormalized() [flags=CONSTANT] {
+    return lr->isNormalized();
+}
+
+//! Returns feature means used for normalization
+/** Only valid when the model was fitted with \c normalize: True
+
+    @return a list of feature mean values, one per feature
+
+    @throw ML-LINEAR-REGRESSION-ERROR if the model has not been fitted or was not fitted with normalization
+*/
+list<float> LinearRegression::getFeatureMeans() {
+    return lr->getFeatureMeans(xsink);
+}
+
+//! Returns feature standard deviations used for normalization
+/** Only valid when the model was fitted with \c normalize: True
+
+    @return a list of feature standard deviation values, one per feature
+
+    @throw ML-LINEAR-REGRESSION-ERROR if the model has not been fitted or was not fitted with normalization
+*/
+list<float> LinearRegression::getFeatureStds() {
+    return lr->getFeatureStds(xsink);
+}

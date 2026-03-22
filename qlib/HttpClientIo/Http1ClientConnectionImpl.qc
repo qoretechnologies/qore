@@ -107,6 +107,31 @@ public class Http1ClientConnection inherits HttpClientConnection {
             max_concurrent_streams);
     }
 
+    #! Submits a streaming request on this connection
+    /** The callback will be called multiple times:
+        - First with response headers (\c status_code, \c headers)
+        - Then with body chunks (\c body)
+        - Finally with \c end_stream: \c True
+
+        @param method HTTP method
+        @param path request path
+        @param headers request headers (optional)
+        @param body request body (optional)
+        @param callback callback invoked for headers, data chunks, and end-of-stream
+        @param ctx optional context passed through to the callback
+        @param streaming if \c True, enable streaming mode (incremental body delivery)
+
+        @return the stream ID
+
+        @see submitRequestImpl()
+    */
+    int submitRequestStreaming(string method, string path, *hash<auto> headers,
+            *data body, HttpResponseCallback callback, *hash<auto> ctx,
+            bool streaming = True) {
+        return poll_op.submitRequest(method, path, headers, body, callback, ctx,
+            max_concurrent_streams, streaming);
+    }
+
     #! Cancels a request (protocol-specific)
     cancelRequestImpl(int stream_id) {
         poll_op.cancelRequest(stream_id);

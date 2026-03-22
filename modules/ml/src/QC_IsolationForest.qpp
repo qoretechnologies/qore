@@ -262,3 +262,35 @@ int IsolationForest::getSampleSize() [flags=CONSTANT] {
 float IsolationForest::getThreshold() [flags=CONSTANT] {
     return iforest->getThreshold();
 }
+
+//! Returns the tree ensemble as a list of lists of node hashes
+/** Each tree is represented as a list of node hashes. Each node hash has:
+    - \c feature (int): feature index used for splitting (-1 for leaf nodes)
+    - \c split_value (float): the split threshold value
+    - \c left (int): index of the left child node (-1 if none)
+    - \c right (int): index of the right child node (-1 if none)
+    - \c size (int): number of samples at leaf nodes (0 for internal nodes)
+
+    @return a list of lists of node hashes
+
+    @throw ML-ISOLATION-FOREST-ERROR if the model has not been fitted
+*/
+list<list<hash<auto>>> IsolationForest::getTrees() {
+    return iforest->getTrees(xsink);
+}
+
+//! Returns the actual sample size used during fitting
+/** This may be smaller than the configured sample_size if the training data had fewer rows.
+
+    @return the actual number of samples used per tree
+
+    @throw ML-ISOLATION-FOREST-ERROR if the model has not been fitted
+*/
+int IsolationForest::getActualSampleSize() {
+    if (!iforest->isFitted()) {
+        xsink->raiseException("ML-ISOLATION-FOREST-ERROR",
+            "model has not been fitted: call fit() or fitMatrix() first");
+        return QoreValue();
+    }
+    return iforest->getActualSampleSize();
+}

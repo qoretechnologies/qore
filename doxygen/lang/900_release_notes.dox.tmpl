@@ -381,6 +381,20 @@ cargo install tree-sitter-cli@0.26.5
       <a href="https://github.com/microsoft/onnxruntime/releases">ONNX Runtime releases</a>
     - <b>Alpine:</b> \c onnxruntime-dev
     - <b>macOS (Homebrew):</b> \c onnxruntime
+
+    @par New Required Build Dependency: libprotobuf
+    @parblock
+
+    <a href="https://protobuf.dev/">libprotobuf</a> is now a required build dependency.
+    It provides the \c protobuf built-in module for dynamic Protocol Buffer schema loading,
+    encoding, and decoding. The build will fail if libprotobuf is not found.
+
+    Install the protobuf development packages:
+    - <b>RHEL/Fedora:</b> \c protobuf-devel
+    - <b>Debian/Ubuntu:</b> \c libprotobuf-dev
+    - <b>Alpine:</b> \c protobuf-dev
+    - <b>macOS (Homebrew):</b> \c protobuf
+    - <b>macOS (MacPorts):</b> \c protobuf3-cpp
     @endparblock
 
     - <b>New @ref modern "%modern" parse directive and \c .qr file extension</b>
@@ -962,6 +976,18 @@ cargo install tree-sitter-cli@0.26.5
       - @ref qoremodelregistryintro "QoreModelRegistry" module
       - new module providing a filesystem-backed ML model registry for versioning,
         tagging, comparison, and deployment management of trained models
+      - multi-tenant support with optional \c tenant_id for tenant-isolated model storage
+      - @ref protobufintro "protobuf" module
+      - dynamic Protocol Buffer schema loading from files, strings, serialized descriptors,
+        or programmatic hash definitions
+      - encode/decode Qore hashes to/from protobuf binary format, JSON conversion,
+        schema introspection, and file descriptor serialization
+      - @ref qoreonnxexportintro "QoreOnnxExport" module
+      - exports trained ML models to ONNX format (8 algorithms: StandardScaler, MinMaxScaler,
+        Imputer, LinearRegression, LogisticRegression, PCA, KMeans, IsolationForest)
+      - enables interoperability with Python/TensorFlow/PyTorch via standard ONNX files
+      - new ML algorithm getter methods (17 methods) for accessing internal model state
+        (weights, coefficients, centroids, tree structures, etc.)
       - Model persistence: ml_serialize/ml_deserialize (in-memory), ml_save_model/ml_load_model
         (file-based .qml native format) for all 12 algorithms
       - Online learning (incremental updates) for KMeans, LinearRegression, GMM, and LogisticRegression

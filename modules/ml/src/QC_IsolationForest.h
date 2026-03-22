@@ -85,6 +85,10 @@ public:
     DLLLOCAL int getNumTrees() const { return n_trees; }
     DLLLOCAL int getSampleSize() const { return sample_size; }
     DLLLOCAL double getThreshold() const { return threshold; }
+    DLLLOCAL int getActualSampleSize() const { return actual_sample_size; }
+
+    //! Get the tree ensemble as a Qore list of lists of hashes
+    DLLLOCAL QoreListNode* getTrees(ExceptionSink* xsink) const;
 
     //! Store field names for hash-based input
     DLLLOCAL void setFieldNames(const std::vector<std::string>& names) { field_names = names; }

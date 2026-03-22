@@ -307,6 +307,17 @@ QoreListNode* QorePCA::getMean(ExceptionSink* xsink) {
     return eigenVectorToQoreList(mean_vec);
 }
 
+QoreListNode* QorePCA::getStddev(ExceptionSink* xsink) {
+    std::lock_guard<std::mutex> lk(mtx);
+    if (!fitted) {
+        xsink->raiseException("ML-PCA-ERROR",
+            "model has not been fitted: call fit() or fitMatrix() first");
+        return nullptr;
+    }
+
+    return eigenVectorToQoreList(stddev_vec);
+}
+
 std::vector<uint8_t> QorePCA::serializeState() const {
     std::vector<uint8_t> buf;
     // Hyperparameters

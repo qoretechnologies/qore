@@ -222,6 +222,20 @@ QoreHashNode* QoreImputer::getInfo(ExceptionSink* xsink) const {
     return rv.release();
 }
 
+QoreListNode* QoreImputer::getFillValuesList(ExceptionSink* xsink) const {
+    std::lock_guard<std::mutex> lk(mtx);
+    if (!fitted) {
+        xsink->raiseException("ML-IMPUTER-ERROR",
+            "imputer has not been fitted: call fit() or fitMatrix() first");
+        return nullptr;
+    }
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(autoTypeInfo), xsink);
+    for (int j = 0; j < n_features; ++j) {
+        rv->push(fill_values(j), xsink);
+    }
+    return rv.release();
+}
+
 std::vector<uint8_t> QoreImputer::serializeState() const {
     std::vector<uint8_t> buf;
     // Hyperparameters
