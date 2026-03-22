@@ -49,6 +49,7 @@
 #include "qore/intern/QoreIRLowering.h"
 #include "qore/intern/QoreIRVerifier.h"
 #include "qore/intern/QoreAOTInstRegistry.h"
+#include "qore/intern/QoreAOTExprRegistry.h"
 #include "qore/intern/CaseNodeRegex.h"
 #include "qore/intern/SwitchStatement.h"
 
@@ -697,206 +698,14 @@ QoreValue readOneExpr(
     uint8_t ekind = QoreAOTBinaryReader::readU8(p);
     AOTExprKind ek = static_cast<AOTExprKind>(ekind);
 
-    // HASH_LITERAL: num_pairs(u8) + [key_str(stringref) + value(readOneExpr)] * N
-    // HASH_DEREF: left(base) + right(key) — reconstructs QoreHashObjectDereferenceOperatorNode
-    if (ek == AOTExprKind::HASH_DEREF) {
-        std::string left_err;
-        QoreValue left = readOneExpr(rdr, p, e, left_err, pgm, locals, num_locals, globals, num_globals);
-        if (!left_err.empty()) {
-            err = left_err;
-            return QoreValue();
-        }
-        std::string right_err;
-        QoreValue right = readOneExpr(rdr, p, e, right_err, pgm, locals, num_locals, globals, num_globals);
-        if (!right_err.empty()) {
-            err = right_err;
-            left.discard(nullptr);
-            return QoreValue();
-        }
-        return QoreValue(new QoreHashObjectDereferenceOperatorNode(&loc_builtin, left, right));
-    }
-
-    // PARSE_REF: \var lvalue reference — contains one inner lvalue expression
-    if (ek == AOTExprKind::PARSE_REF) {
-        std::string inner_err;
-        QoreValue inner = readOneExpr(rdr, p, e, inner_err, pgm, locals, num_locals, globals, num_globals);
-        if (!inner_err.empty()) {
-            err = inner_err;
-            return QoreValue();
-        }
-        return QoreValue(new ParseReferenceNode(&loc_builtin, inner));
-    }
-
-    if (ek == AOTExprKind::HASH_LITERAL) {
-        uint8_t num_pairs = QoreAOTBinaryReader::readU8(p);
-        QoreParseHashNode* phn = new QoreParseHashNode(&loc_builtin);
-        for (uint8_t j = 0; j < num_pairs; ++j) {
-            const char* key_str = rdr.readStringRef(p);
-            std::string val_err;
-            QoreValue val = readOneExpr(rdr, p, e, val_err, pgm,
-                locals, num_locals, globals, num_globals);
-            if (!val_err.empty()) {
-                err = val_err;
-                val.discard(nullptr);
-                phn->deref(nullptr);
-                return QoreValue();
-            }
-            phn->add(new QoreStringNode(key_str ? key_str : ""), val, &loc_builtin);
-        }
-        return QoreValue(phn);
-    }
-
-    // LIST_LITERAL: count(u8) + [value(readOneExpr)] * N
-    if (ek == AOTExprKind::LIST_LITERAL) {
-        uint8_t count = QoreAOTBinaryReader::readU8(p);
-        QoreParseListNode* pln = new QoreParseListNode(&loc_builtin);
-        for (uint8_t j = 0; j < count; ++j) {
-            std::string val_err;
-            QoreValue val = readOneExpr(rdr, p, e, val_err, pgm,
-                locals, num_locals, globals, num_globals);
-            if (!val_err.empty()) {
-                err = val_err;
-                val.discard(nullptr);
-                pln->deref();
-                return QoreValue();
-            }
-            pln->add(val, &loc_builtin);
-        }
-        return QoreValue(pln);
-    }
-
-    // NEW_OBJECT / SCOPED_NEW_OBJECT: class_path + num_args + N×readOneExpr()
-    if (ek == AOTExprKind::NEW_OBJECT || ek == AOTExprKind::SCOPED_NEW_OBJECT) {
-        const char* class_path = rdr.readStringRef(p);
-        uint8_t num_args = QoreAOTBinaryReader::readU8(p);
-        QoreListNode* args_list = nullptr;
-        if (num_args > 0) {
-            // Create with needs_eval=true so evalList() evaluates VarRefNode args at call time.
-            // new QoreListNode(autoTypeInfo) defaults to value=true (no evaluation), but args
-            // may contain VarRefNode or other AST nodes that require runtime evaluation.
-            args_list = qore_list_private::newList(true);
-            for (uint8_t j = 0; j < num_args; ++j) {
-                std::string arg_err;
-                QoreValue arg = readOneExpr(rdr, p, e, arg_err, pgm,
-                    locals, num_locals, globals, num_globals);
-                if (!arg_err.empty()) {
-                    err = arg_err;
-                    args_list->deref(nullptr);
-                    return QoreValue();
-                }
-                args_list->push(arg, nullptr);
-            }
-        }
-        if (!class_path || !*class_path) {
-            if (args_list) {
-                args_list->deref(nullptr);
-            }
-            return QoreValue();
-        }
-        qore_program_private* pp = qore_program_private::get(*pgm);
-        const qore_ns_private* found_ns = nullptr;
-        const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
-            *pp->RootNS, class_path, found_ns);
-        if (!qc) {
-            if (args_list) {
-                args_list->deref(nullptr);
-            }
-            return QoreValue();
-        }
-        NewObjectCallNode* nocn = new NewObjectCallNode(qc, args_list);
-        return QoreValue(nocn);
-    }
-
-    const char* r1 = nullptr;
-    const char* r2 = nullptr;
-    switch (ek) {
-        case AOTExprKind::FUNC_CALL:
-        case AOTExprKind::RUNTIME_CONST_REF:
-        case AOTExprKind::CONST_NUMBER:
-        case AOTExprKind::CONST_BINARY:
-        case AOTExprKind::CONST_STRING:
-        case AOTExprKind::SELF_VARREF:
-        case AOTExprKind::LOCAL_VARREF:
-        case AOTExprKind::GLOBAL_VARREF:
-        case AOTExprKind::HASHDECL_NEW:
-        case AOTExprKind::COMPLEX_HASH_NEW:
-        case AOTExprKind::COMPLEX_LIST_NEW:
-            r1 = rdr.readStringRef(p);
-            break;
-        case AOTExprKind::CONST_INT: {
-            return QoreValue(QoreAOTBinaryReader::readI64(p));
-        }
-        case AOTExprKind::CONST_FLOAT: {
-            return QoreValue(QoreAOTBinaryReader::readF64(p));
-        }
-        case AOTExprKind::CONST_BOOL: {
-            return QoreValue((bool)QoreAOTBinaryReader::readU8(p));
-        }
-        case AOTExprKind::CONST_NOTHING:
-            return QoreValue();
-        case AOTExprKind::SELF_METHOD_CALL:
-        case AOTExprKind::STATIC_METHOD_CALL:
-        case AOTExprKind::STATIC_VARREF:
-        case AOTExprKind::CONST_ENUM:
-            r1 = rdr.readStringRef(p);
-            r2 = rdr.readStringRef(p);
-            break;
-        case AOTExprKind::CAST_HASHDECL:
-        case AOTExprKind::CAST_COMPLEX_HASH:
-        case AOTExprKind::CAST_COMPLEX_LIST:
-        case AOTExprKind::CAST_CLASS:
-        case AOTExprKind::CAST_ENUM: {
-            // Cast operators: ref1 = type/hashdecl/class path, u8 = or_nothing
-            r1 = rdr.readStringRef(p);
-            uint8_t or_nothing = QoreAOTBinaryReader::readU8(p);
-            uint64_t bits = resolveCastExprSlot(ek, r1, or_nothing != 0, pgm);
-            if (bits) {
-                QoreValue v;
-                memcpy(&v, &bits, sizeof(v));
-                return v;
-            }
-            return QoreValue();
-        }
-        default:
-            // GENERIC_EVAL or unknown — no additional bytes to read
-            return QoreValue();
-    }
-
-    // Handle LOCAL_VARREF using the passed-in locals array
-    if (ek == AOTExprKind::LOCAL_VARREF && r1) {
-        int local_slot = std::atoi(r1);
-        if (local_slot >= 0 && local_slot < num_locals && locals && locals[local_slot]) {
-            LocalVar* lv = locals[local_slot];
-            // NOTE: always use false for in_closure — VT_LOCAL type calls ref.id->eval() which
-            // internally checks closure_use and uses the correct lookup (local stack vs closure
-            // stack). VT_CLOSURE uses thread_get_runtime_closure_var() (pointer-based runtime
-            // closure env lookup) which returns null outside a closure execution context.
-            VarRefNode* vrn = new VarRefNode(&loc_builtin,
-                strdup(lv->getName()),
-                lv, false);
-            return QoreValue(vrn);
-        }
+    // Dispatch via registry
+    const auto* kinfo = getAOTExprKindInfo(ekind);
+    if (!kinfo || !kinfo->is_supported || !kinfo->read_fn) {
+        err = "unsupported expression kind " + std::to_string(ekind);
         return QoreValue();
     }
-
-    // Handle GLOBAL_VARREF using the passed-in globals array
-    if (ek == AOTExprKind::GLOBAL_VARREF && r1) {
-        int global_slot = std::atoi(r1);
-        if (global_slot >= 0 && global_slot < num_globals && globals && globals[global_slot]) {
-            Var* gvar = globals[global_slot];
-            GlobalVarRefNode* vrn = new GlobalVarRefNode(&loc_builtin, strdup(gvar->getName()), gvar);
-            return QoreValue(vrn);
-        }
-        return QoreValue();
-    }
-
-    uint64_t bits = resolveExprSlot(ek, r1, r2, pgm);
-    if (bits) {
-        QoreValue v;
-        memcpy(&v, &bits, sizeof(v));
-        return v;
-    }
-    return QoreValue();
+    AOTExprReadCtx rctx{rdr, p, e, pgm, err, locals, num_locals, globals, num_globals};
+    return kinfo->read_fn(rctx);
 }
 
 // ---- Expression Tree Deserializer ----

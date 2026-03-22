@@ -208,7 +208,7 @@ static QoreValue read_expr_new_object(AOTExprReadCtx& ctx) {
         for (uint8_t j = 0; j < num_args; ++j) {
             std::string arg_err;
             QoreValue arg = readOneExpr(ctx.reader, ctx.ptr, ctx.end, arg_err, ctx.pgm,
-                nullptr, 0, nullptr, 0);
+                ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
             if (!arg_err.empty()) {
                 ctx.error = arg_err;
                 args_list->deref(nullptr);
@@ -312,9 +312,21 @@ static bool write_expr_local_varref(AOTExprWriteCtx& ctx) {
 }
 
 static QoreValue read_expr_local_varref(AOTExprReadCtx& ctx) {
-    // Note: This is handled specially in readOneExpr() with passed-in locals array
-    // as a fallback when locals are not available
-    return QoreValue();
+    const char* index_str = ctx.reader.readStringRef(ctx.ptr);
+    if (!index_str) {
+        return QoreValue();
+    }
+    int local_slot = std::atoi(index_str);
+    if (local_slot < 0 || local_slot >= ctx.num_locals || !ctx.locals || !ctx.locals[local_slot]) {
+        return QoreValue();
+    }
+    LocalVar* lv = ctx.locals[local_slot];
+    // NOTE: always use false for in_closure — VT_LOCAL type calls ref.id->eval() which
+    // internally checks closure_use and uses the correct lookup (local stack vs closure stack).
+    // VT_CLOSURE uses thread_get_runtime_closure_var() (pointer-based runtime closure env lookup)
+    // which returns null outside a closure execution context.
+    VarRefNode* vrn = new VarRefNode(&loc_builtin, strdup(lv->getName()), lv, false);
+    return QoreValue(vrn);
 }
 
 // ============================================================================
@@ -341,9 +353,17 @@ static bool write_expr_global_varref(AOTExprWriteCtx& ctx) {
 }
 
 static QoreValue read_expr_global_varref(AOTExprReadCtx& ctx) {
-    // Note: This is handled specially in readOneExpr() with passed-in globals array
-    // as a fallback when globals are not available
-    return QoreValue();
+    const char* index_str = ctx.reader.readStringRef(ctx.ptr);
+    if (!index_str) {
+        return QoreValue();
+    }
+    int global_slot = std::atoi(index_str);
+    if (global_slot < 0 || global_slot >= ctx.num_globals || !ctx.globals || !ctx.globals[global_slot]) {
+        return QoreValue();
+    }
+    Var* gvar = ctx.globals[global_slot];
+    GlobalVarRefNode* vrn = new GlobalVarRefNode(&loc_builtin, strdup(gvar->getName()), gvar);
+    return QoreValue(vrn);
 }
 
 // ============================================================================
@@ -529,7 +549,7 @@ static QoreValue read_expr_scoped_new_object(AOTExprReadCtx& ctx) {
         for (uint8_t j = 0; j < num_args; ++j) {
             std::string arg_err;
             QoreValue arg = readOneExpr(ctx.reader, ctx.ptr, ctx.end, arg_err, ctx.pgm,
-                nullptr, 0, nullptr, 0);
+                ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
             if (!arg_err.empty()) {
                 ctx.error = arg_err;
                 args_list->deref(nullptr);
@@ -756,7 +776,7 @@ static QoreValue read_expr_hash_literal(AOTExprReadCtx& ctx) {
         const char* key_str = ctx.reader.readStringRef(ctx.ptr);
         std::string val_err;
         QoreValue val = readOneExpr(ctx.reader, ctx.ptr, ctx.end, val_err, ctx.pgm,
-            nullptr, 0, nullptr, 0);
+            ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
         if (!val_err.empty()) {
             ctx.error = val_err;
             val.discard(nullptr);
@@ -785,13 +805,13 @@ static bool write_expr_hash_deref(AOTExprWriteCtx& ctx) {
 
 static QoreValue read_expr_hash_deref(AOTExprReadCtx& ctx) {
     std::string left_err;
-    QoreValue left = readOneExpr(ctx.reader, ctx.ptr, ctx.end, left_err, ctx.pgm, nullptr, 0, nullptr, 0);
+    QoreValue left = readOneExpr(ctx.reader, ctx.ptr, ctx.end, left_err, ctx.pgm, ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
     if (!left_err.empty()) {
         ctx.error = left_err;
         return QoreValue();
     }
     std::string right_err;
-    QoreValue right = readOneExpr(ctx.reader, ctx.ptr, ctx.end, right_err, ctx.pgm, nullptr, 0, nullptr, 0);
+    QoreValue right = readOneExpr(ctx.reader, ctx.ptr, ctx.end, right_err, ctx.pgm, ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
     if (!right_err.empty()) {
         ctx.error = right_err;
         left.discard(nullptr);
@@ -816,7 +836,7 @@ static bool write_expr_parse_ref(AOTExprWriteCtx& ctx) {
 
 static QoreValue read_expr_parse_ref(AOTExprReadCtx& ctx) {
     std::string inner_err;
-    QoreValue inner = readOneExpr(ctx.reader, ctx.ptr, ctx.end, inner_err, ctx.pgm, nullptr, 0, nullptr, 0);
+    QoreValue inner = readOneExpr(ctx.reader, ctx.ptr, ctx.end, inner_err, ctx.pgm, ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
     if (!inner_err.empty()) {
         ctx.error = inner_err;
         return QoreValue();
@@ -1083,7 +1103,7 @@ static QoreValue read_expr_list_literal(AOTExprReadCtx& ctx) {
     for (uint8_t j = 0; j < count; ++j) {
         std::string val_err;
         QoreValue val = readOneExpr(ctx.reader, ctx.ptr, ctx.end, val_err, ctx.pgm,
-            nullptr, 0, nullptr, 0);
+            ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
         if (!val_err.empty()) {
             ctx.error = val_err;
             val.discard(nullptr);

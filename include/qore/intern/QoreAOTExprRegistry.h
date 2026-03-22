@@ -46,6 +46,8 @@ class QoreAOTBinaryWriter;
 class QoreAOTBinaryReader;
 class QoreValue;
 class QoreProgram;
+class LocalVar;
+class Var;
 struct AOTLocalSlotId;
 struct AOTGlobalSlotId;
 // Note: AOTConstantReverseMap is a typedef in QoreAOTBinary.h; included below
@@ -66,6 +68,10 @@ struct AOTExprReadCtx {
     const uint8_t* end;
     QoreProgram* pgm;
     std::string& error;
+    LocalVar** locals;              //!< Local variable array for LOCAL_VARREF resolution
+    int num_locals;                 //!< Number of local variables
+    Var** globals;                  //!< Global variable array for GLOBAL_VARREF resolution
+    int num_globals;                //!< Number of global variables
 };
 
 //! Expression handler function types
