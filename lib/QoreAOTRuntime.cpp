@@ -4848,7 +4848,11 @@ static void registerAOTFunctionsFromSlotMaps(
                     func_name, (void*)uvb);
             }
         } else {
-            printd(2, "AOT slot-reg: SKIP '%s' (unsupported) uvb=%p\n",
+            // buildContextFromSlotMap failed — ptr is only past the header.
+            // Reset to entry_start and skip the entire entry to keep ptr aligned.
+            ptr = entry_start;
+            skipSlotMapEntry(reader, ptr, end);
+            printd(2, "AOT slot-reg: SKIP '%s' (context build failed) uvb=%p\n",
                 func_name, (void*)uvb);
         }
     }

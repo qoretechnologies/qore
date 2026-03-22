@@ -107,6 +107,7 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT closure typed params defaults", \testClosureTypedParamsDefaults());
         addTestCase("AOT closure multi capture", \testClosureMultiCapture());
         addTestCase("AOT closure strip source", \testClosureStripSource());
+        addTestCase("AOT method closure param", \testAOTMethodClosureParam());
         addTestCase("AOT regex switch in on_exit", \testRegexSwitchInOnExit());
         addTestCase("AOT nested on_exit", \testNestedOnExit());
         # Closure default value serialization tests
@@ -2861,6 +2862,30 @@ exit(0);
         string interp_out = runInterpreted(code);
         assertEq(interp_out, result.run_out,
             "closure-strip-source output matches interpreter");
+    }
+
+    testAOTMethodClosureParam() {
+        # Test that method closures capture parameters correctly in AOT
+        string code = "%modern
+class Foo {
+    foo(int index) {
+        code c = sub() {
+            printf(\"%y\\n\", index);
+        };
+        c();
+    }
+}
+
+Foo f();
+f.foo(42);
+exit(0);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "method-closure-param: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "method-closure-param output matches interpreter");
     }
 
     testRegexSwitchInOnExit() {
