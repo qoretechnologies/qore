@@ -7,6 +7,7 @@
 %requires ../../../../qlib/HttpServerUtil.qm
 %requires ../../../../qlib/HttpServerAsyncIo
 %requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/ServerSentEventHandler
 %requires ../../../../qlib/HttpStreamClient.qm
 
 %requires qore >= 2.0
@@ -170,6 +171,35 @@ class GzipContentLengthHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! SSE handler that writes events directly to the socket via startImpl()
+/** This simulates a real SSE endpoint (e.g., A2A message/stream) where the server
+    returns 200 with text/event-stream and writes events incrementally to the socket
+    before closing the connection.
+*/
+class SseDirectSocketHandler inherits ServerSentEventHandler {
+    private {
+        string events;
+    }
+
+    constructor(string events = MultipleSseEvents) : ServerSentEventHandler(new PermissiveAuthenticator()) {
+        self.events = events;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data b) {
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {"Content-Type": SseContentType, "Cache-Control": "no-cache"},
+        };
+    }
+
+    bool startImpl(softstring lid, hash<auto> cx, hash<auto> hdr, Qore::Socket sock) {
+        # Write SSE events directly to the socket
+        sock.send(events);
+        # Close the connection (normal for finite SSE streams)
+        return False;
+    }
+}
+
 public class HttpStreamClientTest inherits QUnit::Test {
     private {
         HttpServer m_http;
@@ -193,6 +223,7 @@ public class HttpStreamClientTest inherits QUnit::Test {
         addTestCase("Non-SSE chunked response tests", \nonSseChunkedTests());
         addTestCase("Chunked decompression tests", \chunkedDecompressionTests());
         addTestCase("Non-chunked response tests", \nonChunkedTests());
+        addTestCase("SSE direct socket (non-chunked) tests", \sseDirectSocketTests());
         addTestCase("Headers merging tests", \headersMergingTests());
         set_return_value(main());
     }
@@ -604,6 +635,46 @@ public class HttpStreamClientTest inherits QUnit::Test {
         # Verify actual headers ARE present
         assertTrue(resp.headers.hasKey("content-type") || resp.headers.hasKey("Content-Type"),
             "headers should contain content-type");
+
+        stream.close();
+    }
+
+    sseDirectSocketTests() {
+        # Test SSE via direct socket write (non-chunked, startImpl writes events then closes)
+        # This is how A2A message/stream and similar SSE POST endpoints work
+        SseDirectSocketHandler sse_handler(MultipleSseEvents);
+        m_http.setHandler("sse-direct", "/sse-direct", SseContentType, sse_handler);
+        m_http.setDefaultHandler("sse-direct", sse_handler);
+        on_exit {
+            m_http.setHandler("default", "/", MimeTypeJson, new SseChunkedHandler());
+            m_http.setDefaultHandler("default", new SseChunkedHandler());
+        }
+
+        Qore::HTTPClient hc({"url": sprintf("http://localhost:%d", port), "timeout": 10s});
+        hash<auto> info;
+        auto stream = HttpStreamClient::sendAndStream(hc, "POST", "/sse-direct", "test",
+            {"Content-Type": MimeTypeJson, "Accept": SseContentType}, \info, 10s);
+
+        assertEq(200, stream.getInfo().status_code, "SSE direct socket should return 200");
+        assertEq(SseContentType, stream.getInfo().content_type,
+            "Content-Type should be text/event-stream");
+
+        # Read all SSE events — should get 3 events then EOF (not an exception)
+        list<hash<auto>> events = ();
+        while (!stream.isEof()) {
+            *hash<SseMessageInfo> evt = stream.readServerSentEvent(5s);
+            if (!evt) {
+                break;
+            }
+            events += evt;
+        }
+        assertEq(3, events.size(), "Should read 3 SSE events from direct socket");
+        assertEq("message", events[0].event, "First event type");
+        assertEq("update", events[1].event, "Second event type");
+        assertEq("done", events[2].event, "Third event type");
+
+        # Verify EOF is True after all events consumed
+        assertTrue(stream.isEof(), "Stream should be at EOF after all events read");
 
         stream.close();
     }

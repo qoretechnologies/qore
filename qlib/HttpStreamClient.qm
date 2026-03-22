@@ -264,7 +264,17 @@ stream.close();
                 }
             }
 
-            *hash<SseMessageInfo> evt = client.readServerSentEvent(info.content_encoding, use_to);
+            *hash<SseMessageInfo> evt;
+            try {
+                evt = client.readServerSentEvent(info.content_encoding, use_to);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "SOCKET-CLOSED") {
+                    # Remote end closed — normal EOF for SSE streams
+                    eof = True;
+                    return NOTHING;
+                }
+                rethrow;
+            }
             if (!evt) {
                 eof = True;
             }
