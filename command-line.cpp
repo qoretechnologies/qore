@@ -72,6 +72,7 @@ static QoreParseOptions parse_options = PO_DEFAULT;
 static int warnings = QP_WARN_DEFAULT;
 static int qore_lib_options = QLO_NONE;
 static qore_exec_mode_t exec_mode = QEM_TIERED;
+static bool user_requested_exec_mode = false;
 
 // lock options
 static bool lock_options = false;
@@ -1090,6 +1091,7 @@ static void set_exec_mode(const char* arg) {
         opt_errors++;
         return;
     }
+    user_requested_exec_mode = true;
     if (!strcasecmp(arg, "ast")) {
         exec_mode = QEM_AST;
         return;
@@ -1559,7 +1561,7 @@ int qore_main_intern(int argc, char* argv[], int other_po) {
    {
       QoreProgramHelper qpgm(parse_options, xsink);
       bool mod_errs = false;
-      qpgm->setExecMode(exec_mode);
+      qpgm->setExecMode(exec_mode, user_requested_exec_mode);
       if (ir_dump) {
           qpgm->setIRDump(true);
       }

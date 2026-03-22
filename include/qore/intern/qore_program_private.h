@@ -433,6 +433,7 @@ public:
         ;
 
     qore_exec_mode_t exec_mode = QEM_TIERED;
+    bool user_requested_exec_mode = false;
     bool ir_dump = false;
     bool ir_fallback_warn = false;
     bool ir_fallback_warned = false;
