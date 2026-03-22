@@ -1019,51 +1019,7 @@ public:
     }
 
     DLLLOCAL void acceptInputIntern(ExceptionSink* xsink, const char* arg_type, bool obj, int param_num,
-            const char* param_name, QoreValue& n, LValueHelper* lvhelper = nullptr) const {
-        // CRITICAL FIX Phase 2: Prioritize complex hash/list handlers for optional types
-        // For optional types (return_vec.size() > 1), we need to ensure complex hash/list
-        // handlers are tried BEFORE hashdecl handlers to prevent incorrect routing.
-        // This prevents inner hashdecls from being extracted and applied to outer containers.
-
-        if (return_vec.size() > 1 && return_vec[1].spec.match(NT_NOTHING) == QTI_IDENT) {
-            // This is a proper optional type. For optional complex hashes/lists, try those first.
-            // Check if return_vec[0] indicates a complex hash or list
-            q_typespec_t base_typespec = return_vec[0].spec.getTypeSpec();
-            if (base_typespec == QTS_COMPLEXHASH || base_typespec == QTS_COMPLEXLIST ||
-                base_typespec == QTS_COMPLEXSOFTLIST) {
-                // Try complex hash/list specs first
-                for (auto& t : getAcceptSpecs()) {
-                    q_typespec_t spec_type = t.spec.getTypeSpec();
-                    if (spec_type == QTS_COMPLEXHASH || spec_type == QTS_COMPLEXLIST ||
-                        spec_type == QTS_COMPLEXSOFTLIST) {
-                        if (t.spec.acceptInput(xsink, *this, t.map, arg_type, obj, param_num, param_name, n, lvhelper)) {
-                            return;
-                        }
-                    }
-                }
-                // If complex handlers didn't work, try hashdecl/other handlers
-                for (auto& t : getAcceptSpecs()) {
-                    q_typespec_t spec_type = t.spec.getTypeSpec();
-                    if (spec_type != QTS_COMPLEXHASH && spec_type != QTS_COMPLEXLIST &&
-                        spec_type != QTS_COMPLEXSOFTLIST) {
-                        if (t.spec.acceptInput(xsink, *this, t.map, arg_type, obj, param_num, param_name, n, lvhelper)) {
-                            return;
-                        }
-                    }
-                }
-                doAcceptError(false, arg_type, obj, param_num, param_name, n, xsink);
-                return;
-            }
-        }
-
-        // Normal routing for non-optional or non-complex types
-        for (auto& t : getAcceptSpecs()) {
-            if (t.spec.acceptInput(xsink, *this, t.map, arg_type, obj, param_num, param_name, n, lvhelper)) {
-                return;
-            }
-        }
-        doAcceptError(false, arg_type, obj, param_num, param_name, n, xsink);
-    }
+            const char* param_name, QoreValue& n, LValueHelper* lvhelper = nullptr) const;
 
     DLLLOCAL void doNonNumericWarning(const QoreProgramLocation* loc, const char* preface) const;
     DLLLOCAL void doNonBooleanWarning(const QoreProgramLocation* loc, const char* preface) const;
@@ -1222,42 +1178,7 @@ protected:
 
     DLLLOCAL static qore_type_result_e parseAcceptsIntern(const QoreAcceptSpec& at, const QoreReturnSpec& rt,
             bool& may_not_match, bool& may_need_filter, bool& t_no_match, bool& ok, qore_type_result_e& max_result,
-            bool known_initial_assignment) {
-        //printd(5, "QoreTypeInfo::parseAcceptsIntern() at: %d rt: %d rc: %d\n", (int)at.spec.getTypeSpec(),
-        //    (int)rt.spec.getTypeSpec(), at.spec.match(rt.spec, may_not_match, may_need_filter));
-        qore_type_result_e res = at.spec.match(rt.spec, may_not_match, may_need_filter, max_result,
-            known_initial_assignment);
-        switch (res) {
-            case QTI_IDENT:
-                if (at.exact && rt.exact) {
-                    if (at.map && !may_need_filter) {
-                        may_need_filter = true;
-                    }
-                    return QTI_IDENT;
-                }
-            // fall down to next case
-            case QTI_NEAR:
-            case QTI_AMBIGUOUS:
-            case QTI_WILDCARD:
-                if (at.map && !may_need_filter) {
-                    may_need_filter = true;
-                }
-                if (t_no_match) {
-                    t_no_match = false;
-                    if (!ok) {
-                        ok = true;
-                        if (may_not_match) {
-                            return res;
-                        }
-                    }
-                }
-
-            // fall down to default
-            default:
-                break;
-        }
-        return QTI_NOT_EQUAL;
-    }
+            bool known_initial_assignment);
 
     DLLLOCAL static void getNodeType(QoreString& str, const QoreValue& n);
 
