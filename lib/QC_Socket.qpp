@@ -6438,6 +6438,59 @@ nothing Socket::cleanupQuicStream(int session_id, int stream_id) {
     s->cleanupQuicStream(session_id, stream_id, xsink);
 }
 
+//! Register a Queue for direct data delivery on an HTTP/3 CONNECT tunnel stream
+/** Data arriving on the CONNECT tunnel is pushed directly to the Queue from the
+    QUIC receive callback, bypassing the intermediate buffer and eliminating the
+    dependency on the I/O poll loop for data delivery.
+
+    Any data that was buffered before registration is flushed to the Queue
+    immediately.  When END_STREAM arrives, a @ref nothing sentinel is pushed
+    and the registration is automatically removed.
+
+    @param session_id the QUIC session ID
+    @param stream_id the HTTP/3 stream ID
+    @param queue the Queue for data delivery (must be unlimited, i.e. created with max = -1)
+
+    @throw QUIC-ERROR if session_id or stream_id is invalid
+
+    @since %Qore 2.3
+*/
+nothing Socket::registerQuicConnectStreamQueue(int session_id, int stream_id, Queue[Queue] queue) {
+    if (session_id <= 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
+        return QoreValue();
+    }
+    if (stream_id < 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid stream_id %lld: must be >= 0", (long long)stream_id);
+        return QoreValue();
+    }
+    // Queue must be unlimited to ensure pushAndTakeRef() never blocks inside
+    // ngtcp2/nghttp3 callbacks where blocking would stall all QUIC I/O
+    if (queue->getMax() != -1) {
+        xsink->raiseException("QUIC-ERROR", "Queue must be unlimited (max = -1) for "
+            "CONNECT stream data delivery; got max = %lld", (long long)queue->getMax());
+        return QoreValue();
+    }
+    // Transfer the reference to QuicSession — it will deref() on cleanup
+    s->registerQuicConnectStreamQueue(session_id, stream_id, queue.release(), xsink);
+}
+
+//! Deregister a Queue for an HTTP/3 CONNECT tunnel stream
+/** @param session_id the QUIC session ID
+    @param stream_id the HTTP/3 stream ID
+
+    @since %Qore 2.3
+*/
+nothing Socket::deregisterQuicConnectStreamQueue(int session_id, int stream_id) {
+    if (session_id <= 0) {
+        return QoreValue();
+    }
+    if (stream_id < 0) {
+        return QoreValue();
+    }
+    s->deregisterQuicConnectStreamQueue(session_id, stream_id, xsink);
+}
+
 //! Reset an HTTP/3 stream by shutting down the read side and cleaning up
 /** Sends a STOP_SENDING signal to the peer for the given stream and removes the stream
     from the QUIC session.
