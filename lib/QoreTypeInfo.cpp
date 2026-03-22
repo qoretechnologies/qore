@@ -3624,3 +3624,27 @@ qore_type_result_e QoreTypeInfo::parseAcceptsIntern(const QoreAcceptSpec& at, co
     }
     return QTI_NOT_EQUAL;
 }
+
+bool QoreParseTypeInfo::paramTypesIdentical(
+        const QoreTypeInfo* ti_a, const QoreParseTypeInfo* pti_a,
+        const QoreTypeInfo* ti_b, const QoreParseTypeInfo* pti_b,
+        bool& recheck) {
+    // Both resolved types: direct comparison
+    if (ti_a && ti_b) {
+        return QoreTypeInfo::isInputIdentical(ti_a, ti_b);
+    }
+    // a resolved, b unresolved
+    if (ti_a && pti_b) {
+        return parseStageOneIdenticalWithParsed(pti_b, ti_a, recheck);
+    }
+    // a unresolved, b resolved
+    if (pti_a && ti_b) {
+        return parseStageOneIdenticalWithParsed(pti_a, ti_b, recheck);
+    }
+    // Both unresolved: compare parse-time types
+    if (pti_a && pti_b) {
+        return parseStageOneIdentical(pti_a, pti_b, recheck);
+    }
+    // Both untyped (nullptr): identical
+    return true;
+}

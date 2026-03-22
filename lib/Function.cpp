@@ -3369,31 +3369,22 @@ int QoreFunction::parseCompareResolvedSignature(const VList& vlist, const Abstra
     return QTI_NOT_EQUAL;
 }
 
-// Helper to consolidate parameter type comparison logic across 2x2 matrix of resolved/unresolved types
+// Dispatch matrix relocated to QoreParseTypeInfo::paramTypesIdentical()
+// See include/qore/intern/QoreParseTypeInfo.h for documentation
 static bool paramTypesIdentical(
     const QoreTypeInfo* ti_a, const QoreParseTypeInfo* pti_a,
     const QoreTypeInfo* ti_b, const QoreParseTypeInfo* pti_b,
     bool& recheck) {
-    // Both resolved types: direct comparison
-    if (ti_a && ti_b) {
-        return QoreTypeInfo::isInputIdentical(ti_a, ti_b);
-    }
-    // a resolved, b unresolved
-    if (ti_a && pti_b) {
-        return QoreParseTypeInfo::parseStageOneIdenticalWithParsed(pti_b, ti_a, recheck);
-    }
-    // a unresolved, b resolved
-    if (pti_a && ti_b) {
-        return QoreParseTypeInfo::parseStageOneIdenticalWithParsed(pti_a, ti_b, recheck);
-    }
-    // Both unresolved: compare parse-time types
-    if (pti_a && pti_b) {
-        return QoreParseTypeInfo::parseStageOneIdentical(pti_a, pti_b, recheck);
-    }
-    // Both untyped (nullptr): identical
-    return true;
+    return QoreParseTypeInfo::paramTypesIdentical(ti_a, pti_a, ti_b, pti_b, recheck);
 }
 
+// Stage 1 (parse-time) duplicate-signature checking with conservative type matching.
+// At this stage, unresolved types are string-based (QoreParseTypeInfo), and we use
+// paramTypesIdentical() to implement a 2x2 dispatch matrix over resolved/unresolved pairs.
+// When ambiguous matches are detected (e.g. issue #3861 namespace-scoped names),
+// setRecheck() is called to flag the variant for stage-2 rechecking.
+// See UserFunctionVariant::parseInit() -> parseCheckDuplicateSignatureCommitted()
+// for the stage-2 recheck logic after type resolution.
 int QoreFunction::parseCheckDuplicateSignature(AbstractQoreFunctionVariant* variant) {
     UserSignature* sig = reinterpret_cast<UserSignature*>(variant->getSignature());
 

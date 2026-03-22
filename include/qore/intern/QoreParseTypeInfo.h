@@ -38,6 +38,15 @@ class QoreParseTypeInfo;
 typedef std::vector<QoreParseTypeInfo*> parse_type_vec_t;
 
 // this is basically just a wrapper around NamedScope
+//
+// Three-stage type resolution pipeline:
+//   Stage 1 (parsing): type names are strings (QoreParseTypeInfo), conservative matching
+//   Stage 2 (after resolution): types are resolved to QoreTypeInfo, rechecks happen here via setRecheck()
+//   Stage 3 (runtime): type coercion and runtime type matching via QoreTypeInfo
+//
+// At parse stage, duplicate-signature detection (paramTypesIdentical) conservatively matches
+// unresolved names and flags ambiguous cases via the recheck mechanism (issue #3861).
+// See parseCheckDuplicateSignatureCommitted() in Function.cpp for stage-2 rechecks.
 class QoreParseTypeInfo {
 protected:
     std::string tname;
@@ -113,6 +122,16 @@ public:
         else
             return !(pti || typeInfo);
     }
+
+    // dispatch matrix for parse-stage parameter type comparison:
+    //   both resolved → QoreTypeInfo::isInputIdentical
+    //   mixed         → parseStageOneIdenticalWithParsed (sets recheck=true)
+    //   both unresolved → parseStageOneIdentical
+    //   both nullptr  → identical
+    DLLLOCAL static bool paramTypesIdentical(
+        const QoreTypeInfo* ti_a, const QoreParseTypeInfo* pti_a,
+        const QoreTypeInfo* ti_b, const QoreParseTypeInfo* pti_b,
+        bool& recheck);
 
     // static version of method, checking for null pointer
     DLLLOCAL static const QoreTypeInfo* resolveAndDelete(QoreParseTypeInfo* pti, const QoreProgramLocation* loc,
