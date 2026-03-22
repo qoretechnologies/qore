@@ -402,7 +402,6 @@ DLLLOCAL bool return_vec_compare(const q_return_vec_t& a, const q_return_vec_t& 
 
 class QoreTypeInfo {
 public:
-    const q_accept_vec_t accept_vec;
     const q_return_vec_t return_vec;
 
     DLLLOCAL QoreTypeInfo(const char* name, const q_accept_vec_t&& a_vec, const q_return_vec_t&& r_vec)
@@ -411,6 +410,33 @@ public:
     }
 
     DLLLOCAL virtual ~QoreTypeInfo() = default;
+
+    // Accessors for accept_vec encapsulation
+    DLLLOCAL bool isAcceptVecEmpty() const {
+        return accept_vec.empty();
+    }
+
+    DLLLOCAL size_t getAcceptVecSize() const {
+        return accept_vec.size();
+    }
+
+    DLLLOCAL bool hasOneAcceptSpec() const {
+        return accept_vec.size() == 1;
+    }
+
+    DLLLOCAL const QoreAcceptSpec& getFirstAcceptSpec() const {
+        assert(!accept_vec.empty());
+        return accept_vec[0];
+    }
+
+    DLLLOCAL const QoreAcceptSpec& getAcceptSpec(size_t index) const {
+        assert(index < accept_vec.size());
+        return accept_vec[index];
+    }
+
+    DLLLOCAL const q_accept_vec_t& getAcceptSpecs() const {
+        return accept_vec;
+    }
 
     DLLLOCAL static const QoreTypeInfo* getHardReference(const QoreTypeInfo* ti);
 
@@ -540,7 +566,7 @@ public:
         if (!hasType(second)) {
             if (!may_need_filter) {
                 // check if we could need a runtime filter
-                for (auto& i : first->accept_vec) {
+                for (auto& i : first->getAcceptSpecs()) {
                     if (i.map) {
                         may_need_filter = true;
                         break;
@@ -582,7 +608,7 @@ public:
 
     // static version of method, checking for null pointer
     DLLLOCAL static bool acceptsSingle(const QoreTypeInfo* ti) {
-        return ti && hasType(ti) ? ti->accept_vec.size() == 1 : false;
+        return ti && hasType(ti) ? ti->getAcceptVecSize() == 1 : false;
     }
 
     // static version of method, checking for null pointer
@@ -741,8 +767,8 @@ public:
         if (!ti) {
             return false;
         }
-        assert(!ti->accept_vec.empty());
-        if (ti->accept_vec[0].spec.getType() == NT_ALL) {
+        assert(!ti->isAcceptVecEmpty());
+        if (ti->getFirstAcceptSpec().spec.getType() == NT_ALL) {
             return false;
         }
         return true;
@@ -846,7 +872,7 @@ public:
         bool hta = hasType(a);
         bool htb = hasType(b);
         if (hta && htb)
-            return accept_vec_compare(a->accept_vec, b->accept_vec) && return_vec_compare(a->return_vec, b->return_vec);
+            return accept_vec_compare(a->getAcceptSpecs(), b->getAcceptSpecs()) && return_vec_compare(a->return_vec, b->return_vec);
         return hta || htb ? false : true;
     }
 
@@ -857,7 +883,7 @@ public:
         bool hta = hasType(a);
         bool htb = hasType(b);
         if (hta && htb)
-            return accept_vec_compare(a->accept_vec, b->accept_vec);
+            return accept_vec_compare(a->getAcceptSpecs(), b->getAcceptSpecs());
         return hta || htb ? false : true;
     }
 
@@ -1176,7 +1202,7 @@ public:
     }
 
     DLLLOCAL void getAcceptTypes(ReferenceHolder<QoreHashNode>& h, bool simple = false) const {
-        for (auto& i : accept_vec) {
+        for (auto& i : getAcceptSpecs()) {
             const char* type_name = simple ? i.spec.getSimpleTypeName() : i.spec.getTypeName();
             h->setKeyValue(type_name, true, nullptr);
             if (!strcmp(type_name, "int")) {
@@ -1266,7 +1292,7 @@ public:
             if (base_typespec == QTS_COMPLEXHASH || base_typespec == QTS_COMPLEXLIST ||
                 base_typespec == QTS_COMPLEXSOFTLIST) {
                 // Try complex hash/list specs first
-                for (auto& t : accept_vec) {
+                for (auto& t : getAcceptSpecs()) {
                     q_typespec_t spec_type = t.spec.getTypeSpec();
                     if (spec_type == QTS_COMPLEXHASH || spec_type == QTS_COMPLEXLIST ||
                         spec_type == QTS_COMPLEXSOFTLIST) {
@@ -1276,7 +1302,7 @@ public:
                     }
                 }
                 // If complex handlers didn't work, try hashdecl/other handlers
-                for (auto& t : accept_vec) {
+                for (auto& t : getAcceptSpecs()) {
                     q_typespec_t spec_type = t.spec.getTypeSpec();
                     if (spec_type != QTS_COMPLEXHASH && spec_type != QTS_COMPLEXLIST &&
                         spec_type != QTS_COMPLEXSOFTLIST) {
@@ -1291,7 +1317,7 @@ public:
         }
 
         // Normal routing for non-optional or non-complex types
-        for (auto& t : accept_vec) {
+        for (auto& t : getAcceptSpecs()) {
             if (t.spec.acceptInput(xsink, *this, t.map, arg_type, obj, param_num, param_name, n, lvhelper)) {
                 return;
             }
@@ -1358,11 +1384,11 @@ protected:
 
     // returns true if "this" is a superset of the argument with a strict interpretation that the order of accept and return declarations must also be the same
     DLLLOCAL bool superSetOf(const QoreTypeInfo* t) const {
-        if (accept_vec.size() < t->accept_vec.size() || return_vec.size() < t->return_vec.size())
+        if (accept_vec.size() < t->getAcceptVecSize() || return_vec.size() < t->return_vec.size())
             return false;
 
-        for (unsigned i = 0; i < t->accept_vec.size(); ++i) {
-            if (t->accept_vec[i].spec != accept_vec[i].spec)
+        for (unsigned i = 0; i < t->getAcceptVecSize(); ++i) {
+            if (t->getAcceptSpec(i).spec != getAcceptSpec(i).spec)
                 return false;
         }
 
@@ -1393,7 +1419,7 @@ protected:
 
     DLLLOCAL qore_type_t getSingleType() const {
         if (accept_vec.size() == 1 && return_vec.size() == 1) {
-            qore_type_t qt = accept_vec[0].spec.getType();
+            qore_type_t qt = getFirstAcceptSpec().spec.getType();
             if (qt == return_vec[0].spec.getType())
                 return qt;
         }
@@ -1407,7 +1433,7 @@ protected:
 
     DLLLOCAL bool parseAcceptsReturns(qore_type_t t) const {
         bool ok = false;
-        for (auto& i : accept_vec) {
+        for (auto& i : getAcceptSpecs()) {
             if (i.spec.matchType(t) != QTI_NOT_EQUAL) {
                 ok = true;
                 break;
@@ -1442,7 +1468,7 @@ protected:
 
     // returns true if the type matches an accept type with a filter (type only checked)
     DLLLOCAL bool mayRequireFilter(const QoreValue& n) const {
-        for (auto& at : accept_vec) {
+        for (auto& at : getAcceptSpecs()) {
             if (at.map && at.spec.matchType(n.getType()) != QTI_NOT_EQUAL)
                 return true;
         }
@@ -1459,7 +1485,7 @@ protected:
         bool ok = false;
         for (auto& rt : typeInfo->return_vec) {
             bool t_no_match = true;
-            for (auto& at : accept_vec) {
+            for (auto& at : getAcceptSpecs()) {
                 qore_type_result_e t_max_result = QTI_NOT_EQUAL;
                 qore_type_result_e res = parseAcceptsIntern(at, rt, may_not_match, may_need_filter, t_no_match, ok,
                     t_max_result, known_initial_assignment);
@@ -1496,7 +1522,7 @@ protected:
     */
     DLLLOCAL qore_type_result_e runtimeTypeMatch(const QoreTypeInfo* typeInfo) const {
         //printd(5, "QoreTypeInfo::runtimeTypeMatch() '%s' <=> '%s'\n", tname.c_str(), typeInfo->tname.c_str());
-        if (typeInfo->return_vec.size() != return_vec.size() || typeInfo->accept_vec.size() != accept_vec.size()) {
+        if (typeInfo->return_vec.size() != return_vec.size() || typeInfo->getAcceptVecSize() != accept_vec.size()) {
             return QTI_NOT_EQUAL;
         }
 
@@ -1505,8 +1531,8 @@ protected:
         for (size_t i = 0; i < accept_vec.size(); ++i) {
             bool may_not_match = false;
             bool may_need_filter = false;
-            qore_type_result_e res = accept_vec[i].spec.match(typeInfo->accept_vec[i].spec, may_not_match, may_need_filter);
-            //printd(5, " + accept: %s %d <=> %s %d: %d\n", QoreTypeInfo::getName(accept_vec[i].spec.getBaseTypeInfo()), accept_vec[i].spec.getTypeSpec(), QoreTypeInfo::getName(typeInfo->accept_vec[i].spec.getBaseTypeInfo()), typeInfo->accept_vec[i].spec.getTypeSpec(), res);
+            qore_type_result_e res = getAcceptSpec(i).spec.match(typeInfo->getAcceptSpec(i).spec, may_not_match, may_need_filter);
+            //printd(5, " + accept: %s %d <=> %s %d: %d\n", QoreTypeInfo::getName(getAcceptSpec(i).spec.getBaseTypeInfo()), getAcceptSpec(i).spec.getTypeSpec(), QoreTypeInfo::getName(typeInfo->getAcceptSpec(i).spec.getBaseTypeInfo()), typeInfo->getAcceptSpec(i).spec.getTypeSpec(), res);
             if (res < QTI_NEAR) {
                 return QTI_NOT_EQUAL;
             }
@@ -1638,6 +1664,9 @@ protected:
     }
 
     DLLLOCAL static void stripTypeInfo(QoreValue& n, ExceptionSink* xsink, LValueHelper* lvhelper = nullptr);
+
+private:
+    const q_accept_vec_t accept_vec;
 };
 
 class QoreParseTypeInfo;
@@ -1933,7 +1962,7 @@ public:
 
 protected:
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        str.sprintf("an object of class '%s' or no value (NOTHING)", accept_vec[0].spec.getClass()->getName());
+        str.sprintf("an object of class '%s' or no value (NOTHING)", getFirstAcceptSpec().spec.getClass()->getName());
     }
 
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
@@ -1996,7 +2025,7 @@ public:
 
 protected:
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        str.sprintf("hash<%s> or no value (NOTHING)", accept_vec[0].spec.getHashDecl()->getName());
+        str.sprintf("hash<%s> or no value (NOTHING)", getFirstAcceptSpec().spec.getHashDecl()->getName());
     }
 
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
@@ -2055,7 +2084,7 @@ public:
 
 protected:
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        str.sprintf("enum<%s> or no value (NOTHING)", accept_vec[0].spec.getEnum()->getName());
+        str.sprintf("enum<%s> or no value (NOTHING)", getFirstAcceptSpec().spec.getEnum()->getName());
     }
 
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
@@ -2108,7 +2137,7 @@ protected:
     }
 
     DLLLOCAL virtual QoreValue getDefaultQoreValueImpl() const {
-        return new QoreHashNode(accept_vec[0].spec.getComplexHash());
+        return new QoreHashNode(getFirstAcceptSpec().spec.getComplexHash());
     }
 
     DLLLOCAL const char* getPathImpl() const {
@@ -2136,7 +2165,7 @@ public:
 
 protected:
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        str.sprintf("hash<string, %s> or no value (NOTHING)", QoreTypeInfo::getName(accept_vec[0].spec.getComplexHash()));
+        str.sprintf("hash<string, %s> or no value (NOTHING)", QoreTypeInfo::getName(getFirstAcceptSpec().spec.getComplexHash()));
     }
 
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
@@ -2209,7 +2238,7 @@ protected:
     }
 
     DLLLOCAL virtual QoreValue getDefaultQoreValueImpl() const {
-        return new QoreListNode(accept_vec[0].spec.getComplexList());
+        return new QoreListNode(getFirstAcceptSpec().spec.getComplexList());
     }
 
     DLLLOCAL const char* getPathImpl() const {
@@ -2459,7 +2488,7 @@ protected:
     }
 
     DLLLOCAL virtual const QoreTypeInfo* getHardReferenceImpl() const {
-        return new QoreComplexHardReferenceTypeInfo(accept_vec[0].spec.getComplexReference());
+        return new QoreComplexHardReferenceTypeInfo(getFirstAcceptSpec().spec.getComplexReference());
     }
 };
 
@@ -2479,7 +2508,7 @@ public:
 
 protected:
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        str.sprintf("reference<%s> or no value (NOTHING)", QoreTypeInfo::getName(accept_vec[0].spec.getComplexReference()));
+        str.sprintf("reference<%s> or no value (NOTHING)", QoreTypeInfo::getName(getFirstAcceptSpec().spec.getComplexReference()));
     }
 
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
@@ -2488,7 +2517,7 @@ protected:
     }
 
     DLLLOCAL virtual const QoreTypeInfo* getHardReferenceImpl() const {
-        return new QoreComplexHardReferenceOrNothingTypeInfo(accept_vec[0].spec.getComplexReference());
+        return new QoreComplexHardReferenceOrNothingTypeInfo(getFirstAcceptSpec().spec.getComplexReference());
     }
 };
 

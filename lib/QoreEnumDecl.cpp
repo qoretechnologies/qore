@@ -90,7 +90,7 @@ QoreEnumOrNothingTypeInfo::QoreEnumOrNothingTypeInfo(const QoreEnumDecl* ed, con
 
 // QoreEnumTypeInfo::getDefaultQoreValueImpl() implementation
 QoreValue QoreEnumTypeInfo::getDefaultQoreValueImpl() const {
-    const QoreEnumDecl* ed = accept_vec[0].spec.getEnum();
+    const QoreEnumDecl* ed = getFirstAcceptSpec().spec.getEnum();
     // Return a TAG_ENUM value of the first member if there are any
     if (ed->getMemberCount() > 0) {
         QoreEnumMemberIterator it(*ed);

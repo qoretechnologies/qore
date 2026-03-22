@@ -784,7 +784,7 @@ const QoreTypeInfo* qore_get_union_type(const type_vec_t& member_types, bool or_
 
     for (const QoreTypeInfo* ti : key) {
         // Add accept types from this member
-        for (const auto& a : ti->accept_vec) {
+        for (const auto& a : ti->getAcceptSpecs()) {
             accept_vec.push_back(a);
         }
         // Add return types from this member
@@ -2863,8 +2863,8 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveClass(const QoreProgramLocation* l
 }
 
 QoreValue QoreHashDeclTypeInfo::getDefaultQoreValueImpl() const {
-    return qore_hash_private::newHashDecl(accept_vec[0].spec.getHashDecl());
-    //return new QoreHashNode(accept_vec[0].spec.getHashDecl(), xsink);
+    return qore_hash_private::newHashDecl(getFirstAcceptSpec().spec.getHashDecl());
+    //return new QoreHashNode(getFirstAcceptSpec().spec.getHashDecl(), xsink);
 }
 
 QoreComplexSoftListTypeInfo::QoreComplexSoftListTypeInfo(const QoreTypeInfo* vti) : QoreComplexListTypeInfo(q_accept_vec_t {

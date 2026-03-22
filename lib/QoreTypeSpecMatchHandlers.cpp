@@ -241,11 +241,11 @@ static qore_type_result_e match_QTS_COMPLEXREF(const QoreTypeSpec& self, QoreTyp
         case QTS_EMPTYLIST:
         case QTS_EMPTYHASH: {
             // check if types match
-            if (!self.getComplexReference() || self.getComplexReference()->accept_vec.empty()) {
+            if (!self.getComplexReference() || self.getComplexReference()->isAcceptVecEmpty()) {
                 return QTI_AMBIGUOUS;
             }
             qore_type_result_e rv = QTI_NOT_EQUAL;
-            for (auto& at : self.getComplexReference()->accept_vec) {
+            for (auto& at : self.getComplexReference()->getAcceptSpecs()) {
                 qore_type_result_e t_max_result = QTI_NOT_EQUAL;
                 qore_type_result_e res = at.spec.checkMatchType(ctx.t, ctx.may_not_match, t_max_result);
                 if (res == QTI_NOT_EQUAL && !ctx.may_not_match) {
@@ -258,7 +258,7 @@ static qore_type_result_e match_QTS_COMPLEXREF(const QoreTypeSpec& self, QoreTyp
                     rv = res;
                 }
             }
-            if (self.getComplexReference()->accept_vec.size() == 1) {
+            if (self.getComplexReference()->hasOneAcceptSpec()) {
                 return rv;
             }
             if (rv > QTI_AMBIGUOUS) {
