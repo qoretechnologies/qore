@@ -54,7 +54,11 @@ module QoreModelRegistry {
     enabling production workflows where models need to survive restarts, be compared
     across versions, and be promoted to production.
 
-    @par Example:
+    The registry supports optional multi-tenant deployment, where each tenant's models
+    are stored in an isolated subdirectory. This enables a single shared registry
+    instance to serve multiple independent tenants with full data isolation.
+
+    @par Single-Tenant Example:
     @code{.py}
 %requires QoreModelRegistry
 %requires ml
@@ -81,10 +85,34 @@ reg.tag("customer-segments", vid, "production");
 auto prod_model = reg.loadByTag("customer-segments", "production");
     @endcode
 
+    @par Multi-Tenant Example:
+    @code{.py}
+%requires QoreModelRegistry
+
+# Tenant-scoped registries — each sees only its own models
+QoreModelRegistry::ModelRegistry tenant_a({"path": "/var/models", "tenant_id": "acme-corp"});
+QoreModelRegistry::ModelRegistry tenant_b({"path": "/var/models", "tenant_id": "globex-inc"});
+
+# Tenant A registers a model
+tenant_a.register(model_a, {"name": "fraud-detector"});
+
+# Tenant B registers a model with the same name — no conflict
+tenant_b.register(model_b, {"name": "fraud-detector"});
+
+# Each tenant only sees its own models
+list<string> a_models = tenant_a.listModels();  # ("fraud-detector",)
+list<string> b_models = tenant_b.listModels();  # ("fraud-detector",)
+
+# Admin registry (no tenant_id) can list all tenants
+QoreModelRegistry::ModelRegistry admin({"path": "/var/models"});
+list<string> tenants = admin.listTenants();  # ("acme-corp", "globex-inc")
+    @endcode
+
     @section qoremodelregistryreleasenotes QoreModelRegistry Module Release Notes
 
     @subsection qoremodelregistry_1_0 QoreModelRegistry Module Version 1.0
     - Initial release with filesystem-backed registry
     - Model registration, versioning, tagging, pruning, and comparison
+    - Multi-tenant support with optional \c tenant_id for tenant isolation
     - Supports all ml module algorithm types
 */

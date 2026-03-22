@@ -1,0 +1,61 @@
+/** @mainpage Qore protobuf Module
+
+    @tableofcontents
+
+    @section protobufintro protobuf Module Introduction
+
+    The \c protobuf module provides dynamic Protocol Buffer schema loading, encoding,
+    and decoding for Qore. It wraps Google's libprotobuf library to provide:
+
+    - Loading schemas from \c .proto files, strings, serialized descriptors, or
+      programmatic hash definitions
+    - Encoding Qore hashes to protobuf binary format
+    - Decoding protobuf binary data to Qore hashes
+    - JSON conversion via protobuf's canonical JSON format
+    - Schema introspection (message types, field metadata, enum values)
+    - File descriptor serialization for schema transport
+
+    @section protobufclasses protobuf Module Classes
+
+    - @ref Qore::Protobuf::ProtobufSchema "ProtobufSchema" — the core class for
+      schema loading and message encoding/decoding
+
+    @section protobufexample protobuf Module Examples
+
+    @par Loading from a string
+    @code{.py}
+%requires protobuf
+
+string proto = "syntax = \"proto3\";\nmessage Msg { string text = 1; int32 count = 2; }";
+ProtobufSchema schema(proto);
+binary data = schema.encode("Msg", {"text": "hello", "count": 42});
+hash<auto> result = schema.decode("Msg", data);
+    @endcode
+
+    @par Programmatic schema definition
+    @code{.py}
+%requires protobuf
+
+ProtobufSchema schema({
+    "syntax": "proto3",
+    "package": "example",
+    "messages": {
+        "Point": {
+            "fields": (
+                {"name": "x", "type": "double", "number": 1},
+                {"name": "y", "type": "double", "number": 2},
+                {"name": "label", "type": "string", "number": 3},
+            ),
+        },
+    },
+});
+binary data = schema.encode("example.Point", {"x": 1.5, "y": 2.5, "label": "test"});
+    @endcode
+
+    @section protobufrelnotes protobuf Module Release Notes
+
+    @subsection protobuf_1_0 protobuf Module Version 1.0
+    - Initial release
+    - Schema loading from files, strings, serialized descriptors, and programmatic hashes
+    - Encode/decode, JSON conversion, schema introspection
+*/

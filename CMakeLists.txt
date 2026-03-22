@@ -1796,6 +1796,17 @@ if (NOT Eigen3_FOUND)
     endif()
 endif()
 add_subdirectory(modules/ml)
+# protobuf module (optional — requires libprotobuf)
+find_package(Protobuf CONFIG QUIET)
+if (NOT Protobuf_FOUND)
+    find_package(Protobuf QUIET)
+endif()
+if (Protobuf_FOUND)
+    message(STATUS "Protobuf found (version ${Protobuf_VERSION}) - building protobuf module")
+    add_subdirectory(modules/protobuf)
+else()
+    message(STATUS "Protobuf not found - protobuf module will not be built")
+endif()
 
 # HACK: we need to simulate QORE_USER_MODULES_DIR as the versioned one
 #       for qore core qlib modules.

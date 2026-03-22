@@ -30,7 +30,10 @@ public class ModelRegistry {
         #! Base path for the model registry storage
         string base_path;
 
-        #! In-memory index cache: model_name → {"versions": list, "mtime": date}
+        #! Optional tenant ID for multi-tenant deployments
+        *string tenant_id;
+
+        #! In-memory index cache: model_dir → {"versions": list, "mtime": date}
         hash<string, hash<auto>> index_cache;
 
         #! Mutex for thread-safe cache access
@@ -40,6 +43,9 @@ public class ModelRegistry {
     #! Creates a new model registry backed by the given filesystem path
     /** @param options a hash with the following keys:
         - \c path (required): the base directory path for the registry storage
+        - \c tenant_id (optional): tenant identifier for multi-tenant deployments;
+          when provided, all models are stored under a tenant-specific subdirectory
+          and isolated from other tenants
     */
     constructor(hash<auto> options) {
 %ifdef NoJson
@@ -51,9 +57,23 @@ public class ModelRegistry {
             throw "ML-REGISTRY-ERROR", "required option 'path' not provided";
         }
         base_path = path;
-        # Create base directory if it doesn't exist
-        if (!is_dir(base_path)) {
-            mkdir_ex(base_path, 0755, True);
+
+        # Validate and set tenant_id if provided
+        if (options.tenant_id.val()) {
+            string tid = options.tenant_id;
+            # Only allow alphanumeric, hyphen, underscore (safe filesystem characters)
+            if (tid !~ /^[a-zA-Z0-9_-]+$/) {
+                throw "ML-REGISTRY-ERROR",
+                    sprintf("invalid tenant_id '%s': must contain only alphanumeric "
+                        "characters, hyphens, and underscores", tid);
+            }
+            tenant_id = tid;
+        }
+
+        # Create base directory (and tenant subdirectory) if needed
+        string effective_base = getTenantDir();
+        if (!is_dir(effective_base)) {
+            mkdir_ex(effective_base, 0755, True);
         }
     }
 
@@ -79,7 +99,7 @@ public class ModelRegistry {
             + get_random_bytes(4).toHex();
 
         # Create model directory
-        string model_dir = base_path + DirSep + name;
+        string model_dir = getModelDir(name);
         if (!is_dir(model_dir)) {
             mkdir_ex(model_dir, 0755, True);
         }
@@ -104,6 +124,9 @@ public class ModelRegistry {
             "format": "qml",
             "training_data_hash": options.training_data_hash,
         };
+        if (tenant_id) {
+            metadata.tenant_id = tenant_id;
+        }
 
         # Save metadata file
         string meta_file = model_dir + DirSep + "v_" + version_id + ".meta.json";
@@ -125,7 +148,7 @@ public class ModelRegistry {
         @return a list of version metadata hashes, ordered oldest to newest
     */
     list<hash<auto>> listVersions(string name) {
-        string model_dir = base_path + DirSep + name;
+        string model_dir = getModelDir(name);
         hash<auto> index = loadIndex(model_dir);
         return index.versions ?? ();
     }
@@ -139,9 +162,10 @@ public class ModelRegistry {
         @throw ML-REGISTRY-ERROR if the model or version is not found
     */
     object load(string name, *string version_id) {
-        string model_dir = base_path + DirSep + name;
+        string model_dir = getModelDir(name);
         if (!is_dir(model_dir)) {
-            throw "ML-REGISTRY-ERROR", sprintf("model '%s' not found", name);
+            throw "ML-REGISTRY-ERROR", sprintf("model '%s' not found%s", name,
+                tenant_id ? sprintf(" (tenant '%s')", tenant_id) : "");
         }
 
         if (!version_id.val() || version_id == "latest") {
@@ -170,7 +194,7 @@ public class ModelRegistry {
         @throw ML-REGISTRY-ERROR if the version is not found
     */
     nothing tag(string name, string version_id, string tag_name) {
-        string model_dir = base_path + DirSep + name;
+        string model_dir = getModelDir(name);
         index_mutex.lock();
         on_exit index_mutex.unlock();
 
@@ -227,7 +251,7 @@ public class ModelRegistry {
         bool keep_tagged = options.keep_tagged ?? True;
         int keep_latest = options.keep_latest ?? 5;
 
-        string model_dir = base_path + DirSep + name;
+        string model_dir = getModelDir(name);
         index_mutex.lock();
         on_exit index_mutex.unlock();
 
@@ -276,7 +300,7 @@ public class ModelRegistry {
     list<string> listModels() {
         list<string> result();
         Dir d();
-        if (!d.chdir(base_path)) {
+        if (!d.chdir(getTenantDir())) {
             return result;
         }
         foreach string entry in (d.listDirs()) {
@@ -285,15 +309,55 @@ public class ModelRegistry {
         return sort(result);
     }
 
+    #! Lists all tenant IDs in the registry
+    /** Only meaningful when the registry is used in multi-tenant mode.
+        This method lists subdirectories of the base path that contain tenant data.
+
+        @return a sorted list of tenant ID strings
+
+        @note This is an administrative method — it should only be called by
+        a registry instance created \b without a \c tenant_id (i.e., an admin-level
+        registry), as it lists tenants across the entire registry.
+    */
+    list<string> listTenants() {
+        list<string> result();
+        Dir d();
+        if (!d.chdir(base_path)) {
+            return result;
+        }
+        foreach string entry in (d.listDirs()) {
+            # A tenant directory contains model subdirectories with registry.json
+            Dir td();
+            if (td.chdir(base_path + DirSep + entry)) {
+                foreach string subdir in (td.listDirs()) {
+                    if (is_file(base_path + DirSep + entry + DirSep + subdir
+                            + DirSep + "registry.json")) {
+                        push result, entry;
+                        break;
+                    }
+                }
+            }
+        }
+        return sort(result);
+    }
+
+    #! Returns the tenant ID for this registry instance, or NOTHING if single-tenant
+    /** @return the tenant ID string, or NOTHING
+    */
+    *string getTenantId() {
+        return tenant_id;
+    }
+
     #! Deletes a model and all its versions from the registry
     /** @param name the model name
 
         @throw ML-REGISTRY-ERROR if the model is not found
     */
     nothing deleteModel(string name) {
-        string model_dir = base_path + DirSep + name;
+        string model_dir = getModelDir(name);
         if (!is_dir(model_dir)) {
-            throw "ML-REGISTRY-ERROR", sprintf("model '%s' not found", name);
+            throw "ML-REGISTRY-ERROR", sprintf("model '%s' not found%s", name,
+                tenant_id ? sprintf(" (tenant '%s')", tenant_id) : "");
         }
         # Delete all files in directory
         Dir d();
@@ -302,6 +366,11 @@ public class ModelRegistry {
             unlink(model_dir + DirSep + entry);
         }
         rmdir(model_dir);
+
+        # Invalidate cache for this model directory
+        index_mutex.lock();
+        on_exit index_mutex.unlock();
+        remove index_cache{model_dir};
     }
 
     #! Returns version metadata for a specific version
@@ -331,7 +400,7 @@ public class ModelRegistry {
         @throw ML-REGISTRY-ERROR if the version is not found
     */
     nothing untag(string name, string version_id, string tag_name) {
-        string model_dir = base_path + DirSep + name;
+        string model_dir = getModelDir(name);
         index_mutex.lock();
         on_exit index_mutex.unlock();
 
@@ -443,6 +512,19 @@ public class ModelRegistry {
         hash<auto> index = loadIndexUnlocked(model_dir);
         push index.versions, metadata;
         saveIndexUnlocked(model_dir, index);
+    }
+
+    #! Private: returns the effective base directory, scoped to tenant if applicable
+    private string getTenantDir() {
+        if (tenant_id) {
+            return base_path + DirSep + tenant_id;
+        }
+        return base_path;
+    }
+
+    #! Private: returns the directory path for a named model, scoped to tenant if applicable
+    private string getModelDir(string name) {
+        return getTenantDir() + DirSep + name;
     }
 
     #! Private: determines the algorithm name from a model object

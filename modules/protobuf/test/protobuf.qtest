@@ -1,0 +1,483 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  protobuf.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+%strict-args
+%require-types
+%enable-all-warnings
+
+%requires ../../../qlib/QUnit.qm
+%requires protobuf
+
+%exec-class ProtobufTest
+
+class ProtobufTest inherits QUnit::Test {
+    constructor() : Test("ProtobufTest", "1.0") {
+        addTestCase("stringSchema", \stringSchemaTest());
+        addTestCase("stringSchemaRoundTrip", \stringSchemaRoundTripTest());
+        addTestCase("programmaticSchema", \programmaticSchemaTest());
+        addTestCase("programmaticSchemaPackage", \programmaticSchemaPackageTest());
+        addTestCase("programmaticSchemaEnum", \programmaticSchemaEnumTest());
+        addTestCase("programmaticSchemaRepeated", \programmaticSchemaRepeatedTest());
+        addTestCase("programmaticSchemaNestedMessage", \programmaticSchemaNestedMessageTest());
+        addTestCase("jsonConversion", \jsonConversionTest());
+        addTestCase("messageTypes", \messageTypesTest());
+        addTestCase("messageSchema", \messageSchemaTest());
+        addTestCase("defaultMessage", \defaultMessageTest());
+        addTestCase("descriptorRoundTrip", \descriptorRoundTripTest());
+        addTestCase("errorCases", \errorCasesTest());
+        addTestCase("allScalarTypes", \allScalarTypesTest());
+        addTestCase("bytesField", \bytesFieldTest());
+        addTestCase("emptyMessage", \emptyMessageTest());
+
+        set_return_value(main());
+    }
+
+    stringSchemaTest() {
+        string proto = "syntax = \"proto3\";\n"
+            "message SimpleMsg {\n"
+            "  string text = 1;\n"
+            "  int32 count = 2;\n"
+            "}";
+
+        Protobuf::ProtobufSchema schema(proto);
+
+        # Encode
+        binary data = schema.encode("SimpleMsg", {"text": "hello", "count": 42});
+        assertTrue(data.size() > 0, "encoded data should be non-empty");
+
+        # Decode
+        hash<auto> result = schema.decode("SimpleMsg", data);
+        assertEq("hello", result.text, "decoded text should match");
+        assertEq(42, result.count, "decoded count should match");
+    }
+
+    stringSchemaRoundTripTest() {
+        string proto = "syntax = \"proto3\";\n"
+            "message RoundTripMsg {\n"
+            "  string name = 1;\n"
+            "  double value = 2;\n"
+            "  bool active = 3;\n"
+            "  int64 timestamp = 4;\n"
+            "}";
+
+        Protobuf::ProtobufSchema schema(proto);
+
+        hash<auto> original = {
+            "name": "test",
+            "value": 3.14,
+            "active": True,
+            "timestamp": 1234567890,
+        };
+
+        binary data = schema.encode("RoundTripMsg", original);
+        hash<auto> decoded = schema.decode("RoundTripMsg", data);
+
+        assertEq(original.name, decoded.name, "name round-trip");
+        assertEq(original.value, decoded.value, "value round-trip");
+        assertEq(original.active, decoded.active, "active round-trip");
+        assertEq(original.timestamp, decoded.timestamp, "timestamp round-trip");
+    }
+
+    programmaticSchemaTest() {
+        Protobuf::ProtobufSchema schema({
+            "syntax": "proto3",
+            "messages": {
+                "Point": {
+                    "fields": (
+                        {"name": "x", "type": "double", "number": 1},
+                        {"name": "y", "type": "double", "number": 2},
+                        {"name": "label", "type": "string", "number": 3},
+                    ),
+                },
+            },
+        });
+
+        hash<auto> point = {"x": 1.5, "y": 2.5, "label": "origin"};
+        binary data = schema.encode("Point", point);
+        assertTrue(data.size() > 0, "encoded data should be non-empty");
+
+        hash<auto> decoded = schema.decode("Point", data);
+        assertEq(1.5, decoded.x, "x round-trip");
+        assertEq(2.5, decoded.y, "y round-trip");
+        assertEq("origin", decoded.label, "label round-trip");
+    }
+
+    programmaticSchemaPackageTest() {
+        Protobuf::ProtobufSchema schema({
+            "syntax": "proto3",
+            "package": "mypackage",
+            "messages": {
+                "Msg": {
+                    "fields": (
+                        {"name": "value", "type": "int32", "number": 1},
+                    ),
+                },
+            },
+        });
+
+        # Should be accessible by fully qualified name
+        list<string> types = schema.messageTypes();
+        assertEq(1, types.size(), "should have 1 message type");
+        assertEq("mypackage.Msg", types[0], "type should include package");
+
+        # Encode using full name
+        binary data = schema.encode("mypackage.Msg", {"value": 99});
+        hash<auto> decoded = schema.decode("mypackage.Msg", data);
+        assertEq(99, decoded.value, "value round-trip with package");
+
+        # Encode using short name (should resolve via package)
+        binary data2 = schema.encode("Msg", {"value": 42});
+        hash<auto> decoded2 = schema.decode("Msg", data2);
+        assertEq(42, decoded2.value, "value round-trip with short name");
+    }
+
+    programmaticSchemaEnumTest() {
+        Protobuf::ProtobufSchema schema({
+            "syntax": "proto3",
+            "messages": {
+                "EnumMsg": {
+                    "fields": (
+                        {"name": "status", "type": "int32", "number": 1},
+                        {"name": "name", "type": "string", "number": 2},
+                    ),
+                    "enums": {
+                        "Status": {
+                            "values": {
+                                "UNKNOWN": 0,
+                                "ACTIVE": 1,
+                                "INACTIVE": 2,
+                            },
+                        },
+                    },
+                },
+            },
+        });
+
+        # Verify enum values
+        hash<auto> values = schema.enumValues("EnumMsg.Status");
+        assertEq(0, values.UNKNOWN, "UNKNOWN should be 0");
+        assertEq(1, values.ACTIVE, "ACTIVE should be 1");
+        assertEq(2, values.INACTIVE, "INACTIVE should be 2");
+
+        # Encode/decode with enum field value
+        binary data = schema.encode("EnumMsg", {"status": 1, "name": "test"});
+        hash<auto> decoded = schema.decode("EnumMsg", data);
+        assertEq(1, decoded.status, "status round-trip");
+    }
+
+    programmaticSchemaRepeatedTest() {
+        Protobuf::ProtobufSchema schema({
+            "syntax": "proto3",
+            "messages": {
+                "ListMsg": {
+                    "fields": (
+                        {"name": "values", "type": "int32", "number": 1,
+                         "label": "repeated"},
+                        {"name": "names", "type": "string", "number": 2,
+                         "label": "repeated"},
+                    ),
+                },
+            },
+        });
+
+        hash<auto> original = {
+            "values": (1, 2, 3, 4, 5),
+            "names": ("alice", "bob", "carol"),
+        };
+
+        binary data = schema.encode("ListMsg", original);
+        hash<auto> decoded = schema.decode("ListMsg", data);
+
+        assertEq(5, decoded.values.size(), "values count");
+        assertEq(1, decoded.values[0], "values[0]");
+        assertEq(5, decoded.values[4], "values[4]");
+        assertEq(3, decoded.names.size(), "names count");
+        assertEq("alice", decoded.names[0], "names[0]");
+        assertEq("carol", decoded.names[2], "names[2]");
+    }
+
+    programmaticSchemaNestedMessageTest() {
+        Protobuf::ProtobufSchema schema({
+            "syntax": "proto3",
+            "messages": {
+                "Inner": {
+                    "fields": (
+                        {"name": "value", "type": "int32", "number": 1},
+                    ),
+                },
+                "Outer": {
+                    "fields": (
+                        {"name": "name", "type": "string", "number": 1},
+                        {"name": "inner", "type": "Inner", "number": 2},
+                    ),
+                },
+            },
+        });
+
+        hash<auto> original = {
+            "name": "test",
+            "inner": {"value": 42},
+        };
+
+        binary data = schema.encode("Outer", original);
+        hash<auto> decoded = schema.decode("Outer", data);
+
+        assertEq("test", decoded.name, "outer name");
+        assertEq(42, decoded.inner.value, "inner value");
+    }
+
+    jsonConversionTest() {
+        string proto = "syntax = \"proto3\";\n"
+            "message JsonMsg {\n"
+            "  string text = 1;\n"
+            "  int32 number = 2;\n"
+            "}";
+
+        Protobuf::ProtobufSchema schema(proto);
+
+        # Hash -> JSON
+        string json = schema.toJson("JsonMsg", {"text": "hello", "number": 42});
+        assertTrue(json.val(), "JSON should be non-empty");
+        assertTrue(json.find("hello") >= 0, "JSON should contain text value");
+
+        # JSON -> Hash
+        hash<auto> result = schema.fromJson("JsonMsg", json);
+        assertEq("hello", result.text, "fromJson text");
+        assertEq(42, result.number, "fromJson number");
+    }
+
+    messageTypesTest() {
+        string proto = "syntax = \"proto3\";\n"
+            "package test;\n"
+            "message Foo { string a = 1; }\n"
+            "message Bar { int32 b = 1; }";
+
+        Protobuf::ProtobufSchema schema(proto);
+        list<string> types = schema.messageTypes();
+
+        assertEq(2, types.size(), "should have 2 message types");
+        assertTrue(types.contains("test.Foo"), "should contain test.Foo");
+        assertTrue(types.contains("test.Bar"), "should contain test.Bar");
+    }
+
+    messageSchemaTest() {
+        string proto = "syntax = \"proto3\";\n"
+            "message SchemaMsg {\n"
+            "  string name = 1;\n"
+            "  int32 count = 2;\n"
+            "  repeated double values = 3;\n"
+            "}";
+
+        Protobuf::ProtobufSchema schema(proto);
+        hash<auto> info = schema.messageSchema("SchemaMsg");
+
+        assertEq("SchemaMsg", info.name, "schema name");
+        assertTrue(info.fields instanceof hash, "fields should be a hash");
+        assertEq("string", info.fields.name.type, "name field type");
+        assertEq(1, int(info.fields.name.number), "name field number");
+        assertEq("int32", info.fields.count.type, "count field type");
+        assertEq("double", info.fields.values.type, "values field type");
+        assertEq("repeated", info.fields.values.label, "values field label");
+    }
+
+    defaultMessageTest() {
+        string proto = "syntax = \"proto3\";\n"
+            "message DefaultMsg {\n"
+            "  string text = 1;\n"
+            "  int32 count = 2;\n"
+            "  bool active = 3;\n"
+            "}";
+
+        Protobuf::ProtobufSchema schema(proto);
+        hash<auto> defaults = schema.defaultMessage("DefaultMsg");
+
+        assertEq("", defaults.text, "default string should be empty");
+        assertEq(0, defaults.count, "default int should be 0");
+        assertEq(False, defaults.active, "default bool should be False");
+    }
+
+    descriptorRoundTripTest() {
+        string proto = "syntax = \"proto3\";\n"
+            "message DescMsg {\n"
+            "  string text = 1;\n"
+            "  int32 number = 2;\n"
+            "}";
+
+        Protobuf::ProtobufSchema schema1(proto);
+
+        # Serialize descriptors
+        list<binary> descriptors = schema1.serializeFileDescriptors();
+        assertTrue(descriptors.size() > 0, "should have descriptors");
+
+        # Reconstruct from descriptors
+        Protobuf::ProtobufSchema schema2(descriptors);
+
+        # Encode with schema1, decode with schema2
+        binary data = schema1.encode("DescMsg", {"text": "hello", "number": 99});
+        hash<auto> decoded = schema2.decode("DescMsg", data);
+        assertEq("hello", decoded.text, "cross-schema text");
+        assertEq(99, decoded.number, "cross-schema number");
+    }
+
+    errorCasesTest() {
+        string proto = "syntax = \"proto3\";\n"
+            "message ErrorMsg { string text = 1; }";
+
+        Protobuf::ProtobufSchema schema(proto);
+
+        # Unknown message type
+        assertThrows("PROTOBUF-TYPE-ERROR", \schema.encode(), ("NonExistent", {}));
+        assertThrows("PROTOBUF-TYPE-ERROR", \schema.decode(), ("NonExistent", <cafe>));
+
+        # Unknown field
+        assertThrows("PROTOBUF-FIELD-ERROR", \schema.encode(),
+            ("ErrorMsg", {"unknown_field": "value"}));
+
+        # Invalid proto string
+        assertThrows("PROTOBUF-SCHEMA-ERROR", sub() {
+            new Protobuf::ProtobufSchema("this is not valid proto");
+        });
+
+        # Empty descriptor list
+        assertThrows("PROTOBUF-SCHEMA-ERROR", sub() {
+            list<binary> empty_list();
+            new Protobuf::ProtobufSchema(empty_list);
+        });
+
+        # Programmatic schema with missing field name
+        assertThrows("PROTOBUF-SCHEMA-ERROR", sub() {
+            new Protobuf::ProtobufSchema({
+                "messages": {
+                    "Bad": {
+                        "fields": (
+                            {"type": "string", "number": 1},
+                        ),
+                    },
+                },
+            });
+        });
+
+        # Programmatic schema with missing field number
+        assertThrows("PROTOBUF-SCHEMA-ERROR", sub() {
+            new Protobuf::ProtobufSchema({
+                "messages": {
+                    "Bad": {
+                        "fields": (
+                            {"name": "x", "type": "string"},
+                        ),
+                    },
+                },
+            });
+        });
+    }
+
+    allScalarTypesTest() {
+        Protobuf::ProtobufSchema schema({
+            "syntax": "proto3",
+            "messages": {
+                "AllTypes": {
+                    "fields": (
+                        {"name": "f_double",   "type": "double",   "number": 1},
+                        {"name": "f_float",    "type": "float",    "number": 2},
+                        {"name": "f_int32",    "type": "int32",    "number": 3},
+                        {"name": "f_int64",    "type": "int64",    "number": 4},
+                        {"name": "f_uint32",   "type": "uint32",   "number": 5},
+                        {"name": "f_uint64",   "type": "uint64",   "number": 6},
+                        {"name": "f_bool",     "type": "bool",     "number": 7},
+                        {"name": "f_string",   "type": "string",   "number": 8},
+                        {"name": "f_sint32",   "type": "sint32",   "number": 9},
+                        {"name": "f_sint64",   "type": "sint64",   "number": 10},
+                        {"name": "f_fixed32",  "type": "fixed32",  "number": 11},
+                        {"name": "f_fixed64",  "type": "fixed64",  "number": 12},
+                        {"name": "f_sfixed32", "type": "sfixed32", "number": 13},
+                        {"name": "f_sfixed64", "type": "sfixed64", "number": 14},
+                    ),
+                },
+            },
+        });
+
+        hash<auto> original = {
+            "f_double": 3.14,
+            "f_float": 2.5,
+            "f_int32": -42,
+            "f_int64": -1234567890123,
+            "f_uint32": 42,
+            "f_uint64": 1234567890123,
+            "f_bool": True,
+            "f_string": "hello world",
+            "f_sint32": -100,
+            "f_sint64": -200,
+            "f_fixed32": 300,
+            "f_fixed64": 400,
+            "f_sfixed32": -500,
+            "f_sfixed64": -600,
+        };
+
+        binary data = schema.encode("AllTypes", original);
+        hash<auto> decoded = schema.decode("AllTypes", data);
+
+        assertEq(original.f_double, decoded.f_double, "double round-trip");
+        # float has less precision
+        assertTrue(abs(original.f_float - decoded.f_float) < 0.001, "float round-trip");
+        assertEq(original.f_int32, decoded.f_int32, "int32 round-trip");
+        assertEq(original.f_int64, decoded.f_int64, "int64 round-trip");
+        assertEq(original.f_uint32, decoded.f_uint32, "uint32 round-trip");
+        assertEq(original.f_uint64, decoded.f_uint64, "uint64 round-trip");
+        assertEq(original.f_bool, decoded.f_bool, "bool round-trip");
+        assertEq(original.f_string, decoded.f_string, "string round-trip");
+        assertEq(original.f_sint32, decoded.f_sint32, "sint32 round-trip");
+        assertEq(original.f_sint64, decoded.f_sint64, "sint64 round-trip");
+        assertEq(original.f_fixed32, decoded.f_fixed32, "fixed32 round-trip");
+        assertEq(original.f_fixed64, decoded.f_fixed64, "fixed64 round-trip");
+        assertEq(original.f_sfixed32, decoded.f_sfixed32, "sfixed32 round-trip");
+        assertEq(original.f_sfixed64, decoded.f_sfixed64, "sfixed64 round-trip");
+    }
+
+    bytesFieldTest() {
+        string proto = "syntax = \"proto3\";\n"
+            "message BytesMsg { bytes data = 1; }";
+
+        Protobuf::ProtobufSchema schema(proto);
+
+        binary original = <deadbeef>;
+        binary encoded = schema.encode("BytesMsg", {"data": original});
+        hash<auto> decoded = schema.decode("BytesMsg", encoded);
+
+        assertEq(original, decoded.data, "bytes round-trip");
+    }
+
+    emptyMessageTest() {
+        string proto = "syntax = \"proto3\";\n"
+            "message EmptyMsg {}";
+
+        Protobuf::ProtobufSchema schema(proto);
+
+        binary data = schema.encode("EmptyMsg", {});
+        assertEq(0, data.size(), "empty message should encode to 0 bytes");
+
+        hash<auto> decoded = schema.decode("EmptyMsg", data);
+        assertTrue(decoded instanceof hash, "decoded empty should be a hash");
+    }
+}

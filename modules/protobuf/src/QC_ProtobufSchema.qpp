@@ -1,0 +1,360 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/** @file QC_ProtobufSchema.cpp defines the %Qore ProtobufSchema class and related types */
+/*
+    Qore protobuf module
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+#include "protobuf-module.h"
+#include "QC_ProtobufSchema.h"
+#include "QoreProtobufSchema.h"
+
+//! Information about a method in a protobuf service definition
+/** @since %protobuf 1.0
+*/
+hashdecl Qore::Protobuf::ProtobufMethodInfo {
+    //! The method name (e.g., "SayHello")
+    string name;
+
+    //! The full path (e.g., "/helloworld.Greeter/SayHello")
+    string full_path;
+
+    //! The fully-qualified input message type name
+    string input_type;
+
+    //! The fully-qualified output message type name
+    string output_type;
+
+    //! True if the client sends a stream of messages
+    bool client_streaming;
+
+    //! True if the server sends a stream of messages
+    bool server_streaming;
+}
+
+//! Information about a protobuf service
+/** @since %protobuf 1.0
+*/
+hashdecl Qore::Protobuf::ProtobufServiceInfo {
+    //! The service name (e.g., "Greeter")
+    string name;
+
+    //! The methods defined in this service
+    list<hash<Qore::Protobuf::ProtobufMethodInfo>> methods;
+}
+
+//! The ProtobufSchema class provides dynamic protobuf schema loading and message encoding/decoding
+/**
+    @par Example: Loading a schema and encoding/decoding messages
+    @code{.py}
+#!/usr/bin/qore
+
+%requires protobuf
+
+# Load schema from file
+ProtobufSchema schema("./proto/", "service.proto");
+
+# List message types
+list<string> types = schema.messageTypes();
+
+# Encode a message
+binary data = schema.encode("helloworld.HelloRequest", {"name": "World"});
+
+# Decode a message
+hash<auto> msg = schema.decode("helloworld.HelloReply", data);
+    @endcode
+
+    @par Example: Loading schema from a string
+    @code{.py}
+string proto = "syntax = \"proto3\";
+message Msg { string text = 1; int32 count = 2; }";
+
+ProtobufSchema schema(proto);
+binary data = schema.encode("Msg", {"text": "hello", "count": 42});
+hash<auto> result = schema.decode("Msg", data);
+    @endcode
+
+    @par Example: Programmatic schema definition
+    @code{.py}
+ProtobufSchema schema({
+    "syntax": "proto3",
+    "package": "mypackage",
+    "messages": {
+        "Point": {
+            "fields": (
+                {"name": "x", "type": "double", "number": 1},
+                {"name": "y", "type": "double", "number": 2},
+                {"name": "label", "type": "string", "number": 3},
+            ),
+        },
+    },
+});
+binary data = schema.encode("mypackage.Point", {"x": 1.0, "y": 2.0, "label": "origin"});
+    @endcode
+
+    @since %protobuf 1.0
+*/
+qclass ProtobufSchema [arg=QoreProtobufSchema* schema; ns=Qore::Protobuf; dom=FILESYSTEM];
+
+//! Creates a ProtobufSchema from a \c .proto file on the filesystem
+/** @param path the directory path for \c .proto file imports
+    @param proto_file the \c .proto file name to load
+
+    @throw PROTOBUF-SCHEMA-ERROR if the file cannot be loaded or parsed
+
+    @since %protobuf 1.0
+*/
+ProtobufSchema::constructor(string path, string proto_file) {
+    self->setPrivate(CID_PROTOBUFSCHEMA,
+        new QoreProtobufSchema(path->c_str(), proto_file->c_str(), xsink));
+}
+
+//! Creates a ProtobufSchema from a proto definition string
+/** @param proto_content the \c .proto file content as a string
+    @param filename optional filename for error messages (defaults to "input.proto")
+
+    @throw PROTOBUF-SCHEMA-ERROR if the content cannot be parsed
+
+    @since %protobuf 1.0
+*/
+ProtobufSchema::constructor(string proto_content, *string filename) {
+    self->setPrivate(CID_PROTOBUFSCHEMA,
+        new QoreProtobufSchema(*proto_content, filename ? filename->c_str() : nullptr, xsink));
+}
+
+//! Creates a ProtobufSchema from serialized \c FileDescriptorProto data
+/** @param serialized_descriptors a list of binary data, each element containing one
+        serialized \c FileDescriptorProto message
+    @throw PROTOBUF-SCHEMA-ERROR if deserialization or schema building fails
+
+    @since %protobuf 1.0
+*/
+ProtobufSchema::constructor(list<binary> serialized_descriptors) {
+    self->setPrivate(CID_PROTOBUFSCHEMA,
+        new QoreProtobufSchema(serialized_descriptors, xsink));
+}
+
+//! Creates a ProtobufSchema from a programmatic definition hash
+/** Builds a protobuf schema definition entirely from Qore data structures,
+    without requiring \c .proto files.
+
+    @param schema_def a hash with the following keys:
+    - \c syntax (optional string, default \c "proto3"): the protobuf syntax version
+    - \c package (optional string): the package name for the schema
+    - \c messages (hash): a hash mapping message names to message definitions:
+      - \c fields (list of hashes): each field hash must contain:
+        - \c name (string, required): the field name
+        - \c type (string, required): the protobuf type (e.g., \c "string", \c "int32", \c "double",
+          \c "float", \c "int64", \c "uint64", \c "bool", \c "bytes", or a message type name)
+        - \c number (int, required): the field number
+        - \c label (optional string): \c "optional" (default), \c "repeated", or \c "required"
+        - \c options (optional hash): field options, e.g., \c {"packed": True}
+      - \c enums (optional hash): nested enum definitions, each mapping enum names to
+        \c {"values": {"NAME": number, ...}}
+      - \c nested_messages (optional hash): nested message definitions (same structure)
+    - \c enums (optional hash): top-level enum definitions
+
+    @throw PROTOBUF-SCHEMA-ERROR if the definition is invalid
+
+    @note The programmatic constructor supports messages, scalar fields, repeated fields,
+    nested messages, enums, and packed options. \c oneof and \c map fields are not yet
+    supported — use the string-based constructor for schemas that require those features.
+
+    @note For fields that reference a message type, set \c type to the message name
+    (e.g., \c "Inner"). For fields that reference an enum, set \c type to the enum name
+    — the protobuf descriptor builder will resolve the type automatically.
+
+    @par Example:
+    @code{.py}
+ProtobufSchema schema({
+    "syntax": "proto3",
+    "package": "example",
+    "messages": {
+        "Person": {
+            "fields": (
+                {"name": "name", "type": "string", "number": 1},
+                {"name": "age", "type": "int32", "number": 2},
+                {"name": "emails", "type": "string", "number": 3, "label": "repeated"},
+            ),
+        },
+    },
+});
+    @endcode
+
+    @since %protobuf 1.0
+*/
+ProtobufSchema::constructor(hash<auto> schema_def) {
+    self->setPrivate(CID_PROTOBUFSCHEMA,
+        new QoreProtobufSchema(schema_def, xsink));
+}
+
+//! Returns a list of service definitions from the schema
+/** @return a list of @ref ProtobufServiceInfo hashdecls
+
+    @since %protobuf 1.0
+*/
+list<hash<ProtobufServiceInfo>> ProtobufSchema::services() {
+    return schema->getServices(xsink);
+}
+
+//! Returns a list of top-level message type names
+/** @return a list of fully-qualified message type names
+
+    @since %protobuf 1.0
+*/
+list<string> ProtobufSchema::messageTypes() {
+    return schema->getMessageTypes(xsink);
+}
+
+//! Returns a default (zero-valued) message as a Qore hash
+/** @param type the fully-qualified message type name
+    @return a hash with all fields set to their default values
+
+    @throw PROTOBUF-TYPE-ERROR if the message type is not found
+
+    @since %protobuf 1.0
+*/
+hash<auto> ProtobufSchema::defaultMessage(string type) {
+    return schema->getDefaultMessage(type->c_str(), xsink);
+}
+
+//! Encodes a Qore hash as a protobuf binary message
+/** @param type the fully-qualified message type name
+    @param data the hash to encode
+
+    @return the protobuf-encoded binary data
+
+    @throw PROTOBUF-TYPE-ERROR if the message type is not found
+    @throw PROTOBUF-FIELD-ERROR if a hash key doesn't match a field
+    @throw PROTOBUF-ENCODE-ERROR if serialization fails
+
+    @since %protobuf 1.0
+*/
+binary ProtobufSchema::encode(string type, hash<auto> data) {
+    return schema->encode(type->c_str(), data, xsink);
+}
+
+//! Decodes protobuf binary data to a Qore hash
+/** @param type the fully-qualified message type name
+    @param data the protobuf-encoded binary data
+
+    @return the decoded message as a hash
+
+    @throw PROTOBUF-TYPE-ERROR if the message type is not found
+    @throw PROTOBUF-DECODE-ERROR if parsing fails
+
+    @since %protobuf 1.0
+*/
+hash<auto> ProtobufSchema::decode(string type, binary data) {
+    return schema->decode(type->c_str(), data, xsink);
+}
+
+//! Converts a Qore hash to JSON representation via protobuf
+/** @param type the fully-qualified message type name
+    @param data the hash to convert
+
+    @return the JSON string representation
+
+    @throw PROTOBUF-TYPE-ERROR if the message type is not found
+    @throw PROTOBUF-JSON-ERROR if JSON conversion fails
+
+    @since %protobuf 1.0
+*/
+string ProtobufSchema::toJson(string type, hash<auto> data) {
+    return schema->toJson(type->c_str(), data, xsink);
+}
+
+//! Parses a JSON string to a Qore hash via protobuf
+/** @param type the fully-qualified message type name
+    @param json the JSON string to parse
+
+    @return the parsed message as a hash
+
+    @throw PROTOBUF-TYPE-ERROR if the message type is not found
+    @throw PROTOBUF-JSON-ERROR if JSON parsing fails
+
+    @since %protobuf 1.0
+*/
+hash<auto> ProtobufSchema::fromJson(string type, string json) {
+    return schema->fromJson(type->c_str(), *json, xsink);
+}
+
+//! Returns the schema (field-level metadata) for a protobuf message type
+/** @param type the fully-qualified or short message type name
+    @return a hash describing the message fields
+
+    @throw PROTOBUF-TYPE-ERROR if the message type is not found
+
+    @since %protobuf 1.0
+*/
+hash<auto> ProtobufSchema::messageSchema(string type) {
+    return schema->getMessageSchema(type->c_str(), xsink);
+}
+
+//! Returns enum value names and numbers for a protobuf enum type
+/** @param enum_type the fully-qualified or short enum type name
+    @return a hash mapping enum value names to their integer numbers
+
+    @throw PROTOBUF-TYPE-ERROR if the enum type is not found
+
+    @since %protobuf 1.0
+*/
+hash<string, int> ProtobufSchema::enumValues(string enum_type) {
+    return schema->getEnumValues(enum_type->c_str(), xsink);
+}
+
+//! Serializes all file descriptors to a list of binary data
+/** @return a list of binary data, each containing one serialized \c FileDescriptorProto
+
+    @throw PROTOBUF-SCHEMA-ERROR if serialization fails
+
+    @since %protobuf 1.0
+*/
+list<binary> ProtobufSchema::serializeFileDescriptors() {
+    return schema->serializeFileDescriptors(xsink);
+}
+
+//! Serializes the file descriptor containing a given symbol and its transitive dependencies
+/** @param symbol the fully-qualified symbol name
+
+    @return a list of binary data, each containing one serialized \c FileDescriptorProto
+
+    @throw PROTOBUF-SYMBOL-NOT-FOUND if the symbol is not found in the schema
+
+    @since %protobuf 1.0
+*/
+list<binary> ProtobufSchema::serializeFileDescriptorForSymbol(string symbol) {
+    return schema->serializeFileDescriptorForSymbol(symbol->c_str(), xsink);
+}
+
+//! Serializes the file descriptor with the given filename and its transitive dependencies
+/** @param filename the proto file name
+
+    @return a list of binary data, each containing one serialized \c FileDescriptorProto
+
+    @throw PROTOBUF-FILE-NOT-FOUND if the file is not found in the schema
+
+    @since %protobuf 1.0
+*/
+list<binary> ProtobufSchema::serializeFileDescriptorByName(string filename) {
+    return schema->serializeFileDescriptorByName(filename->c_str(), xsink);
+}
