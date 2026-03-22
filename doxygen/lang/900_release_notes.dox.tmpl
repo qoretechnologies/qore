@@ -216,12 +216,12 @@ cargo install tree-sitter-cli@0.26.5
     - <b>Alpine:</b> \c onnxruntime-dev
     - <b>macOS (Homebrew):</b> \c onnxruntime
 
-    @par New Optional Build Dependency: libprotobuf
+    @par New Required Build Dependency: libprotobuf
     @parblock
 
-    Optional <a href="https://protobuf.dev/">libprotobuf</a> support enables the \c protobuf
-    built-in module for dynamic Protocol Buffer schema loading, encoding, and decoding.
-    Without libprotobuf, all other Qore functionality is unaffected.
+    <a href="https://protobuf.dev/">libprotobuf</a> is now a required build dependency.
+    It provides the \c protobuf built-in module for dynamic Protocol Buffer schema loading,
+    encoding, and decoding. The build will fail if libprotobuf is not found.
 
     Install the protobuf development packages:
     - <b>RHEL/Fedora:</b> \c protobuf-devel
@@ -811,7 +811,7 @@ cargo install tree-sitter-cli@0.26.5
       - new module providing a filesystem-backed ML model registry for versioning,
         tagging, comparison, and deployment management of trained models
       - multi-tenant support with optional \c tenant_id for tenant-isolated model storage
-      - @ref protobufintro "protobuf" module (optional — requires libprotobuf)
+      - @ref protobufintro "protobuf" module
       - dynamic Protocol Buffer schema loading from files, strings, serialized descriptors,
         or programmatic hash definitions
       - encode/decode Qore hashes to/from protobuf binary format, JSON conversion,
