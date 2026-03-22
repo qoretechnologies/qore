@@ -291,7 +291,8 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
 AsyncIoControllerPriv::AsyncIoControllerPriv(bool autostop, ExceptionSink* xsink)
     : tid(0), autostop_flag(autostop), shutting_down(false), force_poll(false),
       io_waiting(false), io_exiting(false), ready_flag(false),
-      submit_seq(0), processed_seq(0), logger(nullptr), timer_callback(nullptr),
+      submit_seq(0), processed_seq(0), autostop_idle_since(0),
+      logger(nullptr), timer_callback(nullptr),
       loop(nullptr), notifier(nullptr) {
     loop = new QoreEventLoop(xsink);
     if (*xsink) {
@@ -1669,11 +1670,38 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
             // Check autostop (only if no deliveries pending — recheck after delivery)
             if (cache.empty() && dedicated_threads.empty() && timer_info_map.empty()
                     && autostop_flag && cmdq.empty() && deferred_deliveries.empty()) {
-                io_exiting = true;
-                if (io_waiting) {
-                    io_cond.broadcast();
+                // Skip grace period during shutdown — exit immediately
+                if (shutting_down) {
+                    io_exiting = true;
+                    if (io_waiting) {
+                        io_cond.broadcast();
+                    }
+                    do_autostop = true;
+                } else {
+                    int64 now_us = get_epoch_us();
+                    if (!autostop_idle_since) {
+                        // First time idle — start the grace period
+                        autostop_idle_since = now_us;
+                    } else if (now_us - autostop_idle_since >= AUTOSTOP_GRACE_US) {
+                        // Grace period expired — exit
+                        io_exiting = true;
+                        if (io_waiting) {
+                            io_cond.broadcast();
+                        }
+                        do_autostop = true;
+                    }
+                    // Else: still within grace period — keep polling
+                    if (!do_autostop) {
+                        // Ensure we wake up to re-check when the grace period expires
+                        int64 grace_deadline_us = autostop_idle_since + AUTOSTOP_GRACE_US;
+                        if (poll_deadline_us == 0 || grace_deadline_us < poll_deadline_us) {
+                            poll_deadline_us = grace_deadline_us;
+                        }
+                    }
                 }
-                do_autostop = true;
+            } else {
+                // Cache is non-empty — reset idle timer
+                autostop_idle_since = 0;
             }
         }
 
@@ -1709,11 +1737,34 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
             AutoLocker al(m);
             if (cache.empty() && dedicated_threads.empty() && timer_info_map.empty()
                     && autostop_flag && cmdq.empty()) {
-                io_exiting = true;
-                if (io_waiting) {
-                    io_cond.broadcast();
+                if (shutting_down) {
+                    io_exiting = true;
+                    if (io_waiting) {
+                        io_cond.broadcast();
+                    }
+                    do_autostop = true;
+                } else {
+                    int64 now_us = get_epoch_us();
+                    if (!autostop_idle_since) {
+                        autostop_idle_since = now_us;
+                    } else if (now_us - autostop_idle_since >= AUTOSTOP_GRACE_US) {
+                        io_exiting = true;
+                        if (io_waiting) {
+                            io_cond.broadcast();
+                        }
+                        do_autostop = true;
+                    }
+                    // Ensure we wake up to re-check when the grace period expires;
+                    // without this, epoll_wait(-1) would sleep indefinitely
+                    if (!do_autostop) {
+                        int64 grace_deadline_us = autostop_idle_since + AUTOSTOP_GRACE_US;
+                        if (poll_deadline_us == 0 || grace_deadline_us < poll_deadline_us) {
+                            poll_deadline_us = grace_deadline_us;
+                        }
+                    }
                 }
-                do_autostop = true;
+            } else {
+                autostop_idle_since = 0;
             }
         }
 
@@ -1947,6 +1998,7 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
         ready_flag = false;
         processed_seq = 0;
         submit_seq = 0;
+        autostop_idle_since = 0;
         processed_cond.broadcast();
         if (io_waiting) {
             io_cond.broadcast();
