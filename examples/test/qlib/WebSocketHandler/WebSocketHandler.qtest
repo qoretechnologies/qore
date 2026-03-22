@@ -300,6 +300,16 @@ class WebSocketHandlerTest inherits QUnit::Test {
         # Use a longer timeout to avoid flakiness on slow or heavily loaded CI environments.
         auto v = wsHandler.errs.get(5s);
         assertRegex("SOCKET-TIMEOUT", v);
+
+        # Close the client socket BEFORE the on_exit handlers run.
+        # on_exit handlers fire in LIFO order: setSendTimeout(original) runs
+        # first (restoring the 30s default), then stopListener() blocks until
+        # all connections close. If the client socket is still open when
+        # stopListener() runs, the server's sendClose() blocks for up to 30s
+        # (the restored timeout) because the client isn't reading. Closing
+        # the socket here triggers an immediate RST/EOF on the server side,
+        # so stopListener() returns promptly.
+        delete s;
     }
 
     webSocketHandlerTests() {

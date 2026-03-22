@@ -486,6 +486,12 @@ QoreValue SocketQuicClientPollOperation::getOutput() const {
         h->setKeyValue("body", body.release(), nullptr);
     }
 
+    // Flag whether response is complete.  Currently always true for client
+    // poll operations because takeCompletedStream() only returns streams
+    // after markStreamComplete() sets body_complete=true.  Kept as a
+    // dynamic value for forward compatibility with incremental delivery.
+    h->setKeyValue("end_stream", cached_stream->body_complete, nullptr);
+
     // Consume the cached stream so subsequent calls return NOTHING
     cached_stream.reset();
 
@@ -970,6 +976,17 @@ int64_t SocketQuicClientPollOperation::submitRequest(
         return -1;
     }
     return quic_session->submitRequest(method, path, headers, body, body_len, xsink);
+}
+
+int64_t SocketQuicClientPollOperation::submitRequestStreaming(
+    const char* method, const char* path,
+    const strcase_str_map_t& headers,
+    ExceptionSink* xsink) {
+    if (!quic_session) {
+        xsink->raiseException("QUIC-ERROR", "QUIC session not initialized");
+        return -1;
+    }
+    return quic_session->submitRequestStreaming(method, path, headers, xsink);
 }
 
 int SocketQuicClientPollOperation::migrateConnection(ExceptionSink* xsink) {

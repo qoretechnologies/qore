@@ -65,6 +65,18 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
         #! QUIC session ID (set when connection becomes ready)
         int session_id = 0;
 
+        #! Responses that arrived before callback registration (race between
+        #! submitRequest() phases 2 and 3).  Key: stream_id string, Value: list
+        #! of response hashes.  Accessed only under stream_lock.
+        hash<string, list<hash<auto>>> pending_responses();
+
+        #! Stream IDs currently between Phase 2 (QUIC submit, outside
+        #! stream_lock) and Phase 3 (callback registration, under stream_lock).
+        #! handleReading() only buffers responses for these specific stream IDs;
+        #! responses for other unknown streams are discarded as before.
+        #! Accessed only under stream_lock.
+        hash<string, bool> pending_stream_ids();
+
         #! True when a GOAWAY has been received from the server
         bool goaway_received = False;
 
@@ -224,6 +236,8 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
         @param callback callback to invoke when response is ready
         @param ctx optional context to pass to callback
         @param max_streams maximum concurrent streams allowed on this connection
+        @param streaming if True, submit without END_STREAM (for bidirectional streaming);
+        the caller sends body data incrementally via sendStreamData()
 
         @return the stream ID assigned to this request
 
@@ -231,7 +245,8 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
         @throw HTTP3-CAPACITY-ERROR if the connection is at capacity
     */
     int submitRequest(string method, string path, *hash<auto> headers, *data body,
-            HttpResponseCallback callback, *hash<auto> ctx, int max_streams) {
+            HttpResponseCallback callback, *hash<auto> ctx, int max_streams,
+            bool streaming = False) {
         string current_state = state;
         if (current_state != STATE_READING && current_state != STATE_WAIT_READ) {
             throw "HTTP3-STATE-ERROR", sprintf("cannot submit request in state: %y", current_state);
@@ -270,11 +285,16 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
         # while calling submitQuicRequest() would therefore create a lock-order
         # inversion and risk deadlock.  submitQuicRequest() is intentionally
         # called outside stream_lock.
+        #
         int stream_id;
         int retries = 0;
         while (True) {
             try {
-                stream_id = sock.submitQuicRequest(method, path, req_headers, body);
+                if (streaming) {
+                    stream_id = sock.submitQuicRequestStreaming(method, path, req_headers);
+                } else {
+                    stream_id = sock.submitQuicRequest(method, path, req_headers, body);
+                }
                 break;
             } catch (hash<ExceptionInfo> ex) {
                 if (ex.err == "QUIC-ERROR" && ex.desc =~ /STREAM_ID_BLOCKED/
@@ -342,12 +362,26 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
             }
         }
 
-        # Phase 3: register callback under lock; re-check state in case the
-        # connection died between the submit and this registration
-        bool need_cancel = False;
-        string post_state;
+        # Mark this stream_id as awaiting registration so handleReading()
+        # buffers responses for it instead of discarding them.  This is
+        # safe to do outside stream_lock because the I/O thread can only
+        # see this stream_id AFTER the submit above returned.
         {
             AutoLock al(stream_lock);
+            pending_stream_ids{string(stream_id)} = True;
+        }
+
+        # Phase 3: register callback under lock; re-check state in case the
+        # connection died between the submit and this registration.
+        # Also check for responses that arrived during the race window
+        # between Phase 2 (submit outside lock) and this registration.
+        bool need_cancel = False;
+        string post_state;
+        *list<hash<auto>> buffered;
+        {
+            AutoLock al(stream_lock);
+            string sid = string(stream_id);
+            remove pending_stream_ids{sid};
             post_state = state;
             if (post_state != STATE_READING && post_state != STATE_WAIT_READ) {
                 # Stream was submitted to QUIC but connection is now dead;
@@ -355,13 +389,19 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
                 # to avoid lock-order inversion (stream_lock → sock->priv->m
                 # vs I/O thread's sock->priv->m → stream_lock)
                 need_cancel = True;
+                # Clean up any buffered responses for this stream
+                remove pending_responses{sid};
             } else {
-                string sid = string(stream_id);
                 stream_callbacks{sid} = callback;
                 if (ctx) {
                     stream_ctxs{sid} = ctx;
                 }
                 ++active_stream_count;
+                # Check for responses that arrived before registration
+                if (pending_responses.hasKey(sid)) {
+                    buffered = pending_responses{sid};
+                    remove pending_responses{sid};
+                }
             }
         }
         if (need_cancel) {
@@ -375,7 +415,47 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
                     post_state);
         }
 
+        # Deliver any buffered responses outside the lock
+        if (buffered) {
+            string sid = string(stream_id);
+            foreach hash<auto> resp in (buffered) {
+                try {
+                    callback(resp + {"ctx": ctx}, NOTHING);
+                } catch (hash<ExceptionInfo> ex) {
+                    log(LoggerLevel::ERROR, "buffered callback exception: %s: %s",
+                        ex.err, ex.desc);
+                }
+                if (resp.end_stream.toBool()) {
+                    AutoLock al(stream_lock);
+                    remove stream_callbacks{sid};
+                    remove stream_ctxs{sid};
+                    --active_stream_count;
+                }
+            }
+        }
+
         return stream_id;
+    }
+
+    #! Sends data on a streaming HTTP/3 request
+    /** @param stream_id the stream ID to send data on
+        @param data the data to send (can be NOTHING to send END_STREAM only)
+        @param end_stream if True, signals end of stream
+
+        @return 0 on success, 1 if buffer full (backpressure), -1 on error
+
+        @throw HTTP3-STATE-ERROR if not in ready state
+    */
+    int sendStreamData(int stream_id, *data data, bool end_stream = False) {
+        string current_state = state;
+        if (current_state != STATE_READING && current_state != STATE_WAIT_READ) {
+            throw "HTTP3-STATE-ERROR", sprintf("cannot send data in state: %y", current_state);
+        }
+
+        log(LoggerLevel::DEBUG, "sending %d bytes on stream %d (end_stream=%y)",
+            data ? data.size() : 0, stream_id, end_stream);
+
+        return sock.sendQuicClientStreamData(stream_id, data, end_stream);
     }
 
     #! Cancels a pending request
@@ -384,6 +464,8 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
         *HttpResponseCallback cb;
         {
             AutoLock al(stream_lock);
+            # Clean up any buffered responses for this stream
+            remove pending_responses{sid};
             if (!stream_callbacks.hasKey(sid)) {
                 log(LoggerLevel::DEBUG, "cancel ignored: stream %d not found (already completed)", stream_id);
                 return;
@@ -471,9 +553,12 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
             try { current_op.abort(); } catch () {}
         }
         notifyPendingStreams({"err": "HTTP3-ABORT", "desc": "connection aborted"});
-        # Wake any threads blocked in STREAM_ID_BLOCKED retry
+        # Wake any threads blocked in STREAM_ID_BLOCKED retry and
+        # clean up any buffered responses
         {
             AutoLock al(stream_lock);
+            remove pending_responses;
+            remove pending_stream_ids;
             stream_capacity_cond.broadcast();
         }
         try { sock.close(); } catch () {}
@@ -562,6 +647,7 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
 
                 int stream_id = output.stream_id;
                 string sid = string(stream_id);
+                bool is_end = output.end_stream.toBool();
                 *HttpResponseCallback cb;
                 *hash<auto> stream_ctx;
                 {
@@ -570,22 +656,34 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
                     stream_ctx = stream_ctxs{sid};
                     if (cb) {
                         callback_dispatched = True;
+                    } else if (pending_stream_ids{sid}) {
+                        # Buffer response — this specific stream_id is between
+                        # Phase 2 (QUIC submit) and Phase 3 (callback registration)
+                        if (!pending_responses.hasKey(sid)) {
+                            pending_responses{sid} = ();
+                        }
+                        push pending_responses{sid}, (output + {"protocol": "h3"});
+                    } else {
+                        log(LoggerLevel::DEBUG,
+                            "discarding response for completed/cancelled stream %d",
+                            stream_id);
                     }
                 }
                 if (cb) {
                     try {
-                        cb(output + {"ctx": stream_ctx, "end_stream": True, "protocol": "h3"}, NOTHING);
+                        cb(output + {"ctx": stream_ctx, "protocol": "h3"}, NOTHING);
                     } catch (hash<ExceptionInfo> ex) {
                         log(LoggerLevel::ERROR, "stream callback exception: %s: %s",
                             ex.err, ex.desc);
                     }
-                } else {
-                    log(LoggerLevel::DEBUG, "discarding response for cancelled stream %d",
-                        stream_id);
                 }
                 # Remove stream AFTER callback completes so the stream handle's
-                # state is already updated before the stream becomes unavailable
-                if (cb) {
+                # state is already updated before the stream becomes unavailable.
+                # For streaming responses (end_stream=false), keep the callback
+                # registered so that subsequent body chunks can be delivered via
+                # the stream's registered callback (into the Channel) and the
+                # stream remains active for further data.
+                if (is_end && cb) {
                     AutoLock al(stream_lock);
                     remove stream_callbacks{sid};
                     remove stream_ctxs{sid};

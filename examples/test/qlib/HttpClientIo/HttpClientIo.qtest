@@ -323,6 +323,11 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         # Bidi streaming: echo test with BidiEchoHandler
         addTestCase("H2 bidi echo streaming", \testH2BidiEchoStreaming());
 
+        # HTTP/3 streaming tests
+        addTestCase("H3 streaming basic", \testH3StreamingBasic());
+        addTestCase("H3 bidi streaming", \testH3BidiStreaming());
+        addTestCase("H3 streaming state errors", \testH3StreamingStateErrors());
+
         # HTTP/3 callback ordering (stream removal after callback)
         addTestCase("H3 callback ordering", \testH3CallbackOrdering());
 
@@ -1170,6 +1175,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             "max_connections_per_host": 1,
             "logger": mLogger,
         });
+        on_exit mgr.closeAll();
 
         list<HttpClientIo::HttpClientStreamHandle> streams = ();
         for (int i = 0; i < 3; i++) {
@@ -1200,6 +1206,24 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
         int remaining = counter.waitForZero(30s);
         if (remaining > 0) {
+            # Dump debug info for diagnosis
+            {
+                AutoLock al(resp_lock);
+                stderr.printf("H3 CONCURRENT FAIL: %d remaining, %d responses collected\n",
+                    remaining, responses.size());
+                foreach hash<auto> resp in (responses) {
+                    if (resp.hasKey("error")) {
+                        stderr.printf("  response error: %s: %s\n", resp.error, resp.desc);
+                    } else {
+                        stderr.printf("  response ok: status=%d\n", resp.status_code);
+                    }
+                }
+            }
+            # Dump connection info
+            try {
+                hash<auto> info = mgr.getConnectionInfo();
+                stderr.printf("  connection info: %y\n", info);
+            } catch () {}
             fail(sprintf("H3 concurrent: %d requests did not complete", remaining));
         }
 
@@ -1934,6 +1958,141 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         binary all_sent = binary();
         map all_sent += $1, sent_chunks;
         assertEq(all_sent, all_received, "echoed data should match sent data");
+    }
+
+    testH3StreamingBasic() {
+        if (!mQuicUrl) {
+            testSkip("QUIC not available");
+        }
+
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "protocol": "h3",
+            "connect_timeout": 10s,
+            "request_timeout": 30s,
+            "logger": mLogger,
+        });
+        on_exit mgr.closeAll();
+
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(mQuicUrl);
+        assertTrue(stream instanceof HttpClientIo::Http3ClientStreamHandle,
+            "H3 stream should be Http3ClientStreamHandle");
+
+        HttpClientIo::Http3ClientStreamHandle h3stream =
+            cast<HttpClientIo::Http3ClientStreamHandle>(stream);
+
+        int stream_id = h3stream.startStreaming("GET", "/streaming",
+            {"accept": "text/plain"});
+        assertTrue(stream_id >= 0, "streaming stream_id should be >= 0");
+
+        # Read all body data — same pattern as H2 streaming tests
+        # readData() returns: binary (body), hash with end_stream (done), NOTHING (timeout)
+        binary received = binary();
+        date end_time = now_us() + 30s;
+        while (now_us() < end_time) {
+            auto data = h3stream.readData(5s);
+            if (!exists data) {
+                continue;  # timeout, retry
+            }
+            if (data.typeCode() == NT_HASH && data.end_stream) {
+                break;  # stream complete — same sentinel as H2
+            }
+            if (data.typeCode() == NT_HASH && data.error) {
+                fail(sprintf("streaming error: %y", data.error));
+                break;
+            }
+            if (data.typeCode() == NT_BINARY) {
+                received += data;
+            }
+        }
+
+        assertTrue(h3stream.isDone(), "stream should be done after reading all data");
+        assertEq("chunk1|chunk2|chunk3", received.toString(),
+            "should receive full streaming payload");
+    }
+
+    testH3BidiStreaming() {
+        if (!mQuicUrl) {
+            testSkip("QUIC not available");
+        }
+
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "protocol": "h3",
+            "connect_timeout": 10s,
+            "request_timeout": 30s,
+            "logger": mLogger,
+        });
+        on_exit mgr.closeAll();
+
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(mQuicUrl);
+        assertTrue(stream instanceof HttpClientIo::Http3ClientStreamHandle,
+            "H3 stream should be Http3ClientStreamHandle");
+
+        HttpClientIo::Http3ClientStreamHandle h3stream =
+            cast<HttpClientIo::Http3ClientStreamHandle>(stream);
+
+        # Start bidirectional streaming (HEADERS without END_STREAM)
+        int stream_id = h3stream.startStreaming("POST", "/echo",
+            {"content-type": "application/octet-stream"}, True);
+        assertTrue(stream_id >= 0, "bidi stream_id should be >= 0");
+
+        # Send body data incrementally
+        h3stream.sendData(binary("hello "));
+        h3stream.sendData(binary("world"));
+        h3stream.writesDone();  # close write side (END_STREAM)
+
+        # Read response — server echoes the body
+        binary received = binary();
+        date end_time = now_us() + 30s;
+        while (now_us() < end_time) {
+            auto data = h3stream.readData(5s);
+            if (!exists data) {
+                continue;  # timeout, retry
+            }
+            if (data.typeCode() == NT_HASH && data.end_stream) {
+                break;  # stream complete
+            }
+            if (data.typeCode() == NT_HASH && data.error) {
+                fail(sprintf("bidi streaming error: %y", data.error));
+                break;
+            }
+            if (data.typeCode() == NT_BINARY) {
+                received += data;
+            }
+        }
+
+        assertTrue(h3stream.isDone(), "bidi stream should be done after reading all data");
+        # EchoHandler responds with "method=POST path=/echo body_size=11 body=hello world"
+        string resp = received.toString();
+        assertTrue(resp =~ /body=hello world/, sprintf("echoed response should contain body: %y", resp));
+    }
+
+    testH3StreamingStateErrors() {
+        if (!mQuicUrl) {
+            testSkip("QUIC not available");
+        }
+
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "protocol": "h3",
+            "connect_timeout": 10s,
+            "request_timeout": 10s,
+            "logger": mLogger,
+        });
+        on_exit mgr.closeAll();
+
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(mQuicUrl);
+        HttpClientIo::Http3ClientStreamHandle h3stream =
+            cast<HttpClientIo::Http3ClientStreamHandle>(stream);
+
+        # readData before startStreaming should throw
+        assertThrows("HTTPCLIENT-STATE-ERROR", sub() { h3stream.readData(1s); });
+        # sendData before startStreaming should throw
+        assertThrows("HTTPCLIENT-STATE-ERROR", sub() { h3stream.sendData(binary("test")); });
     }
 
     testH3CallbackOrdering() {

@@ -315,6 +315,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         addTestCase("async mode client cert capture", \asyncModeClientCertTest());
         addTestCase("async mode WebSocket 401 then success", \asyncModeWebSocket401ThenSuccessTest());
         addTestCase("async mode persistent handler", \asyncModePersistentHandlerTest());
+        addTestCase("async mode end-persistent reuse", \asyncModeEndPersistentReuseTest());
         addTestCase("async mode persistent to non-persistent", \asyncModePersistentToNonPersistentTest());
         addTestCase("async mode persistent connection close", \asyncModePersistentConnectionCloseTest());
         addTestCase("async mode persistent error", \asyncModePersistentErrorTest());
@@ -1395,6 +1396,82 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         hash<auto> resp4 = client.send("end", "POST", "/persistent/end");
         assertEq(200, resp4.status_code);
         assertEq("ended", resp4.body);
+    }
+
+    asyncModeEndPersistentReuseTest() {
+        # Test that an HTTP/1.x connection is reusable after sending
+        # Qorus-Connection: End-Persistent.  This reproduces the Qorus
+        # DataStream pattern: a persistent streaming session ends with
+        # End-Persistent, and a new streaming session starts immediately
+        # on the same keep-alive connection.  The client has setPersistent()
+        # active (as Qorus streaming does), which disables automatic
+        # reconnection — so the server MUST keep the connection alive.
+        Logger epLogger("end-persist-reuse", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            epLogger.addAppender(new StdoutAppender());
+        }
+        hash<HttpServerOptionInfo> ep_opts = <HttpServerOptionInfo>{
+            "logger": epLogger,
+            "debug": True,
+            "async_mode": True,
+        };
+        HttpServer epServer(ep_opts);
+        on_exit epServer.stop();
+
+        PersistentTestHandler handler();
+        epServer.setHandler("persistent", "/persistent", MimeTypeHtml, handler);
+        epServer.setDefaultHandler("persistent", handler);
+        int epPort = epServer.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        string epUrl = "http://localhost:" + epPort;
+
+        HTTPClient client({"url": epUrl, "timeout": 10s});
+        client.connect();
+        # Mark the client connection as persistent (disables auto-reconnect)
+        # — this is what Qorus StreamConfig does
+        client.setPersistent();
+        on_exit {
+            client.clearPersistent();
+            client.disconnect();
+        }
+
+        # 1. Start persistent mode on the server
+        hash<auto> resp1 = client.send("start", "POST", "/persistent/start");
+        assertEq(200, resp1.status_code, "start should return 200");
+        assertEq("started", resp1.body, "start body");
+
+        # 2. Continue in persistent mode
+        hash<auto> resp2 = client.send("continue", "POST", "/persistent/continue");
+        assertEq(200, resp2.status_code, "continue should return 200");
+        assertEq("continued", resp2.body, "continue body");
+
+        # 3. Send Qorus-Connection: End-Persistent header to end the
+        #    persistent session (this is how Qorus DataStream clients signal
+        #    the end of a streaming session)
+        hash<auto> resp3 = client.send(NOTHING, "POST", "/persistent/continue",
+            {"Qorus-Connection": "End-Persistent"});
+        assertEq(200, resp3.status_code, "end-persistent should return 200");
+
+        # 4. The connection should still be alive — make a new request on the
+        #    same persistent connection.  Before the fix, the server closed
+        #    the connection after End-Persistent, causing PERSISTENCE-ERROR
+        #    because the client has setPersistent() active.
+        hash<auto> resp4 = client.send("normal", "POST", "/persistent/normal");
+        assertEq(200, resp4.status_code, "post-end-persistent request should return 200");
+        assertEq("normal", resp4.body, "post-end-persistent body");
+
+        # 5. We can even start a new persistent session on the same connection
+        hash<auto> resp5 = client.send("start", "POST", "/persistent/start");
+        assertEq(200, resp5.status_code, "second persist-start should return 200");
+        assertEq("started", resp5.body, "second persist-start body");
+
+        # 6. End cleanly
+        hash<auto> resp6 = client.send("end", "POST", "/persistent/end");
+        assertEq(200, resp6.status_code, "final persist-end should return 200");
+        assertEq("ended", resp6.body, "final persist-end body");
+
+        if (m_options.verbose > 1) {
+            printf("end-persistent reuse: connection survived End-Persistent with setPersistent() OK\n");
+        }
     }
 
     asyncModePersistentToNonPersistentTest() {
