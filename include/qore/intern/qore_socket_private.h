@@ -1189,7 +1189,8 @@ struct qore_socket_private {
     // issue #3879: must add Content-Length in responses if not present, even if there is no message body
     /** see https://www.w3.org/Protocols/rfc2616/rfc2616-sec9.html
     */
-    DLLLOCAL static void do_headers(QoreString& hdr, const QoreHashNode* headers, size_t size, bool addsize = true) {
+    DLLLOCAL static void do_headers(QoreString& hdr, const QoreHashNode* headers, size_t size, bool addsize = true,
+            bool add_chunked = false) {
         // RFC-2616 4.4 (http://tools.ietf.org/html/rfc2616#section-4.4)
         // add Content-Length: 0 to headers for responses without a body where there is no transfer-encoding
         if (headers) {
@@ -1198,9 +1199,10 @@ struct qore_socket_private {
             while (hi.next()) {
                 const QoreValue v = hi.get();
                 const char* key = hi.getKey();
-                if (!size && addsize) {
+                if (!size && (addsize || add_chunked)) {
                     if (!strcasecmp(key, "transfer-encoding")) {
                         addsize = false;
+                        add_chunked = false;
                     } else if (!strcasecmp(key, "content-type")
                         && (v.getType() == NT_STRING)
                         && (*v.get<const QoreStringNode>() == "text/event-stream")) {
@@ -1223,6 +1225,10 @@ struct qore_socket_private {
         if (size || addsize) {
             hdr.sprintf("Content-Length: %zu\r\n", size);
             //printd(5, "qore_socket_private::do_headers() added Content-Length: %zu\n", size);
+        }
+        // add Transfer-Encoding: chunked for send_callback/input_stream responses (HTTP/1.x only)
+        if (add_chunked) {
+            hdr.concat("Transfer-Encoding: chunked\r\n");
         }
 
         hdr.concat("\r\n");
@@ -4057,8 +4063,10 @@ struct qore_socket_private {
 
         // add headers
         hdr.concat("\r\n");
-        // insert headers
-        do_headers(hdr, headers, size && data ? size : 0, addsize);
+        // insert headers; suppress Content-Length when using send_callback
+        // (the body will be sent as chunked transfer encoding via HTTP/1.x)
+        do_headers(hdr, headers, size && data ? size : 0,
+            send_callback ? false : addsize, send_callback ? true : false);
 
         //printd(5, "qore_socket_private::sendHttpMessage() hdr: %s\n", hdr.c_str());
 
