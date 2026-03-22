@@ -100,8 +100,10 @@ public:
     //! Returns the type name string for a protobuf field type
     DLLLOCAL static const char* fieldTypeName(google::protobuf::FieldDescriptor::Type type);
 
+#ifndef QORE_PROTOBUF_V22_PLUS
     //! Returns the label string for a protobuf field label
     DLLLOCAL static const char* fieldLabelName(google::protobuf::FieldDescriptor::Label label);
+#endif
 
 private:
     //! Find a message descriptor by fully-qualified name

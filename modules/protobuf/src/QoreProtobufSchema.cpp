@@ -696,6 +696,7 @@ const char* QoreProtobufSchema::fieldTypeName(google::protobuf::FieldDescriptor:
     }
 }
 
+#ifndef QORE_PROTOBUF_V22_PLUS
 const char* QoreProtobufSchema::fieldLabelName(google::protobuf::FieldDescriptor::Label label) {
     using FD = google::protobuf::FieldDescriptor;
     switch (label) {
@@ -705,6 +706,7 @@ const char* QoreProtobufSchema::fieldLabelName(google::protobuf::FieldDescriptor
         default:                 return "unknown";
     }
 }
+#endif
 
 QoreHashNode* QoreProtobufSchema::buildFieldInfo(const google::protobuf::FieldDescriptor* field,
         ExceptionSink* xsink) const {
@@ -733,7 +735,13 @@ QoreHashNode* QoreProtobufSchema::buildFieldInfo(const google::protobuf::FieldDe
     } else {
         info->setKeyValue("type", new QoreStringNode(fieldTypeName(field->type())), xsink);
         info->setKeyValue("number", (int64)field->number(), xsink);
+#ifdef QORE_PROTOBUF_V22_PLUS
+        const char* label_str = field->is_repeated() ? "repeated"
+            : field->is_required() ? "required" : "optional";
+        info->setKeyValue("label", new QoreStringNode(label_str), xsink);
+#else
         info->setKeyValue("label", new QoreStringNode(fieldLabelName(field->label())), xsink);
+#endif
 
         if (field->type() == google::protobuf::FieldDescriptor::TYPE_MESSAGE) {
             info->setKeyValue("message_type",
