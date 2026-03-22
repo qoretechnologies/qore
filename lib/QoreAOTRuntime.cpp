@@ -2458,10 +2458,20 @@ static QoreAOTContext* buildContextFromSlotMap(
     std::vector<DeferredExprTree> deferred_expr_trees;
     bool closure_ir_missing = false;
     for (int i = 0; i < num_exprs; ++i) {
+        const uint8_t* before_expr = ptr;  // Track ptr position for validation
         uint8_t kind_byte = QoreAOTBinaryReader::readU8(ptr);
         AOTExprKind kind = static_cast<AOTExprKind>(kind_byte);
         const char* ref1 = nullptr;
         const char* ref2 = nullptr;
+
+        // Validate expression kind is known (Phase 1 validation)
+        bool kind_is_valid = (kind_byte >= 1 && kind_byte <= 33) || kind_byte == 0xFE || kind_byte == 0xFF;
+        if (!kind_is_valid) {
+            printd(0, "AOT buildCtx: '%s' expr slot %d: invalid kind byte 0x%02x\n",
+                name, i, (int)kind_byte);
+            has_unsupported = true;
+            break;
+        }
 
         switch (kind) {
             case AOTExprKind::NEW_OBJECT:
@@ -3045,7 +3055,18 @@ static QoreAOTContext* buildContextFromSlotMap(
                 name, i, (int)kind, ref1 ? ref1 : "", ref2 ? ref2 : "");
             has_unsupported = true;
         }
+
+        // Phase 1 validation: detect pointer overrun (indicates serializer bug)
+        if (ptr > end) {
+            printd(0, "AOT buildCtx: '%s' expr slot %d overran section boundary by %d bytes\n",
+                name, i, (int)(ptr - end));
+            has_unsupported = true;
+            break;
+        }
     }
+
+    // Phase 1 validation: ensure we didn't read past the section boundary
+    assert(ptr <= end && "buildContextFromSlotMap overran section boundary");
 
     // Process deferred EXPR_TREE blobs now that all CLOSURE_CREATE slots are resolved
     for (auto& dt : deferred_expr_trees) {
