@@ -3004,6 +3004,33 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
         assert(signature.argvid);
         signature.argvid->instantiate(argv ? argv->refSelf() : nullptr);
 
+        // Instantiate closure-use parameters on cvstack with actual argument values.
+        // The IR interpreter uses its own slot cache for internal param access, but
+        // closures need params on cvstack for ThreadSafeLocalVarRuntimeEnvironment to
+        // capture them via thread_find_closure_var().
+        unsigned num_closure_use_params = 0;
+        for (unsigned i = 0; i < signature.numParams(); ++i) {
+            LocalVar* lv = signature.lv[i];
+            if (lv && lv->closureUse()) {
+                QoreValue pval = argv && *argv ? (*argv)->retrieveEntry(i) : QoreValue();
+                lv->instantiate(pval.refSelf());  // closureUse() routes to cvstack
+                ++num_closure_use_params;
+            }
+        }
+
+        // Helper lambda to uninstantiate closure-use parameters in reverse order
+        bool cleaned_up_closure_params = false;
+        auto uninstantiate_closure_use_params = [&]() {
+            if (!num_closure_use_params || cleaned_up_closure_params) return;
+            for (int i = (int)signature.numParams() - 1; i >= 0; --i) {
+                LocalVar* lv = signature.lv[i];
+                if (lv && lv->closureUse()) {
+                    lv->uninstantiate(xsink);
+                }
+            }
+            cleaned_up_closure_params = true;
+        };
+
         QoreValue val{};
         {
             ArgvContextHelper argv_helper(argv.release(), xsink);
@@ -3060,6 +3087,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                             cached_ir->ast_visible_body_locals[i]->uninstantiate(xsink);
                         }
                     }
+                    uninstantiate_closure_use_params();
                     fell_back_to_ast = true;
                     printd(2, "UserVariantBase::evalTiered() IR execution failed for '%s', "
                         "falling back to AST\n", name);
@@ -3089,6 +3117,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                             cached_ir->ast_visible_body_locals[i]->uninstantiate(xsink);
                         }
                     }
+                    uninstantiate_closure_use_params();
                 }
 
                 if (gate) {
@@ -3096,6 +3125,9 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 }
             }
         }
+
+        // Clean up closure-use params if gate->enter() failed (we skipped the block)
+        uninstantiate_closure_use_params();
 
         signature.argvid->uninstantiate(xsink);
         if (self && signature.selfid) {

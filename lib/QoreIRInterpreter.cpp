@@ -766,7 +766,7 @@ static void ensureLocalInstantiated(LocalVar* var, std::unordered_set<const Loca
         // capture them. instantiate() routes to cvstack when closureUse()=true, no lvstack
         // double-push. For pre-instantiated non-closure vars: skip (already on lvstack).
         // For locally-uninstantiated closure vars: need new CVV for next loop iteration.
-        bool skip_instantiation = is_pre && !var->closureUse() && !locally_uninst;
+        bool skip_instantiation = is_pre && !(locally_uninst && var->closureUse());
 
         if (!skip_instantiation) {
             var->instantiate(QoreParseOptions());
@@ -782,12 +782,9 @@ static void cleanupInstantiatedLocals(const std::unordered_set<const LocalVar*>&
         const std::unordered_set<const LocalVar*>* pre_instantiated = nullptr) {
     for (auto* var : locals) {
         if (var) {
-            // Skip uninstantiation for locals managed by the caller, except closure-use vars
-            // which were instantiated on cvstack and must be uninstantiated
+            // Skip uninstantiation for locals managed by the caller
             if (pre_instantiated && pre_instantiated->find(var) != pre_instantiated->end()) {
-                if (!var->closureUse()) {
-                    continue;   // Only skip non-closure-use pre-instantiated vars
-                }
+                continue;
             }
             var->uninstantiate(xsink);
         }
@@ -2001,19 +1998,6 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         if (dbg_rc || *xsink) {
             tlpd->dbgFunctionExit(statements, return_value, xsink);
             return false;  // local_cleanup RAII handles cleanup
-        }
-    }
-
-    // Pre-instantiate closure-use pre-instantiated locals on cvstack before executing any IR.
-    // This ensures they're available for thread_find_closure_var() when closures are created,
-    // even if they're never accessed in the IR code before the closure creation.
-    // These will be uninstantiated by the local_cleanup handler at function exit.
-    if (pre_instantiated) {
-        for (const LocalVar* lv : *pre_instantiated) {
-            if (lv && lv->closureUse()) {
-                const_cast<LocalVar*>(lv)->instantiate(QoreParseOptions());
-                instantiated_locals.insert(lv);
-            }
         }
     }
 
