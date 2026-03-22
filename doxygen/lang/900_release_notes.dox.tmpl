@@ -816,6 +816,12 @@ cargo install tree-sitter-cli@0.26.5
         or programmatic hash definitions
       - encode/decode Qore hashes to/from protobuf binary format, JSON conversion,
         schema introspection, and file descriptor serialization
+      - @ref qoreonnxexportintro "QoreOnnxExport" module
+      - exports trained ML models to ONNX format (8 algorithms: StandardScaler, MinMaxScaler,
+        Imputer, LinearRegression, LogisticRegression, PCA, KMeans, IsolationForest)
+      - enables interoperability with Python/TensorFlow/PyTorch via standard ONNX files
+      - new ML algorithm getter methods (17 methods) for accessing internal model state
+        (weights, coefficients, centroids, tree structures, etc.)
       - Model persistence: ml_serialize/ml_deserialize (in-memory), ml_save_model/ml_load_model
         (file-based .qml native format) for all 12 algorithms
       - Online learning (incremental updates) for KMeans, LinearRegression, GMM, and LogisticRegression
