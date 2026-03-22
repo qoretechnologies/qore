@@ -1962,7 +1962,9 @@ bool QoreAOT::compile(QoreProgram* pgm,
             fws.slot_ids = cif.slot_ids;
             func_slots.push_back(std::move(fws));
         }
-        serializeSlotMaps(writer, func_slots, &const_reverse_map);
+        if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error)) {
+            return false;
+        }
 
         // Serialize INIT_FUNCS section: maps init function names to their targets
         if (!compiled_init_funcs.empty()) {
@@ -3078,7 +3080,9 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
             fws.slot_ids = cif.slot_ids;
             func_slots.push_back(std::move(fws));
         }
-        serializeSlotMaps(writer, func_slots, &const_reverse_map);
+        if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error)) {
+            return false;
+        }
         if (!compiled_init_funcs.empty()) {
             serializeInitFuncs(writer, compiled_init_funcs);
         }
@@ -3473,7 +3477,9 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
                 fws.slot_ids = cif.slot_ids;
                 func_slots.push_back(std::move(fws));
             }
-            serializeSlotMaps(writer, func_slots, &const_reverse_map);
+            if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error)) {
+                return false;
+            }
             if (!compiled_init_funcs.empty()) {
                 serializeInitFuncs(writer, compiled_init_funcs);
             }

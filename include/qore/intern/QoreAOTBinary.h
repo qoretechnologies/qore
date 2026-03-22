@@ -888,8 +888,8 @@ struct AOTCompiledInitFunc {
     @param funcs vector of compiled function descriptors with slot identities
     @param const_reverse_map optional reverse map for constant node → FQN resolution
 */
-void serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompiledFuncWithSlots>& funcs,
-    const AOTConstantReverseMap* const_reverse_map = nullptr);
+bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompiledFuncWithSlots>& funcs,
+    const AOTConstantReverseMap* const_reverse_map, std::string& error);
 
 //! Serialize per-function source fallback into the FUNC_SOURCES binary section
 /** Functions with unsupported expression types need the full source text

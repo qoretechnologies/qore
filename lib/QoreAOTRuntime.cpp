@@ -2456,7 +2456,7 @@ static QoreAOTContext* buildContextFromSlotMap(
         uint32_t blob_size;
     };
     std::vector<DeferredExprTree> deferred_expr_trees;
-    bool has_closure_slots = false;
+    bool closure_ir_missing = false;
     for (int i = 0; i < num_exprs; ++i) {
         uint8_t kind_byte = QoreAOTBinaryReader::readU8(ptr);
         AOTExprKind kind = static_cast<AOTExprKind>(kind_byte);
@@ -2700,7 +2700,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                 uint8_t has_ir = QoreAOTBinaryReader::readU8(ptr);
                 if (!has_ir) {
                     // No IR — need source fallback
-                    has_closure_slots = true;
+                    closure_ir_missing = true;
                     continue;
                 }
 
@@ -2724,7 +2724,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                 if (closure_xsink.isException()) {
                     closure_xsink.clear();
                     ptr = ir_end_ptr;
-                    has_closure_slots = true;
+                    closure_ir_missing = true;
                     continue;
                 }
                 auto* ucf = new UserClosureFunction(nullptr, 0, 0, QoreValue(), nullptr);
@@ -2793,7 +2793,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                     printd(2, "AOT: closure IR deser failed for expr slot %d: %s\n",
                         i, ir_error.c_str());
                     delete ucf;
-                    has_closure_slots = true;
+                    closure_ir_missing = true;
                     continue;
                 }
 
@@ -3319,9 +3319,9 @@ static QoreAOTContext* buildContextFromSlotMap(
     }
 
     printd(2, "AOT v2: built context from slot map for '%s' "
-        "(locals=%d, globals=%d, exprs=%d, stmts=%d, regex_cases=%d, body_locals=%d, unsupported=%d, closures=%d)\n",
+        "(locals=%d, globals=%d, exprs=%d, stmts=%d, regex_cases=%d, body_locals=%d, unsupported=%d, closure_ir_missing=%d)\n",
         name, num_locals, num_globals, num_exprs, num_stmts, num_regex_cases, num_body_locals, has_unsupported,
-        has_closure_slots);
+        closure_ir_missing);
 
     // If any expression slots have unsupported types, skip AOT
     // registration for this function — it will fall through to JIT at runtime
@@ -3333,34 +3333,11 @@ static QoreAOTContext* buildContextFromSlotMap(
         return nullptr;
     }
 
-    // Fill closure expression slots from re-lowered source (hybrid approach).
-    // Most slots use the efficient serialized path; only closure slots need source re-lowering.
-    // Slot indices match because buildContextForVariant() re-lowers the same AST, which
-    // produces the same deterministic IR walk order and thus the same slot assignments.
-    if (has_closure_slots) {
-        if (uvb) {
-            QoreAOTContext* source_ctx = buildContextForVariant(uvb, name, pgm, aot_func);
-            if (source_ctx) {
-                for (int i = 0; i < num_exprs; ++i) {
-                    if (ctx->exprs[i] == 0 && source_ctx->exprs[i] != 0) {
-                        ctx->exprs[i] = source_ctx->exprs[i];
-                        source_ctx->exprs[i] = 0;  // Transfer ownership
-                    }
-                }
-                delete source_ctx;
-                printd(2, "AOT buildCtx: '%s' filled closure slots from source re-lowering\n", name);
-            } else {
-                printd(2, "AOT buildCtx: '%s' closure slots could not be filled (no source)\n", name);
-                delete ctx;
-                return nullptr;
-            }
-        } else {
-            // Toplevel or no variant — can't fill closure slots from slot map alone.
-            // Return nullptr to trigger fallback re-lowering path.
-            printd(2, "AOT buildCtx: '%s' has closure slots but no uvb — fallback to re-lowering\n", name);
-            delete ctx;
-            return nullptr;
-        }
+    // Closure IR errors are hard failures (Phase 2: no source fallback)
+    if (closure_ir_missing) {
+        printd(2, "AOT buildCtx: '%s' failed to register (closure IR missing/invalid, no fallback available)\n", name);
+        delete ctx;
+        return nullptr;
     }
 
     return ctx;

@@ -2200,8 +2200,8 @@ static bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& e
 
 } // anonymous namespace
 
-void serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompiledFuncWithSlots>& funcs,
-        const AOTConstantReverseMap* const_reverse_map) {
+bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompiledFuncWithSlots>& funcs,
+        const AOTConstantReverseMap* const_reverse_map, std::string& error) {
     uint32_t sec_idx = writer.beginSection(QoreAOTSectionType::SLOT_MAPS);
 
     // Number of function entries
@@ -2359,7 +2359,8 @@ void serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
                         uint32_t end_pos = writer.position();
                         writer.patchU32(size_pos, end_pos - size_pos - 4);
                     } else {
-                        writer.writeU8(0);  // no IR — fallback needed
+                        error = std::string("closure IR lowering failed in function '") + func.name + "'";
+                        return false;
                     }
                     delete owned_ir;
                     break;
@@ -2436,6 +2437,7 @@ void serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
     }
 
     writer.endSection(sec_idx);
+    return true;
 }
 
 // ---- Init Functions Section ----
