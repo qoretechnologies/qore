@@ -897,6 +897,10 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     // Extract slot identities for source-stripped mode
                     extractAOTSlotIdentities(*ir_func, slots, uvb, cf.slot_ids,
                         const_reverse_map);
+                    // Sync counts: ExprTreeSerializer may have grown expr_slots during extraction
+                    cf.num_exprs = static_cast<int>(cf.slot_ids.exprs.size());
+                    cf.num_locals = static_cast<int>(cf.slot_ids.locals.size());
+                    cf.num_globals = static_cast<int>(cf.slot_ids.globals.size());
                     // Extract handler IR from OnBlockExit instructions (moves ownership)
                     if (!slots.stmt_slots.empty()) {
                         cf.handler_irs = extractHandlerIRs(*ir_func, slots);
@@ -1030,6 +1034,10 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         // Extract slot identities for source-stripped mode
                         extractAOTSlotIdentities(*ir_func, slots, uvb, cf.slot_ids,
                             const_reverse_map);
+                        // Sync counts: ExprTreeSerializer may have grown expr_slots during extraction
+                        cf.num_exprs = static_cast<int>(cf.slot_ids.exprs.size());
+                        cf.num_locals = static_cast<int>(cf.slot_ids.locals.size());
+                        cf.num_globals = static_cast<int>(cf.slot_ids.globals.size());
                         // Extract handler IR from OnBlockExit instructions (moves ownership)
                         if (!slots.stmt_slots.empty()) {
                             cf.handler_irs = extractHandlerIRs(*ir_func, slots);
@@ -1124,6 +1132,10 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
             cif.num_regex_cases = static_cast<int>(slots.regex_case_slots.size());
             extractAOTSlotIdentities(*ir_func, slots, nullptr, cif.slot_ids,
                 const_reverse_map);
+            // Sync counts: ExprTreeSerializer may have grown expr_slots during extraction
+            cif.num_exprs = static_cast<int>(cif.slot_ids.exprs.size());
+            cif.num_locals = static_cast<int>(cif.slot_ids.locals.size());
+            cif.num_globals = static_cast<int>(cif.slot_ids.globals.size());
             cif.feature_flags = scanIRFeatureFlags(*ir_func);
             cif.target_type = target_type;
             cif.ns_path = container_path;
@@ -1840,6 +1852,10 @@ bool QoreAOT::compile(QoreProgram* pgm,
                     // Extract slot identities (no uvb for toplevel)
                     extractAOTSlotIdentities(*ir_func, slots, nullptr, cf.slot_ids,
                         &const_reverse_map);
+                    // Sync counts: ExprTreeSerializer may have grown expr_slots during extraction
+                    cf.num_exprs = static_cast<int>(cf.slot_ids.exprs.size());
+                    cf.num_locals = static_cast<int>(cf.slot_ids.locals.size());
+                    cf.num_globals = static_cast<int>(cf.slot_ids.globals.size());
                     // Scan IR function for required features
                     cf.feature_flags = scanIRFeatureFlags(*ir_func);
                     compiled_funcs.push_back(std::move(cf));
