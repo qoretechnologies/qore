@@ -860,6 +860,19 @@ static google::protobuf::FieldDescriptorProto::Label resolveFieldLabel(const cha
     return FDP::LABEL_OPTIONAL;
 }
 
+// Check if a type name matches a defined enum in the message or top-level schema
+static bool isEnumType(const QoreHashNode* msg_def, const char* type_name) {
+    // Check nested enums in this message
+    QoreValue enums_val = msg_def->getKeyValue("enums");
+    if (!enums_val.isNullOrNothing()) {
+        const QoreHashNode* enums = enums_val.get<QoreHashNode>();
+        if (enums && enums->existsKey(type_name)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void QoreProtobufSchema::buildMessage(google::protobuf::DescriptorProto* msg,
         const QoreHashNode* msg_def, ExceptionSink* xsink) {
     // Process fields
@@ -911,6 +924,9 @@ void QoreProtobufSchema::buildMessage(google::protobuf::DescriptorProto* msg,
             QoreStringValueHelper type_str(type_val);
             bool is_reference = false;
             auto ftype = resolveFieldType(type_str->c_str(), is_reference);
+            if (is_reference && isEnumType(msg_def, type_str->c_str())) {
+                ftype = google::protobuf::FieldDescriptorProto::TYPE_ENUM;
+            }
             fdp->set_type(ftype);
             if (is_reference) {
                 // Message or enum reference — set type_name for protobuf to resolve
@@ -926,6 +942,50 @@ void QoreProtobufSchema::buildMessage(google::protobuf::DescriptorProto* msg,
                 fdp->set_label(google::protobuf::FieldDescriptorProto::LABEL_OPTIONAL);
             }
 
+            // Check for map field: "map_key_type" and "map_value_type" present
+            QoreValue map_key_val = field_def->getKeyValue("map_key_type");
+            QoreValue map_val_val = field_def->getKeyValue("map_value_type");
+            if (!map_key_val.isNullOrNothing() && !map_val_val.isNullOrNothing()) {
+                // Map fields are implemented as repeated fields of a synthetic MapEntry message
+                QoreStringValueHelper map_key_str(map_key_val);
+                QoreStringValueHelper map_val_str(map_val_val);
+
+                // Build the synthetic MapEntry nested message
+                std::string entry_name = std::string(name_str->c_str()) + "Entry";
+                google::protobuf::DescriptorProto* entry = msg->add_nested_type();
+                entry->set_name(entry_name);
+
+                // Key field (always field number 1)
+                google::protobuf::FieldDescriptorProto* key_fdp = entry->add_field();
+                key_fdp->set_name("key");
+                key_fdp->set_number(1);
+                key_fdp->set_label(google::protobuf::FieldDescriptorProto::LABEL_OPTIONAL);
+                bool key_is_ref = false;
+                key_fdp->set_type(resolveFieldType(map_key_str->c_str(), key_is_ref));
+
+                // Value field (always field number 2)
+                google::protobuf::FieldDescriptorProto* val_fdp = entry->add_field();
+                val_fdp->set_name("value");
+                val_fdp->set_number(2);
+                val_fdp->set_label(google::protobuf::FieldDescriptorProto::LABEL_OPTIONAL);
+                bool val_is_ref = false;
+                val_fdp->set_type(resolveFieldType(map_val_str->c_str(), val_is_ref));
+                if (val_is_ref) {
+                    val_fdp->set_type_name(map_val_str->c_str());
+                }
+
+                // The map field itself is a repeated field of the entry type
+                fdp->set_type(google::protobuf::FieldDescriptorProto::TYPE_MESSAGE);
+                fdp->set_type_name(entry_name);
+                fdp->set_label(google::protobuf::FieldDescriptorProto::LABEL_REPEATED);
+            }
+
+            // oneof_index (optional — set by oneof processing below)
+            QoreValue oneof_idx_val = field_def->getKeyValue("oneof_index");
+            if (!oneof_idx_val.isNullOrNothing()) {
+                fdp->set_oneof_index((int)oneof_idx_val.getAsBigInt());
+            }
+
             // options (optional)
             QoreValue opts_val = field_def->getKeyValue("options");
             if (!opts_val.isNullOrNothing()) {
@@ -936,6 +996,72 @@ void QoreProtobufSchema::buildMessage(google::protobuf::DescriptorProto* msg,
                         fdp->mutable_options()->set_packed(true);
                     }
                 }
+            }
+        }
+    }
+
+    // Process oneofs
+    QoreValue oneofs_val = msg_def->getKeyValue("oneofs");
+    if (!oneofs_val.isNullOrNothing()) {
+        const QoreHashNode* oneofs = oneofs_val.get<QoreHashNode>();
+        if (!oneofs) {
+            xsink->raiseException("PROTOBUF-SCHEMA-ERROR",
+                "'oneofs' must be a hash of oneof definitions");
+            return;
+        }
+        ConstHashIterator ohi(oneofs);
+        while (ohi.next()) {
+            google::protobuf::OneofDescriptorProto* odp = msg->add_oneof_decl();
+            odp->set_name(ohi.getKey());
+
+            // Process oneof member fields
+            const QoreHashNode* oneof_def = ohi.get().get<QoreHashNode>();
+            if (!oneof_def) {
+                continue;
+            }
+            QoreValue oneof_fields_val = oneof_def->getKeyValue("fields");
+            if (oneof_fields_val.isNullOrNothing()) {
+                continue;
+            }
+            const QoreListNode* oneof_fields = oneof_fields_val.get<QoreListNode>();
+            if (!oneof_fields) {
+                continue;
+            }
+
+            int oneof_index = msg->oneof_decl_size() - 1;
+            for (size_t j = 0; j < oneof_fields->size(); ++j) {
+                QoreValue ofval = oneof_fields->retrieveEntry(j);
+                const QoreHashNode* ofield_def = ofval.get<QoreHashNode>();
+                if (!ofield_def) {
+                    continue;
+                }
+
+                google::protobuf::FieldDescriptorProto* ofdp = msg->add_field();
+
+                QoreValue oname = ofield_def->getKeyValue("name");
+                if (!oname.isNullOrNothing()) {
+                    QoreStringValueHelper oname_str(oname);
+                    ofdp->set_name(oname_str->c_str());
+                }
+
+                QoreValue onumber = ofield_def->getKeyValue("number");
+                if (!onumber.isNullOrNothing()) {
+                    ofdp->set_number((int)onumber.getAsBigInt());
+                }
+
+                QoreValue otype = ofield_def->getKeyValue("type");
+                if (!otype.isNullOrNothing()) {
+                    QoreStringValueHelper otype_str(otype);
+                    bool ois_ref = false;
+                    auto oftype = resolveFieldType(otype_str->c_str(), ois_ref);
+                    ofdp->set_type(oftype);
+                    if (ois_ref) {
+                        ofdp->set_type_name(otype_str->c_str());
+                    }
+                }
+
+                ofdp->set_label(google::protobuf::FieldDescriptorProto::LABEL_OPTIONAL);
+                ofdp->set_oneof_index(oneof_index);
             }
         }
     }
@@ -1061,6 +1187,65 @@ void QoreProtobufSchema::buildFromHash(const QoreHashNode* schema_def, Exception
                 buildMessage(msg, msg_def, xsink);
                 if (*xsink) {
                     return;
+                }
+            }
+        }
+    }
+
+    // Process services
+    QoreValue svcs_val = schema_def->getKeyValue("services");
+    if (!svcs_val.isNullOrNothing()) {
+        const QoreHashNode* services = svcs_val.get<QoreHashNode>();
+        if (!services) {
+            xsink->raiseException("PROTOBUF-SCHEMA-ERROR",
+                "'services' must be a hash of service definitions");
+            return;
+        }
+        ConstHashIterator shi(services);
+        while (shi.next()) {
+            google::protobuf::ServiceDescriptorProto* sdp = fdp.add_service();
+            sdp->set_name(shi.getKey());
+            const QoreHashNode* svc_def = shi.get().get<QoreHashNode>();
+            if (!svc_def) {
+                continue;
+            }
+            QoreValue methods_val = svc_def->getKeyValue("methods");
+            if (methods_val.isNullOrNothing()) {
+                continue;
+            }
+            const QoreListNode* methods = methods_val.get<QoreListNode>();
+            if (!methods) {
+                continue;
+            }
+            for (size_t i = 0; i < methods->size(); ++i) {
+                QoreValue mval = methods->retrieveEntry(i);
+                const QoreHashNode* method_def = mval.get<QoreHashNode>();
+                if (!method_def) {
+                    continue;
+                }
+                google::protobuf::MethodDescriptorProto* mdp = sdp->add_method();
+                QoreValue mname = method_def->getKeyValue("name");
+                if (!mname.isNullOrNothing()) {
+                    QoreStringValueHelper mname_str(mname);
+                    mdp->set_name(mname_str->c_str());
+                }
+                QoreValue input = method_def->getKeyValue("input_type");
+                if (!input.isNullOrNothing()) {
+                    QoreStringValueHelper input_str(input);
+                    mdp->set_input_type(input_str->c_str());
+                }
+                QoreValue output = method_def->getKeyValue("output_type");
+                if (!output.isNullOrNothing()) {
+                    QoreStringValueHelper output_str(output);
+                    mdp->set_output_type(output_str->c_str());
+                }
+                QoreValue cs = method_def->getKeyValue("client_streaming");
+                if (!cs.isNullOrNothing()) {
+                    mdp->set_client_streaming(cs.getAsBool());
+                }
+                QoreValue ss = method_def->getKeyValue("server_streaming");
+                if (!ss.isNullOrNothing()) {
+                    mdp->set_server_streaming(ss.getAsBool());
                 }
             }
         }

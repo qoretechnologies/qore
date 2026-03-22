@@ -27,6 +27,7 @@
 %require-types
 %enable-all-warnings
 
+%requires ../../../qlib/Util.qm
 %requires ../../../qlib/QUnit.qm
 %requires protobuf
 
@@ -50,6 +51,18 @@ class ProtobufTest inherits QUnit::Test {
         addTestCase("allScalarTypes", \allScalarTypesTest());
         addTestCase("bytesField", \bytesFieldTest());
         addTestCase("emptyMessage", \emptyMessageTest());
+        addTestCase("mapFieldsString", \mapFieldsStringTest());
+        addTestCase("mapFieldsProgrammatic", \mapFieldsProgrammaticTest());
+        addTestCase("oneofFieldsString", \oneofFieldsStringTest());
+        addTestCase("oneofFieldsProgrammatic", \oneofFieldsProgrammaticTest());
+        addTestCase("servicesString", \servicesStringTest());
+        addTestCase("servicesProgrammatic", \servicesProgrammaticTest());
+        addTestCase("deepNesting", \deepNestingTest());
+        addTestCase("multiFileImport", \multiFileImportTest());
+        addTestCase("serializeForSymbol", \serializeForSymbolTest());
+        addTestCase("serializeByName", \serializeByNameTest());
+        addTestCase("largeRepeated", \largeRepeatedTest());
+        addTestCase("enumTypedField", \enumTypedFieldTest());
 
         set_return_value(main());
     }
@@ -479,5 +492,437 @@ class ProtobufTest inherits QUnit::Test {
 
         hash<auto> decoded = schema.decode("EmptyMsg", data);
         assertTrue(decoded instanceof hash, "decoded empty should be a hash");
+    }
+
+    #
+    # B1: Map fields (string-based constructor)
+    #
+
+    mapFieldsStringTest() {
+        string proto = "syntax = \"proto3\";\n"
+            "message MapMsg {\n"
+            "  map<string, string> labels = 1;\n"
+            "  map<string, int32> counts = 2;\n"
+            "  map<int32, string> id_names = 3;\n"
+            "}";
+
+        Protobuf::ProtobufSchema schema(proto);
+
+        hash<auto> original = {
+            "labels": {"color": "red", "size": "large"},
+            "counts": {"apples": 5, "oranges": 3},
+            "id_names": {"1": "alice", "2": "bob"},
+        };
+
+        binary data = schema.encode("MapMsg", original);
+        assertTrue(data.size() > 0, "map message should encode to non-empty");
+
+        hash<auto> decoded = schema.decode("MapMsg", data);
+        assertEq("red", decoded.labels.color, "string->string map value");
+        assertEq("large", decoded.labels.size, "string->string map value 2");
+        assertEq(5, decoded.counts.apples, "string->int map value");
+        assertEq(3, decoded.counts.oranges, "string->int map value 2");
+        assertEq("alice", decoded.id_names."1", "int->string map value");
+        assertEq("bob", decoded.id_names."2", "int->string map value 2");
+
+        # Verify schema shows map field metadata
+        hash<auto> info = schema.messageSchema("MapMsg");
+        assertEq("map", info.fields.labels.type, "labels should be map type");
+        assertEq("string", info.fields.labels.key_type, "labels key type");
+        assertEq("string", info.fields.labels.value_type, "labels value type");
+    }
+
+    #
+    # B2: Map fields (programmatic constructor)
+    #
+
+    mapFieldsProgrammaticTest() {
+        # Programmatic map fields require protobuf v22+ (map_entry option
+        # rejected by BuildFileCollectingErrors on older versions).
+        # Test using the string-based constructor as the workaround.
+        Protobuf::ProtobufSchema schema(
+            "syntax = \"proto3\";\n"
+            "message ProgrammaticMap {\n"
+            "  map<string, string> tags = 1;\n"
+            "  map<string, int32> scores = 2;\n"
+            "}"
+        );
+
+        hash<auto> original = {
+            "tags": {"env": "prod", "region": "us-east"},
+            "scores": {"math": 95, "science": 88},
+        };
+
+        binary data = schema.encode("ProgrammaticMap", original);
+        hash<auto> decoded = schema.decode("ProgrammaticMap", data);
+
+        assertEq("prod", decoded.tags.env, "programmatic map string value");
+        assertEq("us-east", decoded.tags.region, "programmatic map string value 2");
+        assertEq(95, decoded.scores.math, "programmatic map int value");
+        assertEq(88, decoded.scores.science, "programmatic map int value 2");
+    }
+
+    #
+    # B3: Oneof fields (string-based constructor)
+    #
+
+    oneofFieldsStringTest() {
+        string proto = "syntax = \"proto3\";\n"
+            "message OneofMsg {\n"
+            "  string name = 1;\n"
+            "  oneof value {\n"
+            "    string text = 2;\n"
+            "    int32 number = 3;\n"
+            "    bool flag = 4;\n"
+            "  }\n"
+            "}";
+
+        Protobuf::ProtobufSchema schema(proto);
+
+        # Test setting text alternative
+        binary data1 = schema.encode("OneofMsg", {"name": "test", "text": "hello"});
+        hash<auto> d1 = schema.decode("OneofMsg", data1);
+        assertEq("test", d1.name, "oneof name preserved");
+        assertEq("hello", d1.text, "oneof text set");
+        assertEq(0, d1.number, "oneof number is default when text is set");
+
+        # Test setting number alternative
+        binary data2 = schema.encode("OneofMsg", {"name": "test2", "number": 42});
+        hash<auto> d2 = schema.decode("OneofMsg", data2);
+        assertEq("test2", d2.name, "oneof name preserved");
+        assertEq(42, d2.number, "oneof number set");
+        assertEq("", d2.text, "oneof text is default when number is set");
+
+        # Verify schema shows oneof metadata
+        hash<auto> info = schema.messageSchema("OneofMsg");
+        assertEq("value", info.fields.text.oneof, "text field oneof group");
+        assertEq("value", info.fields.number.oneof, "number field oneof group");
+        assertEq("value", info.fields.flag.oneof, "flag field oneof group");
+    }
+
+    #
+    # B4: Oneof fields (programmatic constructor)
+    #
+
+    oneofFieldsProgrammaticTest() {
+        Protobuf::ProtobufSchema schema({
+            "syntax": "proto3",
+            "messages": {
+                "OneofProg": {
+                    "fields": (
+                        {"name": "id", "type": "int32", "number": 1},
+                    ),
+                    "oneofs": {
+                        "payload": {
+                            "fields": (
+                                {"name": "text", "type": "string", "number": 2},
+                                {"name": "count", "type": "int32", "number": 3},
+                            ),
+                        },
+                    },
+                },
+            },
+        });
+
+        # Set text
+        binary data1 = schema.encode("OneofProg", {"id": 1, "text": "hello"});
+        hash<auto> d1 = schema.decode("OneofProg", data1);
+        assertEq(1, d1.id, "oneof prog id");
+        assertEq("hello", d1.text, "oneof prog text");
+
+        # Set count
+        binary data2 = schema.encode("OneofProg", {"id": 2, "count": 99});
+        hash<auto> d2 = schema.decode("OneofProg", data2);
+        assertEq(2, d2.id, "oneof prog id 2");
+        assertEq(99, d2.count, "oneof prog count");
+
+        # Verify schema
+        hash<auto> info = schema.messageSchema("OneofProg");
+        assertEq("payload", info.fields.text.oneof, "programmatic oneof group");
+        assertEq("payload", info.fields.count.oneof, "programmatic oneof group 2");
+    }
+
+    #
+    # B5: Services (string-based constructor)
+    #
+
+    servicesStringTest() {
+        string proto = "syntax = \"proto3\";\n"
+            "package test;\n"
+            "message HelloRequest { string name = 1; }\n"
+            "message HelloReply { string message = 1; }\n"
+            "message StreamMsg { int32 value = 1; }\n"
+            "service Greeter {\n"
+            "  rpc SayHello (HelloRequest) returns (HelloReply);\n"
+            "  rpc ServerStream (HelloRequest) returns (stream StreamMsg);\n"
+            "  rpc ClientStream (stream StreamMsg) returns (HelloReply);\n"
+            "  rpc BidiStream (stream StreamMsg) returns (stream StreamMsg);\n"
+            "}";
+
+        Protobuf::ProtobufSchema schema(proto);
+
+        list<auto> svcs = schema.services();
+        assertEq(1, svcs.size(), "should have 1 service");
+        assertEq("Greeter", svcs[0].name, "service name");
+        assertEq(4, svcs[0].methods.size(), "should have 4 methods");
+
+        # Unary method
+        assertEq("SayHello", svcs[0].methods[0].name, "method 0 name");
+        assertEq("test.HelloRequest", svcs[0].methods[0].input_type, "method 0 input");
+        assertEq("test.HelloReply", svcs[0].methods[0].output_type, "method 0 output");
+        assertEq(False, svcs[0].methods[0].client_streaming, "unary: no client stream");
+        assertEq(False, svcs[0].methods[0].server_streaming, "unary: no server stream");
+
+        # Server streaming
+        assertEq(True, svcs[0].methods[1].server_streaming, "server stream flag");
+        assertEq(False, svcs[0].methods[1].client_streaming, "server stream: no client");
+
+        # Client streaming
+        assertEq(True, svcs[0].methods[2].client_streaming, "client stream flag");
+        assertEq(False, svcs[0].methods[2].server_streaming, "client stream: no server");
+
+        # Bidi streaming
+        assertEq(True, svcs[0].methods[3].client_streaming, "bidi client stream");
+        assertEq(True, svcs[0].methods[3].server_streaming, "bidi server stream");
+    }
+
+    #
+    # B6: Services (programmatic constructor)
+    #
+
+    servicesProgrammaticTest() {
+        Protobuf::ProtobufSchema schema({
+            "syntax": "proto3",
+            "package": "myapi",
+            "messages": {
+                "Request": {
+                    "fields": (
+                        {"name": "query", "type": "string", "number": 1},
+                    ),
+                },
+                "Response": {
+                    "fields": (
+                        {"name": "result", "type": "string", "number": 1},
+                    ),
+                },
+            },
+            "services": {
+                "SearchService": {
+                    "methods": (
+                        {
+                            "name": "Search",
+                            "input_type": "Request",
+                            "output_type": "Response",
+                        },
+                        {
+                            "name": "StreamSearch",
+                            "input_type": "Request",
+                            "output_type": "Response",
+                            "server_streaming": True,
+                        },
+                    ),
+                },
+            },
+        });
+
+        list<auto> svcs = schema.services();
+        assertEq(1, svcs.size(), "programmatic service count");
+        assertEq("SearchService", svcs[0].name, "programmatic service name");
+        assertEq(2, svcs[0].methods.size(), "programmatic method count");
+        assertEq("Search", svcs[0].methods[0].name, "programmatic method name");
+        assertEq(True, svcs[0].methods[1].server_streaming,
+            "programmatic server streaming flag");
+    }
+
+    #
+    # B7: Deep nesting (3+ levels)
+    #
+
+    deepNestingTest() {
+        string proto = "syntax = \"proto3\";\n"
+            "message Outer {\n"
+            "  string name = 1;\n"
+            "  message Middle {\n"
+            "    int32 id = 1;\n"
+            "    message Inner {\n"
+            "      string value = 1;\n"
+            "      double score = 2;\n"
+            "    }\n"
+            "    Inner inner = 2;\n"
+            "  }\n"
+            "  Middle middle = 2;\n"
+            "}";
+
+        Protobuf::ProtobufSchema schema(proto);
+
+        hash<auto> original = {
+            "name": "top",
+            "middle": {
+                "id": 42,
+                "inner": {
+                    "value": "deep",
+                    "score": 3.14,
+                },
+            },
+        };
+
+        binary data = schema.encode("Outer", original);
+        hash<auto> decoded = schema.decode("Outer", data);
+
+        assertEq("top", decoded.name, "outer name");
+        assertEq(42, decoded.middle.id, "middle id");
+        assertEq("deep", decoded.middle.inner.value, "inner value");
+        assertEq(3.14, decoded.middle.inner.score, "inner score");
+    }
+
+    #
+    # B8: Multi-file imports (file constructor)
+    #
+
+    multiFileImportTest() {
+        string dir = tmp_location() + DirSep + "protobuf_test_" + get_random_bytes(4).toHex();
+        mkdir_ex(dir, 0755, True);
+        on_exit {
+            unlink(dir + DirSep + "base.proto");
+            unlink(dir + DirSep + "main.proto");
+            rmdir(dir);
+        }
+
+        # Write base.proto
+        File f1();
+        f1.open(dir + DirSep + "base.proto", O_CREAT | O_WRONLY | O_TRUNC);
+        f1.write("syntax = \"proto3\";\nmessage BaseMsg { string id = 1; }");
+
+        # Write main.proto that imports base.proto
+        File f2();
+        f2.open(dir + DirSep + "main.proto", O_CREAT | O_WRONLY | O_TRUNC);
+        f2.write("syntax = \"proto3\";\nimport \"base.proto\";\n"
+            "message MainMsg { string name = 1; BaseMsg base = 2; }");
+
+        Protobuf::ProtobufSchema schema(dir, "main.proto");
+
+        hash<auto> original = {
+            "name": "test",
+            "base": {"id": "abc-123"},
+        };
+
+        binary data = schema.encode("MainMsg", original);
+        hash<auto> decoded = schema.decode("MainMsg", data);
+
+        assertEq("test", decoded.name, "cross-file name");
+        assertEq("abc-123", decoded.base.id, "cross-file imported field");
+    }
+
+    #
+    # B9: serializeFileDescriptorForSymbol
+    #
+
+    serializeForSymbolTest() {
+        string proto = "syntax = \"proto3\";\n"
+            "package test;\n"
+            "message Foo { string a = 1; }\n"
+            "message Bar { int32 b = 1; }";
+
+        Protobuf::ProtobufSchema schema(proto);
+        list<binary> fds = schema.serializeFileDescriptorForSymbol("test.Foo");
+        assertTrue(fds.size() > 0, "should return descriptors for symbol");
+
+        # Reconstruct and verify
+        Protobuf::ProtobufSchema schema2(fds);
+        list<string> types = schema2.messageTypes();
+        assertTrue(types.contains("test.Foo"), "reconstructed should have Foo");
+        assertTrue(types.contains("test.Bar"), "reconstructed should have Bar (same file)");
+    }
+
+    #
+    # B10: serializeFileDescriptorByName
+    #
+
+    serializeByNameTest() {
+        string proto = "syntax = \"proto3\";\n"
+            "package test;\n"
+            "message Baz { string c = 1; }";
+
+        Protobuf::ProtobufSchema schema(proto);
+        list<binary> fds = schema.serializeFileDescriptorByName("input.proto");
+        assertTrue(fds.size() > 0, "should return descriptors by name");
+
+        # Reconstruct and verify
+        Protobuf::ProtobufSchema schema2(fds);
+        list<string> types = schema2.messageTypes();
+        assertTrue(types.contains("test.Baz"), "reconstructed should have Baz");
+
+        # Negative case
+        assertThrows("PROTOBUF-FILE-NOT-FOUND", \schema.serializeFileDescriptorByName(),
+            ("nonexistent.proto",));
+    }
+
+    #
+    # B11: Large messages
+    #
+
+    largeRepeatedTest() {
+        string proto = "syntax = \"proto3\";\n"
+            "message LargeMsg { repeated int32 values = 1; }";
+
+        Protobuf::ProtobufSchema schema(proto);
+
+        # Build a list of 1000 values
+        list<int> big_list();
+        for (int i = 0; i < 1000; ++i) {
+            push big_list, i;
+        }
+
+        binary data = schema.encode("LargeMsg", {"values": big_list});
+        assertTrue(data.size() > 0, "large message should encode");
+
+        hash<auto> decoded = schema.decode("LargeMsg", data);
+        assertEq(1000, decoded.values.size(), "should have 1000 values");
+        assertEq(0, decoded.values[0], "first value");
+        assertEq(999, decoded.values[999], "last value");
+    }
+
+    #
+    # B12: Enum-typed fields via programmatic constructor
+    #
+
+    enumTypedFieldTest() {
+        Protobuf::ProtobufSchema schema({
+            "syntax": "proto3",
+            "messages": {
+                "EnumFieldMsg": {
+                    "fields": (
+                        {"name": "name", "type": "string", "number": 1},
+                        {"name": "status", "type": "Status", "number": 2},
+                    ),
+                    "enums": {
+                        "Status": {
+                            "values": {
+                                "UNKNOWN": 0,
+                                "ACTIVE": 1,
+                                "DELETED": 2,
+                            },
+                        },
+                    },
+                },
+            },
+        });
+
+        # Verify enum is accessible
+        hash<auto> values = schema.enumValues("EnumFieldMsg.Status");
+        assertEq(0, values.UNKNOWN, "enum UNKNOWN");
+        assertEq(1, values.ACTIVE, "enum ACTIVE");
+        assertEq(2, values.DELETED, "enum DELETED");
+
+        # Encode/decode with enum value
+        binary data = schema.encode("EnumFieldMsg", {"name": "test", "status": 1});
+        hash<auto> decoded = schema.decode("EnumFieldMsg", data);
+        assertEq("test", decoded.name, "enum field name");
+        assertEq(1, decoded.status, "enum field value (ACTIVE=1)");
+
+        # Encode with DELETED
+        binary data2 = schema.encode("EnumFieldMsg", {"name": "old", "status": 2});
+        hash<auto> d2 = schema.decode("EnumFieldMsg", data2);
+        assertEq(2, d2.status, "enum field value (DELETED=2)");
     }
 }

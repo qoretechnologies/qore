@@ -164,20 +164,29 @@ ProtobufSchema::constructor(list<binary> serialized_descriptors) {
       - \c fields (list of hashes): each field hash must contain:
         - \c name (string, required): the field name
         - \c type (string, required): the protobuf type (e.g., \c "string", \c "int32", \c "double",
-          \c "float", \c "int64", \c "uint64", \c "bool", \c "bytes", or a message type name)
+          \c "float", \c "int64", \c "uint64", \c "bool", \c "bytes", a message type name, or an
+          enum type name)
         - \c number (int, required): the field number
         - \c label (optional string): \c "optional" (default), \c "repeated", or \c "required"
+        - \c map_key_type (optional string): for map fields, the key type (e.g., \c "string", \c "int32");
+          requires protobuf v22+
+        - \c map_value_type (optional string): for map fields, the value type
         - \c options (optional hash): field options, e.g., \c {"packed": True}
       - \c enums (optional hash): nested enum definitions, each mapping enum names to
         \c {"values": {"NAME": number, ...}}
+      - \c oneofs (optional hash): oneof group definitions, each mapping group names to
+        \c {"fields": ({"name": "...", "type": "...", "number": N}, ...)}
       - \c nested_messages (optional hash): nested message definitions (same structure)
     - \c enums (optional hash): top-level enum definitions
+    - \c services (optional hash): service definitions, each mapping service names to
+      \c {"methods": ({"name": "...", "input_type": "...", "output_type": "...",
+      "client_streaming": bool, "server_streaming": bool}, ...)}
 
     @throw PROTOBUF-SCHEMA-ERROR if the definition is invalid
 
     @note The programmatic constructor supports messages, scalar fields, repeated fields,
-    nested messages, enums, and packed options. \c oneof and \c map fields are not yet
-    supported — use the string-based constructor for schemas that require those features.
+    nested messages, enums, oneofs, services, and packed options. \c map fields require
+    protobuf v22+; on older versions use the string-based constructor for map fields.
 
     @note For fields that reference a message type, set \c type to the message name
     (e.g., \c "Inner"). For fields that reference an enum, set \c type to the enum name
@@ -210,6 +219,19 @@ ProtobufSchema::constructor(hash<auto> schema_def) {
 //! Returns a list of service definitions from the schema
 /** @return a list of @ref ProtobufServiceInfo hashdecls
 
+    @par Example:
+    @code{.py}
+list<auto> services = schema.services();
+for (auto svc in services) {
+    printf("Service: %s (%d methods)\n", svc.name, svc.methods.size());
+    for (auto m in svc.methods) {
+        printf("  %s(%s) -> %s%s%s\n", m.name, m.input_type, m.output_type,
+            m.client_streaming ? " [client-stream]" : "",
+            m.server_streaming ? " [server-stream]" : "");
+    }
+}
+    @endcode
+
     @since %protobuf 1.0
 */
 list<hash<ProtobufServiceInfo>> ProtobufSchema::services() {
@@ -230,6 +252,12 @@ list<string> ProtobufSchema::messageTypes() {
     @return a hash with all fields set to their default values
 
     @throw PROTOBUF-TYPE-ERROR if the message type is not found
+
+    @par Example:
+    @code{.py}
+hash<auto> defaults = schema.defaultMessage("mypackage.Person");
+# defaults = {"name": "", "age": 0, "active": False, "emails": ()}
+    @endcode
 
     @since %protobuf 1.0
 */
@@ -300,9 +328,28 @@ hash<auto> ProtobufSchema::fromJson(string type, string json) {
 
 //! Returns the schema (field-level metadata) for a protobuf message type
 /** @param type the fully-qualified or short message type name
-    @return a hash describing the message fields
+    @return a hash describing the message fields, with structure:
+    - \c name: the fully-qualified message type name
+    - \c fields: a hash of field name to field info hashes, each containing:
+      - \c type: the protobuf type name (e.g., \c "string", \c "int32", \c "message", \c "enum", \c "map")
+      - \c number: the field number
+      - \c label: the field label (\c "optional", \c "required", \c "repeated")
+      - \c message_type: (for message fields) the fully-qualified nested message type name
+      - \c enum_type: (for enum fields) the fully-qualified enum type name
+      - \c enum_values: (for enum fields) a hash mapping value names to numbers
+      - \c key_type: (for map fields) the map key type name
+      - \c value_type: (for map fields) the map value type name
+      - \c oneof: (for oneof fields) the oneof group name
 
     @throw PROTOBUF-TYPE-ERROR if the message type is not found
+
+    @par Example:
+    @code{.py}
+hash<auto> info = schema.messageSchema("mypackage.Item");
+printf("message: %s\n", info.name);
+map printf("  %s: %s (#%d)%s\n", $1.key, $1.value.type, $1.value.number,
+    $1.value.label == "repeated" ? " [repeated]" : ""), info.fields.pairIterator();
+    @endcode
 
     @since %protobuf 1.0
 */
@@ -316,6 +363,13 @@ hash<auto> ProtobufSchema::messageSchema(string type) {
 
     @throw PROTOBUF-TYPE-ERROR if the enum type is not found
 
+    @par Example:
+    @code{.py}
+hash<string, int> values = schema.enumValues("mypackage.Status");
+# values = {"UNKNOWN": 0, "ACTIVE": 1, "INACTIVE": 2}
+printf("ACTIVE = %d\n", values.ACTIVE);
+    @endcode
+
     @since %protobuf 1.0
 */
 hash<string, int> ProtobufSchema::enumValues(string enum_type) {
@@ -326,6 +380,15 @@ hash<string, int> ProtobufSchema::enumValues(string enum_type) {
 /** @return a list of binary data, each containing one serialized \c FileDescriptorProto
 
     @throw PROTOBUF-SCHEMA-ERROR if serialization fails
+
+    @par Example:
+    @code{.py}
+# Serialize for transport (e.g., gRPC reflection)
+list<binary> descriptors = schema.serializeFileDescriptors();
+
+# Reconstruct on the receiving end
+ProtobufSchema reconstructed(descriptors);
+    @endcode
 
     @since %protobuf 1.0
 */
