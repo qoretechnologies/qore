@@ -3388,3 +3388,41 @@ qore_type_result_e QoreTypeInfo::parseAccepts(const QoreTypeInfo* typeInfo, bool
     may_not_match = false;
     return QTI_NOT_EQUAL;
 }
+
+qore_type_result_e QoreTypeInfo::runtimeTypeMatch(const QoreTypeInfo* typeInfo) const {
+    //printd(5, "QoreTypeInfo::runtimeTypeMatch() '%s' <=> '%s'\n", tname.c_str(), typeInfo->tname.c_str());
+    if (typeInfo->return_vec.size() != return_vec.size() || typeInfo->getAcceptVecSize() != getAcceptVecSize()) {
+        return QTI_NOT_EQUAL;
+    }
+
+    // check accept types
+    qore_type_result_e rc = QTI_IDENT;
+    for (size_t i = 0; i < getAcceptVecSize(); ++i) {
+        bool may_not_match = false;
+        bool may_need_filter = false;
+        qore_type_result_e res = getAcceptSpec(i).spec.match(typeInfo->getAcceptSpec(i).spec, may_not_match, may_need_filter);
+        //printd(5, " + accept: %s %d <=> %s %d: %d\n", QoreTypeInfo::getName(getAcceptSpec(i).spec.getBaseTypeInfo()), getAcceptSpec(i).spec.getTypeSpec(), QoreTypeInfo::getName(typeInfo->getAcceptSpec(i).spec.getBaseTypeInfo()), typeInfo->getAcceptSpec(i).spec.getTypeSpec(), res);
+        if (res < QTI_NEAR) {
+            return QTI_NOT_EQUAL;
+        }
+        if (res < rc) {
+            rc = res;
+        }
+    }
+
+    // check return types
+    for (size_t i = 0; i < return_vec.size(); ++i) {
+        bool may_not_match = false;
+        bool may_need_filter = false;
+        qore_type_result_e res = return_vec[i].spec.match(typeInfo->return_vec[i].spec, may_not_match, may_need_filter);
+        //printd(5, " + return: %s %d <=> %s %d: %d\n", QoreTypeInfo::getName(return_vec[i].spec.getBaseTypeInfo()), return_vec[i].spec.getTypeSpec(), QoreTypeInfo::getName(typeInfo->return_vec[i].spec.getBaseTypeInfo()), typeInfo->return_vec[i].spec.getTypeSpec(), res);
+        if (res < QTI_NEAR) {
+            return QTI_NOT_EQUAL;
+        }
+        if (res < rc) {
+            rc = res;
+        }
+    }
+
+    return rc;
+}

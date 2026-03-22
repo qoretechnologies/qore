@@ -1298,43 +1298,7 @@ protected:
     // checks that types are near identical at runtime
     /** accept and return types match in the same order and with no match worse than QTI_NEAR
     */
-    DLLLOCAL qore_type_result_e runtimeTypeMatch(const QoreTypeInfo* typeInfo) const {
-        //printd(5, "QoreTypeInfo::runtimeTypeMatch() '%s' <=> '%s'\n", tname.c_str(), typeInfo->tname.c_str());
-        if (typeInfo->return_vec.size() != return_vec.size() || typeInfo->getAcceptVecSize() != accept_vec.size()) {
-            return QTI_NOT_EQUAL;
-        }
-
-        // check accept types
-        qore_type_result_e rc = QTI_IDENT;
-        for (size_t i = 0; i < accept_vec.size(); ++i) {
-            bool may_not_match = false;
-            bool may_need_filter = false;
-            qore_type_result_e res = getAcceptSpec(i).spec.match(typeInfo->getAcceptSpec(i).spec, may_not_match, may_need_filter);
-            //printd(5, " + accept: %s %d <=> %s %d: %d\n", QoreTypeInfo::getName(getAcceptSpec(i).spec.getBaseTypeInfo()), getAcceptSpec(i).spec.getTypeSpec(), QoreTypeInfo::getName(typeInfo->getAcceptSpec(i).spec.getBaseTypeInfo()), typeInfo->getAcceptSpec(i).spec.getTypeSpec(), res);
-            if (res < QTI_NEAR) {
-                return QTI_NOT_EQUAL;
-            }
-            if (res < rc) {
-                rc = res;
-            }
-        }
-
-        // check return types
-        for (size_t i = 0; i < return_vec.size(); ++i) {
-            bool may_not_match = false;
-            bool may_need_filter = false;
-            qore_type_result_e res = return_vec[i].spec.match(typeInfo->return_vec[i].spec, may_not_match, may_need_filter);
-            //printd(5, " + return: %s %d <=> %s %d: %d\n", QoreTypeInfo::getName(return_vec[i].spec.getBaseTypeInfo()), return_vec[i].spec.getTypeSpec(), QoreTypeInfo::getName(typeInfo->return_vec[i].spec.getBaseTypeInfo()), typeInfo->return_vec[i].spec.getTypeSpec(), res);
-            if (res < QTI_NEAR) {
-                return QTI_NOT_EQUAL;
-            }
-            if (res < rc) {
-                rc = res;
-            }
-        }
-
-        return rc;
-    }
+    DLLLOCAL qore_type_result_e runtimeTypeMatch(const QoreTypeInfo* typeInfo) const;
 
     DLLLOCAL qore_type_result_e runtimeAcceptsValue(const QoreValue& n) const;
 
