@@ -119,6 +119,15 @@ public class Http1ClientPollOperation inherits HttpClientPollOperation {
         const REQ_RECV_CHUNK_DATA = "recv_chunk_data";
         const REQ_RECV_CHUNK_CRLF = "recv_chunk_crlf";
         const REQ_RECV_BODY_CLOSE = "recv_body_close";
+
+        #! Whether the current request is in streaming mode
+        bool streaming_active = False;
+
+        #! Remaining bytes for streaming body with Content-Length
+        int streaming_body_remaining = 0;
+
+        #! Streaming read chunk size (16 KB)
+        const StreamingChunkSize = 16384;
     }
 
     #! Creates the poll operation for a new HTTP/1.1 connection
@@ -190,7 +199,8 @@ public class Http1ClientPollOperation inherits HttpClientPollOperation {
         @throw HTTP1-CAPACITY-ERROR if the connection already has a request in flight
     */
     int submitRequest(string method, string path, *hash<auto> headers, *data body,
-            HttpResponseCallback callback, *hash<auto> ctx, int max_streams) {
+            HttpResponseCallback callback, *hash<auto> ctx, int max_streams,
+            bool streaming = False) {
         string current_state = state;
         if (current_state != STATE_READING && current_state != STATE_WAIT_READ) {
             throw "HTTP1-STATE-ERROR", sprintf("cannot submit request in state: %y", current_state);
@@ -261,10 +271,11 @@ public class Http1ClientPollOperation inherits HttpClientPollOperation {
             pending_request_data = request_data;
             active_sid = stream_id;
             active_method = method;
+            streaming_active = streaming;
         }
 
-        log(LoggerLevel::DEBUG, "submitted request: method=%y path=%y stream_id=%d (%d bytes)",
-            method, path, stream_id, request_data.size());
+        log(LoggerLevel::DEBUG, "submitted request: method=%y path=%y stream_id=%d streaming=%y (%d bytes)",
+            method, path, stream_id, streaming, request_data.size());
 
         return stream_id;
     }
@@ -697,31 +708,45 @@ public class Http1ClientPollOperation inherits HttpClientPollOperation {
                 || response_status_code == 304;
 
             if (no_body) {
-                return dispatchResponse();
+                return streaming_active ? dispatchStreamingEnd() : dispatchResponse();
+            }
+
+            # For streaming mode: dispatch headers-only callback before reading body
+            if (streaming_active) {
+                dispatchStreamingHeaders();
             }
 
             # Start body reading based on transfer type
             if (response_chunked) {
-                response_body = binary();
+                response_body = streaming_active ? NOTHING : binary();
                 current_op = sock.startPollRecvUntilBytesString("\r\n");
                 req_state = REQ_RECV_CHUNK_SIZE;
                 return handleRecvChunkSize();
             } else if (response_content_length > 0) {
+                if (streaming_active) {
+                    # Read in chunks for incremental delivery
+                    streaming_body_remaining = response_content_length;
+                    int read_size = streaming_body_remaining < StreamingChunkSize
+                        ? streaming_body_remaining : StreamingChunkSize;
+                    current_op = sock.startPollRecvBinary(read_size);
+                    req_state = REQ_RECV_BODY_LENGTH;
+                    return handleRecvBodyLength();
+                }
                 current_op = sock.startPollRecvBinary(response_content_length);
                 req_state = REQ_RECV_BODY_LENGTH;
                 return handleRecvBodyLength();
             } else if (response_content_length == 0) {
                 # Explicit zero-length body
-                return dispatchResponse();
+                return streaming_active ? dispatchStreamingEnd() : dispatchResponse();
             } else if (connection_close) {
                 # No Content-Length, not chunked, but Connection: close — read until EOF
-                response_body = binary();
+                response_body = streaming_active ? NOTHING : binary();
                 current_op = sock.startPollRecvData();
                 req_state = REQ_RECV_BODY_CLOSE;
                 return handleRecvBodyClose();
             } else {
                 # No Content-Length, not chunked, not Connection: close — treat as no body
-                return dispatchResponse();
+                return streaming_active ? dispatchStreamingEnd() : dispatchResponse();
             }
         }
 
@@ -737,7 +762,20 @@ public class Http1ClientPollOperation inherits HttpClientPollOperation {
         }
 
         if (current_op.goalReached()) {
-            response_body = current_op.getOutput();
+            binary data = current_op.getOutput();
+            if (streaming_active) {
+                # Dispatch chunk and check for more
+                dispatchStreamingData(data);
+                streaming_body_remaining -= data.size();
+                if (streaming_body_remaining <= 0) {
+                    return dispatchStreamingEnd();
+                }
+                int read_size = streaming_body_remaining < StreamingChunkSize
+                    ? streaming_body_remaining : StreamingChunkSize;
+                current_op = sock.startPollRecvBinary(read_size);
+                return handleRecvBodyLength();
+            }
+            response_body = data;
             return dispatchResponse();
         }
 
@@ -793,7 +831,12 @@ public class Http1ClientPollOperation inherits HttpClientPollOperation {
             binary data = current_op.getOutput();
             # Remove trailing CRLF (last 2 bytes)
             if (data.size() > 2) {
-                response_body += data.substr(0, data.size() - 2);
+                binary chunk = data.substr(0, data.size() - 2);
+                if (streaming_active) {
+                    dispatchStreamingData(chunk);
+                } else {
+                    response_body += chunk;
+                }
             }
 
             # Read next chunk size
@@ -821,7 +864,7 @@ public class Http1ClientPollOperation inherits HttpClientPollOperation {
             string line = current_op.getOutput();
             if (line == "\r\n") {
                 # Empty line — chunked transfer complete
-                return dispatchResponse();
+                return streaming_active ? dispatchStreamingEnd() : dispatchResponse();
             }
             # Trailer line — read next line (could be another trailer or the empty line)
             log(LoggerLevel::DEBUG, "chunked trailer: %y", line.substr(0, line.size() - 2));
@@ -843,17 +886,21 @@ public class Http1ClientPollOperation inherits HttpClientPollOperation {
         if (current_op.goalReached()) {
             auto data = current_op.getOutput();
             if (data && data.size() > 0) {
-                response_body += data;
+                if (streaming_active) {
+                    dispatchStreamingData(data);
+                } else {
+                    response_body += data;
+                }
                 # Read more data
                 current_op = sock.startPollRecvData();
                 return handleRecvBodyClose();
             }
-            # Empty read — server closed connection; dispatch what we have
-            return dispatchResponse();
+            # Empty read — server closed connection
+            return streaming_active ? dispatchStreamingEnd() : dispatchResponse();
         }
 
-        # Read operation ended (likely EOF) — dispatch accumulated body
-        return dispatchResponse();
+        # Read operation ended (likely EOF)
+        return streaming_active ? dispatchStreamingEnd() : dispatchResponse();
     }
 
     #! Internal: dispatches the response to the registered callback and returns to idle
@@ -919,19 +966,116 @@ public class Http1ClientPollOperation inherits HttpClientPollOperation {
             remove active_method;
         }
 
+        # Save connection_close before resetResponseState() clears it
+        bool close = connection_close;
+
         # Reset response accumulator
         req_state = REQ_IDLE;
         remove current_op;
         resetResponseState();
 
         # Check if server requested connection close
-        if (connection_close) {
+        if (close) {
             log(LoggerLevel::DEBUG, "server requested connection close");
             state = STATE_CLOSED;
             return NOTHING;
         }
 
         # Return to idle — check for next pending request or wait
+        state = STATE_WAIT_READ;
+        return <SocketPollInfo>{
+            "events": SOCK_POLLIN,
+            "socket": sock,
+        };
+    }
+
+    #! Internal: dispatches response headers to the streaming callback (without body or end_stream)
+    private dispatchStreamingHeaders() {
+        *HttpResponseCallback cb;
+        int stream_id;
+        {
+            AutoLock al(stream_lock);
+            stream_id = active_sid;
+            cb = stream_callbacks{string(stream_id)};
+        }
+        if (cb) {
+            try {
+                cb({
+                    "status_code": response_status_code,
+                    "headers": response_headers,
+                    "protocol": "h1",
+                    "stream_id": stream_id,
+                }, NOTHING);
+            } catch (hash<ExceptionInfo> ex) {
+                log(LoggerLevel::ERROR, "streaming headers callback exception: %s: %s", ex.err, ex.desc);
+            }
+        }
+    }
+
+    #! Internal: dispatches a body data chunk to the streaming callback
+    private dispatchStreamingData(binary data) {
+        *HttpResponseCallback cb;
+        {
+            AutoLock al(stream_lock);
+            cb = stream_callbacks{string(active_sid)};
+        }
+        if (cb) {
+            try {
+                cb({"body": data}, NOTHING);
+            } catch (hash<ExceptionInfo> ex) {
+                log(LoggerLevel::ERROR, "streaming data callback exception: %s: %s", ex.err, ex.desc);
+            }
+        }
+    }
+
+    #! Internal: dispatches end-of-stream to the streaming callback and cleans up
+    private *hash<SocketPollInfo> dispatchStreamingEnd() {
+        empty_read_count = 0;
+
+        int stream_id;
+        *HttpResponseCallback cb;
+        *hash<auto> stream_ctx;
+        {
+            AutoLock al(stream_lock);
+            stream_id = active_sid;
+            string sid = string(stream_id);
+            cb = stream_callbacks{sid};
+            stream_ctx = stream_ctxs{sid};
+        }
+
+        if (cb) {
+            try {
+                cb({"end_stream": True, "stream_id": stream_id, "ctx": stream_ctx}, NOTHING);
+            } catch (hash<ExceptionInfo> ex) {
+                log(LoggerLevel::ERROR, "streaming end callback exception: %s: %s", ex.err, ex.desc);
+            }
+        }
+
+        # Clean up stream state
+        {
+            AutoLock al(stream_lock);
+            string sid = string(stream_id);
+            remove stream_callbacks{sid};
+            remove stream_ctxs{sid};
+            --active_stream_count;
+            remove active_sid;
+            remove active_method;
+        }
+
+        # Save connection_close before resetResponseState() clears it
+        bool close = connection_close;
+
+        # Reset response accumulator
+        req_state = REQ_IDLE;
+        remove current_op;
+        resetResponseState();
+
+        if (close) {
+            log(LoggerLevel::DEBUG, "server requested connection close after streaming");
+            state = STATE_CLOSED;
+            return NOTHING;
+        }
+
         state = STATE_WAIT_READ;
         return <SocketPollInfo>{
             "events": SOCK_POLLIN,
@@ -947,6 +1091,8 @@ public class Http1ClientPollOperation inherits HttpClientPollOperation {
         response_chunked = False;
         response_content_length = -1;
         connection_close = False;
+        streaming_active = False;
+        streaming_body_remaining = 0;
     }
 
     #! Internal: logging helper
