@@ -44,6 +44,32 @@ stream.submitAsync("GET", "/api/users", NOTHING, NOTHING,
         printf("Response: %y\n", response);
     });
     @endcode
+
+    @par Streaming Usage (SSE, gRPC, etc.)
+    @code{.py}
+HttpClientStreamHandle stream = manager.acquireStream("https://example.com");
+if (stream.supportsStreaming()) {
+    stream.startStreaming("POST", "/events",
+        {"Accept": "text/event-stream", "Content-Type": "application/json"});
+    while (True) {
+        auto data = stream.readData(30s);
+        if (!exists data) {
+            continue;  # timeout, retry
+        }
+        if (data.typeCode() == NT_HASH) {
+            if (data.end_stream) {
+                break;  # stream complete
+            }
+            if (data.error) {
+                throw "STREAM-ERROR", sprintf("%y", data.error);
+            }
+            continue;
+        }
+        # data is binary or string — process it
+        printf("Received: %y\n", data);
+    }
+}
+    @endcode
 */
 public class HttpClientStreamHandle {
     private {
@@ -552,7 +578,6 @@ public class HttpClientStreamHandle {
         @throw HTTPCLIENT-STATE-ERROR if the stream is already in use
         @throw HTTPCLIENT-TIMEOUT if connection establishment times out
 
-        @since HttpClientIo 1.3
 
         @see readData(), sendData(), writesDone()
     */
@@ -576,7 +601,6 @@ public class HttpClientStreamHandle {
         @throw HTTPCLIENT-STREAMING-NOT-SUPPORTED if the protocol does not support streaming
         @throw HTTPCLIENT-STREAM-CLOSED if the stream has already been closed
 
-        @since HttpClientIo 1.3
 
         @see startStreaming()
     */
@@ -595,7 +619,6 @@ public class HttpClientStreamHandle {
         @throw HTTPCLIENT-STREAMING-NOT-SUPPORTED if the protocol does not support streaming
         @throw HTTPCLIENT-STATE-ERROR if the stream is not in streaming mode
 
-        @since HttpClientIo 1.3
 
         @see startStreaming(), writesDone()
     */
@@ -608,7 +631,6 @@ public class HttpClientStreamHandle {
     /** Convenience method that sends an empty payload with \c end_stream = \c True.
         Override if the protocol has a dedicated half-close mechanism.
 
-        @since HttpClientIo 1.3
 
         @see sendData()
     */
