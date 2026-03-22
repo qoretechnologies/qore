@@ -1,0 +1,57 @@
+
+This GDB supports auto-downloading debuginfo from the following URLs:
+  <https://debuginfod.ubuntu.com>
+Enable debuginfod for this session? (y or [n]) [answered N; input not from terminal]
+Debuginfod has been disabled.
+To make this setting permanent, add 'set debuginfod enabled off' to .gdbinit.
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+QUnit Test "QoreProcessorsTest" v1.0
+2026-03-22 16:30:24.208689 T1 [INFO]: DataProvider loading module: "AsyncApiDataProvider"
+2026-03-22 16:30:24.256815 T1 [INFO]: DataProvider loading module: "AwsRestClientDataProvider"
+2026-03-22 16:30:24.428681 T1 [INFO]: DataProvider loading module: "CdsRestDataProvider"
+2026-03-22 16:30:24.454112 T1 [INFO]: DataProvider loading module: "BigCommerceDataProvider"
+2026-03-22 16:30:24.534154 T1 [INFO]: DataProvider loading module: "BusyLightDataProvider"
+
+Thread 1 "qore/1" received signal SIGSEGV, Segmentation fault.
+0x00007fffcfa5f692 in ?? ()
+
+Thread 2 (Thread 0x7fffedb716c0 (LWP 655230) "qore/1"):
+#0  __syscall_cancel_arch () at ../sysdeps/unix/sysv/linux/x86_64/syscall_cancel.S:56
+No locals.
+#1  0x00007fffee6a013c in __internal_syscall_cancel (a1=140737181521472, a2=140737181521200, a3=0, a4=8, a5=0, a6=0, nr=128) at ./nptl/cancellation.c:49
+        result = <optimized out>
+        pd = <optimized out>
+        ch = <optimized out>
+#2  __syscall_cancel (a1=a1@entry=140737181521472, a2=a2@entry=140737181521200, a3=a3@entry=0, a4=a4@entry=8, a5=a5@entry=0, a6=a6@entry=0, nr=128) at ./nptl/cancellation.c:75
+        r = <optimized out>
+#3  0x00007fffee646b25 in __GI___sigtimedwait (set=set@entry=0x7fffedb61640, info=info@entry=0x7fffedb61530, timeout=timeout@entry=0x0) at ../sysdeps/unix/sysv/linux/sigtimedwait.c:31
+        result = <optimized out>
+#4  0x00007fffee646250 in __GI___sigwait (set=0x7fffedb61640, sig=0x7fffedb61604) at ../sysdeps/unix/sysv/linux/sigwait.c:28
+        si = {si_signo = 31, si_errno = 0, si_code = 0, __pad0 = 0, _sifields = {_pad = {655227, 2000, 0 <repeats 26 times>}, _kill = {si_pid = 655227, si_uid = 2000}, _timer = {si_tid = 655227, si_overrun = 2000, si_sigval = {sival_int = 0, sival_ptr = 0x0}}, _rt = {si_pid = 655227, si_uid = 2000, si_sigval = {sival_int = 0, sival_ptr = 0x0}}, _sigchld = {si_pid = 655227, si_uid = 2000, si_status = 0, si_utime = 0, si_stime = 0}, _sigfault = {si_addr = 0x7d00009ff7b, si_addr_lsb = 0, _bounds = {_addr_bnd = {_lower = 0x0, _upper = 0x0}, _pkey = 0}}, _sigpoll = {si_band = 8589935247227, si_fd = 0}, _sigsys = {_call_addr = 0x7d00009ff7b, _syscall = 0, _arch = 0}}}
+        ret = <optimized out>
+#5  0x00007ffff785b17b in QoreSignalManager::signal_handler_thread() () from /home/david/src/qore/git/qore/build/libqore.so.20
+No symbol table info available.
+#6  0x00007ffff785b724 in sig_thread () from /home/david/src/qore/git/qore/build/libqore.so.20
+No symbol table info available.
+#7  0x00007fffee6a3d64 in start_thread (arg=<optimized out>) at ./nptl/pthread_create.c:448
+        ret = <optimized out>
+        pd = <optimized out>
+        out = <optimized out>
+        unwind_buf = {cancel_jmp_buf = {{jmp_buf = {140737181587136, -5027358148527477155, 140737181587136, 140737488342032, 22, 140737488342295, -5027358148200321443, -5027358733818089891}, mask_was_saved = 0}}, priv = {pad = {0x0, 0x0, 0x0, 0x0}, data = {prev = 0x0, cleanup = 0x0, canceltype = 0}}}
+        not_first_call = <optimized out>
+#8  0x00007fffee7373fc in __GI___clone3 () at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:78
+No locals.
+
+Thread 1 (Thread 0x7fffee85ce40 (LWP 655227) "qore/1"):
+#0  0x00007fffcfa5f692 in ?? ()
+No symbol table info available.
+#1  0x0000000000000206 in ?? ()
+No symbol table info available.
+#2  0x0000000000000000 in ?? ()
+No symbol table info available.
+A debugging session is active.
+
+	Inferior 1 [process 655227] will be killed.
+
+Quit anyway? (y or n) [answered Y; input not from terminal]

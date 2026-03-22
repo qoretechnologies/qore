@@ -65,7 +65,9 @@ public:
     bool lowerStatementBlock(const StatementBlock* block, std::string& error);
     void setParseContext(QoreParseContext* parse_context);
 
-private:
+public:
+    // Expression handler methods - public for use by QoreIRExprRegistry
+    // These are implementation details not meant for external use
     QoreIRValue lowerConstant(const QoreValue& expr, std::string& error);
     QoreIRValue lowerVarRef(const QoreValue& expr, std::string& error);
     QoreIRValue lowerAssignment(const QoreValue& expr, std::string& error);
@@ -83,6 +85,17 @@ private:
     QoreIRValue lowerPostDecrement(const QoreValue& expr, std::string& error);
     QoreIRValue lowerPlus(const QoreValue& expr, std::string& error);
     QoreIRValue lowerMinus(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerMultiplication(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerDivision(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerModulo(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerBinaryAnd(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerBinaryOr(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerBinaryXor(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerBinaryNot(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerShiftLeft(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerShiftRight(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerShiftLeftEquals(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerShiftRightEquals(const QoreValue& expr, std::string& error);
     QoreIRValue lowerLogicalEquals(const QoreValue& expr, std::string& error);
     QoreIRValue lowerLogicalNotEquals(const QoreValue& expr, std::string& error);
     QoreIRValue lowerLogicalAbsoluteEquals(const QoreValue& expr, std::string& error);
@@ -92,50 +105,33 @@ private:
     QoreIRValue lowerLogicalGreaterThan(const QoreValue& expr, std::string& error);
     QoreIRValue lowerLogicalGreaterThanOrEquals(const QoreValue& expr, std::string& error);
     QoreIRValue lowerLogicalComparison(const QoreValue& expr, std::string& error);
-    QoreIRValue lowerLogicalAnd(const QoreValue& expr, std::string& error);
-    QoreIRValue lowerLogicalOr(const QoreValue& expr, std::string& error);
-    QoreIRValue lowerLogicalNot(const QoreValue& expr, std::string& error);
-    QoreIRValue lowerNullCoalescing(const QoreValue& expr, std::string& error);
-    QoreIRValue lowerValueCoalescing(const QoreValue& expr, std::string& error);
-    QoreIRValue lowerQuestionMark(const QoreValue& expr, std::string& error);
     QoreIRValue lowerUnaryPlus(const QoreValue& expr, std::string& error);
     QoreIRValue lowerUnaryMinus(const QoreValue& expr, std::string& error);
-    QoreIRValue lowerBinaryNot(const QoreValue& expr, std::string& error);
-    QoreIRValue lowerMultiplication(const QoreValue& expr, std::string& error);
-    QoreIRValue lowerDivision(const QoreValue& expr, std::string& error);
-    QoreIRValue lowerModulo(const QoreValue& expr, std::string& error);
-    QoreIRValue lowerBinaryAnd(const QoreValue& expr, std::string& error);
-    QoreIRValue lowerBinaryOr(const QoreValue& expr, std::string& error);
-    QoreIRValue lowerBinaryXor(const QoreValue& expr, std::string& error);
-    QoreIRValue lowerShiftLeft(const QoreValue& expr, std::string& error);
-    QoreIRValue lowerShiftRight(const QoreValue& expr, std::string& error);
-    QoreIRValue lowerShiftLeftEquals(const QoreValue& expr, std::string& error);
-    QoreIRValue lowerShiftRightEquals(const QoreValue& expr, std::string& error);
     QoreIRValue lowerRange(const QoreValue& expr, std::string& error);
     QoreIRValue lowerSquareBracketsRange(const QoreValue& expr, std::string& error);
     QoreIRValue lowerSquareBrackets(const QoreValue& expr, std::string& error);
     QoreIRValue lowerHashObjectDereference(const QoreValue& expr, std::string& error);
-    QoreIRValue lowerShift(const QoreValue& expr, std::string& error);
-    QoreIRValue lowerUnshift(const QoreValue& expr, std::string& error);
     QoreIRValue lowerPop(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerShift(const QoreValue& expr, std::string& error);
     QoreIRValue lowerPush(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerUnshift(const QoreValue& expr, std::string& error);
     QoreIRValue lowerSplice(const QoreValue& expr, std::string& error);
     QoreIRValue lowerExtract(const QoreValue& expr, std::string& error);
     QoreIRValue lowerRemove(const QoreValue& expr, std::string& error);
     QoreIRValue lowerDelete(const QoreValue& expr, std::string& error);
     QoreIRValue lowerKeys(const QoreValue& expr, std::string& error);
-    QoreIRValue lowerRegexNMatch(const QoreValue& expr, std::string& error);
     QoreIRValue lowerRegexMatch(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerRegexNMatch(const QoreValue& expr, std::string& error);
     QoreIRValue lowerRegexExtract(const QoreValue& expr, std::string& error);
     QoreIRValue lowerRegexSubst(const QoreValue& expr, std::string& error);
-    QoreIRValue lowerParseHash(const QoreValue& expr, std::string& error);
-    QoreIRValue lowerParseList(const QoreValue& expr, std::string& error);
     QoreIRValue lowerInstanceOf(const QoreValue& expr, std::string& error);
     QoreIRValue lowerTrim(const QoreValue& expr, std::string& error);
     QoreIRValue lowerChomp(const QoreValue& expr, std::string& error);
     QoreIRValue lowerTransliteration(const QoreValue& expr, std::string& error);
     QoreIRValue lowerBackground(const QoreValue& expr, std::string& error);
     QoreIRValue lowerListAssignment(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerParseHash(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerParseList(const QoreValue& expr, std::string& error);
     QoreIRValue lowerExists(const QoreValue& expr, std::string& error);
     QoreIRValue lowerElements(const QoreValue& expr, std::string& error);
     QoreIRValue lowerDotEval(const QoreValue& expr, std::string& error);
@@ -146,7 +142,20 @@ private:
     QoreIRValue lowerMapSelect(const QoreValue& expr, std::string& error);
     QoreIRValue lowerHashMap(const QoreValue& expr, std::string& error);
     QoreIRValue lowerHashMapSelect(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerLogicalAnd(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerLogicalOr(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerLogicalNot(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerNullCoalescing(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerValueCoalescing(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerQuestionMark(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerCast(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerBuiltinTypeConversion(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerFunctionCall(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerCallReference(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerSelfCall(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerStaticCall(const QoreValue& expr, std::string& error);
 
+private:
     //! Native IR lowering for map operator with implicit argument context
     QoreIRValue lowerMapNative(const QoreMapOperatorNode* map, const QoreValue& expr, std::string& error);
     //! Native IR lowering for select operator with implicit argument context
@@ -161,12 +170,6 @@ private:
     QoreIRValue lowerHashMapNative(const QoreHashMapOperatorNode* hm, const QoreValue& expr, std::string& error);
     //! Native IR lowering for hash map+select operator
     QoreIRValue lowerHashMapSelectNative(const QoreHashMapSelectOperatorNode* hms, const QoreValue& expr, std::string& error);
-    QoreIRValue lowerCast(const QoreValue& expr, std::string& error);
-    QoreIRValue lowerBuiltinTypeConversion(const QoreValue& expr, std::string& error);
-    QoreIRValue lowerFunctionCall(const QoreValue& expr, std::string& error);
-    QoreIRValue lowerCallReference(const QoreValue& expr, std::string& error);
-    QoreIRValue lowerSelfCall(const QoreValue& expr, std::string& error);
-    QoreIRValue lowerStaticCall(const QoreValue& expr, std::string& error);
     QoreIRValue lowerListNode(const QoreValue& expr, std::string& error);
     bool guardVarLValue(const QoreValue& exp, std::string& error, bool allow_maybe_nothing = false);
     bool guardLValueBase(const QoreValue& exp, std::string& error, bool allow_maybe_nothing = false);
