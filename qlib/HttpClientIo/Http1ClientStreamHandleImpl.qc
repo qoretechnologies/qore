@@ -99,7 +99,7 @@ public class Http1ClientStreamHandle inherits HttpClientStreamHandle {
         @throw HTTP1-STREAMING-ERROR if \c body_streaming is \c True (not supported)
     */
     int startStreaming(string method, string path, *hash<auto> headers,
-            bool body_streaming = False) {
+            bool body_streaming = False, *data body) {
         if (body_streaming) {
             throw "HTTP1-STREAMING-ERROR",
                 "bidirectional body streaming is not supported over HTTP/1.1";
@@ -145,7 +145,7 @@ public class Http1ClientStreamHandle inherits HttpClientStreamHandle {
         log(LoggerLevel::DEBUG, "starting streaming request: %s %s", method, path);
 
         try {
-            stream_id = h1conn.submitRequestStreaming(method, path, headers, NOTHING,
+            stream_id = h1conn.submitRequestStreaming(method, path, headers, body,
                 \handleStreamingResponse());
             @assert(stream_id >= 0);
             reservation_held = False;

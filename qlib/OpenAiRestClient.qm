@@ -38,6 +38,7 @@
 %requires(reexport) RestClient >= 1.3.1
 %requires(reexport) RestClientIo
 %requires(reexport) ConnectionProvider >= 1.4
+%requires HttpClientStreamingIo
 
 module OpenAiRestClient {
     version = "1.1";
@@ -523,6 +524,137 @@ public class OpenAiRestClientIo inherits RestClientIo::RestClientIo, OpenAiRestC
     */
     constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
             : RestClientIo(OpenAiRestClientBase::getOptions(opts), shared_mgr) {
+    }
+
+    #! Opens a Server-Sent Events stream for responses using async I/O
+    /** Uses HttpClientIo and SseStreamReader for incremental SSE event delivery
+        across HTTP/1.x, HTTP/2, and HTTP/3.
+
+        @param req the request body (will be serialized to JSON)
+        @param hdr optional additional request headers
+        @param to optional timeout for SSE event reading
+
+        @return an SSE stream object for reading events incrementally
+
+        @par Example:
+        @code{.py}
+OpenAiRestClientIo rest({"url": "https://api.openai.com", "token": api_key, "data": "json"});
+OpenAiResponseSseStreamIo stream = rest.openResponsesStream({
+    "model": "gpt-4o-mini",
+    "stream": True,
+    "input": ({"role": "user", "content": "Hello!"},),
+});
+while (*hash<SseMessageInfo> evt = stream.readEvent()) {
+    printf("Event: %y\n", evt.data);
+}
+        @endcode
+    */
+    OpenAiResponseSseStreamIo openResponsesStream(hash<auto> req, *hash<auto> hdr, *timeout to) {
+        return new OpenAiResponseSseStreamIo(self, "responses", req, hdr, to);
+    }
+}
+
+#! SSE stream for OpenAI responses using async I/O (HttpClientIo + SseStreamReader)
+/** Works across HTTP/1.x, HTTP/2, and HTTP/3 via HttpClientIo's multiplexed
+    connection manager.
+
+    @note This class is \b not thread-safe.  Use from a single reader thread.
+*/
+public class OpenAiResponseSseStreamIo {
+    private {
+        #! SSE stream reader
+        HttpClientStreamingIo::SseStreamReader reader;
+
+        #! Timeout for SSE event reading
+        timeout timeout_ms = 15s;
+
+        #! True when the stream has been closed
+        bool closed = False;
+    }
+
+    #! Creates the SSE stream connection
+    /** @param rest the OpenAiRestClientIo instance
+        @param path the API endpoint path (e.g., "responses")
+        @param body the request body (serialized to JSON)
+        @param hdr optional additional request headers
+        @param to optional timeout for SSE event reading
+    */
+    constructor(OpenAiRestClientIo rest, string path, *auto body, *hash<auto> hdr, *timeout to) {
+        if (to) {
+            timeout_ms = to;
+        }
+        hash<auto> headers = rest.getDefaultHeaders() + (hdr ?? {});
+        headers.Accept = "text/event-stream";
+
+        # Serialize body to JSON
+        *data payload;
+        if (exists body) {
+%ifdef NoJson
+            throw "SSE-ERROR", "json module is required to serialize SSE request body";
+%else
+            if (body.typeCode() != NT_STRING) {
+                if (!headers."Content-Type") {
+                    headers."Content-Type" = "application/json";
+                }
+                payload = call_function_args("to_json", (body,));
+            } else {
+                if (!headers."Content-Type") {
+                    headers."Content-Type" = "application/json";
+                }
+                payload = body;
+            }
+%endif
+        }
+
+        # Build full path
+        string full_path = buildPath(rest, path);
+
+        # Acquire stream and start SSE streaming
+        HttpClientIo::HttpClientConnectionManager mgr = rest.getConnectionManager();
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(rest.getUrl());
+        stream.startStreaming("POST", full_path, headers, False, payload);
+
+        reader = new HttpClientStreamingIo::SseStreamReader(stream);
+    }
+
+    #! Reads the next SSE event
+    /** @param to optional timeout override
+        @return the parsed SSE event, or NOTHING on timeout or stream end
+    */
+    *hash<SseMessageInfo> readEvent(*timeout to) {
+        if (closed) {
+            return NOTHING;
+        }
+        return reader.readEvent(to ?? timeout_ms);
+    }
+
+    #! Returns True if the stream has ended
+    bool isDone() {
+        return closed || reader.isDone();
+    }
+
+    #! Closes the stream
+    close() {
+        if (!closed) {
+            closed = True;
+            reader.cancel();
+        }
+    }
+
+    #! Builds the full API path from connection path + relative path
+    private static string buildPath(RestClientIo::RestClientIo rest, string path) {
+        string rv = path;
+        rv =~ s/^\/+//;
+        rv = "/" + rv;
+        *string base = rest.getConnectionPath();
+        if (base.val() && base != "/") {
+            base =~ s/\/+$//;
+            if (base !~ /^\//) {
+                base = "/" + base;
+            }
+            rv = base + rv;
+        }
+        return rv;
     }
 }
 }

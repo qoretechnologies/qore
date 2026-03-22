@@ -111,7 +111,7 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
     }
 
     int startStreaming(string method, string path, *hash<auto> headers,
-            bool body_streaming = False) {
+            bool body_streaming = False, *data body) {
         {
             AutoLock al(lock);
             if (state != HttpClientStreamState::Pending) {
@@ -139,7 +139,7 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
         log(LoggerLevel::DEBUG, "starting streaming request: %s %s", method, path);
 
         try {
-            stream_id = h2conn.submitRequestStreaming(method, path, headers, NOTHING,
+            stream_id = h2conn.submitRequestStreaming(method, path, headers, body,
                 \handleStreamingResponse(), NOTHING, body_streaming);
             @assert(stream_id >= 0);
         } catch (hash<ExceptionInfo> ex) {

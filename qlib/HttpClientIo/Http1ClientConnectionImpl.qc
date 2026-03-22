@@ -103,8 +103,18 @@ public class Http1ClientConnection inherits HttpClientConnection {
     */
     int submitRequestImpl(string method, string path, *hash<auto> headers,
             *data body, HttpResponseCallback callback, *hash<auto> ctx) {
-        return poll_op.submitRequest(method, path, headers, body, callback, ctx,
+        int sid = poll_op.submitRequest(method, path, headers, body, callback, ctx,
             max_concurrent_streams);
+        # Wake the I/O controller so it processes the queued request
+        *object ctl;
+        {
+            AutoLock al(lock);
+            ctl = controller_ref;
+        }
+        if (ctl) {
+            ctl.wake();
+        }
+        return sid;
     }
 
     #! Submits a streaming request on this connection
@@ -128,8 +138,18 @@ public class Http1ClientConnection inherits HttpClientConnection {
     int submitRequestStreaming(string method, string path, *hash<auto> headers,
             *data body, HttpResponseCallback callback, *hash<auto> ctx,
             bool streaming = True) {
-        return poll_op.submitRequest(method, path, headers, body, callback, ctx,
+        int sid = poll_op.submitRequest(method, path, headers, body, callback, ctx,
             max_concurrent_streams, streaming);
+        # Wake the I/O controller so it processes the queued request
+        *object ctl;
+        {
+            AutoLock al(lock);
+            ctl = controller_ref;
+        }
+        if (ctl) {
+            ctl.wake();
+        }
+        return sid;
     }
 
     #! Cancels a request (protocol-specific)
