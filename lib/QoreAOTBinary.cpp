@@ -1835,16 +1835,17 @@ static QoreIRFunction* lowerClosureForSerialization(const UserClosureVariant* va
     return ir;
 }
 
+} // anonymous namespace
 
 //! Classify and write a QoreValue expression in AOTExprKind format
 /** Used by handler IR serialization to classify expression nodes inline.
     Handles function calls, method calls, variable refs, constants, and enums.
     Returns true on success, false if the expression cannot be classified.
 */
-static bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
+bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         const std::vector<AOTLocalSlotId>& parent_locals,
         const std::vector<AOTGlobalSlotId>& parent_globals,
-        const AOTConstantReverseMap* const_reverse_map = nullptr) {
+        const AOTConstantReverseMap* const_reverse_map) {
     if (!expr.hasNode()) {
         if (expr.isEnum()) {
             const QoreEnumMember* member = expr.getEnumMember();
@@ -2199,8 +2200,6 @@ static bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& e
     writer.writeU8(static_cast<uint8_t>(AOTExprKind::GENERIC_EVAL));
     return true;
 }
-
-} // anonymous namespace
 
 bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompiledFuncWithSlots>& funcs,
         const AOTConstantReverseMap* const_reverse_map, std::string& error) {

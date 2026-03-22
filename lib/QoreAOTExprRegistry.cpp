@@ -31,294 +31,24 @@
 #include "qore/intern/QoreAOTExprRegistry.h"
 
 // ============================================================================
-// Expression Kind Handler Stubs
+// Expression Kind Handlers (Phase 3.2 - Extracted from serialization code)
 // ============================================================================
-// Each handler pair (write, read) will be extracted from classifyAndWriteExpr
-// and classifyAndReadExpr during Phase 3.2
-
-// Placeholder handlers (return true for write, nullptr for read) — to be filled in Phase 3.2
-
-static bool write_func_call(AOTExprWriteCtx& ctx) {
-    // TODO: Extract from classifyAndWriteExpr
-    return true;
-}
-
-static QoreValue read_func_call(AOTExprReadCtx& ctx) {
-    // TODO: Extract from classifyAndReadExpr
-    return QoreValue();
-}
-
-static bool write_self_method_call(AOTExprWriteCtx& ctx) {
-    return true;
-}
-
-static QoreValue read_self_method_call(AOTExprReadCtx& ctx) {
-    return QoreValue();
-}
-
-static bool write_static_method_call(AOTExprWriteCtx& ctx) {
-    return true;
-}
-
-static QoreValue read_static_method_call(AOTExprReadCtx& ctx) {
-    return QoreValue();
-}
-
-static bool write_new_object(AOTExprWriteCtx& ctx) {
-    return true;
-}
-
-static QoreValue read_new_object(AOTExprReadCtx& ctx) {
-    return QoreValue();
-}
-
-static bool write_runtime_const_ref(AOTExprWriteCtx& ctx) {
-    return true;
-}
-
-static QoreValue read_runtime_const_ref(AOTExprReadCtx& ctx) {
-    return QoreValue();
-}
-
-static bool write_self_varref(AOTExprWriteCtx& ctx) {
-    return true;
-}
-
-static QoreValue read_self_varref(AOTExprReadCtx& ctx) {
-    return QoreValue();
-}
-
-static bool write_local_varref(AOTExprWriteCtx& ctx) {
-    return true;
-}
-
-static QoreValue read_local_varref(AOTExprReadCtx& ctx) {
-    return QoreValue();
-}
-
-static bool write_global_varref(AOTExprWriteCtx& ctx) {
-    return true;
-}
-
-static QoreValue read_global_varref(AOTExprReadCtx& ctx) {
-    return QoreValue();
-}
-
-static bool write_const_number(AOTExprWriteCtx& ctx) {
-    return true;
-}
-
-static QoreValue read_const_number(AOTExprReadCtx& ctx) {
-    return QoreValue();
-}
-
-static bool write_const_binary(AOTExprWriteCtx& ctx) {
-    return true;
-}
-
-static QoreValue read_const_binary(AOTExprReadCtx& ctx) {
-    return QoreValue();
-}
-
-static bool write_closure_create(AOTExprWriteCtx& ctx) {
-    return true;
-}
-
-static QoreValue read_closure_create(AOTExprReadCtx& ctx) {
-    return QoreValue();
-}
-
-static bool write_call_ref(AOTExprWriteCtx& ctx) {
-    return true;
-}
-
-static QoreValue read_call_ref(AOTExprReadCtx& ctx) {
-    return QoreValue();
-}
-
-static bool write_obj_method_ref(AOTExprWriteCtx& ctx) {
-    return true;
-}
-
-static QoreValue read_obj_method_ref(AOTExprReadCtx& ctx) {
-    return QoreValue();
-}
-
-static bool write_static_varref(AOTExprWriteCtx& ctx) {
-    return true;
-}
-
-static QoreValue read_static_varref(AOTExprReadCtx& ctx) {
-    return QoreValue();
-}
-
-static bool write_scoped_new_object(AOTExprWriteCtx& ctx) {
-    return true;
-}
-
-static QoreValue read_scoped_new_object(AOTExprReadCtx& ctx) {
-    return QoreValue();
-}
-
-static bool write_hashdecl_new(AOTExprWriteCtx& ctx) {
-    return true;
-}
-
-static QoreValue read_hashdecl_new(AOTExprReadCtx& ctx) {
-    return QoreValue();
-}
-
-static bool write_complex_hash_new(AOTExprWriteCtx& ctx) {
-    return true;
-}
-
-static QoreValue read_complex_hash_new(AOTExprReadCtx& ctx) {
-    return QoreValue();
-}
-
-static bool write_complex_list_new(AOTExprWriteCtx& ctx) {
-    return true;
-}
-
-static QoreValue read_complex_list_new(AOTExprReadCtx& ctx) {
-    return QoreValue();
-}
-
-static bool write_const_enum(AOTExprWriteCtx& ctx) {
-    return true;
-}
-
-static QoreValue read_const_enum(AOTExprReadCtx& ctx) {
-    return QoreValue();
-}
-
-static bool write_const_string(AOTExprWriteCtx& ctx) {
-    return true;
-}
-
-static QoreValue read_const_string(AOTExprReadCtx& ctx) {
-    return QoreValue();
-}
-
-static bool write_hash_literal(AOTExprWriteCtx& ctx) {
-    return true;
-}
-
-static QoreValue read_hash_literal(AOTExprReadCtx& ctx) {
-    return QoreValue();
-}
-
-static bool write_hash_deref(AOTExprWriteCtx& ctx) {
-    return true;
-}
-
-static QoreValue read_hash_deref(AOTExprReadCtx& ctx) {
-    return QoreValue();
-}
-
-static bool write_parse_ref(AOTExprWriteCtx& ctx) {
-    return true;
-}
-
-static QoreValue read_parse_ref(AOTExprReadCtx& ctx) {
-    return QoreValue();
-}
-
-static bool write_cast_hashdecl(AOTExprWriteCtx& ctx) {
-    return true;
-}
-
-static QoreValue read_cast_hashdecl(AOTExprReadCtx& ctx) {
-    return QoreValue();
-}
-
-static bool write_cast_complex_hash(AOTExprWriteCtx& ctx) {
-    return true;
-}
-
-static QoreValue read_cast_complex_hash(AOTExprReadCtx& ctx) {
-    return QoreValue();
-}
-
-static bool write_cast_complex_list(AOTExprWriteCtx& ctx) {
-    return true;
-}
-
-static QoreValue read_cast_complex_list(AOTExprReadCtx& ctx) {
-    return QoreValue();
-}
-
-static bool write_cast_class(AOTExprWriteCtx& ctx) {
-    return true;
-}
-
-static QoreValue read_cast_class(AOTExprReadCtx& ctx) {
-    return QoreValue();
-}
-
-static bool write_cast_enum(AOTExprWriteCtx& ctx) {
-    return true;
-}
-
-static QoreValue read_cast_enum(AOTExprReadCtx& ctx) {
-    return QoreValue();
-}
-
-static bool write_const_int(AOTExprWriteCtx& ctx) {
-    return true;
-}
-
-static QoreValue read_const_int(AOTExprReadCtx& ctx) {
-    return QoreValue();
-}
-
-static bool write_const_float(AOTExprWriteCtx& ctx) {
-    return true;
-}
-
-static QoreValue read_const_float(AOTExprReadCtx& ctx) {
-    return QoreValue();
-}
-
-static bool write_const_bool(AOTExprWriteCtx& ctx) {
-    return true;
-}
-
-static QoreValue read_const_bool(AOTExprReadCtx& ctx) {
-    return QoreValue();
-}
-
-static bool write_const_nothing(AOTExprWriteCtx& ctx) {
-    return true;
-}
-
-static QoreValue read_const_nothing(AOTExprReadCtx& ctx) {
-    return QoreValue();
-}
-
-static bool write_list_literal(AOTExprWriteCtx& ctx) {
-    return true;
-}
-
-static QoreValue read_list_literal(AOTExprReadCtx& ctx) {
-    return QoreValue();
-}
-
-static bool write_expr_tree(AOTExprWriteCtx& ctx) {
-    return true;
-}
-
-static QoreValue read_expr_tree(AOTExprReadCtx& ctx) {
-    return QoreValue();
-}
-
-static bool write_generic_eval(AOTExprWriteCtx& ctx) {
-    return true;
-}
-
-static QoreValue read_generic_eval(AOTExprReadCtx& ctx) {
-    return QoreValue();
-}
+// Handler pairs extracted from classifyAndWriteExpr() and readOneExpr()
+
+// Forward declarations for recursive handlers
+extern bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
+        const std::vector<AOTLocalSlotId>& parent_locals,
+        const std::vector<AOTGlobalSlotId>& parent_globals,
+        const AOTConstantReverseMap* const_reverse_map);
+
+extern QoreValue readOneExpr(
+        const QoreAOTBinaryReader& rdr, const uint8_t*& p, const uint8_t* e,
+        std::string& err, QoreProgram* pgm,
+        LocalVar** locals, int num_locals,
+        Var** globals, int num_globals);
+
+// Include all handler implementations (Phase 3.2 extracted handlers)
+#include "QoreAOTExprHandlers.cpp"
 
 // ============================================================================
 // Registry Lookup Function
@@ -340,103 +70,103 @@ const QoreAOTExprKindInfo AOT_EXPR_KIND_REGISTRY[256] = {
     {nullptr, 0, false, nullptr, nullptr, nullptr},
 
     // 1: FUNC_CALL
-    {"FUNC_CALL", 1, true, write_func_call, read_func_call, "Regular function call"},
+    {"FUNC_CALL", 1, true, write_expr_func_call, read_expr_func_call, "Regular function call"},
 
     // 2: SELF_METHOD_CALL
-    {"SELF_METHOD_CALL", 2, true, write_self_method_call, read_self_method_call, "Self method call"},
+    {"SELF_METHOD_CALL", 2, true, write_expr_self_method_call, read_expr_self_method_call, "Self method call"},
 
     // 3: STATIC_METHOD_CALL
-    {"STATIC_METHOD_CALL", 3, true, write_static_method_call, read_static_method_call, "Static method call"},
+    {"STATIC_METHOD_CALL", 3, true, write_expr_static_method_call, read_expr_static_method_call, "Static method call"},
 
     // 4: NEW_OBJECT
-    {"NEW_OBJECT", 4, true, write_new_object, read_new_object, "New object constructor"},
+    {"NEW_OBJECT", 4, true, write_expr_new_object, read_expr_new_object, "New object constructor"},
 
     // 5: RUNTIME_CONST_REF
-    {"RUNTIME_CONST_REF", 5, true, write_runtime_const_ref, read_runtime_const_ref, "Runtime constant reference"},
+    {"RUNTIME_CONST_REF", 5, true, write_expr_runtime_const_ref, read_expr_runtime_const_ref, "Runtime constant reference"},
 
     // 6: SELF_VARREF
-    {"SELF_VARREF", 6, true, write_self_varref, read_self_varref, "Self variable reference"},
+    {"SELF_VARREF", 6, true, write_expr_self_varref, read_expr_self_varref, "Self variable reference"},
 
     // 7: LOCAL_VARREF
-    {"LOCAL_VARREF", 7, true, write_local_varref, read_local_varref, "Local variable reference"},
+    {"LOCAL_VARREF", 7, true, write_expr_local_varref, read_expr_local_varref, "Local variable reference"},
 
     // 8: GLOBAL_VARREF
-    {"GLOBAL_VARREF", 8, true, write_global_varref, read_global_varref, "Global variable reference"},
+    {"GLOBAL_VARREF", 8, true, write_expr_global_varref, read_expr_global_varref, "Global variable reference"},
 
     // 9: CONST_NUMBER
-    {"CONST_NUMBER", 9, true, write_const_number, read_const_number, "Number constant"},
+    {"CONST_NUMBER", 9, true, write_expr_const_number, read_expr_const_number, "Number constant"},
 
     // 10: CONST_BINARY
-    {"CONST_BINARY", 10, true, write_const_binary, read_const_binary, "Binary constant"},
+    {"CONST_BINARY", 10, true, write_expr_const_binary, read_expr_const_binary, "Binary constant"},
 
     // 11: CLOSURE_CREATE
-    {"CLOSURE_CREATE", 11, true, write_closure_create, read_closure_create, "Closure/lambda creation"},
+    {"CLOSURE_CREATE", 11, true, write_expr_closure_create, read_expr_closure_create, "Closure/lambda creation"},
 
     // 12: CALL_REF
-    {"CALL_REF", 12, true, write_call_ref, read_call_ref, "Call reference call"},
+    {"CALL_REF", 12, true, write_expr_call_ref, read_expr_call_ref, "Call reference call"},
 
     // 13: OBJ_METHOD_REF
-    {"OBJ_METHOD_REF", 13, true, write_obj_method_ref, read_obj_method_ref, "Object method reference"},
+    {"OBJ_METHOD_REF", 13, true, write_expr_obj_method_ref, read_expr_obj_method_ref, "Object method reference"},
 
     // 14: STATIC_VARREF
-    {"STATIC_VARREF", 14, true, write_static_varref, read_static_varref, "Static class variable"},
+    {"STATIC_VARREF", 14, true, write_expr_static_varref, read_expr_static_varref, "Static class variable"},
 
     // 15: SCOPED_NEW_OBJECT
-    {"SCOPED_NEW_OBJECT", 15, true, write_scoped_new_object, read_scoped_new_object, "Scoped new object"},
+    {"SCOPED_NEW_OBJECT", 15, true, write_expr_scoped_new_object, read_expr_scoped_new_object, "Scoped new object"},
 
     // 16: HASHDECL_NEW
-    {"HASHDECL_NEW", 16, true, write_hashdecl_new, read_hashdecl_new, "Hashdecl construction"},
+    {"HASHDECL_NEW", 16, true, write_expr_hashdecl_new, read_expr_hashdecl_new, "Hashdecl construction"},
 
     // 17: COMPLEX_HASH_NEW
-    {"COMPLEX_HASH_NEW", 17, true, write_complex_hash_new, read_complex_hash_new, "Complex hash construction"},
+    {"COMPLEX_HASH_NEW", 17, true, write_expr_complex_hash_new, read_expr_complex_hash_new, "Complex hash construction"},
 
     // 18: COMPLEX_LIST_NEW
-    {"COMPLEX_LIST_NEW", 18, true, write_complex_list_new, read_complex_list_new, "Complex list construction"},
+    {"COMPLEX_LIST_NEW", 18, true, write_expr_complex_list_new, read_expr_complex_list_new, "Complex list construction"},
 
     // 19: CONST_ENUM
-    {"CONST_ENUM", 19, true, write_const_enum, read_const_enum, "Enum constant"},
+    {"CONST_ENUM", 19, true, write_expr_const_enum, read_expr_const_enum, "Enum constant"},
 
     // 20: CONST_STRING
-    {"CONST_STRING", 20, true, write_const_string, read_const_string, "String constant"},
+    {"CONST_STRING", 20, true, write_expr_const_string, read_expr_const_string, "String constant"},
 
     // 21: HASH_LITERAL
-    {"HASH_LITERAL", 21, true, write_hash_literal, read_hash_literal, "Hash literal"},
+    {"HASH_LITERAL", 21, true, write_expr_hash_literal, read_expr_hash_literal, "Hash literal"},
 
     // 22: HASH_DEREF
-    {"HASH_DEREF", 22, true, write_hash_deref, read_hash_deref, "Hash/object dereference"},
+    {"HASH_DEREF", 22, true, write_expr_hash_deref, read_expr_hash_deref, "Hash/object dereference"},
 
     // 23: PARSE_REF
-    {"PARSE_REF", 23, true, write_parse_ref, read_parse_ref, "Parse reference"},
+    {"PARSE_REF", 23, true, write_expr_parse_ref, read_expr_parse_ref, "Parse reference"},
 
     // 24: CAST_HASHDECL
-    {"CAST_HASHDECL", 24, true, write_cast_hashdecl, read_cast_hashdecl, "Hashdecl cast"},
+    {"CAST_HASHDECL", 24, true, write_expr_cast_hashdecl, read_expr_cast_hashdecl, "Hashdecl cast"},
 
     // 25: CAST_COMPLEX_HASH
-    {"CAST_COMPLEX_HASH", 25, true, write_cast_complex_hash, read_cast_complex_hash, "Complex hash cast"},
+    {"CAST_COMPLEX_HASH", 25, true, write_expr_cast_complex_hash, read_expr_cast_complex_hash, "Complex hash cast"},
 
     // 26: CAST_COMPLEX_LIST
-    {"CAST_COMPLEX_LIST", 26, true, write_cast_complex_list, read_cast_complex_list, "Complex list cast"},
+    {"CAST_COMPLEX_LIST", 26, true, write_expr_cast_complex_list, read_expr_cast_complex_list, "Complex list cast"},
 
     // 27: CAST_CLASS
-    {"CAST_CLASS", 27, true, write_cast_class, read_cast_class, "Class cast"},
+    {"CAST_CLASS", 27, true, write_expr_cast_class, read_expr_cast_class, "Class cast"},
 
     // 28: CAST_ENUM
-    {"CAST_ENUM", 28, true, write_cast_enum, read_cast_enum, "Enum cast"},
+    {"CAST_ENUM", 28, true, write_expr_cast_enum, read_expr_cast_enum, "Enum cast"},
 
     // 29: CONST_INT
-    {"CONST_INT", 29, true, write_const_int, read_const_int, "Integer constant"},
+    {"CONST_INT", 29, true, write_expr_const_int, read_expr_const_int, "Integer constant"},
 
     // 30: CONST_FLOAT
-    {"CONST_FLOAT", 30, true, write_const_float, read_const_float, "Float constant"},
+    {"CONST_FLOAT", 30, true, write_expr_const_float, read_expr_const_float, "Float constant"},
 
     // 31: CONST_BOOL
-    {"CONST_BOOL", 31, true, write_const_bool, read_const_bool, "Boolean constant"},
+    {"CONST_BOOL", 31, true, write_expr_const_bool, read_expr_const_bool, "Boolean constant"},
 
     // 32: CONST_NOTHING
-    {"CONST_NOTHING", 32, true, write_const_nothing, read_const_nothing, "Nothing constant"},
+    {"CONST_NOTHING", 32, true, write_expr_const_nothing, read_expr_const_nothing, "Nothing constant"},
 
     // 33: LIST_LITERAL
-    {"LIST_LITERAL", 33, true, write_list_literal, read_list_literal, "List literal"},
+    {"LIST_LITERAL", 33, true, write_expr_list_literal, read_expr_list_literal, "List literal"},
 
     // 34-253: Unused/Reserved
     {nullptr, 34, false, nullptr, nullptr, nullptr},
@@ -661,8 +391,8 @@ const QoreAOTExprKindInfo AOT_EXPR_KIND_REGISTRY[256] = {
     {nullptr, 253, false, nullptr, nullptr, nullptr},
 
     // 254: EXPR_TREE
-    {"EXPR_TREE", 254, true, write_expr_tree, read_expr_tree, "Recursive expression tree"},
+    {"EXPR_TREE", 254, true, write_expr_expr_tree, read_expr_expr_tree, "Recursive expression tree"},
 
     // 255: GENERIC_EVAL
-    {"GENERIC_EVAL", 255, true, write_generic_eval, read_generic_eval, "Unsupported expression — fallback to source"},
+    {"GENERIC_EVAL", 255, true, write_expr_generic_eval, read_expr_generic_eval, "Unsupported expression — fallback to source"},
 };

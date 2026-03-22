@@ -1257,4 +1257,39 @@ bool decompressMetadata(const uint8_t* input, size_t input_len,
     std::vector<uint8_t>& output,
     std::string& error);
 
+// ============================================================================
+// Internal Expression Handler Helpers (Phase 3.2+)
+// ============================================================================
+// These functions are used by expression registry handlers for recursive
+// serialization/deserialization of nested expressions.
+
+//! Classify and write a QoreValue expression in AOTExprKind format
+//! @param writer binary writer to write to
+//! @param expr the expression to serialize
+//! @param parent_locals parent function's local slot metadata
+//! @param parent_globals parent function's global slot metadata
+//! @param const_reverse_map reverse map for constant lookup (optional)
+//! @return true if expression was successfully serialized, false otherwise
+bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
+        const std::vector<AOTLocalSlotId>& parent_locals,
+        const std::vector<AOTGlobalSlotId>& parent_globals,
+        const AOTConstantReverseMap* const_reverse_map = nullptr);
+
+//! Read one expression from inline closure/handler IR binary data
+//! @param rdr binary reader for reading data
+//! @param p current read pointer (advanced by reading)
+//! @param e end of valid data
+//! @param err set to error message on failure
+//! @param pgm the Qore program for symbol resolution
+//! @param locals LocalVar* array for LOCAL_VARREF resolution (may be null)
+//! @param num_locals number of entries in locals
+//! @param globals Var* array for GLOBAL_VARREF resolution (may be null)
+//! @param num_globals number of entries in globals
+//! @return reconstructed expression, or NOTHING on failure
+QoreValue readOneExpr(
+        const QoreAOTBinaryReader& rdr, const uint8_t*& p, const uint8_t* e,
+        std::string& err, QoreProgram* pgm,
+        LocalVar** locals, int num_locals,
+        Var** globals, int num_globals);
+
 #endif

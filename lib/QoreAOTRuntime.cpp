@@ -687,7 +687,8 @@ static void skipOneExpr(const QoreAOTBinaryReader& rdr, const uint8_t*& p, const
     // CONST_NOTHING, GENERIC_EVAL or unknown: no bytes to skip
 }
 
-static QoreValue readOneExpr(
+// Forward declaration for use by expression registry handlers (Phase 3.2)
+QoreValue readOneExpr(
         const QoreAOTBinaryReader& rdr, const uint8_t*& p, const uint8_t* e,
         std::string& err, QoreProgram* pgm,
         LocalVar** locals, int num_locals,
