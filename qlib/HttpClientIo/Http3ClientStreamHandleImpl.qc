@@ -220,8 +220,8 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
             stream_id = h3conn.submitRequestStreaming(method, path, headers, NOTHING,
                 \handleStreamingResponse(), NOTHING, body_streaming);
             @assert(stream_id >= 0);
-            # Reservation converted to active stream (same as base class submit path)
-            reservation_held = False;
+            # Reservation converted to active stream; release connection reservation
+            releaseReservationIfHeld();
         } catch (hash<ExceptionInfo> ex) {
             {
                 AutoLock al(lock);
