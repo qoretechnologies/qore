@@ -48,6 +48,7 @@
 #include "qore/intern/QoreIRBuilder.h"
 #include "qore/intern/QoreIRLowering.h"
 #include "qore/intern/QoreIRVerifier.h"
+#include "qore/intern/QoreAOTInstRegistry.h"
 #include "qore/intern/CaseNodeRegex.h"
 #include "qore/intern/SwitchStatement.h"
 
@@ -3401,22 +3402,23 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
     QoreIRBasicBlock* exc_target = (exc_target_idx != 0xFFFF && exc_target_idx < blocks.size())
         ? blocks[exc_target_idx].get() : nullptr;
 
-    // Helper to resolve a block index
-    auto resolveBlock = [&](uint16_t idx) -> QoreIRBasicBlock* {
-        return (idx != 0xFFFF && idx < blocks.size()) ? blocks[idx].get() : nullptr;
-    };
-
-    // Helper to resolve a local variable by name
-    auto resolveLocal = [&](const char* name) -> LocalVar* {
-        if (!name || !*name) {
-            return nullptr;
-        }
-        auto it = local_map.find(name);
-        return it != local_map.end() ? it->second : nullptr;
-    };
-
     std::unique_ptr<QoreIRInstruction> inst;
 
+    // Dispatch via registry
+    const auto* ginfo = getAOTInstGroupInfo(group_byte);
+    if (!ginfo || !ginfo->is_serializable || !ginfo->read_fn) {
+        error = "unsupported instruction group " + std::to_string(group_byte);
+        return nullptr;
+    }
+    AOTInstReadCtx rctx{reader, ptr, end, blocks, local_map, readExpr, pgm, error};
+    inst = ginfo->read_fn(opcode_raw, exc_target, operands, result_id, rctx);
+    if (!inst) {
+        return nullptr;
+    }
+
+    // This #if 0 block contains the original switch statement that was replaced by registry dispatch.
+    // It is kept for reference only.
+    #if 0
     switch (group) {
         case QoreIRInstGroup::Base: {
             inst = std::make_unique<QoreIRInstruction>(opcode);
@@ -4211,6 +4213,7 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
             error = "unsupported IR instruction group " + std::to_string(group_byte);
             return nullptr;
     }
+    #endif
 
     // Set base fields
     inst->result = QoreIRValue(result_id);

@@ -1914,6 +1914,12 @@ static std::unique_ptr<QoreIRInstruction> readListIndexAccess(
 // ============================================================================
 
 const QoreIRInstGroupInfo AOT_INST_GROUP_REGISTRY[AOT_INST_GROUP_TABLE_SIZE] = {
+    // Index 0: Base
+    { "Base", 0, true, false, writeBase, readBase, "Base instruction (no group data)" },
+
+    // Index 1: Const
+    { "Const", 1, true, false, writeConst, readConst, "Constant value" },
+
     // Index 2: Branch
     { "Branch", 2, true, false, writeBranch, readBranch, "Unconditional branch to target block" },
 
