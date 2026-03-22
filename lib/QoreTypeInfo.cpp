@@ -3103,3 +3103,96 @@ const QoreTypeInfo* QoreTypeInfo::getImplicitArgTypeForIterator(const QoreValue&
 
     return implicitArgType;
 }
+
+const QoreTypeInfo* QoreTypeInfo::getReturnComplexHashOrNothing(const QoreTypeInfo* ti) {
+    if (!ti || !hasType(ti)) {
+        return nullptr;
+    }
+    if (ti->return_vec.size() > 1) {
+        if (ti->return_vec.size() != 2 || (ti->return_vec[1].spec.match(NT_NOTHING) != QTI_IDENT))
+            return nullptr;
+    }
+    return ti == autoHashTypeInfo || ti == autoHashOrNothingTypeInfo
+        ? autoTypeInfo
+        : ti->return_vec[0].spec.getComplexHash();
+}
+
+void QoreTypeInfo::getNodeType(QoreString& str, const QoreValue& n) {
+    qore_type_t nt = n.getType();
+    if (nt == NT_NOTHING) {
+        str.concat("no value");
+        return;
+    }
+    if (nt != NT_OBJECT) {
+        str.sprintf("type '%s'", n.getFullTypeName());
+        return;
+    }
+    const QoreObject* obj = n.get<const QoreObject>();
+    if (!obj->isValid()) {
+        str.sprintf("no value (deleted object of class '%s')", obj->getClassName());
+        return;
+    }
+    str.sprintf("an object of class '%s'", obj->getClassName());
+}
+
+void QoreTypeInfo::ptext(QoreString& str, const char* arg_type, int param_num, const char* param_name) {
+    if (!param_num && param_name && param_name[0] == '<') {
+        str.concat(param_name);
+        str.concat(' ');
+        return;
+    }
+    if (param_name && param_name[0] == '<') {
+        str.concat(param_name);
+        str.concat(' ');
+    }
+    if (param_num) {
+        str.sprintf("parameter %d ", param_num);
+        if (param_name && param_name[0] != '<')
+            str.sprintf("('%s') ", param_name);
+    } else if (param_name)
+        str.sprintf("%s '%s' ", arg_type, param_name);
+    else {
+        str.concat(arg_type);
+        str.concat(' ');
+    }
+}
+
+int QoreTypeInfo::doAcceptError(bool priv_error, const char* arg_type, bool obj, int param_num, const char* param_name,
+        const QoreValue& n, ExceptionSink* xsink) const {
+    if (priv_error) {
+        if (obj) {
+            doObjectPrivateClassException(param_name, xsink);
+        } else {
+            doPrivateClassException(arg_type, param_num + 1, param_name, xsink);
+        }
+    } else {
+        if (obj) {
+            doObjectHashDeclTypeException(arg_type, param_name, n, xsink);
+        } else {
+            doTypeException(arg_type, param_num + 1, param_name, n, xsink);
+        }
+    }
+    return -1;
+}
+
+int QoreTypeInfo::doTypeException(const char* arg_type, int param_num, const char* param_name, const QoreValue& n,
+        ExceptionSink* xsink) const {
+    // xsink may be null in case parse exceptions have been disabled in the QoreProgram object
+    // for example if there was a "requires" error
+    if (!xsink)
+        return -1;
+
+    QoreStringNode* desc = new QoreStringNode;
+    QoreTypeInfo::ptext(*desc, arg_type, param_num, param_name);
+    desc->sprintf("expects type '%s', but got ", tname.c_str());
+    QoreTypeInfo::getNodeType(*desc, n);
+    desc->concat(" instead");
+    // Add a hint about type narrowing for lvalue/key assignments when the expected type is a simple type
+    // that could have come from type narrowing of hash<auto>
+    if (!strcmp(arg_type, "lvalue") && isSimpleTypeNarrowed()) {
+        desc->concat("; this may be due to type narrowing from hash<auto>; to store values of "
+            "different types, use 'hash<auto!> h()' or 'hash h = cast<hash>({...})'");
+    }
+    xsink->raiseException("RUNTIME-TYPE-ERROR", desc);
+    return -1;
+}
