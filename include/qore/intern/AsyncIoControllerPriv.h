@@ -130,6 +130,20 @@ public:
     //! Default I/O operation timeout (30 seconds)
     static constexpr int64 DEFAULT_IO_TIMEOUT_US = 30000000LL;
 
+    //! Autostop grace period (2 seconds)
+    /** When the cache empties and autostop is enabled, the I/O thread waits
+        this long before exiting.  This avoids unnecessary stop/restart cycles
+        when operations are submitted in rapid succession (e.g., between test
+        cases or when creating multiple HTTP servers).  Without the grace
+        period, the I/O thread exits immediately and the next submit() must
+        wait for the old thread to finish cleanup before starting a new one,
+        adding latency that can cause QUIC handshake timeouts on
+        resource-constrained systems.
+
+        @since %Qore 2.3
+    */
+    static constexpr int64 AUTOSTOP_GRACE_US = 2000000LL;
+
     //! Creates the controller
     /** @param autostop if true, the I/O thread will stop when all operations complete
         @param xsink for exception handling
@@ -352,6 +366,7 @@ private:
     bool ready_flag;
     int submit_seq;                       //!< Incremented on each submit() call
     int processed_seq;                    //!< Updated by I/O thread after Phase 1 snapshot
+    int64 autostop_idle_since;            //!< Timestamp when cache first became empty (0 = not idle)
     QoreCondition processed_cond;         //!< Signaled when processed_seq advances
     QoreLoggerBridge* logger;              //!< Referenced or nullptr
     std::unordered_map<int64_t, TimerInfo> timer_info_map; //!< Timer ID -> user data
