@@ -431,13 +431,1489 @@ static std::unique_ptr<QoreIRInstruction> readOnBlockExit(
 // Instruction Group Registry Table
 // ============================================================================
 
+// ============================================================================
+// Group 7: Var - Global variable reference
+// ============================================================================
+
+static bool writeVar(AOTInstWriteCtx& ctx) {
+    auto* vi = static_cast<const QoreIRVarInstruction*>(ctx.inst);
+    ctx.writer.writeStringRef(vi->var ? vi->var->getName() : "");
+    ctx.writer.writeU8(vi->weak ? 1 : 0);
+    return true;
+}
+
+static std::unique_ptr<QoreIRInstruction> readVar(
+        uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
+        const std::vector<QoreIRValue>& operands, uint32_t result_id,
+        AOTInstReadCtx& ctx) {
+    const char* vname = ctx.reader.readStringRef(ctx.ptr);
+    bool weak = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
+    Var* var = nullptr;
+    if (vname && *vname) {
+        qore_program_private* pp = qore_program_private::get(*ctx.pgm);
+        const qore_ns_private* vns = nullptr;
+        var = qore_root_ns_private::runtimeFindGlobalVar(*pp->RootNS, vname, vns);
+    }
+    auto* vi = new QoreIRVarInstruction(static_cast<QoreIROpcode>(opcode_raw), var);
+    vi->weak = weak;
+    vi->result = QoreIRValue(result_id);
+    vi->operands = operands;
+    vi->exception_target = exc_target;
+    return std::unique_ptr<QoreIRInstruction>(vi);
+}
+
+// ============================================================================
+// Group 8: LValue - Nested expression with lvalue slot
+// ============================================================================
+
+static bool writeLValue(AOTInstWriteCtx& ctx) {
+    auto* lvi = static_cast<const QoreIRLValueInstruction*>(ctx.inst);
+    if (!ctx.writeExpr(ctx.writer, lvi->lvalue)) {
+        return false;
+    }
+    ctx.writer.writeU8(lvi->weak ? 1 : 0);
+    ctx.writer.writeU32(lvi->lvalue_slot_id);
+    return true;
+}
+
+static std::unique_ptr<QoreIRInstruction> readLValue(
+        uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
+        const std::vector<QoreIRValue>& operands, uint32_t result_id,
+        AOTInstReadCtx& ctx) {
+    std::string error;
+    QoreValue lvalue = ctx.readExpr(ctx.reader, ctx.ptr, ctx.end, error);
+    if (!error.empty()) {
+        return nullptr;
+    }
+    bool weak = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
+    uint32_t lvalue_slot_id = QoreAOTBinaryReader::readU32(ctx.ptr);
+    auto* lvi = new QoreIRLValueInstruction(static_cast<QoreIROpcode>(opcode_raw), lvalue, weak);
+    lvi->lvalue_slot_id = lvalue_slot_id;
+    lvalue.discard(nullptr);
+    lvi->result = QoreIRValue(result_id);
+    lvi->operands = operands;
+    lvi->exception_target = exc_target;
+    return std::unique_ptr<QoreIRInstruction>(lvi);
+}
+
+// ============================================================================
+// Group 9: Expr - General expression instruction
+// ============================================================================
+
+static bool writeExpr(AOTInstWriteCtx& ctx) {
+    auto* ei = static_cast<const QoreIRExprInstruction*>(ctx.inst);
+    if (!ctx.writeExpr(ctx.writer, ei->expr)) {
+        return false;
+    }
+    ctx.writer.writeU8(ei->has_ref_args ? 1 : 0);
+    return true;
+}
+
+static std::unique_ptr<QoreIRInstruction> readExpr(
+        uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
+        const std::vector<QoreIRValue>& operands, uint32_t result_id,
+        AOTInstReadCtx& ctx) {
+    std::string error;
+    QoreValue expr = ctx.readExpr(ctx.reader, ctx.ptr, ctx.end, error);
+    if (!error.empty()) {
+        return nullptr;
+    }
+    bool has_ref_args = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
+    auto* ei = new QoreIRExprInstruction(static_cast<QoreIROpcode>(opcode_raw), expr);
+    ei->has_ref_args = has_ref_args;
+    expr.discard(nullptr);
+    ei->result = QoreIRValue(result_id);
+    ei->operands = operands;
+    ei->exception_target = exc_target;
+    return std::unique_ptr<QoreIRInstruction>(ei);
+}
+
+// ============================================================================
+// Group 10: CallDirect - Direct function call via expression
+// ============================================================================
+
+static bool writeCallDirect(AOTInstWriteCtx& ctx) {
+    auto* ci = static_cast<const QoreIRCallDirectInstruction*>(ctx.inst);
+    if (!ctx.writeExpr(ctx.writer, ci->expr)) {
+        return false;
+    }
+    ctx.writer.writeU8(ci->has_ref_args ? 1 : 0);
+    ctx.writer.writeU8(ci->is_self_recursive ? 1 : 0);
+    return true;
+}
+
+static std::unique_ptr<QoreIRInstruction> readCallDirect(
+        uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
+        const std::vector<QoreIRValue>& operands, uint32_t result_id,
+        AOTInstReadCtx& ctx) {
+    std::string error;
+    QoreValue expr = ctx.readExpr(ctx.reader, ctx.ptr, ctx.end, error);
+    if (!error.empty()) {
+        return nullptr;
+    }
+    bool has_ref_args = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
+    bool is_self_recursive = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
+    const QoreFunction* func = nullptr;
+    QoreProgram* func_pgm = ctx.pgm;
+    auto* ci = new QoreIRCallDirectInstruction(func, nullptr, func_pgm, expr);
+    ci->has_ref_args = has_ref_args;
+    ci->is_self_recursive = is_self_recursive;
+    expr.discard(nullptr);
+    ci->result = QoreIRValue(result_id);
+    ci->operands = operands;
+    ci->exception_target = exc_target;
+    return std::unique_ptr<QoreIRInstruction>(ci);
+}
+
+// ============================================================================
+// Group 11: CallMethodDirect - Direct method call
+// ============================================================================
+
+static bool writeCallMethodDirect(AOTInstWriteCtx& ctx) {
+    auto* ci = static_cast<const QoreIRCallMethodDirectInstruction*>(ctx.inst);
+    if (ci->expr) {
+        ctx.writer.writeU8(1);
+        if (!ctx.writeExpr(ctx.writer, ci->expr)) {
+            return false;
+        }
+    } else {
+        ctx.writer.writeU8(0);
+    }
+    ctx.writer.writeStringRef(ci->qc ? ci->qc->getPath() : "");
+    ctx.writer.writeStringRef(ci->method ? ci->method->getName() : "");
+    ctx.writer.writeU8(ci->has_ref_args ? 1 : 0);
+    return true;
+}
+
+static std::unique_ptr<QoreIRInstruction> readCallMethodDirect(
+        uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
+        const std::vector<QoreIRValue>& operands, uint32_t result_id,
+        AOTInstReadCtx& ctx) {
+    bool has_expr = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
+    QoreValue expr;
+    std::string error;
+    if (has_expr) {
+        expr = ctx.readExpr(ctx.reader, ctx.ptr, ctx.end, error);
+        if (!error.empty()) {
+            return nullptr;
+        }
+    }
+    const char* class_path = ctx.reader.readStringRef(ctx.ptr);
+    const char* method_name = ctx.reader.readStringRef(ctx.ptr);
+    bool has_ref_args = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
+
+    const QoreMethod* method = nullptr;
+    const QoreClass* qc = nullptr;
+    if (class_path && *class_path) {
+        qore_program_private* pp = qore_program_private::get(*ctx.pgm);
+        const qore_ns_private* found_ns = nullptr;
+        qc = qore_root_ns_private::runtimeFindClass(*pp->RootNS, class_path, found_ns);
+        if (qc && method_name && *method_name) {
+            method = qc->findMethod(method_name);
+            if (!method) {
+                method = qc->findStaticMethod(method_name);
+            }
+        }
+    }
+    auto* ci = new QoreIRCallMethodDirectInstruction(method, qc, nullptr, expr);
+    ci->has_ref_args = has_ref_args;
+    if (has_expr) {
+        expr.discard(nullptr);
+    }
+    ci->result = QoreIRValue(result_id);
+    ci->operands = operands;
+    ci->exception_target = exc_target;
+    return std::unique_ptr<QoreIRInstruction>(ci);
+}
+
+// ============================================================================
+// Group 12: InvokeMethodDirect - Direct method call with EH targets
+// ============================================================================
+
+static bool writeInvokeMethodDirect(AOTInstWriteCtx& ctx) {
+    auto* ci = static_cast<const QoreIRInvokeMethodDirectInstruction*>(ctx.inst);
+    if (ci->expr) {
+        ctx.writer.writeU8(1);
+        if (!ctx.writeExpr(ctx.writer, ci->expr)) {
+            return false;
+        }
+    } else {
+        ctx.writer.writeU8(0);
+    }
+    ctx.writer.writeStringRef(ci->qc ? ci->qc->getPath() : "");
+    ctx.writer.writeStringRef(ci->method ? ci->method->getName() : "");
+    ctx.writer.writeU8(ci->has_ref_args ? 1 : 0);
+    auto it_n = ctx.block_idx.find(ci->normal_target);
+    ctx.writer.writeU16(it_n != ctx.block_idx.end() ? it_n->second : 0xFFFF);
+    auto it_e = ctx.block_idx.find(ci->exception_target);
+    ctx.writer.writeU16(it_e != ctx.block_idx.end() ? it_e->second : 0xFFFF);
+    return true;
+}
+
+static std::unique_ptr<QoreIRInstruction> readInvokeMethodDirect(
+        uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
+        const std::vector<QoreIRValue>& operands, uint32_t result_id,
+        AOTInstReadCtx& ctx) {
+    bool has_expr = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
+    QoreValue expr;
+    std::string error;
+    if (has_expr) {
+        expr = ctx.readExpr(ctx.reader, ctx.ptr, ctx.end, error);
+        if (!error.empty()) {
+            return nullptr;
+        }
+    }
+    const char* class_path = ctx.reader.readStringRef(ctx.ptr);
+    const char* method_name = ctx.reader.readStringRef(ctx.ptr);
+    bool has_ref_args = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
+    uint16_t normal_idx = QoreAOTBinaryReader::readU16(ctx.ptr);
+    uint16_t exception_idx = QoreAOTBinaryReader::readU16(ctx.ptr);
+
+    const QoreMethod* method = nullptr;
+    const QoreClass* qc = nullptr;
+    if (class_path && *class_path) {
+        qore_program_private* pp = qore_program_private::get(*ctx.pgm);
+        const qore_ns_private* found_ns = nullptr;
+        qc = qore_root_ns_private::runtimeFindClass(*pp->RootNS, class_path, found_ns);
+        if (qc && method_name && *method_name) {
+            method = qc->findMethod(method_name);
+            if (!method) {
+                method = qc->findStaticMethod(method_name);
+            }
+        }
+    }
+    auto* ci = new QoreIRInvokeMethodDirectInstruction(method, qc, nullptr,
+        ctx.resolveBlock(normal_idx), ctx.resolveBlock(exception_idx), expr);
+    ci->has_ref_args = has_ref_args;
+    if (has_expr) {
+        expr.discard(nullptr);
+    }
+    ci->result = QoreIRValue(result_id);
+    ci->operands = operands;
+    ci->exception_target = exc_target;
+    return std::unique_ptr<QoreIRInstruction>(ci);
+}
+
+// ============================================================================
+// Group 13: CallStaticDirect - Static method call
+// ============================================================================
+
+static bool writeCallStaticDirect(AOTInstWriteCtx& ctx) {
+    auto* ci = static_cast<const QoreIRCallStaticDirectInstruction*>(ctx.inst);
+    if (!ctx.writeExpr(ctx.writer, ci->expr)) {
+        return false;
+    }
+    ctx.writer.writeStringRef(ci->method ? ci->method->getClass()->getPath() : "");
+    ctx.writer.writeStringRef(ci->method ? ci->method->getName() : "");
+    ctx.writer.writeU8(ci->has_ref_args ? 1 : 0);
+    return true;
+}
+
+static std::unique_ptr<QoreIRInstruction> readCallStaticDirect(
+        uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
+        const std::vector<QoreIRValue>& operands, uint32_t result_id,
+        AOTInstReadCtx& ctx) {
+    std::string error;
+    QoreValue expr = ctx.readExpr(ctx.reader, ctx.ptr, ctx.end, error);
+    if (!error.empty()) {
+        return nullptr;
+    }
+    const char* class_path = ctx.reader.readStringRef(ctx.ptr);
+    const char* method_name = ctx.reader.readStringRef(ctx.ptr);
+    bool has_ref_args = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
+
+    const QoreMethod* method = nullptr;
+    if (class_path && *class_path) {
+        qore_program_private* pp = qore_program_private::get(*ctx.pgm);
+        const qore_ns_private* found_ns = nullptr;
+        const QoreClass* qc = qore_root_ns_private::runtimeFindClass(*pp->RootNS, class_path, found_ns);
+        if (qc && method_name && *method_name) {
+            method = qc->findStaticMethod(method_name);
+        }
+    }
+    auto* ci = new QoreIRCallStaticDirectInstruction(method, nullptr, expr);
+    ci->has_ref_args = has_ref_args;
+    expr.discard(nullptr);
+    ci->result = QoreIRValue(result_id);
+    ci->operands = operands;
+    ci->exception_target = exc_target;
+    return std::unique_ptr<QoreIRInstruction>(ci);
+}
+
+// ============================================================================
+// Group 14: DotEvalMethodDirect - Dot-notation method evaluation
+// ============================================================================
+
+static bool writeDotEvalMethodDirect(AOTInstWriteCtx& ctx) {
+    auto* ci = static_cast<const QoreIRDotEvalMethodDirectInstruction*>(ctx.inst);
+    if (!ctx.writeExpr(ctx.writer, ci->expr)) {
+        return false;
+    }
+    ctx.writer.writeStringRef(ci->qc ? ci->qc->getPath() : "");
+    ctx.writer.writeStringRef(ci->method ? ci->method->getName() : "");
+    ctx.writer.writeU8(ci->pseudo ? 1 : 0);
+    ctx.writer.writeU8(ci->has_ref_args ? 1 : 0);
+    return true;
+}
+
+static std::unique_ptr<QoreIRInstruction> readDotEvalMethodDirect(
+        uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
+        const std::vector<QoreIRValue>& operands, uint32_t result_id,
+        AOTInstReadCtx& ctx) {
+    std::string error;
+    QoreValue expr = ctx.readExpr(ctx.reader, ctx.ptr, ctx.end, error);
+    if (!error.empty()) {
+        return nullptr;
+    }
+    const char* class_path = ctx.reader.readStringRef(ctx.ptr);
+    const char* method_name = ctx.reader.readStringRef(ctx.ptr);
+    bool pseudo = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
+    bool has_ref_args = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
+
+    const QoreMethod* method = nullptr;
+    const QoreClass* qc = nullptr;
+    if (class_path && *class_path) {
+        qore_program_private* pp = qore_program_private::get(*ctx.pgm);
+        const qore_ns_private* found_ns = nullptr;
+        qc = qore_root_ns_private::runtimeFindClass(*pp->RootNS, class_path, found_ns);
+        if (qc && method_name && *method_name) {
+            method = qc->findMethod(method_name);
+            if (!method) {
+                method = qc->findStaticMethod(method_name);
+            }
+        }
+    }
+    auto* ci = new QoreIRDotEvalMethodDirectInstruction(method, qc, nullptr, expr, pseudo);
+    ci->has_ref_args = has_ref_args;
+    expr.discard(nullptr);
+    ci->result = QoreIRValue(result_id);
+    ci->operands = operands;
+    ci->exception_target = exc_target;
+    return std::unique_ptr<QoreIRInstruction>(ci);
+}
+
+// ============================================================================
+// Group 15: InvokeDotEvalMethodDirect - Dot-notation method with EH targets
+// ============================================================================
+
+static bool writeInvokeDotEvalMethodDirect(AOTInstWriteCtx& ctx) {
+    auto* ci = static_cast<const QoreIRInvokeDotEvalMethodDirectInstruction*>(ctx.inst);
+    if (!ctx.writeExpr(ctx.writer, ci->expr)) {
+        return false;
+    }
+    ctx.writer.writeStringRef(ci->qc ? ci->qc->getPath() : "");
+    ctx.writer.writeStringRef(ci->method ? ci->method->getName() : "");
+    ctx.writer.writeU8(ci->pseudo ? 1 : 0);
+    ctx.writer.writeU8(ci->has_ref_args ? 1 : 0);
+    auto it_n = ctx.block_idx.find(ci->normal_target);
+    ctx.writer.writeU16(it_n != ctx.block_idx.end() ? it_n->second : 0xFFFF);
+    auto it_e = ctx.block_idx.find(ci->exception_target);
+    ctx.writer.writeU16(it_e != ctx.block_idx.end() ? it_e->second : 0xFFFF);
+    return true;
+}
+
+static std::unique_ptr<QoreIRInstruction> readInvokeDotEvalMethodDirect(
+        uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
+        const std::vector<QoreIRValue>& operands, uint32_t result_id,
+        AOTInstReadCtx& ctx) {
+    std::string error;
+    QoreValue expr = ctx.readExpr(ctx.reader, ctx.ptr, ctx.end, error);
+    if (!error.empty()) {
+        return nullptr;
+    }
+    const char* class_path = ctx.reader.readStringRef(ctx.ptr);
+    const char* method_name = ctx.reader.readStringRef(ctx.ptr);
+    bool pseudo = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
+    bool has_ref_args = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
+    uint16_t normal_idx = QoreAOTBinaryReader::readU16(ctx.ptr);
+    uint16_t exception_idx = QoreAOTBinaryReader::readU16(ctx.ptr);
+
+    const QoreMethod* method = nullptr;
+    const QoreClass* qc = nullptr;
+    if (class_path && *class_path) {
+        qore_program_private* pp = qore_program_private::get(*ctx.pgm);
+        const qore_ns_private* found_ns = nullptr;
+        qc = qore_root_ns_private::runtimeFindClass(*pp->RootNS, class_path, found_ns);
+        if (qc && method_name && *method_name) {
+            method = qc->findMethod(method_name);
+            if (!method) {
+                method = qc->findStaticMethod(method_name);
+            }
+        }
+    }
+    auto* ci = new QoreIRInvokeDotEvalMethodDirectInstruction(method, qc, nullptr, expr,
+        pseudo, ctx.resolveBlock(normal_idx), ctx.resolveBlock(exception_idx));
+    ci->has_ref_args = has_ref_args;
+    expr.discard(nullptr);
+    ci->result = QoreIRValue(result_id);
+    ci->operands = operands;
+    ci->exception_target = exc_target;
+    return std::unique_ptr<QoreIRInstruction>(ci);
+}
+
+// ============================================================================
+// Group 16: Invoke - Generic invoke with opcode and key name
+// ============================================================================
+
+static bool writeInvoke(AOTInstWriteCtx& ctx) {
+    auto* ii = static_cast<const QoreIRInvokeInstruction*>(ctx.inst);
+    if (!ctx.writeExpr(ctx.writer, ii->expr)) {
+        return false;
+    }
+    ctx.writer.writeU16(static_cast<uint16_t>(ii->invoke_opcode));
+    ctx.writer.writeStringRef(ii->invoke_key_name.c_str());
+    ctx.writer.writeU8(ii->weak ? 1 : 0);
+    auto it_n = ctx.block_idx.find(ii->normal_target);
+    ctx.writer.writeU16(it_n != ctx.block_idx.end() ? it_n->second : 0xFFFF);
+    auto it_e = ctx.block_idx.find(ii->exception_target);
+    ctx.writer.writeU16(it_e != ctx.block_idx.end() ? it_e->second : 0xFFFF);
+    return true;
+}
+
+static std::unique_ptr<QoreIRInstruction> readInvoke(
+        uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
+        const std::vector<QoreIRValue>& operands, uint32_t result_id,
+        AOTInstReadCtx& ctx) {
+    std::string error;
+    QoreValue expr = ctx.readExpr(ctx.reader, ctx.ptr, ctx.end, error);
+    if (!error.empty()) {
+        return nullptr;
+    }
+    uint16_t invoke_opcode_raw = QoreAOTBinaryReader::readU16(ctx.ptr);
+    const char* invoke_key_name = ctx.reader.readStringRef(ctx.ptr);
+    bool weak = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
+    uint16_t normal_idx = QoreAOTBinaryReader::readU16(ctx.ptr);
+    uint16_t exception_idx = QoreAOTBinaryReader::readU16(ctx.ptr);
+    auto* ii = new QoreIRInvokeInstruction(expr,
+        ctx.resolveBlock(normal_idx), ctx.resolveBlock(exception_idx));
+    ii->invoke_opcode = static_cast<QoreIROpcode>(invoke_opcode_raw);
+    ii->invoke_key_name = invoke_key_name ? invoke_key_name : "";
+    ii->weak = weak;
+    expr.discard(nullptr);
+    ii->result = QoreIRValue(result_id);
+    ii->operands = operands;
+    ii->exception_target = exc_target;
+    return std::unique_ptr<QoreIRInstruction>(ii);
+}
+
+// ============================================================================
+// Group 17: ScopeEnter - Scope entry tracking
+// ============================================================================
+
+static bool writeScopeEnter(AOTInstWriteCtx& ctx) {
+    auto* si = static_cast<const QoreIRScopeEnterInstruction*>(ctx.inst);
+    ctx.writer.writeU32(si->scope_id);
+    return true;
+}
+
+static std::unique_ptr<QoreIRInstruction> readScopeEnter(
+        uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
+        const std::vector<QoreIRValue>& operands, uint32_t result_id,
+        AOTInstReadCtx& ctx) {
+    uint32_t scope_id = QoreAOTBinaryReader::readU32(ctx.ptr);
+    auto inst = std::make_unique<QoreIRScopeEnterInstruction>(scope_id);
+    inst->result = QoreIRValue(result_id);
+    inst->operands = operands;
+    inst->exception_target = exc_target;
+    return inst;
+}
+
+// ============================================================================
+// Group 18: ScopeExit - Scope exit tracking
+// ============================================================================
+
+static bool writeScopeExit(AOTInstWriteCtx& ctx) {
+    auto* si = static_cast<const QoreIRScopeExitInstruction*>(ctx.inst);
+    ctx.writer.writeU32(si->scope_id);
+    ctx.writer.writeU8(si->is_error ? 1 : 0);
+    return true;
+}
+
+static std::unique_ptr<QoreIRInstruction> readScopeExit(
+        uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
+        const std::vector<QoreIRValue>& operands, uint32_t result_id,
+        AOTInstReadCtx& ctx) {
+    uint32_t scope_id = QoreAOTBinaryReader::readU32(ctx.ptr);
+    bool is_error = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
+    auto inst = std::make_unique<QoreIRScopeExitInstruction>(scope_id, is_error);
+    inst->result = QoreIRValue(result_id);
+    inst->operands = operands;
+    inst->exception_target = exc_target;
+    return inst;
+}
+
+// ============================================================================
+// Group 19: LandingPad - Exception handler landing pad
+// ============================================================================
+
+static bool writeLandingPad(AOTInstWriteCtx& ctx) {
+    auto* li = static_cast<const QoreIRLandingPadInstruction*>(ctx.inst);
+    ctx.writer.writeU32(static_cast<uint32_t>(li->scope_depth));
+    ctx.writer.writeU32(li->try_scope_id);
+    return true;
+}
+
+static std::unique_ptr<QoreIRInstruction> readLandingPad(
+        uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
+        const std::vector<QoreIRValue>& operands, uint32_t result_id,
+        AOTInstReadCtx& ctx) {
+    uint32_t scope_depth = QoreAOTBinaryReader::readU32(ctx.ptr);
+    uint32_t try_scope_id = QoreAOTBinaryReader::readU32(ctx.ptr);
+    auto inst = std::make_unique<QoreIRLandingPadInstruction>(
+        static_cast<size_t>(scope_depth), try_scope_id);
+    inst->result = QoreIRValue(result_id);
+    inst->operands = operands;
+    inst->exception_target = exc_target;
+    return inst;
+}
+
+// ============================================================================
+// Group 20: SwitchInt - Variable-length integer switch table
+// ============================================================================
+
+static bool writeSwitchInt(AOTInstWriteCtx& ctx) {
+    auto* si = static_cast<const QoreIRSwitchIntInstruction*>(ctx.inst);
+    ctx.writer.writeU32(si->switch_val.id);
+    auto it_d = ctx.block_idx.find(si->default_target);
+    ctx.writer.writeU16(it_d != ctx.block_idx.end() ? it_d->second : 0xFFFF);
+    ctx.writer.writeU16(static_cast<uint16_t>(si->cases.size()));
+    for (auto& c : si->cases) {
+        ctx.writer.writeI64(c.value);
+        auto it = ctx.block_idx.find(c.target);
+        ctx.writer.writeU16(it != ctx.block_idx.end() ? it->second : 0xFFFF);
+    }
+    return true;
+}
+
+static std::unique_ptr<QoreIRInstruction> readSwitchInt(
+        uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
+        const std::vector<QoreIRValue>& operands, uint32_t result_id,
+        AOTInstReadCtx& ctx) {
+    auto* si = new QoreIRSwitchIntInstruction();
+    si->opcode = static_cast<QoreIROpcode>(opcode_raw);
+    si->switch_val = QoreIRValue(QoreAOTBinaryReader::readU32(ctx.ptr));
+    uint16_t default_idx = QoreAOTBinaryReader::readU16(ctx.ptr);
+    si->default_target = ctx.resolveBlock(default_idx);
+    uint16_t num_cases = QoreAOTBinaryReader::readU16(ctx.ptr);
+    si->cases.reserve(num_cases);
+    for (int j = 0; j < num_cases; ++j) {
+        int64_t value = QoreAOTBinaryReader::readI64(ctx.ptr);
+        uint16_t target_idx = QoreAOTBinaryReader::readU16(ctx.ptr);
+        si->cases.push_back({value, ctx.resolveBlock(target_idx)});
+    }
+    si->result = QoreIRValue(result_id);
+    si->operands = operands;
+    si->exception_target = exc_target;
+    return std::unique_ptr<QoreIRInstruction>(si);
+}
+
+// ============================================================================
+// Group 21: SwitchString - Variable-length string switch table
+// ============================================================================
+
+static bool writeSwitchString(AOTInstWriteCtx& ctx) {
+    auto* si = static_cast<const QoreIRSwitchStringInstruction*>(ctx.inst);
+    ctx.writer.writeU32(si->switch_val.id);
+    auto it_d = ctx.block_idx.find(si->default_target);
+    ctx.writer.writeU16(it_d != ctx.block_idx.end() ? it_d->second : 0xFFFF);
+    ctx.writer.writeU16(static_cast<uint16_t>(si->cases.size()));
+    for (auto& c : si->cases) {
+        ctx.writer.writeStringRef(c.value.c_str());
+        auto it = ctx.block_idx.find(c.target);
+        ctx.writer.writeU16(it != ctx.block_idx.end() ? it->second : 0xFFFF);
+    }
+    return true;
+}
+
+static std::unique_ptr<QoreIRInstruction> readSwitchString(
+        uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
+        const std::vector<QoreIRValue>& operands, uint32_t result_id,
+        AOTInstReadCtx& ctx) {
+    auto* si = new QoreIRSwitchStringInstruction();
+    si->opcode = static_cast<QoreIROpcode>(opcode_raw);
+    si->switch_val = QoreIRValue(QoreAOTBinaryReader::readU32(ctx.ptr));
+    uint16_t default_idx = QoreAOTBinaryReader::readU16(ctx.ptr);
+    si->default_target = ctx.resolveBlock(default_idx);
+    uint16_t num_cases = QoreAOTBinaryReader::readU16(ctx.ptr);
+    si->cases.reserve(num_cases);
+    for (int j = 0; j < num_cases; ++j) {
+        const char* value = ctx.reader.readStringRef(ctx.ptr);
+        uint16_t target_idx = QoreAOTBinaryReader::readU16(ctx.ptr);
+        si->cases.push_back({value ? value : "", ctx.resolveBlock(target_idx)});
+    }
+    si->result = QoreIRValue(result_id);
+    si->operands = operands;
+    si->exception_target = exc_target;
+    return std::unique_ptr<QoreIRInstruction>(si);
+}
+
+// ============================================================================
+// Group 22: Phi - Phi node with variable-length incoming list
+// ============================================================================
+
+static bool writePhi(AOTInstWriteCtx& ctx) {
+    auto* pi = static_cast<const QoreIRPhiInstruction*>(ctx.inst);
+    ctx.writer.writeU16(static_cast<uint16_t>(pi->incoming.size()));
+    for (auto& inc : pi->incoming) {
+        ctx.writer.writeU32(inc.value.id);
+        auto it = ctx.block_idx.find(inc.block);
+        ctx.writer.writeU16(it != ctx.block_idx.end() ? it->second : 0xFFFF);
+    }
+    return true;
+}
+
+static std::unique_ptr<QoreIRInstruction> readPhi(
+        uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
+        const std::vector<QoreIRValue>& operands, uint32_t result_id,
+        AOTInstReadCtx& ctx) {
+    auto* pi = new QoreIRPhiInstruction();
+    pi->opcode = static_cast<QoreIROpcode>(opcode_raw);
+    uint16_t num_incoming = QoreAOTBinaryReader::readU16(ctx.ptr);
+    pi->incoming.reserve(num_incoming);
+    for (int j = 0; j < num_incoming; ++j) {
+        uint32_t val_id = QoreAOTBinaryReader::readU32(ctx.ptr);
+        uint16_t block_idx = QoreAOTBinaryReader::readU16(ctx.ptr);
+        pi->incoming.push_back({QoreIRValue(val_id), ctx.resolveBlock(block_idx)});
+    }
+    pi->result = QoreIRValue(result_id);
+    pi->operands = operands;
+    pi->exception_target = exc_target;
+    return std::unique_ptr<QoreIRInstruction>(pi);
+}
+
+// ============================================================================
+// Group 23: Guard - Speculative guard with deopt target
+// ============================================================================
+
+static bool writeGuard(AOTInstWriteCtx& ctx) {
+    auto* gi = static_cast<const QoreIRGuardInstruction*>(ctx.inst);
+    auto it = ctx.block_idx.find(gi->deopt_target);
+    ctx.writer.writeU16(it != ctx.block_idx.end() ? it->second : 0xFFFF);
+    ctx.writer.writeStringRef(gi->type_info ? QoreTypeInfo::getPath(gi->type_info) : "");
+    ctx.writer.writeU32(gi->guard_id);
+    return true;
+}
+
+static std::unique_ptr<QoreIRInstruction> readGuard(
+        uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
+        const std::vector<QoreIRValue>& operands, uint32_t result_id,
+        AOTInstReadCtx& ctx) {
+    auto* gi = new QoreIRGuardInstruction(static_cast<QoreIROpcode>(opcode_raw));
+    uint16_t deopt_idx = QoreAOTBinaryReader::readU16(ctx.ptr);
+    gi->deopt_target = ctx.resolveBlock(deopt_idx);
+    const char* type_path = ctx.reader.readStringRef(ctx.ptr);
+    gi->guard_id = QoreAOTBinaryReader::readU32(ctx.ptr);
+    if (type_path && *type_path) {
+        std::string type_error;
+        QoreAOTTypeResolver type_resolver(ctx.pgm);
+        gi->type_info = type_resolver.resolve(type_path, type_error);
+    }
+    gi->result = QoreIRValue(result_id);
+    gi->operands = operands;
+    gi->exception_target = exc_target;
+    return std::unique_ptr<QoreIRInstruction>(gi);
+}
+
+// ============================================================================
+// Group 24: ImplicitArg - Implicit argument access
+// ============================================================================
+
+static bool writeImplicitArg(AOTInstWriteCtx& ctx) {
+    auto* ii = static_cast<const QoreIRImplicitArgInstruction*>(ctx.inst);
+    ctx.writer.writeU16(static_cast<uint16_t>(ii->offset));
+    return true;
+}
+
+static std::unique_ptr<QoreIRInstruction> readImplicitArg(
+        uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
+        const std::vector<QoreIRValue>& operands, uint32_t result_id,
+        AOTInstReadCtx& ctx) {
+    uint16_t offset = QoreAOTBinaryReader::readU16(ctx.ptr);
+    auto inst = std::make_unique<QoreIRImplicitArgInstruction>(static_cast<int>(offset));
+    inst->result = QoreIRValue(result_id);
+    inst->operands = operands;
+    inst->exception_target = exc_target;
+    return inst;
+}
+
+// ============================================================================
+// Group 25: HashKeyAccess - Hash key access by name
+// ============================================================================
+
+static bool writeHashKeyAccess(AOTInstWriteCtx& ctx) {
+    auto* hi = static_cast<const QoreIRHashKeyAccessInstruction*>(ctx.inst);
+    ctx.writer.writeStringRef(hi->key_name.c_str());
+    return true;
+}
+
+static std::unique_ptr<QoreIRInstruction> readHashKeyAccess(
+        uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
+        const std::vector<QoreIRValue>& operands, uint32_t result_id,
+        AOTInstReadCtx& ctx) {
+    const char* key_name = ctx.reader.readStringRef(ctx.ptr);
+    auto inst = std::make_unique<QoreIRHashKeyAccessInstruction>(key_name ? key_name : "", static_cast<QoreIROpcode>(opcode_raw));
+    inst->result = QoreIRValue(result_id);
+    inst->operands = operands;
+    inst->exception_target = exc_target;
+    return inst;
+}
+
+// ============================================================================
+// Group 26: SelfMember - Member access on self
+// ============================================================================
+
+static bool writeSelfMember(AOTInstWriteCtx& ctx) {
+    auto* si = static_cast<const QoreIRSelfMemberInstruction*>(ctx.inst);
+    ctx.writer.writeStringRef(si->member_name.c_str());
+    return true;
+}
+
+static std::unique_ptr<QoreIRInstruction> readSelfMember(
+        uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
+        const std::vector<QoreIRValue>& operands, uint32_t result_id,
+        AOTInstReadCtx& ctx) {
+    const char* member_name = ctx.reader.readStringRef(ctx.ptr);
+    auto* si = new QoreIRSelfMemberInstruction(member_name ? member_name : "");
+    si->opcode = static_cast<QoreIROpcode>(opcode_raw);
+    si->result = QoreIRValue(result_id);
+    si->operands = operands;
+    si->exception_target = exc_target;
+    return std::unique_ptr<QoreIRInstruction>(si);
+}
+
+// ============================================================================
+// Group 27: StaticVar - Static variable access with expression
+// ============================================================================
+
+static bool writeStaticVar(AOTInstWriteCtx& ctx) {
+    auto* si = static_cast<const QoreIRStaticVarInstruction*>(ctx.inst);
+    ctx.writer.writeStringRef(si->var_name.c_str());
+    if (!ctx.writeExpr(ctx.writer, si->expr)) {
+        return false;
+    }
+    return true;
+}
+
+static std::unique_ptr<QoreIRInstruction> readStaticVar(
+        uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
+        const std::vector<QoreIRValue>& operands, uint32_t result_id,
+        AOTInstReadCtx& ctx) {
+    const char* var_name = ctx.reader.readStringRef(ctx.ptr);
+    std::string error;
+    QoreValue expr = ctx.readExpr(ctx.reader, ctx.ptr, ctx.end, error);
+    if (!error.empty()) {
+        return nullptr;
+    }
+    auto* si = new QoreIRStaticVarInstruction(nullptr, var_name ? var_name : "", expr);
+    si->opcode = static_cast<QoreIROpcode>(opcode_raw);
+    expr.discard(nullptr);
+    si->result = QoreIRValue(result_id);
+    si->operands = operands;
+    si->exception_target = exc_target;
+    return std::unique_ptr<QoreIRInstruction>(si);
+}
+
+// ============================================================================
+// Group 28: NewObject - Object construction
+// ============================================================================
+
+static bool writeNewObject(AOTInstWriteCtx& ctx) {
+    auto* ni = static_cast<const QoreIRNewObjectInstruction*>(ctx.inst);
+    if (!ctx.writeExpr(ctx.writer, ni->expr)) {
+        return false;
+    }
+    return true;
+}
+
+static std::unique_ptr<QoreIRInstruction> readNewObject(
+        uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
+        const std::vector<QoreIRValue>& operands, uint32_t result_id,
+        AOTInstReadCtx& ctx) {
+    std::string error;
+    QoreValue expr = ctx.readExpr(ctx.reader, ctx.ptr, ctx.end, error);
+    if (!error.empty()) {
+        return nullptr;
+    }
+    auto* ni = new QoreIRNewObjectInstruction(nullptr, nullptr, nullptr, expr);
+    ni->opcode = static_cast<QoreIROpcode>(opcode_raw);
+    expr.discard(nullptr);
+    ni->result = QoreIRValue(result_id);
+    ni->operands = operands;
+    ni->exception_target = exc_target;
+    return std::unique_ptr<QoreIRInstruction>(ni);
+}
+
+// ============================================================================
+// Group 29: LoadConst - Constant loading
+// ============================================================================
+
+static bool writeLoadConst(AOTInstWriteCtx& ctx) {
+    auto* lci = static_cast<const QoreIRLoadConstantInstruction*>(ctx.inst);
+    if (!ctx.writeExpr(ctx.writer, lci->expr)) {
+        return false;
+    }
+    return true;
+}
+
+static std::unique_ptr<QoreIRInstruction> readLoadConst(
+        uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
+        const std::vector<QoreIRValue>& operands, uint32_t result_id,
+        AOTInstReadCtx& ctx) {
+    std::string error;
+    QoreValue expr = ctx.readExpr(ctx.reader, ctx.ptr, ctx.end, error);
+    if (!error.empty()) {
+        return nullptr;
+    }
+    auto* lci = new QoreIRLoadConstantInstruction(nullptr, expr);
+    lci->opcode = static_cast<QoreIROpcode>(opcode_raw);
+    expr.discard(nullptr);
+    lci->result = QoreIRValue(result_id);
+    lci->operands = operands;
+    lci->exception_target = exc_target;
+    return std::unique_ptr<QoreIRInstruction>(lci);
+}
+
+// ============================================================================
+// Group 30: CreateClosure - Closure creation
+// ============================================================================
+
+static bool writeCreateClosure(AOTInstWriteCtx& ctx) {
+    auto* cci = static_cast<const QoreIRCreateClosureInstruction*>(ctx.inst);
+    if (!ctx.writeExpr(ctx.writer, cci->expr)) {
+        return false;
+    }
+    return true;
+}
+
+static std::unique_ptr<QoreIRInstruction> readCreateClosure(
+        uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
+        const std::vector<QoreIRValue>& operands, uint32_t result_id,
+        AOTInstReadCtx& ctx) {
+    std::string error;
+    QoreValue expr = ctx.readExpr(ctx.reader, ctx.ptr, ctx.end, error);
+    if (!error.empty()) {
+        return nullptr;
+    }
+    auto* cci = new QoreIRCreateClosureInstruction(nullptr, expr);
+    cci->opcode = static_cast<QoreIROpcode>(opcode_raw);
+    expr.discard(nullptr);
+    cci->result = QoreIRValue(result_id);
+    cci->operands = operands;
+    cci->exception_target = exc_target;
+    return std::unique_ptr<QoreIRInstruction>(cci);
+}
+
+// ============================================================================
+// Group 31: CreateCallRef - Call reference creation
+// ============================================================================
+
+static bool writeCreateCallRef(AOTInstWriteCtx& ctx) {
+    auto* cri = static_cast<const QoreIRCreateCallRefInstruction*>(ctx.inst);
+    if (!ctx.writeExpr(ctx.writer, cri->expr)) {
+        return false;
+    }
+    return true;
+}
+
+static std::unique_ptr<QoreIRInstruction> readCreateCallRef(
+        uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
+        const std::vector<QoreIRValue>& operands, uint32_t result_id,
+        AOTInstReadCtx& ctx) {
+    std::string error;
+    QoreValue expr = ctx.readExpr(ctx.reader, ctx.ptr, ctx.end, error);
+    if (!error.empty()) {
+        return nullptr;
+    }
+    auto* cri = new QoreIRCreateCallRefInstruction(expr);
+    cri->opcode = static_cast<QoreIROpcode>(opcode_raw);
+    expr.discard(nullptr);
+    cri->result = QoreIRValue(result_id);
+    cri->operands = operands;
+    cri->exception_target = exc_target;
+    return std::unique_ptr<QoreIRInstruction>(cri);
+}
+
+// ============================================================================
+// Group 32: CreateMethodRef - Method reference creation
+// ============================================================================
+
+static bool writeCreateMethodRef(AOTInstWriteCtx& ctx) {
+    auto* cri = static_cast<const QoreIRCreateMethodRefInstruction*>(ctx.inst);
+    if (!ctx.writeExpr(ctx.writer, cri->expr)) {
+        return false;
+    }
+    return true;
+}
+
+static std::unique_ptr<QoreIRInstruction> readCreateMethodRef(
+        uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
+        const std::vector<QoreIRValue>& operands, uint32_t result_id,
+        AOTInstReadCtx& ctx) {
+    std::string error;
+    QoreValue expr = ctx.readExpr(ctx.reader, ctx.ptr, ctx.end, error);
+    if (!error.empty()) {
+        return nullptr;
+    }
+    auto* cri = new QoreIRCreateMethodRefInstruction(expr);
+    cri->opcode = static_cast<QoreIROpcode>(opcode_raw);
+    expr.discard(nullptr);
+    cri->result = QoreIRValue(result_id);
+    cri->operands = operands;
+    cri->exception_target = exc_target;
+    return std::unique_ptr<QoreIRInstruction>(cri);
+}
+
+// ============================================================================
+// Group 33: CreateParseRef - Parse reference creation
+// ============================================================================
+
+static bool writeCreateParseRef(AOTInstWriteCtx& ctx) {
+    auto* cri = static_cast<const QoreIRCreateParseRefInstruction*>(ctx.inst);
+    if (!ctx.writeExpr(ctx.writer, cri->expr)) {
+        return false;
+    }
+    return true;
+}
+
+static std::unique_ptr<QoreIRInstruction> readCreateParseRef(
+        uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
+        const std::vector<QoreIRValue>& operands, uint32_t result_id,
+        AOTInstReadCtx& ctx) {
+    std::string error;
+    QoreValue expr = ctx.readExpr(ctx.reader, ctx.ptr, ctx.end, error);
+    if (!error.empty()) {
+        return nullptr;
+    }
+    auto* cri = new QoreIRCreateParseRefInstruction(nullptr, expr);
+    cri->opcode = static_cast<QoreIROpcode>(opcode_raw);
+    expr.discard(nullptr);
+    cri->result = QoreIRValue(result_id);
+    cri->operands = operands;
+    cri->exception_target = exc_target;
+    return std::unique_ptr<QoreIRInstruction>(cri);
+}
+
+// ============================================================================
+// Group 34: NewHashDecl - Hash decl instantiation
+// ============================================================================
+
+static bool writeNewHashDecl(AOTInstWriteCtx& ctx) {
+    auto* ni = static_cast<const QoreIRNewHashDeclInstruction*>(ctx.inst);
+    if (!ctx.writeExpr(ctx.writer, ni->expr)) {
+        return false;
+    }
+    return true;
+}
+
+static std::unique_ptr<QoreIRInstruction> readNewHashDecl(
+        uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
+        const std::vector<QoreIRValue>& operands, uint32_t result_id,
+        AOTInstReadCtx& ctx) {
+    std::string error;
+    QoreValue expr = ctx.readExpr(ctx.reader, ctx.ptr, ctx.end, error);
+    if (!error.empty()) {
+        return nullptr;
+    }
+    auto* ni = new QoreIRNewHashDeclInstruction(nullptr, expr);
+    ni->opcode = static_cast<QoreIROpcode>(opcode_raw);
+    expr.discard(nullptr);
+    ni->result = QoreIRValue(result_id);
+    ni->operands = operands;
+    ni->exception_target = exc_target;
+    return std::unique_ptr<QoreIRInstruction>(ni);
+}
+
+// ============================================================================
+// Group 35: NewComplexHash - Complex hash creation
+// ============================================================================
+
+static bool writeNewComplexHash(AOTInstWriteCtx& ctx) {
+    auto* ni = static_cast<const QoreIRNewComplexHashInstruction*>(ctx.inst);
+    if (!ctx.writeExpr(ctx.writer, ni->expr)) {
+        return false;
+    }
+    return true;
+}
+
+static std::unique_ptr<QoreIRInstruction> readNewComplexHash(
+        uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
+        const std::vector<QoreIRValue>& operands, uint32_t result_id,
+        AOTInstReadCtx& ctx) {
+    std::string error;
+    QoreValue expr = ctx.readExpr(ctx.reader, ctx.ptr, ctx.end, error);
+    if (!error.empty()) {
+        return nullptr;
+    }
+    auto* ni = new QoreIRNewComplexHashInstruction(nullptr, expr);
+    ni->opcode = static_cast<QoreIROpcode>(opcode_raw);
+    expr.discard(nullptr);
+    ni->result = QoreIRValue(result_id);
+    ni->operands = operands;
+    ni->exception_target = exc_target;
+    return std::unique_ptr<QoreIRInstruction>(ni);
+}
+
+// ============================================================================
+// Group 36: NewComplexList - Complex list creation
+// ============================================================================
+
+static bool writeNewComplexList(AOTInstWriteCtx& ctx) {
+    auto* ni = static_cast<const QoreIRNewComplexListInstruction*>(ctx.inst);
+    if (!ctx.writeExpr(ctx.writer, ni->expr)) {
+        return false;
+    }
+    return true;
+}
+
+static std::unique_ptr<QoreIRInstruction> readNewComplexList(
+        uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
+        const std::vector<QoreIRValue>& operands, uint32_t result_id,
+        AOTInstReadCtx& ctx) {
+    std::string error;
+    QoreValue expr = ctx.readExpr(ctx.reader, ctx.ptr, ctx.end, error);
+    if (!error.empty()) {
+        return nullptr;
+    }
+    auto* ni = new QoreIRNewComplexListInstruction(nullptr, expr);
+    ni->opcode = static_cast<QoreIROpcode>(opcode_raw);
+    expr.discard(nullptr);
+    ni->result = QoreIRValue(result_id);
+    ni->operands = operands;
+    ni->exception_target = exc_target;
+    return std::unique_ptr<QoreIRInstruction>(ni);
+}
+
+// ============================================================================
+// Group 37: VrnConstruct - Variant value construction
+// ============================================================================
+
+static bool writeVrnConstruct(AOTInstWriteCtx& ctx) {
+    auto* vi = static_cast<const QoreIRVrnConstructInstruction*>(ctx.inst);
+    if (!ctx.writeExpr(ctx.writer, vi->expr)) {
+        return false;
+    }
+    return true;
+}
+
+static std::unique_ptr<QoreIRInstruction> readVrnConstruct(
+        uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
+        const std::vector<QoreIRValue>& operands, uint32_t result_id,
+        AOTInstReadCtx& ctx) {
+    std::string error;
+    QoreValue expr = ctx.readExpr(ctx.reader, ctx.ptr, ctx.end, error);
+    if (!error.empty()) {
+        return nullptr;
+    }
+    auto* vi = new QoreIRVrnConstructInstruction(nullptr, expr);
+    vi->opcode = static_cast<QoreIROpcode>(opcode_raw);
+    expr.discard(nullptr);
+    vi->result = QoreIRValue(result_id);
+    vi->operands = operands;
+    vi->exception_target = exc_target;
+    return std::unique_ptr<QoreIRInstruction>(vi);
+}
+
+// ============================================================================
+// Group 38: HashKeyStore - Hash key storage
+// ============================================================================
+
+static bool writeHashKeyStore(AOTInstWriteCtx& ctx) {
+    auto* hi = static_cast<const QoreIRHashKeyStoreInstruction*>(ctx.inst);
+    ctx.writer.writeStringRef(hi->key_name.c_str());
+    ctx.writer.writeU32(hi->container_slot_id);
+    return true;
+}
+
+static std::unique_ptr<QoreIRInstruction> readHashKeyStore(
+        uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
+        const std::vector<QoreIRValue>& operands, uint32_t result_id,
+        AOTInstReadCtx& ctx) {
+    const char* key_name = ctx.reader.readStringRef(ctx.ptr);
+    uint32_t container_slot_id = QoreAOTBinaryReader::readU32(ctx.ptr);
+    auto* hi = new QoreIRHashKeyStoreInstruction(nullptr, key_name ? key_name : "");
+    hi->opcode = static_cast<QoreIROpcode>(opcode_raw);
+    hi->container_slot_id = container_slot_id;
+    hi->result = QoreIRValue(result_id);
+    hi->operands = operands;
+    hi->exception_target = exc_target;
+    return std::unique_ptr<QoreIRInstruction>(hi);
+}
+
+// ============================================================================
+// Group 39: ListIndexStore - List index storage
+// ============================================================================
+
+static bool writeListIndexStore(AOTInstWriteCtx& ctx) {
+    auto* li = static_cast<const QoreIRListIndexStoreInstruction*>(ctx.inst);
+    ctx.writer.writeU32(li->container_slot_id);
+    return true;
+}
+
+static std::unique_ptr<QoreIRInstruction> readListIndexStore(
+        uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
+        const std::vector<QoreIRValue>& operands, uint32_t result_id,
+        AOTInstReadCtx& ctx) {
+    uint32_t container_slot_id = QoreAOTBinaryReader::readU32(ctx.ptr);
+    auto* li = new QoreIRListIndexStoreInstruction(nullptr);
+    li->opcode = static_cast<QoreIROpcode>(opcode_raw);
+    li->container_slot_id = container_slot_id;
+    li->result = QoreIRValue(result_id);
+    li->operands = operands;
+    li->exception_target = exc_target;
+    return std::unique_ptr<QoreIRInstruction>(li);
+}
+
+// ============================================================================
+// Group 40: FusedAddLocal - Fused += operation on local int
+// ============================================================================
+
+static bool writeFusedAddLocal(AOTInstWriteCtx& ctx) {
+    auto* fi = static_cast<const QoreIRAddAssignLocalIntInstruction*>(ctx.inst);
+    ctx.writer.writeStringRef(fi->target ? fi->target->getName() : "");
+    ctx.writer.writeStringRef(fi->source ? fi->source->getName() : "");
+    ctx.writer.writeU32(fi->target_slot_id);
+    ctx.writer.writeU32(fi->source_slot_id);
+    ctx.writer.writeU8(fi->target_ir_only ? 1 : 0);
+    return true;
+}
+
+static std::unique_ptr<QoreIRInstruction> readFusedAddLocal(
+        uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
+        const std::vector<QoreIRValue>& operands, uint32_t result_id,
+        AOTInstReadCtx& ctx) {
+    const char* target_name = ctx.reader.readStringRef(ctx.ptr);
+    const char* source_name = ctx.reader.readStringRef(ctx.ptr);
+    uint32_t target_slot_id = QoreAOTBinaryReader::readU32(ctx.ptr);
+    uint32_t source_slot_id = QoreAOTBinaryReader::readU32(ctx.ptr);
+    bool target_ir_only = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
+    LocalVar* target_lv = ctx.resolveLocal(target_name);
+    LocalVar* source_lv = ctx.resolveLocal(source_name);
+    auto* fi = new QoreIRAddAssignLocalIntInstruction(target_lv, source_lv);
+    fi->target_slot_id = target_slot_id;
+    fi->source_slot_id = source_slot_id;
+    fi->target_ir_only = target_ir_only;
+    fi->result = QoreIRValue(result_id);
+    fi->operands = operands;
+    fi->exception_target = exc_target;
+    return std::unique_ptr<QoreIRInstruction>(fi);
+}
+
+// ============================================================================
+// Group 41: FusedIncLocal - Fused ++ or += on local int
+// ============================================================================
+
+static bool writeFusedIncLocal(AOTInstWriteCtx& ctx) {
+    auto* fi = static_cast<const QoreIRIncrementLocalIntInstruction*>(ctx.inst);
+    ctx.writer.writeStringRef(fi->local ? fi->local->getName() : "");
+    ctx.writer.writeI64(fi->delta);
+    ctx.writer.writeU32(fi->slot_id);
+    ctx.writer.writeU8(fi->ir_only ? 1 : 0);
+    return true;
+}
+
+static std::unique_ptr<QoreIRInstruction> readFusedIncLocal(
+        uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
+        const std::vector<QoreIRValue>& operands, uint32_t result_id,
+        AOTInstReadCtx& ctx) {
+    const char* local_name = ctx.reader.readStringRef(ctx.ptr);
+    int64_t delta = QoreAOTBinaryReader::readI64(ctx.ptr);
+    uint32_t slot_id = QoreAOTBinaryReader::readU32(ctx.ptr);
+    bool ir_only = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
+    LocalVar* lv = ctx.resolveLocal(local_name);
+    auto* fi = new QoreIRIncrementLocalIntInstruction(lv, delta);
+    fi->slot_id = slot_id;
+    fi->ir_only = ir_only;
+    fi->result = QoreIRValue(result_id);
+    fi->operands = operands;
+    fi->exception_target = exc_target;
+    return std::unique_ptr<QoreIRInstruction>(fi);
+}
+
+// ============================================================================
+// Group 42: FusedBrLtLocal - Fused branch-if-less-than on local ints
+// ============================================================================
+
+static bool writeFusedBrLtLocal(AOTInstWriteCtx& ctx) {
+    auto* fi = static_cast<const QoreIRBranchIfLtLocalIntInstruction*>(ctx.inst);
+    ctx.writer.writeStringRef(fi->lhs ? fi->lhs->getName() : "");
+    ctx.writer.writeStringRef(fi->rhs ? fi->rhs->getName() : "");
+    ctx.writer.writeU32(fi->lhs_slot_id);
+    ctx.writer.writeU32(fi->rhs_slot_id);
+    auto it_t = ctx.block_idx.find(fi->true_target);
+    ctx.writer.writeU16(it_t != ctx.block_idx.end() ? it_t->second : 0xFFFF);
+    auto it_f = ctx.block_idx.find(fi->false_target);
+    ctx.writer.writeU16(it_f != ctx.block_idx.end() ? it_f->second : 0xFFFF);
+    return true;
+}
+
+static std::unique_ptr<QoreIRInstruction> readFusedBrLtLocal(
+        uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
+        const std::vector<QoreIRValue>& operands, uint32_t result_id,
+        AOTInstReadCtx& ctx) {
+    const char* lhs_name = ctx.reader.readStringRef(ctx.ptr);
+    const char* rhs_name = ctx.reader.readStringRef(ctx.ptr);
+    uint32_t lhs_slot_id = QoreAOTBinaryReader::readU32(ctx.ptr);
+    uint32_t rhs_slot_id = QoreAOTBinaryReader::readU32(ctx.ptr);
+    uint16_t true_idx = QoreAOTBinaryReader::readU16(ctx.ptr);
+    uint16_t false_idx = QoreAOTBinaryReader::readU16(ctx.ptr);
+    LocalVar* lhs_lv = ctx.resolveLocal(lhs_name);
+    LocalVar* rhs_lv = ctx.resolveLocal(rhs_name);
+    auto* fi = new QoreIRBranchIfLtLocalIntInstruction(
+        lhs_lv, rhs_lv, ctx.resolveBlock(true_idx), ctx.resolveBlock(false_idx));
+    fi->lhs_slot_id = lhs_slot_id;
+    fi->rhs_slot_id = rhs_slot_id;
+    fi->result = QoreIRValue(result_id);
+    fi->operands = operands;
+    fi->exception_target = exc_target;
+    return std::unique_ptr<QoreIRInstruction>(fi);
+}
+
+// ============================================================================
+// Group 43: MapHashKey - Hash key mapping operation
+// ============================================================================
+
+static bool writeMapHashKey(AOTInstWriteCtx& ctx) {
+    auto* mi = static_cast<const QoreIRMapHashKeyInstruction*>(ctx.inst);
+    ctx.writer.writeStringRef(mi->key1.c_str());
+    ctx.writer.writeStringRef(mi->key2.c_str());
+    return true;
+}
+
+static std::unique_ptr<QoreIRInstruction> readMapHashKey(
+        uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
+        const std::vector<QoreIRValue>& operands, uint32_t result_id,
+        AOTInstReadCtx& ctx) {
+    const char* key1 = ctx.reader.readStringRef(ctx.ptr);
+    const char* key2 = ctx.reader.readStringRef(ctx.ptr);
+    auto inst = std::make_unique<QoreIRMapHashKeyInstruction>(static_cast<QoreIROpcode>(opcode_raw),
+        key1 ? key1 : "", key2 ? key2 : "");
+    inst->result = QoreIRValue(result_id);
+    inst->operands = operands;
+    inst->exception_target = exc_target;
+    return inst;
+}
+
+// ============================================================================
+// Group 44: IteratorCreate - Iterator creation from iterable
+// ============================================================================
+
+static bool writeIteratorCreate(AOTInstWriteCtx& ctx) {
+    auto* ii = static_cast<const QoreIRIteratorCreateInstruction*>(ctx.inst);
+    ctx.writer.writeU32(ii->iterable.id);
+    return true;
+}
+
+static std::unique_ptr<QoreIRInstruction> readIteratorCreate(
+        uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
+        const std::vector<QoreIRValue>& operands, uint32_t result_id,
+        AOTInstReadCtx& ctx) {
+    uint32_t iterable_id = QoreAOTBinaryReader::readU32(ctx.ptr);
+    auto* ii = new QoreIRIteratorCreateInstruction(QoreIRValue(iterable_id));
+    ii->opcode = static_cast<QoreIROpcode>(opcode_raw);
+    ii->result = QoreIRValue(result_id);
+    ii->operands = operands;
+    ii->exception_target = exc_target;
+    return std::unique_ptr<QoreIRInstruction>(ii);
+}
+
+// ============================================================================
+// Group 45: IteratorNext - Iterator advance with two targets
+// ============================================================================
+
+static bool writeIteratorNext(AOTInstWriteCtx& ctx) {
+    auto* ii = static_cast<const QoreIRIteratorNextInstruction*>(ctx.inst);
+    ctx.writer.writeU32(ii->iterator.id);
+    auto it_d = ctx.block_idx.find(ii->done_target);
+    ctx.writer.writeU16(it_d != ctx.block_idx.end() ? it_d->second : 0xFFFF);
+    auto it_c = ctx.block_idx.find(ii->continue_target);
+    ctx.writer.writeU16(it_c != ctx.block_idx.end() ? it_c->second : 0xFFFF);
+    return true;
+}
+
+static std::unique_ptr<QoreIRInstruction> readIteratorNext(
+        uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
+        const std::vector<QoreIRValue>& operands, uint32_t result_id,
+        AOTInstReadCtx& ctx) {
+    uint32_t iterator_id = QoreAOTBinaryReader::readU32(ctx.ptr);
+    uint16_t done_idx = QoreAOTBinaryReader::readU16(ctx.ptr);
+    uint16_t continue_idx = QoreAOTBinaryReader::readU16(ctx.ptr);
+    auto inst = std::make_unique<QoreIRIteratorNextInstruction>(
+        QoreIRValue(iterator_id), ctx.resolveBlock(done_idx), ctx.resolveBlock(continue_idx));
+    inst->result = QoreIRValue(result_id);
+    inst->operands = operands;
+    inst->exception_target = exc_target;
+    return inst;
+}
+
+// ============================================================================
+// Group 46: RefForeachInit - Reference foreach initialization
+// ============================================================================
+
+static bool writeRefForeachInit(AOTInstWriteCtx& ctx) {
+    auto* ri = static_cast<const QoreIRRefForeachInitInstruction*>(ctx.inst);
+    if (!ctx.writeExpr(ctx.writer, ri->expr)) {
+        return false;
+    }
+    return true;
+}
+
+static std::unique_ptr<QoreIRInstruction> readRefForeachInit(
+        uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
+        const std::vector<QoreIRValue>& operands, uint32_t result_id,
+        AOTInstReadCtx& ctx) {
+    std::string error;
+    QoreValue expr = ctx.readExpr(ctx.reader, ctx.ptr, ctx.end, error);
+    if (!error.empty()) {
+        return nullptr;
+    }
+    auto* ri = new QoreIRRefForeachInitInstruction(expr);
+    ri->opcode = static_cast<QoreIROpcode>(opcode_raw);
+    expr.discard(nullptr);
+    ri->result = QoreIRValue(result_id);
+    ri->operands = operands;
+    ri->exception_target = exc_target;
+    return std::unique_ptr<QoreIRInstruction>(ri);
+}
+
+// ============================================================================
+// Group 47: SwitchRegexMatch - Regex match case
+// ============================================================================
+
+static bool writeSwitchRegexMatch(AOTInstWriteCtx& ctx) {
+    auto* sri = static_cast<const QoreIRSwitchRegexMatchInstruction*>(ctx.inst);
+    if (!sri->regex_case) {
+        return false;
+    }
+    QoreRegex* re = sri->regex_case->getRegex();
+    if (!re || !re->getPatternCStr()) {
+        return false;
+    }
+    ctx.writer.writeStringRef(re->getPatternCStr());
+    ctx.writer.writeI64(re->getOptions());
+    ctx.writer.writeU8(dynamic_cast<const CaseNodeNegRegex*>(sri->regex_case) ? 1 : 0);
+    return true;
+}
+
+static std::unique_ptr<QoreIRInstruction> readSwitchRegexMatch(
+        uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
+        const std::vector<QoreIRValue>& operands, uint32_t result_id,
+        AOTInstReadCtx& ctx) {
+    const char* pattern = ctx.reader.readStringRef(ctx.ptr);
+    int64_t options = QoreAOTBinaryReader::readI64(ctx.ptr);
+    bool is_negated = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
+    ExceptionSink xsink;
+    QoreRegex* re = new QoreRegex(pattern ? pattern : "", options, &xsink);
+    if (xsink) {
+        delete re;
+        return nullptr;
+    }
+    const CaseNodeRegex* cnode = is_negated
+        ? new CaseNodeNegRegex(&loc_builtin, re, nullptr)
+        : new CaseNodeRegex(&loc_builtin, re, nullptr);
+    auto* sri = new QoreIRSwitchRegexMatchInstruction(cnode);
+    sri->opcode = static_cast<QoreIROpcode>(opcode_raw);
+    sri->owns_regex_case = true;
+    sri->result = QoreIRValue(result_id);
+    sri->operands = operands;
+    sri->exception_target = exc_target;
+    return std::unique_ptr<QoreIRInstruction>(sri);
+}
+
+// ============================================================================
+// Group 49: MakeHashConstKeys - Variable-length const key list
+// ============================================================================
+
+static bool writeMakeHashConstKeys(AOTInstWriteCtx& ctx) {
+    auto* mhck = static_cast<const QoreIRMakeHashConstKeysInstruction*>(ctx.inst);
+    ctx.writer.writeU16(static_cast<uint16_t>(mhck->keys.size()));
+    for (const auto& key : mhck->keys) {
+        ctx.writer.writeStringRef(key.c_str());
+    }
+    return true;
+}
+
+static std::unique_ptr<QoreIRInstruction> readMakeHashConstKeys(
+        uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
+        const std::vector<QoreIRValue>& operands, uint32_t result_id,
+        AOTInstReadCtx& ctx) {
+    uint16_t key_count = QoreAOTBinaryReader::readU16(ctx.ptr);
+    std::vector<std::string> keys;
+    keys.reserve(key_count);
+    for (uint16_t k = 0; k < key_count; ++k) {
+        const char* key = ctx.reader.readStringRef(ctx.ptr);
+        keys.push_back(key ? key : "");
+    }
+    auto inst = std::make_unique<QoreIRMakeHashConstKeysInstruction>(std::move(keys));
+    inst->result = QoreIRValue(result_id);
+    inst->operands = operands;
+    inst->exception_target = exc_target;
+    return inst;
+}
+
+// ============================================================================
+// Group 50: SwitchCaseMatch - Switch case matching with optional value
+// ============================================================================
+
+static bool writeSwitchCaseMatch(AOTInstWriteCtx& ctx) {
+    auto* scm = static_cast<const QoreIRSwitchCaseMatchInstruction*>(ctx.inst);
+    if (scm->case_node && scm->case_node->val) {
+        ctx.writer.writeU8(1);  // has_val
+        if (!ctx.writeExpr(ctx.writer, scm->case_node->val)) {
+            return false;
+        }
+    } else {
+        ctx.writer.writeU8(0);  // no val (default case)
+    }
+    return true;
+}
+
+static std::unique_ptr<QoreIRInstruction> readSwitchCaseMatch(
+        uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
+        const std::vector<QoreIRValue>& operands, uint32_t result_id,
+        AOTInstReadCtx& ctx) {
+    uint8_t has_val = QoreAOTBinaryReader::readU8(ctx.ptr);
+    QoreValue case_val;
+    std::string error;
+    if (has_val) {
+        case_val = ctx.readExpr(ctx.reader, ctx.ptr, ctx.end, error);
+        if (!error.empty()) {
+            return nullptr;
+        }
+    }
+    auto* cnode = new CaseNode(&loc_builtin, case_val, nullptr);
+    auto* scm = new QoreIRSwitchCaseMatchInstruction(cnode);
+    scm->owns_case_node = true;
+    scm->result = QoreIRValue(result_id);
+    scm->operands = operands;
+    scm->exception_target = exc_target;
+    return std::unique_ptr<QoreIRInstruction>(scm);
+}
+
+// ============================================================================
+// Group 51: ListIndexAccess - List index access (base operands only)
+// ============================================================================
+
+static bool writeListIndexAccess(AOTInstWriteCtx& ctx) {
+    // No extra fields beyond base operands
+    return true;
+}
+
+static std::unique_ptr<QoreIRInstruction> readListIndexAccess(
+        uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
+        const std::vector<QoreIRValue>& operands, uint32_t result_id,
+        AOTInstReadCtx& ctx) {
+    auto inst = std::make_unique<QoreIRListIndexAccessInstruction>();
+    inst->result = QoreIRValue(result_id);
+    inst->operands = operands;
+    inst->exception_target = exc_target;
+    return inst;
+}
+
+// ============================================================================
+// Instruction Group Registry Table
+// ============================================================================
+
 const QoreIRInstGroupInfo AOT_INST_GROUP_REGISTRY[AOT_INST_GROUP_TABLE_SIZE] = {
-    // Index 0: Base
-    { "Base", 0, true, false, writeBase, readBase, "Base instruction with no group-specific fields" },
-
-    // Index 1: Const
-    { "Const", 1, true, false, writeConst, readConst, "Constant value (int/float/bool/string/date/enum)" },
-
     // Index 2: Branch
     { "Branch", 2, true, false, writeBranch, readBranch, "Unconditional branch to target block" },
 
@@ -454,139 +1930,139 @@ const QoreIRInstGroupInfo AOT_INST_GROUP_REGISTRY[AOT_INST_GROUP_TABLE_SIZE] = {
     { "Local", 6, true, false, writeLocal, readLocal, "Local variable slot definition" },
 
     // Index 7: Var
-    { "Var", 7, true, false, write_group_7, read_group_7, "Global variable reference" },
+    { "Var", 7, true, false, writeVar, readVar, "Global variable reference" },
 
     // Index 8: LValue
-    { "LValue", 8, true, false, write_group_8, read_group_8, "LValue (assignable) reference" },
+    { "LValue", 8, true, false, writeLValue, readLValue, "LValue (assignable) reference" },
 
     // Index 9: Expr
-    { "Expr", 9, true, false, write_group_9, read_group_9, "Generic expression" },
+    { "Expr", 9, true, false, writeExpr, readExpr, "Generic expression" },
 
     // Index 10: CallDirect
-    { "CallDirect", 10, true, false, write_group_10, read_group_10, "Direct function call" },
+    { "CallDirect", 10, true, false, writeCallDirect, readCallDirect, "Direct function call" },
 
     // Index 11: CallMethodDirect
-    { "CallMethodDirect", 11, true, false, write_group_11, read_group_11, "Direct method call" },
+    { "CallMethodDirect", 11, true, false, writeCallMethodDirect, readCallMethodDirect, "Direct method call" },
 
     // Index 12: InvokeMethodDirect
-    { "InvokeMethodDirect", 12, true, false, write_group_12, read_group_12, "Direct method call with exception handling" },
+    { "InvokeMethodDirect", 12, true, false, writeInvokeMethodDirect, readInvokeMethodDirect, "Direct method call with exception handling" },
 
     // Index 13: CallStaticDirect
-    { "CallStaticDirect", 13, true, false, write_group_13, read_group_13, "Static method call" },
+    { "CallStaticDirect", 13, true, false, writeCallStaticDirect, readCallStaticDirect, "Static method call" },
 
     // Index 14: DotEvalMethodDirect
-    { "DotEvalMethodDirect", 14, true, false, write_group_14, read_group_14, "Dot-notation method evaluation" },
+    { "DotEvalMethodDirect", 14, true, false, writeDotEvalMethodDirect, readDotEvalMethodDirect, "Dot-notation method evaluation" },
 
     // Index 15: InvokeDotEvalMethodDirect
-    { "InvokeDotEvalMethodDirect", 15, true, false, write_group_15, read_group_15, "Dot-notation method evaluation with exception handling" },
+    { "InvokeDotEvalMethodDirect", 15, true, false, writeInvokeDotEvalMethodDirect, readInvokeDotEvalMethodDirect, "Dot-notation method evaluation with exception handling" },
 
     // Index 16: Invoke
-    { "Invoke", 16, true, false, write_group_16, read_group_16, "Generic method invocation" },
+    { "Invoke", 16, true, false, writeInvoke, readInvoke, "Generic method invocation" },
 
     // Index 17: ScopeEnter
-    { "ScopeEnter", 17, true, false, write_group_17, read_group_17, "Scope entry tracking" },
+    { "ScopeEnter", 17, true, false, writeScopeEnter, readScopeEnter, "Scope entry tracking" },
 
     // Index 18: ScopeExit
-    { "ScopeExit", 18, true, false, write_group_18, read_group_18, "Scope exit tracking" },
+    { "ScopeExit", 18, true, false, writeScopeExit, readScopeExit, "Scope exit tracking" },
 
     // Index 19: LandingPad
-    { "LandingPad", 19, true, false, write_group_19, read_group_19, "Exception handling landing pad" },
+    { "LandingPad", 19, true, false, writeLandingPad, readLandingPad, "Exception handling landing pad" },
 
     // Index 20: SwitchInt
-    { "SwitchInt", 20, true, false, write_group_20, read_group_20, "Switch on integer value" },
+    { "SwitchInt", 20, true, false, writeSwitchInt, readSwitchInt, "Switch on integer value" },
 
     // Index 21: SwitchString
-    { "SwitchString", 21, true, false, write_group_21, read_group_21, "Switch on string value" },
+    { "SwitchString", 21, true, false, writeSwitchString, readSwitchString, "Switch on string value" },
 
     // Index 22: Phi
-    { "Phi", 22, true, false, write_group_22, read_group_22, "Phi node for value merging" },
+    { "Phi", 22, true, false, writePhi, readPhi, "Phi node for value merging" },
 
     // Index 23: Guard
-    { "Guard", 23, true, false, write_group_23, read_group_23, "Type guard with deoptimization" },
+    { "Guard", 23, true, false, writeGuard, readGuard, "Type guard with deoptimization" },
 
     // Index 24: ImplicitArg
-    { "ImplicitArg", 24, true, false, write_group_24, read_group_24, "Implicit argument access" },
+    { "ImplicitArg", 24, true, false, writeImplicitArg, readImplicitArg, "Implicit argument access" },
 
     // Index 25: HashKeyAccess
-    { "HashKeyAccess", 25, true, false, write_group_25, read_group_25, "Hash key access by name" },
+    { "HashKeyAccess", 25, true, false, writeHashKeyAccess, readHashKeyAccess, "Hash key access by name" },
 
     // Index 26: SelfMember
-    { "SelfMember", 26, true, false, write_group_26, read_group_26, "Member access on self" },
+    { "SelfMember", 26, true, false, writeSelfMember, readSelfMember, "Member access on self" },
 
     // Index 27: StaticVar
-    { "StaticVar", 27, true, false, write_group_27, read_group_27, "Static variable access" },
+    { "StaticVar", 27, true, false, writeStaticVar, readStaticVar, "Static variable access" },
 
     // Index 28: NewObject
-    { "NewObject", 28, true, false, write_group_28, read_group_28, "Object instantiation" },
+    { "NewObject", 28, true, false, writeNewObject, readNewObject, "Object instantiation" },
 
     // Index 29: LoadConst
-    { "LoadConst", 29, true, false, write_group_29, read_group_29, "Constant loading" },
+    { "LoadConst", 29, true, false, writeLoadConst, readLoadConst, "Constant loading" },
 
     // Index 30: CreateClosure
-    { "CreateClosure", 30, true, false, write_group_30, read_group_30, "Closure creation" },
+    { "CreateClosure", 30, true, false, writeCreateClosure, readCreateClosure, "Closure creation" },
 
     // Index 31: CreateCallRef
-    { "CreateCallRef", 31, true, false, write_group_31, read_group_31, "Call reference creation" },
+    { "CreateCallRef", 31, true, false, writeCreateCallRef, readCreateCallRef, "Call reference creation" },
 
     // Index 32: CreateMethodRef
-    { "CreateMethodRef", 32, true, false, write_group_32, read_group_32, "Method reference creation" },
+    { "CreateMethodRef", 32, true, false, writeCreateMethodRef, readCreateMethodRef, "Method reference creation" },
 
     // Index 33: CreateParseRef
-    { "CreateParseRef", 33, true, false, write_group_33, read_group_33, "Parse reference creation" },
+    { "CreateParseRef", 33, true, false, writeCreateParseRef, readCreateParseRef, "Parse reference creation" },
 
     // Index 34: NewHashDecl
-    { "NewHashDecl", 34, true, false, write_group_34, read_group_34, "Hash declaration instantiation" },
+    { "NewHashDecl", 34, true, false, writeNewHashDecl, readNewHashDecl, "Hash declaration instantiation" },
 
     // Index 35: NewComplexHash
-    { "NewComplexHash", 35, true, false, write_group_35, read_group_35, "Complex hash creation" },
+    { "NewComplexHash", 35, true, false, writeNewComplexHash, readNewComplexHash, "Complex hash creation" },
 
     // Index 36: NewComplexList
-    { "NewComplexList", 36, true, false, write_group_36, read_group_36, "Complex list creation" },
+    { "NewComplexList", 36, true, false, writeNewComplexList, readNewComplexList, "Complex list creation" },
 
     // Index 37: VrnConstruct
-    { "VrnConstruct", 37, true, false, write_group_37, read_group_37, "Variant value construction" },
+    { "VrnConstruct", 37, true, false, writeVrnConstruct, readVrnConstruct, "Variant value construction" },
 
     // Index 38: HashKeyStore
-    { "HashKeyStore", 38, true, false, write_group_38, read_group_38, "Hash key storage" },
+    { "HashKeyStore", 38, true, false, writeHashKeyStore, readHashKeyStore, "Hash key storage" },
 
     // Index 39: ListIndexStore
-    { "ListIndexStore", 39, true, false, write_group_39, read_group_39, "List index storage" },
+    { "ListIndexStore", 39, true, false, writeListIndexStore, readListIndexStore, "List index storage" },
 
     // Index 40: FusedAddLocal
-    { "FusedAddLocal", 40, true, false, write_group_40, read_group_40, "Fused += operation on local" },
+    { "FusedAddLocal", 40, true, false, writeFusedAddLocal, readFusedAddLocal, "Fused += operation on local" },
 
     // Index 41: FusedIncLocal
-    { "FusedIncLocal", 41, true, false, write_group_41, read_group_41, "Fused ++ operation on local" },
+    { "FusedIncLocal", 41, true, false, writeFusedIncLocal, readFusedIncLocal, "Fused ++ operation on local" },
 
     // Index 42: FusedBrLtLocal
-    { "FusedBrLtLocal", 42, true, false, write_group_42, read_group_42, "Fused branch-if-less-than on locals" },
+    { "FusedBrLtLocal", 42, true, false, writeFusedBrLtLocal, readFusedBrLtLocal, "Fused branch-if-less-than on locals" },
 
     // Index 43: MapHashKey
-    { "MapHashKey", 43, true, false, write_group_43, read_group_43, "Hash key mapping operation" },
+    { "MapHashKey", 43, true, false, writeMapHashKey, readMapHashKey, "Hash key mapping operation" },
 
     // Index 44: IteratorCreate
-    { "IteratorCreate", 44, true, false, write_group_44, read_group_44, "Iterator creation from iterable" },
+    { "IteratorCreate", 44, true, false, writeIteratorCreate, readIteratorCreate, "Iterator creation from iterable" },
 
     // Index 45: IteratorNext
-    { "IteratorNext", 45, true, false, write_group_45, read_group_45, "Iterator advance with targets" },
+    { "IteratorNext", 45, true, false, writeIteratorNext, readIteratorNext, "Iterator advance with targets" },
 
     // Index 46: RefForeachInit
-    { "RefForeachInit", 46, true, false, write_group_46, read_group_46, "Reference foreach initialization" },
+    { "RefForeachInit", 46, true, false, writeRefForeachInit, readRefForeachInit, "Reference foreach initialization" },
 
     // Index 47: SwitchRegexMatch
-    { "SwitchRegexMatch", 47, true, false, write_group_47, read_group_47, "Regex pattern matching" },
+    { "SwitchRegexMatch", 47, true, false, writeSwitchRegexMatch, readSwitchRegexMatch, "Regex pattern matching" },
 
     // Index 48: OnBlockExit
     { "OnBlockExit", 48, true, true, writeOnBlockExit, readOnBlockExit, "Exception handler with nested IR function" },
 
     // Index 49: MakeHashConstKeys
-    { "MakeHashConstKeys", 49, true, false, write_group_49, read_group_49, "Create hash with constant keys" },
+    { "MakeHashConstKeys", 49, true, false, writeMakeHashConstKeys, readMakeHashConstKeys, "Create hash with constant keys" },
 
     // Index 50: SwitchCaseMatch
-    { "SwitchCaseMatch", 50, true, false, write_group_50, read_group_50, "Switch case matching" },
+    { "SwitchCaseMatch", 50, true, false, writeSwitchCaseMatch, readSwitchCaseMatch, "Switch case matching" },
 
     // Index 51: ListIndexAccess
-    { "ListIndexAccess", 51, true, false, write_group_51, read_group_51, "List index access" },
+    { "ListIndexAccess", 51, true, false, writeListIndexAccess, readListIndexAccess, "List index access" },
 
     // Remaining 52-255: Unsupported/undefined
     #define UNUSED_ENTRY(idx) { nullptr, idx, false, false, nullptr, nullptr, nullptr }
