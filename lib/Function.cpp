@@ -3369,6 +3369,31 @@ int QoreFunction::parseCompareResolvedSignature(const VList& vlist, const Abstra
     return QTI_NOT_EQUAL;
 }
 
+// Helper to consolidate parameter type comparison logic across 2x2 matrix of resolved/unresolved types
+static bool paramTypesIdentical(
+    const QoreTypeInfo* ti_a, const QoreParseTypeInfo* pti_a,
+    const QoreTypeInfo* ti_b, const QoreParseTypeInfo* pti_b,
+    bool& recheck) {
+    // Both resolved types: direct comparison
+    if (ti_a && ti_b) {
+        return QoreTypeInfo::isInputIdentical(ti_a, ti_b);
+    }
+    // a resolved, b unresolved
+    if (ti_a && pti_b) {
+        return QoreParseTypeInfo::parseStageOneIdenticalWithParsed(pti_b, ti_a, recheck);
+    }
+    // a unresolved, b resolved
+    if (pti_a && ti_b) {
+        return QoreParseTypeInfo::parseStageOneIdenticalWithParsed(pti_a, ti_b, recheck);
+    }
+    // Both unresolved: compare parse-time types
+    if (pti_a && pti_b) {
+        return QoreParseTypeInfo::parseStageOneIdentical(pti_a, pti_b, recheck);
+    }
+    // Both untyped (nullptr): identical
+    return true;
+}
+
 int QoreFunction::parseCheckDuplicateSignature(AbstractQoreFunctionVariant* variant) {
     UserSignature* sig = reinterpret_cast<UserSignature*>(variant->getSignature());
 
@@ -3413,49 +3438,19 @@ int QoreFunction::parseCheckDuplicateSignature(AbstractQoreFunctionVariant* vari
             const QoreParseTypeInfo* parseTypeInfo = typeInfo ? nullptr : sig->getParseParamTypeInfo(pi);
             bool thisHasDefaultArg = sig->hasDefaultArg(pi);
 
-            // FIXME: this is a horribly-complicated if/then/else structure
             //printd(5, "QoreFunction::parseCheckDuplicateSignature() ti: '%s' pti: '%s' vti: '%s' vpti: '%s' ident: %d\n", QoreTypeInfo::getName(typeInfo), QoreParseTypeInfo::getName(parseTypeInfo), QoreTypeInfo::getName(variantTypeInfo), QoreParseTypeInfo::getName(variantParseTypeInfo), QoreTypeInfo::isInputIdentical(typeInfo, variantTypeInfo));
 
-            // check for ambiguous matches
-            if (typeInfo || parseTypeInfo) {
-                if (!QoreTypeInfo::hasType(variantTypeInfo) && !variantParseTypeInfo && thisHasDefaultArg)
-                    ambiguous = true;
-                else {
-                    // check for real matches
-                    if (typeInfo) {
-                        if (variantTypeInfo) {
-                            if (!QoreTypeInfo::isInputIdentical(typeInfo, variantTypeInfo)) {
-                                dup = false;
-                                break;
-                            }
-                        } else if (!QoreParseTypeInfo::parseStageOneIdenticalWithParsed(variantParseTypeInfo, typeInfo, recheck)) {
-                            dup = false;
-                            break;
-                        }
-                    } else {
-                        if (variantTypeInfo) {
-                            if (!QoreParseTypeInfo::parseStageOneIdenticalWithParsed(parseTypeInfo, variantTypeInfo, recheck)) {
-                                dup = false;
-                                break;
-                            }
-                        } else if (!QoreParseTypeInfo::parseStageOneIdentical(parseTypeInfo, variantParseTypeInfo, recheck)) {
-                            dup = false;
-                            break;
-                        }
-                    }
-                }
-            } else {
-                if ((QoreTypeInfo::hasType(variantTypeInfo) || variantParseTypeInfo) && variantHasDefaultArg)
-                    ambiguous = true;
-                else if (variantTypeInfo) {
-                    if (!QoreTypeInfo::isInputIdentical(typeInfo, variantTypeInfo)) {
-                        dup = false;
-                        break;
-                    }
-                } else if (!QoreParseTypeInfo::parseStageOneIdenticalWithParsed(variantParseTypeInfo, typeInfo, recheck)) {
-                    dup = false;
-                    break;
-                }
+            // Check if types match using consolidated comparison logic
+            if (!paramTypesIdentical(typeInfo, parseTypeInfo, variantTypeInfo, variantParseTypeInfo, recheck)) {
+                dup = false;
+                break;
+            }
+
+            // Detect ambiguous matches: one has type, other doesn't, but has default arg
+            if ((typeInfo || parseTypeInfo) && !QoreTypeInfo::hasType(variantTypeInfo) && !variantParseTypeInfo && thisHasDefaultArg) {
+                ambiguous = true;
+            } else if (!(typeInfo || parseTypeInfo) && (QoreTypeInfo::hasType(variantTypeInfo) || variantParseTypeInfo) && variantHasDefaultArg) {
+                ambiguous = true;
             }
             //printd(5, "QoreFunction::parseCheckDuplicateSignature() %s(%s) == %s(%s) i: %d: %s <=> %s dup: %d\n", getName(), sig->getSignatureText(), getName(), vs->getSignatureText(), pi, QoreTypeInfo::getName(typeInfo), QoreTypeInfo::getName(variantTypeInfo), dup);
         }
