@@ -822,16 +822,13 @@ static QoreValue readOneExpr(
             r1 = rdr.readStringRef(p);
             break;
         case AOTExprKind::CONST_INT: {
-            r1 = rdr.readStringRef(p);
-            return QoreValue(strtoll(r1 ? r1 : "0", nullptr, 10));
+            return QoreValue(QoreAOTBinaryReader::readI64(p));
         }
         case AOTExprKind::CONST_FLOAT: {
-            r1 = rdr.readStringRef(p);
-            return QoreValue(strtod(r1 ? r1 : "0", nullptr));
+            return QoreValue(QoreAOTBinaryReader::readF64(p));
         }
         case AOTExprKind::CONST_BOOL: {
-            r1 = rdr.readStringRef(p);
-            return QoreValue((bool)(r1 && r1[0] == '1'));
+            return QoreValue((bool)QoreAOTBinaryReader::readU8(p));
         }
         case AOTExprKind::CONST_NOTHING:
             return QoreValue();
