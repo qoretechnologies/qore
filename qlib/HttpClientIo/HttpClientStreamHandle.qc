@@ -49,8 +49,10 @@ stream.submitAsync("GET", "/api/users", NOTHING, NOTHING,
     @code{.py}
 HttpClientStreamHandle stream = manager.acquireStream("https://example.com");
 if (stream.supportsStreaming()) {
+    string body = make_json({"jsonrpc": "2.0", "method": "message/stream", "id": 1,
+        "params": {"message": {"role": "user", "parts": ({"type": "text", "text": "Hello"},)}}});
     stream.startStreaming("POST", "/events",
-        {"Accept": "text/event-stream", "Content-Type": "application/json"});
+        {"Accept": "text/event-stream", "Content-Type": "application/json"}, False, body);
     while (True) {
         auto data = stream.readData(30s);
         if (!exists data) {
@@ -571,6 +573,8 @@ public class HttpClientStreamHandle {
         @param headers request headers (optional)
         @param body_streaming if \c True, keep the request body stream open for bidirectional
         communication; if \c False (default), submit with END_STREAM for response-only streaming
+        @param body one-shot request body (optional); sent with the request before streaming
+        begins — use for patterns like POST with JSON body + streaming SSE response
 
         @return the stream ID
 
@@ -581,7 +585,8 @@ public class HttpClientStreamHandle {
 
         @see readData(), sendData(), writesDone()
     */
-    int startStreaming(string method, string path, *hash<auto> headers, bool body_streaming = False) {
+    int startStreaming(string method, string path, *hash<auto> headers,
+            bool body_streaming = False, *data body) {
         throw "HTTPCLIENT-STREAMING-NOT-SUPPORTED",
             "streaming is not supported by " + conn.getProtocol();
     }
