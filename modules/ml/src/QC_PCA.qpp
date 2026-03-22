@@ -245,3 +245,12 @@ list<auto> PCA::getExplainedVarianceRatio() {
 list<auto> PCA::getMean() {
     return pca->getMean(xsink);
 }
+
+//! Returns the standard deviation vector used for scaling
+/** @return a list of float values, one per feature
+
+    @throw ML-PCA-ERROR if the model has not been fitted
+*/
+list<float> PCA::getStddev() {
+    return pca->getStddev(xsink);
+}

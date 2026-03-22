@@ -60,6 +60,18 @@ public:
     //! Whether the model has been fitted
     DLLLOCAL bool isFitted() const { return fitted; }
 
+    //! Get the weight matrix as a Qore list of lists
+    DLLLOCAL QoreListNode* getWeights(ExceptionSink* xsink) const;
+
+    //! Get the intercept values as a Qore list
+    DLLLOCAL QoreListNode* getIntercepts(ExceptionSink* xsink) const;
+
+    //! Get the class labels as a Qore list
+    DLLLOCAL QoreListNode* getClasses(ExceptionSink* xsink) const;
+
+    //! Whether the model is binary classification
+    DLLLOCAL bool isBinaryClassification() const { return is_binary; }
+
     //! Store field names for hash-based input
     DLLLOCAL void setFieldNames(const std::vector<std::string>& names) { field_names = names; }
     DLLLOCAL const std::vector<std::string>& getFieldNames() const { return field_names; }

@@ -82,6 +82,12 @@ public:
     //! Get the std vector (for serialization)
     DLLLOCAL const VectorXd& getStd() const { return std_vec; }
 
+    //! Get the mean vector as a Qore list (thread-safe, checks fitted)
+    DLLLOCAL QoreListNode* getMeanAsList(ExceptionSink* xsink) const;
+
+    //! Get the std vector as a Qore list (thread-safe, checks fitted)
+    DLLLOCAL QoreListNode* getStdAsList(ExceptionSink* xsink) const;
+
     //! Serialize model state to binary
     DLLLOCAL std::vector<uint8_t> serializeState() const;
 

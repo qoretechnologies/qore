@@ -70,6 +70,9 @@ public:
     //! Get mean vector
     DLLLOCAL QoreListNode* getMean(ExceptionSink* xsink);
 
+    //! Get standard deviation vector
+    DLLLOCAL QoreListNode* getStddev(ExceptionSink* xsink);
+
     //! Store field names
     DLLLOCAL void setFieldNames(const std::vector<std::string>& names) { field_names = names; }
     DLLLOCAL const std::vector<std::string>& getFieldNames() const { return field_names; }

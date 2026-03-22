@@ -286,6 +286,30 @@ QoreListNode* QoreIsolationForest::scoreMatrix(const MatrixXd& data, ExceptionSi
     return rv.release();
 }
 
+QoreListNode* QoreIsolationForest::getTrees(ExceptionSink* xsink) const {
+    std::lock_guard<std::mutex> lk(mtx);
+    if (!fitted) {
+        xsink->raiseException("ML-ISOLATION-FOREST-ERROR",
+            "model has not been fitted: call fit() or fitMatrix() first");
+        return nullptr;
+    }
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(autoTypeInfo), xsink);
+    for (const auto& tree : trees) {
+        ReferenceHolder<QoreListNode> node_list(new QoreListNode(autoTypeInfo), xsink);
+        for (const auto& node : tree.nodes) {
+            ReferenceHolder<QoreHashNode> nh(new QoreHashNode(autoTypeInfo), xsink);
+            nh->setKeyValue("feature", static_cast<int64>(node.feature), xsink);
+            nh->setKeyValue("split_value", node.split_value, xsink);
+            nh->setKeyValue("left", static_cast<int64>(node.left), xsink);
+            nh->setKeyValue("right", static_cast<int64>(node.right), xsink);
+            nh->setKeyValue("size", static_cast<int64>(node.size), xsink);
+            node_list->push(nh.release(), xsink);
+        }
+        rv->push(node_list.release(), xsink);
+    }
+    return rv.release();
+}
+
 std::vector<uint8_t> QoreIsolationForest::serializeState() const {
     std::vector<uint8_t> buf;
     // Hyperparameters

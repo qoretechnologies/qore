@@ -68,6 +68,15 @@ public:
     //! Get R-squared value
     DLLLOCAL double getRSquared(ExceptionSink* xsink) const;
 
+    //! Get feature means used for normalization as a Qore list
+    DLLLOCAL QoreListNode* getFeatureMeans(ExceptionSink* xsink) const;
+
+    //! Get feature standard deviations used for normalization as a Qore list
+    DLLLOCAL QoreListNode* getFeatureStds(ExceptionSink* xsink) const;
+
+    //! Whether the model was fitted with normalization
+    DLLLOCAL bool isNormalized() const { return do_normalize; }
+
     //! Get model info (coefficients, intercept, r_squared, n_features)
     DLLLOCAL QoreHashNode* getModelInfo(ExceptionSink* xsink) const;
 

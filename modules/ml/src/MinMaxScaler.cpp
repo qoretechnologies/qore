@@ -182,6 +182,34 @@ QoreHashNode* QoreMinMaxScaler::getInfo(ExceptionSink* xsink) const {
     return rv.release();
 }
 
+QoreListNode* QoreMinMaxScaler::getDataMinList(ExceptionSink* xsink) const {
+    std::lock_guard<std::mutex> lk(mtx);
+    if (!fitted) {
+        xsink->raiseException("ML-MIN-MAX-SCALER-ERROR",
+            "scaler has not been fitted: call fit() or fitMatrix() first");
+        return nullptr;
+    }
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(autoTypeInfo), xsink);
+    for (int j = 0; j < n_features; ++j) {
+        rv->push(data_min(j), xsink);
+    }
+    return rv.release();
+}
+
+QoreListNode* QoreMinMaxScaler::getDataMaxList(ExceptionSink* xsink) const {
+    std::lock_guard<std::mutex> lk(mtx);
+    if (!fitted) {
+        xsink->raiseException("ML-MIN-MAX-SCALER-ERROR",
+            "scaler has not been fitted: call fit() or fitMatrix() first");
+        return nullptr;
+    }
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(autoTypeInfo), xsink);
+    for (int j = 0; j < n_features; ++j) {
+        rv->push(data_max(j), xsink);
+    }
+    return rv.release();
+}
+
 std::vector<uint8_t> QoreMinMaxScaler::serializeState() const {
     std::vector<uint8_t> buf;
     // Hyperparameters

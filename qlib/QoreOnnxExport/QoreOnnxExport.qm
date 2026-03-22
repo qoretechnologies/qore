@@ -1,0 +1,108 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file QoreOnnxExport.qm module providing ONNX model export for trained ML models
+
+/*  QoreOnnxExport.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+%modern
+
+%requires protobuf
+%requires ml
+%requires Util
+
+module QoreOnnxExport {
+    version = "1.0.0";
+    desc = "user module providing ONNX model export for trained ML models";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+}
+
+/** @mainpage QoreOnnxExport Module
+
+    @tableofcontents
+
+    @section qoreonnxexportintro QoreOnnxExport Module Introduction
+
+    The %QoreOnnxExport module exports trained %Qore ML models to ONNX (Open Neural
+    Network Exchange) format. The exported \c .onnx files can be loaded by any
+    ONNX-compatible runtime — ONNX Runtime, TensorFlow, PyTorch, etc. — enabling
+    interoperability between Qore's ML module and the broader ML ecosystem.
+
+    The module uses the \c protobuf built-in module to serialize ONNX ModelProto
+    messages in the standard protobuf binary format.
+
+    @section qoreonnxexportalgos Supported Algorithms
+
+    | Algorithm | ONNX Graph | Notes |
+    |-----------|-----------|-------|
+    | @ref ML::StandardScaler "StandardScaler" | \c Sub → \c Div | Feature normalization |
+    | @ref ML::MinMaxScaler "MinMaxScaler" | \c Sub → \c Div → \c Mul → \c Add | Range scaling |
+    | @ref ML::Imputer "Imputer" | \c IsNaN → \c Where | Missing value replacement |
+    | @ref ML::LinearRegression "LinearRegression" | \c MatMul → \c Add | Linear prediction |
+    | @ref ML::LogisticRegression "LogisticRegression" | \c MatMul → \c Add → \c Sigmoid/\c Softmax | Classification |
+    | @ref ML::PCA "PCA" | \c Sub [→ \c Div] → \c MatMul | Dimensionality reduction |
+    | @ref ML::KMeans "KMeans" | Distance computation → \c ArgMin | Cluster assignment |
+    | @ref ML::IsolationForest "IsolationForest" | \c TreeEnsembleRegressor → score | Anomaly detection |
+
+    @note All tensor data is exported as \c float (32-bit). Qore ML models use
+    \c double (64-bit) internally, so there is a minor precision reduction in the
+    exported model. This is standard practice for ML model interchange.
+
+    @par Example: Export to binary
+    @code{.py}
+%requires QoreOnnxExport
+%requires ml
+
+# Train a model
+ML::LinearRegression lr({"fit_intercept": True});
+lr.fitMatrix(training_X, training_y);
+
+# Export to ONNX binary
+binary onnx_data = QoreOnnxExport::OnnxExporter::export(lr, "my_model");
+    @endcode
+
+    @par Example: Export to file
+    @code{.py}
+QoreOnnxExport::OnnxExporter::exportToFile(lr, "model.onnx");
+    @endcode
+
+    @par Example: Export and reload with OnnxModel
+    @code{.py}
+# Export
+QoreOnnxExport::OnnxExporter::exportToFile(lr, "/tmp/model.onnx");
+
+# Load with ONNX Runtime (if available)
+ML::OnnxModel onnx_model("/tmp/model.onnx");
+list<auto> predictions = onnx_model.predict(test_X);
+    @endcode
+
+    @section qoreonnxexportrelnotes QoreOnnxExport Module Release Notes
+
+    @subsection qoreonnxexport_1_0 QoreOnnxExport Module Version 1.0
+    - Initial release with ONNX export for 8 ML algorithms
+    - StandardScaler, MinMaxScaler, Imputer, LinearRegression,
+      LogisticRegression, PCA, KMeans, IsolationForest
+    - Uses protobuf built-in module for ONNX protobuf serialization
+    - Supports ONNX opset 18 (ai.onnx) and opset 1 (ai.onnx.ml)
+*/

@@ -384,3 +384,38 @@ if (!clf.isFitted()) {
 bool LogisticRegression::isFitted() [flags=CONSTANT] {
     return lr->isFitted();
 }
+
+//! Returns the weight matrix
+/** @return a list of lists of float values (n_models x n_features); for binary classification
+    there is 1 row, for multiclass there are n_classes rows (one-vs-rest)
+
+    @throw ML-LOGISTIC-REGRESSION-ERROR if the model has not been fitted
+*/
+list<list<float>> LogisticRegression::getWeights() {
+    return lr->getWeights(xsink);
+}
+
+//! Returns the intercept (bias) values
+/** @return a list of float values, one per model (1 for binary, n_classes for multiclass)
+
+    @throw ML-LOGISTIC-REGRESSION-ERROR if the model has not been fitted
+*/
+list<float> LogisticRegression::getIntercepts() {
+    return lr->getIntercepts(xsink);
+}
+
+//! Returns the class labels
+/** @return a list of float values representing the unique class labels, sorted ascending
+
+    @throw ML-LOGISTIC-REGRESSION-ERROR if the model has not been fitted
+*/
+list<float> LogisticRegression::getClasses() {
+    return lr->getClasses(xsink);
+}
+
+//! Returns True if the model is a binary classifier
+/** @return True if the model was fitted with exactly 2 classes
+*/
+bool LogisticRegression::isBinary() [flags=CONSTANT] {
+    return lr->isBinaryClassification();
+}
