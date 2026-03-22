@@ -722,8 +722,12 @@ public:
         is flushed to the Queue immediately.  When END_STREAM arrives, a NOTHING
         sentinel is pushed and the registration is automatically removed.
 
+        Ownership: the caller transfers ownership of one reference (+1 ref) to
+        QuicSession.  QuicSession will call deref() when the registration ends
+        (END_STREAM, stream close, cleanup, or session destruction).
+
         @param stream_id the HTTP/3 stream ID
-        @param queue pointer to the Queue (caller must ensure lifetime exceeds registration)
+        @param queue pointer to the Queue; ownership of one reference is transferred
     */
     DLLLOCAL void registerConnectStreamQueue(int64_t stream_id, Queue* queue);
 

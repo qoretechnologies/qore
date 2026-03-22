@@ -2166,6 +2166,19 @@ QoreValue QuicSession::readConnectStreamData(int64_t stream_id, ExceptionSink* x
 
 void QuicSession::registerConnectStreamQueue(int64_t stream_id, Queue* queue) {
     ExceptionSink xsink;
+
+    // Check body_complete under mtx_ FIRST to maintain consistent lock ordering
+    // (mtx_ -> connect_data_mutex_), matching cleanupStream() and callbacks.
+    bool already_complete = false;
+    {
+        std::lock_guard<std::recursive_mutex> lock(mtx_);
+        auto sit = streams_.find(stream_id);
+        if (sit != streams_.end() && sit->second->body_complete) {
+            already_complete = true;
+        }
+    }
+
+    // Now do all Queue/buffer work under connect_data_mutex_ only
     std::lock_guard<std::mutex> lg(connect_data_mutex_);
 
     // Deref any existing queue for this stream (shouldn't happen, but be safe)
@@ -2187,18 +2200,13 @@ void QuicSession::registerConnectStreamQueue(int64_t stream_id, Queue* queue) {
     }
     connect_stream_data_.erase(stream_id);
 
-    // Check if END_STREAM already arrived before registration
-    {
-        std::lock_guard<std::recursive_mutex> lock(mtx_);
-        auto sit = streams_.find(stream_id);
-        if (sit != streams_.end() && sit->second->body_complete) {
-            printd(5, "QuicSession::registerConnectStreamQueue() stream_id=" QLLD
-                " END_STREAM already received, pushing sentinel\n", stream_id);
-            queue->pushAndTakeRef(QoreValue());
-            connect_stream_queues_[stream_id] = nullptr;
-            queue->deref(&xsink);
-            connect_stream_queues_.erase(stream_id);
-        }
+    // If END_STREAM already arrived before registration, push sentinel and release
+    if (already_complete) {
+        printd(5, "QuicSession::registerConnectStreamQueue() stream_id=" QLLD
+            " END_STREAM already received, pushing sentinel\n", stream_id);
+        queue->pushAndTakeRef(QoreValue());
+        connect_stream_queues_.erase(stream_id);
+        queue->deref(&xsink);
     }
 }
 
@@ -3524,33 +3532,38 @@ int QuicSession::h3EndStreamCallback(nghttp3_conn* /* conn */, int64_t stream_id
                                       void* conn_user_data, void* /* stream_user_data */) {
     auto* session = static_cast<QuicSession*>(conn_user_data);
 
-    // For CONNECT tunnel streams, set body_complete and push the NOTHING sentinel
-    // directly to the registered Queue.  Do NOT call markStreamComplete() — the
-    // stream was already dispatched via h3EndHeaders and must not be re-dispatched.
-    auto it = session->streams_.find(stream_id);
-    if (it != session->streams_.end() && it->second->is_connect) {
-        it->second->body_complete = true;
-        // Push NOTHING sentinel to registered Queue (if any) and release reference
-        {
-            ExceptionSink xsink;
-            std::lock_guard<std::mutex> lg(session->connect_data_mutex_);
-            auto qit = session->connect_stream_queues_.find(stream_id);
-            if (qit != session->connect_stream_queues_.end()) {
-                Queue* q = qit->second;
-                session->connect_stream_queues_.erase(qit);
-                q->pushAndTakeRef(QoreValue());
-                q->deref(&xsink);
-                printd(5, "QuicSession::h3EndStreamCallback() stream_id=" QLLD
-                    " CONNECT tunnel END_STREAM — sentinel pushed to Queue\n", stream_id);
-            } else {
-                printd(5, "QuicSession::h3EndStreamCallback() stream_id=" QLLD
-                    " CONNECT tunnel END_STREAM — no Queue registered\n", stream_id);
+    try {
+        // For CONNECT tunnel streams, set body_complete and push the NOTHING sentinel
+        // directly to the registered Queue.  Do NOT call markStreamComplete() — the
+        // stream was already dispatched via h3EndHeaders and must not be re-dispatched.
+        auto it = session->streams_.find(stream_id);
+        if (it != session->streams_.end() && it->second->is_connect) {
+            it->second->body_complete = true;
+            // Push NOTHING sentinel to registered Queue (if any) and release reference
+            {
+                ExceptionSink xsink;
+                std::lock_guard<std::mutex> lg(session->connect_data_mutex_);
+                auto qit = session->connect_stream_queues_.find(stream_id);
+                if (qit != session->connect_stream_queues_.end()) {
+                    Queue* q = qit->second;
+                    session->connect_stream_queues_.erase(qit);
+                    q->pushAndTakeRef(QoreValue());
+                    q->deref(&xsink);
+                    printd(5, "QuicSession::h3EndStreamCallback() stream_id=" QLLD
+                        " CONNECT tunnel END_STREAM — sentinel pushed to Queue\n",
+                        stream_id);
+                } else {
+                    printd(5, "QuicSession::h3EndStreamCallback() stream_id=" QLLD
+                        " CONNECT tunnel END_STREAM — no Queue registered\n", stream_id);
+                }
             }
+            return 0;
         }
-        return 0;
-    }
 
-    session->markStreamComplete(stream_id);
+        session->markStreamComplete(stream_id);
+    } catch (...) {
+        return NGHTTP3_ERR_CALLBACK_FAILURE;
+    }
     return 0;
 }
 
