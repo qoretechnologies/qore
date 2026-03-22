@@ -63,6 +63,7 @@
 #include "qore/intern/QoreIRLowering.h"
 #include "qore/intern/QoreIRVerifier.h"
 #include "qore/intern/QoreAOTInstRegistry.h"
+#include "qore/intern/QoreAOTExprSlotRegistry.h"
 
 #include <cassert>
 #include <cstring>
@@ -2243,145 +2244,16 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
         // Expression slot entries (in slot order)
         for (auto& expr : func.slot_ids.exprs) {
             writer.writeU8(static_cast<uint8_t>(expr.kind));
-            switch (expr.kind) {
-                case AOTExprKind::NEW_OBJECT:
-                case AOTExprKind::SCOPED_NEW_OBJECT:
-                    // ref1 = class path, followed by serialized constructor args.
-                    // Use classifyAndWriteExpr (not writeValue) so runtime-evaluated args
-                    // like VarRefNode and hash literals are serialized with slot indices
-                    // and reconstructed correctly at load time.
-                    writer.writeStringRef(expr.ref1.c_str());
-                    if (expr.constructor_args && expr.constructor_args->size() > 0) {
-                        writer.writeU8(static_cast<uint8_t>(expr.constructor_args->size()));
-                        for (size_t j = 0; j < expr.constructor_args->size(); ++j) {
-                            classifyAndWriteExpr(writer, expr.constructor_args->retrieveEntry(j),
-                                func.slot_ids.locals, func.slot_ids.globals, const_reverse_map);
-                        }
-                    } else {
-                        writer.writeU8(0);
-                    }
-                    break;
-                case AOTExprKind::FUNC_CALL:
-                case AOTExprKind::RUNTIME_CONST_REF:
-                case AOTExprKind::LOCAL_VARREF:
-                case AOTExprKind::GLOBAL_VARREF:
-                case AOTExprKind::CONST_NUMBER:
-                case AOTExprKind::CONST_BINARY:
-                case AOTExprKind::CONST_INT:
-                case AOTExprKind::CONST_FLOAT:
-                case AOTExprKind::CONST_BOOL:
-                case AOTExprKind::CONST_STRING:
-                case AOTExprKind::HASHDECL_NEW:
-                case AOTExprKind::COMPLEX_HASH_NEW:
-                case AOTExprKind::COMPLEX_LIST_NEW:
-                    // ref1 = name/value/index/path/slot/string-content
-                    writer.writeStringRef(expr.ref1.c_str());
-                    break;
-                case AOTExprKind::CONST_NOTHING:
-                    // no additional data needed
-                    break;
-                case AOTExprKind::SELF_METHOD_CALL:
-                case AOTExprKind::STATIC_METHOD_CALL:
-                case AOTExprKind::STATIC_VARREF:
-                case AOTExprKind::CONST_ENUM:
-                    // ref1 = class path/enum path, ref2 = method/var/member name
-                    writer.writeStringRef(expr.ref1.c_str());
-                    writer.writeStringRef(expr.ref2.c_str());
-                    break;
-                case AOTExprKind::SELF_VARREF:
-                    // ref1 = member name
-                    writer.writeStringRef(expr.ref1.c_str());
-                    break;
-                case AOTExprKind::CLOSURE_CREATE: {
-                    // Write flags and class type path
-                    writer.writeStringRef(expr.ref1.c_str());  // "lambda,in_method"
-                    writer.writeStringRef(expr.ref2.c_str());  // class_type_path
 
-                    // Serialize closure signature metadata
-                    const UserClosureFunction* ucf = expr.closure_func;
-                    assert(ucf);
-                    auto* variant = static_cast<const UserClosureVariant*>(ucf->first());
-                    const UserSignature* sig = const_cast<UserClosureVariant*>(variant)->getUserSignature();
-
-                    // Write return type
-                    const char* ret_path = sig->getReturnTypeInfo()
-                        ? QoreTypeInfo::getPath(sig->getReturnTypeInfo()) : "";
-                    writer.writeStringRef(ret_path);
-
-                    // Write params: count, then (name, type_path, default) per param
-                    unsigned num_params = sig->numParams();
-                    writer.writeU16(static_cast<uint16_t>(num_params));
-                    for (unsigned p = 0; p < num_params; ++p) {
-                        const char* pname = sig->getName(p);
-                        writer.writeStringRef(pname ? pname : "");
-                        const char* ptype = sig->getParamTypeInfo(p)
-                            ? QoreTypeInfo::getPath(sig->getParamTypeInfo(p)) : "";
-                        writer.writeStringRef(ptype);
-                        // Default value: write has_default flag + value if present
-                        bool has_default = sig->hasDefaultArg(p);
-                        writer.writeU8(has_default ? 1 : 0);
-                        if (has_default) {
-                            writer.writeValue(sig->getDefaultArgList()[p]);
-                        }
-                    }
-                    writer.writeU8(sig->hasVarargs() ? 1 : 0);
-
-                    // Write captured variable names (from LVarSet)
-                    const LVarSet* vlist = const_cast<UserClosureFunction*>(ucf)->getVList();
-                    writer.writeU16(vlist ? static_cast<uint16_t>(vlist->size()) : 0);
-                    if (vlist) {
-                        for (LocalVar* lv : *vlist) {
-                            writer.writeStringRef(lv->getName());
-                        }
-                    }
-
-                    // Lower closure to IR and serialize
-                    const QoreIRFunction* closure_ir = const_cast<UserClosureVariant*>(variant)->getCachedIR();
-                    QoreIRFunction* owned_ir = nullptr;
-                    if (!closure_ir) {
-                        // Lower on the fly for serialization
-                        owned_ir = lowerClosureForSerialization(variant);
-                        closure_ir = owned_ir;
-                    }
-
-                    if (closure_ir) {
-                        writer.writeU8(1);  // has_ir
-                        uint32_t size_pos = writer.position();
-                        writer.writeU32(0);  // placeholder
-
-                        const auto& parent_locals = func.slot_ids.locals;
-                        const auto& parent_globals = func.slot_ids.globals;
-                        auto writeExpr = [&parent_locals, &parent_globals, const_reverse_map](
-                                QoreAOTBinaryWriter& w, const QoreValue& e) -> bool {
-                            return classifyAndWriteExpr(w, e, parent_locals, parent_globals,
-                                const_reverse_map);
-                        };
-
-                        serializeIRFunction(writer, *closure_ir, writeExpr);
-                        uint32_t end_pos = writer.position();
-                        writer.patchU32(size_pos, end_pos - size_pos - 4);
-                    } else {
-                        error = std::string("closure IR lowering failed in function '") + func.name + "'";
-                        return false;
-                    }
-                    delete owned_ir;
-                    break;
-                }
-                case AOTExprKind::CALL_REF:
-                case AOTExprKind::OBJ_METHOD_REF:
-                    // no additional data
-                    break;
-                case AOTExprKind::EXPR_TREE: {
-                    // ref1 contains binary tree blob — write inline with length prefix
-                    uint32_t blob_size = static_cast<uint32_t>(expr.ref1.size());
-                    writer.writeU32(blob_size);
-                    writer.writeBytes(expr.ref1.data(), blob_size);
-                    break;
-                }
-                case AOTExprKind::GENERIC_EVAL:
-                default:
-                    // no additional data — function needs source fallback
-                    break;
+            // Use registry dispatch for expression slot metadata serialization
+            const auto* kinfo = getAOTExprSlotKindInfo(static_cast<uint8_t>(expr.kind));
+            if (!kinfo || !kinfo->is_supported || !kinfo->write_fn) {
+                error = "unsupported expression slot kind " + std::to_string(static_cast<uint8_t>(expr.kind));
+                return false;
+            }
+            AOTExprSlotWriteCtx wctx{writer, expr, func.slot_ids.locals, func.slot_ids.globals, const_reverse_map};
+            if (!kinfo->write_fn(wctx)) {
+                return false;
             }
         }
 
