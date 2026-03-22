@@ -35,6 +35,8 @@
 %requires(reexport) DataProvider
 %requires(reexport) Logger
 %requires Mime
+%requires HttpClientIo
+%requires HttpClientStreamingIo
 
 %try-module json >= 1.5
 %define NoJson
