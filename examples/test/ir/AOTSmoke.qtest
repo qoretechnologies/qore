@@ -1048,9 +1048,7 @@ printf(\"sum: %d\\n\", sum);
         }
 
         # Write a test module with a filename matching the module name
-        string mod_code = "%new-style
-%require-types
-%strict-args
+        string mod_code = "%modern
 %enable-all-warnings
 
 module AOTTestMod {
@@ -1097,9 +1095,7 @@ public namespace AOTTestMod {
             "all module functions pre-compiled: " + result.compile_out);
 
         # Write a test script that loads the compiled module
-        string test_code = "%new-style
-%require-types
-%strict-args
+        string test_code = "%modern
 %enable-all-warnings
 
 %requires AOTTestMod
@@ -1127,9 +1123,7 @@ printf(\"%d\\n\", AOTTestMod::factorial(10));
     }
 
     testAOTModuleCompileCustomOutput() {
-        string mod_code = "%new-style
-%require-types
-%strict-args
+        string mod_code = "%modern
 
 module AOTTestOut {
     version = \"1.0\";
@@ -1158,9 +1152,7 @@ public namespace AOTTestOut {
     }
 
     testAOTModuleCompileOptLevels() {
-        string mod_code = "%new-style
-%require-types
-%strict-args
+        string mod_code = "%modern
 
 module AOTOptMod {
     version = \"1.0\";
@@ -1297,9 +1289,7 @@ printf(\"not a module\\n\");
     testAOTSplitModuleBasic() {
         # Create a split module with .qm + .qc + .ql files
         string mod_name = "AOTSplitTest";
-        string qm_code = "%new-style
-%require-types
-%strict-args
+        string qm_code = "%modern
 %enable-all-warnings
 
 module AOTSplitTest {
@@ -1799,9 +1789,7 @@ exit(0);
 
     testStripSourceHashDecl() {
         # Create a module with a hashdecl
-        string mod_code = "%new-style
-%require-types
-%strict-args
+        string mod_code = "%modern
 
 module StripHashDeclMod {
     version = \"1.0\";
@@ -1855,9 +1843,7 @@ exit(0);
 
     testStripSourceHashDeclInheritance() {
         # Create a module with hashdecl inheritance
-        string mod_code = "%new-style
-%require-types
-%strict-args
+        string mod_code = "%modern
 
 module StripHashDeclInhMod {
     version = \"1.0\";
@@ -1914,9 +1900,7 @@ exit(0);
 
     testStripSourceEnum() {
         # Create a module with an enum
-        string mod_code = "%new-style
-%require-types
-%strict-args
+        string mod_code = "%modern
 
 module StripEnumMod {
     version = \"1.0\";
@@ -1970,9 +1954,7 @@ exit(0);
 
     testStripSourceModuleDependency() {
         # Create a base module with types
-        string base_mod_code = "%new-style
-%require-types
-%strict-args
+        string base_mod_code = "%modern
 
 module StripBaseTypes {
     version = \"1.0\";
@@ -2001,9 +1983,7 @@ public namespace StripBaseTypes {
         assertTrue(base_info.compiled, "base types module compiled: " + base_info.compile_out);
 
         # Create a dependent module that uses the types from base
-        string dep_mod_code = "%new-style
-%require-types
-%strict-args
+        string dep_mod_code = "%modern
 
 %requires StripBaseTypes
 
@@ -2072,9 +2052,7 @@ exit(0);
 
     testStripSourceClassInheritance() {
         # Create a module with class inheritance
-        string mod_code = "%new-style
-%require-types
-%strict-args
+        string mod_code = "%modern
 
 module StripClassInhMod {
     version = \"1.0\";
@@ -2152,9 +2130,7 @@ exit(0);
 
     testStripSourceStaticMembers() {
         # Create a module with static class members and methods
-        string mod_code = "%new-style
-%require-types
-%strict-args
+        string mod_code = "%modern
 
 module StripStaticMod {
     version = \"1.0\";
@@ -2581,9 +2557,7 @@ exit(0);
 
     testStripSourceStaticVarrefModule() {
         # Static class variable access in a strip-source compiled module
-        string mod_code = "%new-style
-%require-types
-%strict-args
+        string mod_code = "%modern
 
 module StripStaticVarMod {
     version = \"1.0\";

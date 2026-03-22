@@ -2179,9 +2179,7 @@ printf(\"%s,%s,%s,%s,%s\\n\",
 
         # Test 1: Final class with recursive self call
         # The self.compute() call inside compute() should be devirtualized
-        string recursive_code = "%new-style
-%strict-args
-%require-types
+        string recursive_code = "%modern
 %disable-warning non-existent-method-call
 
 final class Calculator {
@@ -2209,9 +2207,7 @@ printf(\"%d,%d\\n\", result, c.calls);
         }
 
         # Test 2: Final class with multiple self calls in one method
-        string multi_self_code = "%new-style
-%strict-args
-%require-types
+        string multi_self_code = "%modern
 %disable-warning non-existent-method-call
 
 final class MyCounter {
@@ -2245,9 +2241,7 @@ printf(\"%d\\n\", result);
         }
 
         # Test 3: Final class with exception in self call
-        string exception_code = "%new-style
-%strict-args
-%require-types
+        string exception_code = "%modern
 %disable-warning non-existent-method-call
 
 final class SafeDiv {
@@ -2276,9 +2270,7 @@ printf(\"%d,%d\\n\", s.safeDivide(10, 2), s.safeDivide(10, 0));
         }
 
         # Test 4: Verify polymorphic calls still work correctly (NOT devirtualized)
-        string polymorphic_code = "%new-style
-%strict-args
-%require-types
+        string polymorphic_code = "%modern
 %disable-warning non-existent-method-call
 
 class Animal {
@@ -2789,9 +2781,7 @@ printf(\"%d %d\\n\", a, b);
         # use the direct InvokeMethodDirect opcode instead of falling back to AST evaluation
 
         # Test 1: Multiple successive self method calls in try/catch (success path)
-        string success_test = "%new-style
-%strict-args
-%require-types
+        string success_test = "%modern
 %disable-warning non-existent-method-call
 
 final class MethodCounter {
@@ -2826,9 +2816,7 @@ printf(\"%d,%d\\n\", c.run(), c.count);
         }
 
         # Test 2: Exception in self method call routes to catch block correctly
-        string exception_test = "%new-style
-%strict-args
-%require-types
+        string exception_test = "%modern
 %disable-warning non-existent-method-call
 
 final class Thrower {
@@ -2857,9 +2845,7 @@ printf(\"%s\\n\", t.run());
         }
 
         # Test 3: Mix of successful calls and exception - verify state consistency
-        string mixed_test = "%new-style
-%strict-args
-%require-types
+        string mixed_test = "%modern
 %disable-warning non-existent-method-call
 
 final class MixedOps {
@@ -2904,9 +2890,7 @@ printf(\"%d,%d\\n\", m.run(), m.count);
         }
 
         # Test 4: Nested try/catch with devirtualized self method calls
-        string nested_test = "%new-style
-%strict-args
-%require-types
+        string nested_test = "%modern
 %disable-warning non-existent-method-call
 
 final class NestedOps {
@@ -4394,9 +4378,7 @@ printf(\"%s\\n\", result);
 
     testFastMethodCall() {
         # Test fast method call: basic final class method call in a loop
-        string code = "%new-style
-%strict-args
-%require-types
+        string code = "%modern
 
 final class FmCalc {
     public {
@@ -4419,9 +4401,7 @@ printf(\"%d\\n\", sum);
         }
 
         # Test fast method call with multiple methods
-        code = "%new-style
-%strict-args
-%require-types
+        code = "%modern
 
 final class FmMath {
     int multiply(int a, int b) { return a * b; }
@@ -4443,9 +4423,7 @@ printf(\"%s\\n\", result);
         }
 
         # Test fast method call in try/catch (InvokeMethodDirect path)
-        code = "%new-style
-%strict-args
-%require-types
+        code = "%modern
 
 final class FmValidator {
     int validate(int x) {
@@ -4472,9 +4450,7 @@ printf(\"%s\\n\", result);
         }
 
         # Test fast method call with string args (node types need refSelf)
-        code = "%new-style
-%strict-args
-%require-types
+        code = "%modern
 
 final class FmGreeter {
     string greet(string name) { return \"Hello, \" + name + \"!\"; }
@@ -4493,9 +4469,7 @@ printf(\"%s\\n\", result);
         }
 
         # Test fast method call with recursive self-calls
-        code = "%new-style
-%strict-args
-%require-types
+        code = "%modern
 
 final class FmFib {
     int fib(int n) {
@@ -4515,9 +4489,7 @@ printf(\"%d\\n\", f.fib(15));
 
     testFastClosureCall() {
         # Test fast closure call: basic closure in a loop
-        string code = "%new-style
-%strict-args
-%require-types
+        string code = "%modern
 
 code adder = int sub(int a, int b) { return a + b; };
 int sum = 0;
@@ -4533,9 +4505,7 @@ printf(\"%d\\n\", sum);
         }
 
         # Test closure capturing outer variable
-        code = "%new-style
-%strict-args
-%require-types
+        code = "%modern
 
 int base = 100;
 code add_base = int sub(int x) { return x + base; };
@@ -4549,9 +4519,7 @@ printf(\"%d\\n\", result);
         }
 
         # Test function call reference
-        code = "%new-style
-%strict-args
-%require-types
+        code = "%modern
 
 int sub multiply(int a, int b) { return a * b; }
 code mul_ref = \\multiply();
@@ -4565,9 +4533,7 @@ printf(\"%d\\n\", result);
         }
 
         # Test closure in try/catch
-        code = "%new-style
-%strict-args
-%require-types
+        code = "%modern
 
 code checker = int sub(int x) {
     if (x < 0) { throw \"NEG\", \"negative\"; }
@@ -4590,9 +4556,7 @@ printf(\"%s\\n\", result);
         }
 
         # Test closure call in tight loop (stack safety)
-        code = "%new-style
-%strict-args
-%require-types
+        code = "%modern
 
 code inc = int sub(int x) { return x + 1; };
 int val = 0;
