@@ -486,7 +486,10 @@ QoreValue SocketQuicClientPollOperation::getOutput() const {
         h->setKeyValue("body", body.release(), nullptr);
     }
 
-    // Flag whether response is complete
+    // Flag whether response is complete.  Currently always true for client
+    // poll operations because takeCompletedStream() only returns streams
+    // after markStreamComplete() sets body_complete=true.  Kept as a
+    // dynamic value for forward compatibility with incremental delivery.
     h->setKeyValue("end_stream", cached_stream->body_complete, nullptr);
 
     // Consume the cached stream so subsequent calls return NOTHING

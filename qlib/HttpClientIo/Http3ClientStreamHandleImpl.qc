@@ -206,6 +206,8 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
         {
             AutoLock al(lock);
             if (state != HttpClientStreamState::Open) {
+                streaming = False;
+                delete data_channel;
                 releaseReservationIfHeld();
                 throw "HTTPCLIENT-CANCELLED",
                     "stream was cancelled during connection setup";

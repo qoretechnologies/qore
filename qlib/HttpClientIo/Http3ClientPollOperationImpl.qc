@@ -70,6 +70,13 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
         #! of response hashes.  Accessed only under stream_lock.
         hash<string, list<hash<auto>>> pending_responses();
 
+        #! Number of submitRequest() calls currently between Phase 2 (QUIC submit,
+        #! outside stream_lock) and Phase 3 (callback registration, under
+        #! stream_lock).  Used by handleReading() to distinguish "callback not yet
+        #! registered" (buffer) from "cancelled/completed stream" (discard).
+        #! Accessed only under stream_lock.
+        int pending_registrations = 0;
+
         #! True when a GOAWAY has been received from the server
         bool goaway_received = False;
 
@@ -278,6 +285,22 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
         # while calling submitQuicRequest() would therefore create a lock-order
         # inversion and risk deadlock.  submitQuicRequest() is intentionally
         # called outside stream_lock.
+        #
+        # Signal that a registration is pending so handleReading() buffers
+        # responses for unknown stream IDs instead of discarding them.
+        # The on_exit guard ensures the counter is decremented if Phase 2
+        # throws before reaching Phase 3.
+        {
+            AutoLock al(stream_lock);
+            ++pending_registrations;
+        }
+        bool phase3_done = False;
+        on_exit {
+            if (!phase3_done) {
+                AutoLock al(stream_lock);
+                --pending_registrations;
+            }
+        }
         int stream_id;
         int retries = 0;
         while (True) {
@@ -363,6 +386,8 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
         *list<hash<auto>> buffered;
         {
             AutoLock al(stream_lock);
+            --pending_registrations;
+            phase3_done = True;
             post_state = state;
             if (post_state != STATE_READING && post_state != STATE_WAIT_READ) {
                 # Stream was submitted to QUIC but connection is now dead;
@@ -637,13 +662,17 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
                     stream_ctx = stream_ctxs{sid};
                     if (cb) {
                         callback_dispatched = True;
-                    } else {
-                        # Buffer response — callback may not be registered yet
-                        # (race between submitRequest() phases 2 and 3)
+                    } else if (pending_registrations > 0) {
+                        # Buffer response — a submitRequest() is between Phase 2
+                        # (QUIC submit) and Phase 3 (callback registration)
                         if (!pending_responses.hasKey(sid)) {
                             pending_responses{sid} = ();
                         }
                         push pending_responses{sid}, (output + {"protocol": "h3"});
+                    } else {
+                        log(LoggerLevel::DEBUG,
+                            "discarding response for completed/cancelled stream %d",
+                            stream_id);
                     }
                 }
                 if (cb) {
@@ -656,9 +685,10 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
                 }
                 # Remove stream AFTER callback completes so the stream handle's
                 # state is already updated before the stream becomes unavailable.
-                # For streaming requests (end_stream=false), keep the callback
-                # registered — body data is read directly via readQuicStreamDataBlock(),
-                # but we need to keep the stream active.
+                # For streaming responses (end_stream=false), keep the callback
+                # registered so that subsequent body chunks can be delivered via
+                # the stream's registered callback (into the Channel) and the
+                # stream remains active for further data.
                 if (is_end && cb) {
                     AutoLock al(stream_lock);
                     remove stream_callbacks{sid};

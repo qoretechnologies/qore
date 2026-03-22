@@ -325,6 +325,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
         # HTTP/3 streaming tests
         addTestCase("H3 streaming basic", \testH3StreamingBasic());
+        addTestCase("H3 bidi streaming", \testH3BidiStreaming());
         addTestCase("H3 streaming state errors", \testH3StreamingStateErrors());
 
         # HTTP/3 callback ordering (stream removal after callback)
@@ -1204,8 +1205,28 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
         int remaining = counter.waitForZero(30s);
         if (remaining > 0) {
+            # Dump debug info for diagnosis
+            {
+                AutoLock al(resp_lock);
+                stderr.printf("H3 CONCURRENT FAIL: %d remaining, %d responses collected\n",
+                    remaining, responses.size());
+                foreach hash<auto> resp in (responses) {
+                    if (resp.hasKey("error")) {
+                        stderr.printf("  response error: %s: %s\n", resp.error, resp.desc);
+                    } else {
+                        stderr.printf("  response ok: status=%d\n", resp.status_code);
+                    }
+                }
+            }
+            # Dump connection info
+            try {
+                hash<auto> info = mgr.getConnectionInfo();
+                stderr.printf("  connection info: %y\n", info);
+            } catch () {}
+            mgr.closeAll();
             fail(sprintf("H3 concurrent: %d requests did not complete", remaining));
         }
+        on_exit mgr.closeAll();
 
         assertEq(3, responses.size(), "H3 concurrent: all 3 responses received");
         foreach hash<auto> resp in (responses) {
@@ -1990,6 +2011,64 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertTrue(h3stream.isDone(), "stream should be done after reading all data");
         assertEq("chunk1|chunk2|chunk3", received.toString(),
             "should receive full streaming payload");
+    }
+
+    testH3BidiStreaming() {
+        if (!mQuicUrl) {
+            testSkip("QUIC not available");
+        }
+
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "protocol": "h3",
+            "connect_timeout": 10s,
+            "request_timeout": 30s,
+            "logger": mLogger,
+        });
+        on_exit mgr.closeAll();
+
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(mQuicUrl);
+        assertTrue(stream instanceof HttpClientIo::Http3ClientStreamHandle,
+            "H3 stream should be Http3ClientStreamHandle");
+
+        HttpClientIo::Http3ClientStreamHandle h3stream =
+            cast<HttpClientIo::Http3ClientStreamHandle>(stream);
+
+        # Start bidirectional streaming (HEADERS without END_STREAM)
+        int stream_id = h3stream.startStreaming("POST", "/echo",
+            {"content-type": "application/octet-stream"}, True);
+        assertTrue(stream_id >= 0, "bidi stream_id should be >= 0");
+
+        # Send body data incrementally
+        h3stream.sendData(binary("hello "));
+        h3stream.sendData(binary("world"));
+        h3stream.writesDone();  # close write side (END_STREAM)
+
+        # Read response — server echoes the body
+        binary received = binary();
+        date end_time = now_us() + 30s;
+        while (now_us() < end_time) {
+            auto data = h3stream.readData(5s);
+            if (!exists data) {
+                continue;  # timeout, retry
+            }
+            if (data.typeCode() == NT_HASH && data.end_stream) {
+                break;  # stream complete
+            }
+            if (data.typeCode() == NT_HASH && data.error) {
+                fail(sprintf("bidi streaming error: %y", data.error));
+                break;
+            }
+            if (data.typeCode() == NT_BINARY) {
+                received += data;
+            }
+        }
+
+        assertTrue(h3stream.isDone(), "bidi stream should be done after reading all data");
+        # EchoHandler responds with "method=POST path=/echo body_size=11 body=hello world"
+        string resp = received.toString();
+        assertTrue(resp =~ /body=hello world/, sprintf("echoed response should contain body: %y", resp));
     }
 
     testH3StreamingStateErrors() {

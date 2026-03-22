@@ -44,30 +44,40 @@ which is unreliable and unrelated to stream-based bidi.
 
 ## Design
 
-### New API Surface
+### Implemented API Surface
 
-Add to `Http3ClientStreamHandleImpl.qc`:
+Added to `Http3ClientStreamHandle` (inherits `HttpClientStreamHandle`):
 
 ```qore
-class Http3ClientStreamHandleImpl inherits HttpClientStreamHandle {
-    # Existing: request(), sendDatagram()
+class Http3ClientStreamHandle inherits HttpClientStreamHandle {
+    # Existing: request(), sendDatagram(), readDatagram()
 
-    # New: open a bidi stream (HEADERS without END_STREAM)
-    openStream(string url, string method, string path, *hash<auto> headers)
+    # Start a streaming request
+    # body_streaming=False (default): HEADERS with END_STREAM (response-only streaming, e.g., SSE)
+    # body_streaming=True: HEADERS without END_STREAM (bidirectional, e.g., gRPC bidi)
+    int startStreaming(string method, string path, *hash<auto> headers,
+            bool body_streaming = False)
 
-    # New: send incremental data on an open stream
+    # Send incremental data on an open stream
     sendData(data data, bool end_stream = False)
 
-    # New: close the write side (empty DATA + END_STREAM)
+    # Close the write side (empty DATA + END_STREAM)
     writesDone()
 
-    # New: read response data from the server
-    readData(timeout t = 60s) returns *binary
+    # Read response data from the server
+    # Returns: binary (body chunk), hash with end_stream (done),
+    #          hash with error (error), or NOTHING (timeout)
+    auto readData(*timeout timeout_ms)
 
-    # New: read trailing headers
-    readTrailers() returns *hash<auto>
+    # Read trailing headers from completed response
+    *hash<string, string> getTrailers()
 }
 ```
+
+Data delivery uses an unlimited-capacity `Channel(-1)` — the same pattern as
+HTTP/2 streaming. The `handleStreamingResponse()` callback forwards body data
+and `{"end_stream": True}` sentinel through the channel; `readData()` reads
+from it via `recv()`.  This avoids blocking on the async I/O thread.
 
 ### C++ Layer Changes
 
