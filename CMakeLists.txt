@@ -1034,6 +1034,7 @@ set(LIBQORE_CPP_SRC
     lib/ReferenceArgumentHelper.cpp
     lib/ReferenceHelper.cpp
     lib/QoreTypeInfo.cpp
+    lib/QoreTypeSpecMatchRegistry.cpp
     lib/QoreDeleteOperatorNode.cpp
     lib/QoreRemoveOperatorNode.cpp
     lib/QoreSpliceOperatorNode.cpp
@@ -1338,6 +1339,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/ReferenceArgumentHelper.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/ReferenceHelper.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreTypeInfo.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreTypeSpecMatchRegistry.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreDeleteOperatorNode.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreRemoveOperatorNode.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreSpliceOperatorNode.cpp\"
