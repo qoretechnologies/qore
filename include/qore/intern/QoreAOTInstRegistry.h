@@ -67,6 +67,29 @@ struct AOTInstReadCtx {
     const AOTExprReadFunc& readExpr;
     QoreProgram* pgm;
     std::string& error;
+
+    //! Resolve block index to block pointer (0xFFFF = nullptr)
+    QoreIRBasicBlock* resolveBlock(uint16_t idx) const {
+        if (idx == 0xFFFF) {
+            return nullptr;
+        }
+        if (idx >= blocks.size()) {
+            return nullptr;
+        }
+        return blocks[idx].get();
+    }
+
+    //! Resolve local variable name to LocalVar pointer
+    LocalVar* resolveLocal(const char* name) const {
+        if (!name || !*name) {
+            return nullptr;
+        }
+        auto it = local_map.find(name);
+        if (it == local_map.end()) {
+            return nullptr;
+        }
+        return it->second;
+    }
 };
 
 //! Function pointer type for writing an instruction group
