@@ -50,9 +50,17 @@ stream.writesDone();  # close write side
 
 # Read response data
 while (True) {
-    *binary chunk = stream.readData(30s);
+    auto chunk = stream.readData(30s);
     if (!exists chunk) {
-        break;  # stream complete
+        continue;  # timeout, retry
+    }
+    if (chunk.typeCode() == NT_HASH) {
+        if (chunk.end_stream) {
+            break;  # stream complete
+        }
+        if (chunk.error) {
+            throw "STREAM-ERROR", sprintf("error: %y", chunk.error);
+        }
     }
     printf("Received: %d bytes\n", chunk.size());
 }
@@ -63,14 +71,11 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
         #! Typed reference to the H3 connection (for streaming and datagram methods)
         Http3ClientConnection h3conn;
 
-        #! Data channel for streaming mode (used as headers-ready signal)
+        #! Data channel for streaming mode (body data and end_stream sentinel)
         *Channel data_channel;
 
         #! Whether this stream is in streaming mode
         bool streaming = False;
-
-        #! Whether response headers have been received (set by handleStreamingResponse)
-        bool headers_received = False;
     }
 
     #! Creates a new stream handle
@@ -180,7 +185,6 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
             }
             state = HttpClientStreamState::Open;
             streaming = True;
-            headers_received = False;
             data_channel = new Channel(-1);
         }
 
@@ -287,9 +291,8 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
         - \c hash with \c error key: stream error
         - \c NOTHING: timeout (no data within \a timeout_ms)
 
-        On the first call, blocks deterministically until response headers
-        arrive from the server. Subsequent calls read body data directly
-        from the QUIC stream.
+        Blocks deterministically until data arrives from the server via the
+        internal channel (same pattern as HTTP/2 streaming).
 
         @param timeout_ms timeout for waiting for data
 
@@ -312,75 +315,21 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
                     && data_channel.empty()) {
                 throw "HTTPCLIENT-STREAM-CLOSED", "stream is closed";
             }
-            if (state == HttpClientStreamState::Complete && headers_received) {
-                throw "HTTPCLIENT-STREAM-CLOSED", "stream is closed";
-            }
+            # NOTE: do NOT check Complete state here — handleStreamingResponse()
+            # sets state to Complete BEFORE sending body data to the channel.
+            # Completion is detected via CHANNEL-CLOSED from the recv() below.
         }
 
-        # Wait for headers if not yet received — blocks deterministically
-        # until the handleStreamingResponse() callback signals the channel
-        if (!headers_received) {
-            try {
-                auto signal = data_channel.recv(wait_timeout);
-                if (!exists signal) {
-                    return NOTHING;  # timeout
-                }
-                headers_received = True;
-                if (signal.typeCode() == NT_HASH && signal.error) {
-                    return signal;  # error from callback
-                }
-                if (signal.typeCode() == NT_HASH && signal.end_stream) {
-                    # Response arrived with headers + body + END_STREAM in one batch.
-                    # Body data is still in the QUIC stream buffer — don't signal
-                    # end_stream yet; let the QUIC read loop below deliver the body.
-                    # If there truly is no body, readQuicStreamDataBlock() will
-                    # return NOTHING immediately and we'll signal end_stream then.
-                }
-                # Headers received, body data follows — fall through to QUIC read
-            } catch (hash<ExceptionInfo> ex) {
-                if (ex.err == "CHANNEL-TIMEOUT") {
-                    return NOTHING;
-                }
-                if (ex.err == "CHANNEL-CLOSED") {
-                    throw "HTTPCLIENT-STREAM-CLOSED", "stream is closed";
-                }
-                rethrow;
-            }
-        }
-
-        int session_id = h3conn.getSessionId();
-        if (!session_id) {
-            throw "HTTPCLIENT-STATE-ERROR", "QUIC session not yet established";
-        }
-        int sid;
-        {
-            AutoLock al(lock);
-            if (!exists stream_id) {
-                throw "HTTPCLIENT-STATE-ERROR", "stream not yet established";
-            }
-            sid = stream_id;
-        }
-
-        # Read body data directly from the QUIC stream.
-        # readQuicStreamDataBlock() blocks until data arrives or timeout.
-        # Returns NOTHING when the stream is complete (END_STREAM received).
+        # Read from the channel — same pattern as H2.
+        # The callback puts body data and {"end_stream": True} into the channel.
         try {
-            *binary chunk = h3conn.getSocket().readQuicStreamDataBlock(session_id, sid,
-                wait_timeout);
-            if (!exists chunk) {
-                # Stream complete — return end_stream sentinel (same as H2)
-                {
-                    AutoLock al(lock);
-                    if (state < HttpClientStreamState::Complete) {
-                        state = HttpClientStreamState::Complete;
-                    }
-                }
-                return {"end_stream": True};
-            }
-            return chunk;
+            return data_channel.recv(wait_timeout);
         } catch (hash<ExceptionInfo> ex) {
-            if (ex.err == "QUIC-STREAM-TIMEOUT") {
+            if (ex.err == "CHANNEL-TIMEOUT") {
                 return NOTHING;
+            }
+            if (ex.err == "CHANNEL-CLOSED") {
+                throw "HTTPCLIENT-STREAM-CLOSED", "stream is closed";
             }
             rethrow;
         }
@@ -393,12 +342,12 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
     }
 
     #! Internal: handles streaming response from the poll operation
-    /** This callback is invoked by the poll operation when headers are
-        received for a streaming request. For HTTP/3, body data is read
-        directly from the QUIC stream via readData(), so this callback
-        is only invoked once for the initial headers.
+    /** This callback is invoked by the poll operation when a response is
+        available for a streaming request.  Body data and the end_stream
+        sentinel are forwarded through the data channel so that readData()
+        can consume them (same pattern as HTTP/2 streaming).
 
-        @param resp the response hash from getOutput() (includes headers, status_code, end_stream)
+        @param resp the response hash from getOutput() (includes headers, status_code, body, end_stream)
         @param err error info if an error occurred
     */
     private handleStreamingResponse(hash<auto> resp, *hash<auto> err) {
@@ -434,18 +383,26 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
             }
         }
 
-        # Signal the channel that headers are ready — readData() blocks on
-        # this signal before attempting direct QUIC stream reads.
-        # For complete responses (end_stream=true), include the end_stream flag
-        # so readData() knows there's no body to read.
-        try {
-            data_channel.send({"headers_ready": True, "end_stream": is_end});
-        } catch (hash<ExceptionInfo> ex2) {
-            if (ex2.err != "CHANNEL-CLOSED") {
-                rethrow;
+        # Send body data and end_stream sentinel through the channel — same
+        # pattern as H2. readData() reads from the channel.
+        if (resp.body) {
+            try {
+                data_channel.send(resp.body);
+            } catch (hash<ExceptionInfo> ex2) {
+                if (ex2.err != "CHANNEL-CLOSED") {
+                    rethrow;
+                }
             }
         }
+
         if (is_end) {
+            try {
+                data_channel.send({"end_stream": True});
+            } catch (hash<ExceptionInfo> ex2) {
+                if (ex2.err != "CHANNEL-CLOSED") {
+                    rethrow;
+                }
+            }
             data_channel.close();
         }
     }

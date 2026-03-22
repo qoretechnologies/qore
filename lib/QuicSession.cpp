@@ -2210,8 +2210,8 @@ void QuicSession::markStreamComplete(int64_t stream_id) {
         // dispatched yet (e.g., HEADERS + DATA + END_STREAM arrived in one batch),
         // keep the stream in the map so takeHeadersReadyStreamCopy() can find it.
         if (headers_only_mode_ && it->second->headers_complete) {
-            printd(5, "QuicSession::markStreamComplete() stream_id=" QLLD " headers-only mode, keeping in map (body_size=%d)\n",
-                stream_id, (int)it->second->body.size());
+            printd(5, "QuicSession::markStreamComplete() stream_id=" QLLD " headers-only mode, keeping in map\n",
+                stream_id);
             return;
         }
 
@@ -2277,10 +2277,7 @@ std::unique_ptr<QuicStreamInfo> QuicSession::takeHeadersReadyStreamCopy(
             auto copy = std::make_unique<QuicStreamInfo>(*info);
             // Clear body on the COPY: any DATA that arrived with HEADERS stays
             // in the original for takeStreamData()/readQuicStreamDataBlock() to return.
-            // Also clear body_complete so getOutput() reports end_stream=false
-            // (the body is still available via the original stream).
             copy->body.clear();
-            copy->body_complete = false;
             info->dispatched = true;
 
             // Create per-stream notifier for targeted wakeup
@@ -3436,7 +3433,6 @@ int QuicSession::h3RecvDataCallback(nghttp3_conn* /* conn */, int64_t stream_id,
 int QuicSession::h3EndStreamCallback(nghttp3_conn* /* conn */, int64_t stream_id,
                                       void* conn_user_data, void* /* stream_user_data */) {
     auto* session = static_cast<QuicSession*>(conn_user_data);
-    printd(5, "QuicSession::h3EndStreamCallback() stream_id=" QLLD " - marking complete\n", stream_id);
 
     // For CONNECT tunnel streams, set body_complete directly without calling
     // markStreamComplete() — the stream was already dispatched via h3EndHeaders

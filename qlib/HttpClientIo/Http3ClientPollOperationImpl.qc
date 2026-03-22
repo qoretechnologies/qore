@@ -65,6 +65,11 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
         #! QUIC session ID (set when connection becomes ready)
         int session_id = 0;
 
+        #! Responses that arrived before callback registration (race between
+        #! submitRequest() phases 2 and 3).  Key: stream_id string, Value: list
+        #! of response hashes.  Accessed only under stream_lock.
+        hash<string, list<hash<auto>>> pending_responses();
+
         #! True when a GOAWAY has been received from the server
         bool goaway_received = False;
 
@@ -350,9 +355,12 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
         }
 
         # Phase 3: register callback under lock; re-check state in case the
-        # connection died between the submit and this registration
+        # connection died between the submit and this registration.
+        # Also check for responses that arrived during the race window
+        # between Phase 2 (submit outside lock) and this registration.
         bool need_cancel = False;
         string post_state;
+        *list<hash<auto>> buffered;
         {
             AutoLock al(stream_lock);
             post_state = state;
@@ -362,6 +370,8 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
                 # to avoid lock-order inversion (stream_lock → sock->priv->m
                 # vs I/O thread's sock->priv->m → stream_lock)
                 need_cancel = True;
+                # Clean up any buffered responses for this stream
+                remove pending_responses{string(stream_id)};
             } else {
                 string sid = string(stream_id);
                 stream_callbacks{sid} = callback;
@@ -369,6 +379,11 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
                     stream_ctxs{sid} = ctx;
                 }
                 ++active_stream_count;
+                # Check for responses that arrived before registration
+                if (pending_responses.hasKey(sid)) {
+                    buffered = pending_responses{sid};
+                    remove pending_responses{sid};
+                }
             }
         }
         if (need_cancel) {
@@ -380,6 +395,25 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
             throw "HTTP3-STATE-ERROR",
                 sprintf("connection closed during request submission (state: %y)",
                     post_state);
+        }
+
+        # Deliver any buffered responses outside the lock
+        if (buffered) {
+            string sid = string(stream_id);
+            foreach hash<auto> resp in (buffered) {
+                try {
+                    callback(resp + {"ctx": ctx}, NOTHING);
+                } catch (hash<ExceptionInfo> ex) {
+                    log(LoggerLevel::ERROR, "buffered callback exception: %s: %s",
+                        ex.err, ex.desc);
+                }
+                if (resp.end_stream.toBool()) {
+                    AutoLock al(stream_lock);
+                    remove stream_callbacks{sid};
+                    remove stream_ctxs{sid};
+                    --active_stream_count;
+                }
+            }
         }
 
         return stream_id;
@@ -412,6 +446,8 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
         *HttpResponseCallback cb;
         {
             AutoLock al(stream_lock);
+            # Clean up any buffered responses for this stream
+            remove pending_responses{sid};
             if (!stream_callbacks.hasKey(sid)) {
                 log(LoggerLevel::DEBUG, "cancel ignored: stream %d not found (already completed)", stream_id);
                 return;
@@ -499,9 +535,11 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
             try { current_op.abort(); } catch () {}
         }
         notifyPendingStreams({"err": "HTTP3-ABORT", "desc": "connection aborted"});
-        # Wake any threads blocked in STREAM_ID_BLOCKED retry
+        # Wake any threads blocked in STREAM_ID_BLOCKED retry and
+        # clean up any buffered responses
         {
             AutoLock al(stream_lock);
+            remove pending_responses;
             stream_capacity_cond.broadcast();
         }
         try { sock.close(); } catch () {}
@@ -599,6 +637,13 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
                     stream_ctx = stream_ctxs{sid};
                     if (cb) {
                         callback_dispatched = True;
+                    } else {
+                        # Buffer response — callback may not be registered yet
+                        # (race between submitRequest() phases 2 and 3)
+                        if (!pending_responses.hasKey(sid)) {
+                            pending_responses{sid} = ();
+                        }
+                        push pending_responses{sid}, (output + {"protocol": "h3"});
                     }
                 }
                 if (cb) {
@@ -608,9 +653,6 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
                         log(LoggerLevel::ERROR, "stream callback exception: %s: %s",
                             ex.err, ex.desc);
                     }
-                } else {
-                    log(LoggerLevel::DEBUG, "discarding response for cancelled stream %d",
-                        stream_id);
                 }
                 # Remove stream AFTER callback completes so the stream handle's
                 # state is already updated before the stream becomes unavailable.

@@ -1236,17 +1236,6 @@ public:
                                    ExceptionSink* xsink);
 
     //! Submit a streaming HTTP/3 request (headers only, no END_STREAM)
-    /** Opens a bidirectional stream for incremental data exchange.
-        Enables headers-only mode on the session so that streaming responses
-        are delivered incrementally via takeHeadersReadyStreamCopy() +
-        takeStreamData().
-
-        @param method HTTP method
-        @param path request path
-        @param headers request headers
-        @param xsink exception sink
-        @return stream ID on success, -1 on error
-    */
     DLLLOCAL int64_t submitRequestStreaming(const char* method, const char* path,
                                             const strcase_str_map_t& headers,
                                             ExceptionSink* xsink);
