@@ -177,7 +177,8 @@ public class Http2ClientPollOperation inherits HttpClientPollOperation {
             req_headers.":method" = method;
         }
         if (!req_headers.":path") {
-            req_headers.":path" = path;
+            # Default empty path to "/" per RFC 9113 §8.3.1 (":path" must not be empty)
+            req_headers.":path" = path.val() ? path : "/";
         }
         if (!req_headers.":scheme") {
             req_headers.":scheme" = ssl_required ? "https" : "http";
