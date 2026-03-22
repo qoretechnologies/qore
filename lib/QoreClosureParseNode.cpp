@@ -56,7 +56,7 @@ QoreObjectClosureNode* QoreClosureParseNode::evalObjectClosure() const {
     QoreObject* o;
     const qore_class_private* c_ctx;
     runtime_get_object_and_class(o, c_ctx);
-    return new QoreObjectClosureNode(o, c_ctx, this);
+    return new QoreObjectClosureNode(o, c_ctx, this, thread_get_all_closure_vars());
 }
 
 QoreValue QoreClosureParseNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {

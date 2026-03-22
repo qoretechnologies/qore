@@ -45,6 +45,7 @@ class TieredSmokeTest inherits QUnit::Test {
         addTestCase("tiered closure write-back", \testTieredClosureWriteBack());
         addTestCase("tiered closure multi-capture", \testTieredClosureMultiCapture());
         addTestCase("tiered closure defaults", \testTieredClosureDefaults());
+        addTestCase("tiered method closure param", \testTieredMethodClosureParam());
         set_return_value(main());
     }
 
@@ -710,5 +711,23 @@ printf(\"%s\\n\", (map $1.toString(), results).join(\",\"));
             assertEq(expected.toString(), parts[i],
                 sprintf("closure defaults: fn(%d) = %d", i, expected));
         }
+    }
+
+    testTieredMethodClosureParam() {
+        # Method closure captures a parameter; verify parameters are correctly captured
+        string code = "%modern
+class Foo {
+    foo(int index) {
+        code<nothing()> c = sub() {
+            printf(\"%y\\n\", index);
+        };
+        c();
+    }
+}
+Foo f();
+f.foo(42);
+";
+        string result = trim(runScript(code, "tiered", "--jit-ir-threshold=3 --jit-jit-threshold=10"));
+        assertEq("42", result, "method closure param: parameter captured correctly");
     }
 }
