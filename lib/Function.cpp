@@ -3008,6 +3008,8 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
         // The IR interpreter uses its own slot cache for internal param access, but
         // closures need params on cvstack for ThreadSafeLocalVarRuntimeEnvironment to
         // capture them via thread_find_closure_var().
+        // Note: For direct function calls, argv contains the parameters.
+        // For method calls, setupCall() has already instantiated them, so argv is null.
         unsigned num_closure_use_params = 0;
         for (unsigned i = 0; i < signature.numParams(); ++i) {
             LocalVar* lv = signature.lv[i];
