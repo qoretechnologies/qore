@@ -54,7 +54,9 @@ public class ConstantContactWatchNewEmailCampaignsDataProvider
 
     #! Fetches email campaigns updated since the given date
     private list<hash<auto>> fetchRecords(date since) {
-        return fetchAllPages("emails", "campaigns", {"limit": DefaultPageSize});
+        string since_str = formatDateTime(since);
+        return fetchAllPages("emails", "campaigns",
+            {"after_date": since_str, "limit": DefaultPageSize});
     }
 
     #! Returns the record ID

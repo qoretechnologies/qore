@@ -93,6 +93,7 @@ public class ConstantContactDataProviderBase inherits DataProvider::AbstractData
 
     #! Sets the logger for the data provider
     setLogger(*LoggerInterface logger) {
+        rest.setLogger(logger);
     }
 
     #! Makes a GET request to the Constant Contact API
