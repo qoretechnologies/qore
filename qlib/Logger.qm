@@ -284,7 +284,7 @@ if (laq.isFull()) {
       - new monitoring methods: @ref Qore::Logger::LoggerAppenderQueue::maxBytes() "maxBytes()",
         @ref Qore::Logger::LoggerAppenderQueue::currentBytes() "currentBytes()",
         @ref Qore::Logger::LoggerAppenderQueue::isFull() "isFull()"
-    - Added \c max_bytes parameter to \c Logger::LoggerAppenderQueueThreadPool "LoggerAppenderQueueThreadPool"
+    - Added \c max_bytes parameter to @ref Logger::LoggerAppenderQueueThreadPool "LoggerAppenderQueueThreadPool"
       constructor
 
     @subsection logger_v1_0 v1.0
@@ -298,7 +298,7 @@ if (laq.isFull()) {
       (<a href="https://github.com/qoretechnologies/qore/issues/4842">issue 4842</a>)
 
     @subsection logger_v0_5 v0.5
-    - added \c LoggerInterface "LoggerInterface" and \c Logger::LoggerWrapper "LoggerWrapper" classes
+    - added \c LoggerInterface "LoggerInterface" and @ref Logger::LoggerWrapper "LoggerWrapper" classes
       (<a href="https://github.com/qoretechnologies/qore/issues/4776">issue 4776</a>)
 
     @subsection logger_v0_4 v0.4
@@ -437,7 +437,7 @@ public class LoggerAppenderQueueThreadPool inherits LoggerAppenderQueue {
     /** @param tp worker @ref Qore::Thread::ThreadPool "ThreadPool" where loggging events are submitted
         @param max_threads max.number of worker threads, default value is \c -1, i.e. unlimited
         @param max_bytes maximum bytes allowed in the queue (for backpressure); see
-        \c LoggerAppenderQueue::constructor(softint) for details:
+        @ref LoggerAppenderQueue::constructor(softint) for details:
         - -1 = unlimited (no backpressure, not recommended for production)
         - 0 = use default limit (10 MiB)
         - >0 = maximum bytes before backpressure is applied

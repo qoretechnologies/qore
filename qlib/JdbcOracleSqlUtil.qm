@@ -69,7 +69,7 @@ module JdbcOracleSqlUtil {
     @note This module requires the <a href="https://github.com/qoretechnologies/module-jni">jni</a> binary module and the
     PostgreSQL JDBC driver for communication with PostgreSQL databases
 
-    @see \c pgsqlsqlutilbaseintro for implementation information about this module
+    @see @ref oraclesqlutilbaseintro for implementation information about this module
 
     @section jdbcoraclesqlutil_relnotes Release Notes
 

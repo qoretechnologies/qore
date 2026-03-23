@@ -29,7 +29,7 @@ public namespace ServerSentEventClient {
     all @ref ConnectionProvider::HttpConnection "HttpConnection" options.
 
     Also supports the following runtime options in getImpl():
-    - \c "logger": a \c Logger::LoggerInterface "LoggerInterface" object for internal logging
+    - \c "logger": a @ref Logger::LoggerInterface "LoggerInterface" object for internal logging
     - \c "start_thread": a closure to start a new thread (signature:
       \c "int sub start_thread(code callable) {}")
     - \c "yield": a closure to yield current thread execution
@@ -122,7 +122,7 @@ public class ServerSentEventConnection inherits ConnectionProvider::AbstractConn
         @param attributes various attributes. See below
         @param options connection options
 
-        See \c AbstractConnection::constructor() for \c attributes and \c options reference.
+        See @ref ConnectionProvider::AbstractConnection::constructor() for \c attributes and \c options reference.
 
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option
     */
@@ -158,7 +158,7 @@ public class ServerSentEventConnection inherits ConnectionProvider::AbstractConn
 
     #! returns runtime options
     /** @return a hash with the following keys reflecting support for the corresponding runtime options in getImpl():
-        - \c "logger": a \c Logger::LoggerInterface "LoggerInterface" object for internal logging
+        - \c "logger": a @ref Logger::LoggerInterface "LoggerInterface" object for internal logging
         - \c "start_thread": a closure to start a new thread (signature:
           \c "int sub start_thread(code callable) {}")
         - \c "yield": a closure to yield current thread execution
@@ -185,7 +185,7 @@ public class ServerSentEventConnection inherits ConnectionProvider::AbstractConn
     #! returns a @ref ServerSentEventClient object
     /** @param connect if @ref True "True", then @ref ServerSentEventClient::connect() is called
         @param rtopts supports the following runtime options in getImpl():
-        - \c "logger": a \c Logger::LoggerInterface "LoggerInterface" object for internal logging
+        - \c "logger": a @ref Logger::LoggerInterface "LoggerInterface" object for internal logging
         - \c "reconnect": try to reconnect when the connection is closed or lost (default @ref False)
         - \c "start_thread": a closure to start a new thread (signature:
           \c "int sub start_thread(code callable) {}")
@@ -226,7 +226,7 @@ public class ServerSentEventConnection inherits ConnectionProvider::AbstractConn
     #! returns @ref True, as the connection returns a data provider with the \c getDataProvider() method
     /** @return @ref True, as the connection returns a data provider with the \c getDataProvider() method
 
-        @see \c getDataProvider()
+        @see @ref getDataProvider()
     */
     bool hasDataProvider() {
         return True;

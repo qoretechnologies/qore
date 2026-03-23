@@ -149,7 +149,7 @@ module RedisDataProvider {
 
     @section redisdataproviderintro Introduction to the RedisDataProvider Module
 
-    The %RedisDataProvider module provides a \c dataproviderintro "data provider" API for Redis
+    The %RedisDataProvider module provides a @ref dataproviderintro "data provider" API for Redis
     servers. It provides connection management and a comprehensive API for all Redis data types
     and operations.
 

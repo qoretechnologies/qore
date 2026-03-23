@@ -60,9 +60,9 @@ module TelnetClient {
     - @ref TelnetClient::TelnetConnection "TelnetConnection": provides a connection object to a REST server (based on the @ref connectionproviderintro "ConnectionProvider" module)
 
     The main definitions are:
-    - \c TelnetCommandCodes "TelnetCommandCodes": telnet protocol command codes and a lookup map
+    - @ref TelnetCommandCodes "TelnetCommandCodes": telnet protocol command codes and a lookup map
     - \c TelnetDefaults "TelnetDefaults": default values for the @ref TelnetClient::TelnetClient "TelnetClient" class
-    - \c TelnetOptionCodes "TelnetOptionCodes": telnet protocol option codes and a lookup map
+    - @ref TelnetOptionCodes "TelnetOptionCodes": telnet protocol option codes and a lookup map
 
     @section telnetclient_relnotes TelnetClient Module Release Notes
 
@@ -475,7 +475,7 @@ public class TelnetClient {
     }
 
     #! returns @ref True "True" if the server has confirmed with a DO command that it supports the given feature
-    /** @param fc The feature code to check; see \c TelnetOptionCodes for possible values; supported features are:
+    /** @param fc The feature code to check; see @ref TelnetOptionCodes for possible values; supported features are:
         - @ref TOPT_TS "TOPT_TS": TerminalSpeed
         - @ref TOPT_XDL "TOPT_XDL": XDisplayLocation
         - @ref TOPT_TERM "TOPT_TERM": TerminalType
@@ -994,7 +994,7 @@ public class TelnetConnection inherits ConnectionProvider::AbstractConnectionWit
         @param attributes various attributes. See below
         @param options connection options
 
-        See \c AbstractConnection::constructor() for \c attributes and \c options reference.
+        See @ref ConnectionProvider::AbstractConnection::constructor() for \c attributes and \c options reference.
 
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option
     */

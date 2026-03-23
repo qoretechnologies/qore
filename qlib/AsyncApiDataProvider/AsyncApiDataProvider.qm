@@ -59,13 +59,13 @@ module AsyncApiDataProvider {
 
     @section asyncapidataproviderintro Introduction to the AsyncApiDataProvider Module
 
-    The %AsyncApiDataProvider module provides a \c dataproviderintro "data provider" API for AsyncAPI 3.0
+    The %AsyncApiDataProvider module provides a @ref dataproviderintro "data provider" API for AsyncAPI 3.0
     event-driven APIs. The module is protocol-agnostic and supports pluggable transports for different
     messaging protocols.
 
     The @ref AsyncApiDataProvider::AsyncApiDataProvider "AsyncApiDataProvider" class allows for introspecting
     an AsyncAPI schema, while the @ref AsyncApiDataProvider::AsyncApiOperationDataProvider "AsyncApiOperationDataProvider"
-    class supports the \c dataproviderintro "data provider" message API for communication with messaging servers.
+    class supports the @ref dataproviderintro "data provider" message API for communication with messaging servers.
 
     @section asyncapi_transports Supported Transports
 

@@ -117,11 +117,11 @@ public const WsSchemes = {
 #! the main Sewio websocket client class
 /** To use this class, create a @ref SewioWebSocketClient::SewioWebSocketClient "SewioWebSocketClient" object and the call \c WebSocketClient::WebSocketClient::connect() "WebSocketClient::connect()".
 
-    The \c WebSocketClient::WebSocketClient::connect() "WebSocketClient::connect()" method starts a background thread to receive messages, which are then posted to the callback provided in the \c SewioWebSocketClient::SewioWebSocketClient::constructor() "SewioWebSocketClient::constructor()" method call.
+    The @ref WebSocketClient::WebSocketClient::connect() "WebSocketClient::connect()" method starts a background thread to receive messages, which are then posted to the callback provided in the @ref SewioWebSocketClient::SewioWebSocketClient::constructor() "SewioWebSocketClient::constructor()" method call.
 
-    To stop listening for web socket events, call \c WebSocketClient::WebSocketClient::disconnect() "WebSocketClient::disconnect()".
+    To stop listening for web socket events, call @ref WebSocketClient::WebSocketClient::disconnect() "WebSocketClient::disconnect()".
 
-    To send data to the Sewio RTLS Studio server, use the \c SewioWebSocketClient::SewioWebSocketClient::send() "SewioWebSocketClient::send()" method; this method will serialize the data
+    To send data to the Sewio RTLS Studio server, use the @ref WebSocketClient::WebSocketClient::send() "SewioWebSocketClient::send()" method; this method will serialize the data
     to JSON and send the JSON string to the server.
 
     When websocket messages are received from the server, they are deserialized and the resulting data is used as the argument to the
@@ -270,7 +270,7 @@ public class SewioWebSocketConnection inherits WebSocketClient::WebSocketConnect
         @param attributes various attributes. See below
         @param options connection options
 
-        See \c AbstractConnection::constructor() for \c attributes and \c options reference.
+        See @ref ConnectionProvider::AbstractConnection::constructor() for \c attributes and \c options reference.
 
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option
     */

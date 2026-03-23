@@ -89,7 +89,7 @@ module Util {
     - @ref Util::ordinal()
     - @ref Util::parse_memory_size()
     - @ref Util::parse_ranges()
-    - \c Util::parse_to_qore_value()
+    - @ref Util::parse_to_qore_value()
     - @ref Util::parse_uri_query()
     - @ref Util::plural()
     - @ref Util::regex_escape()
@@ -133,12 +133,12 @@ module Util {
       (<a href="https://github.com/qoretechnologies/qore/issues/4966">issue 4966</a>)
 
     @subsection util_2_0_1 Util 2.0.1
-    - fixed base64 and base64url file options in \c Util::parse_to_qore_value() "parse_to_qore_value()"
+    - fixed base64 and base64url file options in @ref Util::parse_to_qore_value() "parse_to_qore_value()"
       (<a href="https://github.com/qoretechnologies/qore/issues/4948">issue 4948</a>)
 
     @subsection util_2_0 Util 2.0
     - added @ref Util::get_bit_string() "get_bit_string()"
-    - added file references to \c Util::parse_to_qore_value() "parse_to_qore_value()"
+    - added file references to @ref Util::parse_to_qore_value() "parse_to_qore_value()"
 
     @subsection util_1_11 Util 1.11
     - added @ref Util::AllowedValueInfo "AllowedValueInfo"
@@ -168,11 +168,11 @@ module Util {
       (<a href="https://github.com/qoretechnologies/qore/issues/4428">issue 4428</a>)
 
     @subsection util_1_6_2 Util 1.6.2
-    - fixed a bug in \c parse_to_qore_value() with floats and numbers with trailing zeros
+    - fixed a bug in @ref Util::parse_to_qore_value() "parse_to_qore_value()" with floats and numbers with trailing zeros
       (<a href="https://github.com/qoretechnologies/qore/issues/4349">issue 4349</a>)
 
     @subsection util_1_6_1 Util 1.6.1
-    - fixed a bug in \c parse_memory_size() with numbers larger than \c 9
+    - fixed a bug in @ref Util::parse_memory_size() "parse_memory_size()" with numbers larger than \c 9
       (<a href="https://github.com/qoretechnologies/qore/issues/4198">issue 4198</a>)
 
     @subsection util_1_6 Util 1.6
@@ -180,7 +180,7 @@ module Util {
       (<a href="https://github.com/qoretechnologies/qore/issues/4004">issue 4004</a>)
 
     @subsection util_1_5_1 Util 1.5.1
-    - fixed bugs in \c %EVAL= expressions in \c Util::parse_to_qore_value() "parse_to_qore_value()" where
+    - fixed bugs in \c %EVAL= expressions in @ref Util::parse_to_qore_value() "parse_to_qore_value()" where
       expressions that evaluated to integer 0 or floating-point values were returned as @ref NOTHING
       (<a href="https://github.com/qoretechnologies/qore/issues/3851">issue 3851</a>)
     - added the get_file_from_url() function
@@ -195,7 +195,7 @@ module Util {
     @subsection util_1_4 Util 1.4
     - added the @ref Util::parse_ranges() "parse_ranges()" function (<a href="https://github.com/qoretechnologies/qore/issues/2438">issue 2438</a>)
     - added the @ref Util::check_ip_address() "check_ip_address()" function (<a href="https://github.com/qoretechnologies/qore/issues/2483">issue 2483</a>)
-    - updated \c Util::parse_to_qore_value() "parse_to_qore_value()" to support single-element lists and hashes with
+    - updated @ref Util::parse_to_qore_value() "parse_to_qore_value()" to support single-element lists and hashes with
       curly brackets including empty hashes
       (<a href="https://github.com/qoretechnologies/qore/issues/3138">issue 3138</a>)
     - updated @ref Util::get_exception_string() "get_exception_string()" to show the \c lang value
@@ -1126,7 +1126,7 @@ auto sub process_placeholder(string type, string value) {
     |integers|an @ref integer "integer"
     |floats|a @ref float "float"
     |arbitrary-numeric value|a @ref number "number"
-    |\c True, \c true, \c False, \c false|a \c boolean "bool"
+    |\c True, \c true, \c False, \c false|a @ref boolean "bool"
     |<tt>YYYY-MM-DD[[-T ]HH:mm[:SS[.uu]]]</tt>|a @ref date "date"
     |a %Qore expression|the value evaluated
     |a quoted string|a @ref string "string"

@@ -223,7 +223,7 @@ const Specs = (
     line to match the record.
 
     The above record type resolution logic is executed in
-    \c FixedLengthUtil::FixedLengthAbstractIterator::identifyTypeImpl() "FixedLengthAbstractIterator::identifyTypeImpl()",
+    @ref FixedLengthUtil::FixedLengthAbstractIterator::identifyTypeImpl() "FixedLengthAbstractIterator::identifyTypeImpl()",
     which executes any \c "regex" or \c "value" tests on the input line in the order of the field definitions in the
     @ref fixedlengthspecrecordhash "record description hash".
 
@@ -234,7 +234,7 @@ const Specs = (
 
     When there are no record-matching keys in the field hashes for any record and the input record character lengths are
     not unique, then
-    \c FixedLengthUtil::FixedLengthAbstractIterator::identifyTypeImpl() "FixedLengthAbstractIterator::identifyTypeImpl()"
+    @ref FixedLengthUtil::FixedLengthAbstractIterator::identifyTypeImpl() "FixedLengthAbstractIterator::identifyTypeImpl()"
     must be overridden in a subclass to provide custom record matching logic.
 
     @note

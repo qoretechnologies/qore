@@ -153,9 +153,9 @@ poller.waitStop();
     The @ref FtpPoller::FtpPoller "FtpPoller" class includes support for running in sandboxed Program objects with the
     following parse options set:
     - \c PO_NO_THREAD_CONTROL: in this case the \c "start_thread" option is required in
-      \c FtpPoller::FtpPoller::constructor() "FtpPoller::constructor()"
+      @ref FtpPoller::FtpPoller::constructor() "FtpPoller::constructor()"
     - \c PO_NO_PROCESS_CONTROL: in this case the \c "sleep" option is required in
-      \c FtpPoller::FtpPoller::constructor() "FtpPoller::constructor()"
+      @ref FtpPoller::FtpPoller::constructor() "FtpPoller::constructor()"
 
     @section ftppollerrelnotes FtpPoller Module Release Notes
 
@@ -180,7 +180,7 @@ public const AppName = "FTP";
 public const EVENT_FTP_FILE = "ftp-file-event";
 
 #! FtpPoller client class implementation
-/** See the \c constructor options for information on how to configure this object; note that either
+/** See the @ref constructor options for information on how to configure this object; note that either
     - \c delete_remote_file or
     - \c move_remote_file
     must be set, or FTP files polled will remain where they are in the remote FTP server, unless they are removed or
@@ -1477,7 +1477,7 @@ public class FtpPollerDataProviderFactory inherits AbstractDataProviderFactory {
     }
 
     #! Returns static factory information without \a provider_info
-    /** @return static factory information without \a provider_info which is provided by \c getProviderInfo()
+    /** @return static factory information without \a provider_info which is provided by @ref getProviderInfo()
     */
     private hash<DataProviderFactoryInfo> getInfoImpl() {
         return FactoryInfo;

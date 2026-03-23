@@ -78,7 +78,7 @@ module RestSchemaValidator {
     The %RestSchemaValidator module provides an abstract <a href="https://en.wikipedia.org/wiki/Representational_state_transfer">REST</a> schema validation API to %Qore.
 
     Primary classes provided by this module:
-    - \c RestSchemaValidator::AbstractRestSchemaValidator "AbstractRestSchemaValidator"
+    - @ref RestSchemaValidator::AbstractRestSchemaValidator "AbstractRestSchemaValidator"
     - @ref RestSchemaValidator::NullRestSchemaValidator "NullRestSchemaValidator"
 
     @section restschemavalidator_relnotes RestSchemaValidator Module Release Notes
@@ -102,8 +102,8 @@ module RestSchemaValidator {
       (<a href="https://github.com/qorelanguage/qore/issues/5006">issue 5006</a>)
     - added abstract methods to enable polymorphic access for data providers:
       - @ref RestSchemaValidator::AbstractSchemaObject::getField() "AbstractSchemaObject::getField()"
-      - \c RestSchemaValidator::AbstractRestSchemaValidator::getFieldFromSchema() "AbstractRestSchemaValidator::getFieldFromSchema()"
-      - \c RestSchemaValidator::AbstractRestSchemaValidator::getFieldForHeaders() "AbstractRestSchemaValidator::getFieldForHeaders()"
+      - @ref RestSchemaValidator::AbstractRestSchemaValidator::getFieldFromSchema() "AbstractRestSchemaValidator::getFieldFromSchema()"
+      - @ref RestSchemaValidator::AbstractRestSchemaValidator::getFieldForHeaders() "AbstractRestSchemaValidator::getFieldForHeaders()"
       (<a href="https://github.com/qorelanguage/qore/issues/5006">issue 5006</a>)
 
     @subsection restschemavalidator_2_3 RestSchemaValidator v2.3
@@ -168,7 +168,7 @@ module RestSchemaValidator {
       (<a href="https://github.com/qoretechnologies/qore/issues/2816">issue 2816</a>)
 
     @subsection restschemavalidator_1_0_1 RestSchemaValidator v1.0.1
-    - updated docs for \c RestSchemaValidator::AbstractRestSchemaValidator::parseRequest() "AbstractRestSchemaValidator::parseRequest()" to reflect how validation exceptions should be raised for proper error reporting (<a href="https://github.com/qoretechnologies/qore/issues/2344">issue 2344</a>)
+    - updated docs for @ref RestSchemaValidator::AbstractRestSchemaValidator::parseRequest() "AbstractRestSchemaValidator::parseRequest()" to reflect how validation exceptions should be raised for proper error reporting (<a href="https://github.com/qoretechnologies/qore/issues/2344">issue 2344</a>)
     - fixed handling of messages with non-object (i.e. non-hash) bodies (<a href="https://github.com/qoretechnologies/qore/issues/2366">issue 2366</a>)
 
     @subsection restschemavalidator_1_0 RestSchemaValidator v1.0

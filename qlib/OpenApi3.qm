@@ -90,7 +90,7 @@ module OpenApi3 {
     To override the URI base path specified in the <a href="https://swagger.io/">OpenApi3</a> schema,
     get the <a href="https://swagger.io/">OpenApi3</a> schema object by calling
     \c RestClient::getValidator(), and then call
-    \c RestSchemaValidator::AbstractRestSchemaValidator::setBasePath() "AbstractRestSchemaValidator::setBasePath()"
+    @ref RestSchemaValidator::AbstractRestSchemaValidator::setBasePath() "AbstractRestSchemaValidator::setBasePath()"
     on the validator object.
 
     @par Client Example
@@ -471,7 +471,7 @@ public class OpenApi3Loader {
         - \c try_import: (type *code) a call reference or closure to be passed a string name for external schema
           references, must
           take a string argument (the resource name) and return a string (the resource data)
-        - \c parse_flags: (type *int) a binary or combination of \c ParseOptionFlags
+        - \c parse_flags: (type *int) a binary or combination of @ref ParseOptionFlags
 
         @throws JSON-MODULE-MISSING trying to parse a JSON %OpenApi3 specification with JSON module unavailable
         @throws YAML-MODULE-MISSING trying to parse a YAML %OpenApi3 specification with YAML module unavailable
@@ -497,7 +497,7 @@ public class OpenApi3Loader {
         - \c try_import: (type *code) a call reference or closure to be passed a string name for external schema
           references, must
           take a string argument (the resource name) and return a string (the resource data)
-        - \c parse_flags: (type *int) a binary or combination of \c ParseOptionFlags
+        - \c parse_flags: (type *int) a binary or combination of @ref ParseOptionFlags
 
         @throws EMPTY-SCHEMA-FILE %OpenApi3 file is empty
         @throws JSON-MODULE-MISSING trying to parse a JSON %OpenApi3 specification with the json module unavailable
@@ -512,7 +512,7 @@ public class OpenApi3Loader {
     #! Load <a href="https://swagger.io/">OpenApi3</a> definition from a URL or file path.
     /**
         @param url URL to the <a href="https://swagger.io/">OpenApi3</a> file; uses the
-        \c filelocationhandlerintro "FileLocationHandler" to load the file
+        @ref filelocationhandlerintro "FileLocationHandler" to load the file
         @param json whether the specification is in JSON or YAML format; if not given the source encoding will be
         detected automatically
         @param opts options as per \c OpenApi3Options as follows:
@@ -522,7 +522,7 @@ public class OpenApi3Loader {
         - \c try_import: (type *code) a call reference or closure to be passed a string name for external schema
           references, must
           take a string argument (the resource name) and return a string (the resource data)
-        - \c parse_flags: (type *int) a binary or combination of \c ParseOptionFlags
+        - \c parse_flags: (type *int) a binary or combination of @ref ParseOptionFlags
 
         @throws EMPTY-SCHEMA-FILE %OpenApi3 file is empty
         @throws JSON-MODULE-MISSING trying to parse a JSON %OpenApi3 specification with the json module unavailable
@@ -786,7 +786,7 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
             - \c def_path: (type *string) the default path to use when retrieving external schema references
             - \c try_import: (type *code) a call reference or closure to be passed a string name for external schema
               references, must take a string argument (the resource name) and return a string (the resource data)
-            - \c parse_flags: (type *int) a binary or combination of \c ParseOptionFlags
+            - \c parse_flags: (type *int) a binary or combination of @ref ParseOptionFlags
             - \c utc_dates: (type *bool) send date/time values in queries in UTC format
             - \c query_date_format: (type *string) the format string for date/time values in queries
         */
@@ -853,7 +853,7 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
         - \c try_import: (type *code) a call reference or closure to be passed a string name for external schema
           references, must
           take a string argument (the resource name) and return a string (the resource data)
-        - \c parse_flags: (type *int) a binary or combination of \c ParseOptionFlags
+        - \c parse_flags: (type *int) a binary or combination of @ref ParseOptionFlags
 
         @throws OPENAPI3-OPTION-ERROR unsuported options in constructor
         @throws INVALID-OPENAPI3-VERSION invalid or missing OpenApi3 schema version
@@ -878,7 +878,7 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
         - \c try_import: (type *code) a call reference or closure to be passed a string name for external schema
           references, must
           take a string argument (the resource name) and return a string (the resource data)
-        - \c parse_flags: (type *int) a binary or combination of \c ParseOptionFlags
+        - \c parse_flags: (type *int) a binary or combination of @ref ParseOptionFlags
 
         @throws OPENAPI3-OPTION-ERROR unsuported options in constructor
         @throws INVALID-OPENAPI3-VERSION invalid or missing OpenApi3 schema version
@@ -2244,7 +2244,7 @@ public class LicenseObject inherits ObjectBase {
 
 #! Holds the relative paths to the individual endpoints.
 /**
-    The path is appended to the \c OpenApi3Schema::basePath "basePath" in order to construct the full URL.
+    The path is appended to the @ref OpenApi3Schema::basePath "basePath" in order to construct the full URL.
     The Paths may be empty, due to ACL constraints.
 
     This class stores a tree or a component of a path for path matching, supports wildcard matching
@@ -3395,8 +3395,8 @@ public class ParameterBase inherits ObjectBase, RestSchemaValidator::AbstractPar
 
 #! Describes a single operation parameter
 /**
-    A unique parameter is defined by a combination of a \c ParameterObject::name "name"
-    and \c ParameterObject::inLoc "location".
+    A unique parameter is defined by a combination of a @ref ParameterObject::name "name"
+    and @ref ParameterObject::inLoc "location".
 
     There are five possible parameter types:
     - Path: Used together with Path Templating, where the parameter value is
@@ -4696,7 +4696,7 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
 #! A metadata object that allows for more fine-tuned XML model definitions.
 /**
     When using arrays, XML element names are not inferred (for singular/plural
-    forms) and the \c XmlObject::name "name" property should be used to add that information.
+    forms) and the @ref XmlObject::name "name" property should be used to add that information.
     See examples for expected behavior.
  */
 public class XmlObject inherits ObjectBase {
@@ -4714,7 +4714,7 @@ public class XmlObject inherits ObjectBase {
         #! The URL of the namespace definition. Value SHOULD be in the form of a URL.
         *string ns;
 
-        #! The prefix to be used for the \c XmlObject::name "name".
+        #! The prefix to be used for the @ref XmlObject::name "name".
         *string prefix;
 
         #! Declares whether the property definition translates to an attribute instead of an element. Default value is \c false.

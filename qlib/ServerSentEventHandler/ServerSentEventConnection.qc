@@ -114,7 +114,7 @@ public class ServerSentEventConnection {
     }
 
     #! Pushes an unencoded message on the connection's message channel
-    /** The message will be encoded with \c ServerSentEventUtil::ws_encode_message() before sending
+    /** The message will be encoded with @ref WebSocketUtil::ws_encode_message() before sending
     */
     send(hash<SseMessageInfo> msg) {
         try {

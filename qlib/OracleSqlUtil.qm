@@ -73,12 +73,12 @@ module OracleSqlUtil {
     @note This module requires the <a href="https://github.com/qoretechnologies/module-oracle">oracle</a> binary module
     for communication with Oracle databases
 
-    @see \c pgsqlsqlutilbaseintro for implementation information about this module
+    @see @ref oraclesqlutilbaseintro for implementation information about this module
 
     @section oraclesqlutil_relnotes Release Notes
 
     @subsection oraclesqlutil_v1_6 OracleSqlUtil v1.6
-    - updated to use the \c oraclesqlutilbaseintro module for the base implementation
+    - updated to use the @ref oraclesqlutilbaseintro module for the base implementation
 
     @subsection oraclesqlutil_v1_5 OracleSqlUtil v1.5
     - implemented support for generating queries based on generic expressions using the DataProvider module's generic
@@ -134,7 +134,7 @@ module OracleSqlUtil {
     @subsection oraclesqlutil_v1_2_3 OracleSqlUtil v1.2.3
     - fixed a bug in \c character_semantics for standalone column
       (<a href="https://github.com/qoretechnologies/qore/issues/1688">issue 1688</a>)
-    - implemented \c cop_trunc_date() operator
+    - implemented @ref SqlUtil::cop_trunc_date() operator
       (<a href="https://github.com/qoretechnologies/qore/issues/2032">issue 2032</a>)
 
     @subsection oraclesqlutil_v1_2_2 OracleSqlUtil v1.2.2
@@ -149,14 +149,14 @@ module OracleSqlUtil {
 
     @subsection oraclesqlutil_v1_2 OracleSqlUtil v1.2
     - implemented support for the \c "returning" clause as an insert option
-    - implemented support for views for DML in the \c OracleSqlUtil::OracleTable class
-    - implemented \c OracleSqlUtil::OracleTable::getBaseType()
+    - implemented support for views for DML in the @ref OracleSqlUtil::OracleTable class
+    - implemented @ref OracleSqlUtilBase::OracleTable::getBaseType()
     - implemented support for Oracle pseudocolumns in queries
     - implemented support for @ref SqlUtil::cop_cast() operator
     - fixed bugs in @ref SqlUtil::cop_seq() and @ref SqlUtil::cop_seq_currval()
       (<a href="https://github.com/qoretechnologies/qore/issues/624">issue 624</a>)
     - return lists from Oracle's data dictionary ordered
-    - implemented \c OracleSqlUtil::OracleTable::bindEmptyStringsAsNull()
+    - implemented @ref OracleSqlUtilBase::OracleTable::bindEmptyStringsAsNull()
     - implemented high-performance "upsert" (merge) support also supporting bulk DML
     - implemented @ref SqlUtil::cop_substr() and @ref SqlUtil::uop_substr() operators
       (<a href="https://github.com/qoretechnologies/qore/issues/801">issue 801</a>)

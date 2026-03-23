@@ -224,7 +224,7 @@ GoogleRestClient rest(opts);
         @endcode
 
         @param opts valid options are all the options for the @ref RestClient::RestClient "RestClient" class; note
-        that the URL is set by default if not provided (see \c DefaultUrl); the following options are unique to this
+        that the URL is set by default if not provided (see @ref DefaultUrl); the following options are unique to this
         class:
         - \c api_profile: one of:
           - \c none (no options set)
@@ -320,7 +320,7 @@ public class GoogleRestConnection inherits RestClient::RestConnection {
         @param attributes various attributes. See below
         @param options connection options
 
-        See \c ConnectionProvider::AbstractConnection::constructor() for \c attributes and \c options reference.
+        See @ref ConnectionProvider::AbstractConnection::constructor() for \c attributes and \c options reference.
 
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option
     */
@@ -446,7 +446,7 @@ public class GoogleCalendarRestConnection inherits GoogleRestConnection {
         @param attributes various attributes. See below
         @param options connection options
 
-        See \c ConnectionProvider::AbstractConnection::constructor() for \c attributes and \c options reference.
+        See @ref ConnectionProvider::AbstractConnection::constructor() for \c attributes and \c options reference.
 
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option
     */
@@ -591,7 +591,7 @@ public class GmailRestConnection inherits GoogleRestConnection {
         @param attributes various attributes. See below
         @param options connection options
 
-        See \c ConnectionProvider::AbstractConnection::constructor() for \c attributes and \c options reference.
+        See @ref ConnectionProvider::AbstractConnection::constructor() for \c attributes and \c options reference.
 
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option
     */

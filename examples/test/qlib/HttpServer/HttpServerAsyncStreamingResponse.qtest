@@ -498,6 +498,7 @@ l50Xb2GWQesIt9k5jF5IOw==
             "ssl_verify_cert": False,
             "timeout": 10000,
         });
+        on_exit client.disconnect();
 
         # The server handler claims Content-Length: 10000 but InputStream only has 100 bytes
         # The server should detect the mismatch and the client should get an error
@@ -541,6 +542,7 @@ l50Xb2GWQesIt9k5jF5IOw==
             "http_version": "2.0",
             "timeout": 10000,
         });
+        on_exit client.disconnect();
 
         # The server handler claims Content-Length: 10000 but InputStream only has 100 bytes
         # HTTP/2 should propagate this as a stream error (RST_STREAM or incomplete response)
@@ -580,6 +582,7 @@ l50Xb2GWQesIt9k5jF5IOw==
             "ssl_verify_cert": False,
             "timeout": 10000,
         });
+        on_exit client.disconnect();
 
         # Content-Length exactly matches InputStream size — should succeed
         hash<auto> resp = client.send(NOTHING, "GET", "/exact-stream");

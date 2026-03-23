@@ -127,7 +127,7 @@ public class SewioRestClientBase {
         );
     }
 
-    #! returns options for the \c RestClient::RestClient::constructor() "RestClient::constructor()"
+    #! returns options for the @ref RestClient::RestClient::constructor() "RestClient::constructor()"
     static hash getOptions(hash opts) {
         return opts + {
             "data": "json",
@@ -160,7 +160,7 @@ SewioRestClient rest(("url": "http://rtlsstudio.com/sensmapserver", "apikey": ap
             @endcode
         - \c apikey: (required) the <a href="http://www.sewio.net">Sewio.net</a>'s RTLS Studio api key for the target server
         - \c content_encoding: for possible values, see \c EncodingSupport; this sets the send encoding (if the \c "send_encoding" option is not set) and the requested response encoding (note that the @ref RestClient::RestClient "RestClient" class will only compress outgoing message bodies over \c CompressionThreshold bytes in size)
-        - \c data: a \c DataSerializationOptions "data serialization option"; if not present defaults to \c "json"
+        - \c data: a @ref DataSerializationOptions "data serialization option"; if not present defaults to \c "json"
         - \c default_path: The default path to use for new connections if a path is not otherwise specified in the connection URL
         - \c default_port: The default port number to connect to if none is given in the URL
         - \c error_passthru: if @ref True "True" then HTTP status codes indicating errors will not cause a
@@ -205,7 +205,7 @@ SewioRestClient rest(("url": "http://rtlsstudio.com/sensmapserver", "apikey": ap
     connection class supports the following options:
     - \c "apikey": (required) the <a href="http://www.sewio.net">Sewio.net</a>'s RTLS Studio api key
 
-    @see \c SewioRestClient::SewioRestClient::constructor() "SewioRestClient::constructor()" for more information on the above options
+    @see @ref SewioRestClient::SewioRestClient::constructor() "SewioRestClient::constructor()" for more information on the above options
 */
 public class SewioRestConnection inherits RestClient::RestConnection {
     public {
@@ -277,7 +277,7 @@ public class SewioRestConnection inherits RestClient::RestConnection {
         @param attributes various attributes. See below
         @param options connection options
 
-        See \c AbstractConnection::constructor() for \c attributes and \c options reference.
+        See @ref ConnectionProvider::AbstractConnection::constructor() for \c attributes and \c options reference.
 
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option
     */

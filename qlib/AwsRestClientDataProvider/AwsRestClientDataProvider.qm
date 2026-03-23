@@ -54,14 +54,14 @@ module AwsRestClientDataProvider {
     @section awsrestclientdataproviderintro Introduction to the AwsRestClientDataProvider Module
 
     The %AwsRestClientDataProvider module provides a data provider API for REST servers through the
-    \c dataproviderintro "DataProvider" API.
+    @ref dataproviderintro "DataProvider" API.
 
     The following classes are provided by this module:
     - @ref AwsRestClientDataProvider::AwsRestClientCallDataProvider "AwsRestClientCallDataProvider"
-    - \c AwsRestClientDataProvider::AwsRestClientCallRequestDataType "AwsRestClientCallRequestDataType"
-    - \c AwsRestClientDataProvider::AwsRestClientCallResponseDataType "AwsRestClientCallResponseDataType"
-    - \c AwsRestClientDataProvider::AwsRestClientCallWithMethodRequestDataType "AwsRestClientCallWithMethodRequestDataType"
-    - \c AwsRestClientDataProvider::AwsRestClientCallWithoutBodyRequestDataType "AwsRestClientCallWithoutBodyRequestDataType"
+    - @ref AwsRestClientDataProvider::AwsRestClientCallRequestDataType "AwsRestClientCallRequestDataType"
+    - @ref AwsRestClientDataProvider::AwsRestClientCallResponseDataType "AwsRestClientCallResponseDataType"
+    - @ref AwsRestClientDataProvider::AwsRestClientCallWithMethodRequestDataType "AwsRestClientCallWithMethodRequestDataType"
+    - @ref AwsRestClientDataProvider::AwsRestClientCallWithoutBodyRequestDataType "AwsRestClientCallWithoutBodyRequestDataType"
     - @ref AwsRestClientDataProvider::AwsRestClientDataProviderFactory "AwsRestClientDataProviderFactory"
     - @ref AwsRestClientDataProvider::AwsRestClientDataProvider "AwsRestClientDataProvider"
     - @ref AwsRestClientDataProvider::AwsRestClientDeleteDataProvider "AwsRestClientDeleteDataProvider"

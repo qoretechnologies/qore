@@ -34,12 +34,12 @@ public namespace BulkSqlUtil {
         automatically when \c block_size rows have been queued.
 
         @par Retrieving Data From Inserts
-        It is possible to use \c sql_iop_funcs in the hashes submitted with queueData(); in this case the
+        It is possible to use @ref sql_iop_funcs in the hashes submitted with queueData(); in this case the
         BulkInsertOperation class assumes that every row has the same operations as in the first row.
         Output data can then be processed by using the \c rowcode option in the constructor() or by calling
         setRowCode().\n\n
-        In case \c sql_iop_funcs are used and a \c rowcode option is set, then the SQL DML query for inserts
-        is creating using the \c "returning" \c SqlUtil::AbstractTable::InsertOptions "insert option", therefore
+        In case @ref sql_iop_funcs are used and a \c rowcode option is set, then the SQL DML query for inserts
+        is creating using the \c "returning" @ref SqlUtil::AbstractTable::InsertOptions "insert option", therefore
         the DBI driver in this case must support this option as well.
 
         @par Flushing and Discarding Data
@@ -100,7 +100,7 @@ on_error ds.rollback();
             - \c "block_size": the number of rows executed at once (default: 1000)
             - \c "rowcode": a per-row @ref closure or @ref call_reference for batch inserts; this must take a single
               hash argument and will be called for every row after a bulk insert; the hash argument representing the
-              row inserted will also contain any output values if applicable (for example if \c sql_iop_funcs are
+              row inserted will also contain any output values if applicable (for example if @ref sql_iop_funcs are
               used in the row hashes submitted to queueData())
 
             @see setRowCode()
@@ -116,7 +116,7 @@ on_error ds.rollback();
             - \c "block_size": the number of rows executed at once (default: 1000)
             - \c "rowcode": a per-row @ref closure or @ref call_reference for batch inserts; this must take a single
               hash argument and will be called for every row after a bulk insert; the hash argument representing the
-              row inserted will also contain any output values if applicable (for example if \c sql_iop_funcs are
+              row inserted will also contain any output values if applicable (for example if @ref sql_iop_funcs are
               used in the row hashes submitted to queueData())
 
             @see setRowCode()
@@ -194,11 +194,11 @@ inserter.setRowCode(rowcode);
         #! inserts internally-queued queued data in the database with bulk DML operations
         /**
             This method sets up the SQL DML query used for inserts when row is queued.
-            Output values are only retrieved if \c sql_iop_funcs are used and a
+            Output values are only retrieved if @ref sql_iop_funcs are used and a
             \c rowcode @ref closure "closure" or @ref call_reference "call reference"
             has been set beforehand in the constructor() or by calling setRowCode() and
             the underlying DBI driver supports the \c "returning"
-            \c SqlUtil::AbstractTable::InsertOptions "insert option".
+            @ref SqlUtil::AbstractTable::InsertOptions "insert option".
         */
         private flushImpl() {
             *hash rh;

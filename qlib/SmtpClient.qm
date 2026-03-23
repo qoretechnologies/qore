@@ -127,11 +127,11 @@ module SmtpClient {
     communication with ESMTP servers that require secure connections.
 
     For the above reasons it's normally not required to use the \c "smtptls" or \c "esmtptls" protocols in the
-    \c SmtpClient::SmtpClient::constructor(string, __7_ code, __7_ code) "SmtpClient::constructor(string, *code, *code)"
+    @ref SmtpClient::SmtpClient::constructor(string, __7_ code, __7_ code) "SmtpClient::constructor(string, *code, *code)"
     RL argument.
 
     @anchor smtpclient_protocols
-    \c SmtpClient::SmtpClient::constructor(string, __7_ code, __7_ code) "SmtpClient::constructor(string, *code, *code)"
+    @ref SmtpClient::SmtpClient::constructor(string, __7_ code, __7_ code) "SmtpClient::constructor(string, *code, *code)"
     takes a URL argument, the protocol (scheme) component is handled as in the following table.
 
     <b>SmtpcClient Protocol Handling</b>
@@ -424,7 +424,7 @@ SmtpClient smtp("smtptls://user@gmail.com:password@smtp.gmail.com", \log(), \log
         @endcode
 
         @param url the URL of the SMTP server (use \c "[hostname]" or \c "[address]" for ipv6 connections); if no
-        protocol (scheme) and no port is given for non-UNIX sockets, then \c SmtpPort is used as the default port
+        protocol (scheme) and no port is given for non-UNIX sockets, then @ref SmtpPort is used as the default port
         number.  This argument is parsed with parse_url(); see @ref smtpclient_protocols for a description of the
         handling of the protocol (scheme) component of the URL including default ports per protocol (scheme). If an
         unknown protocol (scheme) is given then a \c SMTP-UNKNOWN-PROTOCOL exception is raised
@@ -581,7 +581,7 @@ SmtpClient smtp("smtptls://user@gmail.com:password@smtp.gmail.com", \log(), \log
         return nosend;
     }
 
-    #! Connect to the server with the connection parameters set in the \c constructor()
+    #! Connect to the server with the connection parameters set in the @ref constructor()
     /** @note
         - For possible exceptions, see %Qore's @ref Qore::Socket::connect() "Socket::connect()" method
         - This method is subject to thread serialization
@@ -1380,7 +1380,7 @@ public class SmtpConnection inherits ConnectionProvider::AbstractConnectionWithI
         @param attributes various attributes. See below
         @param options connection options
 
-        See \c AbstractConnection::constructor() for \c attributes and \c options reference.
+        See @ref ConnectionProvider::AbstractConnection::constructor() for \c attributes and \c options reference.
 
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option
     */
@@ -1440,7 +1440,7 @@ public class SmtpConnection inherits ConnectionProvider::AbstractConnectionWithI
     #! returns @ref True, as the connection returns a data provider with the \c getDataProvider() method
     /** @return @ref True, as the connection returns a data provider with the \c getDataProvider() method
 
-        @see \c getDataProvider()
+        @see @ref getDataProvider()
     */
     bool hasDataProvider() {
         return True;
@@ -1925,7 +1925,7 @@ public class SmtpClientDataProviderFactory inherits AbstractDataProviderFactory 
     }
 
     #! Returns static factory information without \a provider_info
-    /** @return static factory information without \a provider_info which is provided by \c getProviderInfo()
+    /** @return static factory information without \a provider_info which is provided by @ref getProviderInfo()
     */
     private hash<DataProviderFactoryInfo> getInfoImpl() {
         return FactoryInfo;

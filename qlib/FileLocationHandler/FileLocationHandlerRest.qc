@@ -30,7 +30,7 @@ public namespace FileLocationHandler {
 class FileLocationHandlerRest inherits AbstractFileLocationHandler {
     public {
         #! Valid REST location options
-        /** @see \c RestClient::RestClient::constructor() "RestClient::constructor()" for supported options
+        /** @see @ref RestClient::RestClient::constructor() "RestClient::constructor()" for supported options
         */
         const RestClientLocationOpts = {
             "connect_timeout": <FileHandlerOptionInfo>{

@@ -26,7 +26,7 @@
 /** All public declarations in the %ConnectionProvider module are defined in this namespace
 */
 public namespace ConnectionProvider {
-#! Interface class inherited by connection classes that declare the \c AbstractConnection::CF_UPDATE_OPTIONS feature
+#! Interface class inherited by connection classes that declare the @ref AbstractConnection::CF_UPDATE_OPTIONS feature
 public class UpdateOptionsInterface inherits Qore::Serializable {
     private {
         #! Closure or call reference to be called when connection options should be automatically updated

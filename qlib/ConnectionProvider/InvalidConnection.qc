@@ -51,7 +51,7 @@ public class InvalidConnection inherits AbstractConnection {
         @param options connection options
         @param logger optional logger interface for the connection
 
-        See \c AbstractConnection::constructor() for \c attributes and \c options reference.
+        See @ref ConnectionProvider::AbstractConnection::constructor() for \c attributes and \c options reference.
 
         @par Additional Attributes
 

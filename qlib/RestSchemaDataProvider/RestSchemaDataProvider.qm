@@ -56,12 +56,12 @@ module RestSchemaDataProvider {
 
     @section restschemadataproviderintro Introduction to the RestSchemaDataProvider Module
 
-    The %RestSchemaDataProvider module provides a \c dataproviderintro "data provider" API for REST schemas
+    The %RestSchemaDataProvider module provides a @ref dataproviderintro "data provider" API for REST schemas
     including both Swagger 2.0 and OpenAPI 3.0 schemas.
 
     The @ref RestSchemaDataProvider::RestSchemaDataProvider "RestSchemaDataProvider" class allows for introspecting
     REST schemas, while the @ref RestSchemaDataProvider::RestSchemaRequestDataProvider "RestSchemaRequestDataProvider"
-    class supports the \c dataproviderintro "data provider" request-reply API for communication with REST servers.
+    class supports the @ref dataproviderintro "data provider" request-reply API for communication with REST servers.
 
     REST schema paths can be introspected with the following format:
     - REST operation path: <tt><i>uri_path</i>/<i>HTTP_method</i></tt>

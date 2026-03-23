@@ -81,7 +81,7 @@ module PgsqlSqlUtilBase {
     |@ref SqlUtil::VARCHAR|\c varchar
 
     To use other types, use the \c "native_type"
-    \c SqlUtil::AbstractTable::ColumnDescOptions "column description option" with the native PostgreSQL type name
+    @ref SqlUtil::AbstractTable::ColumnDescOptions "column description option" with the native PostgreSQL type name
     instead (under the \c "driver" and \c "pgsql" keys for schemas supporting multiple databases).
 
     @subsection pgsql_other_objects Additional Object Types Supported
@@ -122,7 +122,7 @@ hash<auto> schema = {
     user-supplied arguments to try and use the verbose type names as retrieved by
     <a href="http://www.postgresql.org/docs/9.2/static/functions-info.html">pg_catalog.pg_get_function_identity_arguments()</a>,
     which always returns verbose type names (ie \c "character varying" instead of \c "varchar").\n\n
-    Substitutions are made according to the inverse value of \c PgsqlSqlUtilBase::PgsqlTable::PgsqlNameMap.\n\n
+    Substitutions are made according to the inverse value of @ref PgsqlSqlUtilBase::PgsqlTable::PgsqlNameMap.\n\n
     This is done so that a user-supplied function name like \c "update_queue(qkey varchar, qdata text)" will match the
     value returned by
     <a href="http://www.postgresql.org/docs/9.2/static/functions-info.html">pg_catalog.pg_get_function_identity_arguments()</a>,
@@ -239,7 +239,7 @@ $function$
     @subsection pgsqlsqlutilbasev112 PgsqlSqlUtilBase v1.1.2
     - fixed a bug in setting a \c comment for a table column
       (<a href="https://github.com/qoretechnologies/qore/issues/1886">issue 1886</a>)
-    - implemented \c cop_trunc_date() operator
+    - implemented @ref SqlUtil::cop_trunc_date() operator
       (<a href="https://github.com/qoretechnologies/qore/issues/2032">issue 2032</a>)
 
     @subsection pgsqlsqlutilbasev111 PgsqlSqlUtilBase v1.1.1

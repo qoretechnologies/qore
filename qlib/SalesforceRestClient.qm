@@ -208,7 +208,7 @@ public const BulkJobUpsert = "upsert";
 public const BulkJobDelete = "delete";
 #/@}
 
-#! a hash of Salesforce.com bulk job operations; keys are \c bulkjob_operations
+#! a hash of Salesforce.com bulk job operations; keys are @ref bulkjob_operations
 /** valid operations are:
     - @ref BulkJobQuery (\c "query")
     - @ref BulkJobInsert (\c "insert")
@@ -246,7 +246,7 @@ public const BulkJobZipJson = "ZIP_JSON";
 public const BulkJobZipXml = "ZIP_XML";
 #/@}
 
-#! a hash of Salesforce.com bulk job content types; keys are \c bulkjob_contenttypes; values are Mime \c Content-Type strings
+#! a hash of Salesforce.com bulk job content types; keys are @ref bulkjob_contenttypes; values are Mime \c Content-Type strings
 /** valid content types are:
     - \c BulkJobCsv (\c "CSV")
     - \c BulkJobJson (\c "JSON")
@@ -376,7 +376,7 @@ public class SalesforceRestClientBase {
     This class also automatically adds support for the \c "PATCH" HTTP method used by Salesforce.com for updates to existing objects,
     as well as the @ref SalesforceRestClient::SalesforceRestClient::patch() "SalesforceRestClient::patch()" method
 
-    The \c SalesforceRestClient::SalesforceRestClient::doRequest() "SalesforceRestClient::patchdoRequest()" method is overridden in
+    The @ref SalesforceRestClient::SalesforceRestClient::doRequest() "SalesforceRestClient::patchdoRequest()" method is overridden in
     this class to provide transparent authentication and authorization to Salesforce.com.  With every REST request, if no token has
     been acquired, first a login token will be acquired, the internal URL set to the target URL provided by the token call, and then
     the requested REST call will be made.
@@ -399,11 +399,11 @@ If-Modified-Since: Thu, 24 Nov 2016 23:00:00 GMT
     @endverbatim
 
     The following methods support communication with the Salesforce.com Bulk REST API:
-    - \c doBulkRequest()
+    - @ref doBulkRequest()
     - @ref bulkGet()
     - @ref bulkPost()
     - @ref bulkJobCreate()
-    - \c bulkJobAddBatch()
+    - @ref bulkJobAddBatch()
     - @ref bulkJobClose()
 */
 public class SalesforceRestClient inherits RestClient::RestClient, SalesforceRestClientBase {
@@ -452,12 +452,12 @@ SalesforceRestClient rest({"url": "http://localhost:8001/rest"});
         - \c oauth2_client_secret: (required) the Salesforce.com "consumer secret" for the Connected App
         - \c connect_timeout: The timeout value in milliseconds for establishing a new socket connection (also can be
           a relative date-time value for clarity, ex: \c 20s)
-        - \c content_encoding: for possible values, see \c EncodingSupport; this sets the send encoding (if the
+        - \c content_encoding: for possible values, see @ref EncodingSupport; this sets the send encoding (if the
           \c "send_encoding" option is not set) and the requested response encoding (note that the
           @ref RestClient::RestClient "RestClient" class will only compress outgoing message bodies over
           \c CompressionThreshold bytes in size); additionally please
           note that Salesforce.com does not support \c "bzip2" compression
-        - \c data: a \c DataSerializationOptions "data serialization option"; if not present defaults to \c "json"
+        - \c data: a @ref DataSerializationOptions "data serialization option"; if not present defaults to \c "json"
         - \c default_path: The default path to use for new connections if a path is not otherwise specified in the
           connection URL
         - \c default_port: The default port number to connect to if none is given in the URL
@@ -473,7 +473,7 @@ SalesforceRestClient rest({"url": "http://localhost:8001/rest"});
         - \c proxy: The proxy URL for connecting through a proxy
         - \c redirect_passthru: if @ref True "True" then redirect responses will be passed to the caller instead of
             processed
-        - \c send_encoding: a \c EncodingSupport "send data encoding option" or the value \c "auto" which means to
+        - \c send_encoding: a @ref EncodingSupport "send data encoding option" or the value \c "auto" which means to
           use automatic encoding; if not present defaults to \c "gzip" content encoding on sent message bodies (note
           that the @ref RestClient::RestClient "RestClient" class will only compress outgoing message bodies over
           \c CompressionThreshold bytes in size); additionally please
@@ -533,7 +533,7 @@ hash<auto> ans = rest.patch("/orders/1", {"action": "cancel"});
         @endcode
 
         @param path the URI path to add (will be appended to any root path given in the constructor)
-        @param body an optional message body to be included in the request; if a value for this parameter is passed to the method, then the body will be serialized according to the serialization rules set in \c RestClient::RestClient::constructor() "RestClient::constructor()"
+        @param body an optional message body to be included in the request; if a value for this parameter is passed to the method, then the body will be serialized according to the serialization rules set in @ref RestClient::RestClient::constructor() "RestClient::constructor()"
         @param info an optional reference to a hash that will be used as an output variable giving a hash of request headers and other information about the HTTP request; if present the hash will contain the following keys:
         - \c headers: a hash of outgoing HTTP request headers
         - \c request-uri: the request URI string sent (ex: \c "PATCH /services/async/38.0/job HTTP/1.1")
@@ -544,9 +544,9 @@ hash<auto> ans = rest.patch("/orders/1", {"action": "cancel"});
         - \c chunked: set to @ref True "True" if the response was received with chunked transfer encoding
         - \c response-code: the HTTP response code
         - \c response-body: the raw message body in the response (after any content decoding)
-        - \c response-serialization: the type of message serialization in the response; see \c DataSerializationOptions for possible values
+        - \c response-serialization: the type of message serialization in the response; see @ref DataSerializationOptions for possible values
         - \c request-body: the raw message body in the request (before any content encoding)
-        - \c request-serialization: the type of message serialization in the request; see \c DataSerializationOptions for possible values
+        - \c request-serialization: the type of message serialization in the request; see @ref DataSerializationOptions for possible values
         @param hdr any headers to be sent with the request; headers here will override default headers for the object as well
 
         @return A hash of headers received from the HTTP server with all key names converted to lower-case; if any message body is included in the response, it will be deserialized to %Qore data and assigned to the value of the \c "body" key
@@ -579,7 +579,7 @@ hash<auto> ans = rest.doRequest("GET", "sobjects");
 
         @param m the HTTP method to be used; case is ignored (if not a valid method an \c HTTP-CLIENT-METHOD-ERROR exception is raised)
         @param path the URI path to add (will be appended to any root path given in the constructor)
-        @param body an optional message body to be included in the request; if a value for this parameter is passed to the method, then the body will be serialized according to the serialization rules set in \c RestClient::RestClient::constructor() "RestClient::constructor()"
+        @param body an optional message body to be included in the request; if a value for this parameter is passed to the method, then the body will be serialized according to the serialization rules set in @ref RestClient::RestClient::constructor() "RestClient::constructor()"
         @param info an optional reference to a hash that will be used as an output variable giving a hash of request headers and other information about the HTTP request; if present the hash will contain the following keys:
         - \c headers: a hash of outgoing HTTP request headers
         - \c request-uri: the request URI string sent (ex: \c "POST /services/async/38.0/job HTTP/1.1")
@@ -590,9 +590,9 @@ hash<auto> ans = rest.doRequest("GET", "sobjects");
         - \c chunked: set to @ref True "True" if the response was received with chunked transfer encoding
         - \c response-code: the HTTP response code
         - \c response-body: the raw message body in the response (after any content decoding)
-        - \c response-serialization: the type of message serialization in the response; see \c DataSerializationOptions for possible values
+        - \c response-serialization: the type of message serialization in the response; see @ref DataSerializationOptions for possible values
         - \c request-body: the raw message body in the request (before any content encoding)
-        - \c request-serialization: the type of message serialization in the request; see \c DataSerializationOptions for possible values
+        - \c request-serialization: the type of message serialization in the request; see @ref DataSerializationOptions for possible values
         @param decode_errors decode the message body with HTTP error responses and throw an exception based on the message body
         @param hdr any headers to be sent with the request; headers here will override default headers for the object as well
 
@@ -632,7 +632,7 @@ hash<auto> ans = rest.doBulkRequest("POST", "job", job);
 
         @param m the HTTP method to be used; case is ignored (if not a valid method an \c HTTP-CLIENT-METHOD-ERROR exception is raised)
         @param path the URI path to add (will be appended to any root path given in the constructor)
-        @param body an optional message body to be included in the request; if a value for this parameter is passed to the method, then the body will be serialized according to the serialization rules set in \c RestClient::RestClient::constructor() "RestClient::constructor()"
+        @param body an optional message body to be included in the request; if a value for this parameter is passed to the method, then the body will be serialized according to the serialization rules set in @ref RestClient::RestClient::constructor() "RestClient::constructor()"
         @param info an optional reference to a hash that will be used as an output variable giving a hash of request headers and other information about the HTTP request; if present the hash will contain the following keys:
         - \c headers: a hash of outgoing HTTP request headers
         - \c request-uri: the request URI string sent (ex: \c "POST /services/async/38.0/job HTTP/1.1")
@@ -643,9 +643,9 @@ hash<auto> ans = rest.doBulkRequest("POST", "job", job);
         - \c chunked: set to @ref True "True" if the response was received with chunked transfer encoding
         - \c response-code: the HTTP response code
         - \c response-body: the raw message body in the response (after any content decoding)
-        - \c response-serialization: the type of message serialization in the response; see \c DataSerializationOptions for possible values
+        - \c response-serialization: the type of message serialization in the response; see @ref DataSerializationOptions for possible values
         - \c request-body: the raw message body in the request (before any content encoding)
-        - \c request-serialization: the type of message serialization in the request; see \c DataSerializationOptions for possible values
+        - \c request-serialization: the type of message serialization in the request; see @ref DataSerializationOptions for possible values
         @param decode_errors decode the message body with HTTP error responses and throw an exception based on the message body
         @param hdr any headers to be sent with the request; headers here will override default headers for the object as well
 
@@ -716,7 +716,7 @@ hash<auto> ans = rest.bulkGet("/orders/1?info=verbose");
         @endcode
 
         @param path the URI path to add (will be appended to any root path given in the constructor)
-        @param body an optional message body to be included in the request; if a value for this parameter is passed to the method, then the body will be serialized according to the serialization rules set in \c RestClient::RestClient::constructor() "RestClient::constructor()"
+        @param body an optional message body to be included in the request; if a value for this parameter is passed to the method, then the body will be serialized according to the serialization rules set in @ref RestClient::RestClient::constructor() "RestClient::constructor()"
         @param info an optional reference to a hash that will be used as an output variable giving a hash of request headers and other information about the HTTP request; if present the hash will contain the following keys:
         - \c headers: a hash of outgoing HTTP request headers
         - \c request-uri: the request URI string sent (ex: \c "GET /services/async/38.0/job HTTP/1.1")
@@ -727,9 +727,9 @@ hash<auto> ans = rest.bulkGet("/orders/1?info=verbose");
         - \c chunked: set to @ref True "True" if the response was received with chunked transfer encoding
         - \c response-code: the HTTP response code
         - \c response-body: the raw message body in the response (after any content decoding)
-        - \c response-serialization: the type of message serialization in the response; see \c DataSerializationOptions for possible values
+        - \c response-serialization: the type of message serialization in the response; see @ref DataSerializationOptions for possible values
         - \c request-body: the raw message body in the request (before any content encoding)
-        - \c request-serialization: the type of message serialization in the request; see \c DataSerializationOptions for possible values
+        - \c request-serialization: the type of message serialization in the request; see @ref DataSerializationOptions for possible values
         @param hdr any headers to be sent with the request; headers here will override default headers for the object as well
 
         @return A hash of headers received from the HTTP server with all key names converted to lower-case; if any message body is included in the response, it will be deserialized to %Qore data and assigned to the value of the \c "body" key
@@ -763,7 +763,7 @@ hash<auto> ans = rest.bulkPost("/orders", ("product": "xyz123", "options": 500))
         @endcode
 
         @param path the URI path to add (will be appended to any root path given in the constructor)
-        @param body an optional message body to be included in the request; if a value for this parameter is passed to the method, then the body will be serialized according to the serialization rules set in \c RestClient::RestClient::constructor() "RestClient::constructor()"
+        @param body an optional message body to be included in the request; if a value for this parameter is passed to the method, then the body will be serialized according to the serialization rules set in @ref RestClient::RestClient::constructor() "RestClient::constructor()"
         @param info an optional reference to a hash that will be used as an output variable giving a hash of request headers and other information about the HTTP request; if present the hash will contain the following keys:
         - \c headers: a hash of outgoing HTTP request headers
         - \c request-uri: the request URI string sent (ex: \c "POST /services/async/38.0/job HTTP/1.1")
@@ -774,9 +774,9 @@ hash<auto> ans = rest.bulkPost("/orders", ("product": "xyz123", "options": 500))
         - \c chunked: set to @ref True "True" if the response was received with chunked transfer encoding
         - \c response-code: the HTTP response code
         - \c response-body: the raw message body in the response (after any content decoding)
-        - \c response-serialization: the type of message serialization in the response; see \c DataSerializationOptions for possible values
+        - \c response-serialization: the type of message serialization in the response; see @ref DataSerializationOptions for possible values
         - \c request-body: the raw message body in the request (before any content encoding)
-        - \c request-serialization: the type of message serialization in the request; see \c DataSerializationOptions for possible values
+        - \c request-serialization: the type of message serialization in the request; see @ref DataSerializationOptions for possible values
         @param hdr any headers to be sent with the request; headers here will override default headers for the object as well
 
         @return A hash of headers received from the HTTP server with all key names converted to lower-case; if any message body is included in the response, it will be deserialized to %Qore data and assigned to the value of the \c "body" key
@@ -810,9 +810,9 @@ hash<auto> h = sfrest.bulkJobCreate(BulkJobInsert, "Account", BulkJobJson);
 printf("job ID created: %y\n", h.jobInfo.id);
         @endcode
 
-        @param operation the operation to create; see \c bulkjob_operations for valid values
+        @param operation the operation to create; see @ref bulkjob_operations for valid values
         @param object the API object to operate on
-        @param job_content_type the content type of the job; see \c bulkjob_contenttypes for valid values
+        @param job_content_type the content type of the job; see @ref bulkjob_contenttypes for valid values
         @param info an optional reference to a hash that will be used as an output variable giving a hash of request headers and other information about the HTTP request; if present the hash will contain the following keys:
         - \c headers: a hash of outgoing HTTP request headers
         - \c request-uri: the request URI string sent (ex: \c "POST /services/async/38.0/job HTTP/1.1")
@@ -823,9 +823,9 @@ printf("job ID created: %y\n", h.jobInfo.id);
         - \c chunked: set to @ref True "True" if the response was received with chunked transfer encoding
         - \c response-code: the HTTP response code
         - \c response-body: the raw message body in the response (after any content decoding)
-        - \c response-serialization: the type of message serialization in the response; see \c DataSerializationOptions for possible values
+        - \c response-serialization: the type of message serialization in the response; see @ref DataSerializationOptions for possible values
         - \c request-body: the raw message body in the request (before any content encoding)
-        - \c request-serialization: the type of message serialization in the request; see \c DataSerializationOptions for possible values
+        - \c request-serialization: the type of message serialization in the request; see @ref DataSerializationOptions for possible values
         @param hdr any headers to be sent with the request; headers here will override default headers for the object as well
 
         @return the deserialized message body returned by Salesforce.com
@@ -868,7 +868,7 @@ printf("batch ID: %y batch state: %y\n", h.id, h.state);
 
         @param jobid the job ID to add the batch to
         @param batch_data the data for the job; this data is not serialized but rather sent as-is using the MIME \c Content-Type associated with the job content type value
-        @param job_content_type the content type of the job; see \c bulkjob_contenttypes for valid values
+        @param job_content_type the content type of the job; see @ref bulkjob_contenttypes for valid values
         @param info an optional reference to a hash that will be used as an output variable giving a hash of request headers and other information about the HTTP request; if present the hash will contain the following keys:
         - \c headers: a hash of outgoing HTTP request headers
         - \c request-uri: the request URI string sent (ex: \c "POST /services/async/38.0/job HTTP/1.1")
@@ -879,7 +879,7 @@ printf("batch ID: %y batch state: %y\n", h.id, h.state);
         - \c chunked: set to @ref True "True" if the response was received with chunked transfer encoding
         - \c response-code: the HTTP response code
         - \c response-body: the raw message body in the response (after any content decoding)
-        - \c response-serialization: the type of message serialization in the response; see \c DataSerializationOptions for possible values
+        - \c response-serialization: the type of message serialization in the response; see @ref DataSerializationOptions for possible values
         - \c request-body: the raw message body in the request (before any content encoding)
         @param hdr any headers to be sent with the request; headers here will override default headers for the object as well
 
@@ -955,9 +955,9 @@ sfrest.bulkJobClose(jh.id);
         - \c chunked: set to @ref True "True" if the response was received with chunked transfer encoding
         - \c response-code: the HTTP response code
         - \c response-body: the raw message body in the response (after any content decoding)
-        - \c response-serialization: the type of message serialization in the response; see \c DataSerializationOptions for possible values
+        - \c response-serialization: the type of message serialization in the response; see @ref DataSerializationOptions for possible values
         - \c request-body: the raw message body in the request (before any content encoding)
-        - \c request-serialization: the type of message serialization in the request; see \c DataSerializationOptions for possible values
+        - \c request-serialization: the type of message serialization in the request; see @ref DataSerializationOptions for possible values
         @param hdr any headers to be sent with the request; headers here will override default headers for the object as well
 
         @return the deserialized message body returned by Salesforce.com
@@ -986,9 +986,9 @@ sfrest.bulkJobClose(jh.id);
         - \c chunked: set to @ref True "True" if the response was received with chunked transfer encoding
         - \c response-code: the HTTP response code
         - \c response-body: the raw message body in the response (after any content decoding)
-        - \c response-serialization: the type of message serialization in the response; see \c DataSerializationOptions for possible values
+        - \c response-serialization: the type of message serialization in the response; see @ref DataSerializationOptions for possible values
         - \c request-body: the raw message body in the request (before any content encoding)
-        - \c request-serialization: the type of message serialization in the request; see \c DataSerializationOptions for possible values
+        - \c request-serialization: the type of message serialization in the request; see @ref DataSerializationOptions for possible values
 
         @note this call is made implicitly before each REST call and should not need to be called manually
     */
@@ -1015,9 +1015,9 @@ sfrest.logout();
         - \c chunked: set to @ref True "True" if the response was received with chunked transfer encoding
         - \c response-code: the HTTP response code
         - \c response-body: the raw message body in the response (after any content decoding)
-        - \c response-serialization: the type of message serialization in the response; see \c DataSerializationOptions for possible values
+        - \c response-serialization: the type of message serialization in the response; see @ref DataSerializationOptions for possible values
         - \c request-body: the raw message body in the request (before any content encoding)
-        - \c request-serialization: the type of message serialization in the request; see \c DataSerializationOptions for possible values (for this method, always \c "url")
+        - \c request-serialization: the type of message serialization in the request; see @ref DataSerializationOptions for possible values (for this method, always \c "url")
     */
     logout(*reference<hash<auto>> info) {
         AutoLock al(m);
@@ -1215,7 +1215,7 @@ sfrest.logout();
       to Salesforce.com)
     - \c oauth2_logout_url: default value \c "https://login.salesforce.com/services/oauth2/revoke"
 
-    @see \c SalesforceRestClient::SalesforceRestClient::constructor() "SalesforceRestClient::constructor()" for more
+    @see @ref SalesforceRestClient::SalesforceRestClient::constructor() "SalesforceRestClient::constructor()" for more
     information on the above options
 
     @since %SalesforceRestConnection 1.1
@@ -1346,7 +1346,7 @@ public class SalesforceRestConnection inherits RestClient::RestConnection {
         @param attributes various attributes. See below
         @param options connection options
 
-        See \c AbstractConnection::constructor() for \c attributes and \c options reference.
+        See @ref ConnectionProvider::AbstractConnection::constructor() for \c attributes and \c options reference.
     */
     constructor(string name, string description, string url, hash<auto> attributes = {}, hash<auto> options = {})
             : RestConnection(name, description, url, attributes, options) {
@@ -1381,7 +1381,7 @@ public class SalesforceRestConnection inherits RestClient::RestConnection {
     #! returns @ref True as this connection returns a data provider with the \c getDataProvider() method
     /** @return @ref True as this connection returns a data provider with the \c getDataProvider() method
 
-        @see \c getDataProvider()
+        @see @ref getDataProvider()
     */
     bool hasDataProvider() {
         return True;

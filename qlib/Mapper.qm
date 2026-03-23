@@ -175,7 +175,7 @@ list: (2 elements)
       also the data itself.  The use of this option enables the use of the
       @ref Mapper::Mapper::getOutputIterator() "Mapper::getOutputIterator()" API.  This option is mutually exclusive
       with the \a input option.  If an \c "output_provider" is also provided, the
-      \c Mapper::Mapper::runAutonomous() "Mapper::runAutonomous()" method can be used to map from input to output
+      @ref Mapper::Mapper::runAutonomous() "Mapper::runAutonomous()" method can be used to map from input to output
       in a single call
     - \c "input_provider_search": the search criteria for the input provider; see the \a where_cond option of
       @ref DataProvider::AbstractDataProvider::searchRecords() "AbstractDataProvider::searchRecords()" for more
@@ -221,7 +221,7 @@ list: (2 elements)
         request is made for each output record.
       .
       This option is mutually exclusive with the \a output option.  If an \c "input_provider" is also provided, the
-      \c Mapper::Mapper::runAutonomous() "Mapper::runAutonomous()" method can be used to map from input to output
+      @ref Mapper::Mapper::runAutonomous() "Mapper::runAutonomous()" method can be used to map from input to output
       in a single call
     - \c "output_provider_bulk": if this option is used with a record-based output provider, then bulk operations are
       used with the output provider, and the @ref Mapper::Mapper::flushOutput() "Mapper::flushOutput()" method must be
@@ -302,7 +302,7 @@ m.mapData(input1);           # output record hash date_begin = start_date = time
     @ref Mapper::Mapper "Mapper".
 
     Note that the @ref Mapper::Mapper::setRuntime() "Mapper::setRuntime()" and
-    \c Mapper::Mapper::replaceRuntime() "Mapper::replaceRuntime()" methods are deprecated - please use
+    @ref Mapper::Mapper::replaceRuntime() "Mapper::replaceRuntime()" methods are deprecated - please use
     @ref Mapper::Mapper "Mapper" construction options to set runtime values instead. The methods are deprecated since
     runtime options duplicate existing functionality and are confusing and error-prone to use.
 
@@ -318,7 +318,7 @@ m.mapData(input1);           # output record hash date_begin = start_date = time
       (<a href="https://github.com/qoretechnologies/qore/issues/4845">issue 4845</a>)
 
     @subsection mapperv1_6_1 Mapper v1.6.1
-    - fixed \c Mapper::Mapper::mapAuto() "Mapper::mapAuto()" to accept an iterator argument
+    - fixed @ref Mapper::Mapper::mapAuto() "Mapper::mapAuto()" to accept an iterator argument
       (<a href="https://github.com/qoretechnologies/qore/issues/4629">issue 4629</a>)
 
     @subsection mapperv1_6 Mapper v1.6
@@ -355,7 +355,7 @@ m.mapData(input1);           # output record hash date_begin = start_date = time
       (<a href="https://github.com/qoretechnologies/qore/issues/3931">issue 3931</a>)
 
     @subsection mapperv1_5_2 Mapper v1.5.2
-    - added the \c Mapper::Mapper::mapAutoInput() "Mapper::mapAutoInput()" method
+    - added the @ref Mapper::Mapper::mapAutoInput() "Mapper::mapAutoInput()" method
     - added the following \c output_create_ignore_duplicates option
     - fixed a bug where mapper output data was not logged in case of an error in an output provider
       (<a href="https://github.com/qoretechnologies/qore/issues/3909">issue 3909</a>)
@@ -371,7 +371,7 @@ m.mapData(input1);           # output record hash date_begin = start_date = time
       (<a href="https://github.com/qoretechnologies/qore/issues/3837">issue 3837</a>)
     - added support for the \c use_input_record output field mapping key
       (<a href="https://github.com/qoretechnologies/qore/issues/3823">issue 3823</a>)
-    - added the \c Mapper::Mapper::setNullableOutput() "Mapper::setNullableOutput()" method and the
+    - added the @ref Mapper::Mapper::setNullableOutput() "Mapper::setNullableOutput()" method and the
       \c output_nullable option
       (<a href="https://github.com/qoretechnologies/qore/issues/3788">issue 3788</a>)
 
@@ -416,7 +416,7 @@ m.mapData(input1);           # output record hash date_begin = start_date = time
     - added runtime option handling (@ref mapper_runtime_handling):
       - \c "runtime" mapper option
       - @ref Mapper::Mapper::getRuntime()
-      - \c Mapper::Mapper::replaceRuntime()
+      - @ref Mapper::Mapper::replaceRuntime()
       - @ref Mapper::Mapper::setRuntime()
     - implemented \c "index" field tag for current row index
     - improved the @ref Mapper::Mapper::mapAll() method by adding support for hashes of lists to better support input from bulk DML (@ref Qore::SQL::SQLStatement::fetchColumns() "SQLStatement::fetchColumns()")
@@ -1809,7 +1809,7 @@ Mapper mapv(DataMap);
 
         @since %Mapper 1.1
 
-        @deprecated use \c constructor() "Mapper construction options" to set
+        @deprecated use @ref constructor() "Mapper construction options" to set
                     the runtime options.
 
         @throw RUNTIME-OPTION-CHANGED the option has changed during while already
@@ -1837,7 +1837,7 @@ Mapper mapv(DataMap);
 
         @since %Mapper 1.1
 
-        @deprecated use \c constructor() "Mapper construction options" to set
+        @deprecated use @ref constructor() "Mapper construction options" to set
                     the runtime options.
 
         @throw RUNTIME-OPTION-CHANGED the option has changed during while already
@@ -1865,7 +1865,7 @@ Mapper mapv(DataMap);
 
         @since %Mapper 1.1
 
-        @deprecated use \c constructor() "Mapper construction options" to set
+        @deprecated use @ref constructor() "Mapper construction options" to set
                     the runtime options.
 
         @throw RUNTIME-OPTION-CHANGED the option has changed during while already

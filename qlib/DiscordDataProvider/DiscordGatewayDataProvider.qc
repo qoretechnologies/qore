@@ -193,7 +193,7 @@ public class DiscordGatewayDataProvider inherits DataProvider::AbstractDataProvi
     }
 
     #! Returns connection info
-    /** @return the connection hash; see \c WebSocketClient::getConnectionInfo() for information about the \c info
+    /** @return the connection hash; see @ref WebSocketClient::WebSocketClient::getConnectionInfo() for information about the \c info
         key
 
         @since DataProvider 3.0

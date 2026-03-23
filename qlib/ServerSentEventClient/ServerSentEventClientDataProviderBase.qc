@@ -313,7 +313,7 @@ public class ServerSentEventClientDataProviderBase inherits DataProvider::Abstra
     }
 
     #! Returns connection info
-    /** @return the connection hash; see \c ServerSentEventClient::getConnectionInfo() for information about the \c info
+    /** @return the connection hash; see @ref ServerSentEventClient::getConnectionInfo() for information about the \c info
         key
 
         @since DataProvider 3.0

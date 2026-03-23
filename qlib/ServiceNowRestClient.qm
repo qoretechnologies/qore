@@ -194,11 +194,11 @@ ServiceNowRestClient rest({
         - \c api: the API version for ServiceNow
         - \c oauth2_client_id: (required) the OAuth2 client ID
         - \c oauth2_client_secret: (required) the OAuth2 client secret
-        - \c content_encoding: for possible values, see \c EncodingSupport; this sets the send encoding (if the
+        - \c content_encoding: for possible values, see @ref EncodingSupport; this sets the send encoding (if the
             \c "send_encoding" option is not set) and the requested response encoding (note that the
             @ref RestClient::RestClient "RestClient" class will only compress outgoing message bodies over
             \c CompressionThreshold bytes in size)
-        - \c data: a \c DataSerializationOptions "data serialization option"; if not present defaults to \c "json"
+        - \c data: a @ref DataSerializationOptions "data serialization option"; if not present defaults to \c "json"
         - \c default_path: The default path to use for new connections if a path is not otherwise specified in the
             connection URL
         - \c default_port: The default port number to connect to if none is given in the URL
@@ -214,7 +214,7 @@ ServiceNowRestClient rest({
         - \c proxy: The proxy URL for connecting through a proxy
         - \c redirect_passthru: if @ref True "True" then redirect responses will be passed to the caller instead of
             processed
-        - \c send_encoding: a \c EncodingSupport "send data encoding option" or the value \c "auto" which means
+        - \c send_encoding: a @ref EncodingSupport "send data encoding option" or the value \c "auto" which means
             to use automatic encoding; if not present defaults to \c "gzip" content encoding on sent message bodies
             (note that the @ref RestClient::RestClient "RestClient" class will only compress outgoing message bodies
             over \c CompressionThreshold bytes in size)
@@ -318,7 +318,7 @@ ServiceNowRestClient rest({
     - \c "oauth2_client_id": (optional) the ServiceNow OAuth2 client ID (mapped to the \c oauth2_client_id option)
     - \c "oauth2_client_secret": (optional) the ServiceNow OAuth2 client secret (mapped to the \c oauth2_client_secret option)
 
-    @see \c ServiceNowRestClient::ServiceNowRestClient::constructor() for more information on the above options
+    @see @ref ServiceNowRestClient::ServiceNowRestClient::constructor() for more information on the above options
 */
 public class ServiceNowRestConnection inherits RestClient::RestConnection {
     public {
@@ -444,7 +444,7 @@ public class ServiceNowRestConnection inherits RestClient::RestConnection {
         @param attributes various attributes. See below
         @param options connection options
 
-        See \c ConnectionProvider::AbstractConnection::constructor() for \c attributes and \c options reference.
+        See @ref ConnectionProvider::AbstractConnection::constructor() for \c attributes and \c options reference.
 
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option
     */
@@ -488,7 +488,7 @@ public class ServiceNowRestConnection inherits RestClient::RestConnection {
     #! returns @ref True as this connection returns a data provider with the \c getDataProvider() method
     /** @return @ref True as this connection returns a data provider with the \c getDataProvider() method
 
-        @see \c getDataProvider()
+        @see @ref getDataProvider()
     */
     bool hasDataProvider() {
         return True;

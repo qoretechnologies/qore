@@ -171,7 +171,7 @@ printf("HTTP/3 WebSocket server listening on port 8443\n");
       "WebSocketConnection::getActiveExtensions()" method
 
     @subsection websockethandler_v2_2 Version 2.2
-    - added optional AsyncAPI validation support via \c WebSocketHandler::WebSocketConnection::setAsyncApiValidator()
+    - added optional AsyncAPI validation support via @ref WebSocketHandler::WebSocketConnection::setAsyncApiValidator()
       "WebSocketConnection::setAsyncApiValidator()" for validating WebSocket messages against AsyncAPI schemas
       (<a href="https://github.com/qoretechnologies/qore/issues/5014">issue 5014</a>)
 
@@ -179,10 +179,10 @@ printf("HTTP/3 WebSocket server listening on port 8443\n");
     - implemented support for a variable send timeout
 
     @subsection websockethandler_v2_0 Version 2.0
-    - implemented support for \c Logger::Logger "Logger" objects for logging
+    - implemented support for @ref Logger::Logger "Logger" objects for logging
 
     @subsection websockethandler_v1_5_4 Version 1.5.4
-    - fixed a bug in \c WebSocketHandler::WebSocketHandler::sendOne() "WebSocketHandler::sendOne()"
+    - fixed a bug in @ref WebSocketHandler::WebSocketHandler::sendOne() "WebSocketHandler::sendOne()"
       (<a href="https://github.com/qoretechnologies/qore/issues/4634">issue 4634</a>)
 
     @subsection websockethandler_v1_5_3 Version 1.5.3
@@ -207,7 +207,7 @@ printf("HTTP/3 WebSocket server listening on port 8443\n");
     @subsection websockethandler_v1_4_3 Version 1.4.3
     - added missing exception handling to connection registration code
       (<a href="https://github.com/qoretechnologies/qore/issues/3215">issue 3215</a>)
-    - added \c WebSocketHandler::WebSocketConnection::stop() and \c WebSocketHandler::WebSocketHandler::stopOne()
+    - added @ref WebSocketHandler::WebSocketConnection::stop() and @ref WebSocketHandler::WebSocketHandler::stopOne()
 
     @subsection websockethandler_v1_4_2 Version 1.4.2
     - added support for heartbeat messages
@@ -561,7 +561,7 @@ public class WebSocketConnection {
     #! This method is called when a message is received
     /** @param msg the raw message information
 
-        @return see \c WSClientRawCallbackReturnCodes for values and meanings
+        @return see @ref WSHandlerRawCallbackReturnCodes for values and meanings
 
         @note this base class always returns @ref WSC_Process
 
@@ -871,13 +871,13 @@ public class WebSocketConnection {
 
     @par Sending WebSocket Message to Clients
     To send a message to a websocket client, call one of the following methods:
-    - \c WebSocketHandler::WebSocketHandler::sendOne() "WebSocketHandler::sendOne()": send a message to single
+    - @ref WebSocketHandler::WebSocketHandler::sendOne() "WebSocketHandler::sendOne()": send a message to single
       connection given its connection ID
-    - \c WebSocketHandler::WebSocketHandler::sendAll() "WebSocketHandler::sendAll()": send a message to all
+    - @ref WebSocketHandler::WebSocketHandler::sendAll() "WebSocketHandler::sendAll()": send a message to all
       connected clients
 
     Websocket connections are identified by their HTTP connection ID as passed in
-    \c WebSocketHandler::WebSocketHandler::handleRequest() "WebSocketHandler::handleRequest()" in the \c "cx.id"
+    @ref WebSocketHandler::WebSocketHandler::handleRequest() "WebSocketHandler::handleRequest()" in the \c "cx.id"
     argument when the connection is first established.
 */
 public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Logger::LoggerWrapper {
@@ -990,7 +990,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
           (default: 20 seconds)
         - \c heartbeat_msg: a string giving the payload to send in heartbeat messages (default: \c "heartbeat"); may
           be an empty string meaning no message
-        - \c logger: a \c Logger::Logger "Logger" object to use for logging (default: no logging)
+        - \c logger: a @ref Logger::Logger "Logger" object to use for logging (default: no logging)
         - \c send_timeout: a relative date/time value giving the timeout to use for sending data on the socket
           (default: 30s); if an integer is sent here, it is assumed to represent a value in milliseconds
         - \c extensions: a list of extension names to support (e.g., \c ("permessage-deflate")) or a
@@ -1177,7 +1177,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
 
         @param cx call context hash; see @ref httpserverutil_request_context for details; note that \c id is the
         unique HTTP connection ID; this ID is also used to identify the websocket client connection in
-        \c WebSocketHandler::WebSocketHandler::sendOne() "WebSocketHandler::sendOne()"
+        @ref WebSocketHandler::WebSocketHandler::sendOne() "WebSocketHandler::sendOne()"
         @param hdr incoming header hash; all keys will be converted to lower-case, additionally the following keys
         will be present:
         - \c method: the HTTP method received (ie \c "GET", \c "POST", etc)
@@ -1187,7 +1187,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
 
         @return a hash representing the response to the client as follows; to accept a dedicated connection; make sure
         the \c "code" is 101 (ie \c "Switching Protocols") and the \c "close" key is not @ref False "False":
-        - \c "code": the HTTP return code (see \c HttpServer::HttpCodes) (101 \c "Switching Protocols" to accept the
+        - \c "code": the HTTP return code (see @ref HttpServer::HttpCodes) (101 \c "Switching Protocols" to accept the
           dedicated connection, in which case the start() method will be called)
         - \c "body": the message body to return in the response
         - \c "close": (optional) set this key to @ref True "True" if the connection should be unconditionally closed
@@ -1285,7 +1285,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         @param lid the unique HTTP listener ID
         @param cx call context hash; see @ref httpserverutil_request_context for details; note that \c id is the
         unique HTTP connection ID; this ID is also used to identify the websocket client connection in
-        \c WebSocketHandler::WebSocketHandler::sendOne() "WebSocketHandler::sendOne()"
+        @ref WebSocketHandler::WebSocketHandler::sendOne() "WebSocketHandler::sendOne()"
         @param hdr a hash of headers in the request
         @param sock the @ref Qore::Socket "Socket" object for the dedicated connection to the client
     */
@@ -1827,7 +1827,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
 
     #! sends a message to the given connection ID
     /** Websocket connections are identified by their HTTP connection ID as passed in
-        \c WebSocketHandler::WebSocketHandler::handleRequest() "WebSocketHandler::handleRequest()" in the \c "cx.id"
+        @ref WebSocketHandler::WebSocketHandler::handleRequest() "WebSocketHandler::handleRequest()" in the \c "cx.id"
         argument when the connection is first established.
 
         Messages are automatically encoded with @ref WebSocketUtil::ws_encode_message() before sending.

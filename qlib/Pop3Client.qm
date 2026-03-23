@@ -181,7 +181,7 @@ public const DefaultConnectTimeout = 30s;
     to the underlying socket and its internal configuration, so it is safe to access in a multithreaded context.
 
     Connection to and authentication with the POP3 server is made implicitly by calling a Pop3Client method that
-    requires a connection; it is not necessary to call \c Pop3Client::Pop3Client::connect() "Pop3Client::connect()"
+    requires a connection; it is not necessary to call @ref Pop3Client::Pop3Client::connect() "Pop3Client::connect()"
     explicitly.
 
     This class supports automatic recognition and use of APOP authentication
@@ -283,7 +283,7 @@ public class Pop3Client inherits Logger::LoggerWrapper, ConnectionProvider::Opti
         @param opts options for the object; supported options:
         - \c connect_timeout (int): the connect timeout in milliseconds
         - \c io_timeout (int): the I/O timeout in milliseconds
-        - \c logger (\c Logger::LoggerInterface "LoggerInterface"): a logger to use for logging
+        - \c logger (@ref Logger::LoggerInterface "LoggerInterface"): a logger to use for logging
         - \c password (string): the password for the connection
         - \c read_timeout (int): the read timeout in milliseconds
         - \c tls (bool): execute the \c STLS command after connecting with insecure connections
@@ -538,7 +538,7 @@ bool b = pop3.noquit();
         return noquit;
     }
 
-    #! Connect to the server with the connection parameters set in the \c constructor()
+    #! Connect to the server with the connection parameters set in the @ref constructor()
     /** @par Example:
         @code{.py}
 pop3.connect();
@@ -1922,7 +1922,7 @@ public class Pop3Connection inherits ConnectionProvider::AbstractConnectionWithI
         @param attributes various attributes. See below
         @param options connection options
 
-        See \c AbstractConnection::constructor() for \c attributes and \c options reference.
+        See @ref ConnectionProvider::AbstractConnection::constructor() for \c attributes and \c options reference.
 
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option
     */

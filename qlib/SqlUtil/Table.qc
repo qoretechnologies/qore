@@ -55,7 +55,7 @@ Table table(ds, "table");
 
         @param ds the AbstractDatasource object used to provide the DB connection
         @param name the name of the table
-        @param opts a hash of options for the table creation string; see \c SqlUtil::AbstractTable::TableOptions for common options; each driver can support additional driver-specific options
+        @param opts a hash of options for the table creation string; see @ref SqlUtil::AbstractTable::TableOptions for common options; each driver can support additional driver-specific options
 
         @throw TABLE-DRIVER-ERROR no database-specific module can be loaded
         @throw OPTION-ERROR invalid or unsupported option passed
@@ -72,7 +72,7 @@ Table table("pgsql:user/pass@db%host", "table");
 
         @param ds a datasource description string in the format that can be parsed by parse_datasource()
         @param name the name of the table
-        @param opts a hash of options for the table creation string; see \c SqlUtil::AbstractTable::TableOptions for common options; each driver can support additional driver-specific options
+        @param opts a hash of options for the table creation string; see @ref SqlUtil::AbstractTable::TableOptions for common options; each driver can support additional driver-specific options
 
         @throw TABLE-DRIVER-ERROR no database-specific module can be loaded
         @throw OPTION-ERROR invalid or unsupported option passed
@@ -97,7 +97,7 @@ Table table("pgsql:user/pass@db%host", "table");
         - \c port: (@ref softint_type "softint") The port number for the new connection
         - \c options: (@ref hash_or_nothing_type "*hash") Any options for the new connection
         @param name the name of the table
-        @param opts a hash of options for the table creation string; see \c SqlUtil::AbstractTable::TableOptions for common options; each driver can support additional driver-specific options
+        @param opts a hash of options for the table creation string; see @ref SqlUtil::AbstractTable::TableOptions for common options; each driver can support additional driver-specific options
 
         @throw TABLE-DRIVER-ERROR no database-specific module can be loaded
         @throw OPTION-ERROR invalid or unsupported option passed
@@ -110,7 +110,7 @@ Table table("pgsql:user/pass@db%host", "table");
     /** @param ds the AbstractDatasource for the connection to the database
         @param desc a @ref table_desc_hash "table description hash" describing the table
         @param name the name of the table
-        @param opts an optional hash of options for the table creation string; see \c SqlUtil::AbstractTable::TableOptions for common options; each driver can support additional driver-specific options
+        @param opts an optional hash of options for the table creation string; see @ref SqlUtil::AbstractTable::TableOptions for common options; each driver can support additional driver-specific options
 
         @throw OPTION-ERROR invalid or unsupported option passed
         @throw DESCRIPTION-ERROR invalid or unsupported description hash value passed

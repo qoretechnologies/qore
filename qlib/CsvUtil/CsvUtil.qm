@@ -247,7 +247,7 @@ while (i.next())
     line to match the record.
 
     The above record type resolution logic is executed in
-    \c CsvUtil::AbstractCsvIterator::identifyTypeImpl() "AbstractCsvIterator::identifyTypeImpl()",
+    @ref CsvUtil::AbstractCsvIterator::identifyTypeImpl() "AbstractCsvIterator::identifyTypeImpl()",
     which executes any \c "regex" or \c "value" tests on the input line in the order of the field definitions in the
     @ref abstractcsviterator_option_field_hash "record description hash".
 
@@ -257,7 +257,7 @@ while (i.next())
 
     When there are no record-matching keys in the field hashes for any record and the input record field number are
     not unique, then
-    \c CsvUtil::AbstractCsvIterator::identifyTypeImpl() "AbstractCsvIterator::identifyTypeImpl()"
+    @ref CsvUtil::AbstractCsvIterator::identifyTypeImpl() "AbstractCsvIterator::identifyTypeImpl()"
     must be overridden in a subclass to provide custom record matching logic.
 
     @note
@@ -377,12 +377,12 @@ while (i.next()) {
     - improved \a fields option documentation and added an exception when detected headers do not match the \a fields option (<a href="https://github.com/qoretechnologies/qore/issues/2179">issue 2179</a>)
 
     @subsection csvutil_v1_5_1 Version 1.5.1
-    - fixed a bug in \c CsvUtil::AbstractCsvIterator::identifyTypeImpl() "AbstractCsvIterator::identifyTypeImpl()" generating an error message (<a href="https://github.com/qoretechnologies/qore/issues/1355">issue 1355</a>)
+    - fixed a bug in @ref CsvUtil::AbstractCsvIterator::identifyTypeImpl() "AbstractCsvIterator::identifyTypeImpl()" generating an error message (<a href="https://github.com/qoretechnologies/qore/issues/1355">issue 1355</a>)
 
     @subsection csvutil_v1_5 Version 1.5
     - fixed a bug handling the global option \c "eol"
     - converted to new-style
-    - if "headers" are not given in the \c CsvUtil::AbstractCsvWriter::constructor() but "fields" are, then set the headers from the field descriptions automatically
+    - if "headers" are not given in the @ref CsvUtil::AbstractCsvWriter::constructor() but "fields" are, then set the headers from the field descriptions automatically
     - added write() methods returning the generated strings to the @ref CsvUtil::CsvStringWriter class for API compatibility with the corresponding FixedLengthDataWriter methods
     - implemented support for @ref Qore::SQL::SQLStatement "SQLStatement" as an iterator source for @ref CsvUtil::AbstractCsvWriter::write()
     - implemented the \c "datamap" and \c "info_log" options for CSV generation

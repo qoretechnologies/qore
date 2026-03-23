@@ -375,7 +375,7 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
     }
 
     #! returns a hash with the results of the ping operation
-    /** @param ping_flags see \c PingFlags for more information
+    /** @param ping_flags see @ref PingFlags for more information
 
         @return a @ref PingInfo hash
 
@@ -658,7 +658,7 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
 
     #! returns an async-I/O-capable connection object
     /** Calls @ref getAsyncImpl() to acquire a connection object that uses non-blocking,
-        multiplexed I/O (e.g., HTTP/2, HTTP/3, or HTTP/1.1 via @ref HttpClientIo).
+        multiplexed I/O (e.g., HTTP/2, HTTP/3, or HTTP/1.1 via \c HttpClientIo).
 
         @param connect if @ref True "True" then the connection should be returned connected
         @param rtopts runtime options for connection acquisition
@@ -731,7 +731,7 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
         This base class method returns @ref False; to support the data provider API, override this method in child
         classes
 
-        @see \c getDataProvider()
+        @see @ref getDataProvider()
 
         @since ConnectionProvider 1.3
     */

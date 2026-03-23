@@ -143,7 +143,7 @@ module ElasticSearchDataProvider {
     </div>
     @endhtmlonly
 
-    The %ElasticSearchDataProvider module provides a \c dataproviderintro "data provider" API for ElasticSearch
+    The %ElasticSearchDataProvider module provides a @ref dataproviderintro "data provider" API for ElasticSearch
     instances and data.  It provides introspection into the configuration and document attributes as well as APIs and
     a record-based data provider to use ElasticSearch indices as DB table-like objects as well.
 

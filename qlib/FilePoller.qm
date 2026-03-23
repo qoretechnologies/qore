@@ -327,12 +327,12 @@ public class FilePoller {
           @ref closure "closure" or @ref call_reference "call reference" to use instead of @ref Qore::sleep() (if not
           set then @ref Qore::sleep() will be used)
         - \c "sort_order": an integer constant giving the sort order; valid options are:
-            - \c OrderAsc "OrderAsc": ascending (the default)
-            - \c OrderDesc "OrderDesc": descending
+            - @ref OrderAsc "OrderAsc": ascending (the default)
+            - @ref OrderDesc "OrderDesc": descending
         - \c "sort_type": an integer constant giving the sort type; valid options are:
-            - \c SortNone "SortNone": no sort
-            - \c SortName "SortName": sort by file name (the default)
-            - \c SortDate "SortDate": sort by the file's last modified date
+            - @ref SortNone "SortNone": no sort
+            - @ref SortName "SortName": sort by file name (the default)
+            - @ref SortDate "SortDate": sort by the file's last modified date
         - \c "start_thread": (required when imported into a context where @ref Qore::PO_NO_THREAD_CONTROL is set) a
           @ref closure "closure" or @ref call_reference "call reference" for starting threads; must return the integer
           thread ID (if not set then @ref background will be used)
@@ -1153,7 +1153,7 @@ public class FilePollerDataProviderFactory inherits AbstractDataProviderFactory 
     }
 
     #! Returns static factory information without \a provider_info
-    /** @return static factory information without \a provider_info which is provided by \c getProviderInfo()
+    /** @return static factory information without \a provider_info which is provided by @ref getProviderInfo()
     */
     private hash<DataProviderFactoryInfo> getInfoImpl() {
         return FactoryInfo;
