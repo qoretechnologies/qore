@@ -333,6 +333,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         addTestCase("restDoRequest", \testRestDoRequest());
         addTestCase("serialization config", \testSerializationConfig());
         addTestCase("header management", \testHeaderManagement());
+        addTestCase("default Accept header sent on wire", \testDefaultAcceptSentOnWire());
         addTestCase("token management", \testTokenManagement());
         addTestCase("error passthru", \testErrorPassthru());
         addTestCase("error without passthru", \testErrorWithoutPassthru());
@@ -621,12 +622,52 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         RestClientIo::RestClientIo rest = createClient();
         on_exit rest.close();
 
+        # verify default Accept and User-Agent headers are present
+        hash<auto> hdrs = rest.getDefaultHeaders();
+        assertEq(True, exists hdrs."Accept", "Accept header must be set by default");
+        assertRegex("application/yaml", hdrs."Accept", "Accept must include YAML MIME type");
+        assertRegex("Qore-RestClientIo/", hdrs."User-Agent", "User-Agent must be set");
+
+        # addDefaultHeaders preserves defaults
         rest.addDefaultHeaders({"X-Custom": "header-value"});
         assertEq("header-value", rest.getDefaultHeaders()."X-Custom");
+        assertEq(True, exists rest.getDefaultHeaders()."Accept",
+            "Accept still present after addDefaultHeaders");
 
+        # replaceDefaultHeaders preserves DefaultHeaders
         rest.replaceDefaultHeaders({"X-New": "only"});
         assertEq("only", rest.getDefaultHeaders()."X-New");
-        assertEq(True, !rest.getDefaultHeaders()."X-Custom");
+        assertEq(True, !rest.getDefaultHeaders()."X-Custom",
+            "old custom header removed after replace");
+        assertEq(True, exists rest.getDefaultHeaders()."Accept",
+            "Accept preserved by replaceDefaultHeaders");
+        assertEq(True, exists rest.getDefaultHeaders()."User-Agent",
+            "User-Agent preserved by replaceDefaultHeaders");
+
+        # user-provided headers override defaults
+        RestClientIo::RestClientIo rest2 = createClient({
+            "headers": {"Accept": "text/html", "User-Agent": "CustomAgent/1.0"},
+        });
+        on_exit rest2.close();
+        assertEq("text/html", rest2.getDefaultHeaders()."Accept",
+            "user Accept overrides default");
+        assertEq("CustomAgent/1.0", rest2.getDefaultHeaders()."User-Agent",
+            "user User-Agent overrides default");
+    }
+
+    testDefaultAcceptSentOnWire() {
+%ifndef NoJson
+        RestClientIo::RestClientIo rest = createClient();
+        on_exit rest.close();
+
+        # Hit the echo endpoint and verify the server received Accept and User-Agent
+        hash<RestClient::RestResponseInfo> resp = rest.restGet("/echo/test");
+        assertEq(200, resp.status_code);
+        assertRegex("application/yaml", resp.body.request_headers.accept,
+            "Accept header must be sent on the wire");
+        assertRegex("Qore-RestClientIo/", resp.body.request_headers."user-agent",
+            "User-Agent header must be sent on the wire");
+%endif
     }
 
     testTokenManagement() {
