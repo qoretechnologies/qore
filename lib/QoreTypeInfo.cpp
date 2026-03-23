@@ -3321,6 +3321,13 @@ qore_type_result_e QoreTypeInfo::parseAccepts(const QoreTypeInfo* first, const Q
     }
     */
     if (first == autoTypeInfo) {
+        // If parameter is auto and argument is untyped (also auto),
+        // require runtime matching so specific types can be preferred
+        if (!hasType(second)) {
+            may_not_match = true;
+            max_result = QTI_AMBIGUOUS;
+            return QTI_AMBIGUOUS;
+        }
         max_result = QTI_WILDCARD;
         return QTI_WILDCARD;
     }
