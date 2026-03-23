@@ -74,8 +74,8 @@ module ConstantContactDataProvider {
             "options": {
                 "email_address": <ActionOptionInfo>{
                     "display_name": "Email Address",
-                    "short_desc": "Email address object with `address` and optional `permission_to_send`",
-                    "type": AbstractDataProviderTypeMap."*hash",
+                    "short_desc": "Email address object",
+                    "type": new ConstantContactEmailAddressDataType(AutoHashOrNothingType),
                     "desc": "Email address object with `address` and optional `permission_to_send`",
                     "preselected": True,
                 },
@@ -113,10 +113,12 @@ module ConstantContactDataProvider {
                     "allowed_values": (
                         <AllowedValueInfo>{
                             "value": "Account",
+                            "display_name": "Account",
                             "desc": "Created by the account owner",
                         },
                         <AllowedValueInfo>{
                             "value": "Contact",
+                            "display_name": "Contact",
                             "desc": "Created by the contact themselves",
                         },
                     ),
@@ -132,6 +134,45 @@ module ConstantContactDataProvider {
                     "short_desc": "Tag IDs to apply to the contact",
                     "type": AbstractDataProviderTypeMap."*list",
                     "desc": "List of tag IDs to apply to the contact",
+                },
+                "birthday_month": <ActionOptionInfo>{
+                    "display_name": "Birthday Month",
+                    "short_desc": "Birthday month (1-12)",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "The birthday month of the contact (`1`-`12`)",
+                },
+                "birthday_day": <ActionOptionInfo>{
+                    "display_name": "Birthday Day",
+                    "short_desc": "Birthday day (1-31)",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "The birthday day of the contact (`1`-`31`)",
+                },
+                "anniversary": <ActionOptionInfo>{
+                    "display_name": "Anniversary",
+                    "short_desc": "Anniversary date (YYYY-MM-DD)",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The anniversary date of the contact in `YYYY-MM-DD` format",
+                },
+                "phone_numbers": <ActionOptionInfo>{
+                    "display_name": "Phone Numbers",
+                    "short_desc": "Contact phone numbers",
+                    "type": new ListDataType("PhoneNumberList",
+                        new ConstantContactPhoneNumberDataType(), True),
+                    "desc": "A list of phone number objects for the contact",
+                },
+                "street_addresses": <ActionOptionInfo>{
+                    "display_name": "Street Addresses",
+                    "short_desc": "Contact street addresses",
+                    "type": new ListDataType("StreetAddressList",
+                        new ConstantContactStreetAddressDataType(), True),
+                    "desc": "A list of street address objects for the contact",
+                },
+                "custom_fields": <ActionOptionInfo>{
+                    "display_name": "Custom Fields",
+                    "short_desc": "Custom field values",
+                    "type": new ListDataType("CustomFieldValueList",
+                        new ConstantContactCustomFieldValueDataType(), True),
+                    "desc": "A list of custom field value objects for the contact",
                 },
             },
             "get_output_type": AbstractDataProviderType sub () { return new ConstantContactContactDataType(); },
@@ -158,7 +199,7 @@ module ConstantContactDataProvider {
                 "email_address": <ActionOptionInfo>{
                     "display_name": "Email Address",
                     "short_desc": "Email address object",
-                    "type": AbstractDataProviderTypeMap."*hash",
+                    "type": new ConstantContactEmailAddressDataType(AutoHashOrNothingType),
                     "desc": "Email address object with `address` and optional `permission_to_send`",
                     "preselected": True,
                 },
@@ -192,10 +233,12 @@ module ConstantContactDataProvider {
                     "allowed_values": (
                         <AllowedValueInfo>{
                             "value": "Account",
+                            "display_name": "Account",
                             "desc": "Updated by the account owner",
                         },
                         <AllowedValueInfo>{
                             "value": "Contact",
+                            "display_name": "Contact",
                             "desc": "Updated by the contact themselves",
                         },
                     ),
@@ -211,6 +254,45 @@ module ConstantContactDataProvider {
                     "short_desc": "Tag IDs",
                     "type": AbstractDataProviderTypeMap."*list",
                     "desc": "List of tag IDs",
+                },
+                "birthday_month": <ActionOptionInfo>{
+                    "display_name": "Birthday Month",
+                    "short_desc": "Birthday month (1-12)",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "The birthday month of the contact (`1`-`12`)",
+                },
+                "birthday_day": <ActionOptionInfo>{
+                    "display_name": "Birthday Day",
+                    "short_desc": "Birthday day (1-31)",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "The birthday day of the contact (`1`-`31`)",
+                },
+                "anniversary": <ActionOptionInfo>{
+                    "display_name": "Anniversary",
+                    "short_desc": "Anniversary date (YYYY-MM-DD)",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The anniversary date of the contact in `YYYY-MM-DD` format",
+                },
+                "phone_numbers": <ActionOptionInfo>{
+                    "display_name": "Phone Numbers",
+                    "short_desc": "Contact phone numbers",
+                    "type": new ListDataType("PhoneNumberList",
+                        new ConstantContactPhoneNumberDataType(), True),
+                    "desc": "A list of phone number objects for the contact",
+                },
+                "street_addresses": <ActionOptionInfo>{
+                    "display_name": "Street Addresses",
+                    "short_desc": "Contact street addresses",
+                    "type": new ListDataType("StreetAddressList",
+                        new ConstantContactStreetAddressDataType(), True),
+                    "desc": "A list of street address objects for the contact",
+                },
+                "custom_fields": <ActionOptionInfo>{
+                    "display_name": "Custom Fields",
+                    "short_desc": "Custom field values",
+                    "type": new ListDataType("CustomFieldValueList",
+                        new ConstantContactCustomFieldValueDataType(), True),
+                    "desc": "A list of custom field value objects for the contact",
                 },
             },
             "get_output_type": AbstractDataProviderType sub () { return new ConstantContactContactDataType(); },
@@ -269,30 +351,37 @@ module ConstantContactDataProvider {
                     "allowed_values": (
                         <AllowedValueInfo>{
                             "value": "all",
+                            "display_name": "All",
                             "desc": "All contacts",
                         },
                         <AllowedValueInfo>{
                             "value": "active",
+                            "display_name": "Active",
                             "desc": "Active contacts",
                         },
                         <AllowedValueInfo>{
                             "value": "deleted",
+                            "display_name": "Deleted",
                             "desc": "Deleted contacts",
                         },
                         <AllowedValueInfo>{
                             "value": "not_set",
+                            "display_name": "Not Set",
                             "desc": "Contacts with no status set",
                         },
                         <AllowedValueInfo>{
                             "value": "pending_confirmation",
+                            "display_name": "Pending Confirmation",
                             "desc": "Contacts pending confirmation",
                         },
                         <AllowedValueInfo>{
                             "value": "temp_hold",
+                            "display_name": "Temporary Hold",
                             "desc": "Contacts on temporary hold",
                         },
                         <AllowedValueInfo>{
                             "value": "unsubscribed",
+                            "display_name": "Unsubscribed",
                             "desc": "Unsubscribed contacts",
                         },
                     ),
@@ -647,10 +736,12 @@ module ConstantContactDataProvider {
                     "allowed_values": (
                         <AllowedValueInfo>{
                             "value": "string",
+                            "display_name": "String",
                             "desc": "String field",
                         },
                         <AllowedValueInfo>{
                             "value": "date",
+                            "display_name": "Date",
                             "desc": "Date field",
                         },
                     ),
@@ -874,18 +965,22 @@ module ConstantContactDataProvider {
                     "allowed_values": (
                         <AllowedValueInfo>{
                             "value": "name",
+                            "display_name": "Name",
                             "desc": "Sort by name",
                         },
                         <AllowedValueInfo>{
                             "value": "date",
+                            "display_name": "Date",
                             "desc": "Sort by date",
                         },
                         <AllowedValueInfo>{
                             "value": "modified_date",
+                            "display_name": "Modified Date",
                             "desc": "Sort by modified date",
                         },
                         <AllowedValueInfo>{
                             "value": "created_date",
+                            "display_name": "Created Date",
                             "desc": "Sort by created date",
                         },
                     ),
@@ -943,9 +1038,11 @@ module ConstantContactDataProvider {
                 },
                 "email_campaign_activities": <ActionOptionInfo>{
                     "display_name": "Campaign Activities",
-                    "short_desc": "List of campaign activity config hashes",
-                    "type": AbstractDataProviderTypeMap."*list",
-                    "desc": "List of campaign activity configuration hashes",
+                    "short_desc": "List of campaign activity configurations",
+                    "type": new ListDataType("CampaignActivityList",
+                        new ConstantContactEmailCampaignActivityDataType(), True),
+                    "desc": "List of campaign activity configurations including sender, "
+                        "subject, HTML content, and target lists",
                     "preselected": True,
                 },
             },
@@ -1057,26 +1154,32 @@ module ConstantContactDataProvider {
                     "allowed_values": (
                         <AllowedValueInfo>{
                             "value": "Draft",
+                            "display_name": "Draft",
                             "desc": "Draft campaigns",
                         },
                         <AllowedValueInfo>{
                             "value": "Scheduled",
+                            "display_name": "Scheduled",
                             "desc": "Scheduled campaigns",
                         },
                         <AllowedValueInfo>{
                             "value": "Executing",
+                            "display_name": "Executing",
                             "desc": "Currently sending campaigns",
                         },
                         <AllowedValueInfo>{
                             "value": "Done",
+                            "display_name": "Done",
                             "desc": "Completed campaigns",
                         },
                         <AllowedValueInfo>{
                             "value": "Cancelled",
+                            "display_name": "Cancelled",
                             "desc": "Cancelled campaigns",
                         },
                         <AllowedValueInfo>{
                             "value": "Deleted",
+                            "display_name": "Deleted",
                             "desc": "Deleted campaigns",
                         },
                     ),
@@ -1192,9 +1295,11 @@ module ConstantContactDataProvider {
                 "source": <ActionOptionInfo>{
                     "display_name": "Source",
                     "short_desc": "Source of contacts",
-                    "type": AbstractDataProviderTypeMap."hash",
+                    "type": new ConstantContactBulkActivitySourceDataType(),
                     "required": True,
-                    "desc": "Source of contacts to add to the lists",
+                    "desc": "Source of contacts to add to the lists. Use one of the mutually "
+                        "exclusive fields: `contact_ids`, `list_ids`, `tag_ids`, `segment_id`, "
+                        "`all_active_contacts`, `new_subscriber`, or `engagement_level`",
                 },
                 "list_ids": <ActionOptionInfo>{
                     "display_name": "List IDs",
@@ -1221,9 +1326,11 @@ module ConstantContactDataProvider {
                 "source": <ActionOptionInfo>{
                     "display_name": "Source",
                     "short_desc": "Source of contacts",
-                    "type": AbstractDataProviderTypeMap."hash",
+                    "type": new ConstantContactBulkActivitySourceDataType(),
                     "required": True,
-                    "desc": "Source of contacts to remove from the lists",
+                    "desc": "Source of contacts to remove from the lists. Use one of the "
+                        "mutually exclusive fields: `contact_ids`, `list_ids`, `tag_ids`, "
+                        "`all_active_contacts`, or `engagement_level`",
                 },
                 "list_ids": <ActionOptionInfo>{
                     "display_name": "List IDs",
@@ -1315,6 +1422,24 @@ module ConstantContactDataProvider {
                     "display_name": "Website",
                     "short_desc": "Website URL",
                     "type": AbstractDataProviderTypeMap."*string",
+                },
+                "country_code": <ActionOptionInfo>{
+                    "display_name": "Country Code",
+                    "short_desc": "Two-letter country code",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The two-letter ISO country code",
+                },
+                "state_code": <ActionOptionInfo>{
+                    "display_name": "State Code",
+                    "short_desc": "State or province code",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The state or province code",
+                },
+                "time_zone_id": <ActionOptionInfo>{
+                    "display_name": "Time Zone",
+                    "short_desc": "Account time zone ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The time zone ID (e.g., `US/Eastern`)",
                 },
             },
             "get_output_type": AbstractDataProviderType sub () { return new ConstantContactAccountDataType(); },

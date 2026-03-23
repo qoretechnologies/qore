@@ -198,17 +198,16 @@ ConstantContactRestClient cc({
     static hash<auto> getOptions(hash<auto> opts) {
         hash<auto> rv = DefaultOptions + opts;
 
-        # Check if token-only mode (token provided without OAuth2 credentials)
-        bool token_only = opts.token && !opts.oauth2_client_id && !opts.oauth2_client_secret
+        # Check if apikey-only mode (apikey provided without OAuth2 credentials)
+        bool apikey_only = opts.apikey && !opts.oauth2_client_id && !opts.oauth2_client_secret
             && !opts.oauth2_refresh_token;
 
-        if (!token_only && opts.oauth2_client_id) {
+        if (!apikey_only && opts.oauth2_client_id) {
             rv += OAuth2Options;
-        } else if (opts.token) {
-            # Bearer token mode
-            rv.headers.Authorization = "Bearer " + opts.token;
-            # Remove token from opts so RestClient doesn't add another "Bearer" prefix
-            remove rv.token;
+        } else if (opts.apikey) {
+            # Bearer token mode using apikey
+            rv.headers.Authorization = "Bearer " + opts.apikey;
+            remove rv.apikey;
         }
 
         return rv;
@@ -241,6 +240,14 @@ public class ConstantContactRestConnection inherits RestClient::RestConnection {
                 "https": "constantcontactres",
             },
             "options": RestConnection::ConnectionScheme.options + {
+                "apikey": <ConnectionOptionInfo>{
+                    "display_name": "API Key / Access Token",
+                    "short_desc": "A Constant Contact API key or access token for Bearer auth",
+                    "type": "string",
+                    "desc": "A Constant Contact API key or access token used for Bearer token "
+                        "authentication as an alternative to OAuth2",
+                    "sensitive": True,
+                },
                 "data": RestConnection::ConnectionScheme.options."data"
                 + <ConnectionOptionInfo>{
                     "default_value": ConstantContactRestClient::DefaultData,
@@ -330,15 +337,9 @@ public class ConstantContactRestConnection inherits RestClient::RestConnection {
         # Always set OAuth2 URLs
         rv.oauth2_auth_url = ConstantContactRestClient::DefaultAuthUrl;
         rv.oauth2_token_url = ConstantContactRestClient::DefaultTokenUrl;
-        if (!rv.oauth2_grant_type) {
-            rv.oauth2_grant_type = ConstantContactRestClient::DefaultGrantType;
-        }
-        if (!rv.oauth2_scopes) {
-            rv.oauth2_scopes = ConstantContactRestClient::DefaultScopes;
-        }
-        if (!rv.oauth2_auth_args) {
-            rv.oauth2_auth_args = ConstantContactRestClient::DefaultAuthArgs;
-        }
+        rv.oauth2_grant_type = ConstantContactRestClient::DefaultGrantType;
+        rv.oauth2_scopes = ConstantContactRestClient::DefaultScopes;
+        rv.oauth2_auth_args = ConstantContactRestClient::DefaultAuthArgs;
         return rv;
     }
 

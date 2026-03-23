@@ -60,18 +60,22 @@ public class ConstantContactSegmentsDataProvider inherits ConstantContactDataPro
                 "allowed_values": (
                     <AllowedValueInfo>{
                         "value": "name",
+                        "display_name": "Name",
                         "desc": "Sort by segment name",
                     },
                     <AllowedValueInfo>{
                         "value": "date",
+                        "display_name": "Date",
                         "desc": "Sort by date",
                     },
                     <AllowedValueInfo>{
                         "value": "modified_date",
+                        "display_name": "Modified Date",
                         "desc": "Sort by last modified date",
                     },
                     <AllowedValueInfo>{
                         "value": "created_date",
+                        "display_name": "Created Date",
                         "desc": "Sort by creation date",
                     },
                 ),

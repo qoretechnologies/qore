@@ -30,11 +30,12 @@ public class ConstantContactRemoveListMembersRequestDataType inherits HashDataTy
     public {
         const Fields = {
             "source": {
-                "type": AutoHashType,
+                "type": new ConstantContactBulkActivitySourceDataType(),
                 "display_name": "Source",
                 "short_desc": "Source of contacts",
-                "desc": "The source of contacts to remove from the lists. Can contain "
-                    "`contact_ids`, `list_ids`, `tag_ids`, `segment_id`, or `all_active_contacts`",
+                "desc": "The source of contacts to remove from the lists. Use one of the "
+                    "mutually exclusive fields: `contact_ids`, `list_ids`, `tag_ids`, "
+                    "`all_active_contacts`, or `engagement_level`",
                 "required": True,
             },
             "list_ids": {

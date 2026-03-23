@@ -79,7 +79,8 @@ public class ConstantContactEmailCampaignDataType inherits HashDataType {
                 "desc": "The date the campaign was last sent (ISO-8601 format)",
             },
             "campaign_activities": {
-                "type": AutoListOrNothingType,
+                "type": new ListDataType("CampaignActivityRefList",
+                    new ConstantContactCampaignActivityRefDataType(), True),
                 "display_name": "Campaign Activities",
                 "short_desc": "Associated campaign activities",
                 "desc": "A list of campaign activity objects associated with this campaign, "
@@ -105,7 +106,8 @@ public class ConstantContactCreateEmailCampaignRequestDataType inherits HashData
                 "example_value": "Monthly Newsletter",
             },
             "email_campaign_activities": {
-                "type": AutoListOrNothingType,
+                "type": new ListDataType("EmailCampaignActivityList",
+                    new ConstantContactEmailCampaignActivityDataType(), True),
                 "display_name": "Campaign Activities",
                 "short_desc": "Campaign activity configurations",
                 "desc": "A list of email campaign activity objects. Each activity includes "

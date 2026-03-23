@@ -34,7 +34,7 @@ public class ConstantContactContactDataType inherits HashDataType {
                 "desc": "The unique identifier for the contact (UUID format)",
             },
             "email_address": {
-                "type": AutoHashOrNothingType,
+                "type": new ConstantContactEmailAddressDataType(AutoHashOrNothingType),
                 "display_name": "Email Address",
                 "short_desc": "The contact's email address object",
                 "desc": "The contact's email address object containing `address`, "
@@ -118,20 +118,23 @@ public class ConstantContactContactDataType inherits HashDataType {
                     "if applicable",
             },
             "custom_fields": {
-                "type": AutoListOrNothingType,
+                "type": new ListDataType("CustomFieldValueList",
+                    new ConstantContactCustomFieldValueDataType(), True),
                 "display_name": "Custom Fields",
                 "short_desc": "Contact custom field values",
                 "desc": "A list of custom field value objects for the contact, each containing "
                     "`custom_field_id` and `value`",
             },
             "phone_numbers": {
-                "type": AutoListOrNothingType,
+                "type": new ListDataType("PhoneNumberList",
+                    new ConstantContactPhoneNumberDataType(), True),
                 "display_name": "Phone Numbers",
                 "short_desc": "Contact phone numbers",
                 "desc": "A list of phone number objects for the contact",
             },
             "street_addresses": {
-                "type": AutoListOrNothingType,
+                "type": new ListDataType("StreetAddressList",
+                    new ConstantContactStreetAddressDataType(), True),
                 "display_name": "Street Addresses",
                 "short_desc": "Contact street addresses",
                 "desc": "A list of street address objects for the contact",
@@ -149,16 +152,18 @@ public class ConstantContactContactDataType inherits HashDataType {
                 "desc": "A list of tag IDs assigned to the contact",
             },
             "notes": {
-                "type": AutoListOrNothingType,
+                "type": new ListDataType("NoteList",
+                    new ConstantContactNoteDataType(), True),
                 "display_name": "Notes",
                 "short_desc": "Contact notes",
                 "desc": "A list of note objects associated with the contact",
             },
             "sms_channel": {
-                "type": AutoHashOrNothingType,
+                "type": new ConstantContactSmsChannelDataType(AutoHashOrNothingType),
                 "display_name": "SMS Channel",
                 "short_desc": "SMS channel details",
-                "desc": "SMS channel consent and details for the contact",
+                "desc": "SMS channel details for the contact, including `sms_channel_id`, "
+                    "`sms_address`, `dial_code`, `country_code`, and `sms_channel_consents`",
             },
         };
     }
@@ -173,7 +178,7 @@ public class ConstantContactCreateContactRequestDataType inherits HashDataType {
     public {
         const Fields = {
             "email_address": {
-                "type": AutoHashOrNothingType,
+                "type": new ConstantContactEmailAddressDataType(AutoHashOrNothingType),
                 "display_name": "Email Address",
                 "short_desc": "The contact's email address",
                 "desc": "The contact's email address object. Must contain an `address` field "
@@ -231,20 +236,23 @@ public class ConstantContactCreateContactRequestDataType inherits HashDataType {
                 "desc": "The source of the contact creation. Values: `Account`, `Contact`",
             },
             "custom_fields": {
-                "type": AutoListOrNothingType,
+                "type": new ListDataType("CustomFieldValueList",
+                    new ConstantContactCustomFieldValueDataType(), True),
                 "display_name": "Custom Fields",
                 "short_desc": "Custom field values",
                 "desc": "A list of custom field value objects, each containing "
                     "`custom_field_id` and `value`",
             },
             "phone_numbers": {
-                "type": AutoListOrNothingType,
+                "type": new ListDataType("PhoneNumberList",
+                    new ConstantContactPhoneNumberDataType(), True),
                 "display_name": "Phone Numbers",
                 "short_desc": "Phone numbers",
                 "desc": "A list of phone number objects for the contact",
             },
             "street_addresses": {
-                "type": AutoListOrNothingType,
+                "type": new ListDataType("StreetAddressList",
+                    new ConstantContactStreetAddressDataType(), True),
                 "display_name": "Street Addresses",
                 "short_desc": "Street addresses",
                 "desc": "A list of street address objects for the contact",

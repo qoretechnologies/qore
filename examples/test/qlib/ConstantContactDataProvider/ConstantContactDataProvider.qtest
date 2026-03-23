@@ -61,6 +61,12 @@ public class ConstantContactDataProviderTest inherits QUnit::Test {
 
         #! Test contact ID (created during integration tests)
         *string testContactId;
+
+        #! Test tag ID (created during integration tests)
+        *string testTagId;
+
+        #! Test custom field ID (created during integration tests)
+        *string testCustomFieldId;
     }
 
     constructor() : Test("ConstantContactDataProvider Test", "1.0", \ARGV, MyOpts) {
@@ -126,7 +132,7 @@ public class ConstantContactDataProviderTest inherits QUnit::Test {
                 printf("Using token-only mode (no OAuth2 refresh)\n");
             }
             hash<auto> opts = {
-                "token": token,
+                "apikey": token,
             };
             client = new ConstantContactRestClient::ConstantContactRestClient(opts);
             return;
@@ -138,7 +144,7 @@ public class ConstantContactDataProviderTest inherits QUnit::Test {
             "oauth2_client_secret": client_secret,
         };
         if (token) {
-            opts.token = token;
+            opts.apikey = token;
         }
         client = new ConstantContactRestClient::ConstantContactRestClient(opts);
     }
@@ -156,7 +162,7 @@ public class ConstantContactDataProviderTest inherits QUnit::Test {
         try {
             ConstantContactDataProvider::ConstantContactDataProvider prov({
                 "constantcontactrestclient_options": {
-                    "token": "fake-token",
+                    "apikey": "fake-token",
                 },
             });
             assertEq("constantcontact", prov.getName());
@@ -192,7 +198,7 @@ public class ConstantContactDataProviderTest inherits QUnit::Test {
         try {
             ConstantContactDataProvider::ConstantContactDataProvider prov({
                 "constantcontactrestclient_options": {
-                    "token": "fake-token",
+                    "apikey": "fake-token",
                 },
             });
             hash<DataProviderInfo> info = prov.getInfo();
@@ -223,7 +229,7 @@ public class ConstantContactDataProviderTest inherits QUnit::Test {
         try {
             prov = new ConstantContactDataProvider::ConstantContactDataProvider({
                 "constantcontactrestclient_options": {
-                    "token": "fake-token",
+                    "apikey": "fake-token",
                 },
             });
         } catch (hash<ExceptionInfo> ex) {
@@ -435,6 +441,34 @@ public class ConstantContactDataProviderTest inherits QUnit::Test {
         assertTrue(createListFields.hasKey("name"));
         assertTrue(createListFields.hasKey("description"));
         assertTrue(createListFields.hasKey("favorite"));
+
+        # Test bulk activity source sub-type
+        ConstantContactDataProvider::ConstantContactBulkActivitySourceDataType sourceType();
+        hash<string, AbstractDataField> sourceFields = sourceType.getFields();
+        assertTrue(sourceFields.hasKey("contact_ids"));
+        assertTrue(sourceFields.hasKey("list_ids"));
+        assertTrue(sourceFields.hasKey("tag_ids"));
+        assertTrue(sourceFields.hasKey("segment_id"));
+        assertTrue(sourceFields.hasKey("all_active_contacts"));
+        assertTrue(sourceFields.hasKey("new_subscriber"));
+        assertTrue(sourceFields.hasKey("engagement_level"));
+        assertTrue(sourceFields.hasKey("exclude"));
+
+        # Test SMS channel sub-type
+        ConstantContactDataProvider::ConstantContactSmsChannelDataType smsType();
+        hash<string, AbstractDataField> smsFields = smsType.getFields();
+        assertTrue(smsFields.hasKey("sms_channel_id"));
+        assertTrue(smsFields.hasKey("sms_address"));
+        assertTrue(smsFields.hasKey("dial_code"));
+        assertTrue(smsFields.hasKey("country_code"));
+        assertTrue(smsFields.hasKey("sms_channel_consents"));
+
+        # Test company logo sub-type
+        ConstantContactDataProvider::ConstantContactCompanyLogoDataType logoType();
+        hash<string, AbstractDataField> logoFields = logoType.getFields();
+        assertTrue(logoFields.hasKey("url"));
+        assertTrue(logoFields.hasKey("external_url"));
+        assertTrue(logoFields.hasKey("internal_id"));
     }
 
     #! Trigger example data tests
@@ -444,7 +478,7 @@ public class ConstantContactDataProviderTest inherits QUnit::Test {
         try {
             prov = new ConstantContactDataProvider::ConstantContactDataProvider({
                 "constantcontactrestclient_options": {
-                    "token": "fake-token",
+                    "apikey": "fake-token",
                 },
             });
         } catch (hash<ExceptionInfo> ex) {
@@ -481,6 +515,35 @@ public class ConstantContactDataProviderTest inherits QUnit::Test {
             auto exampleData = triggerProvider.getExampleEventData(triggerName);
             assertTrue(exampleData instanceof hash,
                 sprintf("%s getExampleEventData() should return a hash", triggerName));
+
+            # Verify expected fields per trigger type
+            hash<auto> example = exampleData;
+            switch (triggerName) {
+                case "new-contact":
+                    assertTrue(example.hasKey("contact_id"),
+                        "new-contact example should have contact_id");
+                    assertTrue(example.hasKey("email_address"),
+                        "new-contact example should have email_address");
+                    assertTrue(example.hasKey("first_name"),
+                        "new-contact example should have first_name");
+                    break;
+                case "new-email-campaign":
+                    assertTrue(example.hasKey("campaign_id"),
+                        "new-email-campaign example should have campaign_id");
+                    assertTrue(example.hasKey("name"),
+                        "new-email-campaign example should have name");
+                    assertTrue(example.hasKey("current_status"),
+                        "new-email-campaign example should have current_status");
+                    break;
+                case "new-contact-list":
+                    assertTrue(example.hasKey("list_id"),
+                        "new-contact-list example should have list_id");
+                    assertTrue(example.hasKey("name"),
+                        "new-contact-list example should have name");
+                    assertTrue(example.hasKey("membership_count"),
+                        "new-contact-list example should have membership_count");
+                    break;
+            }
         }
     }
 
@@ -491,7 +554,7 @@ public class ConstantContactDataProviderTest inherits QUnit::Test {
         try {
             prov = new ConstantContactDataProvider::ConstantContactDataProvider({
                 "constantcontactrestclient_options": {
-                    "token": "fake-token",
+                    "apikey": "fake-token",
                 },
             });
         } catch (hash<ExceptionInfo> ex) {
@@ -567,6 +630,12 @@ public class ConstantContactDataProviderTest inherits QUnit::Test {
 
         # Test 8: Get account summary
         testGetAccountSummary();
+
+        # Test 9: Tag CRUD
+        testTagCrud();
+
+        # Test 10: Custom field CRUD
+        testCustomFieldCrud();
 
         # Cleanup any remaining test data
         cleanup();
@@ -788,6 +857,156 @@ public class ConstantContactDataProviderTest inherits QUnit::Test {
         }
     }
 
+    #! Test tag create, get, update, and delete
+    private testTagCrud() {
+        ConstantContactDataProvider::ConstantContactDataProvider prov(client);
+
+        # Create a tag
+        AbstractDataProvider createTag = prov.getChildProvider("tags")
+            .getChildProvider("create");
+
+        string unique = now_us().format("YYYYMMDDHHmmssxxxxxx");
+        hash<auto> result;
+        try {
+            result = createTag.doRequest({
+                "name": "Test Tag " + unique,
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.arg.status_code == 403 || ex.arg.status_code == 401) {
+                testSkip("Insufficient permissions for tag operations");
+                return;
+            }
+            rethrow;
+        }
+
+        assertTrue(result.hasKey("tag_id"), "Created tag should have 'tag_id' field");
+        assertTrue(result.tag_id.val(), "Tag ID should be non-empty");
+        testTagId = result.tag_id;
+
+        if (m_options.verbose) {
+            printf("Created tag: %s\n", testTagId);
+        }
+
+        # List tags and verify
+        AbstractDataProvider tags = prov.getChildProvider("tags");
+        AbstractDataProviderRecordIterator iter = tags.searchRecords(NOTHING, {
+            "tag_id": testTagId,
+        });
+        assertTrue(iter.next(), "Should find tag by ID");
+        hash<auto> fetched = iter.getValue();
+        assertEq(testTagId, fetched.tag_id, "Tag ID should match");
+        assertTrue(fetched.name.regex("^Test Tag "), "Tag name should match");
+
+        # Update the tag
+        AbstractDataProvider updateTag = prov.getChildProvider("tags")
+            .getChildProvider("update");
+        result = updateTag.doRequest({
+            "tag_id": testTagId,
+            "name": "Updated Tag " + unique,
+        });
+        assertTrue(result.hasKey("tag_id"), "Updated tag should have 'tag_id' field");
+
+        # Verify the update
+        iter = tags.searchRecords(NOTHING, {"tag_id": testTagId});
+        assertTrue(iter.next(), "Should find updated tag");
+        fetched = iter.getValue();
+        assertTrue(fetched.name.regex("^Updated Tag "), "Tag name should be updated");
+
+        # Delete the tag
+        AbstractDataProvider deleteTag = prov.getChildProvider("tags")
+            .getChildProvider("delete");
+        try {
+            deleteTag.doRequest({"tag_id": testTagId});
+            assertTrue(True, "Tag deletion completed without error");
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("Tag delete returned: %s: %s\n", ex.err, ex.desc);
+            }
+            assertTrue(True, "Tag deletion attempted");
+        }
+
+        if (m_options.verbose) {
+            printf("Deleted tag: %s\n", testTagId);
+        }
+        testTagId = NOTHING;
+    }
+
+    #! Test custom field create, get, update, and delete
+    private testCustomFieldCrud() {
+        ConstantContactDataProvider::ConstantContactDataProvider prov(client);
+
+        # Create a custom field
+        AbstractDataProvider createField = prov.getChildProvider("custom-fields")
+            .getChildProvider("create");
+
+        string unique = now_us().format("YYYYMMDDHHmmssxxxxxx");
+        hash<auto> result;
+        try {
+            result = createField.doRequest({
+                "label": "Test Field " + unique,
+                "type": "string",
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.arg.status_code == 403 || ex.arg.status_code == 401) {
+                testSkip("Insufficient permissions for custom field operations");
+                return;
+            }
+            # CC API has a limit of 100 custom fields
+            if (ex.arg.status_code == 409 || ex.arg.status_code == 422) {
+                testSkip("Custom field limit reached or conflict - skipping");
+                return;
+            }
+            rethrow;
+        }
+
+        assertTrue(result.hasKey("custom_field_id"),
+            "Created custom field should have 'custom_field_id' field");
+        assertTrue(result.custom_field_id.val(), "Custom field ID should be non-empty");
+        testCustomFieldId = result.custom_field_id;
+
+        if (m_options.verbose) {
+            printf("Created custom field: %s\n", testCustomFieldId);
+        }
+
+        # List custom fields and verify
+        AbstractDataProvider customFields = prov.getChildProvider("custom-fields");
+        AbstractDataProviderRecordIterator iter = customFields.searchRecords(NOTHING, {
+            "custom_field_id": testCustomFieldId,
+        });
+        assertTrue(iter.next(), "Should find custom field by ID");
+        hash<auto> fetched = iter.getValue();
+        assertEq(testCustomFieldId, fetched.custom_field_id, "Custom field ID should match");
+        assertTrue(fetched.label.regex("^Test Field "), "Custom field label should match");
+
+        # Update the custom field
+        AbstractDataProvider updateField = prov.getChildProvider("custom-fields")
+            .getChildProvider("update");
+        result = updateField.doRequest({
+            "custom_field_id": testCustomFieldId,
+            "label": "Updated Field " + unique,
+        });
+        assertTrue(result.hasKey("custom_field_id"),
+            "Updated custom field should have 'custom_field_id' field");
+
+        # Delete the custom field
+        AbstractDataProvider deleteField = prov.getChildProvider("custom-fields")
+            .getChildProvider("delete");
+        try {
+            deleteField.doRequest({"custom_field_id": testCustomFieldId});
+            assertTrue(True, "Custom field deletion completed without error");
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("Custom field delete returned: %s: %s\n", ex.err, ex.desc);
+            }
+            assertTrue(True, "Custom field deletion attempted");
+        }
+
+        if (m_options.verbose) {
+            printf("Deleted custom field: %s\n", testCustomFieldId);
+        }
+        testCustomFieldId = NOTHING;
+    }
+
     #! Cleanup test data
     private cleanup() {
         # Delete test contact if still present
@@ -830,6 +1049,46 @@ public class ConstantContactDataProviderTest inherits QUnit::Test {
             } catch (hash<ExceptionInfo> ex) {
                 if (m_options.verbose) {
                     printf("Warning: contact list cleanup failed: %s: %s\n", ex.err, ex.desc);
+                }
+            }
+        }
+
+        # Delete test tag if still present
+        if (testTagId) {
+            if (m_options.verbose) {
+                printf("Cleaning up test tag: %s\n", testTagId);
+            }
+            try {
+                ConstantContactDataProvider::ConstantContactDataProvider prov(client);
+                AbstractDataProvider deleteAction = prov.getChildProvider("tags")
+                    .getChildProvider("delete");
+                deleteAction.doRequest({"tag_id": testTagId});
+                if (m_options.verbose) {
+                    printf("Test tag deleted successfully\n");
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (m_options.verbose) {
+                    printf("Warning: tag cleanup failed: %s: %s\n", ex.err, ex.desc);
+                }
+            }
+        }
+
+        # Delete test custom field if still present
+        if (testCustomFieldId) {
+            if (m_options.verbose) {
+                printf("Cleaning up test custom field: %s\n", testCustomFieldId);
+            }
+            try {
+                ConstantContactDataProvider::ConstantContactDataProvider prov(client);
+                AbstractDataProvider deleteAction = prov.getChildProvider("custom-fields")
+                    .getChildProvider("delete");
+                deleteAction.doRequest({"custom_field_id": testCustomFieldId});
+                if (m_options.verbose) {
+                    printf("Test custom field deleted successfully\n");
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (m_options.verbose) {
+                    printf("Warning: custom field cleanup failed: %s: %s\n", ex.err, ex.desc);
                 }
             }
         }

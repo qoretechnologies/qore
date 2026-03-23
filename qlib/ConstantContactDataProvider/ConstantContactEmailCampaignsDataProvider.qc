@@ -67,26 +67,32 @@ public class ConstantContactEmailCampaignsDataProvider inherits ConstantContactD
                 "allowed_values": (
                     <AllowedValueInfo>{
                         "value": "Draft",
+                        "display_name": "Draft",
                         "desc": "Draft campaigns",
                     },
                     <AllowedValueInfo>{
                         "value": "Scheduled",
+                        "display_name": "Scheduled",
                         "desc": "Scheduled campaigns",
                     },
                     <AllowedValueInfo>{
                         "value": "Executing",
+                        "display_name": "Executing",
                         "desc": "Currently sending campaigns",
                     },
                     <AllowedValueInfo>{
                         "value": "Done",
+                        "display_name": "Done",
                         "desc": "Completed campaigns",
                     },
                     <AllowedValueInfo>{
                         "value": "Cancelled",
+                        "display_name": "Cancelled",
                         "desc": "Cancelled campaigns",
                     },
                     <AllowedValueInfo>{
                         "value": "Deleted",
+                        "display_name": "Deleted",
                         "desc": "Deleted campaigns",
                     },
                 ),

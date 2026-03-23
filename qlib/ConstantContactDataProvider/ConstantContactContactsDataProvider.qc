@@ -66,30 +66,37 @@ public class ConstantContactContactsDataProvider inherits ConstantContactDataPro
                 "allowed_values": (
                     <AllowedValueInfo>{
                         "value": "all",
+                        "display_name": "All",
                         "desc": "All contacts",
                     },
                     <AllowedValueInfo>{
                         "value": "active",
+                        "display_name": "Active",
                         "desc": "Active contacts",
                     },
                     <AllowedValueInfo>{
                         "value": "deleted",
+                        "display_name": "Deleted",
                         "desc": "Deleted contacts",
                     },
                     <AllowedValueInfo>{
                         "value": "not_set",
+                        "display_name": "Not Set",
                         "desc": "Contacts with no status set",
                     },
                     <AllowedValueInfo>{
                         "value": "pending_confirmation",
+                        "display_name": "Pending Confirmation",
                         "desc": "Contacts pending confirmation",
                     },
                     <AllowedValueInfo>{
                         "value": "temp_hold",
+                        "display_name": "Temporary Hold",
                         "desc": "Contacts on temporary hold",
                     },
                     <AllowedValueInfo>{
                         "value": "unsubscribed",
+                        "display_name": "Unsubscribed",
                         "desc": "Unsubscribed contacts",
                     },
                 ),

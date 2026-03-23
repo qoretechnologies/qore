@@ -88,7 +88,7 @@ public class ConstantContactAccountDataType inherits HashDataType {
                 "desc": "The time zone ID for the account (e.g., `US/Eastern`)",
             },
             "physical_address": {
-                "type": AutoHashOrNothingType,
+                "type": new ConstantContactPhysicalAddressDataType(AutoHashOrNothingType),
                 "display_name": "Physical Address",
                 "short_desc": "The physical address",
                 "desc": "The physical address associated with the account, containing "
@@ -96,10 +96,11 @@ public class ConstantContactAccountDataType inherits HashDataType {
                     "and `country_code`",
             },
             "company_logo": {
-                "type": AutoHashOrNothingType,
+                "type": new ConstantContactCompanyLogoDataType(AutoHashOrNothingType),
                 "display_name": "Company Logo",
                 "short_desc": "Company logo URL info",
-                "desc": "The company logo information, if available",
+                "desc": "The company logo information containing `url`, `external_url`, "
+                    "and `internal_id` fields, if available",
             },
         };
     }

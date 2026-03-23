@@ -30,11 +30,12 @@ public class ConstantContactAddListMembersRequestDataType inherits HashDataType 
     public {
         const Fields = {
             "source": {
-                "type": AutoHashType,
+                "type": new ConstantContactBulkActivitySourceDataType(),
                 "display_name": "Source",
                 "short_desc": "Source of contacts",
-                "desc": "The source of contacts to add to the lists. Can contain `contact_ids`, "
-                    "`list_ids`, `tag_ids`, `segment_id`, or `all_active_contacts`",
+                "desc": "The source of contacts to add to the lists. Use one of the mutually "
+                    "exclusive fields: `contact_ids`, `list_ids`, `tag_ids`, `segment_id`, "
+                    "`all_active_contacts`, `new_subscriber`, or `engagement_level`",
                 "required": True,
             },
             "list_ids": {
