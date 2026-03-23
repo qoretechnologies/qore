@@ -1137,7 +1137,7 @@ struct qore_httpclient_priv {
     }
 
     DLLLOCAL ~qore_httpclient_priv() {
-        disconnectQuic();
+        disconnect_unlocked();
     }
 
     QoreHashNode* getConfig(my_socket_priv& priv) const {
