@@ -314,7 +314,6 @@ l50Xb2GWQesIt9k5jF5IOw==
         mServer = new HttpServer(<HttpServerOptionInfo>{
             "logger": mLogger,
             "debug": True,
-            "async_mode": True,
         });
 
         # Register handlers
@@ -747,7 +746,6 @@ l50Xb2GWQesIt9k5jF5IOw==
         HttpServer server(<HttpServerOptionInfo>{
             "logger": logger,
             "debug": True,
-            "async_mode": True,
             "quic_drain_timeout": 100ms,  # short for localhost testing
         });
         server.setHandler("simple", "/hello", NOTHING, new SimpleHandler());
@@ -800,7 +798,6 @@ l50Xb2GWQesIt9k5jF5IOw==
         HttpServer server(<HttpServerOptionInfo>{
             "logger": logger,
             "debug": True,
-            "async_mode": True,
             "quic_drain_timeout": 100ms,  # short for localhost testing
         });
         server.setHandler("simple", "/hello", NOTHING, new SimpleHandler());
@@ -855,7 +852,6 @@ l50Xb2GWQesIt9k5jF5IOw==
         HttpServer server(<HttpServerOptionInfo>{
             "logger": logger,
             "debug": True,
-            "async_mode": True,
             "quic_drain_timeout": 100ms,  # short for localhost testing
         });
         server.setHandler("simple", "/hello", NOTHING, new SimpleHandler());
@@ -945,7 +941,6 @@ l50Xb2GWQesIt9k5jF5IOw==
         # Create a server with enable_h3=True (default)
         HttpServer server(<HttpServerOptionInfo>{
             "logger": mLogger,
-            "async_mode": True,
             "enable_h3": True,
         });
         on_exit {
@@ -1006,7 +1001,6 @@ l50Xb2GWQesIt9k5jF5IOw==
         # Create a server with auto-QUIC
         HttpServer server(<HttpServerOptionInfo>{
             "logger": mLogger,
-            "async_mode": True,
             "enable_h3": True,
         });
         on_exit {
@@ -1066,7 +1060,6 @@ l50Xb2GWQesIt9k5jF5IOw==
         # Create a server with auto-QUIC (TLS + QUIC on same port)
         HttpServer server(<HttpServerOptionInfo>{
             "logger": mLogger,
-            "async_mode": True,
             "enable_h3": True,
         });
         on_exit {
@@ -1141,7 +1134,6 @@ l50Xb2GWQesIt9k5jF5IOw==
         # Create a server with auto-QUIC
         HttpServer server(<HttpServerOptionInfo>{
             "logger": mLogger,
-            "async_mode": True,
             "enable_h3": True,
         });
         on_exit {
@@ -1188,7 +1180,6 @@ l50Xb2GWQesIt9k5jF5IOw==
         # (where no QUIC server is listening), to test client fallback
         HttpServer server(<HttpServerOptionInfo>{
             "logger": mLogger,
-            "async_mode": True,
             "enable_h3": False,  # No auto-QUIC
         });
         on_exit {
@@ -1272,7 +1263,6 @@ l50Xb2GWQesIt9k5jF5IOw==
         # Create a server with enable_h3=False
         HttpServer server(<HttpServerOptionInfo>{
             "logger": mLogger,
-            "async_mode": True,
             "enable_h3": False,
         });
         on_exit {
@@ -1314,7 +1304,6 @@ l50Xb2GWQesIt9k5jF5IOw==
     private hash<auto> createAutoQuicServer() {
         HttpServer server(<HttpServerOptionInfo>{
             "logger": mLogger,
-            "async_mode": True,
             "enable_h3": True,
         });
         server.setHandler("test", "/test", NOTHING, new SimpleHandler());
@@ -1484,7 +1473,6 @@ l50Xb2GWQesIt9k5jF5IOw==
         # Create a TCP-only server that returns Alt-Svc pointing to a different host
         HttpServer server(<HttpServerOptionInfo>{
             "logger": mLogger,
-            "async_mode": True,
             "enable_h3": False,
         });
         on_exit delete server;

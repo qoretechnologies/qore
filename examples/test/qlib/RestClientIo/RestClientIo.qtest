@@ -262,7 +262,7 @@ class RestClientIoTest inherits QUnit::Test {
         HttpServer server;
         int port;
         int h1_port;
-        #! HTTP/1.1-only server (no async_mode, no HTTP/2 support)
+        #! HTTP/1.1-only server (no HTTP/2 support)
         HttpServer h1only_server;
         int h1only_port;
         #! Token handler for OAuth2 tests
@@ -429,7 +429,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
             "logger": logger,
             "debug": True,
-            "async_mode": True,
         };
         token_handler = new OAuth2TokenHandler("test-client-id", "test-client-secret");
         auth401_handler = new Auth401Handler();
@@ -452,7 +451,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         }).port;
         server.waitForAsyncIo();
 
-        # HTTP/1.1-only server (no async_mode → no HTTP/2 support)
+        # HTTP/1.1-only server (no HTTP/2 support)
         # Simulates servers like uvicorn, nginx default, etc. that only speak HTTP/1.1
         Logger h1_logger("h1test", LoggerLevel::getLevelInfo());
         h1only_server = new HttpServer(<HttpServerOptionInfo>{

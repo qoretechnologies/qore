@@ -92,6 +92,14 @@ public class Http2PollOperation inherits AbstractPollOperation {
             NOTHING is pushed as a sentinel when the stream closes.
         */
         hash<string, Queue> stream_queues;
+
+        #! Optional notification callbacks per stream, called when data is drained to the Queue
+        /** Keyed by stream_id string. Called on the I/O thread after data is pushed
+            to the corresponding Queue, enabling event-driven wakeup of handler threads.
+
+            @since HttpServerAsyncIo 1.1
+        */
+        hash<string, code<nothing()>> stream_notify_callbacks;
     }
 
     #! Creates the poll operation
@@ -496,6 +504,26 @@ if (push) {
             current_op.abort();
         }
         state = STATE_CLOSED;
+        # Push NOTHING sentinels to all registered stream queues so handler threads
+        # waiting on data wake up and see the stream is closed
+        foreach string sid in (keys stream_queues) {
+            try {
+                stream_queues{sid}.push(NOTHING);
+            } catch () {
+                # Ignore errors pushing to the queue
+            }
+        }
+        # Call all stream notify callbacks so handler threads are woken
+        foreach string sid in (keys stream_notify_callbacks) {
+            try {
+                stream_notify_callbacks{sid}();
+            } catch () {
+                # Ignore errors in notify callbacks
+            }
+        }
+        # Clear registrations
+        remove stream_queues;
+        remove stream_notify_callbacks;
         try {
             sock.close();
         } catch () {}
@@ -507,12 +535,20 @@ if (push) {
 
         @param stream_id the HTTP/2 stream ID
         @param queue the unlimited Queue for data delivery
+        @param notify optional callback called on the I/O thread after data is pushed to the
+        Queue; use this for event-driven wakeup of handler threads (e.g., signaling a
+        Condition variable)
 
         @note Must be called on the I/O controller thread before the handler starts reading.
+
+        @since HttpServerAsyncIo 1.1 added @a notify parameter
     */
-    registerStreamQueue(int stream_id, Queue queue) {
+    registerStreamQueue(int stream_id, Queue queue, *code<nothing()> notify) {
         AutoLock al(op_lock);
         stream_queues{stream_id} = queue;
+        if (notify) {
+            stream_notify_callbacks{stream_id} = notify;
+        }
     }
 
     #! Internal: starts the read request operation
@@ -551,6 +587,10 @@ if (push) {
                         stream_id, drain_count, drain_bytes, queue.size());
                 }
             }
+            # Notify handler thread that data is available
+            if (drain_count && stream_notify_callbacks{sid}) {
+                stream_notify_callbacks{sid}();
+            }
             # Check if the remote peer has sent END_STREAM (client done sending)
             # or if the stream is fully closed (RST_STREAM, GOAWAY)
             if (sock.isHttp2StreamRemoteClosed(stream_id)
@@ -562,11 +602,15 @@ if (push) {
                     }
                 }
                 queue.push(NOTHING);
+                # Notify on close too so the handler wakes up
+                if (stream_notify_callbacks{sid}) {
+                    stream_notify_callbacks{sid}();
+                }
                 completed += sid;
             }
         }
         # Remove completed streams outside the iteration loop
-        map remove stream_queues{$1}, completed;
+        map (remove stream_queues{$1}, remove stream_notify_callbacks{$1}), completed;
     }
 }
 

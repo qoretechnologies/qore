@@ -713,7 +713,6 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
             "logger": logger,
             "debug": True,
-            "async_mode": True,
         };
         mServer = new HttpServer(opts);
 
@@ -1284,8 +1283,8 @@ OKKqgBjNAlYDdPhOy8O8Agk=
     }
 
     testHttp1xChunkedAsync() {
-        # Verify that the async mode works correctly with HTTP/1.x chunked responses.
-        # The server is already running in async_mode: True, so every request uses async I/O.
+        # Verify that async I/O works correctly with HTTP/1.x chunked responses.
+        # The server uses async I/O for all requests.
         HTTPClient hc = getHttp1xClient();
 
         # Make multiple requests to exercise the async path
@@ -1569,7 +1568,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
     testHttp1xSendCallbackAsyncSequential() {
         # Verify that send_callback works correctly through the async I/O pipeline
         # with sequential requests on a keep-alive connection. The server runs in
-        # async_mode=True, so this exercises the full async response path for
+        # This exercises the full async response path for
         # send_callback responses.
         HTTPClient hc = getHttp1xClient();
 

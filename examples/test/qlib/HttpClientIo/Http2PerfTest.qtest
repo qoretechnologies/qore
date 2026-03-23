@@ -136,7 +136,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
             "logger": mLogger,
             "debug": True,
-            "async_mode": True,
         };
         mServer = new HttpServer(opts);
 

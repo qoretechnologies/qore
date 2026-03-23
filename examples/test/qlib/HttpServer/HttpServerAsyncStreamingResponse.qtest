@@ -345,7 +345,6 @@ l50Xb2GWQesIt9k5jF5IOw==
         HttpServer server(<HttpServerOptionInfo>{
             "logger": mLogger,
             "debug": True,
-            "async_mode": True,
         });
         server.setHandler("large", "/large", NOTHING, new LargeStreamHandler(mLargePayload));
         server.setHandler("large-chunked", "/large-chunked", NOTHING, new LargeChunkedHandler(mLargePayload));

@@ -653,6 +653,12 @@ cargo install tree-sitter-cli@0.26.5
       - @ref Qore::Reflection::Class::tryGetConstant() "Class::tryGetConstant()"
     - new builtin methods:
       - static @ref Qore::Program::getAllDefines() "Program::getAllDefines()"
+      - @ref Qore::Thread::Queue::tryGet() "Queue::tryGet()": non-blocking get that returns a hash with a
+        \c "value" key containing the first entry on the queue, or @ref nothing if the queue is empty;
+        disambiguates an empty queue from a @ref nothing value in the queue
+      - @ref Qore::Thread::Queue::tryPop() "Queue::tryPop()": non-blocking pop that returns a hash with a
+        \c "value" key containing the last entry on the queue, or @ref nothing if the queue is empty;
+        disambiguates an empty queue from a @ref nothing value in the queue
       - @ref Qore::Socket::startPollSendHttpResponse() "Socket::startPollSendHttpResponse()": sends an HTTP
         response in non-blocking mode with proper \c Content-Length header handling
       - @ref Qore::Socket::startPollSendHttpResponseWithStream() "Socket::startPollSendHttpResponseWithStream()":

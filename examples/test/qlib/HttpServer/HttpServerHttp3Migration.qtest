@@ -168,7 +168,6 @@ l50Xb2GWQesIt9k5jF5IOw==
         mServer = new HttpServer(<HttpServerOptionInfo>{
             "logger": mLogger,
             "debug": True,
-            "async_mode": True,
         });
 
         mServer.setHandler("echo", "/echo", NOTHING, new MigrationEchoHandler());

@@ -648,7 +648,8 @@ class Http2TrailersTest inherits QUnit::Test {
                     {"content-type": "application/grpc+proto"});
 
                 # Create Http2StreamContext and use it for sending
-                AsyncSocketIo::Http2StreamContext ctx(client, stream_id);
+                Queue data_queue();
+                AsyncSocketIo::Http2StreamContext ctx(client, stream_id, data_queue);
 
                 # Send body via context
                 ctx.sendData(binary("context-body"));

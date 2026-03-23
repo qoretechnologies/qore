@@ -90,7 +90,7 @@ class SizeLimitWsHandler inherits WebSocketHandler {
 
 class HttpServerBodySizeLimitTest inherits QUnit::Test {
     private {
-        # Sync server with body size limit
+        # Server with body size limit
         HttpServer mSyncServer;
         int mSyncPort;
         string mSyncUrl;
@@ -171,7 +171,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     }
 
     constructor() : Test("HttpServerBodySizeLimitTest", "1.0") {
-        # HTTP/1.1 sync mode tests
+        # HTTP/1.1 Content-Length tests
         addTestCase("sync: Content-Length under limit succeeds",
             \syncContentLengthUnderLimitTest());
         addTestCase("sync: Content-Length at limit succeeds",
@@ -218,11 +218,10 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             mLogger.addAppender(new StdoutAppender());
         }
 
-        # Sync server with body size limit
+        # Server with body size limit
         hash<HttpServerOptionInfo> sync_opts = <HttpServerOptionInfo>{
             "logger": mLogger,
             "debug": True,
-            "async_mode": False,
             "max_request_body_size": BodySizeLimit,
         };
         mSyncServer = new HttpServer(sync_opts);
@@ -235,7 +234,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         hash<HttpServerOptionInfo> async_opts = <HttpServerOptionInfo>{
             "logger": mLogger,
             "debug": True,
-            "async_mode": True,
             "max_request_body_size": BodySizeLimit,
         };
         mAsyncServer = new HttpServer(async_opts);
@@ -265,7 +263,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         hash<HttpServerOptionInfo> unlimited_opts = <HttpServerOptionInfo>{
             "logger": mLogger,
             "debug": True,
-            "async_mode": False,
         };
         mUnlimitedServer = new HttpServer(unlimited_opts);
         mUnlimitedServer.setHandler("echo", "", NOTHING, new BodyEchoHandler());
@@ -542,7 +539,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
             "logger": logger,
             "debug": True,
-            "async_mode": False,
         };
         HttpServer srv(opts);
         on_exit delete srv;

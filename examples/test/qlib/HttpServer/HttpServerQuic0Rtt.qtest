@@ -139,7 +139,6 @@ l50Xb2GWQesIt9k5jF5IOw==
         HttpServer server(<HttpServerOptionInfo>{
             "logger": mLogger,
             "debug": True,
-            "async_mode": True,
         });
         server.setHandler("simple", "/hello", NOTHING, new SimpleHandler());
         server.setHandler("echo", "/echo", NOTHING, new EchoHandler());

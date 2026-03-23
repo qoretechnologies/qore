@@ -613,14 +613,10 @@ public hashdecl HttpListenerOptionInfo {
         - \c "2.0": Require HTTP/2, reject connections that don't negotiate HTTP/2
         - \c "3.0": HTTP/3 (QUIC) listener — uses QUIC sockets configured separately
 
-        @note HTTP/2 requires:
-        - TLS (non-TLS connections always use HTTP/1.x)
-        - Async I/O mode enabled on the HttpServer (\c async_mode: \c True, which is the default)
+        @note HTTP/2 requires TLS (non-TLS connections always use HTTP/1.x).
 
         @note HTTP/3 requires TLS and uses QUIC as the transport protocol; HTTP/3 listeners are configured
         via QUIC-specific paths
-
-        When async mode is disabled, the server only supports HTTP/1.x regardless of this setting.
 
         @since HttpServer 1.6
     */
@@ -632,8 +628,10 @@ public hashdecl HttpListenerOptionInfo {
     #! Free-form information to be used by custom listener startup code
     hash<auto> additional_info;
 
-    #! If True, the listener's main thread will not be started (for use with async I/O mode)
-    /** @since HttpServer 1.5
+    #! If True, the listener's main thread will not be started
+    /** @deprecated Async mode is now always active; this field is ignored.
+
+        @since HttpServer 1.5
     */
     bool no_start_main_thread = False;
 
@@ -641,9 +639,6 @@ public hashdecl HttpListenerOptionInfo {
     /** Set to @ref False to add multiple listeners without blocking, then call
         \c HttpServer::waitForAsyncIo() "HttpServer::waitForAsyncIo()" manually once
         after all listeners are added.
-
-        @note This option only affects servers running in async I/O mode (the default).
-        In sync mode, listeners are ready immediately.
 
         @since HttpServer 1.6
     */
@@ -664,13 +659,13 @@ public hashdecl HttpListenerOptionInfo {
     bool no_bind = False;
 
     #! Enable automatic HTTP/3 (QUIC) listener creation for TLS listeners
-    /** When \c True (the default) and both \c cert and \c key are present and async mode is on,
+    /** When \c True (the default) and both \c cert and \c key are present,
         an additional QUIC listener is automatically created on the same port as the TCP listener.
         The server will then advertise HTTP/3 availability via the \c Alt-Svc response header.
 
         Set to \c False to disable automatic QUIC listener creation for this listener.
 
-        @note Requires async mode and TLS (cert + key). Has no effect without TLS or in sync mode.
+        @note Requires TLS (cert + key). Has no effect without TLS.
 
         @since HttpServer 1.6
     */
@@ -1720,8 +1715,8 @@ public class AbstractStreamRequest {
         # Normal streaming: wrap the send callback in a CallbackInputStream so that data is
         # streamed without buffering the entire response in memory. For HTTP/2, the downstream
         # code sends DATA frames via startPollSendHttp2StreamingResponse; for HTTP/1.x, the
-        # InputStream is sent as a chunked response via sendHTTPResponse. In async mode, both
-        # protocols route through the async I/O controller, freeing the handler thread immediately.
+        # InputStream is sent as a chunked response via sendHTTPResponse. Both protocols route
+        # through the async I/O controller, freeing the handler thread immediately.
         if (cx."header-info".http2) {
             # HTTP/2 uses DATA frames, not chunked transfer encoding
             remove rv.hdr."Transfer-Encoding";

@@ -113,7 +113,6 @@ l50Xb2GWQesIt9k5jF5IOw==
         addTestCase("Http3ServerPollOperation with UDP socket", \testH3PollOpWithUdpSocket());
 
         # HttpServer addQuicListener validation tests
-        addTestCase("addQuicListener requires async mode", \testAddQuicListenerRequiresAsyncMode());
         addTestCase("addQuicListener requires cert and key", \testAddQuicListenerRequiresCertKey());
         addTestCase("addQuicListener binds UDP socket", \testAddQuicListenerBindsUdp());
 
@@ -259,35 +258,12 @@ l50Xb2GWQesIt9k5jF5IOw==
             "cannot continueReading while reading");
     }
 
-    #! Test addQuicListener requires async mode
-    testAddQuicListenerRequiresAsyncMode() {
-        # Create server WITHOUT async mode
-        Logger logger("test", LoggerLevel::getLevelInfo());
-        HttpServer server(<HttpServerOptionInfo>{
-            "logger": logger,
-            "debug": True,
-            "async_mode": False,
-        });
-        on_exit {
-            delete server;
-        }
-
-        # Should throw because async_mode is not enabled
-        assertThrows("HTTP3-ERROR", "async mode", \server.addQuicListener(),
-            (<HttpListenerOptionInfo>{
-                "cert": new SSLCertificate(CertPem),
-                "key": new SSLPrivateKey(KeyPem),
-            },),
-            "addQuicListener requires async mode");
-    }
-
     #! Test addQuicListener requires cert and key
     testAddQuicListenerRequiresCertKey() {
         Logger logger("test", LoggerLevel::getLevelInfo());
         HttpServer server(<HttpServerOptionInfo>{
             "logger": logger,
             "debug": True,
-            "async_mode": True,
         });
         on_exit {
             delete server;
@@ -323,7 +299,6 @@ l50Xb2GWQesIt9k5jF5IOw==
         HttpServer server(<HttpServerOptionInfo>{
             "logger": logger,
             "debug": True,
-            "async_mode": True,
         });
         on_exit {
             delete server;

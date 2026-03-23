@@ -737,8 +737,9 @@ class WebSocketHandlerTest inherits QUnit::Test {
             try { server_sock.close(); } catch () {}
         }
 
-        # Create Http2StreamContext with the connected socket
-        auto h2_ctx = new AsyncSocketIo::Http2StreamContext(accepted_sock, 1);
+        # Create Http2StreamContext with the connected socket and a data queue
+        Queue h2_data_queue();
+        auto h2_ctx = new AsyncSocketIo::Http2StreamContext(accepted_sock, 1, h2_data_queue);
         assertTrue(h2_ctx instanceof AsyncSocketIo::AbstractStreamContext,
             "Http2StreamContext is an AbstractStreamContext");
         assertEq("http2", h2_ctx.getProtocol(), "Http2StreamContext.getProtocol() returns 'http2'");

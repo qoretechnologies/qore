@@ -183,7 +183,6 @@ l50Xb2GWQesIt9k5jF5IOw==
         HttpServer server(<HttpServerOptionInfo>{
             "logger": mLogger,
             "debug": True,
-            "async_mode": True,
         });
 
         server.setHandler("ws-handler", "", NOTHING, ws_handler);

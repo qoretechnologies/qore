@@ -11,6 +11,7 @@ class Test inherits QUnit::Test {
     constructor() : QUnit::Test("Queue", "1.0") {
         addTestCase("simple tests", \simpleTests());
         addTestCase("timeout", \timeoutTests());
+        addTestCase("tryGet and tryPop tests", \tryGetTryPopTests());
         addTestCase("leak test", \leakTest());
         set_return_value(main());
     }
@@ -69,6 +70,145 @@ class Test inherits QUnit::Test {
         assertThrows("QUEUE-TIMEOUT-ERROR", \q.insert(), (True, 9999999999));
         assertThrows("QUEUE-TIMEOUT-ERROR", \q.push(), (True, -9999999999));
         assertThrows("QUEUE-TIMEOUT-ERROR", \q.push(), (True, 9999999999));
+    }
+
+    tryGetTryPopTests() {
+        # tryGet on empty queue returns NOTHING
+        {
+            Queue q();
+            assertNothing(q.tryGet());
+        }
+
+        # tryGet on queue with data returns {"value": data}
+        {
+            Queue q();
+            q.push(42);
+            auto result = q.tryGet();
+            assertEq({"value": 42}, result);
+            assertEq(0, q.size());
+        }
+
+        # tryGet on queue with NOTHING value returns {"value": NOTHING} (exists returns True)
+        {
+            Queue q();
+            q.push(NOTHING);
+            auto result = q.tryGet();
+            assertTrue(exists result);
+            assertNothing(result.value);
+            assertEq({"value": NOTHING}, result);
+            assertEq(0, q.size());
+        }
+
+        # tryGet ordering: returns first element, queue order preserved
+        {
+            Queue q();
+            q.push("first");
+            q.push("second");
+            q.push("third");
+
+            auto result = q.tryGet();
+            assertEq({"value": "first"}, result);
+
+            result = q.tryGet();
+            assertEq({"value": "second"}, result);
+
+            result = q.tryGet();
+            assertEq({"value": "third"}, result);
+
+            assertNothing(q.tryGet());
+        }
+
+        # tryPop on empty queue returns NOTHING
+        {
+            Queue q();
+            assertNothing(q.tryPop());
+        }
+
+        # tryPop on queue with data returns {"value": data} (last element)
+        {
+            Queue q();
+            q.push("first");
+            q.push("last");
+            auto result = q.tryPop();
+            assertEq({"value": "last"}, result);
+            assertEq(1, q.size());
+        }
+
+        # tryPop on queue with NOTHING value returns {"value": NOTHING}
+        {
+            Queue q();
+            q.push(NOTHING);
+            auto result = q.tryPop();
+            assertTrue(exists result);
+            assertNothing(result.value);
+            assertEq({"value": NOTHING}, result);
+            assertEq(0, q.size());
+        }
+
+        # Queue with error state set via setError() — tryGet() throws the error
+        {
+            Queue q();
+            q.push("data");
+            q.setError("TEST-ERR", "test error description");
+            assertThrows("TEST-ERR", "test error description", \q.tryGet());
+            assertThrows("TEST-ERR", "test error description", \q.tryPop());
+            q.clearError();
+        }
+
+        # Multiple elements: tryGet drains first, tryPop drains last
+        {
+            Queue q();
+            q.push(1);
+            q.push(2);
+            q.push(3);
+            q.push(4);
+            q.push(5);
+
+            # tryGet takes from the front
+            assertEq({"value": 1}, q.tryGet());
+            # tryPop takes from the back
+            assertEq({"value": 5}, q.tryPop());
+            # Remaining: 2, 3, 4
+            assertEq(3, q.size());
+            assertEq({"value": 2}, q.tryGet());
+            assertEq({"value": 4}, q.tryPop());
+            # Remaining: 3
+            assertEq(1, q.size());
+            assertEq({"value": 3}, q.tryGet());
+            assertEq(0, q.size());
+            # Both return NOTHING on empty queue
+            assertNothing(q.tryGet());
+            assertNothing(q.tryPop());
+        }
+
+        # tryGet/tryPop with various value types
+        {
+            Queue q();
+            q.push(True);
+            q.push(3.14);
+            q.push(("a", "b", "c"));
+            q.push({"key": "val"});
+
+            assertEq({"value": True}, q.tryGet());
+            assertEq({"value": {"key": "val"}}, q.tryPop());
+            assertEq({"value": 3.14}, q.tryGet());
+            assertEq({"value": ("a", "b", "c")}, q.tryPop());
+            assertNothing(q.tryGet());
+        }
+
+        # tryGet/tryPop on queue with max size
+        {
+            Queue q(2);
+            q.push("a");
+            q.push("b");
+
+            assertEq({"value": "a"}, q.tryGet());
+            assertEq(1, q.size());
+            assertEq({"value": "b"}, q.tryPop());
+            assertEq(0, q.size());
+            assertNothing(q.tryGet());
+            assertNothing(q.tryPop());
+        }
     }
 
     wait(Queue q, Counter c) {

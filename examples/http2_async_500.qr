@@ -201,7 +201,6 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
             "logger": logger,
             "debug": True,
-            "async_mode": True,
         };
         server = new HttpServer(opts);
         server.setHandler("no-response", "/500", NOTHING, new NoResponseHandler());

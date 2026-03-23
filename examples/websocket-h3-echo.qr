@@ -132,11 +132,10 @@ class EchoWsHandler inherits WebSocketHandler {
 # --- Main program -------------------------------------------------------------
 
 sub main() {
-    # Create HTTP server with WebSocket echo handler in async mode
+    # Create HTTP server with WebSocket echo handler
     EchoWsHandler ws_handler();
     HttpServer server(<HttpServerOptionInfo>{
         "debug": True,
-        "async_mode": True,
     });
 
     server.setHandler("ws-handler", "", NOTHING, ws_handler);

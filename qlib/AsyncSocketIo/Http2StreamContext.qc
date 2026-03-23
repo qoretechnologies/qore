@@ -30,14 +30,8 @@ public namespace AsyncSocketIo {
 #! HTTP/2 stream I/O helper
 /** Provides stream-scoped send/receive helpers for HTTP/2 sockets.
 
-    When \c direct_io is @ref True "True", the context manages HTTP/2 frame reading from the
-    TCP socket itself (via @ref Qore::Socket::isDataAvailable() "Socket::isDataAvailable()"
-    which triggers HTTP/2 frame processing). This is required when no I/O thread polls the
-    socket for incoming HTTP/2 frames (e.g., dedicated WebSocket handler threads).
-
-    When \c direct_io is @ref False "False" (default), an external I/O thread is expected to
-    read HTTP/2 frames and populate the stream buffer. The context only reads from the buffer
-    via @ref Qore::Socket::readHttp2StreamData() "Socket::readHttp2StreamData()".
+    An external I/O thread reads HTTP/2 frames and populates a Queue for the stream. The
+    context reads from the Queue via @ref readData() and sends via the socket directly.
 
     @since AsyncSocketIo 1.0
 */
@@ -45,28 +39,36 @@ public class Http2StreamContext inherits AbstractStreamContext {
     private {
         Socket sock;
         int stream_id;
-        #! When True, readData() triggers HTTP/2 frame reading from TCP
-        bool direct_io;
+        #! Queue for receiving data from the I/O controller
+        /** @ref readData() reads from this Queue (non-blocking). The I/O controller's
+            @ref HttpServerAsyncIo::Http2PollOperation "Http2PollOperation" drains data
+            from the per-stream buffer to this Queue after each poll cycle.
+
+            @since AsyncSocketIo 1.1
+        */
+        Queue data_queue;
+
+        #! Set to True when a NOTHING sentinel is received from the Queue (stream closed)
+        /** @since AsyncSocketIo 1.1
+        */
+        bool closed = False;
     }
 
-    #! Creates an HTTP/2 stream context
-    /** @param sock the HTTP/2 socket
+    #! Creates an HTTP/2 stream context with Queue-based async I/O
+    /** @param sock the HTTP/2 socket (used for sending; the I/O controller reads)
         @param stream_id the HTTP/2 stream ID (must be positive)
-        @param direct_io when @ref True "True", the context reads HTTP/2 frames directly from
-        the TCP socket (for cases where no I/O thread manages frame reading)
+        @param data_queue the Queue populated by the I/O controller with incoming data;
+        @ref readData() reads from this Queue non-blockingly
+
+        @since AsyncSocketIo 1.1
     */
-    constructor(Socket sock, int stream_id, bool direct_io = False) {
+    constructor(Socket sock, int stream_id, Queue data_queue) {
         @assert(sock, "socket cannot be null");
         @assert(sock.isOpen(), "socket must be open");
         @assert(stream_id > 0, "stream_id must be positive");
         self.sock = sock;
         self.stream_id = stream_id;
-        self.direct_io = direct_io;
-        if (direct_io) {
-            # Set the active stream so isDataAvailable() knows which stream to check
-            # and can trigger HTTP/2 frame reading from TCP
-            sock.setHttp2ActiveStream(stream_id);
-        }
+        self.data_queue = data_queue;
     }
 
     string getProtocol() {
@@ -82,7 +84,7 @@ public class Http2StreamContext inherits AbstractStreamContext {
     }
 
     bool isOpen() {
-        return sock.isOpen();
+        return !closed && sock.isOpen();
     }
 
     #! Send DATA frames on the associated HTTP/2 stream.
@@ -102,29 +104,30 @@ public class Http2StreamContext inherits AbstractStreamContext {
     }
 
     #! Read data from this HTTP/2 stream.
-    /** Reads data for this stream from the underlying HTTP/2 socket.
-
-        In direct I/O mode, this method first calls
-        @ref Qore::Socket::isDataAvailable() "Socket::isDataAvailable()" with a zero timeout
-        to trigger non-blocking HTTP/2 frame reading from the TCP socket. This populates the
-        per-stream buffer that @ref Qore::Socket::readHttp2StreamData()
-        "Socket::readHttp2StreamData()" reads from.
+    /** Reads from the Queue non-blockingly. The I/O controller populates the Queue via
+        @ref HttpServerAsyncIo::Http2PollOperation::drainStreamQueues()
+        "Http2PollOperation::drainStreamQueues()".
 
         @param max_bytes
-        the maximum number of bytes to read; if 0, the socket decides how much data to return
+        ignored; present for API compatibility
 
         @return
-        the binary data returned by Socket::readHttp2StreamData(), or @ref nothing if no data
-        is available
+        binary data if available, or @ref nothing if no data is buffered
     */
     *binary readData(int max_bytes = 0) {
-        if (direct_io) {
-            # Trigger HTTP/2 frame reading from TCP. isDataAvailable() with the active
-            # stream set will: check the stream buffer, and if empty, read HTTP/2 frames
-            # from the TCP socket (non-blocking with 0ms timeout) to populate the buffer.
-            sock.isDataAvailable(0ms);
+        # Read from Queue populated by the I/O controller.
+        # tryGet() returns {"value": data} or NOTHING if queue is empty,
+        # disambiguating empty queue from a NOTHING sentinel value.
+        auto result = data_queue.tryGet();
+        if (!exists result) {
+            return NOTHING;
         }
-        return sock.readHttp2StreamData(stream_id, max_bytes);
+        # NOTHING sentinel means stream closed
+        if (exists result && !(result.value instanceof binary)) {
+            closed = True;
+            return NOTHING;
+        }
+        return result.value;
     }
 
     #! Send HTTP/2 trailer headers on this stream

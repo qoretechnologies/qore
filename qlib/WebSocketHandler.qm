@@ -91,9 +91,9 @@ class EchoWsHandler inherits WebSocketHandler {
     }
 }
 
-# Create server in async mode (required for HTTP/3)
+# Create server
 EchoWsHandler ws_handler();
-HttpServer server(<HttpServerOptionInfo>{"async_mode": True});
+HttpServer server();
 server.setHandler("ws", "", NOTHING, ws_handler);
 server.setDefaultHandler("ws", ws_handler);
 server.waitForAsyncIo();
@@ -304,12 +304,38 @@ public class WebSocketConnection {
         */
         int extension_rsv_mask = 0;
 
-        bool async_mode = False;
         *AsyncSocketIo::AsyncSocketIoController async_ctrl;
         *AsyncSocketIo::AbstractStreamContext stream_ctx;
 
         #! Listener ID this connection belongs to
         string lid;
+
+        #! Mutex for event-driven I/O notification
+        /** Used with @ref io_cond to replace polling with deterministic wakeups.
+
+            @since WebSocketHandler 2.6
+        */
+        Mutex io_mutex();
+
+        #! Condition variable for event-driven I/O notification
+        /** Signaled when:
+            - outgoing data is pushed to the channel via @ref send() or @ref sendEncoded()
+            - the connection is stopped via @ref stop()
+            - incoming data is available from the stream context
+
+            @since WebSocketHandler 2.6
+        */
+        Condition io_cond();
+
+        #! Flag indicating an I/O event has been signaled but not yet consumed
+        /** Prevents lost wakeups when @ref notifyIo() fires between
+            @ref pollDataImmediate() returning NOTHING and @ref waitForIoEvent()
+            entering its condition wait.  Set under @ref io_mutex by @ref notifyIo(),
+            checked and cleared by @ref waitForIoEvent().
+
+            @since WebSocketHandler 2.6
+        */
+        bool io_pending = False;
     }
 
     private:internal {
@@ -341,8 +367,7 @@ public class WebSocketConnection {
         self.sock = sock;
     }
 
-    setAsyncIo(bool async_mode, *AsyncSocketIo::AsyncSocketIoController async_ctrl) {
-        self.async_mode = async_mode;
+    setAsyncIo(*AsyncSocketIo::AsyncSocketIoController async_ctrl) {
         self.async_ctrl = async_ctrl;
     }
 
@@ -397,7 +422,7 @@ public class WebSocketConnection {
     }
 
     bool isAsyncMode() {
-        return async_mode;
+        return exists async_ctrl;
     }
 
     *AsyncSocketIo::AsyncSocketIoController getAsyncCtrl() {
@@ -419,8 +444,35 @@ public class WebSocketConnection {
         return lid;
     }
 
+    #! Signals the I/O loop and async controller that data is available
+    /** Wakes the startImpl loop's condition wait so it can process outgoing data immediately
+        (instead of waiting for the next poll cycle).  In async I/O mode, also wakes the async
+        I/O controller to ensure timely flushing of transport-layer buffers.
+
+        This method is safe to call from any thread, including I/O controller callbacks
+        and stream context wake callbacks.
+
+        @since WebSocketHandler 2.6
+    */
+    notifyIo() {
+        {
+            AutoLock al(io_mutex);
+            io_pending = True;
+            io_cond.signal();
+        }
+        if (async_ctrl) {
+            try {
+                async_ctrl.wake();
+            } catch () {
+                # Wake failure is non-critical; the I/O loop will wake on its next cycle
+            }
+        }
+    }
+
     #! This method is called to poll for messages from the client to send from the server
     /** Called by the @ref WebSocketHandler::WebSocketHandler "WebSocketHandler"
+
+        @deprecated Use @ref waitForIoEvent() + @ref pollDataImmediate() for event-driven I/O
     */
     *binary pollData() {
         try {
@@ -440,6 +492,36 @@ public class WebSocketConnection {
         return exists result ? result.value : NOTHING;
     }
 
+    #! Waits for an I/O event (outgoing data, incoming data, stop, or heartbeat timeout)
+    /** Blocks the calling thread until one of the following occurs:
+        - @ref send() or @ref sendEncoded() pushes outgoing data (signals @ref io_cond)
+        - @ref stop() is called (signals @ref io_cond)
+        - An incoming data callback signals @ref io_cond
+        - The timeout expires (used for heartbeat timing)
+
+        After this method returns, the caller should check both the outgoing channel
+        (via @ref pollDataImmediate()) and the incoming stream context.
+
+        @param to the maximum time to wait; use the heartbeat interval
+        @return @ref True if the wait was interrupted by a signal (data/stop available),
+        @ref False if it timed out
+
+        @since WebSocketHandler 2.6
+    */
+    bool waitForIoEvent(timeout to) {
+        AutoLock al(io_mutex);
+        # Check the predicate before waiting to prevent lost wakeups:
+        # if notifyIo() fired between the caller's pollDataImmediate() and this
+        # call, io_pending is already True and we return immediately
+        if (io_pending) {
+            io_pending = False;
+            return True;
+        }
+        int rc = io_cond.wait(io_mutex, to);
+        io_pending = False;
+        return rc == 0;
+    }
+
     #! Pushes an already-encoded message on the connection's message channel
     sendEncoded(binary msg) {
         try {
@@ -448,7 +530,9 @@ public class WebSocketConnection {
             if (ex.err != "CHANNEL-CLOSED") {
                 rethrow;
             }
+            return;
         }
+        notifyIo();
     }
 
     #! Returns True if this connection requires per-connection encoding
@@ -486,7 +570,9 @@ public class WebSocketConnection {
             if (ex.err != "CHANNEL-CLOSED") {
                 rethrow;
             }
+            return;
         }
+        notifyIo();
     }
 
     #! Pushes an unencoded message on the connection's message channel
@@ -507,7 +593,9 @@ public class WebSocketConnection {
             if (ex.err != "CHANNEL-CLOSED") {
                 rethrow;
             }
+            return;
         }
+        notifyIo();
     }
 
     #! Applies extension transforms to outgoing message and encodes it
@@ -594,7 +682,9 @@ public class WebSocketConnection {
     flush() {
         if (gettid() != tid) {
             while (!stop_flag && (!channel.empty() || hasPendingSends())) {
-                usleep(DefaultQueuePollingInterval);
+                # Wait on condition instead of polling with usleep — woken by the
+                # I/O thread after it drains the channel/pending sends
+                waitForIoEvent(DefaultQueuePollingInterval);
             }
         } else {
             handler.flushIo(self, sock);
@@ -606,6 +696,12 @@ public class WebSocketConnection {
         stop_flag = True;
         # closing the channel wakes up the polling thread immediately
         channel.close();
+        # signal the condition to wake up the I/O loop in case it's waiting
+        {
+            AutoLock al(io_mutex);
+            io_pending = True;
+            io_cond.signal();
+        }
     }
 
     #! Returns True if there are buffered frames awaiting send
@@ -1314,22 +1410,34 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         }
         # Debug helper for HTTP/2 WS frame headers
         @debug(bool h2_ws_debug_frames = is_http2 && getenv("QORE_HTTP2_WS_DEBUG_FRAMES"));
-        bool async_mode = cx."async_mode" ?? False;
-        *AsyncSocketIo::AsyncSocketIoController async_ctrl;
-        if (async_mode) {
-            async_ctrl = cx."async_ctrl";
-        }
+        *AsyncSocketIo::AsyncSocketIoController async_ctrl = cx."async_ctrl";
         # get new connection object
         WebSocketConnection wsc = doNewConnection(cx, hdr, cid);
         sock.setEncoding("UTF-8");
         wsc.setSocket(sock);
         wsc.setListenerId(lid);
-        wsc.setAsyncIo(async_mode, async_ctrl);
+        wsc.setAsyncIo(async_ctrl);
         if (is_http2) {
             @assert(h2_stream_id > 0, "missing HTTP/2 stream id for WebSocket");
-            # The WebSocket handler thread owns the socket exclusively and must read
-            # HTTP/2 frames directly (no I/O thread is polling this connection)
-            wsc.setStreamContext(new AsyncSocketIo::Http2StreamContext(sock, h2_stream_id, True));
+            # The I/O controller reads HTTP/2 frames from TCP and
+            # delivers data via a Queue.  No direct_io — only the I/O controller
+            # touches the socket for reading.  Using direct_io=True
+            # would cause the handler and I/O controller to compete for the same
+            # TCP socket, corrupting the HTTP/2 session.
+            *Queue h2_data_queue = cx."header-info".stream_data_queue;
+            if (!h2_data_queue) {
+                throw "WEBSOCKET-HTTP2-ERROR", "HTTP/2 WebSocket requires "
+                    "a stream data Queue from the I/O controller";
+            }
+            wsc.setStreamContext(
+                new AsyncSocketIo::Http2StreamContext(sock, h2_stream_id, h2_data_queue));
+            # Register notification callback so the I/O controller signals
+            # this connection when data arrives for this stream
+            *code<nothing(code<nothing()>)> register_notify =
+                cx."header-info".register_stream_notify;
+            if (register_notify) {
+                register_notify(sub () { wsc.notifyIo(); });
+            }
         } else if (is_http3) {
             @assert(h3_session_id > 0, "missing HTTP/3 session id for WebSocket");
             @assert(h3_stream_id >= 0, "missing HTTP/3 stream id for WebSocket");
@@ -1339,6 +1447,8 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                 if (async_ctrl) {
                     async_ctrl.wake();
                 }
+                # Wake the startImpl loop so it checks for incoming data
+                wsc.notifyIo();
             };
             wsc.setStreamContext(new AsyncSocketIo::Http3StreamContext(
                 sock, h3_session_id, h3_stream_id, wake));
@@ -1420,8 +1530,17 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                 # this creates natural backpressure to the application thread — when
                 # we stop dequeuing, the Channel fills up and send() blocks
                 if (!wsc.hasPendingSends()) {
-                    # send any and all messages on the channel
-                    *binary d = wsc.pollData();
+                    # Dequeue outgoing messages: event-driven for async extended
+                    # CONNECT (HTTP/2, HTTP/3); blocking with timeout for HTTP/1.1
+                    *binary d;
+                    if (is_extended_connect) {
+                        # Non-blocking: send() signals io_cond which wakes this loop
+                        d = wsc.pollDataImmediate();
+                    } else {
+                        # HTTP/1.1: channel.recv() wakes instantly on channel.send();
+                        # the 250ms timeout provides heartbeat granularity
+                        d = wsc.pollData();
+                    }
                     if (d) {
                         @debug {
                             if (h2_ws_debug_frames && d.size() >= 2) {
@@ -1452,7 +1571,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                 }
                 hash<WsMsgInfo> h;
                 bool have_frame = False;
-                if (is_extended_connect && async_mode) {
+                if (is_extended_connect) {
                     # HTTP/2 and HTTP/3 WebSocket: read from stream context
                     *AsyncSocketIo::AbstractStreamContext ctx = wsc.getStreamContext();
                     *binary incoming = ctx ? ctx.readData() : NOTHING;
@@ -1498,6 +1617,15 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                                 }
                                 sendFrame(wsc, sock, frame);
                                 timestamp = now;
+                            } else if (!wsc.hasPendingSends()) {
+                                # Event-driven idle wait: sleep until signaled by send(),
+                                # stop(), or the I/O controller's incoming data callback.
+                                # Wakes instantly on any I/O event; heartbeat is the only
+                                # timeout — no polling.
+                                int remaining_s = heartbeat - (now - timestamp);
+                                if (remaining_s > 0) {
+                                    wsc.waitForIoEvent(remaining_s * 1s);
+                                }
                             }
                         } else {
                             timestamp = now;
@@ -1511,15 +1639,6 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                             # Skip heartbeats when backpressured — see comment above
                             if (!wsc.hasPendingSends() && (now - timestamp) >= heartbeat) {
                                 binary frame = ws_encode_message(heartbeat_msg, WSOP_Ping);
-                                @debug {
-                                    if (h2_ws_debug_frames && frame.size() >= 2) {
-                                        int b0 = frame[0];
-                                        int b1 = frame[1];
-                                        log(LoggerLevel::INFO,
-                                            "HTTP/2 WS send frame: b0=0x%02x b1=0x%02x fin=%y op=%d masked=%y",
-                                            b0, b1, (b0 & WS_FIN) != 0, b0 & 0x0f, (b1 & 0x80) != 0);
-                                    }
-                                }
                                 sendFrame(wsc, sock, frame);
                                 timestamp = now;
                             }
@@ -1772,6 +1891,11 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                 }
             }
         }
+        # Wake flush() callers waiting on waitForIoEvent() so they see the
+        # channel/pending sends are now drained
+        if (rv) {
+            wsc.notifyIo();
+        }
         return rv ?? False;
     }
 
@@ -1836,9 +1960,10 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         rwl.readLock();
         on_exit rwl.readUnlock();
 
-        if (!exists ch{id})
+        if (!exists ch{id}) {
             throw "WEBSOCKET-CONNECTION-ERROR", sprintf("connection %y does not exist (valid connections: %y)", id,
                 keys ch);
+        }
         #logDebug("sending data to connection: %y", id);
         ch{id}.send(d);
     }
@@ -1848,9 +1973,10 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         rwl.readLock();
         on_exit rwl.readUnlock();
 
-        if (!exists ch{id})
+        if (!exists ch{id}) {
             throw "WEBSOCKET-CONNECTION-ERROR", sprintf("connection %y does not exist (valid connections: %y)", id,
                 keys ch);
+        }
         #logDebug("stopping connection: %y", id);
         ch{id}.stop();
     }
@@ -1865,13 +1991,14 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         ## Deadlock Prevention
 
         WebSocket connections run in their own threads (startImpl loop) and may be blocked on:
-        - pollData() waiting for messages to send (250ms timeout)
+        - waitForIoEvent() for extended CONNECT connections (HTTP/2, HTTP/3)
+        - pollData() waiting for messages to send (250ms timeout) for HTTP/1.1
         - Socket I/O operations
 
         Without this method, the server shutdown sequence would hang waiting for these threads
         to notice the shutdown flag. By calling stop() on each connection, we:
         1. Set the connection's stop_flag to True
-        2. Close the channel to wake up pollData() immediately
+        2. Close the channel to wake up pollData()/waitForIoEvent() immediately
 
         @param lid the listener ID being stopped
 
@@ -1926,7 +2053,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
 
         For each connection, stop() does:
         1. Sets stop_flag = True (checked in startImpl's while loop)
-        2. Closes the channel (wakes up pollData immediately)
+        2. Closes the channel (wakes up pollData()/waitForIoEvent() immediately)
 
         This ensures the startImpl loop will exit on its next iteration, allowing the
         connection thread to complete and decrement the dThreads counter.
@@ -1946,10 +2073,11 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
 
         binary msg = code.encodeMsb(2);
 
-        if (txtmsg)
+        if (txtmsg) {
             txtmsg = convert_encoding(txtmsg, "utf8");
-        else
+        } else {
             txtmsg = WSCCMap{code};
+        }
         @debug {
             if (getenv("QORE_HTTP2_DEBUG")) {
                 log(LoggerLevel::INFO, "HTTP/2 WS sendClose: code=%d reason=%y", code, txtmsg);
@@ -2030,13 +2158,12 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                     throw ex.err, ex.desc, ex.arg;
                 }
             }
-            if (wsc.isAsyncMode() && wsc.getAsyncCtrl()) {
+            if (wsc.getAsyncCtrl()) {
                 wsc.getAsyncCtrl().wake();
             }
             return True;
         }
-        if (wsc.isAsyncMode()) {
-            @assert(wsc.getAsyncCtrl(), "missing async controller for async mode WebSocket send");
+        if (wsc.getAsyncCtrl()) {
             AbstractPollOperation op;
             try {
                 op = sock.startPollSend(frame);
@@ -2133,11 +2260,17 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
             wsc.dequeuePendingSend();
             ++drained;
         }
+        # If the pending list is now empty after draining, signal flush() callers
+        # waiting on waitForIoEvent() so they see the backlog is cleared
+        if (drained > 0 && !wsc.hasPendingSends()) {
+            wsc.notifyIo();
+        }
     }
 
     static string getDataString(*data d) {
-        if (!d)
+        if (!d) {
             return "n/a";
+        }
         return sprintf("type: %s: %y", d.type(), d);
     }
 

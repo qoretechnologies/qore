@@ -92,7 +92,6 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         int iterations;
         int concurrent;
         bool verbose = False;
-        bool async_mode = False;
         HttpServer server;
         string server_url;
     }
@@ -110,20 +109,15 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         string arg3 = shift ARGV ?? "";
         if (arg3 == "-v") {
             verbose = True;
-        } else if (arg3 == "--async") {
-            async_mode = True;
         }
         string arg4 = shift ARGV ?? "";
         if (arg4 == "-v") {
             verbose = True;
-        } else if (arg4 == "--async") {
-            async_mode = True;
         }
 
         printf("=== HTTP/2 vs HTTP/1.1 Local Benchmark ===\n\n");
         printf("Iterations: %d\n", iterations);
         printf("Concurrent: %d\n", concurrent);
-        printf("Server mode: %s\n", async_mode ? "async" : "sync");
         printf("\n");
     }
 
@@ -132,7 +126,6 @@ OKKqgBjNAlYDdPhOy8O8Agk=
 
         server = new HttpServer(<HttpServerOptionInfo>{
             "logger": logger,
-            "async_mode": async_mode,
         });
 
         # Create SSL certificate and key objects

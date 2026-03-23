@@ -2567,15 +2567,19 @@ public class HttpAsyncSocketIoController {
             request.headers.":protocol", uh, stream_id, request.path);
 
         # Create unlimited Queue for async data delivery to the handler.
-        # WebSocket CONNECT handlers have their own framing mechanism and read
-        # connect_stream_data_ directly — registering a Queue would consume
-        # the data before the WebSocket handler sees it.
-        *Queue stream_data_queue;
-        if (!is_websocket_connect) {
-            stream_data_queue = new Queue();
-            # Register the Queue with h2op so the I/O controller drains data after each poll
-            h2op.registerStreamQueue(stream_id, stream_data_queue);
-        }
+        # The I/O controller's h2op reads HTTP/2 frames from TCP, buffers
+        # per-stream data, then drains it to this Queue after each poll cycle.
+        # All CONNECT stream handlers — including WebSocket — use the Queue
+        # so only the I/O controller reads from the socket (no direct_io).
+        Queue stream_data_queue();
+        h2op.registerStreamQueue(stream_id, stream_data_queue);
+
+        # Closure for handlers to register a notification callback after the
+        # handler thread starts (e.g., after creating the WebSocketConnection).
+        # The callback is called on the I/O thread when data is drained to the Queue.
+        code<nothing(code<nothing()>)> register_stream_notify = sub (code<nothing()> notify) {
+            h2op.registerStreamQueue(stream_id, stream_data_queue, notify);
+        };
 
         # Continue reading on h2op immediately — the CONNECT stream coexists
         # with other streams on the same connection
@@ -2654,6 +2658,7 @@ public class HttpAsyncSocketIoController {
                 "accept-encoding": accept_encoding,
                 "body": request.body,
                 "stream_data_queue": stream_data_queue,
+                "register_stream_notify": register_stream_notify,
                 "send_stream_data": send_stream_data,
                 "io_wake": sub () { controller.wake(); },
             },
