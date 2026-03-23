@@ -1134,42 +1134,12 @@ void NarrowedTypeHelper::mergeAndApply() {
             printd(5, "    setting narrowed type\n");
             lvar->parseSetNarrowedType(common_type);
         } else if (found_in_all) {
-            // All branches found but no common type - branches have incompatible types
-            // Check if one of the branches is the implicit "no change" branch (matches saved state)
-            // This happens when a branch doesn't assign the variable, so it retains the saved type
-            bool has_unchanged_branch = false;
-            for (const auto& branch : branch_types) {
-                for (const auto& branch_entry : branch) {
-                    if (branch_entry.first == lvar && branch_entry.second == saved_entry.second) {
-                        has_unchanged_branch = true;
-                        break;
-                    }
-                }
-                if (has_unchanged_branch) break;
-            }
-
-            if (has_unchanged_branch && saved_entry.second) {
-                // One branch didn't change (matches saved state), keep it
-                // This handles loops and if-only statements where one path is unchanged
-                QORE_DEBUG_NARROW_MERGE_ACTION("incompatible but one unchanged, keeping saved");
-                printd(5, "    incompatible branches but one unchanged, keeping saved type\n");
+            // All branches found but no common type - keep original
+            if (saved_entry.second) {
                 lvar->parseSetNarrowedType(saved_entry.second);
             } else {
-                // Both branches changed incompatibly, reset the narrowing
-                // This handles if/else where both branches assign different types
-                // Since we can't determine the type at parse time, treat as unassigned for overload resolution
-                QORE_DEBUG_NARROW_MERGE_ACTION("all branches changed, incompatible, resetting");
-                printd(5, "    all branches changed, incompatible, resetting\n");
                 lvar->parseResetNarrowedType();
-                lvar->parseUnassigned();
             }
-        } else {
-            // Variable assigned in some branches but not all - reset narrowing
-            // to be conservative (variable may be unassigned on some paths)
-            QORE_DEBUG_NARROW_MERGE_ACTION("not in all branches, resetting");
-            printd(5, "    not found in all branches, resetting\n");
-            lvar->parseResetNarrowedType();
-            lvar->parseUnassigned();
         }
     }
 }
