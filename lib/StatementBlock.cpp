@@ -34,6 +34,7 @@
 #include "qore/intern/ParserSupport.h"
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/RuntimeConfig.h"
+#include "qore/intern/qore_debug_narrowing.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/qore_thread_intern.h"
 #include "qore/intern/QoreNamespaceIntern.h"
@@ -1050,7 +1051,9 @@ void NarrowedTypeHelper::recordBranchAndRestore() {
     VNode* vnode = getVStack();
     while (vnode) {
         if (vnode->lvar && vnode->lvar->isAutoType()) {
-            branch.push_back({vnode->lvar, vnode->lvar->parseGetNarrowedType()});
+            const QoreTypeInfo* narrowed = vnode->lvar->parseGetNarrowedType();
+            QORE_DEBUG_NARROW_RECORD_BRANCH(vnode->lvar->getName(), narrowed);
+            branch.push_back({vnode->lvar, narrowed});
         }
         vnode = vnode->nextSearch();
     }
@@ -1071,6 +1074,8 @@ void NarrowedTypeHelper::mergeAndApply() {
         return;
     }
 
+    QORE_DEBUG_NARROW_MERGE_START(saved_types.size(), branch_types.size());
+
     // For each saved variable, find the common type across all branches
     for (const auto& saved_entry : saved_types) {
         LocalVar* lvar = saved_entry.first;
@@ -1078,6 +1083,7 @@ void NarrowedTypeHelper::mergeAndApply() {
         bool found_in_all = true;
         bool first = true;
 
+        QORE_DEBUG_NARROW_MERGE_VAR(lvar->getName(), saved_entry.second);
         printd(5, "NarrowedTypeHelper::mergeAndApply() processing var '%s', %lu branches\n",
             lvar->getName(), branch_types.size());
 
@@ -1086,6 +1092,7 @@ void NarrowedTypeHelper::mergeAndApply() {
             for (const auto& branch_entry : branch) {
                 if (branch_entry.first == lvar) {
                     found = true;
+                    QORE_DEBUG_NARROW_MERGE_BRANCH(branch_entry.second);
                     printd(5, "  branch has var with type: %s\n",
                         branch_entry.second ? QoreTypeInfo::getName(branch_entry.second) : "nullptr");
                     if (first) {
@@ -1119,9 +1126,11 @@ void NarrowedTypeHelper::mergeAndApply() {
         }
 
         // Apply the merged type
+        QORE_DEBUG_NARROW_MERGE_DECISION(lvar->getName(), found_in_all, common_type);
         printd(5, "  applying: found_in_all=%d, common_type=%s\n",
             found_in_all, common_type ? QoreTypeInfo::getName(common_type) : "nullptr");
         if (found_in_all && common_type) {
+            QORE_DEBUG_NARROW_MERGE_ACTION("setting narrowed type");
             printd(5, "    setting narrowed type\n");
             lvar->parseSetNarrowedType(common_type);
         } else if (found_in_all) {
@@ -1142,19 +1151,25 @@ void NarrowedTypeHelper::mergeAndApply() {
             if (has_unchanged_branch && saved_entry.second) {
                 // One branch didn't change (matches saved state), keep it
                 // This handles loops and if-only statements where one path is unchanged
+                QORE_DEBUG_NARROW_MERGE_ACTION("incompatible but one unchanged, keeping saved");
                 printd(5, "    incompatible branches but one unchanged, keeping saved type\n");
                 lvar->parseSetNarrowedType(saved_entry.second);
             } else {
                 // Both branches changed incompatibly, reset the narrowing
                 // This handles if/else where both branches assign different types
+                // Since we can't determine the type at parse time, treat as unassigned for overload resolution
+                QORE_DEBUG_NARROW_MERGE_ACTION("all branches changed, incompatible, resetting");
                 printd(5, "    all branches changed, incompatible, resetting\n");
                 lvar->parseResetNarrowedType();
+                lvar->parseUnassigned();
             }
         } else {
             // Variable assigned in some branches but not all - reset narrowing
             // to be conservative (variable may be unassigned on some paths)
+            QORE_DEBUG_NARROW_MERGE_ACTION("not in all branches, resetting");
             printd(5, "    not found in all branches, resetting\n");
             lvar->parseResetNarrowedType();
+            lvar->parseUnassigned();
         }
     }
 }

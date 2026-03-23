@@ -41,6 +41,7 @@
 #include "qore/intern/WeakReferenceNode.h"
 #include "qore/intern/WeakHashReferenceNode.h"
 #include "qore/intern/WeakListReferenceNode.h"
+#include "qore/intern/qore_debug_narrowing.h"
 
 #include <atomic>
 
@@ -592,10 +593,12 @@ public:
         // calls, allowing unassigned variables to match no-argument variants instead of their
         // declared types. An unassigned variable could be NOTHING at runtime.
         if (!parse_assigned) {
+            QORE_DEBUG_NARROW_GET_TYPE(name.c_str(), nullptr, "not assigned");
             return nullptr;
         }
         // If this is a reference type with a target type, return that
         if (refTypeInfo) {
+            QORE_DEBUG_NARROW_GET_TYPE(name.c_str(), refTypeInfo, "reference type");
             return refTypeInfo;
         }
         // If this is an auto type with a narrowed type, return the narrowed type
@@ -605,9 +608,11 @@ public:
         if (is_auto_type && narrowedTypeInfo) {
             QoreProgram* pgm = getProgram();
             if (!pgm || !(pgm->getParseOptions() & PO_BROKEN_NARROWED_TYPES)) {
+                QORE_DEBUG_NARROW_GET_TYPE(name.c_str(), narrowedTypeInfo, "narrowed auto");
                 return narrowedTypeInfo;
             }
         }
+        QORE_DEBUG_NARROW_GET_TYPE(name.c_str(), typeInfo, "declared type");
         return typeInfo;
     }
 

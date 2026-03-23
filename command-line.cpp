@@ -37,6 +37,7 @@
 #include <qore/safe_dslist>
 #include "qore/intern/QoreJIT.h"
 #include "qore/intern/QoreAOT.h"
+#include "qore/intern/qore_debug_narrowing.h"
 
 #include "command-line.h"
 
@@ -1195,6 +1196,10 @@ static void set_include_source(const char* arg) {
     aot_include_source = true;
 }
 
+static void set_debug_show_narrowing(const char* arg) {
+    qore_debug_narrowing = true;
+}
+
 static void disable_gc(const char* arg) {
     qore_lib_options |= QLO_DISABLE_GARBAGE_COLLECTION;
 }
@@ -1316,6 +1321,7 @@ static struct opt_struct_s {
    { '\0', "strip-source",         ARG_NONE, set_strip_source },
    { '\0', "include-source",       ARG_NONE, set_include_source },
    // debugging options
+   { '\0', "debug-show-narrowing", ARG_NONE, set_debug_show_narrowing },
    { 'b', "disable-signals",       ARG_NONE, disable_signals },
    { 'd', "debug",                 ARG_MAND, do_debug },
    { 't', "trace",                 ARG_NONE, do_trace },

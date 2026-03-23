@@ -32,6 +32,7 @@
 #include <qore/Qore.h>
 
 #include "qore/intern/RuntimeConfig.h"
+#include "qore/intern/qore_debug_narrowing.h"
 
 #include <cassert>
 #include <cerrno>
@@ -57,6 +58,9 @@ typedef std::set<int64, std::greater<int64>> ind_set_t;
 
 // global environment hash
 QoreHashNode* ENV;
+
+// Debug flag for type narrowing - controlled by --debug-show-narrowing command-line flag
+bool qore_debug_narrowing = false;
 
 void check_lvalue_object_in_out(AbstractQoreNode* in, AbstractQoreNode* out) {
     if (in && in->getType() == NT_OBJECT) {
@@ -2671,6 +2675,7 @@ void LocalVar::parseSetNarrowedType(const QoreTypeInfo* ti, const QoreProgramLoc
     if (!QoreTypeInfo::hasType(ti) || ti == nothingTypeInfo || ti == nullTypeInfo) {
         narrowedTypeInfo = nullptr;
         narrowedLoc = nullptr;
+        QORE_DEBUG_NARROW_RESET(name.c_str(), "untyped assignment");
         return;
     }
     // Don't narrow if the new type is also auto
@@ -2679,6 +2684,7 @@ void LocalVar::parseSetNarrowedType(const QoreTypeInfo* ti, const QoreProgramLoc
     }
     narrowedTypeInfo = ti;
     narrowedLoc = loc;
+    QORE_DEBUG_NARROW_SET(name.c_str(), typeInfo, ti);
 }
 
 void LocalVar::parseMergeNarrowedType(const QoreTypeInfo* ti) {
@@ -2771,6 +2777,7 @@ void Var::parseSetNarrowedType(const QoreTypeInfo* ti, const QoreProgramLocation
     if (!QoreTypeInfo::hasType(ti) || ti == nothingTypeInfo || ti == nullTypeInfo) {
         narrowedTypeInfo = nullptr;
         narrowedLoc = nullptr;
+        QORE_DEBUG_NARROW_RESET(getName(), "untyped assignment");
         return;
     }
     // Don't narrow if the new type is also auto
@@ -2779,6 +2786,7 @@ void Var::parseSetNarrowedType(const QoreTypeInfo* ti, const QoreProgramLocation
     }
     narrowedTypeInfo = ti;
     narrowedLoc = loc;
+    QORE_DEBUG_NARROW_SET(getName(), typeInfo, ti);
 }
 
 void Var::parseMergeNarrowedType(const QoreTypeInfo* ti) {
