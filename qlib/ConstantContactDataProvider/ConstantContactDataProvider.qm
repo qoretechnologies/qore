@@ -1,0 +1,1568 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore ConstantContactDataProvider module definition
+
+/*  ConstantContactDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%modern
+# require type definitions everywhere
+# strict argument handling
+# enable all warnings
+
+%requires(reexport) DataProvider
+%requires(reexport) ConstantContactRestClient
+%requires RestClientIo
+
+module ConstantContactDataProvider {
+    version = "1.1";
+    desc = "User module providing a data provider API for Constant Contact email marketing";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # Register the data provider factory
+        DataProvider::registerFactory(new ConstantContactDataProviderFactory());
+
+        # Register the application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": ConstantContactDataProvider::AppName,
+            "display_name": "Constant Contact",
+            "short_desc": "Constant Contact email marketing platform",
+            "desc": "Constant Contact is an email marketing platform for creating campaigns, "
+                "managing contacts, and tracking engagement.\n\n"
+                "This integration supports contacts, contact lists, tags, custom fields, "
+                "segments, email campaigns, bulk activities, reports, and events.",
+            "scheme": "constantcontactres",
+            "logo": ConstantContactLogo,
+            "logo_file_name": "constantcontact-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::Email, DataProvider::AppGroup::Marketing),
+        });
+
+        # ========== CONTACT ACTIONS ==========
+
+        # Create a Contact
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ConstantContactDataProvider::AppName,
+            "path": "/contacts/create",
+            "action": "create-contact",
+            "groups": "Contacts",
+            "display_name": "Create a Contact",
+            "short_desc": "Create a new contact",
+            "desc": "Create a new contact in Constant Contact",
+            "action_code": DPAT_API,
+            "options": {
+                "email_address": <ActionOptionInfo>{
+                    "display_name": "Email Address",
+                    "short_desc": "Email address object",
+                    "type": new ConstantContactEmailAddressDataType(AutoHashOrNothingType),
+                    "desc": "Email address object with `address` and optional `permission_to_send`",
+                    "preselected": True,
+                },
+                "first_name": <ActionOptionInfo>{
+                    "display_name": "First Name",
+                    "short_desc": "Contact first name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "First name of the contact",
+                    "preselected": True,
+                },
+                "last_name": <ActionOptionInfo>{
+                    "display_name": "Last Name",
+                    "short_desc": "Contact last name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Last name of the contact",
+                    "preselected": True,
+                },
+                "job_title": <ActionOptionInfo>{
+                    "display_name": "Job Title",
+                    "short_desc": "Contact job title",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Job title of the contact",
+                },
+                "company_name": <ActionOptionInfo>{
+                    "display_name": "Company Name",
+                    "short_desc": "Contact company name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Company name of the contact",
+                },
+                "create_source": <ActionOptionInfo>{
+                    "display_name": "Create Source",
+                    "short_desc": "Source of the contact creation",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The source of the contact creation",
+                    "allowed_values": (
+                        <AllowedValueInfo>{
+                            "value": "Account",
+                            "display_name": "Account",
+                            "desc": "Created by the account owner",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "Contact",
+                            "display_name": "Contact",
+                            "desc": "Created by the contact themselves",
+                        },
+                    ),
+                },
+                "list_memberships": <ActionOptionInfo>{
+                    "display_name": "List Memberships",
+                    "short_desc": "Contact list IDs to add the contact to",
+                    "type": AbstractDataProviderTypeMap."*list",
+                    "desc": "List of contact list IDs to add the contact to",
+                },
+                "taggings": <ActionOptionInfo>{
+                    "display_name": "Taggings",
+                    "short_desc": "Tag IDs to apply to the contact",
+                    "type": AbstractDataProviderTypeMap."*list",
+                    "desc": "List of tag IDs to apply to the contact",
+                },
+                "birthday_month": <ActionOptionInfo>{
+                    "display_name": "Birthday Month",
+                    "short_desc": "Birthday month (1-12)",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "The birthday month of the contact (`1`-`12`)",
+                },
+                "birthday_day": <ActionOptionInfo>{
+                    "display_name": "Birthday Day",
+                    "short_desc": "Birthday day (1-31)",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "The birthday day of the contact (`1`-`31`)",
+                },
+                "anniversary": <ActionOptionInfo>{
+                    "display_name": "Anniversary",
+                    "short_desc": "Anniversary date (YYYY-MM-DD)",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The anniversary date of the contact in `YYYY-MM-DD` format",
+                },
+                "phone_numbers": <ActionOptionInfo>{
+                    "display_name": "Phone Numbers",
+                    "short_desc": "Contact phone numbers",
+                    "type": new ListDataType("PhoneNumberList",
+                        new ConstantContactPhoneNumberDataType(), True),
+                    "desc": "A list of phone number objects for the contact",
+                },
+                "street_addresses": <ActionOptionInfo>{
+                    "display_name": "Street Addresses",
+                    "short_desc": "Contact street addresses",
+                    "type": new ListDataType("StreetAddressList",
+                        new ConstantContactStreetAddressDataType(), True),
+                    "desc": "A list of street address objects for the contact",
+                },
+                "custom_fields": <ActionOptionInfo>{
+                    "display_name": "Custom Fields",
+                    "short_desc": "Custom field values",
+                    "type": new ListDataType("CustomFieldValueList",
+                        new ConstantContactCustomFieldValueDataType(), True),
+                    "desc": "A list of custom field value objects for the contact",
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return new ConstantContactContactDataType(); },
+        });
+
+        # Update a Contact
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ConstantContactDataProvider::AppName,
+            "path": "/contacts/update",
+            "action": "update-contact",
+            "groups": "Contacts",
+            "display_name": "Update a Contact",
+            "short_desc": "Update an existing contact",
+            "desc": "Update an existing contact in Constant Contact.\n\n"
+                "**Important**: This uses PUT semantics (full replace). Any fields not included "
+                "in the request will be cleared to their default values. Include all fields you "
+                "want to preserve",
+            "action_code": DPAT_API,
+            "options": {
+                "contact_id": <ActionOptionInfo>{
+                    "display_name": "Contact ID",
+                    "short_desc": "The contact to update",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "contacts",
+                },
+                "email_address": <ActionOptionInfo>{
+                    "display_name": "Email Address",
+                    "short_desc": "Email address object",
+                    "type": new ConstantContactEmailAddressDataType(AutoHashOrNothingType),
+                    "desc": "Email address object with `address` and optional `permission_to_send`",
+                    "preselected": True,
+                },
+                "first_name": <ActionOptionInfo>{
+                    "display_name": "First Name",
+                    "short_desc": "Contact first name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "last_name": <ActionOptionInfo>{
+                    "display_name": "Last Name",
+                    "short_desc": "Contact last name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "job_title": <ActionOptionInfo>{
+                    "display_name": "Job Title",
+                    "short_desc": "Contact job title",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "company_name": <ActionOptionInfo>{
+                    "display_name": "Company Name",
+                    "short_desc": "Contact company name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "update_source": <ActionOptionInfo>{
+                    "display_name": "Update Source",
+                    "short_desc": "Source of the contact update",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The source of the contact update",
+                    "allowed_values": (
+                        <AllowedValueInfo>{
+                            "value": "Account",
+                            "display_name": "Account",
+                            "desc": "Updated by the account owner",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "Contact",
+                            "display_name": "Contact",
+                            "desc": "Updated by the contact themselves",
+                        },
+                    ),
+                },
+                "list_memberships": <ActionOptionInfo>{
+                    "display_name": "List Memberships",
+                    "short_desc": "Contact list IDs",
+                    "type": AbstractDataProviderTypeMap."*list",
+                    "desc": "List of contact list IDs",
+                },
+                "taggings": <ActionOptionInfo>{
+                    "display_name": "Taggings",
+                    "short_desc": "Tag IDs",
+                    "type": AbstractDataProviderTypeMap."*list",
+                    "desc": "List of tag IDs",
+                },
+                "birthday_month": <ActionOptionInfo>{
+                    "display_name": "Birthday Month",
+                    "short_desc": "Birthday month (1-12)",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "The birthday month of the contact (`1`-`12`)",
+                },
+                "birthday_day": <ActionOptionInfo>{
+                    "display_name": "Birthday Day",
+                    "short_desc": "Birthday day (1-31)",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "The birthday day of the contact (`1`-`31`)",
+                },
+                "anniversary": <ActionOptionInfo>{
+                    "display_name": "Anniversary",
+                    "short_desc": "Anniversary date (YYYY-MM-DD)",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The anniversary date of the contact in `YYYY-MM-DD` format",
+                },
+                "phone_numbers": <ActionOptionInfo>{
+                    "display_name": "Phone Numbers",
+                    "short_desc": "Contact phone numbers",
+                    "type": new ListDataType("PhoneNumberList",
+                        new ConstantContactPhoneNumberDataType(), True),
+                    "desc": "A list of phone number objects for the contact",
+                },
+                "street_addresses": <ActionOptionInfo>{
+                    "display_name": "Street Addresses",
+                    "short_desc": "Contact street addresses",
+                    "type": new ListDataType("StreetAddressList",
+                        new ConstantContactStreetAddressDataType(), True),
+                    "desc": "A list of street address objects for the contact",
+                },
+                "custom_fields": <ActionOptionInfo>{
+                    "display_name": "Custom Fields",
+                    "short_desc": "Custom field values",
+                    "type": new ListDataType("CustomFieldValueList",
+                        new ConstantContactCustomFieldValueDataType(), True),
+                    "desc": "A list of custom field value objects for the contact",
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return new ConstantContactContactDataType(); },
+        });
+
+        # Delete a Contact
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ConstantContactDataProvider::AppName,
+            "path": "/contacts/delete",
+            "action": "delete-contact",
+            "groups": "Contacts",
+            "display_name": "Delete a Contact",
+            "short_desc": "Delete a contact",
+            "desc": "Delete a contact from Constant Contact",
+            "action_code": DPAT_API,
+            "options": {
+                "contact_id": <ActionOptionInfo>{
+                    "display_name": "Contact ID",
+                    "short_desc": "The contact to delete",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "contacts",
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+        });
+
+        # List Contacts
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ConstantContactDataProvider::AppName,
+            "path": "/contacts",
+            "action": "list-contacts",
+            "groups": "Contacts",
+            "display_name": "List Contacts",
+            "short_desc": "List all contacts",
+            "desc": "List contacts in Constant Contact with optional filtering",
+            "action_code": DPAT_FIND,
+            "options": {
+                "contact_id": <ActionOptionInfo>{
+                    "display_name": "Contact ID",
+                    "short_desc": "Filter by contact ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "email": <ActionOptionInfo>{
+                    "display_name": "Email",
+                    "short_desc": "Filter by email address",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter contacts by email address",
+                    "preselected": True,
+                },
+                "status": <ActionOptionInfo>{
+                    "display_name": "Status",
+                    "short_desc": "Filter by contact status",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter contacts by status",
+                    "preselected": True,
+                    "allowed_values": (
+                        <AllowedValueInfo>{
+                            "value": "all",
+                            "display_name": "All",
+                            "desc": "All contacts",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "active",
+                            "display_name": "Active",
+                            "desc": "Active contacts",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "deleted",
+                            "display_name": "Deleted",
+                            "desc": "Deleted contacts",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "not_set",
+                            "display_name": "Not Set",
+                            "desc": "Contacts with no status set",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "pending_confirmation",
+                            "display_name": "Pending Confirmation",
+                            "desc": "Contacts pending confirmation",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "temp_hold",
+                            "display_name": "Temporary Hold",
+                            "desc": "Contacts on temporary hold",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "unsubscribed",
+                            "display_name": "Unsubscribed",
+                            "desc": "Unsubscribed contacts",
+                        },
+                    ),
+                },
+                "list_id": <ActionOptionInfo>{
+                    "display_name": "List ID",
+                    "short_desc": "Filter by contact list ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter contacts by contact list membership",
+                    "ref_data": "contact_lists",
+                },
+                "updated_after": <ActionOptionInfo>{
+                    "display_name": "Updated After",
+                    "short_desc": "Filter by update date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter contacts updated after this date (ISO-8601)",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "Maximum number of results to return",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Get a Contact
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ConstantContactDataProvider::AppName,
+            "path": "/contacts",
+            "action": "get-contact",
+            "groups": "Contacts",
+            "display_name": "Get a Contact",
+            "short_desc": "Get a single contact by ID",
+            "desc": "Retrieve a single contact by ID from Constant Contact",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "contact_id": <ActionOptionInfo>{
+                    "display_name": "Contact ID",
+                    "short_desc": "The contact ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "contacts",
+                },
+            },
+        });
+
+        # ========== CONTACT LIST ACTIONS ==========
+
+        # Create a Contact List
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ConstantContactDataProvider::AppName,
+            "path": "/contact-lists/create",
+            "action": "create-contact-list",
+            "groups": "Contact Lists",
+            "display_name": "Create a Contact List",
+            "short_desc": "Create a new contact list",
+            "desc": "Create a new contact list in Constant Contact",
+            "action_code": DPAT_API,
+            "options": {
+                "name": <ActionOptionInfo>{
+                    "display_name": "Name",
+                    "short_desc": "Contact list name",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The name of the contact list",
+                },
+                "description": <ActionOptionInfo>{
+                    "display_name": "Description",
+                    "short_desc": "Contact list description",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Description of the contact list",
+                    "preselected": True,
+                },
+                "favorite": <ActionOptionInfo>{
+                    "display_name": "Favorite",
+                    "short_desc": "Mark as favorite",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                    "desc": "Whether to mark this list as a favorite",
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return new ConstantContactContactListDataType(); },
+        });
+
+        # Update a Contact List
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ConstantContactDataProvider::AppName,
+            "path": "/contact-lists/update",
+            "action": "update-contact-list",
+            "groups": "Contact Lists",
+            "display_name": "Update a Contact List",
+            "short_desc": "Update an existing contact list",
+            "desc": "Update an existing contact list in Constant Contact",
+            "action_code": DPAT_API,
+            "options": {
+                "list_id": <ActionOptionInfo>{
+                    "display_name": "List ID",
+                    "short_desc": "The contact list to update",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "contact_lists",
+                },
+                "name": <ActionOptionInfo>{
+                    "display_name": "Name",
+                    "short_desc": "Contact list name",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The name of the contact list",
+                },
+                "description": <ActionOptionInfo>{
+                    "display_name": "Description",
+                    "short_desc": "Contact list description",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Description of the contact list",
+                },
+                "favorite": <ActionOptionInfo>{
+                    "display_name": "Favorite",
+                    "short_desc": "Mark as favorite",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                    "desc": "Whether to mark this list as a favorite",
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return new ConstantContactContactListDataType(); },
+        });
+
+        # Delete a Contact List
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ConstantContactDataProvider::AppName,
+            "path": "/contact-lists/delete",
+            "action": "delete-contact-list",
+            "groups": "Contact Lists",
+            "display_name": "Delete a Contact List",
+            "short_desc": "Delete a contact list",
+            "desc": "Delete a contact list from Constant Contact",
+            "action_code": DPAT_API,
+            "options": {
+                "list_id": <ActionOptionInfo>{
+                    "display_name": "List ID",
+                    "short_desc": "The contact list to delete",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "contact_lists",
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+        });
+
+        # List Contact Lists
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ConstantContactDataProvider::AppName,
+            "path": "/contact-lists",
+            "action": "list-contact-lists",
+            "groups": "Contact Lists",
+            "display_name": "List Contact Lists",
+            "short_desc": "List all contact lists",
+            "desc": "List contact lists in Constant Contact",
+            "action_code": DPAT_FIND,
+            "options": {
+                "list_id": <ActionOptionInfo>{
+                    "display_name": "List ID",
+                    "short_desc": "Filter by list ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "Maximum number of results to return",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Get a Contact List
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ConstantContactDataProvider::AppName,
+            "path": "/contact-lists",
+            "action": "get-contact-list",
+            "groups": "Contact Lists",
+            "display_name": "Get a Contact List",
+            "short_desc": "Get a single contact list by ID",
+            "desc": "Retrieve a single contact list by ID from Constant Contact",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "list_id": <ActionOptionInfo>{
+                    "display_name": "List ID",
+                    "short_desc": "The contact list ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "contact_lists",
+                },
+            },
+        });
+
+        # ========== TAG ACTIONS ==========
+
+        # Create a Tag
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ConstantContactDataProvider::AppName,
+            "path": "/tags/create",
+            "action": "create-tag",
+            "groups": "Tags",
+            "display_name": "Create a Tag",
+            "short_desc": "Create a new tag",
+            "desc": "Create a new tag in Constant Contact",
+            "action_code": DPAT_API,
+            "options": {
+                "name": <ActionOptionInfo>{
+                    "display_name": "Name",
+                    "short_desc": "Tag name",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The name of the tag",
+                },
+                "tag_source": <ActionOptionInfo>{
+                    "display_name": "Tag Source",
+                    "short_desc": "Source of the tag",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The source of the tag",
+                    "allowed_values": (
+                        <AllowedValueInfo>{
+                            "value": "Account",
+                            "display_name": "Account",
+                            "desc": "Tag created by the account owner",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "Contact",
+                            "display_name": "Contact",
+                            "desc": "Tag created by the contact",
+                        },
+                    ),
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return new ConstantContactTagDataType(); },
+        });
+
+        # Update a Tag
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ConstantContactDataProvider::AppName,
+            "path": "/tags/update",
+            "action": "update-tag",
+            "groups": "Tags",
+            "display_name": "Update a Tag",
+            "short_desc": "Update an existing tag",
+            "desc": "Update an existing tag in Constant Contact",
+            "action_code": DPAT_API,
+            "options": {
+                "tag_id": <ActionOptionInfo>{
+                    "display_name": "Tag ID",
+                    "short_desc": "The tag to update",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "tags",
+                },
+                "name": <ActionOptionInfo>{
+                    "display_name": "Name",
+                    "short_desc": "Tag name",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The new name of the tag",
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return new ConstantContactTagDataType(); },
+        });
+
+        # Delete a Tag
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ConstantContactDataProvider::AppName,
+            "path": "/tags/delete",
+            "action": "delete-tag",
+            "groups": "Tags",
+            "display_name": "Delete a Tag",
+            "short_desc": "Delete a tag",
+            "desc": "Delete a tag from Constant Contact",
+            "action_code": DPAT_API,
+            "options": {
+                "tag_id": <ActionOptionInfo>{
+                    "display_name": "Tag ID",
+                    "short_desc": "The tag to delete",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "tags",
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+        });
+
+        # List Tags
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ConstantContactDataProvider::AppName,
+            "path": "/tags",
+            "action": "list-tags",
+            "groups": "Tags",
+            "display_name": "List Tags",
+            "short_desc": "List all tags",
+            "desc": "List tags in Constant Contact",
+            "action_code": DPAT_FIND,
+            "options": {
+                "tag_id": <ActionOptionInfo>{
+                    "display_name": "Tag ID",
+                    "short_desc": "Filter by tag ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "Maximum number of results to return",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Get a Tag
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ConstantContactDataProvider::AppName,
+            "path": "/tags",
+            "action": "get-tag",
+            "groups": "Tags",
+            "display_name": "Get a Tag",
+            "short_desc": "Get a single tag by ID",
+            "desc": "Retrieve a single tag by ID from Constant Contact",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "tag_id": <ActionOptionInfo>{
+                    "display_name": "Tag ID",
+                    "short_desc": "The tag ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "tags",
+                },
+            },
+        });
+
+        # ========== CUSTOM FIELD ACTIONS ==========
+
+        # Create a Custom Field
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ConstantContactDataProvider::AppName,
+            "path": "/custom-fields/create",
+            "action": "create-custom-field",
+            "groups": "Custom Fields",
+            "display_name": "Create a Custom Field",
+            "short_desc": "Create a new custom field",
+            "desc": "Create a new custom field in Constant Contact",
+            "action_code": DPAT_API,
+            "options": {
+                "label": <ActionOptionInfo>{
+                    "display_name": "Label",
+                    "short_desc": "Custom field label",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The label for the custom field",
+                },
+                "type": <ActionOptionInfo>{
+                    "display_name": "Type",
+                    "short_desc": "Custom field type",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The type of the custom field",
+                    "allowed_values": (
+                        <AllowedValueInfo>{
+                            "value": "string",
+                            "display_name": "String",
+                            "desc": "String field",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "date",
+                            "display_name": "Date",
+                            "desc": "Date field",
+                        },
+                    ),
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return new ConstantContactCustomFieldDataType(); },
+        });
+
+        # Update a Custom Field
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ConstantContactDataProvider::AppName,
+            "path": "/custom-fields/update",
+            "action": "update-custom-field",
+            "groups": "Custom Fields",
+            "display_name": "Update a Custom Field",
+            "short_desc": "Update an existing custom field",
+            "desc": "Update an existing custom field in Constant Contact",
+            "action_code": DPAT_API,
+            "options": {
+                "custom_field_id": <ActionOptionInfo>{
+                    "display_name": "Custom Field ID",
+                    "short_desc": "The custom field to update",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "custom_fields",
+                },
+                "label": <ActionOptionInfo>{
+                    "display_name": "Label",
+                    "short_desc": "Custom field label",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The new label for the custom field",
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return new ConstantContactCustomFieldDataType(); },
+        });
+
+        # Delete a Custom Field
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ConstantContactDataProvider::AppName,
+            "path": "/custom-fields/delete",
+            "action": "delete-custom-field",
+            "groups": "Custom Fields",
+            "display_name": "Delete a Custom Field",
+            "short_desc": "Delete a custom field",
+            "desc": "Delete a custom field from Constant Contact",
+            "action_code": DPAT_API,
+            "options": {
+                "custom_field_id": <ActionOptionInfo>{
+                    "display_name": "Custom Field ID",
+                    "short_desc": "The custom field to delete",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "custom_fields",
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+        });
+
+        # List Custom Fields
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ConstantContactDataProvider::AppName,
+            "path": "/custom-fields",
+            "action": "list-custom-fields",
+            "groups": "Custom Fields",
+            "display_name": "List Custom Fields",
+            "short_desc": "List all custom fields",
+            "desc": "List custom fields in Constant Contact",
+            "action_code": DPAT_FIND,
+            "options": {
+                "custom_field_id": <ActionOptionInfo>{
+                    "display_name": "Custom Field ID",
+                    "short_desc": "Filter by custom field ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "custom_fields",
+                    "preselected": True,
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "Maximum number of results to return",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Get a Custom Field
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ConstantContactDataProvider::AppName,
+            "path": "/custom-fields",
+            "action": "get-custom-field",
+            "groups": "Custom Fields",
+            "display_name": "Get a Custom Field",
+            "short_desc": "Get a single custom field by ID",
+            "desc": "Retrieve a single custom field by ID from Constant Contact",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "custom_field_id": <ActionOptionInfo>{
+                    "display_name": "Custom Field ID",
+                    "short_desc": "The custom field ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "custom_fields",
+                },
+            },
+        });
+
+        # ========== SEGMENT ACTIONS ==========
+
+        # Create a Segment
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ConstantContactDataProvider::AppName,
+            "path": "/segments/create",
+            "action": "create-segment",
+            "groups": "Segments",
+            "display_name": "Create a Segment",
+            "short_desc": "Create a new segment",
+            "desc": "Create a new segment in Constant Contact",
+            "action_code": DPAT_API,
+            "options": {
+                "name": <ActionOptionInfo>{
+                    "display_name": "Name",
+                    "short_desc": "Segment name",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The name of the segment",
+                },
+                "segment_criteria": <ActionOptionInfo>{
+                    "display_name": "Segment Criteria",
+                    "short_desc": "Segment criteria expression",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The criteria expression for the segment",
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return new ConstantContactSegmentDataType(); },
+        });
+
+        # Update a Segment
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ConstantContactDataProvider::AppName,
+            "path": "/segments/update",
+            "action": "update-segment",
+            "groups": "Segments",
+            "display_name": "Update a Segment",
+            "short_desc": "Update an existing segment",
+            "desc": "Update an existing segment in Constant Contact",
+            "action_code": DPAT_API,
+            "options": {
+                "segment_id": <ActionOptionInfo>{
+                    "display_name": "Segment ID",
+                    "short_desc": "The segment to update",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "ref_data": "segments",
+                },
+                "name": <ActionOptionInfo>{
+                    "display_name": "Name",
+                    "short_desc": "Segment name",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The new name of the segment",
+                },
+                "segment_criteria": <ActionOptionInfo>{
+                    "display_name": "Segment Criteria",
+                    "short_desc": "Segment criteria expression",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The new criteria expression for the segment",
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return new ConstantContactSegmentDataType(); },
+        });
+
+        # Delete a Segment
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ConstantContactDataProvider::AppName,
+            "path": "/segments/delete",
+            "action": "delete-segment",
+            "groups": "Segments",
+            "display_name": "Delete a Segment",
+            "short_desc": "Delete a segment",
+            "desc": "Delete a segment from Constant Contact",
+            "action_code": DPAT_API,
+            "options": {
+                "segment_id": <ActionOptionInfo>{
+                    "display_name": "Segment ID",
+                    "short_desc": "The segment to delete",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "ref_data": "segments",
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+        });
+
+        # List Segments
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ConstantContactDataProvider::AppName,
+            "path": "/segments",
+            "action": "list-segments",
+            "groups": "Segments",
+            "display_name": "List Segments",
+            "short_desc": "List all segments",
+            "desc": "List segments in Constant Contact",
+            "action_code": DPAT_FIND,
+            "options": {
+                "segment_id": <ActionOptionInfo>{
+                    "display_name": "Segment ID",
+                    "short_desc": "Filter by segment ID",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "segments",
+                    "preselected": True,
+                },
+                "sort_by": <ActionOptionInfo>{
+                    "display_name": "Sort By",
+                    "short_desc": "Field to sort by",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The field to sort results by",
+                    "allowed_values": (
+                        <AllowedValueInfo>{
+                            "value": "name",
+                            "display_name": "Name",
+                            "desc": "Sort by name",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "date",
+                            "display_name": "Date",
+                            "desc": "Sort by date",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "modified_date",
+                            "display_name": "Modified Date",
+                            "desc": "Sort by modified date",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "created_date",
+                            "display_name": "Created Date",
+                            "desc": "Sort by created date",
+                        },
+                    ),
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "Maximum number of results to return",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Get a Segment
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ConstantContactDataProvider::AppName,
+            "path": "/segments",
+            "action": "get-segment",
+            "groups": "Segments",
+            "display_name": "Get a Segment",
+            "short_desc": "Get a single segment by ID",
+            "desc": "Retrieve a single segment by ID from Constant Contact",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "segment_id": <ActionOptionInfo>{
+                    "display_name": "Segment ID",
+                    "short_desc": "The segment ID",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "ref_data": "segments",
+                },
+            },
+        });
+
+        # ========== EMAIL CAMPAIGN ACTIONS ==========
+
+        # Create an Email Campaign
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ConstantContactDataProvider::AppName,
+            "path": "/email-campaigns/create",
+            "action": "create-email-campaign",
+            "groups": "Email Campaigns",
+            "display_name": "Create an Email Campaign",
+            "short_desc": "Create a new email campaign",
+            "desc": "Create a new email campaign in Constant Contact",
+            "action_code": DPAT_API,
+            "options": {
+                "name": <ActionOptionInfo>{
+                    "display_name": "Name",
+                    "short_desc": "Campaign name",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The name of the email campaign",
+                },
+                "email_campaign_activities": <ActionOptionInfo>{
+                    "display_name": "Campaign Activities",
+                    "short_desc": "List of campaign activity configurations",
+                    "type": new ListDataType("CampaignActivityList",
+                        new ConstantContactEmailCampaignActivityDataType(), True),
+                    "desc": "List of campaign activity configurations including sender, "
+                        "subject, HTML content, and target lists",
+                    "preselected": True,
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return new ConstantContactEmailCampaignDataType(); },
+        });
+
+        # Update an Email Campaign
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ConstantContactDataProvider::AppName,
+            "path": "/email-campaigns/update",
+            "action": "update-email-campaign",
+            "groups": "Email Campaigns",
+            "display_name": "Update an Email Campaign",
+            "short_desc": "Update an existing email campaign",
+            "desc": "Update an existing email campaign in Constant Contact",
+            "action_code": DPAT_API,
+            "options": {
+                "campaign_id": <ActionOptionInfo>{
+                    "display_name": "Campaign ID",
+                    "short_desc": "The email campaign to update",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "email_campaigns",
+                },
+                "name": <ActionOptionInfo>{
+                    "display_name": "Name",
+                    "short_desc": "Campaign name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The new name of the email campaign",
+                    "preselected": True,
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return new ConstantContactEmailCampaignDataType(); },
+        });
+
+        # Delete an Email Campaign
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ConstantContactDataProvider::AppName,
+            "path": "/email-campaigns/delete",
+            "action": "delete-email-campaign",
+            "groups": "Email Campaigns",
+            "display_name": "Delete an Email Campaign",
+            "short_desc": "Delete an email campaign",
+            "desc": "Delete an email campaign from Constant Contact",
+            "action_code": DPAT_API,
+            "options": {
+                "campaign_id": <ActionOptionInfo>{
+                    "display_name": "Campaign ID",
+                    "short_desc": "The email campaign to delete",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "email_campaigns",
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+        });
+
+        # Schedule an Email Campaign
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ConstantContactDataProvider::AppName,
+            "path": "/email-campaigns/schedule",
+            "action": "schedule-email-campaign",
+            "groups": "Email Campaigns",
+            "display_name": "Schedule an Email Campaign",
+            "short_desc": "Schedule an email campaign for sending",
+            "desc": "Schedule an email campaign activity for sending in Constant Contact",
+            "action_code": DPAT_API,
+            "options": {
+                "campaign_activity_id": <ActionOptionInfo>{
+                    "display_name": "Campaign Activity ID",
+                    "short_desc": "The campaign activity to schedule",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                },
+                "scheduled_date": <ActionOptionInfo>{
+                    "display_name": "Scheduled Date",
+                    "short_desc": "ISO-8601 date",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The scheduled send date in ISO-8601 format",
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+        });
+
+        # List Email Campaigns
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ConstantContactDataProvider::AppName,
+            "path": "/email-campaigns",
+            "action": "list-email-campaigns",
+            "groups": "Email Campaigns",
+            "display_name": "List Email Campaigns",
+            "short_desc": "List all email campaigns",
+            "desc": "List email campaigns in Constant Contact with optional filtering",
+            "action_code": DPAT_FIND,
+            "options": {
+                "campaign_id": <ActionOptionInfo>{
+                    "display_name": "Campaign ID",
+                    "short_desc": "Filter by campaign ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "email_campaigns",
+                },
+                "status": <ActionOptionInfo>{
+                    "display_name": "Status",
+                    "short_desc": "Filter by campaign status",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter campaigns by status",
+                    "preselected": True,
+                    "allowed_values": (
+                        <AllowedValueInfo>{
+                            "value": "Draft",
+                            "display_name": "Draft",
+                            "desc": "Draft campaigns",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "Scheduled",
+                            "display_name": "Scheduled",
+                            "desc": "Scheduled campaigns",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "Executing",
+                            "display_name": "Executing",
+                            "desc": "Currently sending campaigns",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "Done",
+                            "display_name": "Done",
+                            "desc": "Completed campaigns",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "Error",
+                            "display_name": "Error",
+                            "desc": "Campaigns that encountered an error",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "Removed",
+                            "display_name": "Removed",
+                            "desc": "Removed campaigns",
+                        },
+                    ),
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "Maximum number of results to return",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Get an Email Campaign
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ConstantContactDataProvider::AppName,
+            "path": "/email-campaigns",
+            "action": "get-email-campaign",
+            "groups": "Email Campaigns",
+            "display_name": "Get an Email Campaign",
+            "short_desc": "Get a single email campaign by ID",
+            "desc": "Retrieve a single email campaign by ID from Constant Contact",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "campaign_id": <ActionOptionInfo>{
+                    "display_name": "Campaign ID",
+                    "short_desc": "The email campaign ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "email_campaigns",
+                },
+            },
+        });
+
+        # ========== BULK ACTIVITY ACTIONS ==========
+
+        # Import Contacts
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ConstantContactDataProvider::AppName,
+            "path": "/activities/import",
+            "action": "import-contacts",
+            "groups": "Activities",
+            "display_name": "Import Contacts",
+            "short_desc": "Import contacts in bulk",
+            "desc": "Import contacts in bulk into Constant Contact",
+            "action_code": DPAT_API,
+            "options": {
+                "import_data": <ActionOptionInfo>{
+                    "display_name": "Import Data",
+                    "short_desc": "List of contact data to import",
+                    "type": AbstractDataProviderTypeMap."list",
+                    "required": True,
+                    "desc": "List of contact data hashes to import",
+                },
+                "list_ids": <ActionOptionInfo>{
+                    "display_name": "List IDs",
+                    "short_desc": "Contact list IDs to add imported contacts to",
+                    "type": AbstractDataProviderTypeMap."*list",
+                    "desc": "List of contact list IDs to add the imported contacts to",
+                    "preselected": True,
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+        });
+
+        # Export Contacts
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ConstantContactDataProvider::AppName,
+            "path": "/activities/export",
+            "action": "export-contacts",
+            "groups": "Activities",
+            "display_name": "Export Contacts",
+            "short_desc": "Export contacts in bulk",
+            "desc": "Export contacts in bulk from Constant Contact",
+            "action_code": DPAT_API,
+            "options": {
+                "list_ids": <ActionOptionInfo>{
+                    "display_name": "List IDs",
+                    "short_desc": "Contact list IDs to export from",
+                    "type": AbstractDataProviderTypeMap."*list",
+                    "desc": "List of contact list IDs to export contacts from",
+                    "preselected": True,
+                },
+                "segment_id": <ActionOptionInfo>{
+                    "display_name": "Segment ID",
+                    "short_desc": "Segment to export",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "The segment ID to export contacts from",
+                },
+                "fields": <ActionOptionInfo>{
+                    "display_name": "Fields",
+                    "short_desc": "Fields to include in export",
+                    "type": AbstractDataProviderTypeMap."*list",
+                    "desc": "List of field names to include in the export",
+                    "preselected": True,
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+        });
+
+        # Add List Members
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ConstantContactDataProvider::AppName,
+            "path": "/activities/add-list-members",
+            "action": "add-list-members",
+            "groups": "Activities",
+            "display_name": "Add List Members",
+            "short_desc": "Add contacts to lists in bulk",
+            "desc": "Add contacts to one or more contact lists in bulk",
+            "action_code": DPAT_API,
+            "options": {
+                "source": <ActionOptionInfo>{
+                    "display_name": "Source",
+                    "short_desc": "Source of contacts",
+                    "type": new ConstantContactBulkActivitySourceDataType(),
+                    "required": True,
+                    "desc": "Source of contacts to add to the lists. Use one of the mutually "
+                        "exclusive fields: `contact_ids`, `list_ids`, `tag_ids`, `segment_id`, "
+                        "`all_active_contacts`, `new_subscriber`, or `engagement_level`",
+                },
+                "list_ids": <ActionOptionInfo>{
+                    "display_name": "List IDs",
+                    "short_desc": "Contact list IDs",
+                    "type": AbstractDataProviderTypeMap."list",
+                    "required": True,
+                    "desc": "List of contact list IDs to add the contacts to",
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+        });
+
+        # Remove List Members
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ConstantContactDataProvider::AppName,
+            "path": "/activities/remove-list-members",
+            "action": "remove-list-members",
+            "groups": "Activities",
+            "display_name": "Remove List Members",
+            "short_desc": "Remove contacts from lists in bulk",
+            "desc": "Remove contacts from one or more contact lists in bulk",
+            "action_code": DPAT_API,
+            "options": {
+                "source": <ActionOptionInfo>{
+                    "display_name": "Source",
+                    "short_desc": "Source of contacts",
+                    "type": new ConstantContactBulkActivitySourceDataType(),
+                    "required": True,
+                    "desc": "Source of contacts to remove from the lists. Use one of the "
+                        "mutually exclusive fields: `contact_ids`, `list_ids`, `tag_ids`, "
+                        "`all_active_contacts`, or `engagement_level`",
+                },
+                "list_ids": <ActionOptionInfo>{
+                    "display_name": "List IDs",
+                    "short_desc": "Contact list IDs",
+                    "type": AbstractDataProviderTypeMap."list",
+                    "required": True,
+                    "desc": "List of contact list IDs to remove the contacts from",
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderType::get(AutoHashType); },
+        });
+
+        # ========== REPORT ACTIONS ==========
+
+        # Get Email Summary
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ConstantContactDataProvider::AppName,
+            "path": "/reports/get-email-summary",
+            "action": "get-email-summary",
+            "groups": "Reports",
+            "display_name": "Get Email Summary",
+            "short_desc": "Get email campaign summary report",
+            "desc": "Get a summary report for email campaigns in Constant Contact",
+            "action_code": DPAT_API,
+            "options": {
+                "campaign_ids": <ActionOptionInfo>{
+                    "display_name": "Campaign IDs",
+                    "short_desc": "List of campaign IDs",
+                    "type": AbstractDataProviderTypeMap."*softlist",
+                    "desc": "A list of email campaign IDs to get summaries for",
+                    "preselected": True,
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return new ConstantContactEmailCampaignSummaryDataType(); },
+        });
+
+        # ========== ACCOUNT ACTIONS ==========
+
+        # Get Account
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ConstantContactDataProvider::AppName,
+            "path": "/account/get",
+            "action": "get-account",
+            "groups": "Account",
+            "display_name": "Get Account",
+            "short_desc": "Get account information",
+            "desc": "Get the Constant Contact account information",
+            "action_code": DPAT_API,
+            "options": {},
+            "get_output_type": AbstractDataProviderType sub () { return new ConstantContactAccountDataType(); },
+        });
+
+        # Update Account
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ConstantContactDataProvider::AppName,
+            "path": "/account/update",
+            "action": "update-account",
+            "groups": "Account",
+            "display_name": "Update Account",
+            "short_desc": "Update account information",
+            "desc": "Update the Constant Contact account information.\n\n"
+                "**Important**: This uses PUT semantics (full replace). Any fields not included "
+                "in the request will be cleared to their default values. Include all fields you "
+                "want to preserve",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_name": <ActionOptionInfo>{
+                    "display_name": "Organization Name",
+                    "short_desc": "Organization name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The name of the organization",
+                    "preselected": True,
+                },
+                "first_name": <ActionOptionInfo>{
+                    "display_name": "First Name",
+                    "short_desc": "Account owner first name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "last_name": <ActionOptionInfo>{
+                    "display_name": "Last Name",
+                    "short_desc": "Account owner last name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "phone": <ActionOptionInfo>{
+                    "display_name": "Phone",
+                    "short_desc": "Phone number",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "website": <ActionOptionInfo>{
+                    "display_name": "Website",
+                    "short_desc": "Website URL",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "country_code": <ActionOptionInfo>{
+                    "display_name": "Country Code",
+                    "short_desc": "Two-letter country code",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The two-letter ISO country code",
+                },
+                "state_code": <ActionOptionInfo>{
+                    "display_name": "State Code",
+                    "short_desc": "State or province code",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The state or province code",
+                },
+                "time_zone_id": <ActionOptionInfo>{
+                    "display_name": "Time Zone",
+                    "short_desc": "Account time zone ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The time zone ID (e.g., `US/Eastern`)",
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () { return new ConstantContactAccountDataType(); },
+        });
+
+        # ========== TRIGGERS ==========
+
+        # New Contact
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ConstantContactDataProvider::AppName,
+            "path": "/events/new-contact",
+            "action": "new-contact",
+            "groups": "Triggers",
+            "display_name": "New Contact",
+            "short_desc": "Trigger when a new contact is created",
+            "desc": "Fires when a new contact is created in Constant Contact. "
+                "Uses polling to detect new records.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_CONTACT,
+            "options": {
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "Polling interval in seconds",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "How often to check for new records (minimum 30 seconds)",
+                    "default_value": DefaultPollInterval,
+                },
+            },
+        });
+
+        # New Email Campaign
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ConstantContactDataProvider::AppName,
+            "path": "/events/new-email-campaign",
+            "action": "new-email-campaign",
+            "groups": "Triggers",
+            "display_name": "New Email Campaign",
+            "short_desc": "Trigger when a new email campaign is created",
+            "desc": "Fires when a new email campaign is created in Constant Contact. "
+                "Uses polling to detect new records.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_EMAIL_CAMPAIGN,
+            "options": {
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "Polling interval in seconds",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "How often to check for new records (minimum 30 seconds)",
+                    "default_value": DefaultPollInterval,
+                },
+            },
+        });
+
+        # New Contact List
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ConstantContactDataProvider::AppName,
+            "path": "/events/new-contact-list",
+            "action": "new-contact-list",
+            "groups": "Triggers",
+            "display_name": "New Contact List",
+            "short_desc": "Trigger when a new contact list is created",
+            "desc": "Fires when a new contact list is created in Constant Contact. "
+                "Uses polling to detect new records.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_CONTACT_LIST,
+            "options": {
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "Polling interval in seconds",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "How often to check for new records (minimum 30 seconds)",
+                    "default_value": DefaultPollInterval,
+                },
+            },
+        });
+    };
+}
+
+/** @mainpage ConstantContactDataProvider Module
+
+    @tableofcontents
+
+    @section constantcontactdataproviderintro ConstantContactDataProvider Introduction
+
+    The %ConstantContactDataProvider module provides a data provider API for the Constant Contact
+    email marketing platform.
+
+    To use this module, use \c "%requires ConstantContactDataProvider" in your code.
+
+    All the public symbols in the module are defined in the ConstantContactDataProvider namespace.
+
+    The main classes are:
+    - @ref ConstantContactDataProvider::ConstantContactDataProvider "ConstantContactDataProvider":
+      the root data provider for Constant Contact
+    - @ref ConstantContactDataProvider::ConstantContactDataProviderFactory "ConstantContactDataProviderFactory":
+      the data provider factory for Constant Contact
+
+    @section constantcontactdataproviderrelnotes Release Notes
+
+    @subsection constantcontactdataproviderv1_0 ConstantContactDataProvider v1.0
+    - the initial version of the %ConstantContactDataProvider module
+*/
+
+#! Contains all public definitions in the ConstantContactDataProvider module
+public namespace ConstantContactDataProvider {
+}

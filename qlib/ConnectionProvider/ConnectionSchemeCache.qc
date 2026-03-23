@@ -220,6 +220,7 @@ public class ConnectionSchemeCache {
 
             "apollorest": "ApolloRestClient",
 
+            "constantcontactres": "ConstantContactRestClient",
             "squareres": "SquareRestClient",
             "squarespaceres": "SquarespaceRestClient",
 

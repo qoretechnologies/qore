@@ -173,6 +173,7 @@ public class DataProvider {
             "keap": "KeapDataProvider",
             "kit": "KitDataProvider",
             "apollo": "ApolloDataProvider",
+            "constantcontact": "ConstantContactDataProvider",
             "square": "SquareDataProvider",
             "squarespace": "SquarespaceDataProvider",
             "tableau": "TableauDataProvider",
