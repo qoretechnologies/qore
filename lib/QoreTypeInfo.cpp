@@ -3328,6 +3328,11 @@ qore_type_result_e QoreTypeInfo::parseAccepts(const QoreTypeInfo* first, const Q
             max_result = QTI_AMBIGUOUS;
             return QTI_AMBIGUOUS;
         }
+        // For union types, check all components against auto via instance method
+        // This ensures proper scoring for union variant selection
+        if (second && second->return_vec.size() > 1) {
+            return first->parseAccepts(second, may_not_match, may_need_filter, max_result, known_initial_assignment);
+        }
         max_result = QTI_WILDCARD;
         return QTI_WILDCARD;
     }
@@ -3361,9 +3366,12 @@ qore_type_result_e QoreTypeInfo::parseAccepts(const QoreTypeInfo* typeInfo, bool
     // For union types (return_vec.size() > 1), check all components for proper matching
 
     bool ok = false;
-    bool is_union = typeInfo->return_vec.size() > 1;
-    qore_type_result_e worst_score = QTI_IDENT;  // worst (highest value) score across matched components
+    bool is_union = typeInfo && typeInfo->return_vec.size() > 1;
+    qore_type_result_e best_score = QTI_NOT_EQUAL;  // best (lowest numeric value) score across matched components
     bool all_match = true;
+
+    fprintf(stderr, "DEBUG parseAccepts: param='%s' arg=%s (return_vec.size=%zu, is_union=%d)\n",
+           tname.c_str(), typeInfo ? typeInfo->tname.c_str() : "nullptr", typeInfo ? typeInfo->return_vec.size() : 0, is_union);
 
     if (is_union) {
         fprintf(stderr, "DEBUG parseAccepts: parameter='%s' <- arg='%s' (arg components: %zu)\n",
@@ -3392,11 +3400,17 @@ qore_type_result_e QoreTypeInfo::parseAccepts(const QoreTypeInfo* typeInfo, bool
                     return res;
                 }
                 // For union types: record and continue checking other components
-                if (t_max_result > worst_score) { worst_score = t_max_result; }
+                // Track best (minimum numeric value) score across all components
+                if (best_score == QTI_NOT_EQUAL || t_max_result < best_score) {
+                    best_score = t_max_result;
+                }
                 break;  // done with accept specs for this component
             } else if (res == QTI_AMBIGUOUS || res == QTI_NEAR || res == QTI_WILDCARD) {
                 max_result = t_max_result;
-                if (is_union && res > worst_score) { worst_score = res; }
+                // Track best score for union types
+                if (is_union && (best_score == QTI_NOT_EQUAL || res < best_score)) {
+                    best_score = res;
+                }
                 if (is_union) {
                     fprintf(stderr, "  component %zu: %s match score=%d\n", comp_idx,
                            QoreTypeInfo::getName(rt.spec.getBaseTypeInfo()), res);
@@ -3419,6 +3433,7 @@ qore_type_result_e QoreTypeInfo::parseAccepts(const QoreTypeInfo* typeInfo, bool
                     may_not_match = true;
                     if (ok) {
                         // some prior component matched, some didn't -> case 2
+                        fprintf(stderr, "  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true\n");
                         return QTI_AMBIGUOUS;
                     }
                 }
@@ -3441,10 +3456,22 @@ qore_type_result_e QoreTypeInfo::parseAccepts(const QoreTypeInfo* typeInfo, bool
             }
             return QTI_AMBIGUOUS;
         }
-        qore_type_result_e result = is_union ? worst_score : QTI_AMBIGUOUS;
+        // For union types:
+        // Case 3 (all_match=true): all components match -> definitive match (QTI_IDENT)
+        // Case 2 (all_match=false): some match, some don't -> already returned QTI_AMBIGUOUS above
+        qore_type_result_e result;
         if (is_union) {
-            fprintf(stderr, "  -> result: %d (case %d), all_match=%d\n",
-                   result, (all_match ? 3 : 2), all_match);
+            if (all_match) {
+                // All components match - definitive match
+                result = QTI_IDENT;
+                fprintf(stderr, "  -> result: %d (case 3: all match)\n", result);
+            } else {
+                // Should have already returned above
+                result = QTI_AMBIGUOUS;
+                fprintf(stderr, "  -> result: %d (case 2: partial match)\n", result);
+            }
+        } else {
+            result = QTI_AMBIGUOUS;
         }
         return result;
     }
