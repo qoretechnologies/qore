@@ -1794,10 +1794,10 @@ string doxygen_output = proc.process();
                 writeDocComment(doc);
             }
 
-            # Use "int" instead of "auto" so doxygen indexes the constant;
+            # Infer a C++ type from the value so doxygen indexes the constant;
             # "auto" is not recognized by doxygen and causes the symbol to
             # be skipped entirely (Qore constants have no type declarations)
-            writeLine(sprintf("const int %s = ...;", con.name.name));
+            writeLine(sprintf("const %s %s = ...;", inferConstType(con.value), con.name.name));
         }
 
         #! Processes a hashdecl declaration
@@ -2263,6 +2263,38 @@ string doxygen_output = proc.process();
                 }
             }
             return result.join("\n");
+        }
+
+        #! Infers a C++-compatible type string from a constant's value AST node
+        /** @param value the value expression node from the AST
+            @return a type string suitable for doxygen (e.g., "int", "string", "hash")
+        */
+        private static string inferConstType(*hash<auto> value) {
+            if (!value) {
+                return "int";
+            }
+            switch (value.kind) {
+                case QoreCodeFormat::AEK_Literal:
+                    switch (value.literalKind) {
+                        case "string": return "string";
+                        case "int": return "int";
+                        case "float": return "double";
+                        case "number": return "number";
+                        case "bool": return "bool";
+                        case "binary": return "binary";
+                        default: return "int";
+                    }
+                case QoreCodeFormat::AEK_Hash:
+                    return "hash";
+                case QoreCodeFormat::AEK_List:
+                    # List expressions often wrap a sub-expression; check first element
+                    if (value.elements.size() == 1) {
+                        return inferConstType(value.elements[0]);
+                    }
+                    return "list";
+                default:
+                    return "int";
+            }
         }
 
         #! Scans text for doxygen label definitions (@section, @defgroup, @anchor, etc.)
