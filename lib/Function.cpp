@@ -1733,6 +1733,8 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
                 int max_pscore = 0;
                 int variant_nperfect = 0;
                 bool variant_runtime_match = false;
+                bool variant_hard_match = false;  // true if missing type info (must do runtime dispatch)
+                bool variant_soft_match = false;  // true if union type partial match (may do runtime dispatch)
                 bool ok = true;
 
                 for (unsigned pi = 0; pi < sig->numParams(); ++pi) {
@@ -1753,8 +1755,9 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
                     if (QoreTypeInfo::hasType(t)) {
                         if (!QoreTypeInfo::hasType(a)) {
                             if (pi < num_args) {
-                                // we are missing parse-time type information, we need to match at runtime
+                                // we are missing parse-time type information, we need to match at runtime (HARD)
                                 variant_runtime_match = true;
+                                variant_hard_match = true;
                                 break;
                             } else if (sig->hasDefaultArg(pi)) {
                                 rc = max_rc = QTI_IGNORE;
@@ -1773,13 +1776,19 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
                         //printd(5, "QoreFunction::parseFindVariant() %s(%s) pi: %d (%s <= %s) rc: %d max_rc: %d "
                         //    "may_not_match: %d\n", getName(), sig->getSignatureText(), pi, QoreTypeInfo::getName(t),
                         //    QoreTypeInfo::getName(a), rc, max_rc, may_not_match);
-                        // if we might not match, we need to match at runtime
+                        // if we might not match, we have a soft match (union type partial match)
                         if (may_not_match) {
-                            variant_runtime_match = true;
-                            continue;
-                        }
-                        if (rc == QTI_IDENT) {
-                            ++variant_nperfect;
+                            variant_soft_match = true;
+                            // For soft matches, treat as a match but mark that runtime dispatch may be needed
+                            // Continue to next parameter instead of trying other accept specs
+                            if (rc == QTI_IDENT) {
+                                ++variant_nperfect;
+                            }
+                            // Don't break or return - continue to next parameter
+                        } else {
+                            if (rc == QTI_IDENT) {
+                                ++variant_nperfect;
+                            }
                         }
                     }
 
@@ -1801,13 +1810,18 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
                     }
                 }
 
-                // stop searching if we need to match at runtime
+                // Handle runtime matching based on type of mismatch
                 if (variant_runtime_match) {
-                    runtime_match = true;
-                    if (variant) {
-                        variant = nullptr;
+                    if (variant_hard_match) {
+                        // HARD: missing type info, must do runtime dispatch and clear any previous match
+                        runtime_match = true;
+                        if (variant) {
+                            variant = nullptr;
+                        }
+                        break;  // stop searching - hard match requires runtime dispatch
                     }
-                    break;
+                    // SOFT: union type partial match - don't clear variant, continue checking other variants
+                    // The soft match case is handled below after all variants are checked
                 }
 
                 //printd(5, "QoreFunction::parseFindVariant() this: %p tested %s(%s) ok: %d pscore: %d max_pscore: %d "
