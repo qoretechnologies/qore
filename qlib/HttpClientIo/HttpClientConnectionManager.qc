@@ -253,6 +253,43 @@ public class HttpClientConnectionManager {
         return stream;
     }
 
+    #! Acquires a stream and starts streaming with automatic retry on stale connections
+    /** If the server closed the connection between acquisition and streaming start
+        (a race inherent in pooled HTTP/1.1 connections), this method retries with a
+        fresh connection up to \c MaxRequestRetries times.
+
+        @param url the target URL
+        @param method HTTP method (e.g., "POST")
+        @param path request path
+        @param headers request headers (optional)
+        @param body_streaming if True, enables bidirectional streaming (HTTP/2+ only)
+        @param body request body (optional)
+
+        @return the stream handle ready for reading
+
+        @throw HTTPCLIENT-CONNECT-ERROR if the connection cannot be established
+        @throw HTTP1-STREAMING-ERROR if body_streaming is True on HTTP/1.1
+    */
+    HttpClientStreamHandle acquireAndStartStreaming(string url, string method, string path,
+            *hash<auto> headers, bool body_streaming = False, *data body) {
+        int retries = 0;
+        while (True) {
+            HttpClientStreamHandle stream = acquireStream(url);
+            try {
+                stream.startStreaming(method, path, headers, body_streaming, body);
+                return stream;
+            } catch (hash<ExceptionInfo> ex) {
+                if (isConnectionError(ex.err) && ++retries <= MaxRequestRetries) {
+                    log(LoggerLevel::DEBUG, "streaming connection error %s, retrying (%d/%d)",
+                        ex.err, retries, MaxRequestRetries);
+                    evictDeadConnections(url);
+                    continue;
+                }
+                rethrow;
+            }
+        }
+    }
+
     #! Submits an async request and returns immediately
     /** @param url the target URL
         @param method HTTP method
@@ -944,6 +981,8 @@ public class HttpClientConnectionManager {
             || err == "HTTP2-ABORT"
             || err == "HTTP2-ERROR"
             || err == "HTTP1-CONNECT-ERROR"
+            || err == "HTTP1-CONNECTION-CLOSED"
+            || err == "HTTP1-STATE-ERROR"
             || err == "HTTP1-SSL-ERROR"
             || err == "HTTP1-ABORT"
             || err == "HTTP1-SEND-ERROR"
