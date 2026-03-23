@@ -261,17 +261,36 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
     if (!err && left.getType() == NT_VARREF) {
         VarRefNode* vrn = left.get<VarRefNode>();
         qore_var_t vtype = vrn->getType();
+        // Get the type to narrow to: use inferred type if available, otherwise use declared type
+        const QoreTypeInfo* narrow_type = parse_context.typeInfo;
+        if (!narrow_type && right.getType() == NT_VARREF) {
+            // If assigning from a variable reference with no inferred type (e.g., unassigned),
+            // use the declared type of the variable
+            VarRefNode* right_vrn = right.get<VarRefNode>();
+            qore_var_t right_vtype = right_vrn->getType();
+            if (right_vtype == VT_LOCAL || right_vtype == VT_CLOSURE || right_vtype == VT_LOCAL_TS) {
+                LocalVar* right_lvar = right_vrn->ref.id;
+                if (right_lvar) {
+                    narrow_type = right_lvar->getTypeInfo();
+                }
+            } else if (right_vtype == VT_GLOBAL || right_vtype == VT_THREAD_LOCAL) {
+                Var* right_gvar = right_vrn->ref.var;
+                if (right_gvar) {
+                    narrow_type = right_gvar->getTypeInfo();
+                }
+            }
+        }
         if (vtype == VT_LOCAL || vtype == VT_CLOSURE || vtype == VT_LOCAL_TS) {
             LocalVar* lvar = vrn->ref.id;
-            if (lvar && lvar->isAutoType() && QoreTypeInfo::hasType(parse_context.typeInfo)) {
+            if (lvar && lvar->isAutoType() && QoreTypeInfo::hasType(narrow_type)) {
                 // Direct assignment replaces the narrowed type, store location for error messages
-                lvar->parseSetNarrowedType(parse_context.typeInfo, loc);
+                lvar->parseSetNarrowedType(narrow_type, loc);
             }
         } else if (vtype == VT_GLOBAL || vtype == VT_THREAD_LOCAL) {
             Var* gvar = vrn->ref.var;
-            if (gvar && gvar->isAutoType() && QoreTypeInfo::hasType(parse_context.typeInfo)) {
+            if (gvar && gvar->isAutoType() && QoreTypeInfo::hasType(narrow_type)) {
                 // Direct assignment replaces the narrowed type, store location for error messages
-                gvar->parseSetNarrowedType(parse_context.typeInfo, loc);
+                gvar->parseSetNarrowedType(narrow_type, loc);
             }
         }
     }

@@ -1812,12 +1812,6 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValue(const QoreValue& n, bool ex
                 obj = n.get<const WeakReferenceNode>()->get();
             }
             if (obj) {
-                // issue #4920: builtin/system classes cannot be matched as explicit parameter types at runtime
-                // builtin classes should only be matched implicitly (e.g., through inheritance chains or wildcard types)
-                if (exact && u.qc->isSystem()) {
-                    printd(5, "QoreTypeSpec::runtimeAcceptsValue() rejecting exact match for system class '%s'\n", u.qc->getName());
-                    return QTI_NOT_EQUAL;
-                }
                 qore_type_result_e rv = qore_class_private::runtimeCheckCompatibleClass(*u.qc, *obj->getClass());
                 if (rv == QTI_NOT_EQUAL) {
                     return rv;
