@@ -191,12 +191,25 @@ int ForStatement::parseInitImpl(QoreParseContext& parse_context) {
         ignore_return_value(iterator);
     }
     if (code) {
+        // Track narrowed types: loops may not execute, so narrowing from the loop
+        // body shouldn't persist outside. Use NarrowedTypeHelper to merge the
+        // "executed loop" branch with the "loop didn't execute" branch.
+        NarrowedTypeHelper nth;
+        nth.saveState();
+
         QoreParseContextFlagHelper fh0(parse_context);
         fh0.setFlags(PF_BREAK_OK | PF_CONTINUE_OK);
 
         if (code->parseInitImpl(parse_context) && !err) {
             err = -1;
         }
+
+        // Record the loop body branch and restore narrowing state
+        nth.recordBranchAndRestore();
+        // The loop may not execute, so record the saved pre-loop state as implicit branch
+        nth.recordSavedAsImplicitBranch();
+        // Merge narrowing from both branches (loop executed vs. loop didn't execute)
+        nth.mergeAndApply();
     }
 
     return err;

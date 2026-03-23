@@ -1125,13 +1125,29 @@ void NarrowedTypeHelper::mergeAndApply() {
             printd(5, "    setting narrowed type\n");
             lvar->parseSetNarrowedType(common_type);
         } else if (found_in_all) {
-            // All branches found but no common type - keep original
-            printd(5, "    all branches found, no common type, saved_entry=%s\n",
-                saved_entry.second ? QoreTypeInfo::getName(saved_entry.second) : "nullptr");
-            if (saved_entry.second) {
+            // All branches found but no common type - branches have incompatible types
+            // Check if one of the branches is the implicit "no change" branch (matches saved state)
+            // This happens when a branch doesn't assign the variable, so it retains the saved type
+            bool has_unchanged_branch = false;
+            for (const auto& branch : branch_types) {
+                for (const auto& branch_entry : branch) {
+                    if (branch_entry.first == lvar && branch_entry.second == saved_entry.second) {
+                        has_unchanged_branch = true;
+                        break;
+                    }
+                }
+                if (has_unchanged_branch) break;
+            }
+
+            if (has_unchanged_branch && saved_entry.second) {
+                // One branch didn't change (matches saved state), keep it
+                // This handles loops and if-only statements where one path is unchanged
+                printd(5, "    incompatible branches but one unchanged, keeping saved type\n");
                 lvar->parseSetNarrowedType(saved_entry.second);
             } else {
-                printd(5, "    resetting narrowed type (all branches, no common)\n");
+                // Both branches changed incompatibly, reset the narrowing
+                // This handles if/else where both branches assign different types
+                printd(5, "    all branches changed, incompatible, resetting\n");
                 lvar->parseResetNarrowedType();
             }
         } else {

@@ -2587,7 +2587,11 @@ AbstractQoreNode* ClosureVarValue::getReference(const QoreProgramLocation* loc, 
 // LocalVar type narrowing methods
 
 bool LocalVar::isAutoTypeInfo(const QoreTypeInfo* ti) {
-    // Check for direct auto types (but NOT pure auto - it's meant to hold any type)
+    // Check for plain auto types
+    if (ti == autoTypeInfo || ti == autoNoNarrowTypeInfo) {
+        return true;
+    }
+    // Check for container auto types (but NOT pure auto - it's meant to hold any type)
     // Note: softlist<auto> is excluded because it accepts scalar values that get
     // automatically converted to lists, making straightforward type narrowing incorrect
     if (ti == autoHashTypeInfo || ti == autoHashOrNothingTypeInfo
@@ -2661,8 +2665,16 @@ void LocalVar::parseSetNarrowedType(const QoreTypeInfo* ti, const QoreProgramLoc
     if (no_narrowing) {
         return;
     }
-    // Don't narrow if the new type is also auto or unspecified
-    if (!QoreTypeInfo::hasType(ti) || ti == autoTypeInfo) {
+
+    // Handle assignment of NOTHING (or other untyped values) by resetting narrowing
+    // This includes both nullptr (untyped) and specific untyped literal types like nothing/null
+    if (!QoreTypeInfo::hasType(ti) || ti == nothingTypeInfo || ti == nullTypeInfo) {
+        narrowedTypeInfo = nullptr;
+        narrowedLoc = nullptr;
+        return;
+    }
+    // Don't narrow if the new type is also auto
+    if (ti == autoTypeInfo || ti == autoNoNarrowTypeInfo) {
         return;
     }
     narrowedTypeInfo = ti;
@@ -2699,7 +2711,11 @@ void LocalVar::parseMergeNarrowedType(const QoreTypeInfo* ti) {
 // Var (global variable) narrowed type methods
 
 bool Var::isAutoTypeInfo(const QoreTypeInfo* ti) {
-    // Check for direct auto types (but NOT pure auto - it's meant to hold any type)
+    // Check for plain auto types
+    if (ti == autoTypeInfo || ti == autoNoNarrowTypeInfo) {
+        return true;
+    }
+    // Check for container auto types (but NOT pure auto - it's meant to hold any type)
     // Note: softlist<auto> is excluded because it accepts scalar values that get
     // automatically converted to lists, making straightforward type narrowing incorrect
     if (ti == autoHashTypeInfo || ti == autoHashOrNothingTypeInfo
@@ -2750,8 +2766,15 @@ void Var::parseSetNarrowedType(const QoreTypeInfo* ti, const QoreProgramLocation
     if (no_narrowing) {
         return;
     }
-    // Don't narrow if the new type is also auto or unspecified
-    if (!QoreTypeInfo::hasType(ti) || ti == autoTypeInfo) {
+    // Handle assignment of NOTHING (or other untyped values) by resetting narrowing
+    // This includes both nullptr (untyped) and specific untyped literal types like nothing/null
+    if (!QoreTypeInfo::hasType(ti) || ti == nothingTypeInfo || ti == nullTypeInfo) {
+        narrowedTypeInfo = nullptr;
+        narrowedLoc = nullptr;
+        return;
+    }
+    // Don't narrow if the new type is also auto
+    if (ti == autoTypeInfo || ti == autoNoNarrowTypeInfo) {
         return;
     }
     narrowedTypeInfo = ti;

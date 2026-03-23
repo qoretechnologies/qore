@@ -236,9 +236,11 @@ int VarRefNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
         if (ref.id && ref.id->isAssigned()) {
             parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
         }
-        if (ref.id && ref.id->parseGetNarrowedType()) {
-            parse_context.analysis.narrowed_type = ref.id->parseGetNarrowedType();
-        }
+        // NOTE: Don't set analysis.narrowed_type here - use parse_context.typeInfo from parseGetTypeInfo() instead
+        // Setting it here creates stale cached information that doesn't reflect post-merge narrowing state
+        //if (ref.id && ref.id->parseGetNarrowedType()) {
+        //    parse_context.analysis.narrowed_type = ref.id->parseGetNarrowedType();
+        //}
     } else if (type == VT_GLOBAL || type == VT_THREAD_LOCAL) {
         if (ref.var && ref.var->parseGetNarrowedType()) {
             parse_context.analysis.narrowed_type = ref.var->parseGetNarrowedType();
