@@ -957,10 +957,14 @@ public class Http1ClientPollOperation inherits HttpClientPollOperation {
         log(LoggerLevel::DEBUG, "dispatching response: stream_id=%d status=%d body_size=%d",
             stream_id, response_status_code, response_body ? response_body.size() : 0);
 
-        # Clean up stream BEFORE the callback so that active_stream_count is
-        # already decremented by the time the callback resolves the caller's
-        # Promise — otherwise request() can return while
-        # getActiveStreamCount() still reports the old value.
+        # Clean up ALL per-request state BEFORE the callback so that by the
+        # time the callback resolves the caller's Promise:
+        #   1. active_stream_count is already decremented
+        #   2. req_state is IDLE (ready for the next request)
+        #   3. response accumulators are cleared
+        # Without this, a new submitRequest() racing against resetResponseState()
+        # could have its streaming_active flag clobbered.
+        bool close = connection_close;
         {
             AutoLock al(stream_lock);
             string sid = string(stream_id);
@@ -970,6 +974,9 @@ public class Http1ClientPollOperation inherits HttpClientPollOperation {
             remove active_sid;
             remove active_method;
         }
+        req_state = REQ_IDLE;
+        remove current_op;
+        resetResponseState();
 
         if (cb) {
             try {
@@ -978,14 +985,6 @@ public class Http1ClientPollOperation inherits HttpClientPollOperation {
                 log(LoggerLevel::ERROR, "stream callback exception: %s: %s", ex.err, ex.desc);
             }
         }
-
-        # Save connection_close before resetResponseState() clears it
-        bool close = connection_close;
-
-        # Reset response accumulator
-        req_state = REQ_IDLE;
-        remove current_op;
-        resetResponseState();
 
         # Check if server requested connection close
         if (close) {
@@ -1048,7 +1047,8 @@ public class Http1ClientPollOperation inherits HttpClientPollOperation {
         int stream_id;
         *HttpResponseCallback cb;
         *hash<auto> stream_ctx;
-        # Clean up stream state BEFORE callback (same rationale as normal response path)
+        # Clean up ALL per-request state BEFORE callback (same rationale as normal response path)
+        bool close = connection_close;
         {
             AutoLock al(stream_lock);
             stream_id = active_sid;
@@ -1061,6 +1061,9 @@ public class Http1ClientPollOperation inherits HttpClientPollOperation {
             remove active_sid;
             remove active_method;
         }
+        req_state = REQ_IDLE;
+        remove current_op;
+        resetResponseState();
 
         if (cb) {
             try {
@@ -1069,14 +1072,6 @@ public class Http1ClientPollOperation inherits HttpClientPollOperation {
                 log(LoggerLevel::ERROR, "streaming end callback exception: %s: %s", ex.err, ex.desc);
             }
         }
-
-        # Save connection_close before resetResponseState() clears it
-        bool close = connection_close;
-
-        # Reset response accumulator
-        req_state = REQ_IDLE;
-        remove current_op;
-        resetResponseState();
 
         if (close) {
             log(LoggerLevel::DEBUG, "server requested connection close after streaming");
