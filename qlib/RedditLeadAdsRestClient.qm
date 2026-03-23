@@ -198,6 +198,23 @@ public class RedditLeadAdsRestConnection inherits RestClient::RestConnection {
                 "https": "redditleadads",
             },
             "options": RestConnection::ConnectionScheme.options + {
+                "oauth2_client_id": RestConnection::ConnectionScheme.options.oauth2_client_id
+                + <ConnectionOptionInfo>{
+                    "desc": "the Reddit OAuth2 client ID; "
+                        "to obtain it, go to https://www.reddit.com/prefs/apps, "
+                        "click **create another app...**, select **web app**, "
+                        "fill in the name and redirect URI, and copy the client ID "
+                        "shown under the app name after creation",
+                },
+                "oauth2_client_secret": RestConnection::ConnectionScheme.options.oauth2_client_secret
+                + <ConnectionOptionInfo>{
+                    "desc": "the Reddit OAuth2 client secret; "
+                        "to obtain it, go to https://www.reddit.com/prefs/apps, "
+                        "click **create another app...**, select **web app**, "
+                        "fill in the name and redirect URI, and copy the secret "
+                        "shown after creation",
+                    "sensitive": True,
+                },
                 "data": RestConnection::ConnectionScheme.options."data"
                 + <ConnectionOptionInfo>{
                     "default_value": RedditLeadAdsRestClient::DefaultData,
