@@ -111,14 +111,6 @@ public class Http3ServerPollOperation inherits AbstractPollOperation {
         #! Mutex for thread safety between I/O thread (continuePoll) and handler
         #! thread (startSendResponse)
         Mutex op_lock();
-
-        #! Queues for delivering data to CONNECT stream handlers
-        #! (composite key "session_id:stream_id" → Queue)
-        /** Registered by the I/O controller when dispatching extended CONNECT handlers.
-            Data is drained from the per-stream buffer to these Queues after each poll
-            cycle.  NOTHING is pushed as a sentinel when the stream closes.
-        */
-        hash<string, Queue> stream_queues;
     }
 
     #! Creates the poll operation
@@ -199,10 +191,6 @@ public class Http3ServerPollOperation inherits AbstractPollOperation {
                     }
                     try {
                         auto poll_info = current_op.continuePoll();
-                        # Drain data for registered CONNECT streams after each poll cycle
-                        if (stream_queues) {
-                            drainStreamQueues();
-                        }
 
                         # QUIC is a long-running multiplexed operation:
                         # continuePoll() always returns poll info (never NOTHING).
@@ -567,54 +555,6 @@ public class Http3ServerPollOperation inherits AbstractPollOperation {
         if (current_op) {
             try { current_op.abort(); } catch () {}
         }
-    }
-
-    #! Registers a Queue for delivering data to a CONNECT stream handler
-    /** Called by the I/O controller when dispatching an extended CONNECT handler.
-        The Queue must be unlimited (created with no max size) to ensure non-blocking pushes.
-
-        @param session_id the QUIC session ID
-        @param stream_id the HTTP/3 stream ID
-        @param queue the unlimited Queue for data delivery
-
-        @note Must be called on the I/O controller thread before the handler starts reading.
-    */
-    registerStreamQueue(int session_id, int stream_id, Queue queue) {
-        AutoLock al(op_lock);
-        stream_queues{sprintf("%d:%d", session_id, stream_id)} = queue;
-    }
-
-    #! Internal: drains buffered data for registered CONNECT streams into their Queues
-    /** Called after each continuePoll() cycle on the I/O controller thread.
-        Uses readQuicConnectStreamData() (non-blocking) to read available data from
-        each registered stream's buffer and pushes it to the corresponding Queue.
-        When a stream is complete (END_STREAM received), a NOTHING sentinel is pushed
-        and the Queue registration is removed.
-    */
-    private drainStreamQueues() {
-        list<string> completed;
-        foreach string key in (keys stream_queues) {
-            # Parse composite key "session_id:stream_id"
-            list<string> parts = key.split(":");
-            int session_id = int(parts[0]);
-            int stream_id = int(parts[1]);
-            Queue queue = stream_queues{key};
-            # Drain all available data from the per-stream buffer
-            while (True) {
-                *binary data = sock.readQuicConnectStreamData(session_id, stream_id);
-                if (!data) {
-                    break;
-                }
-                queue.push(data);
-            }
-            # Check if the stream has received END_STREAM
-            if (sock.isQuicStreamComplete(session_id, stream_id)) {
-                queue.push(NOTHING);
-                completed += key;
-            }
-        }
-        # Remove completed streams outside the iteration loop
-        map remove stream_queues{$1}, completed;
     }
 
     #! Internal: starts the read request operation

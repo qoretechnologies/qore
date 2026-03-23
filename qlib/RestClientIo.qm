@@ -421,6 +421,18 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             Condition oauth2_cond();
             #! True if a thread is currently refreshing the OAuth2 token
             bool oauth2_refreshing = False;
+
+            # --- Alt token signer for proxy-based OAuth2 ---
+
+            #! Callback for signing token requests to an alternate token URL (proxy)
+            transient *code alt_token_signer;
+            #! Header name for the alt token signer signature
+            transient *string alt_token_signer_header;
+
+            # --- Option update callback ---
+
+            #! Callback to notify the connection when options (tokens) are updated
+            transient *code update_options;
         }
 
         #! Creates a new RestClientIo with the given options
@@ -535,6 +547,8 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             if (opts.password) {
                 password = opts.password;
             }
+            # Option update callback for notifying the connection about token changes
+            update_options = remove opts.update_options;
             checkOAuth2Options(opts);
 
             # HTTP Basic auth: set if username provided and no OAuth2 grant type configured
@@ -1280,6 +1294,37 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             };
         }
 
+        #! Sets the callback for option updates (token changes)
+        /** @param update_options the callback to set, or NOTHING to clear
+
+            @since %RestClientIo 1.0
+        */
+        setUpdateOptionsCode(*code update_options) {
+            self.update_options = update_options;
+        }
+
+        #! Sets the alt token signer callback and header for proxy-based OAuth2 token requests
+        /** When set, the signer is called for token requests to the \c oauth2_alt_token_url (proxy),
+            and the return value is set in the specified header.
+
+            @param signer the signer callback; receives a hash with \c method, \c path, \c body, and \c hdr keys
+            @param signer_header the header name for the signature
+
+            @since %RestClientIo 1.0
+        */
+        setAltTokenSigner(code signer, string signer_header) {
+            alt_token_signer = signer;
+            alt_token_signer_header = signer_header;
+        }
+
+        #! Clears the alt token signer callback and header
+        /** @since %RestClientIo 1.0
+        */
+        clearAltTokenSigner() {
+            remove alt_token_signer;
+            remove alt_token_signer_header;
+        }
+
         #! Forces acquisition of a new OAuth2 token
         /** @return the OAuth2 token response hash
 
@@ -1464,6 +1509,17 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 }
             }
 
+            # Include signed request header if necessary (for proxy-based token requests)
+            if (has_alt_token_url && alt_token_signer && alt_token_signer_header) {
+                string body_str = mime_get_form_urlencoded_string(login);
+                hdr{alt_token_signer_header} = alt_token_signer({
+                    "method": "POST",
+                    "path": req_path,
+                    "body": body_str,
+                    "hdr": hdr,
+                });
+            }
+
             # Serialize body as form-urlencoded
             string body = mime_get_form_urlencoded_string(login);
 
@@ -1534,6 +1590,8 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             *string pwd;
             *string alt_token_url;
             *string token_url;
+            bool use_basic_auth;
+            bool auth_secret_only;
             {
                 AutoReadLock al(config_lock);
                 client_id = oauth2_client_id;
@@ -1545,15 +1603,22 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 pwd = password;
                 alt_token_url = oauth2_alt_token_url;
                 token_url = oauth2_token_url;
+                use_basic_auth = oauth2_token_use_basic_auth;
+                auth_secret_only = oauth2_token_auth_secret_only;
             }
             hash<auto> login = {
                 "client_id": client_id,
                 "client_secret": client_secret,
                 "grant_type": grant_type,
             } + token_args;
-            # When using alt token URL, pass the real token URL as a body arg so the proxy knows where to forward
+            # When using alt token URL, pass the real token URL and auth flags as body args for the proxy
             if (alt_token_url) {
                 login.oauth2_token_url = token_url;
+                if (use_basic_auth) {
+                    login.oauth2_token_use_basic_auth = True;
+                } else if (auth_secret_only) {
+                    login.oauth2_token_auth_secret_only = True;
+                }
             }
             if (scopes) {
                 login.scope = (foldl $1 + scope_sep + $2, scopes);
@@ -1577,6 +1642,8 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             *hash<auto> token_args;
             *string alt_token_url;
             *string token_url;
+            bool use_basic_auth;
+            bool auth_secret_only;
             {
                 AutoReadLock al(config_lock);
                 client_id = oauth2_client_id;
@@ -1585,6 +1652,8 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 token_args = oauth2_token_args;
                 alt_token_url = oauth2_alt_token_url;
                 token_url = oauth2_token_url;
+                use_basic_auth = oauth2_token_use_basic_auth;
+                auth_secret_only = oauth2_token_auth_secret_only;
             }
             hash<auto> rv = {
                 "client_id": client_id,
@@ -1592,9 +1661,14 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 "grant_type": "refresh_token",
                 "refresh_token": ref_token,
             } + token_args;
-            # When using alt token URL, pass the real token URL as a body arg so the proxy knows where to forward
+            # When using alt token URL, pass the real token URL and auth flags as body args for the proxy
             if (alt_token_url) {
                 rv.oauth2_token_url = token_url;
+                if (use_basic_auth) {
+                    rv.oauth2_token_use_basic_auth = True;
+                } else if (auth_secret_only) {
+                    rv.oauth2_token_auth_secret_only = True;
+                }
             }
             return rv;
         }
@@ -1649,8 +1723,51 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 throw "OAUTH2-ERROR", sprintf("OAuth2 response is invalid, needs both token_type "
                     "(%y) and access_token (%y): %y", h.token_type, h.access_token, h);
             }
+            *hash<auto> new_opts = update_options ? getUpdateOptionsAfterLogin(h) : NOTHING;
             setOAuth2LoginInfo(h);
+            if (update_options && new_opts) {
+                try {
+                    update_options(new_opts);
+                } catch (hash<ExceptionInfo> ex) {
+                    log(LoggerLevel::ERROR, "Error updating options: %s: %s", ex.err, ex.desc);
+                }
+            }
             return h;
+        }
+
+        #! Returns options to update in the connection after an OAuth2 login/refresh
+        private *hash<auto> getUpdateOptionsAfterLogin(hash<auto> h) {
+            hash<auto> new_opts;
+            string token_val;
+            string token_type_val;
+            *string cur_refresh_token;
+            *int expiry_hint;
+            {
+                AutoReadLock al(config_lock);
+                token_val = self.token_val;
+                token_type_val = self.token_type_val;
+                cur_refresh_token = refresh_token;
+                expiry_hint = oauth2_token_expiry_hint;
+            }
+            # do not update "Bearer" -> "bearer"; it can break oauth2 refresh for apps like HubSpot
+            if (h.token_type && (!token_type_val || (h.token_type.lwr() != token_type_val.lwr()))) {
+                new_opts.token_type = h.token_type;
+            }
+            if (h.access_token && h.access_token != token_val) {
+                new_opts.token = h.access_token;
+            }
+            if (h.refresh_token && h.refresh_token != cur_refresh_token) {
+                new_opts.oauth2_refresh_token = h.refresh_token;
+            }
+            if (h.hasKey("expires_in") && !h.expires_in.intp()) {
+                log(LoggerLevel::WARN, "Ignoring invalid 'expires_in' value with type %y; value: %y",
+                    h.expires_in.fullType(), h.expires_in);
+                remove h.expires_in;
+            }
+            if (*softint expires_in = h.expires_in ?? expiry_hint) {
+                new_opts.oauth2_token_expiry = now_us() + seconds(expires_in);
+            }
+            return new_opts;
         }
 
         #! Sets the token from an OAuth2 login response

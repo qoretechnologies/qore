@@ -1081,13 +1081,16 @@ public class HttpAsyncSocketIoController {
         bool body_streaming = request.hdr && !request.headers_end_stream;
 
         # For non-WebSocket extended CONNECT: create unlimited Queue for async data
-        # delivery.  WebSocket CONNECT handlers have their own framing mechanism
-        # and read connect_stream_data_ directly — registering a Queue would
-        # consume the data before the WebSocket handler sees it.
+        # delivery.  Data is pushed directly from the QUIC receive callback to the
+        # Queue, eliminating the I/O poll loop dependency for data delivery.
+        # WebSocket CONNECT handlers have their own framing mechanism and read
+        # connect_stream_data_ directly — registering a Queue would consume the
+        # data before the WebSocket handler sees it.
         *Queue stream_data_queue;
         if (is_extended_connect && !is_websocket_connect) {
             stream_data_queue = new Queue();
-            h3op.registerStreamQueue(session_id, stream_id, stream_data_queue);
+            listener.registerQuicConnectStreamQueue(session_id, stream_id,
+                stream_data_queue);
         }
 
         # Create send-and-wake wrapper for handler threads (HTTP/3 version).

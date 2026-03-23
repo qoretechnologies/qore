@@ -224,6 +224,14 @@ QuicSession::~QuicSession() {
         SSL_CTX_free(ssl_ctx_);
         ssl_ctx_ = nullptr;
     }
+    // Release any remaining Queue references
+    if (!connect_stream_queues_.empty()) {
+        ExceptionSink xsink;
+        for (auto& [id, q] : connect_stream_queues_) {
+            q->deref(&xsink);
+        }
+        connect_stream_queues_.clear();
+    }
 }
 
 // ===== Factory Methods =====
@@ -2156,6 +2164,62 @@ QoreValue QuicSession::readConnectStreamData(int64_t stream_id, ExceptionSink* x
     return bin.release();
 }
 
+void QuicSession::registerConnectStreamQueue(int64_t stream_id, Queue* queue) {
+    ExceptionSink xsink;
+
+    // Check body_complete under mtx_ FIRST to maintain consistent lock ordering
+    // (mtx_ -> connect_data_mutex_), matching cleanupStream() and callbacks.
+    bool already_complete = false;
+    {
+        std::lock_guard<std::recursive_mutex> lock(mtx_);
+        auto sit = streams_.find(stream_id);
+        if (sit != streams_.end() && sit->second->body_complete) {
+            already_complete = true;
+        }
+    }
+
+    // Now do all Queue/buffer work under connect_data_mutex_ only
+    std::lock_guard<std::mutex> lg(connect_data_mutex_);
+
+    // Deref any existing queue for this stream (shouldn't happen, but be safe)
+    auto existing = connect_stream_queues_.find(stream_id);
+    if (existing != connect_stream_queues_.end()) {
+        existing->second->deref(&xsink);
+    }
+    connect_stream_queues_[stream_id] = queue;
+
+    // Flush any data that was buffered before the Queue was registered
+    auto it = connect_stream_data_.find(stream_id);
+    if (it != connect_stream_data_.end() && !it->second.empty()) {
+        SimpleRefHolder<BinaryNode> bin(new BinaryNode());
+        bin->append(it->second.data(), it->second.size());
+        printd(5, "QuicSession::registerConnectStreamQueue() stream_id=" QLLD
+            " flushing %d buffered bytes to Queue\n", stream_id, (int)it->second.size());
+        queue->pushAndTakeRef(bin.release());
+        it->second.clear();
+    }
+    connect_stream_data_.erase(stream_id);
+
+    // If END_STREAM already arrived before registration, push sentinel and release
+    if (already_complete) {
+        printd(5, "QuicSession::registerConnectStreamQueue() stream_id=" QLLD
+            " END_STREAM already received, pushing sentinel\n", stream_id);
+        queue->pushAndTakeRef(QoreValue());
+        connect_stream_queues_.erase(stream_id);
+        queue->deref(&xsink);
+    }
+}
+
+void QuicSession::deregisterConnectStreamQueue(int64_t stream_id) {
+    ExceptionSink xsink;
+    std::lock_guard<std::mutex> lg(connect_data_mutex_);
+    auto it = connect_stream_queues_.find(stream_id);
+    if (it != connect_stream_queues_.end()) {
+        it->second->deref(&xsink);
+        connect_stream_queues_.erase(it);
+    }
+}
+
 // ===== Stream Management =====
 // THREADING INVARIANT: getOrCreateStream() and markStreamComplete() must only be
 // called while holding mtx_. All current call paths satisfy this:
@@ -2332,6 +2396,17 @@ void QuicSession::cleanupStream(int64_t stream_id) {
         streams_.erase(it);
     }
     stream_notifiers_.erase(stream_id);
+    // Deregister Queue and release reference — the handler has already exited
+    {
+        ExceptionSink xsink;
+        std::lock_guard<std::mutex> lg(connect_data_mutex_);
+        auto qit = connect_stream_queues_.find(stream_id);
+        if (qit != connect_stream_queues_.end()) {
+            qit->second->deref(&xsink);
+            connect_stream_queues_.erase(qit);
+        }
+        connect_stream_data_.erase(stream_id);
+    }
 }
 
 int QuicSession::resetStream(int64_t stream_id) {
@@ -2737,15 +2812,22 @@ int QuicSession::streamCloseCallback(ngtcp2_conn* /* conn */, uint32_t flags,
         session->body_data_.erase(stream_id);
         session->streaming_body_data_.erase(stream_id);
 
-        // Clean up extended CONNECT tunnel data — only erase if the buffer
-        // is already empty.  readConnectStreamData() drains with swap(), so
-        // once the caller reads the last chunk the entry is empty.  If data
-        // is still buffered (e.g. stream closed before the caller has read
-        // it all), preserve the buffer so the caller can still retrieve it.
-        // The entry with an empty vector has negligible overhead and is
-        // cleaned up when the QuicSession is destroyed.
+        // Clean up extended CONNECT tunnel data and Queue registration
         {
+            ExceptionSink xsink;
             std::lock_guard<std::mutex> lg(session->connect_data_mutex_);
+            // Push NOTHING sentinel to registered Queue if still active, then release ref
+            auto qit = session->connect_stream_queues_.find(stream_id);
+            if (qit != session->connect_stream_queues_.end()) {
+                Queue* q = qit->second;
+                session->connect_stream_queues_.erase(qit);
+                q->pushAndTakeRef(QoreValue());
+                q->deref(&xsink);
+                printd(5, "QuicSession::streamCloseCallback() stream_id=" QLLD
+                    " pushed sentinel to Queue on stream close\n", stream_id);
+            }
+            // Clean up fallback buffer — only erase if empty (data may still
+            // be needed by readConnectStreamData callers)
             auto cit = session->connect_stream_data_.find(stream_id);
             if (cit != session->connect_stream_data_.end() && cit->second.empty()) {
                 session->connect_stream_data_.erase(cit);
@@ -3351,12 +3433,28 @@ int QuicSession::h3RecvDataCallback(nghttp3_conn* /* conn */, int64_t stream_id,
         printd(5, "h3RecvDataCallback() stream_id=" QLLD " datalen=%d body_total=%d\n",
             stream_id, (int)datalen, (int)(stream->body.size() + datalen));
 
-        // RFC 9220: Extended CONNECT tunnel — buffer data separately for readConnectStreamData()
+        // RFC 9220: Extended CONNECT tunnel — deliver data to handler
         if (stream->is_connect) {
             {
                 std::lock_guard<std::mutex> lg(session->connect_data_mutex_);
-                auto& buf = session->connect_stream_data_[stream_id];
-                buf.insert(buf.end(), data, data + datalen);
+                auto qit = session->connect_stream_queues_.find(stream_id);
+                if (qit != session->connect_stream_queues_.end()) {
+                    // Direct push to registered Queue — data is available to
+                    // the handler immediately without waiting for the I/O loop
+                    SimpleRefHolder<BinaryNode> bin(new BinaryNode());
+                    bin->append(data, datalen);
+                    qit->second->pushAndTakeRef(bin.release());
+                    printd(5, "h3RecvDataCallback() stream_id=" QLLD
+                        " datalen=%d direct-push to Queue\n",
+                        stream_id, (int)datalen);
+                } else {
+                    // Fallback: buffer for later (Queue not yet registered)
+                    auto& buf = session->connect_stream_data_[stream_id];
+                    buf.insert(buf.end(), data, data + datalen);
+                    printd(5, "h3RecvDataCallback() stream_id=" QLLD
+                        " datalen=%d buffered (no Queue registered)\n",
+                        stream_id, (int)datalen);
+                }
             }
             // Extend flow control
             ngtcp2_conn_extend_max_stream_offset(session->conn_, stream_id,
@@ -3434,20 +3532,38 @@ int QuicSession::h3EndStreamCallback(nghttp3_conn* /* conn */, int64_t stream_id
                                       void* conn_user_data, void* /* stream_user_data */) {
     auto* session = static_cast<QuicSession*>(conn_user_data);
 
-    // For CONNECT tunnel streams, set body_complete directly without calling
-    // markStreamComplete() — the stream was already dispatched via h3EndHeaders
-    // and we must NOT push it to completed_streams_ again (which would cause a
-    // spurious second dispatch).  Setting body_complete lets isStreamComplete()
-    // return true so drainStreamQueues() pushes the NOTHING sentinel.
-    auto it = session->streams_.find(stream_id);
-    if (it != session->streams_.end() && it->second->is_connect) {
-        it->second->body_complete = true;
-        printd(5, "QuicSession::h3EndStreamCallback() stream_id=" QLLD
-            " CONNECT tunnel END_STREAM\n", stream_id);
-        return 0;
-    }
+    try {
+        // For CONNECT tunnel streams, set body_complete and push the NOTHING sentinel
+        // directly to the registered Queue.  Do NOT call markStreamComplete() — the
+        // stream was already dispatched via h3EndHeaders and must not be re-dispatched.
+        auto it = session->streams_.find(stream_id);
+        if (it != session->streams_.end() && it->second->is_connect) {
+            it->second->body_complete = true;
+            // Push NOTHING sentinel to registered Queue (if any) and release reference
+            {
+                ExceptionSink xsink;
+                std::lock_guard<std::mutex> lg(session->connect_data_mutex_);
+                auto qit = session->connect_stream_queues_.find(stream_id);
+                if (qit != session->connect_stream_queues_.end()) {
+                    Queue* q = qit->second;
+                    session->connect_stream_queues_.erase(qit);
+                    q->pushAndTakeRef(QoreValue());
+                    q->deref(&xsink);
+                    printd(5, "QuicSession::h3EndStreamCallback() stream_id=" QLLD
+                        " CONNECT tunnel END_STREAM — sentinel pushed to Queue\n",
+                        stream_id);
+                } else {
+                    printd(5, "QuicSession::h3EndStreamCallback() stream_id=" QLLD
+                        " CONNECT tunnel END_STREAM — no Queue registered\n", stream_id);
+                }
+            }
+            return 0;
+        }
 
-    session->markStreamComplete(stream_id);
+        session->markStreamComplete(stream_id);
+    } catch (...) {
+        return NGHTTP3_ERR_CALLBACK_FAILURE;
+    }
     return 0;
 }
 

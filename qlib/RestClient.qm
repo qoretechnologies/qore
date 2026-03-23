@@ -4320,6 +4320,20 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
         return create_object("RestClientIo::RestClientIo", getConnectionOptions(rtopts));
     }
 
+    #! Returns an async-I/O-capable connection object with alt token signer applied
+    /** Overrides the base class to propagate the alt token signer to the async client,
+        similar to how @ref get() calls @ref setupRestClientConfig() for the sync client.
+
+        @since %RestClient 2.5
+    */
+    object getAsync(bool connect = True, *hash<auto> rtopts) {
+        object o = AbstractConnection::getAsync(connect, rtopts);
+        if (alt_token_signer) {
+            call_object_method(o, "setAltTokenSigner", alt_token_signer, alt_token_signer_header);
+        }
+        return o;
+    }
+
     #! Sets the alt token signer code and header on a RestClient object if applicable
     /** @param rest the RestClient object to set the alt token signer on
         @since %RestClient 2.2

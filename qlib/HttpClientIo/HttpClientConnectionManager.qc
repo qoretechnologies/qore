@@ -277,7 +277,13 @@ public class HttpClientConnectionManager {
                 # processes it on the next user-thread call.
                 HttpResponseCallback wrapped_cb = sub (hash<auto> resp, *hash<auto> err) {
                     if (!err && resp.headers) {
-                        *string alt_svc = resp.headers."alt-svc" ?? resp.headers."Alt-Svc";
+                        # NOTE: multiple Alt-Svc headers are collected into a list
+                        # by Qore's HTTP parser — join them per RFC 7838 §3
+                        auto alt_svc_raw = resp.headers."alt-svc"
+                            ?? resp.headers."Alt-Svc";
+                        *string alt_svc = alt_svc_raw.typeCode() == NT_LIST
+                            ? (foldl $1 + ", " + $2, alt_svc_raw)
+                            : alt_svc_raw;
                         if (alt_svc) {
                             pending_alt_svc.push({"url": url, "alt_svc": alt_svc});
                         }
@@ -1011,7 +1017,12 @@ public class HttpClientConnectionManager {
         # HTTP/2 headers are lowercase; HTTP/1.1 headers preserve case — check both.
         # Check for the header before parse_url() to avoid the parse on the common
         # case where no Alt-Svc header is present.
-        *string alt_svc = resp.headers."alt-svc" ?? resp.headers."Alt-Svc";
+        # NOTE: multiple Alt-Svc headers are collected into a list by Qore's HTTP
+        # parser — join them with commas per RFC 7838 §3.
+        auto alt_svc_raw = resp.headers."alt-svc" ?? resp.headers."Alt-Svc";
+        *string alt_svc = alt_svc_raw.typeCode() == NT_LIST
+            ? (foldl $1 + ", " + $2, alt_svc_raw)
+            : alt_svc_raw;
         if (!alt_svc) {
             return;
         }
