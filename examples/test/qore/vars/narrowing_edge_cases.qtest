@@ -1,0 +1,108 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+string sub auto_variant(auto x) { return "auto"; }
+string sub auto_variant(Mutex x) { return "mutex"; }
+string sub auto_variant(string x) { return "string"; }
+
+int passed = 0;
+int failed = 0;
+
+# Test 1: Assignment in only one branch - should NOT retain narrowing after if/else
+# This is CRITICAL for correctness
+{
+    auto x;
+    if (rand() > 0.5) {
+        Mutex m();
+        x = m;  # narrowed to Mutex in this branch only
+    } else {
+        x = NOTHING;  # explicitly set to NOTHING in other branch
+    }
+    # After if/else, x should be NOTHING or untyped, NOT Mutex
+    string result = auto_variant(x);
+    if (result == "auto") {
+        printf("PASS: x in conditional with only one assignment correctly selected auto\n");
+        ++passed;
+    } else {
+        printf("FAIL: x in conditional with only one assignment incorrectly selected %s\n", result);
+        ++failed;
+    }
+}
+
+# Test 2: Assignment in both branches but with different types
+{
+    auto x;
+    if (rand() > 0.5) {
+        Mutex m();
+        x = m;
+    } else {
+        x = "string";
+    }
+    # After if/else, x should be narrowed to union of Mutex | string?
+    # Or should it fall back to auto since the narrowed types conflict?
+    string result = auto_variant(x);
+    printf("INFO: x with different types in branches selected %s variant\n", result);
+    ++passed;
+}
+
+# Test 3: Loop without prior assignment
+{
+    auto x;
+    for (int i = 0; i < 0; ++i) {  # loop doesn't execute
+        Mutex m();
+        x = m;
+    }
+    # x is still unassigned (auto), should select auto variant
+    string result = auto_variant(x);
+    if (result == "auto") {
+        printf("PASS: x unassigned after non-executing loop correctly selected auto\n");
+        ++passed;
+    } else {
+        printf("FAIL: x unassigned after non-executing loop incorrectly selected %s\n", result);
+        ++failed;
+    }
+}
+
+# Test 4: Loop with prior assignment
+{
+    Mutex m1();
+    auto x = m1;  # x initially narrowed to Mutex
+    for (int i = 0; i < 0; ++i) {  # loop doesn't execute
+        x = "string";
+    }
+    # x should still be narrowed to Mutex (loop doesn't execute)
+    string result = auto_variant(x);
+    if (result == "mutex") {
+        printf("PASS: x initially Mutex stays Mutex with non-executing loop\n");
+        ++passed;
+    } else {
+        printf("FAIL: x initially Mutex changed to %s\n", result);
+        ++failed;
+    }
+}
+
+# Test 5: Loop that may not execute - assignment in loop shouldn't narrow outside loop
+{
+    Mutex m1();
+    auto x = m1;  # x initially narrowed to Mutex
+    for (int i = 0; i < 1; ++i) {  # loop may execute
+        x = "string";
+    }
+    # After the loop, what's x's type?
+    # If loop executes: x is string
+    # If loop doesn't execute: x is still Mutex
+    # The actual value at parse time is unknown, so either narrowing could be wrong
+    string result = auto_variant(x);
+    printf("INFO: x after loop with possible reassignment selected %s\n", result);
+    ++passed;
+}
+
+printf("\n=== Narrowing Edge Cases Results ===\n");
+printf("Passed: %d\n", passed);
+printf("Failed: %d\n", failed);
+
+if (failed > 0) {
+    exit(1);
+}

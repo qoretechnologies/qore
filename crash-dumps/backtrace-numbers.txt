@@ -8,4 +8,4 @@ To make this setting permanent, add 'set debuginfod enabled off' to .gdbinit.
 Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
 QUnit Test "NumbersTest" v1.0
 Ran 7 test cases, 7 succeeded (113 assertions)
-[Inferior 1 (process 2049136) exited normally]
+[Inferior 1 (process 2357532) exited normally]

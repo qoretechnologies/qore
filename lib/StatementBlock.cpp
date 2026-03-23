@@ -1078,11 +1078,16 @@ void NarrowedTypeHelper::mergeAndApply() {
         bool found_in_all = true;
         bool first = true;
 
+        printd(5, "NarrowedTypeHelper::mergeAndApply() processing var '%s', %lu branches\n",
+            lvar->getName(), branch_types.size());
+
         for (const auto& branch : branch_types) {
             bool found = false;
             for (const auto& branch_entry : branch) {
                 if (branch_entry.first == lvar) {
                     found = true;
+                    printd(5, "  branch has var with type: %s\n",
+                        branch_entry.second ? QoreTypeInfo::getName(branch_entry.second) : "nullptr");
                     if (first) {
                         common_type = branch_entry.second;
                         first = false;
@@ -1092,12 +1097,14 @@ void NarrowedTypeHelper::mergeAndApply() {
                             const QoreTypeInfo* merged = common_type;
                             if (!QoreTypeInfo::matchCommonType(merged, branch_entry.second)) {
                                 // Types incompatible, reset to original (un-narrowed)
+                                printd(5, "  incompatible types, resetting\n");
                                 common_type = nullptr;
                             } else {
                                 common_type = merged;
                             }
                         } else {
                             // One branch has null (reset), use null
+                            printd(5, "  one branch has null, resetting\n");
                             common_type = nullptr;
                         }
                     }
@@ -1106,20 +1113,32 @@ void NarrowedTypeHelper::mergeAndApply() {
             }
             if (!found) {
                 found_in_all = false;
+                printd(5, "  var not found in this branch\n");
                 break;
             }
         }
 
         // Apply the merged type
+        printd(5, "  applying: found_in_all=%d, common_type=%s\n",
+            found_in_all, common_type ? QoreTypeInfo::getName(common_type) : "nullptr");
         if (found_in_all && common_type) {
+            printd(5, "    setting narrowed type\n");
             lvar->parseSetNarrowedType(common_type);
         } else if (found_in_all) {
             // All branches found but no common type - keep original
+            printd(5, "    all branches found, no common type, saved_entry=%s\n",
+                saved_entry.second ? QoreTypeInfo::getName(saved_entry.second) : "nullptr");
             if (saved_entry.second) {
                 lvar->parseSetNarrowedType(saved_entry.second);
             } else {
+                printd(5, "    resetting narrowed type (all branches, no common)\n");
                 lvar->parseResetNarrowedType();
             }
+        } else {
+            // Variable assigned in some branches but not all - reset narrowing
+            // to be conservative (variable may be unassigned on some paths)
+            printd(5, "    not found in all branches, resetting\n");
+            lvar->parseResetNarrowedType();
         }
     }
 }

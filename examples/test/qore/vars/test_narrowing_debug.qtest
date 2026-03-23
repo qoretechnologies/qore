@@ -1,0 +1,36 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+string sub auto_variant(auto x) { return "auto"; }
+string sub auto_variant(Mutex x) { return "mutex"; }
+
+# Simple test: if/else with different assignments
+{
+    auto x;
+    if (1) {  # Always true
+        Mutex m();
+        x = m;
+    } else {
+        x = NOTHING;
+    }
+    string result = auto_variant(x);
+    printf("If-else (always if): x is %s (should be mutex)\n", result);
+}
+
+# Even simpler: just assign NOTHING
+{
+    auto y;
+    y = NOTHING;
+    string result = auto_variant(y);
+    printf("After NOTHING assignment: y is %s (should be auto)\n", result);
+}
+
+# Baseline: straight assignment
+{
+    Mutex m();
+    auto z = m;
+    string result = auto_variant(z);
+    printf("Direct Mutex assignment: z is %s (should be mutex)\n", result);
+}
