@@ -70,7 +70,7 @@ public class RedditSubscribeDataProvider inherits RedditDataProviderBase {
         static AbstractDataProviderType ResponseType = AbstractDataProviderTypeMap."hash";
     }
 
-    constructor(RedditRestClient::RedditRestClient rest) : RedditDataProviderBase(rest) {
+    constructor(RedditRestClient::RedditRestClientIo rest) : RedditDataProviderBase(rest) {
     }
 
     string getName() {

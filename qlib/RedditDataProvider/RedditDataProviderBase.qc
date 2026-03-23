@@ -32,16 +32,16 @@ public class RedditDataProviderBase inherits DataProvider::AbstractDataProvider 
         const BaseConstructorOptions = {
             "redditrestclient": <DataProviderOptionInfo>{
                 "display_name": "Reddit REST Client",
-                "short_desc": "The RedditRestClient object",
+                "short_desc": "The RedditRestClientIo object",
                 "type": AbstractDataProviderType::get(
-                    new Type("RedditRestClient::RedditRestClient")),
-                "desc": "The RedditRestClient object to use for API calls",
+                    new Type("RedditRestClient::RedditRestClientIo")),
+                "desc": "The `RedditRestClientIo` object to use for API calls",
             },
             "redditrestclient_options": <DataProviderOptionInfo>{
                 "display_name": "Reddit REST Client Options",
-                "short_desc": "Options for creating a RedditRestClient",
+                "short_desc": "Options for creating a RedditRestClientIo",
                 "type": AbstractDataProviderType::get(AutoHashType),
-                "desc": "Options for creating a RedditRestClient object if one is not provided "
+                "desc": "Options for creating a `RedditRestClientIo` object if one is not provided "
                     "directly",
             },
         };
@@ -49,7 +49,7 @@ public class RedditDataProviderBase inherits DataProvider::AbstractDataProvider 
 
     private {
         #! The REST client object for API calls
-        RedditRestClient::RedditRestClient rest;
+        RedditRestClient::RedditRestClientIo rest;
 
         #! The connection object, if applicable
         *RedditRestClient::RedditRestConnection conn;
@@ -60,14 +60,14 @@ public class RedditDataProviderBase inherits DataProvider::AbstractDataProvider 
     }
 
     #! Creates the object with a REST client
-    constructor(RedditRestClient::RedditRestClient rest) {
+    constructor(RedditRestClient::RedditRestClientIo rest) {
         self.rest = rest;
     }
 
     #! Creates the object with a connection
     constructor(RedditRestClient::RedditRestConnection conn) {
         self.conn = conn;
-        rest = conn.get(True);
+        rest = conn.getAsync();
     }
 
     #! Creates the object with options
@@ -77,23 +77,18 @@ public class RedditDataProviderBase inherits DataProvider::AbstractDataProvider 
             rest = copts.redditrestclient;
         } else {
             hash<auto> client_opts = copts.redditrestclient_options ?? {};
-            rest = new RedditRestClient::RedditRestClient(client_opts);
+            rest = new RedditRestClient::RedditRestClientIo(client_opts);
         }
     }
 
     #! Returns the REST client
-    RedditRestClient::RedditRestClient getRestClient() {
+    RedditRestClient::RedditRestClientIo getRestClient() {
         return rest;
     }
 
     #! Returns the connection, if any
     *RedditRestClient::RedditRestConnection getConnection() {
         return conn;
-    }
-
-    #! Sets the logger for the data provider
-    setLogger(*LoggerInterface logger) {
-        rest.setLogger(logger);
     }
 
     #! Makes a GET request to the Reddit API
@@ -206,23 +201,22 @@ public class RedditDataProviderBase inherits DataProvider::AbstractDataProvider 
         int retries = 0;
         while (True) {
             try {
-                hash<auto> info;
                 hash<auto> response;
                 switch (method) {
                     case "GET":
-                        response = rest.get(path, NOTHING, \info);
+                        response = rest.restGet(path);
                         break;
                     case "POST":
-                        response = rest.post(path, body, \info);
+                        response = rest.restPost(path, body);
                         break;
                     case "PUT":
-                        response = rest.put(path, body, \info);
+                        response = rest.restPut(path, body);
                         break;
                     case "PATCH":
-                        response = rest.patch(path, body, \info);
+                        response = rest.restPatch(path, body);
                         break;
                     case "DELETE":
-                        response = rest.del(path, NOTHING, \info);
+                        response = rest.restDel(path);
                         break;
                     default:
                         throw "REDDIT-ERROR", sprintf("unsupported HTTP method: %s", method);

@@ -72,7 +72,7 @@ public class RedditFlairDataProvider inherits RedditDataProviderBase {
     }
 
     #! Creates the object with a REST client
-    constructor(RedditRestClient::RedditRestClient rest) : RedditDataProviderBase(rest) {
+    constructor(RedditRestClient::RedditRestClientIo rest) : RedditDataProviderBase(rest) {
     }
 
     #! Returns the provider name
@@ -114,8 +114,7 @@ public class RedditFlairDataProvider inherits RedditDataProviderBase {
         string path = "r/" + search_options.subreddit + "/api/" + flair_type + "_flair_v2";
 
         # Flair endpoints return a flat list, not a Listing
-        hash<auto> info;
-        hash<auto> response = rest.get(path, NOTHING, \info);
+        hash<auto> response = rest.restGet(path);
         list<hash<auto>> results = ();
         if (response.body.typeCode() == NT_LIST) {
             foreach auto item in (response.body) {

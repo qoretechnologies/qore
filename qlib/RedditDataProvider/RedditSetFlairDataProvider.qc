@@ -81,7 +81,7 @@ public class RedditSetFlairDataProvider inherits RedditDataProviderBase {
         const ConstructorOptions = BaseConstructorOptions;
     }
 
-    constructor(RedditRestClient::RedditRestClient rest) : RedditDataProviderBase(rest) {
+    constructor(RedditRestClient::RedditRestClientIo rest) : RedditDataProviderBase(rest) {
     }
 
     string getName() {

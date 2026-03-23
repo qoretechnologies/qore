@@ -121,7 +121,7 @@ public class RedditCreatePostDataProvider inherits RedditDataProviderBase {
         static RedditPostDataType ResponseType();
     }
 
-    constructor(RedditRestClient::RedditRestClient rest) : RedditDataProviderBase(rest) {
+    constructor(RedditRestClient::RedditRestClientIo rest) : RedditDataProviderBase(rest) {
     }
 
     string getName() {

@@ -68,7 +68,7 @@ public class RedditCreateCommentDataProvider inherits RedditDataProviderBase {
         static RedditCommentDataType ResponseType();
     }
 
-    constructor(RedditRestClient::RedditRestClient rest) : RedditDataProviderBase(rest) {
+    constructor(RedditRestClient::RedditRestClientIo rest) : RedditDataProviderBase(rest) {
     }
 
     string getName() {

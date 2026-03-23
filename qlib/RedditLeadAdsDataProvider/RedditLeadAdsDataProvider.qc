@@ -50,7 +50,7 @@ public class RedditLeadAdsDataProvider inherits RedditLeadAdsDataProviderBase {
     constructor(*hash<auto> options) : RedditLeadAdsDataProviderBase(options) {
     }
 
-    constructor(RedditLeadAdsRestClient::RedditLeadAdsRestClient rest)
+    constructor(RedditLeadAdsRestClient::RedditLeadAdsRestClientIo rest)
             : RedditLeadAdsDataProviderBase(rest) {
     }
 

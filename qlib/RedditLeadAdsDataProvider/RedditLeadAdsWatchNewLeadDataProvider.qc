@@ -84,14 +84,14 @@ public class RedditLeadAdsWatchNewLeadDataProvider inherits RedditLeadAdsDataPro
     }
 
     #! Creates the object with a REST client (no options — for provider tree traversal)
-    constructor(RedditLeadAdsRestClient::RedditLeadAdsRestClient rest)
+    constructor(RedditLeadAdsRestClient::RedditLeadAdsRestClientIo rest)
             : RedditLeadAdsDataProviderBase(rest),
               AbstractWatchDataProviderBase(DefaultPollInterval) {
         last_check = now_us();
     }
 
     #! Creates the object with a REST client and options (for trigger activation)
-    constructor(RedditLeadAdsRestClient::RedditLeadAdsRestClient rest, hash<auto> options)
+    constructor(RedditLeadAdsRestClient::RedditLeadAdsRestClientIo rest, hash<auto> options)
             : RedditLeadAdsDataProviderBase(rest),
               AbstractWatchDataProviderBase(
                   max(options.poll_interval ?? DefaultPollInterval, MinPollInterval)) {
@@ -103,6 +103,11 @@ public class RedditLeadAdsWatchNewLeadDataProvider inherits RedditLeadAdsDataPro
     #! Destructor - stops the polling thread
     destructor() {
         stopEventsIntern();
+    }
+
+    #! Cancels any in-progress poll operation for graceful shutdown
+    private cancelPollOperation() {
+        rest.close();
     }
 
     #! Called when observers are ready; gets options from context if needed and starts polling

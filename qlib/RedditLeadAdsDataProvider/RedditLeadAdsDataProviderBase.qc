@@ -32,16 +32,16 @@ public class RedditLeadAdsDataProviderBase inherits DataProvider::AbstractDataPr
         const BaseConstructorOptions = {
             "redditleadadsrestclient": <DataProviderOptionInfo>{
                 "display_name": "Reddit Lead Ads REST Client",
-                "short_desc": "The RedditLeadAdsRestClient object",
+                "short_desc": "The RedditLeadAdsRestClientIo object",
                 "type": AbstractDataProviderType::get(
-                    new Type("RedditLeadAdsRestClient::RedditLeadAdsRestClient")),
-                "desc": "The `RedditLeadAdsRestClient` object to use for API calls",
+                    new Type("RedditLeadAdsRestClient::RedditLeadAdsRestClientIo")),
+                "desc": "The `RedditLeadAdsRestClientIo` object to use for API calls",
             },
             "redditleadadsrestclient_options": <DataProviderOptionInfo>{
                 "display_name": "Reddit Lead Ads REST Client Options",
-                "short_desc": "Options for creating a RedditLeadAdsRestClient",
+                "short_desc": "Options for creating a RedditLeadAdsRestClientIo",
                 "type": AbstractDataProviderType::get(AutoHashType),
-                "desc": "Options for creating a `RedditLeadAdsRestClient` object if one is not "
+                "desc": "Options for creating a `RedditLeadAdsRestClientIo` object if one is not "
                     "provided directly",
             },
         };
@@ -49,7 +49,7 @@ public class RedditLeadAdsDataProviderBase inherits DataProvider::AbstractDataPr
 
     private {
         #! The REST client object for API calls
-        RedditLeadAdsRestClient::RedditLeadAdsRestClient rest;
+        RedditLeadAdsRestClient::RedditLeadAdsRestClientIo rest;
 
         #! The connection object, if applicable
         *RedditLeadAdsRestClient::RedditLeadAdsRestConnection conn;
@@ -60,14 +60,14 @@ public class RedditLeadAdsDataProviderBase inherits DataProvider::AbstractDataPr
     }
 
     #! Creates the object with a REST client
-    constructor(RedditLeadAdsRestClient::RedditLeadAdsRestClient rest) {
+    constructor(RedditLeadAdsRestClient::RedditLeadAdsRestClientIo rest) {
         self.rest = rest;
     }
 
     #! Creates the object with a connection
     constructor(RedditLeadAdsRestClient::RedditLeadAdsRestConnection conn) {
         self.conn = conn;
-        rest = conn.get(True);
+        rest = conn.getAsync();
     }
 
     #! Creates the object with options
@@ -77,18 +77,13 @@ public class RedditLeadAdsDataProviderBase inherits DataProvider::AbstractDataPr
             rest = copts.redditleadadsrestclient;
         } else {
             hash<auto> client_opts = copts.redditleadadsrestclient_options ?? {};
-            rest = new RedditLeadAdsRestClient::RedditLeadAdsRestClient(client_opts);
+            rest = new RedditLeadAdsRestClient::RedditLeadAdsRestClientIo(client_opts);
         }
     }
 
     #! Returns the REST client
-    RedditLeadAdsRestClient::RedditLeadAdsRestClient getRestClient() {
+    RedditLeadAdsRestClient::RedditLeadAdsRestClientIo getRestClient() {
         return rest;
-    }
-
-    #! Sets the logger for the data provider
-    setLogger(*LoggerInterface logger) {
-        rest.setLogger(logger);
     }
 
     #! Makes a GET request to the Reddit Ads API
@@ -110,14 +105,13 @@ public class RedditLeadAdsDataProviderBase inherits DataProvider::AbstractDataPr
         int retries = 0;
         while (True) {
             try {
-                hash<auto> info;
                 hash<auto> response;
                 switch (method) {
                     case "GET":
-                        response = rest.get(path, NOTHING, \info);
+                        response = rest.restGet(path);
                         break;
                     case "POST":
-                        response = rest.post(path, body, \info);
+                        response = rest.restPost(path, body);
                         break;
                     default:
                         throw "REDDIT-LEAD-ADS-ERROR", sprintf("unsupported HTTP method: %s", method);

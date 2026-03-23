@@ -40,7 +40,7 @@ public class RedditGetTrophiesDataProvider inherits RedditDataProviderBase {
         static RedditTrophyDataType ResponseType();
     }
 
-    constructor(RedditRestClient::RedditRestClient rest) : RedditDataProviderBase(rest) {
+    constructor(RedditRestClient::RedditRestClientIo rest) : RedditDataProviderBase(rest) {
     }
 
     string getName() {

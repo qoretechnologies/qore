@@ -60,7 +60,7 @@ public class RedditApproveDataProvider inherits RedditDataProviderBase {
         };
     }
 
-    constructor(RedditRestClient::RedditRestClient rest) : RedditDataProviderBase(rest) {
+    constructor(RedditRestClient::RedditRestClientIo rest) : RedditDataProviderBase(rest) {
     }
 
     string getName() { return "approve"; }
@@ -120,7 +120,7 @@ public class RedditRemoveDataProvider inherits RedditDataProviderBase {
         };
     }
 
-    constructor(RedditRestClient::RedditRestClient rest) : RedditDataProviderBase(rest) {
+    constructor(RedditRestClient::RedditRestClientIo rest) : RedditDataProviderBase(rest) {
     }
 
     string getName() { return "remove"; }
@@ -187,7 +187,7 @@ public class RedditDistinguishDataProvider inherits RedditDataProviderBase {
         };
     }
 
-    constructor(RedditRestClient::RedditRestClient rest) : RedditDataProviderBase(rest) {
+    constructor(RedditRestClient::RedditRestClientIo rest) : RedditDataProviderBase(rest) {
     }
 
     string getName() { return "distinguish"; }
@@ -223,7 +223,7 @@ public class RedditLockDataProvider inherits RedditDataProviderBase {
         };
     }
 
-    constructor(RedditRestClient::RedditRestClient rest) : RedditDataProviderBase(rest) {
+    constructor(RedditRestClient::RedditRestClientIo rest) : RedditDataProviderBase(rest) {
     }
 
     string getName() { return "lock"; }
@@ -258,7 +258,7 @@ public class RedditUnlockDataProvider inherits RedditDataProviderBase {
         };
     }
 
-    constructor(RedditRestClient::RedditRestClient rest) : RedditDataProviderBase(rest) {
+    constructor(RedditRestClient::RedditRestClientIo rest) : RedditDataProviderBase(rest) {
     }
 
     string getName() { return "unlock"; }
@@ -325,7 +325,7 @@ public class RedditStickyDataProvider inherits RedditDataProviderBase {
         };
     }
 
-    constructor(RedditRestClient::RedditRestClient rest) : RedditDataProviderBase(rest) {
+    constructor(RedditRestClient::RedditRestClientIo rest) : RedditDataProviderBase(rest) {
     }
 
     string getName() { return "sticky"; }
@@ -361,7 +361,7 @@ public class RedditMarkNsfwDataProvider inherits RedditDataProviderBase {
         };
     }
 
-    constructor(RedditRestClient::RedditRestClient rest) : RedditDataProviderBase(rest) {
+    constructor(RedditRestClient::RedditRestClientIo rest) : RedditDataProviderBase(rest) {
     }
 
     string getName() { return "mark-nsfw"; }
@@ -396,7 +396,7 @@ public class RedditUnmarkNsfwDataProvider inherits RedditDataProviderBase {
         };
     }
 
-    constructor(RedditRestClient::RedditRestClient rest) : RedditDataProviderBase(rest) {
+    constructor(RedditRestClient::RedditRestClientIo rest) : RedditDataProviderBase(rest) {
     }
 
     string getName() { return "unmark-nsfw"; }
@@ -431,7 +431,7 @@ public class RedditSpoilerDataProvider inherits RedditDataProviderBase {
         };
     }
 
-    constructor(RedditRestClient::RedditRestClient rest) : RedditDataProviderBase(rest) {
+    constructor(RedditRestClient::RedditRestClientIo rest) : RedditDataProviderBase(rest) {
     }
 
     string getName() { return "mark-spoiler"; }
@@ -466,7 +466,7 @@ public class RedditUnspoilerDataProvider inherits RedditDataProviderBase {
         };
     }
 
-    constructor(RedditRestClient::RedditRestClient rest) : RedditDataProviderBase(rest) {
+    constructor(RedditRestClient::RedditRestClientIo rest) : RedditDataProviderBase(rest) {
     }
 
     string getName() { return "unmark-spoiler"; }

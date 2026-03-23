@@ -74,7 +74,7 @@ public class RedditMessagesDataProvider inherits RedditDataProviderBase {
     }
 
     #! Creates the object with a REST client
-    constructor(RedditRestClient::RedditRestClient rest) : RedditDataProviderBase(rest) {
+    constructor(RedditRestClient::RedditRestClientIo rest) : RedditDataProviderBase(rest) {
     }
 
     #! Returns the provider name

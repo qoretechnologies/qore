@@ -54,7 +54,7 @@ public class RedditWatchNewPostsDataProvider inherits RedditWatchDataProviderBas
         *string subreddit;
     }
 
-    constructor(RedditRestClient::RedditRestClient rest, *hash<auto> options)
+    constructor(RedditRestClient::RedditRestClientIo rest, *hash<auto> options)
             : RedditWatchDataProviderBase(rest, options) {
         if (options.subreddit) {
             subreddit = options.subreddit;
@@ -136,7 +136,7 @@ public class RedditWatchNewCommentsDataProvider inherits RedditWatchDataProvider
         *string article;
     }
 
-    constructor(RedditRestClient::RedditRestClient rest, *hash<auto> options)
+    constructor(RedditRestClient::RedditRestClientIo rest, *hash<auto> options)
             : RedditWatchDataProviderBase(rest, options) {
         if (options.article) {
             article = options.article;
@@ -216,7 +216,7 @@ public class RedditWatchNewMessagesDataProvider inherits RedditWatchDataProvider
         };
     }
 
-    constructor(RedditRestClient::RedditRestClient rest, *hash<auto> options)
+    constructor(RedditRestClient::RedditRestClientIo rest, *hash<auto> options)
             : RedditWatchDataProviderBase(rest, options) {
     }
 

@@ -56,7 +56,7 @@ public class RedditWatchDataProviderBase inherits RedditDataProviderBase,
     }
 
     #! Creates the object with a REST client
-    constructor(RedditRestClient::RedditRestClient rest, *hash<auto> options)
+    constructor(RedditRestClient::RedditRestClientIo rest, *hash<auto> options)
             : RedditDataProviderBase(rest),
               AbstractWatchDataProviderBase(max(options.poll_interval ?? DefaultPollInterval, MinPollInterval)) {
         last_check = options.start_date ?? now_us();
@@ -65,6 +65,11 @@ public class RedditWatchDataProviderBase inherits RedditDataProviderBase,
     #! Destructor - stops the polling thread
     destructor() {
         stopEventsIntern();
+    }
+
+    #! Cancels any in-progress poll operation for graceful shutdown
+    private cancelPollOperation() {
+        rest.close();
     }
 
     #! Polls for new records once

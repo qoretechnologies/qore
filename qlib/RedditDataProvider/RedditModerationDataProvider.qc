@@ -54,7 +54,7 @@ public class RedditModerationDataProvider inherits RedditDataProviderBase {
         };
     }
 
-    constructor(RedditRestClient::RedditRestClient rest) : RedditDataProviderBase(rest) {
+    constructor(RedditRestClient::RedditRestClientIo rest) : RedditDataProviderBase(rest) {
     }
 
     string getName() {

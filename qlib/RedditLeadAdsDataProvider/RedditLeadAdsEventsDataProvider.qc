@@ -44,7 +44,7 @@ public class RedditLeadAdsEventsDataProvider inherits RedditLeadAdsDataProviderB
         };
     }
 
-    constructor(RedditLeadAdsRestClient::RedditLeadAdsRestClient rest)
+    constructor(RedditLeadAdsRestClient::RedditLeadAdsRestClientIo rest)
             : RedditLeadAdsDataProviderBase(rest) {
     }
 
