@@ -1794,7 +1794,10 @@ string doxygen_output = proc.process();
                 writeDocComment(doc);
             }
 
-            writeLine(sprintf("const auto %s = ...;", con.name.name));
+            # Use "int" instead of "auto" so doxygen indexes the constant;
+            # "auto" is not recognized by doxygen and causes the symbol to
+            # be skipped entirely (Qore constants have no type declarations)
+            writeLine(sprintf("const int %s = ...;", con.name.name));
         }
 
         #! Processes a hashdecl declaration
@@ -2220,7 +2223,7 @@ string doxygen_output = proc.process();
                     # Match class, hashdecl, const, sub/function, enum declarations
                     if (*list<string> m0 = (line =~ x/^\s*(?:public\s+)?(?:abstract\s+)?(?:class|hashdecl|struct)\s+(?:[A-Za-z_:]+::)?([A-Za-z_][A-Za-z0-9_]*)/)) {
                         sym = m0[0];
-                    } else if (*list<string> m1 = (line =~ x/^\s*(?:public\s+)?const\s+(?:auto|int|string|float|hash|list|bool|number|binary|softint|timeout|date|data|code)\s+([A-Za-z_][A-Za-z0-9_]*)/)) {
+                    } else if (*list<string> m1 = (line =~ x/^\s*(?:public\s+)?const\s+([A-Za-z_][A-Za-z0-9_]*)\s*=/)) {
                         sym = m1[0];
                     } else if (*list<string> m2 = (line =~ x/^\s*(?:public\s+)?(?:deprecated\s+)?(?:synchronized\s+)?(?:\*?[A-Za-z_][A-Za-z0-9_<>:, ]*\s+)?sub\s+([A-Za-z_][A-Za-z0-9_]*)/)) {
                         sym = m2[0];

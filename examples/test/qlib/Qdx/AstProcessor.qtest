@@ -118,7 +118,7 @@ public class AstProcessorTests inherits QUnit::Test {
         string code = "const MyConst = 42;";
         string output = processCode(code);
 
-        assertTrue(output =~ /const auto MyConst = \.\.\.;/, "constant with simplified value");
+        assertTrue(output =~ /const int MyConst = \.\.\.;/, "constant with simplified value");
     }
 
     testDocCommentConversion() {
