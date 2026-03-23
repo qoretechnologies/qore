@@ -709,16 +709,9 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
                                 stream_id);
                         }
                     }
-                    if (cb) {
-                        try {
-                            cb(output + {"ctx": stream_ctx, "protocol": "h3"}, NOTHING);
-                        } catch (hash<ExceptionInfo> ex) {
-                            log(LoggerLevel::ERROR, "stream callback exception: %s: %s",
-                                ex.err, ex.desc);
-                        }
-                    }
-                    # Remove stream AFTER callback completes so the stream handle's
-                    # state is already updated before the stream becomes unavailable.
+                    # Remove stream BEFORE the callback so that
+                    # active_stream_count is already decremented by the time the
+                    # callback resolves the caller's Promise.
                     # For streaming responses (end_stream=false), keep the callback
                     # registered so that subsequent body chunks can be delivered via
                     # the stream's registered callback (into the Channel) and the
@@ -728,6 +721,14 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
                         remove stream_callbacks{sid};
                         remove stream_ctxs{sid};
                         --active_stream_count;
+                    }
+                    if (cb) {
+                        try {
+                            cb(output + {"ctx": stream_ctx, "protocol": "h3"}, NOTHING);
+                        } catch (hash<ExceptionInfo> ex) {
+                            log(LoggerLevel::ERROR, "stream callback exception: %s: %s",
+                                ex.err, ex.desc);
+                        }
                     }
                 }
 

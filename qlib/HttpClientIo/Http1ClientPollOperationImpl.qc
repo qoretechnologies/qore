@@ -957,15 +957,10 @@ public class Http1ClientPollOperation inherits HttpClientPollOperation {
         log(LoggerLevel::DEBUG, "dispatching response: stream_id=%d status=%d body_size=%d",
             stream_id, response_status_code, response_body ? response_body.size() : 0);
 
-        if (cb) {
-            try {
-                cb(resp + {"ctx": stream_ctx}, NOTHING);
-            } catch (hash<ExceptionInfo> ex) {
-                log(LoggerLevel::ERROR, "stream callback exception: %s: %s", ex.err, ex.desc);
-            }
-        }
-
-        # Clean up stream AFTER callback (same pattern as HTTP/2)
+        # Clean up stream BEFORE the callback so that active_stream_count is
+        # already decremented by the time the callback resolves the caller's
+        # Promise — otherwise request() can return while
+        # getActiveStreamCount() still reports the old value.
         {
             AutoLock al(stream_lock);
             string sid = string(stream_id);
@@ -974,6 +969,14 @@ public class Http1ClientPollOperation inherits HttpClientPollOperation {
             --active_stream_count;
             remove active_sid;
             remove active_method;
+        }
+
+        if (cb) {
+            try {
+                cb(resp + {"ctx": stream_ctx}, NOTHING);
+            } catch (hash<ExceptionInfo> ex) {
+                log(LoggerLevel::ERROR, "stream callback exception: %s: %s", ex.err, ex.desc);
+            }
         }
 
         # Save connection_close before resetResponseState() clears it
@@ -1045,12 +1048,18 @@ public class Http1ClientPollOperation inherits HttpClientPollOperation {
         int stream_id;
         *HttpResponseCallback cb;
         *hash<auto> stream_ctx;
+        # Clean up stream state BEFORE callback (same rationale as normal response path)
         {
             AutoLock al(stream_lock);
             stream_id = active_sid;
             string sid = string(stream_id);
             cb = stream_callbacks{sid};
             stream_ctx = stream_ctxs{sid};
+            remove stream_callbacks{sid};
+            remove stream_ctxs{sid};
+            --active_stream_count;
+            remove active_sid;
+            remove active_method;
         }
 
         if (cb) {
@@ -1059,17 +1068,6 @@ public class Http1ClientPollOperation inherits HttpClientPollOperation {
             } catch (hash<ExceptionInfo> ex) {
                 log(LoggerLevel::ERROR, "streaming end callback exception: %s: %s", ex.err, ex.desc);
             }
-        }
-
-        # Clean up stream state
-        {
-            AutoLock al(stream_lock);
-            string sid = string(stream_id);
-            remove stream_callbacks{sid};
-            remove stream_ctxs{sid};
-            --active_stream_count;
-            remove active_sid;
-            remove active_method;
         }
 
         # Save connection_close before resetResponseState() clears it
