@@ -1134,10 +1134,34 @@ void NarrowedTypeHelper::mergeAndApply() {
             printd(5, "    setting narrowed type\n");
             lvar->parseSetNarrowedType(common_type);
         } else if (found_in_all) {
-            // All branches found but no common type - keep original
-            if (saved_entry.second) {
-                lvar->parseSetNarrowedType(saved_entry.second);
+            // All branches found but no common type - create union type
+            // Collect all concrete types from branches
+            bool has_null_branch = false;
+            type_vec_t concrete_types;
+
+            for (const auto& branch : branch_types) {
+                for (const auto& branch_entry : branch) {
+                    if (branch_entry.first == lvar) {
+                        if (branch_entry.second) {
+                            concrete_types.push_back(branch_entry.second);
+                        } else {
+                            has_null_branch = true;
+                        }
+                        break;
+                    }
+                }
+            }
+
+            if (!concrete_types.empty()) {
+                // Create union type from all concrete branch types
+                const QoreTypeInfo* union_type = has_null_branch
+                    ? qore_get_union_or_nothing_type(concrete_types)
+                    : qore_get_union_type(concrete_types, false);
+                lvar->parseSetNarrowedType(union_type);
+                QORE_DEBUG_NARROW_MERGE_ACTION("creating union type");
+                printd(5, "    creating union type: %s\n", QoreTypeInfo::getName(union_type));
             } else {
+                // All branches had null — no concrete type available
                 lvar->parseResetNarrowedType();
             }
         }

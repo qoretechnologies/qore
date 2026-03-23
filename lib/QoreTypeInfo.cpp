@@ -3365,14 +3365,28 @@ qore_type_result_e QoreTypeInfo::parseAccepts(const QoreTypeInfo* typeInfo, bool
     qore_type_result_e worst_score = QTI_IDENT;  // worst (highest value) score across matched components
     bool all_match = true;
 
-    for (auto& rt : typeInfo->return_vec) {
+    if (is_union) {
+        fprintf(stderr, "DEBUG parseAccepts: parameter='%s' <- arg='%s' (arg components: %zu)\n",
+               tname.c_str(), typeInfo->tname.c_str(), typeInfo->return_vec.size());
+    }
+
+    for (size_t comp_idx = 0; comp_idx < typeInfo->return_vec.size(); ++comp_idx) {
+        auto& rt = typeInfo->return_vec[comp_idx];
         bool t_no_match = true;
+        if (is_union) {
+            fprintf(stderr, "  checking component %zu: %s\n", comp_idx,
+                   QoreTypeInfo::getName(rt.spec.getBaseTypeInfo()));
+        }
         for (auto& at : getAcceptSpecs()) {
             qore_type_result_e t_max_result = QTI_NOT_EQUAL;
             qore_type_result_e res = parseAcceptsIntern(at, rt, may_not_match, may_need_filter, t_no_match, ok,
                 t_max_result, known_initial_assignment);
             if (res == QTI_IDENT) {
                 max_result = t_max_result;
+                if (is_union) {
+                    fprintf(stderr, "  component %zu: %s matches (QTI_IDENT)\n", comp_idx,
+                           QoreTypeInfo::getName(rt.spec.getBaseTypeInfo()));
+                }
                 // Fast path for non-union types: return immediately
                 if (!is_union) {
                     return res;
@@ -3383,12 +3397,20 @@ qore_type_result_e QoreTypeInfo::parseAccepts(const QoreTypeInfo* typeInfo, bool
             } else if (res == QTI_AMBIGUOUS || res == QTI_NEAR || res == QTI_WILDCARD) {
                 max_result = t_max_result;
                 if (is_union && res > worst_score) { worst_score = res; }
+                if (is_union) {
+                    fprintf(stderr, "  component %zu: %s match score=%d\n", comp_idx,
+                           QoreTypeInfo::getName(rt.spec.getBaseTypeInfo()), res);
+                }
                 assert(ok);
                 if (may_not_match) {
                     return res;
                 }
                 break;
             }
+        }
+        if (t_no_match && is_union) {
+            fprintf(stderr, "  component %zu: %s does NOT match\n", comp_idx,
+                   QoreTypeInfo::getName(rt.spec.getBaseTypeInfo()));
         }
         if (t_no_match) {
             if (is_union) {
@@ -3414,11 +3436,22 @@ qore_type_result_e QoreTypeInfo::parseAccepts(const QoreTypeInfo* typeInfo, bool
         if (is_union && !all_match) {
             // case 2: some matched, some didn't -> conservative match
             may_not_match = true;
+            if (is_union) {
+                fprintf(stderr, "  -> result: AMBIGUOUS (case 2: partial match), may_not_match=true\n");
+            }
             return QTI_AMBIGUOUS;
         }
-        return is_union ? worst_score : QTI_AMBIGUOUS;
+        qore_type_result_e result = is_union ? worst_score : QTI_AMBIGUOUS;
+        if (is_union) {
+            fprintf(stderr, "  -> result: %d (case %d), all_match=%d\n",
+                   result, (all_match ? 3 : 2), all_match);
+        }
+        return result;
     }
     may_not_match = false;
+    if (is_union) {
+        fprintf(stderr, "  -> result: NOT_EQUAL (case 1: no match)\n");
+    }
     return QTI_NOT_EQUAL;
 }
 
