@@ -69,6 +69,21 @@ int QoreRemoveOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& pars
     if (exp && !err) {
         err = checkLValue(exp, parse_context.pflag);
     }
+
+    // If remove is applied to a simple variable reference, reset its assignment tracking
+    // since remove unassigns the variable (sets it to NOTHING)
+    if (exp && exp.getType() == NT_VARREF && !err) {
+        VarRefNode* vrn = exp.get<VarRefNode>();
+        qore_var_t vtype = vrn->getType();
+        if (vtype == VT_LOCAL || vtype == VT_CLOSURE || vtype == VT_LOCAL_TS) {
+            LocalVar* lvar = vrn->ref.id;
+            if (lvar) {
+                lvar->parseUnassigned();
+            }
+        }
+        // TODO: handle global and thread-local variables if needed
+    }
+
     returnTypeInfo = parse_context.typeInfo;
     parse_context.analysis.clear();
     if (returnTypeInfo) {
