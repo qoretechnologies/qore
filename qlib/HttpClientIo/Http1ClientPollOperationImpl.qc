@@ -928,9 +928,19 @@ public class Http1ClientPollOperation inherits HttpClientPollOperation {
         auto body = response_body;
         if (body && body.typeCode() == NT_BINARY) {
             *string ct = response_headers."content-type";
-            if (ct && (ct =~ /^text\// || ct =~ /\/(json|xml|yaml|html)/
-                    || ct =~ /\+(json|xml)/ || ct =~ /charset=/)) {
-                body = body.toString();
+            if (ct && (ct =~ /^text\// || ct =~ /\/(json|xml|yaml|html|javascript)/
+                    || ct =~ /\+(json|xml)/ || ct =~ /charset=/
+                    || ct =~ /x-www-form-urlencoded/)) {
+                # JSON and YAML are always UTF-8 per RFC 8259 / YAML spec
+                bool force_utf8 = ct =~ /\/(json|x-yaml|yaml)/ || ct =~ /\+json/;
+                *string charset;
+                if (!force_utf8) {
+                    *list<*string> m = (ct =~ x/charset=["']?([^\s;,"']+)/i);
+                    if (m) {
+                        charset = m[0];
+                    }
+                }
+                body = body.toString(charset ?? "UTF-8");
             }
         }
 

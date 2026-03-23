@@ -1150,13 +1150,13 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
     testAutoPlainHttpFallback() {
 %ifndef NoJson
-        # Connect to HTTP/1.1-only server with auto protocol (should try h2c, fail, fall back to h1)
+        # Connect to HTTP/1.1-only server with auto protocol — for plain HTTP (non-TLS),
+        # auto mode uses HTTP/1.1 directly since ALPN is not available to negotiate H2
         RestClientIo::RestClientIo rest({
             "url": sprintf("http://127.0.0.1:%d", h1only_port),
             "data": "json",
             "error_passthru": True,
             "timeout": 15s,
-            # "auto" is the default protocol — it will try h2c first
         });
         on_exit rest.close();
 
@@ -1169,7 +1169,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
     testAutoPlainHttpFallbackCaching() {
 %ifndef NoJson
-        # Verify that after fallback, subsequent requests reuse h1 without failing
+        # Verify that multiple requests reuse h1 without issues
         RestClientIo::RestClientIo rest({
             "url": sprintf("http://127.0.0.1:%d", h1only_port),
             "data": "json",
@@ -1178,11 +1178,11 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         });
         on_exit rest.close();
 
-        # First request triggers fallback
+        # First request uses h1 directly (auto on plain HTTP = h1)
         hash<RestClient::RestResponseInfo> resp1 = rest.restGet("/api/first");
         assertEq(200, resp1.status_code);
 
-        # Second request should use cached h1 directly (no h2c attempt)
+        # Second request reuses the same h1 connection
         hash<RestClient::RestResponseInfo> resp2 = rest.restGet("/api/second");
         assertEq(200, resp2.status_code);
         assertEq("GET", resp2.body.method);

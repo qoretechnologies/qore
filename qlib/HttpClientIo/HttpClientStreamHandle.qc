@@ -538,6 +538,9 @@ public class HttpClientStreamHandle {
 
     #! Internal: handles response (called from protocol-specific submit callback)
     private handleResponse(hash<auto> resp, *hash<auto> err) {
+        if (!err) {
+            resp = normalizeResponseBody(resp);
+        }
         *Promise p;
         {
             AutoLock al(lock);
@@ -560,6 +563,37 @@ public class HttpClientStreamHandle {
                 try { p.set(resp); } catch () {}
             }
         }
+    }
+
+    #! Internal: converts binary body to string for text-based content types
+    /** Ensures consistent body types across all HTTP protocol versions (H1, H2, H3).
+        The H1 and H2 layers already perform this conversion internally, so this is
+        effectively a no-op for those protocols (body is already a string). For H3
+        (QUIC), the C++ layer returns bodies as binary, so this normalizes the output.
+
+        The charset parameter from the Content-Type header is used for encoding
+        conversion when present; JSON and YAML content types always use UTF-8
+        per RFC 8259 / YAML spec regardless of any charset parameter.
+    */
+    private static hash<auto> normalizeResponseBody(hash<auto> resp) {
+        if (resp.body && resp.body.typeCode() == NT_BINARY) {
+            *string ct = resp.headers."content-type";
+            if (ct && (ct =~ /^text\// || ct =~ /\/(json|xml|yaml|html|javascript)/
+                    || ct =~ /\+(json|xml)/ || ct =~ /charset=/
+                    || ct =~ /x-www-form-urlencoded/)) {
+                # JSON and YAML are always UTF-8 per their respective specs
+                bool force_utf8 = ct =~ /\/(json|x-yaml|yaml)/ || ct =~ /\+json/;
+                *string charset;
+                if (!force_utf8) {
+                    *list<*string> m = (ct =~ x/charset=["']?([^\s;,"']+)/i);
+                    if (m) {
+                        charset = m[0];
+                    }
+                }
+                resp.body = resp.body.toString(charset ?? "UTF-8");
+            }
+        }
+        return resp;
     }
 
     #! Starts a streaming request on this stream handle

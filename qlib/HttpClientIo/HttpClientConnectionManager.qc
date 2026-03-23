@@ -539,13 +539,12 @@ public class HttpClientConnectionManager {
 
         # Auto mode
         if (url_info.protocol != "https") {
-            # For plain HTTP, check cache — a previous h2c failure caches "h1"
-            if (protocol_cache.hasKey(key)) {
-                return protocol_cache{key};
-            }
-            # Try h2c (HTTP/2 prior knowledge) first; createConnection() will
-            # fall back to h1 if the server doesn't support it
-            return "h2";
+            # For plain HTTP, default to HTTP/1.1 — h2c (HTTP/2 prior knowledge)
+            # requires the server to support it, and most HTTP/1.1 servers will
+            # reject the HTTP/2 preface.  ALPN negotiation (which reliably detects
+            # HTTP/2 support) is only available over TLS.  Users who know their
+            # server supports h2c can explicitly set protocol: "h2".
+            return "h1";
         }
 
         # Check cache — "h3" is set by checkAltSvc() when an Alt-Svc response

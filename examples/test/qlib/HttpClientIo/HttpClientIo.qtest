@@ -172,6 +172,8 @@ class BidiEchoHandler inherits AbstractHttpRequestHandler {
 class HttpClientIoTest inherits QUnit::Test {
     private {
         HttpServer mServer;
+        int mHttpPort;
+        string mHttpUrl;
         int mSslPort;
         string mSslUrl;
         *int mQuicPort;
@@ -274,6 +276,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         # Auto protocol selection (against HTTP/2-only server)
         addTestCase("auto protocol fallback to H2", \testAutoProtocolFallback());
 
+        # Auto protocol on plain HTTP (must use HTTP/1.1)
+        addTestCase("auto protocol plain HTTP uses H1", \testAutoProtocolPlainHttp());
+
         # H3 end-to-end tests
         addTestCase("H3 end-to-end basic request", \testH3EndToEndBasic());
         addTestCase("H3 end-to-end concurrent", \testH3EndToEndConcurrent());
@@ -355,6 +360,12 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         mServer.setHandler("streaming", "/streaming", NOTHING, new StreamingHandler());
         mServer.setHandler("bidi", "/bidi", NOTHING, new BidiEchoHandler());
 
+        # Add plain HTTP listener
+        mHttpPort = mServer.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+        }).port;
+        mHttpUrl = "http://127.0.0.1:" + mHttpPort;
+
         # Add HTTPS listener
         mSslPort = mServer.addListener(<HttpListenerOptionInfo>{
             "service": 0,
@@ -378,7 +389,8 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
         mServer.waitForAsyncIo();
 
-        if (m_options.verbose > 1) {
+        if (m_options.verbose > 2) {
+            printf("HTTP test server on port %d\n", mHttpPort);
             printf("HTTPS test server on port %d\n", mSslPort);
             if (mQuicPort) {
                 printf("QUIC test server on port %d\n", mQuicPort);
@@ -1132,6 +1144,37 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         stream = mgr.acquireStream(mSslUrl);
         response = stream.request("GET", "/simple");
         assertEq(200, response.status_code, "auto protocol cached request status code");
+    }
+
+    testAutoProtocolPlainHttp() {
+        # Bug: protocol "auto" on plain HTTP (non-TLS) must use HTTP/1.1, not attempt
+        # HTTP/2 prior knowledge (h2c) which fails against HTTP/1.1-only servers.
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "auto",
+            "logger": mLogger,
+        });
+
+        # Basic GET via plain HTTP with auto protocol
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(mHttpUrl);
+        hash<auto> response = stream.request("GET", "/simple");
+        assertEq(200, response.status_code, "auto plain HTTP GET /simple status code");
+        assertEq("OK", response.body, "auto plain HTTP GET /simple body");
+
+        # Verify the connection used HTTP/1.1 (not HTTP/2)
+        hash<auto> stats = mgr.getStats();
+        assertTrue(stats.total_connections >= 1, "auto plain HTTP created at least one connection");
+
+        # POST with body via plain HTTP
+        stream = mgr.acquireStream(mHttpUrl);
+        response = stream.request("POST", "/echo", NOTHING, "plain-http-body");
+        assertEq(200, response.status_code, "auto plain HTTP POST status code");
+        assertRegex("body=plain-http-body", response.body, "auto plain HTTP POST body in response");
+
+        # Second request reuses cached connection
+        stream = mgr.acquireStream(mHttpUrl);
+        response = stream.request("GET", "/simple");
+        assertEq(200, response.status_code, "auto plain HTTP reuse request status code");
     }
 
     # ---- H3 End-to-End Tests ----
