@@ -473,6 +473,12 @@ int VarRefNewObjectNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_c
     const QoreClass* qc = QoreTypeInfo::getUniqueReturnClass(typeInfo);
     if (qc) {
         err = parseInitConstructorCall(loc, parse_context, qc);
+        if (!err) {
+            // Mark the variable as assigned after successful constructor call
+            if (ref.id) {
+                ref.id->parseAssigned();
+            }
+        }
         vrn_type = VRN_OBJECT;
     } else {
         // Check complex hash/list BEFORE hashdecl, since hash<HashdeclType> has both

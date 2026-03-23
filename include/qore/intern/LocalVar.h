@@ -587,8 +587,15 @@ public:
     }
 
     DLLLOCAL const QoreTypeInfo* parseGetTypeInfo() const {
+        // If the variable is not definitely assigned at parse time, return nullptr to indicate
+        // that we don't have reliable type information. This forces runtime matching for function
+        // calls, allowing unassigned variables to match no-argument variants instead of their
+        // declared types. An unassigned variable could be NOTHING at runtime.
+        if (!parse_assigned) {
+            return nullptr;
+        }
         // If this is a reference type with a target type, return that
-        if (parse_assigned && refTypeInfo) {
+        if (refTypeInfo) {
             return refTypeInfo;
         }
         // If this is an auto type with a narrowed type, return the narrowed type
