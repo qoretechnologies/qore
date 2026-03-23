@@ -343,7 +343,7 @@ module SqlUtil {
 *hash<auto> row = ds.selectRow("select * from schema.table where id = %v", id);
     @endcode
     \n
-    To retrieve a single row based on a complex primary key value, or a single primary key value and extra criteria, use @ref SqlUtil::AbstractTable::find(hash):
+    To retrieve a single row based on a complex primary key value, or a single primary key value and extra criteria, use @ref SqlUtil::AbstractTable::find "find(hash)":
     @code{.py}
 *hash<auto> row = table.find(("account_type": type, "name": name));
     @endcode
@@ -368,7 +368,7 @@ module SqlUtil {
     @subsection find_multiple_rows Retrieving Multiple Rows
 
     @par From the Primary Key
-    To retrieve multiple rows from a list of single primary key values, use @ref SqlUtil::AbstractTable::find(list)
+    To retrieve multiple rows from a list of single primary key values, use @ref SqlUtil::AbstractTable::find "find(list)"
     @code{.py}
 *list<auto> rows = table.find(list);
     @endcode

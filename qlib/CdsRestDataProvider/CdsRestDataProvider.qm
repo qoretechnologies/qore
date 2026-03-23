@@ -329,8 +329,8 @@ module CdsRestDataProvider {
     The following classes are provided by this module for Dynamics 365:
     - @ref CdsRestDataProvider::CdsRestDataProvider "CdsRestDataProvider"
     - @ref CdsRestDataProvider::CdsRestDataProviderFactory "CdsRestDataProviderFactory"
-    - @ref CdsRestDataProvider::CdsEntityDataProvider "CdsEntityDataProvider"
-    - @ref CdsRestDataProvider::CdsRestRecordIterator "CdsRestRecordIterator"
+    - @ref CdsRestDataProvider::ODataEntityDataProvider "ODataEntityDataProvider"
+    - @ref CdsRestDataProvider::ODataRecordIterator "ODataRecordIterator"
 
     The following classes are provided for Business Central:
     - @ref CdsRestDataProvider::BcRestDataProvider "BcRestDataProvider"
@@ -338,8 +338,8 @@ module CdsRestDataProvider {
     - @ref CdsRestDataProvider::BcCompaniesDataProvider "BcCompaniesDataProvider"
     - @ref CdsRestDataProvider::BcCompanyDataProvider "BcCompanyDataProvider"
     - @ref CdsRestDataProvider::BcTablesDataProvider "BcTablesDataProvider"
-    - @ref CdsRestDataProvider::BcEntityDataProvider "BcEntityDataProvider"
-    - @ref CdsRestDataProvider::BcRecordIterator "BcRecordIterator"
+    - @ref CdsRestDataProvider::ODataEntityDataProvider "ODataEntityDataProvider"
+    - @ref CdsRestDataProvider::ODataRecordIterator "ODataRecordIterator"
 
     @subsection cdsrestdataprovider_v2_1 CdsRestDataProvider v2.1
     - added support for Microsoft Dynamics 365 Business Central

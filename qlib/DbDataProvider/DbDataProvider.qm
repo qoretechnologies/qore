@@ -362,7 +362,7 @@ module DbDataProvider {
       (<a href="https://github.com/qoretechnologies/qore/issues/4628">issue 4628</a>)
 
     @subsection dbdataprovider_v2_0 DbDataProvider v2.0
-    - added the @ref DbDataProvider::DbTransactionHelper "DbTransactionHelper" class
+    - added the \c DbTransactionHelper class
     - added support for creating, reading, updating, and modifying data providers
       (<a href="https://github.com/qoretechnologies/qore/issues/4395">issue 4395</a>)
 

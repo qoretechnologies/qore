@@ -714,7 +714,7 @@ hash<auto> h = ws.getInfo();
 }
 
 #! class for Discord websocket connections; returns an object of class @ref DiscordWebSocketClient
-/** Supports all the options of the @ref WebSocketClient::WebSocketConnection "WebSocketConnection" class; note that
+/** Supports all the options of the @ref WebSocketClient::WebSocketConnectionObject "WebSocketConnection" class; note that
     the \c token option is required by this class and is used as the gateway token after connecting and not as an HTTP
     authentication token
 */

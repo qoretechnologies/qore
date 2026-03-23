@@ -173,7 +173,7 @@ ServerSentEventClient sse(\event(), {
         - \c logger: an optional @ref Logger::LoggerInterface "LoggerInterface" object for internal logging
         - \c reconnect: try to reconnect when the connection is closed or lost (default @ref False)
         - \c yield: an options @ref closure "closure" or @ref call_reference "call reference" for yielding the
-            current thread's execution to another thread (default value: @ref Qore::Threads::thread_yield());
+            current thread's execution to another thread (default value: \c thread_yield());
             required if @ref Qore::PO_NO_PROCESS_CONTROL is set in the current execution context
 
         @throw SSE-ERROR unknown scheme, missing 'url' key in option hash; invalid option value

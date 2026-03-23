@@ -138,7 +138,7 @@ module MysqlSqlUtil {
 
     @subsection mysqlsqlutilv111 MysqlSqlUtil v1.1.1
     - implemented the \a force option (i.e. cascade) for dropping code objects (<a href="https://github.com/qoretechnologies/qore/issues/1314">issue 1314</a>)
-    - implemented @ref cop_trunc_date() operator (<a href="https://github.com/qoretechnologies/qore/issues/2032">issue 2032</a>)
+    - implemented @ref SqlUtil::cop_trunc_date() operator (<a href="https://github.com/qoretechnologies/qore/issues/2032">issue 2032</a>)
 
     @subsection mysqlsqlutilv11 MysqlSqlUtil v1.1
     - corrected support for the \c varbinary type (<a href="https://github.com/qoretechnologies/qore/issues/403">bug 403</a>)

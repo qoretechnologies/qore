@@ -256,7 +256,7 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
       to parse strange and unexpected URLs like eg. pure json strings, or Datasource connection strings.
 
     @subsection connectionprovider_1_1 ConnectionProvider 1.1
-    - the @ref ConnectionProvider::AbstractConnection::getConstructorInfo() "AbstractConnection::getConstructorInfo()"
+    - the \c AbstractConnection::getConstructorInfo() "AbstractConnection::getConstructorInfo()"
       method (and supporting declarations) was added to allow connections to be created dynamically,
       potentially in another process from a network call
       (<a href="https://github.com/qoretechnologies/qore/issues/2628">issue 2628</a>)

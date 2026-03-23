@@ -122,7 +122,7 @@ hash<auto> schema = {
     user-supplied arguments to try and use the verbose type names as retrieved by
     <a href="http://www.postgresql.org/docs/9.2/static/functions-info.html">pg_catalog.pg_get_function_identity_arguments()</a>,
     which always returns verbose type names (ie \c "character varying" instead of \c "varchar").\n\n
-    Substitutions are made according to the inverse value of @ref PgsqlSqlUtilBase::PgsqlTable::PgsqlNameMap.\n\n
+    Substitutions are made according to the inverse value of @ref PgsqlSqlUtilBase::PgsqlTable::PgsqlNameMap "PgsqlNameMap".\n\n
     This is done so that a user-supplied function name like \c "update_queue(qkey varchar, qdata text)" will match the
     value returned by
     <a href="http://www.postgresql.org/docs/9.2/static/functions-info.html">pg_catalog.pg_get_function_identity_arguments()</a>,

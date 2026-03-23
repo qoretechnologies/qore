@@ -639,7 +639,7 @@ public hashdecl HttpListenerOptionInfo {
 
     #! If True (the default), addListener() will block until async I/O is ready to accept connections
     /** Set to @ref False to add multiple listeners without blocking, then call
-        @ref HttpServer::HttpServer::waitForAsyncIo() "HttpServer::waitForAsyncIo()" manually once
+        \c HttpServer::waitForAsyncIo() "HttpServer::waitForAsyncIo()" manually once
         after all listeners are added.
 
         @note This option only affects servers running in async I/O mode (the default).

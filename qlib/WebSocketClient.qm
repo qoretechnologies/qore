@@ -735,8 +735,8 @@ WebSocketClient ws(\event(), {
           \a validator is not provided (see the @ref asyncapiintro "AsyncApi" module)
         - \c asyncapi_channel: the channel name to use for AsyncAPI validation; required if \a asyncapi or
           \a validator is provided
-        - \c extensions: a list of @ref AbstractWebSocketExtension "AbstractWebSocketExtension" instances
-          to offer to the server (e.g., @ref PerMessageDeflateExtension for compression)
+        - \c extensions: a list of @ref WebSocketUtil::AbstractWebSocketExtension "AbstractWebSocketExtension" instances
+          to offer to the server (e.g., @ref WebSocketUtil::PerMessageDeflateExtension for compression)
         - \c logger: an optional @ref Logger::LoggerInterface "LoggerInterface" object for internal logging
         - \c raw_callback: an optional @ref closure "closure" or @ref call_reference "call reference" for
           receiving raw WebSocket messages before processing; takes a single <tt>hash&lt;WsMsgInfo&gt;</tt>
@@ -3563,7 +3563,7 @@ public class WebSocketPingPollOperation inherits Qore::AbstractPollOperation {
     Also supports the following runtime options in getImpl():
     - \c "logger": a @ref Logger::LoggerInterface "LoggerInterface" object for internal logging
     - \c "start_thread": a closure to start a new thread (signature:
-      @verbatim int sub start_thread(code callable) {}@endverbatim)
+      @verbatim int sub start_thread(code callable) {} @endverbatim )
     - \c "yield": a closure to yield current thread execution
 */
 public class WebSocketConnectionObject inherits ConnectionProvider::AbstractConnectionWithInfo {
@@ -3706,7 +3706,7 @@ public class WebSocketConnectionObject inherits ConnectionProvider::AbstractConn
     /** @return a hash with the following keys reflecting support for the corresponding runtime options in getImpl():
         - \c "logger": a @ref Logger::LoggerInterface "LoggerInterface" object for internal logging
         - \c "start_thread": a closure to start a new thread (signature:
-          @verbatim int sub start_thread(code callable) {}@endverbatim)
+          @verbatim int sub start_thread(code callable) {} @endverbatim )
         - \c "yield": a closure to yield current thread execution
         - \c "connect_timeout": connection timeout in milliseconds
     */
@@ -3767,7 +3767,7 @@ public class WebSocketConnectionObject inherits ConnectionProvider::AbstractConn
         - \c "logger": a @ref Logger::LoggerInterface "LoggerInterface" object for internal logging
         - \c "reconnect": try to reconnect when the connection is closed or lost (default @ref False)
         - \c "start_thread": a closure to start a new thread (signature:
-          @verbatim int sub start_thread(code callable) {}@endverbatim)
+          @verbatim int sub start_thread(code callable) {} @endverbatim )
         - \c "yield": a closure to yield current thread execution
         - \c "connect_timeout": connection timeout in milliseconds
 
@@ -4745,7 +4745,7 @@ public class WebSocketClientPollOperation inherits Qore::AbstractPollOperation {
         *binary h3_frame_buf;
 
         #! Optional raw frame callback — called per-frame before extension transforms
-        /** Called with a @ref WsMsgInfo hash for each frame. Return value:
+        /** Called with a @ref WebSocketUtil::WsMsgInfo hash for each frame. Return value:
             - @ref WSC_Process (default) — continue with normal processing
             - @ref WSC_Continue — skip this frame (do not queue)
             - @ref WSC_Break — skip this frame and signal connection termination

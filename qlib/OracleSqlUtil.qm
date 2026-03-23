@@ -149,7 +149,7 @@ module OracleSqlUtil {
 
     @subsection oraclesqlutil_v1_2 OracleSqlUtil v1.2
     - implemented support for the \c "returning" clause as an insert option
-    - implemented support for views for DML in the @ref OracleSqlUtil::OracleTable class
+    - implemented support for views for DML in the @ref OracleSqlUtilBase::OracleTable "OracleTable" class
     - implemented @ref OracleSqlUtilBase::OracleTable::getBaseType()
     - implemented support for Oracle pseudocolumns in queries
     - implemented support for @ref SqlUtil::cop_cast() operator

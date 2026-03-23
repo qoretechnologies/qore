@@ -1915,7 +1915,7 @@ qore_user_module("qlib/WebUtil.qm" "HttpServerUtil;Mime;Util")
 
 # base 5 modules
 qore_user_module("qlib/ProviderIndex" "DataProvider;ConnectionProvider;ProviderIndexUtil")
-qore_user_module("qlib/ServerSentEventClient" "DataProvider;ConnectionProvider;Logger;Mime;Util;WebSocketUtil")
+qore_user_module("qlib/ServerSentEventClient" "DataProvider;ConnectionProvider;Logger;Mime;Util;WebSocketUtil;HttpClientIo;HttpClientStreamingIo")
 qore_user_module("qlib/MssqlSqlUtilBase.qm" "SqlUtil;DataProvider")
 qore_user_module("qlib/MysqlSqlUtil.qm" "SqlUtil;DataProvider")
 qore_user_module("qlib/OracleSqlUtilBase.qm" "SqlUtil;Util;DataProvider")
@@ -1940,7 +1940,7 @@ qore_user_module("qlib/Pop3ClientDataProvider" "Pop3Client;ConnectionProvider;Da
 qore_user_module("qlib/FreetdsSqlUtil.qm" "SqlUtil;DataProvider;MssqlSqlUtilBase")
 qore_user_module("qlib/JdbcMicrosoftSqlUtil.qm" "SqlUtil;DataProvider;MssqlSqlUtilBase")
 qore_user_module("qlib/OracleSqlUtil.qm" "OracleSqlUtilBase;SqlUtil;Util;DataProvider")
-qore_user_module("qlib/JdbcOracleSqlUtil.qm" "OracleSqlUtil;SqlUtil;Util;DataProvider")
+qore_user_module("qlib/JdbcOracleSqlUtil.qm" "OracleSqlUtilBase;OracleSqlUtil;SqlUtil;Util;DataProvider")
 qore_user_module("qlib/PgsqlSqlUtil.qm" "PgsqlSqlUtilBase;SqlUtil;DataProvider")
 qore_user_module("qlib/JdbcPostgresqlSqlUtil.qm" "PgsqlSqlUtilBase;SqlUtil;DataProvider")
 qore_user_module("qlib/JdbcFirebirdSqlUtil.qm" "XdbcFirebirdSqlUtilBase;SqlUtil;DataProvider")

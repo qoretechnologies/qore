@@ -330,7 +330,7 @@ public class TelnetClient {
 
         @note a UNIX domain socket target can be given with a URL in the following format:
         <tt><b>scheme://socket=</b></tt><i>url_encoded_path</i><tt><b>/path</b></tt>, where <i>url_encoded_path</i>
-        is a path with URL-encoding as performed by @ref encode_url() "encode_url(string, True)"; for example:
+        is a path with URL-encoding as performed by \c encode_url() "encode_url(string, True)"; for example:
         \c "telnet://socket=%2ftmp%socket-dir%2fsocket-file-1"; this allows a filesystem path to be used in the
         host portion of the URL providing the path to the UNIX domain socket.
 

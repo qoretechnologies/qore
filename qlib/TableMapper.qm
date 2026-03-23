@@ -231,7 +231,7 @@ on_error table1.rollback();
 
     @subsection tablemapperv1_2 TableMapper v1.2
     - added support for upserts in @ref TableMapper::InboundTableMapper (<a href="https://github.com/qoretechnologies/qore/issues/1067">issue 1067</a>)
-    - added @ref TableMapper::InboundTableMapper::queueData(list, __7_ hash)
+    - added @ref TableMapper::InboundTableMapper::queueData "queueData(list, __7_ hash)
     - fixed a bug with the @ref TableMapper::SqlStatementOutboundMapper::iterator() method; corrected the iterator object return value which was causing \c AbstractMapperIterator::mapBulk() to fail (<a href="https://github.com/qoretechnologies/qore/issues/979">issue 979</a>)
     - fixed a bug with @ref TableMapper::SqlStatementOutboundMapper; it would throw an error if the required \c "table" or \c "sh" options were used and only worked with subclasses that declared these options (<a href="https://github.com/qoretechnologies/qore/issues/981">issue 981</a>)
     - updated for complex types

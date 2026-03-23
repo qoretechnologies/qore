@@ -104,10 +104,10 @@ module HttpServer {
     @par Paired Listener Architecture
     - Each TCP/TLS listener with HTTP/3 enabled gets a paired QUIC listener
     - The QUIC listener binds to the same port on UDP
-    - Handlers added via @ref HttpServer::addHandlerToListenerID()
+    - Handlers added via @ref HttpServer::HttpServer::addHandlerToListenerID()
       "addHandlerToListenerID()" are automatically propagated to the paired QUIC listener
       (with a \c "-h3" suffix on the handler name)
-    - Handler removal via @ref HttpServer::removeHandlerFromListenerID()
+    - Handler removal via @ref HttpServer::HttpServer::removeHandlerFromListenerID()
       "removeHandlerFromListenerID()" also removes the propagated handler from the paired
       QUIC listener
     - Stopping a TCP listener also stops its paired QUIC listener
@@ -831,7 +831,7 @@ public class HttpServer inherits HttpServer::AbstractLogger {
     #! Signals all active streaming handlers (SSE, WebSocket) to stop their polling loops
     /** Called by the async I/O controller during shutdown before waiting for the handler pool
         to complete.  This allows handler tasks to exit deterministically so that
-        @ref ThreadPool::stopWait() "stopWait()" does not block indefinitely.
+        \c ThreadPool::stopWait() "stopWait()" does not block indefinitely.
 
         @since HttpServer 1.6
     */
@@ -1087,7 +1087,7 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         @throw HTTPSERVER-ADDLISTENER-ERROR invalid options; duplicate bind address
 
         @note This method blocks until async I/O is ready to accept connections.
-        Use @ref addListener(hash<HttpListenerOptionInfo>) with \c sync: \c False to add listeners without blocking.
+        Use @ref HttpServer::HttpServer::addListener "addListener(hash<HttpListenerOptionInfo>)" with \c sync: \c False to add listeners without blocking.
      */
     hash<auto> addListener(int port) {
         hash<auto> rv = addListenerIntern(<HttpListenerOptionInfo>{

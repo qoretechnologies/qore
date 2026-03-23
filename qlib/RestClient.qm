@@ -269,7 +269,7 @@ printf("%N\n", ans.body);
     - all connection clases have unified constructor
 
     @subsection restclientv1_5 RestClient v1.5
-    - added the @ref RestClient::RestConnection::getConstructorInfo() "RestConnection::getConstructorInfo()"
+    - added the \c RestConnection::getConstructorInfo() "RestConnection::getConstructorInfo()"
       method to allow connections to be created dynamically, potentially in another process from a network
       call (<a href="https://github.com/qoretechnologies/qore/issues/2628">issue 2628</a>)
 

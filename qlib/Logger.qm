@@ -437,7 +437,7 @@ public class LoggerAppenderQueueThreadPool inherits LoggerAppenderQueue {
     /** @param tp worker @ref Qore::Thread::ThreadPool "ThreadPool" where loggging events are submitted
         @param max_threads max.number of worker threads, default value is \c -1, i.e. unlimited
         @param max_bytes maximum bytes allowed in the queue (for backpressure); see
-        @ref LoggerAppenderQueue::constructor(softint) for details:
+        \c LoggerAppenderQueue::constructor(softint) for details:
         - -1 = unlimited (no backpressure, not recommended for production)
         - 0 = use default limit (10 MiB)
         - >0 = maximum bytes before backpressure is applied
