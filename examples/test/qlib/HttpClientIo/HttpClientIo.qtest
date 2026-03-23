@@ -1254,7 +1254,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             }();
         }
 
-        int rc = counter.waitForZero(30s);
+        # Outer timeout must exceed the default request timeout (60s) to let threads
+        # fail gracefully with their own timeout rather than the barrier expiring first
+        int rc = counter.waitForZero(90s);
         if (rc != 0) {
             int completed = responses.size();
             int pending = 3 - completed;

@@ -800,6 +800,9 @@ class QuicComprehensiveTest inherits QUnit::Test {
     #! Test multiple independent QUIC connections to same server
     testMultipleConnections() {
         int num_connections = 3;
+        # Per-thread sequential timeouts: handshake(10s) + server_q(15s) + send_q(15s) + client_q(15s)
+        # = 55s worst case, so 60s outer timeout gives headroom
+        timeout internal_to = 15s;
         Counter done(num_connections);
         list<hash<auto>> results = ();
         Mutex m();
@@ -834,13 +837,13 @@ class QuicComprehensiveTest inherits QUnit::Test {
                         "sock": srv,
                         "spop": server_op,
                         "owner": owner_server,
-                        "to": 30s,
+                        "to": internal_to,
                     });
                     Queue client_q = ctrl.submit(<SocketPollOperationInfo>{
                         "sock": cli,
                         "spop": client_op,
                         "owner": owner_client,
-                        "to": 30s,
+                        "to": internal_to,
                     });
 
                     # Wait for client reading state (see waitForClientReading() for rationale)
@@ -864,7 +867,7 @@ class QuicComprehensiveTest inherits QUnit::Test {
                     ctrl.wake();
 
                     # Wait for server
-                    server_q.get(30000);
+                    server_q.get(internal_to);
                     hash<auto> req = server_op.getOutput();
 
                     # Send response
@@ -876,12 +879,12 @@ class QuicComprehensiveTest inherits QUnit::Test {
                         "spop": send_op,
                         "owner": owner_server,
                         "key": "server-send-" + string(conn_idx),
-                        "to": 30s,
+                        "to": internal_to,
                     });
-                    send_q.get(30000);
+                    send_q.get(internal_to);
 
                     # Wait for client response
-                    client_q.get(30000);
+                    client_q.get(internal_to);
                     hash<auto> resp = client_op.getOutput();
 
                     { AutoLock al(m); results += {
@@ -900,7 +903,7 @@ class QuicComprehensiveTest inherits QUnit::Test {
             }(i);
         }
 
-        int rc = done.waitForZero(30s);
+        int rc = done.waitForZero(60s);
         assertEq(0, rc, "all connections completed within timeout");
         assertEq(num_connections, results.size(), "got results from all connections");
 

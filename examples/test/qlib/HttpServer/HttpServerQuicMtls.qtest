@@ -201,7 +201,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         hash<auto> resp = mgr.request(sprintf("https://127.0.0.1:%d", quic_port), "GET", "/mtls");
         assertEq(200, resp.status_code, "mTLS request should succeed");
 
-        hash<auto> body = parse_json(binary_to_string(resp.body));
+        hash<auto> body = parse_json(resp.body.typeCode() == NT_BINARY ? binary_to_string(resp.body) : resp.body);
         assertTrue(body.has_client_cert, "server should have captured client certificate");
     }
 
@@ -226,7 +226,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         hash<auto> resp = mgr.request(sprintf("https://127.0.0.1:%d", quic_port), "GET", "/mtls");
         assertEq(200, resp.status_code, "request without client cert should succeed with SSL_VERIFY_PEER");
 
-        hash<auto> body = parse_json(binary_to_string(resp.body));
+        hash<auto> body = parse_json(resp.body.typeCode() == NT_BINARY ? binary_to_string(resp.body) : resp.body);
         assertFalse(body.has_client_cert, "server should NOT have a client certificate");
     }
 
@@ -282,7 +282,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         hash<auto> resp = mgr.request(sprintf("https://127.0.0.1:%d", quic_port), "GET", "/mtls");
         assertEq(200, resp.status_code, "mTLS request should succeed");
 
-        hash<auto> body = parse_json(binary_to_string(resp.body));
+        hash<auto> body = parse_json(resp.body.typeCode() == NT_BINARY ? binary_to_string(resp.body) : resp.body);
         assertTrue(body.has_client_cert, "server should have captured client certificate");
         # Verify the certificate subject contains "localhost" CN (from our self-signed cert)
         # getInfo().subject returns a hash like {"CN": "localhost"}
