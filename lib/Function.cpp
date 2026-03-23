@@ -1678,6 +1678,7 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
 
     // do we need to match at runtime
     bool runtime_match = false;
+    bool has_possible_match = false;
 
     QoreProgram* pgm = getProgram();
 

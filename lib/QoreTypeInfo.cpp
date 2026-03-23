@@ -3357,11 +3357,14 @@ qore_type_result_e QoreTypeInfo::parseAccepts(const QoreTypeInfo* first, const Q
 qore_type_result_e QoreTypeInfo::parseAccepts(const QoreTypeInfo* typeInfo, bool& may_not_match,
         bool& may_need_filter, qore_type_result_e& max_result, bool known_initial_assignment) const {
     //printd(5, "QoreTypeInfo::parseAccepts() '%s' <- '%s'\n", tname.c_str(), typeInfo->tname.c_str());
-    if (typeInfo->return_vec.size() > getAcceptVecSize()) {
-        may_not_match = true;
-    }
+    // For non-union types (return_vec.size() == 1), use fast path: return immediately on QTI_IDENT
+    // For union types (return_vec.size() > 1), check all components for proper matching
 
     bool ok = false;
+    bool is_union = typeInfo->return_vec.size() > 1;
+    qore_type_result_e worst_score = QTI_IDENT;  // worst (highest value) score across matched components
+    bool all_match = true;
+
     for (auto& rt : typeInfo->return_vec) {
         bool t_no_match = true;
         for (auto& at : getAcceptSpecs()) {
@@ -3370,9 +3373,16 @@ qore_type_result_e QoreTypeInfo::parseAccepts(const QoreTypeInfo* typeInfo, bool
                 t_max_result, known_initial_assignment);
             if (res == QTI_IDENT) {
                 max_result = t_max_result;
-                return res;
+                // Fast path for non-union types: return immediately
+                if (!is_union) {
+                    return res;
+                }
+                // For union types: record and continue checking other components
+                if (t_max_result > worst_score) { worst_score = t_max_result; }
+                break;  // done with accept specs for this component
             } else if (res == QTI_AMBIGUOUS || res == QTI_NEAR || res == QTI_WILDCARD) {
                 max_result = t_max_result;
+                if (is_union && res > worst_score) { worst_score = res; }
                 assert(ok);
                 if (may_not_match) {
                     return res;
@@ -3381,16 +3391,32 @@ qore_type_result_e QoreTypeInfo::parseAccepts(const QoreTypeInfo* typeInfo, bool
             }
         }
         if (t_no_match) {
-            if (!may_not_match) {
-                may_not_match = true;
-                if (ok) {
-                    return QTI_AMBIGUOUS;
+            if (is_union) {
+                all_match = false;
+                if (!may_not_match) {
+                    may_not_match = true;
+                    if (ok) {
+                        // some prior component matched, some didn't -> case 2
+                        return QTI_AMBIGUOUS;
+                    }
+                }
+            } else {
+                if (!may_not_match) {
+                    may_not_match = true;
+                    if (ok) {
+                        return QTI_AMBIGUOUS;
+                    }
                 }
             }
         }
     }
     if (ok) {
-        return QTI_AMBIGUOUS;
+        if (is_union && !all_match) {
+            // case 2: some matched, some didn't -> conservative match
+            may_not_match = true;
+            return QTI_AMBIGUOUS;
+        }
+        return is_union ? worst_score : QTI_AMBIGUOUS;
     }
     may_not_match = false;
     return QTI_NOT_EQUAL;
