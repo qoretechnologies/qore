@@ -119,6 +119,22 @@ public class ConstantContactUpdateCustomFieldRequestDataType inherits HashDataTy
                 "short_desc": "The new display label",
                 "desc": "The new display label for the custom field",
             },
+            "type": {
+                "type": StringType,
+                "display_name": "Type",
+                "short_desc": "The custom field type",
+                "desc": "The type of the custom field (e.g., `string`, `date`)",
+                "allowed_values": (
+                    <AllowedValueInfo>{
+                        "value": "string",
+                        "desc": "String type custom field",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "date",
+                        "desc": "Date type custom field",
+                    },
+                ),
+            },
         };
     }
 

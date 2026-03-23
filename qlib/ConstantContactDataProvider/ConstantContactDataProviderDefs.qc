@@ -25,7 +25,7 @@
 #! Contains all public definitions in the ConstantContactDataProvider module
 public namespace ConstantContactDataProvider {
     #! Application name constant
-    public const AppName = "Constant Contact";
+    public const AppName = "ConstantContact";
 
     #! Default page size for list operations
     public const DefaultPageSize = 50;

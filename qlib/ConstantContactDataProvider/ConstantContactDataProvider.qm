@@ -32,9 +32,10 @@
 
 %requires(reexport) DataProvider
 %requires(reexport) ConstantContactRestClient
+%requires RestClientIo
 
 module ConstantContactDataProvider {
-    version = "1.0";
+    version = "1.1";
     desc = "User module providing a data provider API for Constant Contact email marketing";
     author = "Qore Technologies <info@qoretechnologies.com>";
     url = "https://qore.org";

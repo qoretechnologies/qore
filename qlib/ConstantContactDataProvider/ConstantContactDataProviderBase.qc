@@ -34,7 +34,7 @@ public class ConstantContactDataProviderBase inherits DataProvider::AbstractData
                 "display_name": "Constant Contact REST Client",
                 "short_desc": "The ConstantContactRestClient object",
                 "type": AbstractDataProviderType::get(
-                    new Type("ConstantContactRestClient::ConstantContactRestClient")),
+                    new Type("RestClientIo::RestClientIo")),
                 "desc": "The ConstantContactRestClient object to use for API calls",
             },
             "constantcontactrestclient_options": <DataProviderOptionInfo>{
@@ -49,7 +49,7 @@ public class ConstantContactDataProviderBase inherits DataProvider::AbstractData
 
     private {
         #! The REST client object for API calls
-        ConstantContactRestClient::ConstantContactRestClient rest;
+        RestClientIo::RestClientIo rest;
 
         #! The connection object, if applicable
         *ConstantContactRestClient::ConstantContactRestConnection conn;
@@ -60,14 +60,14 @@ public class ConstantContactDataProviderBase inherits DataProvider::AbstractData
     }
 
     #! Creates the object with a REST client
-    constructor(ConstantContactRestClient::ConstantContactRestClient rest) {
+    constructor(RestClientIo::RestClientIo rest) {
         self.rest = rest;
     }
 
     #! Creates the object with a connection
     constructor(ConstantContactRestClient::ConstantContactRestConnection conn) {
         self.conn = conn;
-        rest = conn.get(True);
+        rest = conn.getAsync(True);
     }
 
     #! Creates the object with options
@@ -77,12 +77,12 @@ public class ConstantContactDataProviderBase inherits DataProvider::AbstractData
             rest = copts.constantcontactrestclient;
         } else {
             hash<auto> client_opts = copts.constantcontactrestclient_options ?? {};
-            rest = new ConstantContactRestClient::ConstantContactRestClient(client_opts);
+            rest = new ConstantContactRestClient::ConstantContactRestClientIo(client_opts);
         }
     }
 
     #! Returns the REST client
-    ConstantContactRestClient::ConstantContactRestClient getRestClient() {
+    RestClientIo::RestClientIo getRestClient() {
         return rest;
     }
 
@@ -93,7 +93,6 @@ public class ConstantContactDataProviderBase inherits DataProvider::AbstractData
 
     #! Sets the logger for the data provider
     setLogger(*LoggerInterface logger) {
-        rest.setLogger(logger);
     }
 
     #! Makes a GET request to the Constant Contact API
@@ -376,23 +375,22 @@ public class ConstantContactDataProviderBase inherits DataProvider::AbstractData
         int retries = 0;
         while (True) {
             try {
-                hash<auto> info;
                 hash<auto> response;
                 switch (method) {
                     case "GET":
-                        response = rest.get(path, NOTHING, \info);
+                        response = rest.restGet(path);
                         break;
                     case "POST":
-                        response = rest.post(path, body, \info);
+                        response = rest.restPost(path, body);
                         break;
                     case "PUT":
-                        response = rest.put(path, body, \info);
+                        response = rest.restPut(path, body);
                         break;
                     case "PATCH":
-                        response = rest.patch(path, body, \info);
+                        response = rest.restPatch(path, body);
                         break;
                     case "DELETE":
-                        response = rest.del(path, NOTHING, \info);
+                        response = rest.restDel(path);
                         break;
                     default:
                         throw "CONSTANTCONTACT-ERROR",

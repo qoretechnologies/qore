@@ -131,7 +131,7 @@ public class ConstantContactContactsDataProvider inherits ConstantContactDataPro
     }
 
     #! Creates the object with a REST client
-    constructor(ConstantContactRestClient::ConstantContactRestClient rest)
+    constructor(RestClientIo::RestClientIo rest)
             : ConstantContactDataProviderBase(rest) {
     }
 

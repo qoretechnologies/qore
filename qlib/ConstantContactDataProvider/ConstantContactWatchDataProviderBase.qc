@@ -56,7 +56,7 @@ public class ConstantContactWatchDataProviderBase inherits ConstantContactDataPr
     }
 
     #! Creates the object with a REST client
-    constructor(ConstantContactRestClient::ConstantContactRestClient rest, *hash<auto> options)
+    constructor(RestClientIo::RestClientIo rest, *hash<auto> options)
             : ConstantContactDataProviderBase(rest),
               AbstractWatchDataProviderBase(max(options.poll_interval ?? DefaultPollInterval,
                   MinPollInterval)) {
@@ -66,6 +66,11 @@ public class ConstantContactWatchDataProviderBase inherits ConstantContactDataPr
     #! Destructor - stops the polling thread
     destructor() {
         stopEventsIntern();
+    }
+
+    #! Cancels the poll operation for graceful shutdown
+    private cancelPollOperation() {
+        rest.close();
     }
 
     #! Polls for new records once

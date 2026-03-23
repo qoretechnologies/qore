@@ -417,6 +417,8 @@ public namespace Mime {
         "application/json-patch+json": True,            # RFC 6902 JSON Patch
         "application/geo+json": True,                   # GeoJSON
         "application/manifest+json": True,              # Web App Manifest
+        "application/vnd.contentful.management.v1+json": True, # Contentful CMA
+        "application/vnd.contentful.delivery.v1+json": True,   # Contentful CDA
     };
 
     #! Returns True if the MIME type is JSON-compatible

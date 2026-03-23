@@ -73,7 +73,7 @@ public class ConstantContactAddListMembersDataProvider inherits ConstantContactD
     }
 
     #! Creates the object with a REST client
-    constructor(ConstantContactRestClient::ConstantContactRestClient rest)
+    constructor(RestClientIo::RestClientIo rest)
             : ConstantContactDataProviderBase(rest) {
     }
 

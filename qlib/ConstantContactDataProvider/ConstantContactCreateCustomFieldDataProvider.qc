@@ -48,7 +48,7 @@ public class ConstantContactCreateCustomFieldDataProvider inherits ConstantConta
     }
 
     #! Creates the object with a REST client
-    constructor(ConstantContactRestClient::ConstantContactRestClient rest) : ConstantContactDataProviderBase(rest) {
+    constructor(RestClientIo::RestClientIo rest) : ConstantContactDataProviderBase(rest) {
     }
 
     #! Returns the provider name

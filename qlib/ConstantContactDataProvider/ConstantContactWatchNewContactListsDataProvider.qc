@@ -40,7 +40,7 @@ public class ConstantContactWatchNewContactListsDataProvider
     }
 
     #! Creates the object with a REST client
-    constructor(ConstantContactRestClient::ConstantContactRestClient rest, *hash<auto> options)
+    constructor(RestClientIo::RestClientIo rest, *hash<auto> options)
             : ConstantContactWatchDataProviderBase(rest, options) {
     }
 

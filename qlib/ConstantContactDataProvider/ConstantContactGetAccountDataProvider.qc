@@ -45,7 +45,7 @@ public class ConstantContactGetAccountDataProvider inherits ConstantContactDataP
     }
 
     #! Creates the object with a REST client
-    constructor(ConstantContactRestClient::ConstantContactRestClient rest)
+    constructor(RestClientIo::RestClientIo rest)
             : ConstantContactDataProviderBase(rest) {
     }
 

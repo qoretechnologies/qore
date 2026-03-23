@@ -30,6 +30,7 @@
 %requires ../../../../qlib/DataProvider
 %requires ../../../../qlib/ConnectionProvider
 %requires ../../../../qlib/RestClient.qm
+%requires ../../../../qlib/RestClientIo.qm
 
 %try-module json
 %define NoJson
@@ -43,7 +44,7 @@
 public class ConstantContactDataProviderTest inherits QUnit::Test {
     private {
         #! Constant Contact REST client for integration tests
-        *ConstantContactRestClient::ConstantContactRestClient client;
+        *RestClientIo::RestClientIo client;
 
         #! Logger for verbose output
         Logger logger;
@@ -105,7 +106,7 @@ public class ConstantContactDataProviderTest inherits QUnit::Test {
             if (m_options.verbose) {
                 printf("Using connection: %s\n", conn_name);
             }
-            client = get_connection(conn_name).get();
+            client = get_connection(conn_name).getAsync();
             return;
         }
 
@@ -134,7 +135,7 @@ public class ConstantContactDataProviderTest inherits QUnit::Test {
             hash<auto> opts = {
                 "apikey": token,
             };
-            client = new ConstantContactRestClient::ConstantContactRestClient(opts);
+            client = new ConstantContactRestClient::ConstantContactRestClientIo(opts);
             return;
         }
 
@@ -146,7 +147,7 @@ public class ConstantContactDataProviderTest inherits QUnit::Test {
         if (token) {
             opts.apikey = token;
         }
-        client = new ConstantContactRestClient::ConstantContactRestClient(opts);
+        client = new ConstantContactRestClient::ConstantContactRestClientIo(opts);
     }
 
     #! Check if json module is available
@@ -758,8 +759,20 @@ public class ConstantContactDataProviderTest inherits QUnit::Test {
         AbstractDataProvider updateAction = prov.getChildProvider("contacts")
             .getChildProvider("update");
 
+        # Fetch the current contact to get the email address (required by the API)
+        AbstractDataProvider contacts = prov.getChildProvider("contacts");
+        AbstractDataProviderRecordIterator citer = contacts.searchRecords(NOTHING, {
+            "contact_id": testContactId,
+        });
+        assertTrue(citer.next(), "Should find contact to update");
+        hash<auto> current = citer.getValue();
+
         hash<auto> result = updateAction.doRequest({
             "contact_id": testContactId,
+            "email_address": {
+                "address": current.email_address.address,
+                "permission_to_send": current.email_address.permission_to_send,
+            },
             "first_name": "Updated",
             "update_source": "Account",
         });
@@ -768,7 +781,7 @@ public class ConstantContactDataProviderTest inherits QUnit::Test {
         assertEq(testContactId, result.contact_id, "Updated contact ID should match");
 
         # Verify the update persisted
-        AbstractDataProvider contacts = prov.getChildProvider("contacts");
+        contacts = prov.getChildProvider("contacts");
         AbstractDataProviderRecordIterator iter = contacts.searchRecords(NOTHING, {
             "contact_id": testContactId,
         });
@@ -984,6 +997,7 @@ public class ConstantContactDataProviderTest inherits QUnit::Test {
         result = updateField.doRequest({
             "custom_field_id": testCustomFieldId,
             "label": "Updated Field " + unique,
+            "type": "string",
         });
         assertTrue(result.hasKey("custom_field_id"),
             "Updated custom field should have 'custom_field_id' field");
