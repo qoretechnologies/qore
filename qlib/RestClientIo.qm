@@ -1401,7 +1401,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
         private bool requiresRefresh() {
             AutoReadLock al(config_lock);
             return token_val.val() && refresh_token.val() && oauth2_token_expiry.val()
-                && ((now_us() - RestClient::RestClient::Oauth2TokenRefreshWindow) > oauth2_token_expiry);
+                && ((now_us() + RestClient::RestClient::Oauth2TokenRefreshWindow) > oauth2_token_expiry);
         }
 
         #! Checks if an initial OAuth2 login is needed

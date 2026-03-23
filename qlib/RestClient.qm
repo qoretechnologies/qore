@@ -1700,7 +1700,7 @@ hash<auto> ans = rest.del("/orders/1");
     */
     bool requiresRefresh() {
         return token.val() && (refresh_token.val() || custom_token_auth) && oauth2_token_expiry
-            && ((now_us() - Oauth2TokenRefreshWindow) > oauth2_token_expiry);
+            && ((now_us() + Oauth2TokenRefreshWindow) > oauth2_token_expiry);
     }
 
     #! Sets a token for authentication
@@ -2230,7 +2230,7 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
             remove h.expires_in;
         }
         setToken(h.token_type, h.access_token, h.refresh_token,
-            h.expires_in ? (now_us() + minutes(h.expires_in)) : NOTHING);
+            h.expires_in ? (now_us() + seconds(h.expires_in)) : NOTHING);
         debug("RestClient: set OAuth2 auth header: %s %s; refresh_token: %s; expires in: %s", h.token_type,
             h.access_token, h.refresh_token ?? "n/a", h.expires_in ?? "n/a");
     }
@@ -2255,8 +2255,10 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
                 h.expires_in);
             remove h.expires_in;
         }
-        if (*softint expires_in = h.expires_in ?? oauth2_token_expiry_hint) {
-            new_opts.oauth2_token_expiry = now_us() + minutes(expires_in);
+        if (h.expires_in) {
+            new_opts.oauth2_token_expiry = now_us() + seconds(h.expires_in);
+        } else if (oauth2_token_expiry_hint) {
+            new_opts.oauth2_token_expiry = now_us() + minutes(oauth2_token_expiry_hint);
         }
         if (h.url && h.url != getURL()) {
             new_opts.url = h.url;
@@ -4257,7 +4259,7 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
                 warn("Ignoring invalid 'expires_in' value with type %y; value: %y", resp.expires_in.fullType(),
                     resp.expires_in);
             } else {
-                new_opts.oauth2_token_expiry = now_us() + minutes(resp.expires_in);
+                new_opts.oauth2_token_expiry = now_us() + seconds(resp.expires_in);
             }
         }
         if (resp.refresh_token && resp.refresh_token != real_opts.oauth2_refresh_token) {

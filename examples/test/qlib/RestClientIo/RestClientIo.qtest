@@ -362,6 +362,8 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         addTestCase("oauth2 client_credentials", \testOAuth2ClientCredentials());
         addTestCase("oauth2 password grant", \testOAuth2PasswordGrant());
         addTestCase("oauth2 proactive refresh", \testOAuth2ProactiveRefresh());
+        addTestCase("oauth2 refresh within window", \testOAuth2RefreshWithinWindow());
+        addTestCase("oauth2 no refresh outside window", \testOAuth2NoRefreshOutsideWindow());
         addTestCase("oauth2 concurrent refresh", \testOAuth2ConcurrentRefresh());
         addTestCase("oauth2 401 retry", \testOAuth2_401Retry());
         addTestCase("oauth2 setOAuth2Options/getOAuth2Options", \testOAuth2OptionsRoundTrip());
@@ -1282,6 +1284,55 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertEq(200, resp.status_code);
         assertEq(2, token_handler.getRequestCount(), "proactive refresh");
         assertEq("refreshed-token", rest.getToken());
+%endif
+    }
+
+    testOAuth2RefreshWithinWindow() {
+%ifndef NoJson
+        # Test that a token expiring WITHIN the 10-minute window triggers proactive refresh
+        # This was the actual bug: (now - 10m > expiry) never triggered when expiry was in the future
+        token_handler.resetRequestCount();
+        token_handler.setReturnToken("initial-token");
+        token_handler.setReturnRefreshToken("initial-refresh");
+
+        RestClientIo::RestClientIo rest = createOAuth2Client();
+        on_exit rest.close();
+
+        assertEq(1, token_handler.getRequestCount(), "initial login");
+
+        # Set token to expire in 5 minutes (within the 10-minute refresh window)
+        rest.setToken("Bearer", "soon-expiring-token", "refresh-token-window",
+            now_us() + 5m);
+
+        token_handler.setReturnToken("preemptive-refreshed-token");
+        hash<RestClient::RestResponseInfo> resp = rest.restGet("/api/test");
+        assertEq(200, resp.status_code);
+        assertEq(2, token_handler.getRequestCount(), "proactive refresh within window");
+        assertEq("preemptive-refreshed-token", rest.getToken());
+%endif
+    }
+
+    testOAuth2NoRefreshOutsideWindow() {
+%ifndef NoJson
+        # Test that a token expiring well in the future does NOT trigger refresh
+        token_handler.resetRequestCount();
+        token_handler.setReturnToken("initial-token");
+        token_handler.setReturnRefreshToken("initial-refresh");
+
+        RestClientIo::RestClientIo rest = createOAuth2Client();
+        on_exit rest.close();
+
+        assertEq(1, token_handler.getRequestCount(), "initial login");
+
+        # Set token to expire in 30 minutes (outside the 10-minute window)
+        rest.setToken("Bearer", "long-lived-token", "refresh-token-norefresh",
+            now_us() + 30m);
+
+        hash<RestClient::RestResponseInfo> resp = rest.restGet("/api/test");
+        assertEq(200, resp.status_code);
+        # No extra token request — the token is still valid with plenty of time left
+        assertEq(1, token_handler.getRequestCount(), "no refresh outside window");
+        assertEq("long-lived-token", rest.getToken());
 %endif
     }
 
