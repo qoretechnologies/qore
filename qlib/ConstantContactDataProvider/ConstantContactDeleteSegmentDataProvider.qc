@@ -52,7 +52,7 @@ public class ConstantContactDeleteSegmentResponseDataType inherits HashDataType 
                 "type": BoolType,
                 "display_name": "Deleted",
                 "short_desc": "Whether the segment was deleted",
-                "desc": "Indicates `True` if the segment was successfully deleted",
+                "desc": "Returns `True` when the segment is successfully deleted",
             },
         };
     }

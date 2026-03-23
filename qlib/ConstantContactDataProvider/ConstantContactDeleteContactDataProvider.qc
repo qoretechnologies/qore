@@ -52,7 +52,7 @@ public class ConstantContactDeleteContactResponseDataType inherits HashDataType 
                 "type": BoolType,
                 "display_name": "Deleted",
                 "short_desc": "Whether the contact was deleted",
-                "desc": "Indicates `True` if the contact was successfully deleted",
+                "desc": "Returns `True` when the contact is successfully deleted",
             },
         };
     }

@@ -50,7 +50,13 @@ public class ConstantContactCustomFieldDataType inherits HashDataType {
                 "type": StringOrNothingType,
                 "display_name": "Type",
                 "short_desc": "The field type",
-                "desc": "The data type of the custom field. Values: `string`, `date`",
+                "desc": "The data type of the custom field",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "string", "display_name": "String",
+                        "desc": "A text string field"},
+                    <AllowedValueInfo>{"value": "date", "display_name": "Date",
+                        "desc": "A date field"},
+                ),
             },
         };
     }

@@ -243,7 +243,12 @@ public class ConstantContactEmailCampaignSummaryDataType inherits HashDataType {
         };
     }
 
-    constructor() {
+    constructor() : HashDataType("ConstantContactEmailCampaignSummaryDataType") {
+        addQoreFields(Fields);
+    }
+
+    constructor(Type base_type) : HashDataType(base_type,
+            "ConstantContactEmailCampaignSummaryDataType") {
         addQoreFields(Fields);
     }
 }

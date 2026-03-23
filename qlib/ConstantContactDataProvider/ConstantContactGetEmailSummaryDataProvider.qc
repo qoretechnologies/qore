@@ -30,15 +30,20 @@ public class ConstantContactGetEmailSummaryRequestDataType inherits HashDataType
     public {
         const Fields = {
             "campaign_ids": {
-                "type": StringOrNothingType,
+                "type": SoftAutoListOrNothingType,
                 "display_name": "Campaign IDs",
-                "short_desc": "Comma-separated campaign IDs",
-                "desc": "A comma-separated list of email campaign IDs to get summaries for",
+                "short_desc": "List of campaign IDs",
+                "desc": "A list of email campaign IDs to get summaries for",
             },
         };
     }
 
-    constructor() {
+    constructor() : HashDataType("ConstantContactGetEmailSummaryRequestDataType") {
+        addQoreFields(Fields);
+    }
+
+    constructor(Type base_type) : HashDataType(base_type,
+            "ConstantContactGetEmailSummaryRequestDataType") {
         addQoreFields(Fields);
     }
 }
@@ -94,7 +99,7 @@ public class ConstantContactGetEmailSummaryDataProvider inherits ConstantContact
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         hash<auto> params;
         if (req.campaign_ids) {
-            params.campaign_ids = req.campaign_ids;
+            params.campaign_ids = (foldl $1 + "," + $2, req.campaign_ids);
         }
         return doGet("reports/summary_reports/email_campaign_summaries", params);
     }

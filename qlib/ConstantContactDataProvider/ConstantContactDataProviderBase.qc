@@ -246,7 +246,7 @@ public class ConstantContactDataProviderBase inherits DataProvider::AbstractData
                         "display_name": display_name,
                         "short_desc": contact.email_address.address ?? "",
                         "desc": sprintf("%s (ID: %s)", display_name, contact.contact_id),
-                        "value": contact.contact_id,
+                        "value": string(contact.contact_id),
                     };
                 }
             }
@@ -267,7 +267,7 @@ public class ConstantContactDataProviderBase inherits DataProvider::AbstractData
                         "display_name": lst.name ?? sprintf("List %s", lst.list_id),
                         "short_desc": sprintf("%d members", lst.membership_count ?? 0),
                         "desc": sprintf("%s (ID: %s)", lst.name ?? "List", lst.list_id),
-                        "value": lst.list_id,
+                        "value": string(lst.list_id),
                     };
                 }
             }
@@ -287,7 +287,7 @@ public class ConstantContactDataProviderBase inherits DataProvider::AbstractData
                         "display_name": tag.name ?? sprintf("Tag %s", tag.tag_id),
                         "short_desc": "",
                         "desc": sprintf("%s (ID: %s)", tag.name ?? "Tag", tag.tag_id),
-                        "value": tag.tag_id,
+                        "value": string(tag.tag_id),
                     };
                 }
             }
@@ -309,7 +309,7 @@ public class ConstantContactDataProviderBase inherits DataProvider::AbstractData
                         "short_desc": field.type ?? "",
                         "desc": sprintf("%s (ID: %s)", field.label ?? "Field",
                             field.custom_field_id),
-                        "value": field.custom_field_id,
+                        "value": string(field.custom_field_id),
                     };
                 }
             }
@@ -332,7 +332,7 @@ public class ConstantContactDataProviderBase inherits DataProvider::AbstractData
                         "desc": sprintf("%s - %s (ID: %s)",
                             campaign.name ?? "Campaign",
                             campaign.current_status ?? "", campaign.campaign_id),
-                        "value": campaign.campaign_id,
+                        "value": string(campaign.campaign_id),
                     };
                 }
             }

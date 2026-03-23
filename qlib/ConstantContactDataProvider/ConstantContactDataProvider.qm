@@ -186,7 +186,10 @@ module ConstantContactDataProvider {
             "groups": "Contacts",
             "display_name": "Update a Contact",
             "short_desc": "Update an existing contact",
-            "desc": "Update an existing contact in Constant Contact",
+            "desc": "Update an existing contact in Constant Contact.\n\n"
+                "**Important**: This uses PUT semantics (full replace). Any fields not included "
+                "in the request will be cleared to their default values. Include all fields you "
+                "want to preserve",
             "action_code": DPAT_API,
             "options": {
                 "contact_id": <ActionOptionInfo>{
@@ -348,6 +351,7 @@ module ConstantContactDataProvider {
                     "short_desc": "Filter by contact status",
                     "type": AbstractDataProviderTypeMap."*string",
                     "desc": "Filter contacts by status",
+                    "preselected": True,
                     "allowed_values": (
                         <AllowedValueInfo>{
                             "value": "all",
@@ -603,6 +607,18 @@ module ConstantContactDataProvider {
                     "short_desc": "Source of the tag",
                     "type": AbstractDataProviderTypeMap."*string",
                     "desc": "The source of the tag",
+                    "allowed_values": (
+                        <AllowedValueInfo>{
+                            "value": "Account",
+                            "display_name": "Account",
+                            "desc": "Tag created by the account owner",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "Contact",
+                            "display_name": "Contact",
+                            "desc": "Tag created by the contact",
+                        },
+                    ),
                 },
             },
             "get_output_type": AbstractDataProviderType sub () { return new ConstantContactTagDataType(); },
@@ -1173,14 +1189,14 @@ module ConstantContactDataProvider {
                             "desc": "Completed campaigns",
                         },
                         <AllowedValueInfo>{
-                            "value": "Cancelled",
-                            "display_name": "Cancelled",
-                            "desc": "Cancelled campaigns",
+                            "value": "Error",
+                            "display_name": "Error",
+                            "desc": "Campaigns that encountered an error",
                         },
                         <AllowedValueInfo>{
-                            "value": "Deleted",
-                            "display_name": "Deleted",
-                            "desc": "Deleted campaigns",
+                            "value": "Removed",
+                            "display_name": "Removed",
+                            "desc": "Removed campaigns",
                         },
                     ),
                 },
@@ -1358,9 +1374,9 @@ module ConstantContactDataProvider {
             "options": {
                 "campaign_ids": <ActionOptionInfo>{
                     "display_name": "Campaign IDs",
-                    "short_desc": "Comma-separated campaign IDs",
-                    "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "Comma-separated list of campaign IDs to get summaries for",
+                    "short_desc": "List of campaign IDs",
+                    "type": AbstractDataProviderTypeMap."*softlist",
+                    "desc": "A list of email campaign IDs to get summaries for",
                     "preselected": True,
                 },
             },
@@ -1391,7 +1407,10 @@ module ConstantContactDataProvider {
             "groups": "Account",
             "display_name": "Update Account",
             "short_desc": "Update account information",
-            "desc": "Update the Constant Contact account information",
+            "desc": "Update the Constant Contact account information.\n\n"
+                "**Important**: This uses PUT semantics (full replace). Any fields not included "
+                "in the request will be cleared to their default values. Include all fields you "
+                "want to preserve",
             "action_code": DPAT_API,
             "options": {
                 "organization_name": <ActionOptionInfo>{

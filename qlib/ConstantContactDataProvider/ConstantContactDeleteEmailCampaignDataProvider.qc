@@ -52,7 +52,7 @@ public class ConstantContactDeleteEmailCampaignResponseDataType inherits HashDat
                 "type": BoolType,
                 "display_name": "Deleted",
                 "short_desc": "Whether the campaign was deleted",
-                "desc": "Indicates `True` if the email campaign was successfully deleted",
+                "desc": "Returns `True` when the email campaign is successfully deleted",
             },
         };
     }

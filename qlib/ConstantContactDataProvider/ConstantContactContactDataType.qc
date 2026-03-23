@@ -71,13 +71,13 @@ public class ConstantContactContactDataType inherits HashDataType {
                 "type": IntOrNothingType,
                 "display_name": "Birthday Month",
                 "short_desc": "The birthday month (1-12)",
-                "desc": "The birthday month of the contact (1-12)",
+                "desc": "The birthday month of the contact (`1`-`12`)",
             },
             "birthday_day": {
                 "type": IntOrNothingType,
                 "display_name": "Birthday Day",
                 "short_desc": "The birthday day (1-31)",
-                "desc": "The birthday day of the contact (1-31)",
+                "desc": "The birthday day of the contact (`1`-`31`)",
             },
             "anniversary": {
                 "type": StringOrNothingType,
@@ -89,14 +89,25 @@ public class ConstantContactContactDataType inherits HashDataType {
                 "type": StringOrNothingType,
                 "display_name": "Update Source",
                 "short_desc": "Source of last update",
-                "desc": "The source of the last update to the contact. Values: `Account`, "
-                    "`Contact`",
+                "desc": "The source of the last update to the contact",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "Account", "display_name": "Account",
+                        "desc": "Updated by the account owner"},
+                    <AllowedValueInfo>{"value": "Contact", "display_name": "Contact",
+                        "desc": "Updated by the contact themselves"},
+                ),
             },
             "create_source": {
                 "type": StringOrNothingType,
                 "display_name": "Create Source",
                 "short_desc": "Source of contact creation",
-                "desc": "The source of the contact creation. Values: `Account`, `Contact`",
+                "desc": "The source of the contact creation",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "Account", "display_name": "Account",
+                        "desc": "Created by the account owner"},
+                    <AllowedValueInfo>{"value": "Contact", "display_name": "Contact",
+                        "desc": "Created by the contact themselves"},
+                ),
             },
             "created_at": {
                 "type": StringOrNothingType,
@@ -215,13 +226,13 @@ public class ConstantContactCreateContactRequestDataType inherits HashDataType {
                 "type": IntOrNothingType,
                 "display_name": "Birthday Month",
                 "short_desc": "The birthday month (1-12)",
-                "desc": "The birthday month of the contact (1-12)",
+                "desc": "The birthday month of the contact (`1`-`12`)",
             },
             "birthday_day": {
                 "type": IntOrNothingType,
                 "display_name": "Birthday Day",
                 "short_desc": "The birthday day (1-31)",
-                "desc": "The birthday day of the contact (1-31)",
+                "desc": "The birthday day of the contact (`1`-`31`)",
             },
             "anniversary": {
                 "type": StringOrNothingType,
@@ -233,7 +244,13 @@ public class ConstantContactCreateContactRequestDataType inherits HashDataType {
                 "type": StringOrNothingType,
                 "display_name": "Create Source",
                 "short_desc": "Source of contact creation",
-                "desc": "The source of the contact creation. Values: `Account`, `Contact`",
+                "desc": "The source of the contact creation",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "Account", "display_name": "Account",
+                        "desc": "Created by the account owner"},
+                    <AllowedValueInfo>{"value": "Contact", "display_name": "Contact",
+                        "desc": "Created by the contact themselves"},
+                ),
             },
             "custom_fields": {
                 "type": new ListDataType("CustomFieldValueList",
@@ -292,7 +309,13 @@ public class ConstantContactUpdateContactRequestDataType inherits HashDataType {
                 "type": StringOrNothingType,
                 "display_name": "Update Source",
                 "short_desc": "Source of the update",
-                "desc": "The source of the update. Values: `Account`, `Contact`",
+                "desc": "The source of the update",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "Account", "display_name": "Account",
+                        "desc": "Updated by the account owner"},
+                    <AllowedValueInfo>{"value": "Contact", "display_name": "Contact",
+                        "desc": "Updated by the contact themselves"},
+                ),
             },
         };
     }

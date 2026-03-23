@@ -126,10 +126,14 @@ public class ConstantContactPhoneNumberDataType inherits HashDataType {
                 "short_desc": "The type of phone number",
                 "desc": "The type of phone number",
                 "allowed_values": (
-                    <AllowedValueInfo>{"value": "home", "display_name": "Home"},
-                    <AllowedValueInfo>{"value": "work", "display_name": "Work"},
-                    <AllowedValueInfo>{"value": "mobile", "display_name": "Mobile"},
-                    <AllowedValueInfo>{"value": "other", "display_name": "Other"},
+                    <AllowedValueInfo>{"value": "home", "display_name": "Home",
+                        "desc": "Home phone number"},
+                    <AllowedValueInfo>{"value": "work", "display_name": "Work",
+                        "desc": "Work phone number"},
+                    <AllowedValueInfo>{"value": "mobile", "display_name": "Mobile",
+                        "desc": "Mobile phone number"},
+                    <AllowedValueInfo>{"value": "other", "display_name": "Other",
+                        "desc": "Other phone number"},
                 ),
             },
         };
@@ -154,9 +158,12 @@ public class ConstantContactStreetAddressDataType inherits HashDataType {
                 "short_desc": "The type of address",
                 "desc": "The type of street address",
                 "allowed_values": (
-                    <AllowedValueInfo>{"value": "home", "display_name": "Home"},
-                    <AllowedValueInfo>{"value": "work", "display_name": "Work"},
-                    <AllowedValueInfo>{"value": "other", "display_name": "Other"},
+                    <AllowedValueInfo>{"value": "home", "display_name": "Home",
+                        "desc": "Home address"},
+                    <AllowedValueInfo>{"value": "work", "display_name": "Work",
+                        "desc": "Work address"},
+                    <AllowedValueInfo>{"value": "other", "display_name": "Other",
+                        "desc": "Other address"},
                 ),
             },
             "street": {
@@ -299,8 +306,15 @@ public class ConstantContactEmailCampaignActivityDataType inherits HashDataType 
                 "type": IntOrNothingType,
                 "display_name": "Format Type",
                 "short_desc": "The email format type code",
-                "desc": "The format type of the email. Use `5` for custom code email",
+                "desc": "The format type of the email",
                 "example_value": 5,
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": 1, "display_name": "Newsletter"},
+                    <AllowedValueInfo>{"value": 2, "display_name": "Product Update"},
+                    <AllowedValueInfo>{"value": 3, "display_name": "Announcement"},
+                    <AllowedValueInfo>{"value": 4, "display_name": "Birthday/Anniversary"},
+                    <AllowedValueInfo>{"value": 5, "display_name": "Custom Code Email"},
+                ),
             },
             "from_email": {
                 "type": StringOrNothingType,
@@ -334,7 +348,21 @@ public class ConstantContactEmailCampaignActivityDataType inherits HashDataType 
                 "type": StringOrNothingType,
                 "display_name": "HTML Content",
                 "short_desc": "The email HTML body content",
-                "desc": "The HTML content of the email body",
+                "desc": "The HTML content of the email body (format types `1` and `5` only)",
+            },
+            "preheader": {
+                "type": StringOrNothingType,
+                "display_name": "Preheader",
+                "short_desc": "Preview text shown in inbox",
+                "desc": "The preview text displayed after the subject line in email clients "
+                    "(format types `3`, `4`, and `5` only)",
+                "example_value": "Check out our latest updates!",
+            },
+            "physical_address_in_footer": {
+                "type": new ConstantContactFooterAddressDataType(AutoHashOrNothingType),
+                "display_name": "Physical Address in Footer",
+                "short_desc": "Address override for email footer",
+                "desc": "Override the organization's physical address shown in the email footer",
             },
             "contact_list_ids": {
                 "type": AutoListOrNothingType,
@@ -369,7 +397,18 @@ public class ConstantContactCampaignActivityRefDataType inherits HashDataType {
                 "type": StringOrNothingType,
                 "display_name": "Role",
                 "short_desc": "The activity role",
-                "desc": "The role of the campaign activity (e.g., `primary_email`)",
+                "desc": "The role of the campaign activity",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "primary_email",
+                        "display_name": "Primary Email",
+                        "desc": "The main marketing email message"},
+                    <AllowedValueInfo>{"value": "resend",
+                        "display_name": "Resend",
+                        "desc": "A followup to non-openers"},
+                    <AllowedValueInfo>{"value": "permalink",
+                        "display_name": "Permalink",
+                        "desc": "A permanent web-accessible link"},
+                ),
             },
             "contact_list_ids": {
                 "type": AutoListOrNothingType,
@@ -386,6 +425,95 @@ public class ConstantContactCampaignActivityRefDataType inherits HashDataType {
 
     constructor(Type base_type) : HashDataType(base_type,
             "ConstantContactCampaignActivityRefDataType") {
+        addQoreFields(Fields);
+    }
+}
+
+#! Constant Contact physical address in footer sub-type (for email campaigns)
+public class ConstantContactFooterAddressDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "address_line1": {
+                "type": StringOrNothingType,
+                "display_name": "Address Line 1",
+                "short_desc": "Primary address line",
+                "desc": "The primary address line",
+                "example_value": "123 Business Ave",
+            },
+            "address_line2": {
+                "type": StringOrNothingType,
+                "display_name": "Address Line 2",
+                "short_desc": "Secondary address line",
+                "desc": "The secondary address line",
+            },
+            "address_line3": {
+                "type": StringOrNothingType,
+                "display_name": "Address Line 3",
+                "short_desc": "Third address line",
+                "desc": "The third address line",
+            },
+            "address_optional": {
+                "type": StringOrNothingType,
+                "display_name": "Address Optional",
+                "short_desc": "Additional address details",
+                "desc": "Additional address details (suite, floor, etc.)",
+            },
+            "city": {
+                "type": StringOrNothingType,
+                "display_name": "City",
+                "short_desc": "The city",
+                "desc": "The city name",
+                "example_value": "Waltham",
+            },
+            "state_code": {
+                "type": StringOrNothingType,
+                "display_name": "State Code",
+                "short_desc": "State or province code",
+                "desc": "The state or province code",
+                "example_value": "MA",
+            },
+            "state_name": {
+                "type": StringOrNothingType,
+                "display_name": "State Name",
+                "short_desc": "Full state or province name",
+                "desc": "The full state or province name",
+            },
+            "postal_code": {
+                "type": StringOrNothingType,
+                "display_name": "Postal Code",
+                "short_desc": "The postal/ZIP code",
+                "desc": "The postal or ZIP code",
+                "example_value": "02451",
+            },
+            "country_code": {
+                "type": StringOrNothingType,
+                "display_name": "Country Code",
+                "short_desc": "Two-letter country code",
+                "desc": "The two-letter ISO country code",
+                "example_value": "US",
+            },
+            "country_name": {
+                "type": StringOrNothingType,
+                "display_name": "Country Name",
+                "short_desc": "Full country name",
+                "desc": "The full country name",
+                "example_value": "United States",
+            },
+            "organization_name": {
+                "type": StringOrNothingType,
+                "display_name": "Organization Name",
+                "short_desc": "Business or organization name",
+                "desc": "The business or organization name for the footer",
+            },
+        };
+    }
+
+    constructor() : HashDataType("ConstantContactFooterAddressDataType") {
+        addQoreFields(Fields);
+    }
+
+    constructor(Type base_type) : HashDataType(base_type,
+            "ConstantContactFooterAddressDataType") {
         addQoreFields(Fields);
     }
 }
@@ -553,8 +681,15 @@ public class ConstantContactSmsConsentDataType inherits HashDataType {
                 "type": StringOrNothingType,
                 "display_name": "Consent Permission",
                 "short_desc": "SMS consent permission status",
-                "desc": "The SMS consent permission status. Values: `pending_confirmation`, "
-                    "`explicit`",
+                "desc": "The SMS consent permission status",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "pending_confirmation",
+                        "display_name": "Pending Confirmation",
+                        "desc": "Awaiting consent confirmation"},
+                    <AllowedValueInfo>{"value": "explicit",
+                        "display_name": "Explicit",
+                        "desc": "Explicitly granted consent"},
+                ),
             },
             "consent_type": {
                 "type": StringOrNothingType,
@@ -578,8 +713,7 @@ public class ConstantContactSmsConsentDataType inherits HashDataType {
                 "type": BoolOrNothingType,
                 "display_name": "Confirmed",
                 "short_desc": "Whether consent is confirmed",
-                "desc": "Whether the SMS consent has been confirmed. "
-                    "`True` if confirmed, `False` otherwise",
+                "desc": "Whether the SMS consent has been confirmed",
             },
             "created_at": {
                 "type": StringOrNothingType,

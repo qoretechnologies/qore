@@ -50,8 +50,7 @@ public class ConstantContactContactListDataType inherits HashDataType {
                 "type": BoolOrNothingType,
                 "display_name": "Favorite",
                 "short_desc": "Whether the list is a favorite",
-                "desc": "Whether the contact list is marked as a favorite. "
-                    "`True` if marked as favorite, `False` otherwise",
+                "desc": "Whether the contact list is marked as a favorite",
             },
             "created_at": {
                 "type": StringOrNothingType,

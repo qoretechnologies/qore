@@ -63,6 +63,12 @@ public class ConstantContactTagDataType inherits HashDataType {
                 "display_name": "Tag Source",
                 "short_desc": "Source of the tag",
                 "desc": "The source that created the tag",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "Account", "display_name": "Account",
+                        "desc": "Tag created by the account owner"},
+                    <AllowedValueInfo>{"value": "Contact", "display_name": "Contact",
+                        "desc": "Tag created by the contact"},
+                ),
             },
         };
     }
@@ -88,6 +94,12 @@ public class ConstantContactCreateTagRequestDataType inherits HashDataType {
                 "display_name": "Tag Source",
                 "short_desc": "Source of the tag",
                 "desc": "The source creating the tag. Default is `Account`",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "Account", "display_name": "Account",
+                        "desc": "Tag created by the account owner"},
+                    <AllowedValueInfo>{"value": "Contact", "display_name": "Contact",
+                        "desc": "Tag created by the contact"},
+                ),
             },
         };
     }

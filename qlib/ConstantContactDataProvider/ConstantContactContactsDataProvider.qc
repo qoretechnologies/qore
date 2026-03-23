@@ -159,8 +159,8 @@ public class ConstantContactContactsDataProvider inherits ConstantContactDataPro
     }
 
     #! Returns the record type
-    private *AbstractDataProviderType getRecordTypeImpl() {
-        return new ConstantContactContactDataType();
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return new ConstantContactContactDataType().getFields();
     }
 
     #! Returns an iterator for records matching the search criteria

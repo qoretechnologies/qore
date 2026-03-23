@@ -86,14 +86,14 @@ public class ConstantContactEmailCampaignsDataProvider inherits ConstantContactD
                         "desc": "Completed campaigns",
                     },
                     <AllowedValueInfo>{
-                        "value": "Cancelled",
-                        "display_name": "Cancelled",
-                        "desc": "Cancelled campaigns",
+                        "value": "Error",
+                        "display_name": "Error",
+                        "desc": "Campaigns that encountered an error",
                     },
                     <AllowedValueInfo>{
-                        "value": "Deleted",
-                        "display_name": "Deleted",
-                        "desc": "Deleted campaigns",
+                        "value": "Removed",
+                        "display_name": "Removed",
+                        "desc": "Removed campaigns",
                     },
                 ),
             },
@@ -138,8 +138,8 @@ public class ConstantContactEmailCampaignsDataProvider inherits ConstantContactD
     }
 
     #! Returns the record type
-    private *AbstractDataProviderType getRecordTypeImpl() {
-        return new ConstantContactEmailCampaignDataType();
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return new ConstantContactEmailCampaignDataType().getFields();
     }
 
     #! Returns an iterator for records matching the search criteria
