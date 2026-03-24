@@ -508,13 +508,11 @@ public const DefaultGenericSearchOpMap = {
 #/@{
 #! returns an @ref SearchOperatorInfo hash
 public hash<SearchOperatorInfo> sub dp_make_op(string op, auto arg, *int op_args) {
-    if (!exists op_args) {
-        op_args = DefaultGenericSearchOpMap{op}.op_args ?? 1;
-    }
+    int op_args_int = exists op_args ? op_args : (DefaultGenericSearchOpMap{op}.op_args ?? 1);
     return new hash<SearchOperatorInfo>({
         "op": op,
         "arg": arg,
-        "op_args": op_args,
+        "op_args": op_args_int,
     });
 }
 

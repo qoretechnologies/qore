@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore QoreDataType class definition
 
-/** QoreDataType.qc Copyright 2019 - 2025 Qore Technologies, s.r.o.
+/** QoreDataType.qc Copyright 2019 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -330,9 +330,10 @@ public class QoreDataType inherits AbstractDataProviderType {
             throw "RUNTIME-TYPE-ERROR", sprintf("type %y does not accept values of type %y", getName(),
                 value.type());
         }
-        # Reject NULL for non-optional soft types (unless PO_BROKEN_SOFT_TYPES is set for backward compatibility)
+        # Reject NULL for non-optional soft types (unless broken-soft-types parse option is set for backward compatibility)
         # Use == instead of === because NULL is often treated as empty/falsy value
-        if (!is_broken_soft_types() && value == NULL && type.getName() =~ /^soft/ && type.getName() !~ /^\*soft/) {
+        if (!has_parse_option("broken-soft-types") && value == NULL
+            && type.getName() =~ /^soft/ && type.getName() !~ /^\*soft/) {
             throw "RUNTIME-TYPE-ERROR", sprintf("type %y does not accept NULL", type.getName());
         }
         # Only use default value when value is truly missing, not when NULL is explicitly passed

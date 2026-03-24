@@ -3061,6 +3061,34 @@ int get_parse_options() [flags=CONSTANT] {
    return runtime_get_parse_options().getLo();
 }
 
+//! checks if a parse option is set in the current Program by name
+/** @par Example:
+    @code{.py}
+if (has_parse_option("broken-soft-types")) {
+    printf("broken-soft-types is enabled\n");
+}
+    @endcode
+
+    @param name the name of the parse option to check (e.g., "broken-soft-types", "require-types", etc.)
+
+    @return @ref TRUE if the parse option is set in the current Program, @ref FALSE otherwise
+
+    @throw PARSE-OPTION-ERROR if the parse option name is not recognized
+
+    @note This function checks both standard (lo-word) and extended (hi-word) parse options
+
+    @since %Qore 2.3
+ */
+bool has_parse_option(string name) [flags=CONSTANT] {
+    QoreParseOptions opts = runtime_get_parse_options();
+    QoreParseOptions opt = ParseOptionMap::find_code(name->c_str());
+    if (opt == QoreParseOptions(-1)) {
+        xsink->raiseException("PARSE-OPTION-ERROR", "unknown parse option: '%s'", name->c_str());
+        return false;
+    }
+    return opts.hasAll(opt);
+}
+
 //! sets the return value for a Program object when running with @ref exec-class "%exec-class"
 /** @par Example:
     @code{.py}
