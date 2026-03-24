@@ -20,6 +20,8 @@
 #include <algorithm>
 #include <climits>
 #include <cstdio>
+#include <queue>
+#include <functional>
 #include <cassert>
 
 using namespace QoreTokenizer;
@@ -168,55 +170,106 @@ std::string BPEModel::byteToken(uint8_t byte) {
     return std::string(buf);
 }
 
-std::vector<int> BPEModel::tokenize(const std::string& pre_token) const {
+std::vector<TokenWithOffset> BPEModel::bpeMerge(
+        const std::string& pre_token) const {
     if (pre_token.empty()) {
         return {};
     }
 
-    // Step 1: split into UTF-8 characters
-    std::vector<std::string> symbols = splitUtf8Chars(pre_token);
-
-    // Apply end_of_word_suffix to the last symbol
-    if (!end_of_word_suffix.empty() && !symbols.empty()) {
-        symbols.back() += end_of_word_suffix;
+    // Split into UTF-8 characters and build linked list
+    std::vector<std::string> chars = splitUtf8Chars(pre_token);
+    if (chars.empty()) {
+        return {};
     }
 
-    // Apply continuing_subword_prefix to all symbols except the first
+    std::vector<BPENode> nodes;
+    nodes.reserve(chars.size());
+
+    // Build initial node list with byte offsets
+    size_t byte_pos = 0;
+    for (size_t i = 0; i < chars.size(); ++i) {
+        BPENode node;
+        node.symbol = chars[i];
+        node.orig_start = byte_pos;
+        byte_pos += chars[i].size();
+        node.orig_end = byte_pos;
+        node.prev = (int)i - 1;
+        node.next = (i + 1 < chars.size()) ? (int)(i + 1) : -1;
+        nodes.push_back(std::move(node));
+    }
+
+    // Apply end_of_word_suffix to last node
+    if (!end_of_word_suffix.empty()) {
+        int last = (int)nodes.size() - 1;
+        nodes[last].symbol += end_of_word_suffix;
+    }
+
+    // Apply continuing_subword_prefix to all nodes except first
     if (!continuing_subword_prefix.empty()) {
-        for (size_t i = 1; i < symbols.size(); ++i) {
-            symbols[i] = continuing_subword_prefix + symbols[i];
+        for (int i = nodes[0].next; i >= 0; i = nodes[i].next) {
+            nodes[i].symbol = continuing_subword_prefix + nodes[i].symbol;
         }
     }
 
-    // Step 2: iteratively merge highest-priority pair
-    while (symbols.size() > 1) {
-        // Find the pair with the lowest rank (highest priority)
-        int best_rank = INT_MAX;
-        size_t best_pos = 0;
-        bool found = false;
+    // Build priority queue of merge candidates
+    std::priority_queue<MergeCandidate, std::vector<MergeCandidate>,
+        std::greater<MergeCandidate>> pq;
 
-        for (size_t i = 0; i + 1 < symbols.size(); ++i) {
-            int rank = getMergeRank(symbols[i], symbols[i + 1]);
-            if (rank >= 0 && rank < best_rank) {
-                best_rank = rank;
-                best_pos = i;
-                found = true;
+    auto pushPair = [&](int left, int right) {
+        if (left >= 0 && right >= 0 && nodes[left].active && nodes[right].active) {
+            int rank = getMergeRank(nodes[left].symbol, nodes[right].symbol);
+            if (rank >= 0) {
+                pq.push({rank, left, right});
             }
         }
+    };
 
-        if (!found) {
-            break;
+    // Initialize: push all adjacent pairs
+    for (int i = 0; i >= 0; i = nodes[i].next) {
+        if (nodes[i].next >= 0) {
+            pushPair(i, nodes[i].next);
         }
-
-        // Merge the best pair
-        std::string merged = symbols[best_pos] + symbols[best_pos + 1];
-        symbols[best_pos] = merged;
-        symbols.erase(symbols.begin() + best_pos + 1);
     }
 
-    // Step 3: look up token IDs
-    std::vector<int> ids;
-    ids.reserve(symbols.size());
+    // Merge loop: O(n log n) amortized
+    while (!pq.empty()) {
+        auto mc = pq.top();
+        pq.pop();
+
+        // Stale check: both nodes must be active and still adjacent
+        if (!nodes[mc.left_idx].active || !nodes[mc.right_idx].active
+                || nodes[mc.left_idx].next != mc.right_idx) {
+            continue;
+        }
+
+        // Verify rank still matches (symbol may have changed due to prior merge)
+        int cur_rank = getMergeRank(nodes[mc.left_idx].symbol,
+            nodes[mc.right_idx].symbol);
+        if (cur_rank != mc.rank) {
+            continue;
+        }
+
+        // Merge: left absorbs right
+        nodes[mc.left_idx].symbol += nodes[mc.right_idx].symbol;
+        nodes[mc.left_idx].orig_end = nodes[mc.right_idx].orig_end;
+        nodes[mc.left_idx].next = nodes[mc.right_idx].next;
+        if (nodes[mc.right_idx].next >= 0) {
+            nodes[nodes[mc.right_idx].next].prev = mc.left_idx;
+        }
+        nodes[mc.right_idx].active = false;
+
+        // Push new pairs formed by the merge
+        pushPair(nodes[mc.left_idx].prev, mc.left_idx);
+        pushPair(mc.left_idx, nodes[mc.left_idx].next);
+    }
+
+    // Walk linked list to collect final symbols with offsets
+    return symbolsToIdsWithOffsets(nodes, 0);
+}
+
+std::vector<TokenWithOffset> BPEModel::symbolsToIdsWithOffsets(
+        const std::vector<BPENode>& nodes, int head) const {
+    std::vector<TokenWithOffset> result;
 
     int unk_id = -1;
     if (!unk_token.empty()) {
@@ -227,34 +280,54 @@ std::vector<int> BPEModel::tokenize(const std::string& pre_token) const {
     }
 
     bool prev_was_unk = false;
-    for (const auto& sym : symbols) {
+    for (int i = head; i >= 0; i = nodes[i].next) {
+        if (!nodes[i].active) {
+            continue;
+        }
+        const std::string& sym = nodes[i].symbol;
+        size_t start = nodes[i].orig_start;
+        size_t end = nodes[i].orig_end;
+
         auto it = vocab.find(sym);
         if (it != vocab.end()) {
-            ids.push_back(it->second);
+            result.push_back({it->second, start, end});
             prev_was_unk = false;
         } else if (byte_fallback) {
-            // Decompose the symbol to byte tokens <0xHH>
             prev_was_unk = false;
-            for (uint8_t byte : sym) {
-                std::string bt = byteToken(byte);
+            for (size_t j = 0; j < sym.size(); ++j) {
+                std::string bt = byteToken((uint8_t)sym[j]);
                 auto bt_it = vocab.find(bt);
                 if (bt_it != vocab.end()) {
-                    ids.push_back(bt_it->second);
+                    result.push_back({bt_it->second, start, end});
                 } else if (unk_id >= 0) {
-                    ids.push_back(unk_id);
+                    result.push_back({unk_id, start, end});
                 }
             }
         } else {
-            // Unknown token
             if (fuse_unk && prev_was_unk) {
-                // Skip: fuse consecutive unknowns into one
+                // Skip
             } else if (unk_id >= 0) {
-                ids.push_back(unk_id);
+                result.push_back({unk_id, start, end});
             }
             prev_was_unk = true;
         }
     }
 
+    return result;
+}
+
+std::vector<TokenWithOffset> BPEModel::tokenizeWithOffsets(
+        const std::string& pre_token) const {
+    return bpeMerge(pre_token);
+}
+
+std::vector<int> BPEModel::tokenize(const std::string& pre_token) const {
+    auto with_offsets = bpeMerge(pre_token);
+    std::vector<int> ids;
+    ids.reserve(with_offsets.size());
+    for (const auto& t : with_offsets) {
+        ids.push_back(t.id);
+    }
     return ids;
 }
 

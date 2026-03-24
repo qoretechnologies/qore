@@ -32,6 +32,8 @@ public:
     //! Tokenizes a pre-token using the BPE algorithm
     std::vector<int> tokenize(const std::string& pre_token) const override;
 
+    std::vector<TokenWithOffset> tokenizeWithOffsets(
+        const std::string& pre_token) const override;
     int vocabSize() const override;
     std::string idToToken(int id) const override;
     int tokenToId(const std::string& token) const override;
@@ -73,6 +75,32 @@ private:
 
     //! Encodes a byte value as a <0xHH> token
     static std::string byteToken(uint8_t byte);
+
+    //! Node in the BPE doubly-linked list
+    struct BPENode {
+        std::string symbol;
+        int prev = -1;
+        int next = -1;
+        bool active = true;
+        size_t orig_start = 0;
+        size_t orig_end = 0;
+    };
+
+    //! Merge candidate for the priority queue
+    struct MergeCandidate {
+        int rank;
+        int left_idx;
+        int right_idx;
+        bool operator>(const MergeCandidate& o) const { return rank > o.rank; }
+    };
+
+    //! Internal: run BPE merge with priority queue, return final symbols with offsets
+    std::vector<TokenWithOffset> bpeMerge(const std::string& pre_token) const;
+
+    //! Internal: look up symbols -> token IDs with byte_fallback/fuse_unk
+    std::vector<int> symbolsToIds(const std::vector<std::string>& symbols) const;
+    std::vector<TokenWithOffset> symbolsToIdsWithOffsets(
+        const std::vector<BPENode>& nodes, int head) const;
 };
 
 } // namespace QoreTokenizer
