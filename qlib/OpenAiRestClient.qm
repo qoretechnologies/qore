@@ -142,6 +142,7 @@ public class OpenAiRestClientBase {
         const DefaultOptions = {
             "url": DefaultUrl,
             "api": DefaultApiVersion,
+            "default_path": "/" + DefaultApiVersion,
         };
     }
 
@@ -483,7 +484,24 @@ public class OpenAiRestConnection inherits RestClient::RestConnection {
         # to avoid circular dependencies, this object loads the OpenAiDataProvider and creates the data provider
         # object dynamically
         load_module("OpenAiDataProvider");
-        return create_object("OpenAiDataProvider", get());
+        return create_object("OpenAiDataProvider", getAsync());
+    }
+
+    #! Sets the update options code for the connection
+    setUpdateOptionsCode(*code update_options) {
+        UpdateOptionsInterface::setUpdateOptionsCode(update_options);
+        if (update_options) {
+            hash<auto> update;
+            if (url != DefaultUrl) {
+                update.url = DefaultUrl;
+            }
+            if (opts.ping_path =~ /^\//) {
+                update.ping_path = opts.ping_path.substr(1);
+            }
+            if (update) {
+                doUpdateOptions(self, update);
+            }
+        }
     }
 
     #! Sets child data provider capabilities

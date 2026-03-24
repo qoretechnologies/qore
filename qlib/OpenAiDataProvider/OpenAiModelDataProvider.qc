@@ -62,7 +62,7 @@ public class OpenAiModelDataProvider inherits OpenAiDataProviderCommon {
     }
 
     #! Creates the object from the arguments
-    constructor(*RestClient rest, hash<auto> model) : OpenAiDataProviderCommon(rest) {
+    constructor(*RestClientIo::RestClientIo rest, hash<auto> model) : OpenAiDataProviderCommon(rest) {
         self.model = model;
         model.created = localtime(model.created);
     }

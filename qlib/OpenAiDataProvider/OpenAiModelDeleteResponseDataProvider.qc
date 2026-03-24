@@ -53,7 +53,7 @@ public class OpenAiModelDeleteResponseDataProvider inherits OpenAiDataProviderCo
     }
 
     #! Deletes the object from the arguments
-    constructor(*RestClient rest, hash<auto> model) : OpenAiDataProviderCommon(rest) {
+    constructor(*RestClientIo::RestClientIo rest, hash<auto> model) : OpenAiDataProviderCommon(rest) {
         self.model = model;
     }
 

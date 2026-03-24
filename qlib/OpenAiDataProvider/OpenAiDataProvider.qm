@@ -32,10 +32,11 @@
 
 %requires(reexport) DataProvider
 %requires(reexport) OpenAiRestClient
+%requires RestClientIo
 %requires FileLocationHandler
 
 module OpenAiDataProvider {
-    version = "1.5";
+    version = "1.6";
     desc = "user module providing a data provider API for OpenAI services";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";

@@ -53,7 +53,7 @@ public class OpenAiFileDeleteDataProvider inherits OpenAiDataProviderCommon {
     }
 
     #! Creates the object from the arguments
-    constructor(*RestClient rest, hash<auto> file) : OpenAiDataProviderCommon(rest) {
+    constructor(*RestClientIo::RestClientIo rest, hash<auto> file) : OpenAiDataProviderCommon(rest) {
         self.file = file;
     }
 
