@@ -5354,9 +5354,10 @@ public class OpenApi3SchemaTokenizer {
             # Process content based on current state
             switch (state) {
                 case "desc":
-                    # Continue description with continuation character
+                    # Continue description with backslash continuation character
                     if (rv.desc =~ /\\$/) {
-                        rv.desc = rv.desc.substr(0, rv.desc.length() - 1) + " " + trimmed;
+                        rv.desc = rtrim(rv.desc.substr(0, rv.desc.length() - 1))
+                            + " " + trimmed;
                     }
                     break;
 
@@ -5367,6 +5368,15 @@ public class OpenApi3SchemaTokenizer {
                         if (param) {
                             rv.params += param;
                         }
+                    } else if (rv.params) {
+                        # Continue description with backslash continuation
+                        int last_idx = rv.params.size() - 1;
+                        if (rv.params[last_idx].description =~ /\\$/) {
+                            rv.params[last_idx].description =
+                                rtrim(rv.params[last_idx].description.substr(0,
+                                    rv.params[last_idx].description.length() - 1))
+                                + " " + trimmed;
+                        }
                     }
                     break;
 
@@ -5376,6 +5386,15 @@ public class OpenApi3SchemaTokenizer {
                         *hash<FieldInfo> field = parseFieldLine(trimmed, depth - base_depth);
                         if (field) {
                             current_fields += field;
+                        }
+                    } else if (current_fields) {
+                        # Continue description with backslash continuation
+                        int last_idx = current_fields.size() - 1;
+                        if (current_fields[last_idx].description =~ /\\$/) {
+                            current_fields[last_idx].description =
+                                rtrim(current_fields[last_idx].description.substr(0,
+                                    current_fields[last_idx].description.length() - 1))
+                                + " " + trimmed;
                         }
                     }
                     break;
@@ -5471,8 +5490,12 @@ public class OpenApi3SchemaTokenizer {
         foreach auto match in (matches) {
             string block = match;
 
-            # Extract HTTP method and optional path
-            *list<string> method_match = (block =~ x/@REST\s+(GET|POST|PUT|DELETE|PATCH|OPTIONS|HEAD)\s*(\/\S+)?/i);
+            # Extract HTTP method and optional path (path may appear before or after action=xxx)
+            *list<string> method_match = (block =~ x/@REST\s+(GET|POST|PUT|DELETE|PATCH|OPTIONS|HEAD)\s+(?:action=\S+\s+)?(\/\S+)/i);
+            if (!method_match) {
+                # Try without path
+                method_match = (block =~ x/@REST\s+(GET|POST|PUT|DELETE|PATCH|OPTIONS|HEAD)/i);
+            }
             if (!method_match) {
                 continue;
             }
@@ -5864,10 +5887,29 @@ public class OpenApi3SchemaGenerator {
             };
         }
 
+        # Build a set of path parameter names for deduplication
+        hash<string, bool> path_param_set;
+        foreach string pn in (path_params) {
+            path_param_set{pn} = True;
+        }
+
         # Add query parameters for GET methods
         if (method_info.http_method == "GET" && method_info.schema.params) {
             foreach hash<ParamInfo> param in (method_info.schema.params) {
                 if (param.depth) {
+                    continue;
+                }
+                # Skip params that are already defined as path parameters; use the @SCHEMA
+                # description for the path param instead of the generic one
+                if (path_param_set{param.name}) {
+                    # Update the path parameter entry with the richer description from @SCHEMA
+                    for (int i = 0; i < params.size(); ++i) {
+                        if (params[i].name == param.name && params[i]."in" == "path") {
+                            params[i].description = param.description;
+                            params[i].schema = OpenApi3TypeMapper::mapType(param.type_str);
+                            break;
+                        }
+                    }
                     continue;
                 }
                 params += {

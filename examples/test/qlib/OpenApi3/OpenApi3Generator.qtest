@@ -187,6 +187,8 @@ hash<HttpHandlerResponseInfo> del(hash<auto> cx, *hash<auto> ah) {
         addTestCase("Test auto-register with nested types", \testAutoRegisterNestedSchemas());
         addTestCase("Test auto-register from body params", \testAutoRegisterBodyParamSchemas());
         addTestCase("Test extractSchemaName", \testExtractSchemaName());
+        addTestCase("Test path param deduplication", \testPathParamDeduplication());
+        addTestCase("Test backslash description continuation", \testBackslashContinuation());
 
         set_return_value(main());
     }
@@ -1119,5 +1121,65 @@ hash<HttpHandlerResponseInfo> get(hash<auto> cx) {}';
         assertFalse(OpenApi3::OpenApi3SchemaGenerator::extractSchemaName("string").val());
         assertFalse(OpenApi3::OpenApi3SchemaGenerator::extractSchemaName("list<string>").val());
         assertFalse(OpenApi3::OpenApi3SchemaGenerator::extractSchemaName("").val());
+    }
+
+    testPathParamDeduplication() {
+        # When a @SCHEMA @params entry has the same name as a path parameter,
+        # the generator should NOT produce a duplicate query parameter.
+        # Instead, it should enrich the path param with the @SCHEMA description.
+        OpenApi3::OpenApi3SchemaGenerator gen({"title": "Dedup Test", "version": "1.0.0"});
+
+        hash<OpenApi3::SchemaBlockInfo> schema_info = makeSchemaInfo({
+            "summary": "Get app details",
+            "params": (
+                makeParamInfo("app", "string", "Application name or ID", True, "body"),
+            ),
+            "return_info": makeReturnInfo("hash", "App info"),
+        });
+        gen.addMethod("/apps/{app}", makeMethodInfo("GET", "/apps/{app}", schema_info));
+
+        hash<auto> spec = gen.generate();
+        list<hash<auto>> params = spec.paths{"/apps/{app}"}.get.parameters;
+
+        # Should have exactly 1 parameter, not 2
+        assertEq(1, params.size(), "Should deduplicate path param from @params");
+        assertEq("app", params[0].name);
+        assertEq("path", params[0]."in");
+        assertEq(True, params[0].required);
+        # Description should come from @SCHEMA, not the generic "Path parameter: app"
+        assertEq("Application name or ID", params[0].description);
+    }
+
+    testBackslashContinuation() {
+        # Descriptions ending with backslash should be continued on the next line
+        string block = "
+@summary Test continuation
+@params
+- secret (string): the client secret; this value must be stored as it \\
+  cannot be retrieved after this call
+- name (string): client name
+@return (hash Info): result info
+- message (string): the result message; if \\c False the operation \\
+  was not successful and should be retried
+- status (string): status code
+";
+        hash<OpenApi3::SchemaBlockInfo> result =
+            OpenApi3::OpenApi3SchemaTokenizer::parseSchemaBlock(block);
+
+        # Param description should be joined
+        assertEq(2, result.params.size());
+        assertEq("the client secret; this value must be stored as it "
+            "cannot be retrieved after this call", result.params[0].description,
+            "Param description should be joined via backslash continuation");
+        assertEq("client name", result.params[1].description,
+            "Next param should be unaffected");
+
+        # Field description should be joined
+        assertEq(2, result.return_info.fields.size());
+        assertEq("the result message; if \\c False the operation "
+            "was not successful and should be retried", result.return_info.fields[0].description,
+            "Field description should be joined via backslash continuation");
+        assertEq("status code", result.return_info.fields[1].description,
+            "Next field should be unaffected");
     }
 }
