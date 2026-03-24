@@ -72,6 +72,41 @@ public class OpenApi3GeneratorTest inherits QUnit::Test {
 @return (hash<StatusResponse>): status response
 ";
 
+        #! Sample source content with field descriptions for auto-registration testing
+        const AutoRegSourceContent = '
+/** @REST GET /apps
+    @SCHEMA
+    @summary List all applications
+    @desc Returns a list of all registered applications and their clients
+    @return (list<hash AppInfo>): List of applications
+    - name (string): Application name
+    - hidden (bool): Whether the app is hidden
+    - clients (list<hash ClientInfo>): List of clients for this app
+      - client (string): Client name
+      - client_id (string): OAuth2 client ID
+      - secret (string): Masked client secret
+    @ENDSCHEMA
+*/
+hash<HttpHandlerResponseInfo> get(hash<auto> cx, *hash<auto> ah) {}
+
+/** @REST GET /apps/{app}
+    @SCHEMA
+    @summary Get application details
+    @desc Returns detailed info for a specific app
+    @params
+    - app (string): Application name
+    @return (hash AppDetailInfo): Application details
+    - app (string): Application identifier
+    - hidden (bool): Whether the app is hidden
+    - clients (*list<hash ClientInfo>): List of clients
+      - client (string): Client name
+      - client_id (string): Client ID
+      - secret (string): Masked secret
+    @ENDSCHEMA
+*/
+hash<HttpHandlerResponseInfo> get(hash<auto> cx, *hash<auto> ah) {}
+';
+
         #! Sample source content with @REST and @SCHEMA
         const SampleSourceContent = '
 /** @REST GET
@@ -148,6 +183,10 @@ hash<HttpHandlerResponseInfo> del(hash<auto> cx, *hash<auto> ah) {
         addTestCase("Test empty and missing values", \testEmptyMissingValues());
         addTestCase("Test duplicate methods", \testDuplicateMethods());
         addTestCase("Test all HTTP methods", \testAllHttpMethods());
+        addTestCase("Test auto-register schemas from return fields", \testAutoRegisterSchemas());
+        addTestCase("Test auto-register with nested types", \testAutoRegisterNestedSchemas());
+        addTestCase("Test auto-register from body params", \testAutoRegisterBodyParamSchemas());
+        addTestCase("Test extractSchemaName", \testExtractSchemaName());
 
         set_return_value(main());
     }
@@ -927,5 +966,158 @@ hash<HttpHandlerResponseInfo> get(hash<auto> cx) {}';
         assertTrue(spec.paths{"/resource"}.hasKey("patch"));
         assertTrue(spec.paths{"/resource"}.hasKey("head"));
         assertTrue(spec.paths{"/resource"}.hasKey("options"));
+    }
+
+    testAutoRegisterSchemas() {
+        # Test that a named hash return type with field descriptions auto-registers the component schema
+        OpenApi3::OpenApi3SchemaGenerator gen({"title": "Auto-Register Test", "version": "1.0.0"});
+
+        hash<OpenApi3::SchemaBlockInfo> schema_info =
+            OpenApi3::OpenApi3SchemaTokenizer::parseSchemaBlock(SimpleSchemaBlock);
+        gen.addMethod("/users/{id}", makeMethodInfo("GET", "/users/{id}", schema_info));
+
+        hash<auto> spec = gen.generate();
+
+        # UserInfo should be auto-registered from the field descriptions
+        assertTrue(spec.components.hasKey("schemas"), "Should have schemas in components");
+        assertTrue(spec.components.schemas.hasKey("UserInfo"), "UserInfo should be auto-registered");
+
+        # Verify schema properties
+        hash<auto> user_schema = spec.components.schemas.UserInfo;
+        assertEq("object", user_schema.type);
+        assertTrue(user_schema.properties.hasKey("id"), "Should have 'id' property");
+        assertTrue(user_schema.properties.hasKey("name"), "Should have 'name' property");
+        assertTrue(user_schema.properties.hasKey("email"), "Should have 'email' property");
+
+        # Verify field types
+        assertEq("integer", user_schema.properties.id.type);
+        assertEq("string", user_schema.properties.name.type);
+        assertEq("string", user_schema.properties.email.type);
+        assertEq(True, user_schema.properties.email.nullable);
+
+        # Verify the response uses $ref (not inline properties)
+        hash<auto> response_schema =
+            spec.paths{"/users/{id}"}.get.responses."200".content."application/json".schema;
+        assertEq("#/components/schemas/UserInfo", response_schema."\$ref",
+            "Response should use $ref to the auto-registered schema");
+    }
+
+    testAutoRegisterNestedSchemas() {
+        # Parse source with nested named types and verify both parent and child schemas are registered
+        OpenApi3::OpenApi3SchemaGenerator gen({"title": "Nested Auto-Register", "version": "1.0.0"});
+
+        list<hash<OpenApi3::RestMethodInfo>> methods =
+            OpenApi3::OpenApi3SchemaTokenizer::parseSourceContent(AutoRegSourceContent);
+        foreach hash<OpenApi3::RestMethodInfo> method in (methods) {
+            gen.addMethod(method.path, method);
+        }
+
+        hash<auto> spec = gen.generate();
+
+        # Both AppInfo and ClientInfo should be auto-registered
+        assertTrue(spec.components.schemas.hasKey("AppInfo"),
+            "AppInfo should be auto-registered from list<hash AppInfo> return type");
+        assertTrue(spec.components.schemas.hasKey("ClientInfo"),
+            "ClientInfo should be auto-registered from nested field type");
+
+        # AppDetailInfo should also be registered from the second endpoint
+        assertTrue(spec.components.schemas.hasKey("AppDetailInfo"),
+            "AppDetailInfo should be auto-registered from hash AppDetailInfo return type");
+
+        # Verify AppInfo has the correct properties
+        hash<auto> app_schema = spec.components.schemas.AppInfo;
+        assertEq("object", app_schema.type);
+        assertTrue(app_schema.properties.hasKey("name"), "AppInfo should have 'name'");
+        assertTrue(app_schema.properties.hasKey("hidden"), "AppInfo should have 'hidden'");
+        assertTrue(app_schema.properties.hasKey("clients"), "AppInfo should have 'clients'");
+
+        # Verify clients field is an array with $ref to ClientInfo
+        hash<auto> clients_prop = app_schema.properties.clients;
+        assertEq("array", clients_prop.type, "clients should be array type");
+        assertEq("#/components/schemas/ClientInfo", clients_prop.items."\$ref",
+            "clients items should $ref ClientInfo");
+
+        # Verify ClientInfo has the correct properties
+        hash<auto> client_schema = spec.components.schemas.ClientInfo;
+        assertEq("object", client_schema.type);
+        assertTrue(client_schema.properties.hasKey("client"), "ClientInfo should have 'client'");
+        assertTrue(client_schema.properties.hasKey("client_id"), "ClientInfo should have 'client_id'");
+        assertTrue(client_schema.properties.hasKey("secret"), "ClientInfo should have 'secret'");
+
+        # Verify the list endpoint response uses array with $ref
+        hash<auto> list_response =
+            spec.paths{"/apps"}.get.responses."200".content."application/json".schema;
+        assertEq("array", list_response.type, "List response should be array");
+        assertEq("#/components/schemas/AppInfo", list_response.items."\$ref",
+            "List items should $ref AppInfo");
+
+        # Verify the detail endpoint response uses direct $ref
+        hash<auto> detail_response =
+            spec.paths{"/apps/{app}"}.get.responses."200".content."application/json".schema;
+        assertEq("#/components/schemas/AppDetailInfo", detail_response."\$ref",
+            "Detail response should use $ref to AppDetailInfo");
+    }
+
+    testAutoRegisterBodyParamSchemas() {
+        # Test that body params with named hash types auto-register component schemas
+        OpenApi3::OpenApi3SchemaGenerator gen({"title": "Body Param Test", "version": "1.0.0"});
+
+        # Create a POST method with a body param referencing a named type with children
+        hash<OpenApi3::SchemaBlockInfo> schema_info = makeSchemaInfo({
+            "summary": "Send message",
+            "params": (
+                makeParamInfo("content", "list<hash<ContentPart>>", "Message content parts", True, "body", 0),
+                makeParamInfo("type", "string", "Content type", True, "body", 2),
+                makeParamInfo("text", "*string", "Text content", False, "body", 2),
+                makeParamInfo("language", "*string", "Programming language", False, "body", 2),
+            ),
+            "return_info": makeReturnInfo("hash", "Message sent"),
+        });
+        gen.addMethod("/messages", makeMethodInfo("POST", "/messages", schema_info));
+
+        hash<auto> spec = gen.generate();
+
+        # ContentPart should be auto-registered from the body param
+        assertTrue(spec.components.schemas.hasKey("ContentPart"),
+            "ContentPart should be auto-registered from body param");
+
+        # Verify schema properties
+        hash<auto> cp_schema = spec.components.schemas.ContentPart;
+        assertEq("object", cp_schema.type);
+        assertTrue(cp_schema.properties.hasKey("type"), "ContentPart should have 'type'");
+        assertTrue(cp_schema.properties.hasKey("text"), "ContentPart should have 'text'");
+        assertTrue(cp_schema.properties.hasKey("language"), "ContentPart should have 'language'");
+        assertEq("string", cp_schema.properties.type.type);
+        assertEq(True, cp_schema.properties.text.nullable);
+    }
+
+    testExtractSchemaName() {
+        # Test direct hash types
+        assertEq("UserInfo", OpenApi3::OpenApi3SchemaGenerator::extractSchemaName("hash<UserInfo>"));
+        assertEq("UserInfo", OpenApi3::OpenApi3SchemaGenerator::extractSchemaName("hash UserInfo"));
+        assertEq("UserInfo", OpenApi3::OpenApi3SchemaGenerator::extractSchemaName("*hash<UserInfo>"));
+        assertEq("UserInfo", OpenApi3::OpenApi3SchemaGenerator::extractSchemaName("*hash UserInfo"));
+
+        # Test list of hash types
+        assertEq("UserInfo", OpenApi3::OpenApi3SchemaGenerator::extractSchemaName("list<hash<UserInfo>>"));
+        assertEq("UserInfo", OpenApi3::OpenApi3SchemaGenerator::extractSchemaName("list<hash UserInfo>"));
+        assertEq("UserInfo", OpenApi3::OpenApi3SchemaGenerator::extractSchemaName("*list<hash<UserInfo>>"));
+        assertEq("UserInfo", OpenApi3::OpenApi3SchemaGenerator::extractSchemaName("*list<hash UserInfo>"));
+
+        # Test nullable element types (list<*hash<TypeName>>)
+        assertEq("UserInfo", OpenApi3::OpenApi3SchemaGenerator::extractSchemaName("list<*hash<UserInfo>>"));
+        assertEq("UserInfo", OpenApi3::OpenApi3SchemaGenerator::extractSchemaName("*list<*hash<UserInfo>>"));
+
+        # Test qualified names (namespace::type)
+        assertEq("UserInfo", OpenApi3::OpenApi3SchemaGenerator::extractSchemaName("hash<MyModule::UserInfo>"));
+        assertEq("DeepType",
+            OpenApi3::OpenApi3SchemaGenerator::extractSchemaName("list<hash<Outer::Inner::DeepType>>"));
+
+        # Test non-named types return NOTHING
+        assertFalse(OpenApi3::OpenApi3SchemaGenerator::extractSchemaName("hash").val());
+        assertFalse(OpenApi3::OpenApi3SchemaGenerator::extractSchemaName("hash<auto>").val());
+        assertFalse(OpenApi3::OpenApi3SchemaGenerator::extractSchemaName("string").val());
+        assertFalse(OpenApi3::OpenApi3SchemaGenerator::extractSchemaName("list<string>").val());
+        assertFalse(OpenApi3::OpenApi3SchemaGenerator::extractSchemaName("").val());
     }
 }
