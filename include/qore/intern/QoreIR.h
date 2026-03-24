@@ -1646,12 +1646,13 @@ public:
 //! Marks the exit from a scope - triggers execution of on_exit handlers registered since matching ScopeEnter
 class QoreIRScopeExitInstruction : public QoreIRInstruction {
 public:
-    explicit QoreIRScopeExitInstruction(uint32_t n_scope_id, bool n_is_error = false)
-            : QoreIRInstruction(QoreIROpcode::ScopeExit), scope_id(n_scope_id), is_error(n_is_error) {
+    explicit QoreIRScopeExitInstruction(uint32_t n_scope_id, bool n_is_error = false, bool n_inline_lowered = false)
+            : QoreIRInstruction(QoreIROpcode::ScopeExit), scope_id(n_scope_id), is_error(n_is_error), inline_lowered(n_inline_lowered) {
     }
 
     uint32_t scope_id = 0;  //!< scope ID from matching ScopeEnter
     bool is_error = false;  //!< true if exiting due to an exception
+    bool inline_lowered = false;  //!< true if handlers were already inlined; just flush runtime vector
 };
 
 class QoreIRContextInstruction : public QoreIRInstruction {

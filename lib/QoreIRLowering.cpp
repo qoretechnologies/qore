@@ -481,7 +481,9 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             // because execution continues after the loop, but on return the function
             // exits immediately and the caller handles cleanup.
             // Also handles RefForeach cleanup (record + finalize without fill remaining).
-            emitBlockCleanups(0, false, CF_SKIP_LVARS);
+            if (!emitBlockCleanups(0, error, false, CF_SKIP_LVARS)) {
+                return false;
+            }
             // Emit CatchCleanup for all active catch scopes before returning
             for (int i = 0; i < catch_cleanup_depth; ++i) {
                 builder.createCatchCleanup(stmt->loc);
@@ -501,7 +503,9 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         }
         // Emit block cleanups for all active scopes (fires on_exit handlers).
         // Same as ReturnNothing — CF_SKIP_LVARS, and handles RefForeach cleanup.
-        emitBlockCleanups(0, false, CF_SKIP_LVARS);
+        if (!emitBlockCleanups(0, error, false, CF_SKIP_LVARS)) {
+            return false;
+        }
         // Emit CatchCleanup for all active catch scopes before returning
         for (int i = 0; i < catch_cleanup_depth; ++i) {
             builder.createCatchCleanup(stmt->loc);
@@ -1075,10 +1079,12 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         return true;
     }
     if (auto* on_block_exit_stmt = dynamic_cast<const OnBlockExitStatement*>(stmt)) {
-        auto* inst = builder.createOnBlockExit(on_block_exit_stmt, stmt->loc);
-        // Register handler for inline lowering at block exit points
-        // Handlers are stored in block_handlers and will be lowered inline at each exit instruction
-        // This allows natural scope access to parent block's variables without closure overhead
+        // Phase 3a: Register handler for inline lowering
+        // For now, only register OBE_Error handlers in runtime vector to avoid double execution
+        // OBE_Unconditional and OBE_Success will be inlined at compile time
+        // TODO: Phase 3b - resolve double-execution issue when inlining with runtime registration
+
+        // Register in block_handlers for inline lowering
         StatementBlock* handler_code = on_block_exit_stmt->getCode();
         if (handler_code) {
             block_handlers.emplace_back(InlineHandler{
@@ -1086,6 +1092,11 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                 handler_code,
                 stmt->loc
             });
+        }
+
+        // Only register OBE_Error handlers in runtime vector
+        if (on_block_exit_stmt->getType() == OBE_Error) {
+            builder.createOnBlockExit(on_block_exit_stmt, stmt->loc);
         }
         return true;
     }
@@ -1207,7 +1218,9 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         }
         // Emit interleaved ScopeExit and UninstantiateLocal for blocks entered
         // since the loop started (matches AST mode's destruction ordering)
-        emitBlockCleanups(target_cleanup_depth, false);
+        if (!emitBlockCleanups(target_cleanup_depth, error, false)) {
+            return false;
+        }
         // Emit CatchCleanup for catch scopes entered since the loop started
         for (int i = 0; i < catch_cleanup_depth - target_catch_depth; ++i) {
             builder.createCatchCleanup(stmt->loc);
@@ -1237,7 +1250,9 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         }
         // Emit interleaved ScopeExit and UninstantiateLocal for blocks entered
         // since the loop started (matches AST mode's destruction ordering)
-        emitBlockCleanups(target_cleanup_depth, false);
+        if (!emitBlockCleanups(target_cleanup_depth, error, false)) {
+            return false;
+        }
         // Emit CatchCleanup for catch scopes entered since the loop started
         for (int i = 0; i < catch_cleanup_depth - target_catch_depth; ++i) {
             builder.createCatchCleanup(stmt->loc);
@@ -1712,7 +1727,8 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
     }
 
     // Push handler stack to track which handlers are registered in this block
-    handler_stack.push(block_handlers.size());
+    size_t block_handler_start = block_handlers.size();
+    handler_stack.push(block_handler_start);
 
     // Get the block's local variables for cleanup
     const LVList* lvars = block->getLVList();
@@ -1741,6 +1757,7 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
             BlockCleanupEntry scope_entry;
             scope_entry.type = BlockCleanupEntry::Scope;
             scope_entry.scope_id = scope_id;
+            scope_entry.handler_start = block_handler_start;  // Record handler start for inline lowering
             cleanup_stack.push_back(scope_entry);
         }
         builder.createScopeEnter(scope_id);
@@ -1767,16 +1784,18 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
         }
     }
 
-    // Pop handler stack and restore block_handlers to previous size
-    size_t block_handler_start = handler_stack.top();
+    // Pop handler stack
     handler_stack.pop();
 
-    // Emit ScopeExit if we have on_exit handlers and didn't terminate early
-    // (early termination like return/break/continue will handle ScopeExit themselves
-    // via emitBlockCleanups)
+    // At fall-through (normal exit), inline handlers and emit flush ScopeExit
     if (has_on_block_exit) {
         if (!terminated) {
-            builder.createScopeExit(scope_id, false);
+            // Phase 3b: Inline non-error handlers
+            if (!lowerHandlersAtExit(false, error, block_handler_start)) {
+                return false;
+            }
+            // Emit flush-mode ScopeExit (handlers were inlined, skip runtime execution)
+            builder.createScopeExit(scope_id, false, nullptr, true);
         }
         scope_stack.pop_back();
         cleanup_stack.pop_back();
@@ -1803,7 +1822,7 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
     return true;
 }
 
-void QoreIRLowering::emitBlockCleanups(size_t target_depth, bool is_error, unsigned flags) {
+bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, bool is_error, unsigned flags) {
     // Emit interleaved cleanup instructions from innermost to outermost block until
     // we reach the target depth.  Handles: ScopeExit (on_exit handlers), Lvars
     // (block-scoped locals), RefForeachRecord (pop $#, load var, record), and
@@ -1811,9 +1830,20 @@ void QoreIRLowering::emitBlockCleanups(size_t target_depth, bool is_error, unsig
     for (size_t i = cleanup_stack.size(); i > target_depth; --i) {
         const BlockCleanupEntry& entry = cleanup_stack[i - 1];
         switch (entry.type) {
-            case BlockCleanupEntry::Scope:
-                builder.createScopeExit(entry.scope_id, is_error);
+            case BlockCleanupEntry::Scope: {
+                // Phase 3a: On non-error paths, inline non-error handlers
+                // On error paths, let runtime fire OBE_Error handlers
+                if (!is_error) {
+                    // Inline OBE_Unconditional and OBE_Success handlers
+                    if (!lowerHandlersAtExit(false, error, entry.handler_start)) {
+                        return false;
+                    }
+                }
+                // Always emit ScopeExit - with inline_lowered=true on non-error (handlers inlined)
+                // or inline_lowered=false on error (let runtime fire OBE_Error handlers)
+                builder.createScopeExit(entry.scope_id, is_error, entry.loc, !is_error);
                 break;
+            }
             case BlockCleanupEntry::Lvars:
                 if (!(flags & CF_SKIP_LVARS)) {
                     assert(entry.lvars);
@@ -1841,6 +1871,7 @@ void QoreIRLowering::emitBlockCleanups(size_t target_depth, bool is_error, unsig
             }
         }
     }
+    return true;
 }
 
 bool QoreIRLowering::shouldRunHandler(const InlineHandler& handler, bool is_error) {

@@ -1038,8 +1038,8 @@ QoreIRScopeEnterInstruction* QoreIRBuilder::createScopeEnter(uint32_t scope_id, 
 }
 
 QoreIRScopeExitInstruction* QoreIRBuilder::createScopeExit(uint32_t scope_id, bool is_error,
-        const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRScopeExitInstruction>(scope_id, is_error);
+        const QoreProgramLocation* loc, bool inline_lowered) {
+    auto inst = block->appendInstruction<QoreIRScopeExitInstruction>(scope_id, is_error, inline_lowered);
     inst->loc = loc;
     return inst;
 }

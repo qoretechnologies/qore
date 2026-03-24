@@ -260,16 +260,18 @@ private:
         CF_FILL_REMAINING = 2,   //!< fill remaining elements in ref foreach (for break)
     };
 
-    //! Emit block cleanup instructions (ScopeExit + UninstantiateLocal + RefForeach)
+    //! Emit block cleanup instructions (handler lowering + ScopeExit + UninstantiateLocal + RefForeach)
     //! from innermost to target depth
     /** Used by return/break/continue to properly unwind on_exit handlers, block-scoped
      *  local variables, and reference foreach state in the correct interleaved order
-     *  matching AST mode.
+     *  matching AST mode. Inlines handler code when handlers have been lowered.
      *  @param target_depth the cleanup_stack depth to unwind to
+     *  @param error output string for error messages
      *  @param is_error true if exiting due to an exception
      *  @param flags combination of CleanupFlags
+     *  @return false if lowering failed
      */
-    void emitBlockCleanups(size_t target_depth, bool is_error = false, unsigned flags = CF_NONE);
+    bool emitBlockCleanups(size_t target_depth, std::string& error, bool is_error = false, unsigned flags = CF_NONE);
 
     //! Determine if a handler should execute for a given exit type
     /** Handlers are filtered by type:
@@ -304,6 +306,7 @@ private:
         enum Type { Scope, Lvars, RefForeachRecord, RefForeach };
         Type type;
         uint32_t scope_id = 0;                    //!< scope ID for Scope entries
+        size_t handler_start = 0;                 //!< index into block_handlers at scope entry (for inline lowering)
         const LVList* lvars = nullptr;             //!< local variables for Lvars entries
         const QoreProgramLocation* loc = nullptr;  //!< location for cleanup instructions
         QoreIRValue ref_foreach_state;             //!< state handle for RefForeach/RefForeachRecord

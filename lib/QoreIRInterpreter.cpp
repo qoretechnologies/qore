@@ -4961,12 +4961,12 @@ load_local_done:
             }
             case QoreIROpcode::ScopeExit: {
                 auto* scope_inst = static_cast<QoreIRScopeExitInstruction*>(inst);
-                // Execute handlers registered since matching ScopeEnter
+                // Execute handlers registered since matching ScopeEnter (only if not inline-lowered)
                 if (!scope_stack.empty()) {
                     size_t scope_start = scope_stack.back();
                     scope_stack.pop_back();
-                    // Execute handlers in reverse order (LIFO) from current to scope_start
-                    if (on_block_exit_handlers.size() > scope_start) {
+                    // Skip handler execution if inline_lowered=true; just flush the vector
+                    if (!scope_inst->inline_lowered && on_block_exit_handlers.size() > scope_start) {
                         ExceptionSink obe_xsink;
                         bool error = scope_inst->is_error || (xsink && xsink->isException());
                         for (size_t i = on_block_exit_handlers.size(); i > scope_start; --i) {
@@ -5007,12 +5007,15 @@ load_local_done:
                                 }
                             }
                         }
-                        // Remove executed handlers
-                        on_block_exit_handlers.resize(scope_start);
-                        // Handler execution (both AST and compiled IR) can modify globals,
-                        // threadlocals, closures, and non-IR-only locals through the TLS
-                        // variable stack.  IR-only locals exist only in the slot cache and
-                        // are unreachable by handlers, so they stay valid.
+                        invalidateExternalCaches();
+                    }
+                    // Always remove executed handlers (or all handlers if inline_lowered=true)
+                    on_block_exit_handlers.resize(scope_start);
+                    // Handler execution (both AST and compiled IR) can modify globals,
+                    // threadlocals, closures, and non-IR-only locals through the TLS
+                    // variable stack.  IR-only locals exist only in the slot cache and
+                    // are unreachable by handlers, so they stay valid.
+                    if (!scope_inst->inline_lowered) {
                         invalidateExternalCaches();
                     }
                 }

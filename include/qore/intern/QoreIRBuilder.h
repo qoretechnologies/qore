@@ -257,7 +257,7 @@ public:
         const QoreProgramLocation* loc = nullptr);
     QoreIRScopeEnterInstruction* createScopeEnter(uint32_t scope_id, const QoreProgramLocation* loc = nullptr);
     QoreIRScopeExitInstruction* createScopeExit(uint32_t scope_id, bool is_error = false,
-        const QoreProgramLocation* loc = nullptr);
+        const QoreProgramLocation* loc = nullptr, bool inline_lowered = false);
     QoreIRContextInstruction* createContext(const ContextStatement* stmt, const QoreProgramLocation* loc = nullptr);
     QoreIRSummarizeInstruction* createSummarize(const SummarizeStatement* stmt,
         const QoreProgramLocation* loc = nullptr);
