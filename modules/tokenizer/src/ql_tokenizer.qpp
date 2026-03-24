@@ -24,4 +24,8 @@ hashdecl Qore::Tokenizer::TokenizerEncoding {
     *list<int> attention_mask;
     //! String tokens
     *list<string> tokens;
+    //! Byte-level offset mapping: each entry is (start, end) in the original text
+    *list<list<int>> offset_mapping;
+    //! Special tokens mask (1 = special token, 0 = content token)
+    *list<int> special_tokens_mask;
 }

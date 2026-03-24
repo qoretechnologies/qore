@@ -20,6 +20,13 @@
 
 namespace QoreTokenizer {
 
+//! A token ID with byte-level offsets within the pre-token string
+struct TokenWithOffset {
+    int id;
+    size_t start;  //!< byte offset of token start within the pre-token
+    size_t end;    //!< byte offset of token end within the pre-token
+};
+
 //! Abstract base class for tokenizer models
 class AbstractTokenizerModel {
 public:
@@ -48,6 +55,21 @@ public:
 
     //! Returns the full vocabulary as a token-to-id mapping
     virtual std::unordered_map<std::string, int> getVocab() const = 0;
+
+    //! Tokenizes with byte-level offset tracking within the pre-token
+    /** Default implementation calls tokenize() and assigns full-span offsets.
+        Override for accurate per-token offsets.
+    */
+    virtual std::vector<TokenWithOffset> tokenizeWithOffsets(
+            const std::string& pre_token) const {
+        auto ids = tokenize(pre_token);
+        std::vector<TokenWithOffset> result;
+        result.reserve(ids.size());
+        for (int id : ids) {
+            result.push_back({id, 0, pre_token.size()});
+        }
+        return result;
+    }
 
     //! Factory: creates a model from a parsed tokenizer.json "model" config hash
     /** Dispatches on config.type:

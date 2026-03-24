@@ -87,14 +87,21 @@ private:
     };
     std::vector<AddedToken> added_tokens;
 
+    //! Internal encoding result with offsets
+    struct InternalEncoding {
+        std::vector<int> ids;
+        std::vector<std::string> tokens;
+        std::vector<std::pair<size_t, size_t>> offsets;
+    };
+
     //! Internal: tokenize a single pre-token through the model
     std::vector<int> tokenizePreToken(const std::string& pre_token) const;
 
     //! Internal: encode a text segment through normalize + pre-tokenize + model
-    std::vector<int> encodeSegment(const std::string& text) const;
+    InternalEncoding encodeSegment(const std::string& text) const;
 
     //! Internal: encode text with added token splitting
-    std::vector<int> encodeText(const std::string& text) const;
+    InternalEncoding encodeText(const std::string& text) const;
 };
 
 } // namespace QoreTokenizer

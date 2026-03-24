@@ -112,41 +112,54 @@ std::vector<int> QoreHFTokenizer::tokenizePreToken(const std::string& pre_token)
 }
 
 // Internal: tokenize a text segment through normalize + pre-tokenize + model
-std::vector<int> QoreHFTokenizer::encodeSegment(const std::string& text) const {
+QoreHFTokenizer::InternalEncoding QoreHFTokenizer::encodeSegment(
+        const std::string& text) const {
+    InternalEncoding result;
     std::string normalized = text;
 
-    // Step 1: Normalize
+    // Step 1: Normalize (note: offsets are best-effort when normalizer changes length)
     if (normalizer) {
         normalized = normalizer->normalize(normalized);
     }
 
-    // Step 2: Pre-tokenize + model tokenize
-    std::vector<int> all_ids;
-
+    // Step 2: Pre-tokenize + model tokenize with offset tracking
     if (pre_tokenizer) {
         auto pre_tokens = pre_tokenizer->pretokenize(normalized);
         for (const auto& pt : pre_tokens) {
-            auto ids = tokenizePreToken(pt.text);
-            all_ids.insert(all_ids.end(), ids.begin(), ids.end());
+            if (model) {
+                auto toks = model->tokenizeWithOffsets(pt.text);
+                for (const auto& t : toks) {
+                    result.ids.push_back(t.id);
+                    result.tokens.push_back(model->idToToken(t.id));
+                    // Compose: pre-token offset + model-internal offset
+                    result.offsets.push_back({pt.start + t.start, pt.start + t.end});
+                }
+            }
         }
-    } else {
-        all_ids = tokenizePreToken(normalized);
+    } else if (model) {
+        auto toks = model->tokenizeWithOffsets(normalized);
+        for (const auto& t : toks) {
+            result.ids.push_back(t.id);
+            result.tokens.push_back(model->idToToken(t.id));
+            result.offsets.push_back({t.start, t.end});
+        }
     }
 
-    return all_ids;
+    return result;
 }
 
-std::vector<int> QoreHFTokenizer::encodeText(const std::string& text) const {
+QoreHFTokenizer::InternalEncoding QoreHFTokenizer::encodeText(
+        const std::string& text) const {
     if (added_tokens.empty()) {
         return encodeSegment(text);
     }
 
     // Split text on added tokens, tokenize segments between them
-    std::vector<int> all_ids;
+    InternalEncoding result;
     std::string remaining = text;
+    size_t base_offset = 0;  // tracks position in original text
 
     while (!remaining.empty()) {
-        // Find the earliest occurring added token in remaining text
         size_t best_pos = std::string::npos;
         size_t best_len = 0;
         int best_id = -1;
@@ -165,27 +178,41 @@ std::vector<int> QoreHFTokenizer::encodeText(const std::string& text) const {
         }
 
         if (best_pos == std::string::npos) {
-            // No added tokens found — tokenize the rest normally
-            auto ids = encodeSegment(remaining);
-            all_ids.insert(all_ids.end(), ids.begin(), ids.end());
+            auto seg = encodeSegment(remaining);
+            // Adjust offsets by base_offset
+            for (auto& off : seg.offsets) {
+                off.first += base_offset;
+                off.second += base_offset;
+            }
+            result.ids.insert(result.ids.end(), seg.ids.begin(), seg.ids.end());
+            result.tokens.insert(result.tokens.end(), seg.tokens.begin(), seg.tokens.end());
+            result.offsets.insert(result.offsets.end(), seg.offsets.begin(), seg.offsets.end());
             break;
         }
 
-        // Tokenize text before the added token
         if (best_pos > 0) {
             std::string before = remaining.substr(0, best_pos);
-            auto ids = encodeSegment(before);
-            all_ids.insert(all_ids.end(), ids.begin(), ids.end());
+            auto seg = encodeSegment(before);
+            for (auto& off : seg.offsets) {
+                off.first += base_offset;
+                off.second += base_offset;
+            }
+            result.ids.insert(result.ids.end(), seg.ids.begin(), seg.ids.end());
+            result.tokens.insert(result.tokens.end(), seg.tokens.begin(), seg.tokens.end());
+            result.offsets.insert(result.offsets.end(), seg.offsets.begin(), seg.offsets.end());
         }
 
-        // Insert the added token's ID directly
-        all_ids.push_back(best_id);
+        // Insert the added token with its offset in the original text
+        result.ids.push_back(best_id);
+        result.tokens.push_back(model ? model->idToToken(best_id) : "");
+        result.offsets.push_back({base_offset + best_pos,
+            base_offset + best_pos + best_len});
 
-        // Continue after the added token
+        base_offset += best_pos + best_len;
         remaining = remaining.substr(best_pos + best_len);
     }
 
-    return all_ids;
+    return result;
 }
 
 QoreHashNode* QoreHFTokenizer::encode(const QoreStringNode* text,
@@ -200,58 +227,48 @@ QoreHashNode* QoreHFTokenizer::encode(const QoreStringNode* text,
 
     // Encode first text
     std::string text_str = text ? text->c_str() : "";
-    std::vector<int> ids_a = encodeText(text_str);
+    InternalEncoding enc_a = encodeText(text_str);
 
     // Encode second text (optional)
-    std::vector<int> ids_b;
+    InternalEncoding enc_b;
     bool has_pair = false;
     if (text_pair && text_pair->size() > 0) {
-        ids_b = encodeText(text_pair->c_str());
+        enc_b = encodeText(text_pair->c_str());
         has_pair = true;
     }
 
-    // Step 3: Post-process (add special tokens)
-    std::vector<int> final_ids;
-    std::vector<int> type_ids;
-    std::vector<std::string> tokens;
-
-    // Build token strings for post-processing
-    std::vector<std::string> tokens_a;
-    if (model) {
-        for (int id : ids_a) {
-            tokens_a.push_back(model->idToToken(id));
-        }
-    }
-    std::vector<std::string> tokens_b_str;
-    if (has_pair && model) {
-        for (int id : ids_b) {
-            tokens_b_str.push_back(model->idToToken(id));
-        }
-    }
+    // Step 3: Post-process (add special tokens) with offset tracking
+    EncodingResult post_result;
 
     if (post_processor && add_special_tokens) {
-        auto result = post_processor->process(ids_a,
-            has_pair ? ids_b : std::vector<int>(),
-            tokens_a,
-            has_pair ? tokens_b_str : std::vector<std::string>(),
+        post_result = post_processor->processWithOffsets(
+            enc_a.ids,
+            has_pair ? enc_b.ids : std::vector<int>(),
+            enc_a.tokens,
+            has_pair ? enc_b.tokens : std::vector<std::string>(),
+            enc_a.offsets,
+            has_pair ? enc_b.offsets : std::vector<std::pair<size_t, size_t>>(),
             true);
-        final_ids = std::move(result.ids);
-        type_ids = std::move(result.type_ids);
-        tokens = std::move(result.tokens);
     } else {
-        final_ids = std::move(ids_a);
-        tokens = std::move(tokens_a);
+        post_result.ids = std::move(enc_a.ids);
+        post_result.tokens = std::move(enc_a.tokens);
+        post_result.offsets = std::move(enc_a.offsets);
         if (has_pair) {
-            final_ids.insert(final_ids.end(), ids_b.begin(), ids_b.end());
-            tokens.insert(tokens.end(), tokens_b_str.begin(), tokens_b_str.end());
+            post_result.ids.insert(post_result.ids.end(),
+                enc_b.ids.begin(), enc_b.ids.end());
+            post_result.tokens.insert(post_result.tokens.end(),
+                enc_b.tokens.begin(), enc_b.tokens.end());
+            post_result.offsets.insert(post_result.offsets.end(),
+                enc_b.offsets.begin(), enc_b.offsets.end());
         }
-        type_ids.resize(final_ids.size(), 0);
+        post_result.type_ids.resize(post_result.ids.size(), 0);
+        post_result.special_tokens_mask.resize(post_result.ids.size(), 0);
     }
 
-    // Build token strings if not already set
-    if (tokens.empty() && model) {
-        for (int id : final_ids) {
-            tokens.push_back(model->idToToken(id));
+    // Ensure tokens are populated
+    if (post_result.tokens.empty() && model) {
+        for (int id : post_result.ids) {
+            post_result.tokens.push_back(model->idToToken(id));
         }
     }
 
@@ -260,31 +277,48 @@ QoreHashNode* QoreHFTokenizer::encode(const QoreStringNode* text,
 
     // input_ids
     ReferenceHolder<QoreListNode> id_list(new QoreListNode(bigIntTypeInfo), xsink);
-    for (int id : final_ids) {
+    for (int id : post_result.ids) {
         id_list->push(id, xsink);
     }
     result->setKeyValue("input_ids", id_list.release(), xsink);
 
     // token_type_ids
     ReferenceHolder<QoreListNode> type_list(new QoreListNode(bigIntTypeInfo), xsink);
-    for (int tid : type_ids) {
+    for (int tid : post_result.type_ids) {
         type_list->push(tid, xsink);
     }
     result->setKeyValue("token_type_ids", type_list.release(), xsink);
 
-    // attention_mask (all 1s)
+    // attention_mask (all 1s for real tokens)
     ReferenceHolder<QoreListNode> mask_list(new QoreListNode(bigIntTypeInfo), xsink);
-    for (size_t i = 0; i < final_ids.size(); ++i) {
+    for (size_t i = 0; i < post_result.ids.size(); ++i) {
         mask_list->push(1, xsink);
     }
     result->setKeyValue("attention_mask", mask_list.release(), xsink);
 
     // tokens
     ReferenceHolder<QoreListNode> tok_list(new QoreListNode(stringTypeInfo), xsink);
-    for (const auto& t : tokens) {
+    for (const auto& t : post_result.tokens) {
         tok_list->push(new QoreStringNode(t), xsink);
     }
     result->setKeyValue("tokens", tok_list.release(), xsink);
+
+    // offset_mapping — list of (start, end) pairs
+    ReferenceHolder<QoreListNode> off_list(new QoreListNode(autoTypeInfo), xsink);
+    for (const auto& off : post_result.offsets) {
+        ReferenceHolder<QoreListNode> pair(new QoreListNode(bigIntTypeInfo), xsink);
+        pair->push((int64)off.first, xsink);
+        pair->push((int64)off.second, xsink);
+        off_list->push(pair.release(), xsink);
+    }
+    result->setKeyValue("offset_mapping", off_list.release(), xsink);
+
+    // special_tokens_mask
+    ReferenceHolder<QoreListNode> stm_list(new QoreListNode(bigIntTypeInfo), xsink);
+    for (int m : post_result.special_tokens_mask) {
+        stm_list->push(m, xsink);
+    }
+    result->setKeyValue("special_tokens_mask", stm_list.release(), xsink);
 
     return result.release();
 }

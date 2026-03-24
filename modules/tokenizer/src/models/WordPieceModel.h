@@ -35,6 +35,8 @@ public:
     //! Tokenizes a pre-token using greedy longest-prefix matching
     std::vector<int> tokenize(const std::string& pre_token) const override;
 
+    std::vector<TokenWithOffset> tokenizeWithOffsets(
+        const std::string& pre_token) const override;
     int vocabSize() const override;
     std::string idToToken(int id) const override;
     int tokenToId(const std::string& token) const override;

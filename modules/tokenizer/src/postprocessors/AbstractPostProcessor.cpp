@@ -48,4 +48,60 @@ std::unique_ptr<AbstractPostProcessor> AbstractPostProcessor::fromConfig(
     }
 }
 
+EncodingResult AbstractPostProcessor::processWithOffsets(
+        const std::vector<int>& ids_a,
+        const std::vector<int>& ids_b,
+        const std::vector<std::string>& tokens_a,
+        const std::vector<std::string>& tokens_b,
+        const std::vector<std::pair<size_t, size_t>>& offsets_a,
+        const std::vector<std::pair<size_t, size_t>>& offsets_b,
+        bool add_special) const {
+    // Call the base process() to get ids, type_ids, tokens
+    EncodingResult result = process(ids_a, ids_b, tokens_a, tokens_b, add_special);
+
+    // Now populate offsets and special_tokens_mask by matching against input IDs
+    // Strategy: walk through result.ids, matching against ids_a then ids_b
+    size_t a_pos = 0;
+    size_t b_pos = 0;
+    result.offsets.reserve(result.ids.size());
+    result.special_tokens_mask.reserve(result.ids.size());
+
+    for (size_t i = 0; i < result.ids.size(); ++i) {
+        int id = result.ids[i];
+        int type_id = i < result.type_ids.size() ? result.type_ids[i] : 0;
+
+        // Check if this is a sequence token from A or B
+        bool found = false;
+        if (type_id == 0 && a_pos < ids_a.size() && id == ids_a[a_pos]) {
+            // Token from sequence A
+            if (a_pos < offsets_a.size()) {
+                result.offsets.push_back(offsets_a[a_pos]);
+            } else {
+                result.offsets.push_back({0, 0});
+            }
+            result.special_tokens_mask.push_back(0);
+            ++a_pos;
+            found = true;
+        } else if (type_id == 1 && b_pos < ids_b.size() && id == ids_b[b_pos]) {
+            // Token from sequence B
+            if (b_pos < offsets_b.size()) {
+                result.offsets.push_back(offsets_b[b_pos]);
+            } else {
+                result.offsets.push_back({0, 0});
+            }
+            result.special_tokens_mask.push_back(0);
+            ++b_pos;
+            found = true;
+        }
+
+        if (!found) {
+            // This is a special token (CLS, SEP, etc.)
+            result.offsets.push_back({0, 0});
+            result.special_tokens_mask.push_back(1);
+        }
+    }
+
+    return result;
+}
+
 } // namespace QoreTokenizer

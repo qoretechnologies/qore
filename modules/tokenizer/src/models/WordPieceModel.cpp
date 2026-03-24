@@ -93,13 +93,26 @@ WordPieceModel::WordPieceModel(const QoreHashNode* config, ExceptionSink* xsink)
 }
 
 std::vector<int> WordPieceModel::tokenize(const std::string& pre_token) const {
+    auto with_offsets = tokenizeWithOffsets(pre_token);
+    std::vector<int> ids;
+    ids.reserve(with_offsets.size());
+    for (const auto& t : with_offsets) {
+        ids.push_back(t.id);
+    }
+    return ids;
+}
+
+std::vector<TokenWithOffset> WordPieceModel::tokenizeWithOffsets(
+        const std::string& pre_token) const {
     if (pre_token.empty()) {
         return {};
     }
 
-    // Count UTF-8 characters
+    // Count UTF-8 characters and build byte offset table
+    std::vector<size_t> char_offsets;
     size_t char_count = 0;
     for (size_t i = 0; i < pre_token.size(); ) {
+        char_offsets.push_back(i);
         uint8_t c = pre_token[i];
         int len = 1;
         if ((c & 0xE0) == 0xC0) {
@@ -115,38 +128,18 @@ std::vector<int> WordPieceModel::tokenize(const std::string& pre_token) const {
         ++char_count;
         i += len;
     }
+    char_offsets.push_back(pre_token.size());
 
     // If the word is too long, return unk_token
     if ((int)char_count > max_input_chars_per_word) {
         int unk_id = tokenToId(unk_token);
         if (unk_id >= 0) {
-            return {unk_id};
+            return {{unk_id, 0, pre_token.size()}};
         }
         return {};
     }
 
-    // Build a list of UTF-8 character byte offsets for substring extraction
-    std::vector<size_t> char_offsets;
-    char_offsets.reserve(char_count + 1);
-    for (size_t i = 0; i < pre_token.size(); ) {
-        char_offsets.push_back(i);
-        uint8_t c = pre_token[i];
-        int len = 1;
-        if ((c & 0xE0) == 0xC0) {
-            len = 2;
-        } else if ((c & 0xF0) == 0xE0) {
-            len = 3;
-        } else if ((c & 0xF8) == 0xF0) {
-            len = 4;
-        }
-        if (i + len > pre_token.size()) {
-            len = 1;
-        }
-        i += len;
-    }
-    char_offsets.push_back(pre_token.size());
-
-    std::vector<int> output_ids;
+    std::vector<TokenWithOffset> output;
     size_t start_char = 0;
     bool is_bad = false;
 
@@ -165,7 +158,7 @@ std::vector<int> WordPieceModel::tokenize(const std::string& pre_token) const {
 
             auto it = vocab.find(substr);
             if (it != vocab.end()) {
-                output_ids.push_back(it->second);
+                output.push_back({it->second, byte_start, byte_end});
                 found = true;
                 break;
             }
@@ -180,15 +173,14 @@ std::vector<int> WordPieceModel::tokenize(const std::string& pre_token) const {
     }
 
     if (is_bad) {
-        // Return unk_token for the entire word
         int unk_id = tokenToId(unk_token);
         if (unk_id >= 0) {
-            return {unk_id};
+            return {{unk_id, 0, pre_token.size()}};
         }
         return {};
     }
 
-    return output_ids;
+    return output;
 }
 
 int WordPieceModel::vocabSize() const {
