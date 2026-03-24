@@ -282,18 +282,14 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
         }
         if (vtype == VT_LOCAL || vtype == VT_CLOSURE || vtype == VT_LOCAL_TS) {
             LocalVar* lvar = vrn->ref.id;
-            if (lvar) {
-                // Mark variable as assigned during parse phase
-                lvar->parseAssigned();
-                // Update narrowed type for auto variables (handles both typed and untyped assignments)
-                if (lvar->isAutoType()) {
-                    lvar->parseSetNarrowedType(narrow_type, loc);
-                }
+            if (lvar && lvar->isAutoType() && QoreTypeInfo::hasType(narrow_type)) {
+                // Direct assignment replaces the narrowed type, store location for error messages
+                lvar->parseSetNarrowedType(narrow_type, loc);
             }
         } else if (vtype == VT_GLOBAL || vtype == VT_THREAD_LOCAL) {
             Var* gvar = vrn->ref.var;
-            // Update narrowed type for auto variables
-            if (gvar && gvar->isAutoType()) {
+            if (gvar && gvar->isAutoType() && QoreTypeInfo::hasType(narrow_type)) {
+                // Direct assignment replaces the narrowed type, store location for error messages
                 gvar->parseSetNarrowedType(narrow_type, loc);
             }
         }

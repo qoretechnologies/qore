@@ -3024,6 +3024,53 @@ static int Program::getCapabilityMask() [flags=RET_VALUE_ONLY] {
     return runtime_get_parse_options().getLo();
 }
 
+//! Checks if a parse option is set in the current Program by name
+/** @param name the name of the parse option to check (e.g., "broken-soft-types", "require-types", etc.)
+
+    @return @ref TRUE if the parse option is set in the current Program, @ref FALSE otherwise
+
+    @throw PARSE-OPTION-ERROR if the parse option name is not recognized
+
+    @note This function checks both standard (lo-word) and extended (hi-word) parse options
+
+    @par Example:
+    @code{.py}
+if (Program::hasParseOption("broken-soft-types")) {
+    printf("broken-soft-types is enabled\n");
+}
+    @endcode
+
+    @since %Qore 2.3
+ */
+static bool Program::hasParseOption(string name) [flags=CONSTANT] {
+    QoreParseOptions opts = runtime_get_parse_options();
+    QoreParseOptions opt = ParseOptionMap::find_code(name->c_str());
+    if (opt == QoreParseOptions(-1)) {
+        xsink->raiseException("PARSE-OPTION-ERROR", "unknown parse option: '%s'", name->c_str());
+        return false;
+    }
+    return opts.hasAll(opt);
+}
+
+//! Returns the full parse options as a ParseOptions object (including extended options)
+/** @return a @ref ParseOptions object with all parse options for the current Program
+
+    @par Example:
+    @code{.py}
+ParseOptions po = Program::getFullParseOptions();
+if (po.hasAny("broken-soft-types")) {
+    printf("broken-soft-types is enabled\n");
+}
+    @endcode
+
+    @since %Qore 2.3
+ */
+static ParseOptions Program::getFullParseOptions() [flags=CONSTANT] {
+    QoreObject* obj = new QoreObject(QC_PARSEOPTIONS, getProgram());
+    obj->setPrivate(CID_PARSEOPTIONS, new QoreParseOptionsData(runtime_get_parse_options()));
+    return obj;
+}
+
 //! Retrieves all @ref conditional_parsing "parse defines" in the current Program
 /** @return the hash of values of all @ref conditional_parsing "parse defines" in the current Program
 
