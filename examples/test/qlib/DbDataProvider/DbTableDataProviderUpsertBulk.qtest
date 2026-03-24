@@ -24,8 +24,6 @@
 */
 
 %modern
-%require-types
-%strict-args
 %enable-all-warnings
 
 %requires ../../../../qlib/QUnit.qm

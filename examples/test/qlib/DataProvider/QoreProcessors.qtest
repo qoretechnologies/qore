@@ -22,8 +22,6 @@
 # DEALINGS IN THE SOFTWARE.
 
 %modern
-%strict-args
-%require-types
 %enable-all-warnings
 
 %requires ../../../../qlib/Util.qm
