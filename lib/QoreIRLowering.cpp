@@ -1076,9 +1076,13 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
     }
     if (auto* on_block_exit_stmt = dynamic_cast<const OnBlockExitStatement*>(stmt)) {
         auto* inst = builder.createOnBlockExit(on_block_exit_stmt, stmt->loc);
-        // Try to lower handler body as a separate IR function for native execution
-        StatementBlock* handler_code = on_block_exit_stmt->getCode();
-        if (handler_code) {
+        // NOTE: Handler IR compilation is disabled due to complexity of implementing closure variable capture
+        // for handler functions that need access to parent scope variables. AST fallback works correctly
+        // and has proper access to parent scope. Full closure support for handlers is a TODO for future work.
+        // To implement: would need to pass parent frame's local values as closure parameters to handler_ir,
+        // requiring tracking of variable references and proper closure vector construction at execution time.
+        StatementBlock* handler_code = nullptr;  // DISABLED: on_block_exit_stmt->getCode();
+        if (handler_code && false) {  // Disabled handler IR compilation
             static std::atomic<uint64_t> handler_counter{0};
             std::string handler_name = "on_block_exit_handler_"
                 + std::to_string(handler_counter.fetch_add(1));
