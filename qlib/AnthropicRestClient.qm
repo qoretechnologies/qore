@@ -1,0 +1,668 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file AnthropicRestClient.qm Qore user module for calling Anthropic REST services
+
+/*  AnthropicRestClient.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+
+# enable all warnings
+
+# don't use "$" for vars, members, and methods, assume local variable scope
+%modern
+
+# do not ignore argument errors
+
+%requires(reexport) Mime >= 1.3
+%requires(reexport) RestClient >= 1.3.1
+%requires(reexport) RestClientIo
+%requires(reexport) ConnectionProvider >= 1.4
+%requires HttpClientStreamingIo
+
+module AnthropicRestClient {
+    version = "1.0";
+    desc = "user module for calling Anthropic Claude REST API services";
+    author = "David Nichols <david@qore.org>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        ConnectionSchemeCache::registerScheme("anthropic", AnthropicRestConnection::ConnectionScheme);
+    };
+}
+
+/** @mainpage AnthropicRestClient Module
+
+    @tableofcontents
+
+    @section anthropicrestclientintro AnthropicRestClient Introduction
+
+    The %AnthropicRestClient module provides an API for calling Anthropic Claude REST API services.
+
+    To use this module, use \c "%requires AnthropicRestClient" in your code.
+
+    All the public symbols in the module are defined in the AnthropicRestClient namespace.
+
+    The main classes are:
+    - @ref AnthropicRestClient::AnthropicRestClient "AnthropicRestClient":
+      this class provides the REST client API for communication with the Anthropic REST
+      API; it also automates authentication and authorization to the target
+    - @ref AnthropicRestClient::AnthropicRestConnection "AnthropicRestConnection":
+      provides a REST connection object to Anthropic cloud services (based on the
+      @ref connectionproviderintro "ConnectionProvider" module)
+
+    @par Example:
+    @code{.py}
+#!/usr/bin/env qore
+
+%modern
+
+%requires AnthropicRestClient
+%requires ConnectionProvider
+
+AnthropicRestClient rest = get_connection("my-anthropic-connection");
+hash<auto> ans = rest.get("/models");
+printf("%N\n", ans.body);
+    @endcode
+
+    @par Streaming Example:
+    @code{.py}
+AnthropicRestClient rest = get_connection("my-anthropic-connection");
+AnthropicSseStream stream = rest.openMessagesStream({
+    "model": "claude-sonnet-4-6-20250514",
+    "max_tokens": 1024,
+    "messages": (
+        {
+            "role": "user",
+            "content": "Stream a response",
+        },
+    ),
+});
+while (hash<SseMessageInfo> evt = stream.readEvent(5s)) {
+    printf("%s\n", evt.data);
+}
+stream.close();
+    @endcode
+
+    @section AnthropicRestClientRelnotes Release Notes
+
+    @subsection AnthropicRestClientv1_0 AnthropicRestClient v1.0
+    - the initial version of the %AnthropicRestClient module
+*/
+
+%try-module json
+%define NoJson
+%endtry
+
+#! the AnthropicRestClient namespace contains all the objects in the AnthropicRestClient module
+public namespace AnthropicRestClient {
+#! Common base class for AnthropicRestClient functionality
+public class AnthropicRestClientBase {
+    public {
+        #! Default Anthropic REST API URL
+        const DefaultUrl = "https://api.anthropic.com";
+
+        #! Default Anthropic API version
+        const DefaultApiVersion = "v1";
+
+        #! Default anthropic-version header value
+        const DefaultAnthropicVersion = "2023-06-01";
+
+        #! Default constructor options
+        const DefaultOptions = {
+            "url": DefaultUrl,
+            "api": DefaultApiVersion,
+        };
+
+        #! Default ping method
+        const DefaultPingMethod = "GET";
+
+        #! Default ping path (no leading slash - ping bypasses API base path)
+        const DefaultPingPath = "models";
+
+        #! Default ping headers
+        const DefaultPingHeaders = {
+            "Accept": MimeTypeJson,
+        };
+    }
+
+    #! returns options for the constructor
+    static hash<auto> getOptions(hash<auto> opts) {
+        hash<auto> rv = DefaultOptions + opts;
+        # ensure anthropic-version header is set in default headers
+        if (!rv.headers."anthropic-version") {
+            rv.headers."anthropic-version" = opts.anthropic_version ?? DefaultAnthropicVersion;
+        }
+        # map apikey to x-api-key header so RestClient does not apply special token handling
+        if (rv.apikey) {
+            rv.headers."x-api-key" = rv.apikey;
+            remove rv.apikey;
+        }
+        return rv;
+    }
+}
+
+#! this class provides the REST client API for communication with Anthropic servers
+/** You must use an API key in the 'apikey' option (or 'token' with token_type 'x-api-key') to call Anthropic APIs.
+    The API key is sent as the \c x-api-key header.
+*/
+public class AnthropicRestClient inherits RestClient::RestClient, AnthropicRestClientBase {
+    #! creates the object with the given options
+    /**
+        @par Example:
+        @code{.py}
+AnthropicRestClient rest(opts);
+        @endcode
+
+        @param opts valid options are all the options for the @ref RestClient::RestClient "RestClient" class; note
+        that the URL is set by default if not provided (see @ref DefaultUrl)
+        @param do_not_connect if \c False (the default), then a connection is returned already connected to the
+        remote server
+
+        @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data serialization, etc
+    */
+    constructor(hash<auto> opts, *softbool do_not_connect)
+            : RestClient(AnthropicRestClientBase::getOptions(opts), True) {
+        if (validator instanceof NullRestSchemaValidator) {
+            setConnectionPath(getString(opts, "api") ?? DefaultApiVersion);
+        }
+    }
+
+    #! Opens a Server-Sent Events stream for messages
+    AnthropicSseStream openMessagesStream(hash<auto> req, *hash<auto> hdr, *timeout to) {
+        return new AnthropicSseStream(self, "messages", req, hdr, to);
+    }
+}
+
+#! SSE connection for Anthropic messages streams
+public class AnthropicSseStream {
+    private {
+        AnthropicRestClient rest;
+        bool chunked;
+        string content_encoding;
+        StringOutputStream ostream;
+        TransformOutputStream dstream;
+        bool use_decompressor;
+        timeout timeout_ms = 15s;
+        bool closed;
+
+        const SseMimeType = "text/event-stream";
+    }
+
+    #! Creates the stream connection
+    constructor(AnthropicRestClient rest, string path, *auto body, *hash<auto> hdr, *timeout to) {
+        self.rest = rest;
+        if (to) {
+            timeout_ms = to;
+        }
+        hash<auto> headers = rest.getDefaultHeaders() + (hdr ?? {});
+        headers.Accept = SseMimeType;
+        data payload;
+        if (exists body) {
+            payload = getSerializedBody(body, \headers);
+        }
+        string full_path = buildPath(path);
+        hash<auto> info;
+        hash<auto> resp = rest.send(payload, "POST", full_path, headers, False, \info);
+        if (resp.status_code != 200) {
+            throw "SSE-ERROR", sprintf("unexpected status code %d %s", resp.status_code, resp.status_message);
+        }
+        string content_type = normalizeContentType(resp."content-type");
+        if (content_type != SseMimeType) {
+            throw "SSE-ERROR", sprintf("expected Content-Type %y but got %y", SseMimeType, resp."content-type");
+        }
+        if (resp."content-encoding".val()) {
+            content_encoding = tolower(resp."content-encoding");
+        }
+        if (resp."transfer-encoding".val()) {
+            string transfer_encoding = tolower(resp."transfer-encoding");
+            if (transfer_encoding == "chunked") {
+                chunked = True;
+            } else {
+                throw "SSE-ERROR", sprintf("unsupported Transfer-Encoding: %y", resp."transfer-encoding");
+            }
+        }
+        setupDecompression();
+    }
+
+    #! Reads the next SSE message
+    *hash<SseMessageInfo> readEvent(*timeout to) {
+        if (closed) {
+            return;
+        }
+        timeout use_to = to ?? timeout_ms;
+        if (chunked) {
+            hash<auto> hh = rest.readHTTPChunk(use_to);
+            if (!hh.body) {
+                return;
+            }
+            if (use_decompressor) {
+                dstream.write(hh.body);
+            } else {
+                ostream.write(hh.body);
+            }
+            return rest.parseServerSentEvent(ostream.getData());
+        }
+        return rest.readServerSentEvent(content_encoding, use_to);
+    }
+
+    #! Closes the stream connection
+    close() {
+        if (!closed) {
+            closed = True;
+            rest.disconnect();
+        }
+    }
+
+    private string buildPath(string path) {
+        string rv = path;
+        rv =~ s/^\/+//;
+        rv = "/" + rv;
+        *string base = rest.getConnectionPath();
+        if (base.val() && base != "/") {
+            base =~ s/\/+$//;
+            if (base !~ /^\//) {
+                base = "/" + base;
+            }
+            rv = base + rv;
+        }
+        *string defp = rest.getDefaultPath();
+        if (defp.val() && defp != "/") {
+            defp =~ s/\/+$//;
+            if (defp !~ /^\//) {
+                defp = "/" + defp;
+            }
+            rv = defp + rv;
+        }
+        return rv;
+    }
+
+    private data getSerializedBody(data body, reference<hash<auto>> headers) {
+        if (body.typeCode() == NT_STRING) {
+            if (!headers."Content-Type") {
+                headers."Content-Type" = "application/json";
+            }
+            return body;
+        }
+%ifdef NoJson
+        throw "SSE-ERROR", "json module is required to serialize SSE request body";
+%else
+        if (!headers."Content-Type") {
+            headers."Content-Type" = "application/json";
+        }
+        return call_function_args("to_json", (body,));
+%endif
+    }
+
+    private setupDecompression() {
+        if (!chunked) {
+            return;
+        }
+        ostream = new StringOutputStream();
+        Transform decompressor;
+        switch (content_encoding) {
+            case "deflate":
+                use_decompressor = True;
+                decompressor = get_decompressor(Qore::COMPRESSION_ALG_ZLIB);
+                break;
+            case "gzip":
+                use_decompressor = True;
+                decompressor = get_decompressor(Qore::COMPRESSION_ALG_GZIP);
+                break;
+            case "bzip2":
+                use_decompressor = True;
+                decompressor = get_decompressor(Qore::COMPRESSION_ALG_BZIP2);
+                break;
+            case NOTHING:
+            case "identity":
+                use_decompressor = False;
+                break;
+
+            default:
+                throw "ENCODING-ERROR", sprintf("Don't know how to handle Content-Encoding %y", content_encoding);
+        }
+        if (use_decompressor) {
+            dstream = new TransformOutputStream(ostream, decompressor);
+        }
+    }
+
+    private static string normalizeContentType(*string content_type) {
+        if (!content_type.val()) {
+            return "";
+        }
+        string rv = content_type;
+        rv =~ s/\s*;.*$//;
+        rv =~ s/^\s+//;
+        rv =~ s/\s+$//;
+        return tolower(rv);
+    }
+}
+
+#! Class for Anthropic REST connections; returns @ref AnthropicRestClient objects
+/** This class implements all options of @ref RestClient::RestConnection "RestClientConnection"
+
+    @see @ref AnthropicRestClient::AnthropicRestClient::constructor() for more information on the above options
+*/
+public class AnthropicRestConnection inherits RestClient::RestConnection {
+    public {
+        #! Default Anthropic REST API URL
+        const DefaultUrl = "anthropic://api.anthropic.com";
+
+        #! Connection entry info
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "Anthropic REST Connection",
+            "short_desc": "A connection to the Anthropic Claude REST API",
+            "desc": "A connection to the Anthropic Claude REST API.\n\n"
+                "Requires an API key (set as `apikey`) from the "
+                "[Anthropic Console](https://console.anthropic.com/). "
+                "The connection uses the `anthropic://` URL scheme and automatically "
+                "sets the required `anthropic-version` header on all API requests",
+            "cls": Class::forName("AnthropicRestConnection"),
+            "auto_url": True,
+            "schemes": {
+                "anthropic": True,
+            },
+            "base_scheme_map": {
+                "https": "anthropic",
+            },
+            "options": RestConnection::ConnectionScheme.options + {
+                "apikey": <ConnectionOptionInfo>{
+                    "display_name": "API Key",
+                    "short_desc": "Anthropic API key for authentication",
+                    "type": "string",
+                    "desc": "The Anthropic API key used for authentication; sent as the `x-api-key` header.\n\n"
+                        "Get your API key from the [Anthropic Console](https://console.anthropic.com/)",
+                    "sensitive": True,
+                    "preselected": True,
+                },
+                "api": <ConnectionOptionInfo>{
+                    "display_name": "API Version",
+                    "short_desc": "The API version to use",
+                    "desc": "The API version to use",
+                    "type": "string",
+                    "default_value": AnthropicRestClientBase::DefaultApiVersion,
+                },
+                "anthropic_version": <ConnectionOptionInfo>{
+                    "display_name": "Anthropic Version",
+                    "short_desc": "The anthropic-version header value",
+                    "desc": "The anthropic-version header value sent with all API requests",
+                    "type": "string",
+                    "default_value": AnthropicRestClientBase::DefaultAnthropicVersion,
+                },
+                "ping_headers": RestConnection::ConnectionScheme.options.ping_headers + <ConnectionOptionInfo>{
+                    "default_value": AnthropicRestClientBase::DefaultPingHeaders,
+                },
+                "ping_method": RestConnection::ConnectionScheme.options.ping_method + <ConnectionOptionInfo>{
+                    "default_value": AnthropicRestClientBase::DefaultPingMethod,
+                },
+                "ping_path": RestConnection::ConnectionScheme.options.ping_path + <ConnectionOptionInfo>{
+                    "default_value": AnthropicRestClientBase::DefaultPingPath,
+                },
+            },
+            "required_options": "apikey",
+        };
+    }
+
+    #! creates the AnthropicRestConnection object
+    /** @param name the name of the connection
+        @param description connection description
+        @param url connection URL (potentially with password info)
+        @param attributes various attributes. See below
+        @param options connection options
+
+        See @ref ConnectionProvider::AbstractConnection::constructor() for \c attributes and \c options reference.
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option
+    */
+    constructor(string name, string description, string url = DefaultUrl,
+            hash<auto> attributes = {}, hash<auto> options = {})
+            : RestConnection(name, description, url, attributes, options) {
+    }
+
+    #! creates the AnthropicRestConnection object
+    /** @param config with the following keys:
+        - name (required string): the connection name
+        - display_name (optional string): the display name
+        - short_desc (optional string): a short description in plain text
+        - desc (optional string): a long description with markdown formatting
+        - url (required string): the connection URL
+        - opts (optional hash): connection options
+        - logger (optional LoggerInterface object): logger for the connection
+        @param attr optional connection attributes
+        - monitor (optional bool): should the connection be monitored? Default: True
+        - enabled (optional bool): is the connection enabled? Default: True
+        - locked (optional bool): is the connection locked? Default: False
+        - debug_data (optional bool): debug data? Default: False
+        - tags (optional hash): tags for the connection; no default value
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option or attribute
+    */
+    constructor(hash<auto> config, *hash<auto> attr)
+            : RestConnection(config + (exists config.url ? {} : {"url": DefaultUrl}), attr) {
+    }
+
+    #! returns \c "anthropic"
+    string getType() {
+        return "anthropic";
+    }
+
+    #! returns @ref True as this connection returns a data provider with the \c getDataProvider() method
+    /** @return @ref True as this connection returns a data provider with the \c getDataProvider() method
+
+        @see @ref getDataProvider()
+    */
+    bool hasDataProvider() {
+        return True;
+    }
+
+    #! returns a data provider object for this connection
+    /** @param constructor_options any additional constructor options for the data provider
+
+        @return a data provider object for this connection
+    */
+    DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        # to avoid circular dependencies, this object loads the AnthropicDataProvider and creates the data provider
+        # object dynamically
+        load_module("AnthropicDataProvider");
+        return create_object("AnthropicDataProvider", getAsync());
+    }
+
+    #! Sets child data provider capabilities
+    private setChildCapabilities() {
+        children_can_support_apis = True;
+    }
+
+    #! returns an @ref AnthropicRestClient object
+    /** @param connect if @ref True "True", then the connection is returned already connected
+        @param rtopts this connection type does not accept any runtime options, so this parameter is ignored
+
+        @return an @ref AnthropicRestClient object
+    */
+    private AnthropicRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
+        return new AnthropicRestClient(getConnectionOptions(rtopts), !connect);
+    }
+
+    #! Returns an async-I/O-capable connection object
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new AnthropicRestClientIo(getConnectionOptions(rtopts));
+    }
+
+    #! Returns the ConnectionSchemeInfo hash for this object
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+}
+
+#! REST client for Anthropic REST API using multiplexed HTTP connections
+/** @see AnthropicRestClient for more information
+*/
+public class AnthropicRestClientIo inherits RestClientIo::RestClientIo, AnthropicRestClientBase {
+    #! Creates the object with the given options
+    /** @param opts constructor options
+        @param shared_mgr optional shared connection manager
+    */
+    constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+            : RestClientIo(AnthropicRestClientBase::getOptions(opts), shared_mgr) {
+    }
+
+    #! Opens a Server-Sent Events stream for messages using async I/O
+    /** Uses HttpClientIo and SseStreamReader for incremental SSE event delivery
+        across HTTP/1.x, HTTP/2, and HTTP/3.
+
+        @param req the request body (will be serialized to JSON)
+        @param hdr optional additional request headers
+        @param to optional timeout for SSE event reading
+
+        @return an SSE stream object for reading events incrementally
+
+        @par Example:
+        @code{.py}
+AnthropicRestClientIo rest({"apikey": api_key});
+AnthropicSseStreamIo stream = rest.openMessagesStream({
+    "model": "claude-sonnet-4-6-20250514",
+    "max_tokens": 1024,
+    "messages": ({"role": "user", "content": "Hello!"},),
+});
+while (*hash<SseMessageInfo> evt = stream.readEvent()) {
+    printf("Event: %y\n", evt.data);
+}
+        @endcode
+    */
+    AnthropicSseStreamIo openMessagesStream(hash<auto> req, *hash<auto> hdr, *timeout to) {
+        return new AnthropicSseStreamIo(self, "messages", req, hdr, to);
+    }
+}
+
+#! SSE stream for Anthropic messages using async I/O (HttpClientIo + SseStreamReader)
+/** Works across HTTP/1.x, HTTP/2, and HTTP/3 via HttpClientIo's multiplexed
+    connection manager.
+
+    @note This class is \b not thread-safe.  Use from a single reader thread.
+*/
+public class AnthropicSseStreamIo {
+    private {
+        #! SSE stream reader
+        HttpClientStreamingIo::SseStreamReader reader;
+
+        #! Timeout for SSE event reading
+        timeout timeout_ms = 15s;
+
+        #! True when the stream has been closed
+        bool closed = False;
+    }
+
+    #! Creates the SSE stream connection
+    /** @param rest the AnthropicRestClientIo instance
+        @param path the API endpoint path (e.g., "messages")
+        @param body the request body (serialized to JSON)
+        @param hdr optional additional request headers
+        @param to optional timeout for SSE event reading
+    */
+    constructor(AnthropicRestClientIo rest, string path, *auto body, *hash<auto> hdr, *timeout to) {
+        if (to) {
+            timeout_ms = to;
+        }
+        hash<auto> headers = rest.getDefaultHeaders() + (hdr ?? {});
+        headers.Accept = "text/event-stream";
+
+        # Serialize body to JSON
+        *data payload;
+        if (exists body) {
+%ifdef NoJson
+            throw "SSE-ERROR", "json module is required to serialize SSE request body";
+%else
+            if (body.typeCode() != NT_STRING) {
+                if (!headers."Content-Type") {
+                    headers."Content-Type" = "application/json";
+                }
+                payload = call_function_args("to_json", (body,));
+            } else {
+                if (!headers."Content-Type") {
+                    headers."Content-Type" = "application/json";
+                }
+                payload = body;
+            }
+%endif
+        }
+
+        # Build full path
+        string full_path = buildPath(rest, path);
+
+        # Acquire stream and start SSE streaming
+        HttpClientIo::HttpClientConnectionManager mgr = rest.getConnectionManager();
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(rest.getUrl());
+        stream.startStreaming("POST", full_path, headers, False, payload);
+
+        reader = new HttpClientStreamingIo::SseStreamReader(stream);
+    }
+
+    #! Reads the next SSE event
+    /** @param to optional timeout override
+        @return the parsed SSE event, or NOTHING on timeout or stream end
+    */
+    *hash<SseMessageInfo> readEvent(*timeout to) {
+        if (closed) {
+            return NOTHING;
+        }
+        return reader.readEvent(to ?? timeout_ms);
+    }
+
+    #! Returns True if the stream has ended
+    bool isDone() {
+        return closed || reader.isDone();
+    }
+
+    #! Closes the stream
+    close() {
+        if (!closed) {
+            closed = True;
+            reader.cancel();
+        }
+    }
+
+    #! Builds the full API path from connection path + relative path
+    private static string buildPath(RestClientIo::RestClientIo rest, string path) {
+        string rv = path;
+        rv =~ s/^\/+//;
+        rv = "/" + rv;
+        *string base = rest.getConnectionPath();
+        if (base.val() && base != "/") {
+            base =~ s/\/+$//;
+            if (base !~ /^\//) {
+                base = "/" + base;
+            }
+            rv = base + rv;
+        }
+        # getDefaultPath() may not be available in all RestClientIo versions
+        if (rest.hasCallableMethod("getDefaultPath")) {
+            *string defp = call_object_method(rest, "getDefaultPath");
+            if (defp.val() && defp != "/") {
+                defp =~ s/\/+$//;
+                if (defp !~ /^\//) {
+                    defp = "/" + defp;
+                }
+                rv = defp + rv;
+            }
+        }
+        return rv;
+    }
+}
+}

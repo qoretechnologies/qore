@@ -1,0 +1,518 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore AnthropicDataProvider module definition
+
+/*  AnthropicDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%modern
+# require type definitions everywhere
+# strict argument handling
+# enable all warnings
+
+%requires(reexport) DataProvider
+%requires(reexport) AnthropicRestClient
+%requires RestClientIo
+
+module AnthropicDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for Anthropic Claude services";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        # register the data provider factory
+        DataProvider::registerFactory(new AnthropicDataProviderFactory());
+
+        # register the data provider application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": AnthropicDataProvider::AppName,
+            "display_name": "Anthropic Claude",
+            "short_desc": "Anthropic Claude AI services",
+            "desc": "Anthropic Claude AI services providing access to Claude language models for text generation, "
+                "analysis, and tool use with streaming support",
+            "scheme": "anthropic",
+            "logo": AnthropicLogo,
+            "logo_file_name": "anthropic-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::AiLlm,),
+        });
+
+        # register create-message action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AnthropicDataProvider::AppName,
+            "path": "/messages/create",
+            "action": "create-message",
+            "display_name": "Create Message",
+            "short_desc": "Send a message to a Claude model and receive a response",
+            "desc": "Send a structured message to an Anthropic Claude model and receive a complete response. "
+                "Supports text, images, tool use, and extended thinking.",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AnthropicMessageRequestDataType::Fields{"model", "messages", "max_tokens"}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                AnthropicMessageRequestDataType::Fields - ("model", "messages", "max_tokens", "stream")
+            ),
+            "output_type": AnthropicMessageCreateDataProvider::ResponseType,
+        });
+
+        # register stream-message action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AnthropicDataProvider::AppName,
+            "path": "/messages/stream",
+            "action": "stream-message",
+            "display_name": "Stream Message",
+            "short_desc": "Stream a response from a Claude model via Server-Sent Events",
+            "desc": "Stream a response from an Anthropic Claude model using Server-Sent Events (SSE). "
+                "Events are emitted incrementally as the model generates content.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_ANTHROPIC_MESSAGE_STREAM,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AnthropicMessageRequestDataType::Fields{"model", "messages", "max_tokens"}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                AnthropicMessageRequestDataType::Fields - ("model", "messages", "max_tokens", "stream")
+            ),
+            "output_type": AnthropicMessageStreamDataProvider::ResponseType,
+        });
+
+        # register count-tokens action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AnthropicDataProvider::AppName,
+            "path": "/count-tokens",
+            "action": "count-tokens",
+            "display_name": "Count Tokens",
+            "short_desc": "Count the number of tokens in a message without creating it",
+            "desc": "Count the number of input tokens that would be used by a message request without actually "
+                "creating the message. Useful for estimating costs and managing context windows.",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AnthropicCountTokensRequestDataType::Fields{"model", "messages"}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                AnthropicCountTokensRequestDataType::Fields{"system",}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                AnthropicCountTokensRequestDataType::Fields - ("model", "messages", "system")
+            ),
+            "output_type": AnthropicCountTokensDataProvider::ResponseType,
+        });
+
+        # register get-model action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AnthropicDataProvider::AppName,
+            "path": "/models/get",
+            "action": "get-model",
+            "display_name": "Get Model",
+            "short_desc": "Get details for a specific model by ID or alias",
+            "desc": "Retrieve details for a specific Anthropic model including capabilities, context window size, "
+                "and max output tokens.",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AnthropicModelIdRequestDataType::Fields{"model_id",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ),
+            "output_type": AnthropicModelGetDataProvider::ResponseType,
+        });
+
+        # register create-batch action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AnthropicDataProvider::AppName,
+            "path": "/batches/create",
+            "action": "create-batch",
+            "display_name": "Create Message Batch",
+            "short_desc": "Submit a batch of message requests for async processing",
+            "desc": "Submit a batch of message requests for asynchronous processing at 50% reduced cost. "
+                "Batches are processed within 24 hours.",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AnthropicCreateBatchRequestDataType::Fields{"requests",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ),
+            "output_type": AnthropicBatchCreateDataProvider::ResponseType,
+        });
+
+        # register get-batch action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AnthropicDataProvider::AppName,
+            "path": "/batches/{batch_id}/get",
+            "action": "get-batch",
+            "display_name": "Get Message Batch",
+            "short_desc": "Get the status and details of a message batch",
+            "desc": "Retrieve the status and metadata of a specific message batch. Use this to poll for "
+                "batch completion.",
+            "action_code": DPAT_API,
+            "path_vars": {
+                "batch_id": <DataProviderPathVarInfo>{
+                    "display_name": "Batch ID",
+                    "short_desc": "The ID of the message batch",
+                    "desc": "The ID of the message batch",
+                    "example_value": "msgbatch_013Zva2CMbUFEYkeWyl6QV",
+                },
+            },
+            "output_type": AnthropicBatchGetDataProvider::ResponseType,
+        });
+
+        # register list-batches action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AnthropicDataProvider::AppName,
+            "path": "/batches/list",
+            "action": "list-batches",
+            "display_name": "List Message Batches",
+            "short_desc": "List all message batches in the workspace",
+            "desc": "List all message batches with pagination support.",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AnthropicBatchListRequestDataType::Fields{"limit",}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                AnthropicBatchListRequestDataType::Fields - "limit"
+            ),
+            "output_type": AnthropicBatchListDataProvider::ResponseType,
+        });
+
+        # register cancel-batch action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AnthropicDataProvider::AppName,
+            "path": "/batches/{batch_id}/cancel",
+            "action": "cancel-batch",
+            "display_name": "Cancel Message Batch",
+            "short_desc": "Cancel a message batch before it finishes processing",
+            "desc": "Cancel a message batch. The batch enters a `canceling` state; already-processed requests "
+                "are not undone.",
+            "action_code": DPAT_API,
+            "path_vars": {
+                "batch_id": <DataProviderPathVarInfo>{
+                    "display_name": "Batch ID",
+                    "short_desc": "The ID of the message batch to cancel",
+                    "desc": "The ID of the message batch to cancel",
+                    "example_value": "msgbatch_013Zva2CMbUFEYkeWyl6QV",
+                },
+            },
+            "output_type": AnthropicBatchCancelDataProvider::ResponseType,
+        });
+
+        # register upload-file action (Beta)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AnthropicDataProvider::AppName,
+            "path": "/files/upload",
+            "action": "upload-file",
+            "display_name": "Upload File",
+            "short_desc": "Upload a file for reuse across API calls (Beta)",
+            "desc": "Upload a file that can be referenced in multiple API calls. Supports PDF, text, and "
+                "image files up to 500 MB. Requires the Files API beta.",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AnthropicUploadFileRequestDataType::Fields{"file_data", "filename"}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                AnthropicUploadFileRequestDataType::Fields - ("file_data", "filename")
+            ),
+            "output_type": AnthropicFileUploadDataProvider::ResponseType,
+        });
+
+        # register list-files action (Beta)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AnthropicDataProvider::AppName,
+            "path": "/files/list",
+            "action": "list-files",
+            "display_name": "List Files",
+            "short_desc": "List all uploaded files in the workspace (Beta)",
+            "desc": "List all files that have been uploaded to the workspace. Requires the Files API beta.",
+            "action_code": DPAT_API,
+            "output_type": AnthropicFileListDataProvider::ResponseType,
+        });
+
+        # register get-file action (Beta)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AnthropicDataProvider::AppName,
+            "path": "/files/{file_id}/get",
+            "action": "get-file",
+            "display_name": "Get File",
+            "short_desc": "Get metadata for a specific file (Beta)",
+            "desc": "Retrieve metadata for a specific uploaded file. Requires the Files API beta.",
+            "action_code": DPAT_API,
+            "path_vars": {
+                "file_id": <DataProviderPathVarInfo>{
+                    "display_name": "File ID",
+                    "short_desc": "The ID of the file",
+                    "desc": "The ID of the file",
+                    "example_value": "file_abc123",
+                },
+            },
+            "output_type": AnthropicFileGetDataProvider::ResponseType,
+        });
+
+        # register delete-file action (Beta)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AnthropicDataProvider::AppName,
+            "path": "/files/{file_id}/delete",
+            "action": "delete-file",
+            "display_name": "Delete File",
+            "short_desc": "Delete a file from the workspace (Beta)",
+            "desc": "Delete a file that was previously uploaded. Requires the Files API beta.",
+            "action_code": DPAT_API,
+            "path_vars": {
+                "file_id": <DataProviderPathVarInfo>{
+                    "display_name": "File ID",
+                    "short_desc": "The ID of the file to delete",
+                    "desc": "The ID of the file to delete",
+                    "example_value": "file_abc123",
+                },
+            },
+            "output_type": AnthropicFileDeleteDataProvider::ResponseType,
+        });
+
+        # register create-skill action (Beta)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AnthropicDataProvider::AppName,
+            "path": "/skills/create",
+            "action": "create-skill",
+            "display_name": "Create Skill",
+            "short_desc": "Create a custom skill (Beta)",
+            "desc": "Create a new custom skill that packages domain expertise and workflows. "
+                "Requires the Skills API beta.",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AnthropicSkillRequestDataType::Fields{"display_title",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                AnthropicSkillRequestDataType::Fields - "display_title"
+            ),
+            "output_type": AnthropicSkillCreateDataProvider::ResponseType,
+        });
+
+        # register list-skills action (Beta)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AnthropicDataProvider::AppName,
+            "path": "/skills/list",
+            "action": "list-skills",
+            "display_name": "List Skills",
+            "short_desc": "List available skills (Beta)",
+            "desc": "List all available skills including custom and Anthropic-provided skills. "
+                "Requires the Skills API beta.",
+            "action_code": DPAT_API,
+            "output_type": AnthropicSkillListDataProvider::ResponseType,
+        });
+
+        # register get-skill action (Beta)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AnthropicDataProvider::AppName,
+            "path": "/skills/{skill_id}/get",
+            "action": "get-skill",
+            "display_name": "Get Skill",
+            "short_desc": "Get details for a specific skill (Beta)",
+            "desc": "Retrieve details for a specific skill by ID. Requires the Skills API beta.",
+            "action_code": DPAT_API,
+            "path_vars": {
+                "skill_id": <DataProviderPathVarInfo>{
+                    "display_name": "Skill ID",
+                    "short_desc": "The ID of the skill",
+                    "desc": "The ID of the skill",
+                },
+            },
+            "output_type": AnthropicSkillGetDataProvider::ResponseType,
+        });
+
+        # register update-skill action (Beta)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AnthropicDataProvider::AppName,
+            "path": "/skills/{skill_id}/update",
+            "action": "update-skill",
+            "display_name": "Update Skill",
+            "short_desc": "Update an existing skill (Beta)",
+            "desc": "Update an existing custom skill. Requires the Skills API beta.",
+            "action_code": DPAT_API,
+            "path_vars": {
+                "skill_id": <DataProviderPathVarInfo>{
+                    "display_name": "Skill ID",
+                    "short_desc": "The ID of the skill to update",
+                    "desc": "The ID of the skill to update",
+                },
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AnthropicSkillRequestDataType::Fields
+            ),
+            "output_type": AnthropicSkillUpdateDataProvider::ResponseType,
+        });
+    };
+}
+
+/** @mainpage AnthropicDataProvider Module
+
+    @tableofcontents
+
+    @section anthropicdataproviderintro Introduction to the AnthropicDataProvider Module
+
+    The %AnthropicDataProvider module provides a @ref dataproviderintro "data provider" API for Anthropic Claude
+    services.
+
+    @section anthropicdataprovider_examples Examples
+
+    @subsection anthropicdataprovider_message_example Creating a Message
+
+    @code{.py}
+%requires AnthropicDataProvider
+
+AnthropicRestConnection rc = get_connection("anthropic");
+AnthropicDataProvider::AnthropicDataProvider prov(rc.getAsync());
+
+AbstractDataProvider msg = prov.getChildProvider("messages").getChildProvider("create");
+hash<auto> result = msg.doRequest({
+    "model": "claude-sonnet-4-6-20250514",
+    "max_tokens": 1024,
+    "messages": (
+        {
+            "role": "user",
+            "content": "What is the capital of France?",
+        },
+    ),
+});
+printf("Response: %s\n", result.output_text);
+    @endcode
+
+    @subsection anthropicdataprovider_stream_example Streaming Messages
+
+    @code{.py}
+%requires AnthropicDataProvider
+
+AnthropicRestConnection rc = get_connection("anthropic");
+AnthropicDataProvider::AnthropicDataProvider prov(rc.getAsync());
+
+AbstractDataProvider stream = prov.getChildProvider("messages").getChildProvider("stream");
+stream.registerObserver(myObserver);
+stream.observersReady();
+stream.doRequest({
+    "model": "claude-sonnet-4-6-20250514",
+    "max_tokens": 1024,
+    "messages": (
+        {
+            "role": "user",
+            "content": "Write a short poem about coding",
+        },
+    ),
+});
+    @endcode
+
+    @subsection anthropicdataprovider_context_store Conversation Context Store
+
+    @code{.py}
+class MyContextStore inherits AnthropicConversationContextStore {
+    *hash<auto> loadContext(string key) { return get_from_store(key); }
+    nothing saveContext(string key, hash<auto> ctxt) { save_to_store(key, ctxt); }
+}
+
+AnthropicRestConnection rc = get_connection("anthropic");
+AnthropicDataProvider::AnthropicDataProvider prov(rc.getAsync());
+prov.setConversationContextStore(new MyContextStore());
+
+AbstractDataProvider msg = prov.getChildProvider("messages").getChildProvider("create");
+hash<auto> result = msg.doRequest({
+    "model": "claude-sonnet-4-6-20250514",
+    "max_tokens": 1024,
+    "messages": (
+        {"role": "user", "content": "Remember my name is Alice"},
+    ),
+    "conversation_key": "user-42",
+});
+    @endcode
+
+    @subsection anthropicdataprovider_tool_use Tool Use Example
+
+    @code{.py}
+hash<auto> result = msg.doRequest({
+    "model": "claude-sonnet-4-6-20250514",
+    "max_tokens": 1024,
+    "messages": (
+        {"role": "user", "content": "What's the weather in San Francisco?"},
+    ),
+    "tools": (
+        {
+            "name": "get_weather",
+            "description": "Get the weather for a location",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "location": {"type": "string"},
+                },
+                "required": ("location",),
+            },
+        },
+    ),
+});
+
+if (result.tool_calls) {
+    hash<auto> call = result.tool_calls[0];
+    printf("Tool: %s, Input: %N\n", call.name, call.input);
+}
+    @endcode
+
+    @section anthropicdataprovider_stream_events Stream Event Types
+
+    The stream provider emits SSE events matching the Anthropic Messages API event types:
+    - \c message_start - beginning of the message, includes full message metadata
+    - \c content_block_start - beginning of a content block (text, tool_use, thinking)
+    - \c content_block_delta - incremental content (text_delta, input_json_delta, thinking_delta)
+    - \c content_block_stop - end of a content block
+    - \c message_delta - message-level changes (stop_reason, usage)
+    - \c message_stop - message generation complete
+    - \c ping - heartbeat event
+    - \c error - stream error
+
+    @section anthropicdataprovider_relnotes Release Notes
+
+    @subsection anthropicdataprovider_v1_0 AnthropicDataProvider v1.0
+    - initial release of the module
+    - Messages API with create and stream support
+    - Models listing API
+    - Token counting API
+    - Conversation context store for multi-turn conversations
+    - Action session for Creator WebSocket integration
+    - Built on RestClientIo for async-capable multiplexed HTTP connections
+*/
+
+#! contains all public definitions in the AnthropicDataProvider module
+public namespace AnthropicDataProvider {
+#! Anthropic app name
+public const AppName = "Anthropic";
+
+#! Logo file
+const AnthropicLogo = File::readTextFile(get_script_dir() + "/anthropic-logo.svg");
+}

@@ -1,0 +1,797 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/AnthropicDataProvider
+
+%try-module json
+%define NoJson
+%endtry
+
+%exec-class AnthropicDataProviderTest
+
+class FakeAnthropicRestClientIo inherits RestClientIo::RestClientIo {
+    public {
+        hash<auto> last_request;
+        string last_method;
+        string last_path;
+        hash<auto> response_body;
+        hash<auto> last_stream_request;
+        list<hash<SseMessageInfo>> stream_events;
+    }
+
+    constructor() : RestClientIo({"url": "https://api.anthropic.com", "token": "x", "data": "json"}) {
+    }
+
+    hash<RestClient::RestResponseInfo> restPost(string path, auto body) {
+        last_method = "POST";
+        last_path = path;
+        last_request = body;
+        if (!response_body) {
+            response_body = {
+                "id": "msg_test123",
+                "type": "message",
+                "role": "assistant",
+                "content": (
+                    {
+                        "type": "text",
+                        "text": "Hello! How can I help you?",
+                    },
+                ),
+                "model": "claude-sonnet-4-6-20250514",
+                "stop_reason": "end_turn",
+                "usage": {
+                    "input_tokens": 10,
+                    "output_tokens": 15,
+                },
+            };
+        }
+        return <RestClient::RestResponseInfo>{
+            "body": response_body,
+        };
+    }
+
+    hash<RestClient::RestResponseInfo> restGet(string path) {
+        last_method = "GET";
+        last_path = path;
+        return <RestClient::RestResponseInfo>{
+            "body": {
+                "data": (
+                    {
+                        "id": "claude-sonnet-4-6-20250514",
+                        "display_name": "Claude Sonnet 4.6",
+                        "type": "model",
+                        "created_at": "2025-05-14T00:00:00Z",
+                        "max_input_tokens": 1000000,
+                        "max_tokens": 64000,
+                    },
+                ),
+            },
+        };
+    }
+
+    auto openMessagesStream(hash<auto> req, *hash<auto> hdr, *timeout to) {
+        last_stream_request = req;
+        return new FakeAnthropicSseStream(stream_events);
+    }
+}
+
+class FailingAnthropicRestClientIo inherits FakeAnthropicRestClientIo {
+    auto openMessagesStream(hash<auto> req, *hash<auto> hdr, *timeout to) {
+        throw "SSE-ERROR", "stream failed";
+    }
+}
+
+class TestAnthropicConversationStore inherits AnthropicConversationContextStore {
+    public {
+        hash<auto> stored;
+        string last_load_key;
+        string last_save_key;
+        hash<auto> last_saved;
+    }
+
+    *hash<auto> loadContext(string key) {
+        last_load_key = key;
+        return stored{key};
+    }
+
+    auto saveContext(string key, hash<auto> ctxt) {
+        last_save_key = key;
+        last_saved = ctxt;
+        stored{key} = ctxt;
+    }
+}
+
+class FakeAnthropicSseStream {
+    public {
+        list<hash<SseMessageInfo>> events;
+        int idx;
+        bool done_flag = False;
+    }
+
+    constructor(*list<hash<SseMessageInfo>> events) {
+        self.events = events ?? ();
+    }
+
+    *hash<SseMessageInfo> readEvent(*timeout to) {
+        if (idx >= events.lsize()) {
+            done_flag = True;
+            return;
+        }
+        return events[idx++];
+    }
+
+    bool isDone() {
+        return done_flag;
+    }
+
+    close() {
+    }
+}
+
+class StreamObserver inherits Observer {
+    public {
+        list<hash<auto>> events = ();
+    }
+
+    private {
+        Mutex m();
+        Condition cond();
+    }
+
+    update(string event_id, hash<auto> data_) {
+        events += data_;
+        m.lock();
+        on_exit m.unlock();
+        cond.broadcast();
+    }
+
+    wait(int count) {
+        date start = now_us();
+        m.lock();
+        on_exit m.unlock();
+        while (events.lsize() < count) {
+            cond.wait(m, 1s);
+            if ((now_us() - start) > 5s) {
+                throw "ERROR", "no stream events in timeout";
+            }
+        }
+    }
+}
+
+public class AnthropicDataProviderTest inherits QUnit::Test {
+    public {
+%ifndef NoJson
+        *AnthropicRestClient::AnthropicRestConnection rc;
+%endif
+        Logger logger;
+
+        # command-line options
+        const MyOpts = Opts + {
+            "conn": "c,connection=s",
+        };
+
+        const OptionColumn = 22;
+    }
+
+    constructor() : Test("AnthropicDataProvider Test", "1.0", \ARGV, MyOpts) {
+        addTestCase("sanity test", \sanityTest());
+        addTestCase("action catalog", \actionCatalogTest());
+        addTestCase("child providers", \childProvidersTest());
+        addTestCase("create message", \createMessageTest());
+        addTestCase("create message with tools", \createMessageWithToolsTest());
+        addTestCase("conversation context save", \conversationContextSaveTest());
+        addTestCase("conversation callback store", \conversationCallbackStoreTest());
+        addTestCase("stream events", \streamEventsTest());
+        addTestCase("stream error", \streamErrorTest());
+        addTestCase("count tokens", \countTokensTest());
+        addTestCase("models list", \modelsListTest());
+        addTestCase("action session create", \actionSessionCreateTest());
+        addTestCase("action session stream", \actionSessionStreamTest());
+        addTestCase("action session invalid", \actionSessionInvalidTest());
+        addTestCase("example event data", \exampleEventDataTest());
+        addTestCase("data types", \dataTypesTest());
+        addTestCase("live connection ping", \liveConnectionPingTest());
+        addTestCase("live create message", \liveCreateMessageTest());
+        addTestCase("live models list", \liveModelsListTest());
+        addTestCase("live count tokens", \liveCountTokensTest());
+
+        try {
+            setupConnection();
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose > 2) {
+                printf("%s\n", get_exception_string(ex));
+            } else if (m_options.verbose) {
+                printf("%s: %s\n", ex.err, ex.desc);
+            }
+        }
+
+        # Return for compatibility with test harness that checks return value.
+        set_return_value(main());
+    }
+
+    checkModule() {
+%ifdef NoJson
+        testSkip("no json module");
+%endif
+    }
+
+    sanityTest() {
+        checkModule();
+%ifndef NoJson
+        FakeAnthropicRestClientIo rest();
+        AnthropicDataProvider prov(rest);
+        assertEq("anthropic", prov.getName());
+        assertEq(("batches", "count-tokens", "files", "messages", "models", "skills"),
+            sort(prov.getChildProviderNames()));
+%endif
+    }
+
+    actionCatalogTest() {
+        # test stream action
+        hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppAction(
+            AnthropicDataProvider::AppName, "stream-message"
+        );
+        assertEq("/messages/stream", action.path);
+        assertEq(DPAT_EVENT, action.action_code);
+        assertEq(AnthropicDataProvider::EVENT_ANTHROPIC_MESSAGE_STREAM, action.action_val);
+        assertEq(True, action.output_type instanceof AnthropicStreamEventDataType);
+
+        # test create action
+        action = DataProviderActionCatalog::getAppAction(
+            AnthropicDataProvider::AppName, "create-message"
+        );
+        assertEq("/messages/create", action.path);
+        assertEq(DPAT_API, action.action_code);
+        # verify new fields are in action options
+        assertEq(True, action.options.hasKey("service_tier"));
+        assertEq(True, action.options.hasKey("output_config"));
+        assertEq(True, action.options.hasKey("container"));
+
+        # test count-tokens action
+        action = DataProviderActionCatalog::getAppAction(
+            AnthropicDataProvider::AppName, "count-tokens"
+        );
+        assertEq("/count-tokens", action.path);
+        assertEq(DPAT_API, action.action_code);
+
+        # test batch actions
+        action = DataProviderActionCatalog::getAppAction(
+            AnthropicDataProvider::AppName, "create-batch"
+        );
+        assertEq("/batches/create", action.path);
+        assertEq(DPAT_API, action.action_code);
+
+        action = DataProviderActionCatalog::getAppAction(
+            AnthropicDataProvider::AppName, "get-model"
+        );
+        assertEq("/models/get", action.path);
+        assertEq(DPAT_API, action.action_code);
+
+        # test file actions
+        action = DataProviderActionCatalog::getAppAction(
+            AnthropicDataProvider::AppName, "upload-file"
+        );
+        assertEq("/files/upload", action.path);
+        assertEq(DPAT_API, action.action_code);
+
+        # test skill actions
+        action = DataProviderActionCatalog::getAppAction(
+            AnthropicDataProvider::AppName, "create-skill"
+        );
+        assertEq("/skills/create", action.path);
+        assertEq(DPAT_API, action.action_code);
+    }
+
+    childProvidersTest() {
+        checkModule();
+%ifndef NoJson
+        FakeAnthropicRestClientIo rest();
+        AnthropicDataProvider prov(rest);
+
+        # verify batches children
+        AbstractDataProvider batches = prov.getChildProvider("batches");
+        assertEq(("cancel", "create", "get", "list"), sort(batches.getChildProviderNames()));
+
+        # verify files children
+        AbstractDataProvider files = prov.getChildProvider("files");
+        assertEq(("delete", "get", "get-content", "list", "upload"), sort(files.getChildProviderNames()));
+
+        # verify skills children
+        AbstractDataProvider skills = prov.getChildProvider("skills");
+        assertEq(("create", "get", "list", "update"), sort(skills.getChildProviderNames()));
+
+        # verify models children (now a container)
+        AbstractDataProvider models = prov.getChildProvider("models");
+        assertEq(("get", "list"), sort(models.getChildProviderNames()));
+%endif
+    }
+
+    createMessageTest() {
+        checkModule();
+%ifndef NoJson
+        FakeAnthropicRestClientIo rest();
+        AnthropicDataProvider prov(rest);
+        AbstractDataProvider create = prov.getChildProvider("messages").getChildProvider("create");
+
+        hash<auto> req = {
+            "model": "claude-sonnet-4-6-20250514",
+            "max_tokens": 1024,
+            "messages": (
+                {"role": "user", "content": "Hello!"},
+            ),
+        };
+        hash<auto> resp = create.doRequest(req);
+        assertEq("POST", rest.last_method);
+        assertEq("messages", rest.last_path);
+        assertEq("claude-sonnet-4-6-20250514", rest.last_request.model);
+        assertEq(1024, rest.last_request.max_tokens);
+        # verify stream is not set for non-streaming
+        assertNothing(rest.last_request.stream);
+        assertEq("Hello! How can I help you?", resp.output_text);
+        assertEq("msg_test123", resp.id);
+        assertEq("end_turn", resp.stop_reason);
+%endif
+    }
+
+    createMessageWithToolsTest() {
+        checkModule();
+%ifndef NoJson
+        FakeAnthropicRestClientIo rest();
+        rest.response_body = {
+            "id": "msg_tool123",
+            "type": "message",
+            "role": "assistant",
+            "content": (
+                {
+                    "type": "text",
+                    "text": "I'll check the weather.",
+                },
+                {
+                    "type": "tool_use",
+                    "id": "toolu_01",
+                    "name": "get_weather",
+                    "input": {"location": "San Francisco"},
+                },
+            ),
+            "model": "claude-sonnet-4-6-20250514",
+            "stop_reason": "tool_use",
+            "usage": {"input_tokens": 20, "output_tokens": 30},
+        };
+        AnthropicDataProvider prov(rest);
+        AbstractDataProvider create = prov.getChildProvider("messages").getChildProvider("create");
+
+        hash<auto> req = {
+            "model": "claude-sonnet-4-6-20250514",
+            "max_tokens": 1024,
+            "messages": ({"role": "user", "content": "What's the weather?"},),
+            "tools": (
+                {
+                    "name": "get_weather",
+                    "description": "Get weather",
+                    "input_schema": {
+                        "type": "object",
+                        "properties": {"location": {"type": "string"}},
+                    },
+                },
+            ),
+        };
+        hash<auto> resp = create.doRequest(req);
+        assertEq("tool_use", resp.stop_reason);
+        assertEq("I'll check the weather.", resp.output_text);
+        assertEq(1, resp.tool_calls.lsize());
+        assertEq("get_weather", resp.tool_calls[0].name);
+        assertEq("San Francisco", resp.tool_calls[0].input.location);
+%endif
+    }
+
+    conversationContextSaveTest() {
+        checkModule();
+%ifndef NoJson
+        FakeAnthropicRestClientIo rest();
+        AnthropicDataProvider prov(rest);
+        TestAnthropicConversationStore store();
+        prov.setConversationContextStore(store);
+        AnthropicMessageCreateDataProvider create =
+            cast<AnthropicMessageCreateDataProvider>(prov.getChildProvider("messages").getChildProvider("create"));
+        create.setConversationContextStore(store);
+
+        hash<auto> req = {
+            "model": "claude-sonnet-4-6-20250514",
+            "max_tokens": 1024,
+            "messages": ({"role": "user", "content": "Hi"},),
+            "conversation_key": "test-conv",
+        };
+        hash<auto> resp = create.doRequest(req);
+        assertEq("test-conv", store.last_save_key);
+        assertEq(True, store.last_saved.messages.lsize() > 0);
+        # the saved messages should include the user message and assistant response
+        assertEq("user", store.last_saved.messages[0].role);
+        assertEq("assistant", store.last_saved.messages[1].role);
+
+        # second call should load context and prepend messages
+        hash<auto> req2 = {
+            "model": "claude-sonnet-4-6-20250514",
+            "max_tokens": 1024,
+            "messages": ({"role": "user", "content": "Follow up"},),
+            "conversation_key": "test-conv",
+        };
+        create.doRequest(req2);
+        # should have loaded context
+        assertEq("test-conv", store.last_load_key);
+        # the request should have prepended the stored messages
+        assertTrue(rest.last_request.messages.lsize() > 1);
+%endif
+    }
+
+    conversationCallbackStoreTest() {
+        checkModule();
+%ifndef NoJson
+        hash<auto> saved_data;
+        string saved_key;
+        AnthropicConversationContextStoreCallbacks store(
+            *hash<auto> sub (string key) { return saved_data; },
+            nothing sub (string key, hash<auto> ctxt) { saved_key = key; saved_data = ctxt; }
+        );
+
+        FakeAnthropicRestClientIo rest();
+        AnthropicDataProvider prov(rest);
+        AnthropicMessageCreateDataProvider create =
+            cast<AnthropicMessageCreateDataProvider>(prov.getChildProvider("messages").getChildProvider("create"));
+        create.setConversationContextStore(store);
+
+        hash<auto> req = {
+            "model": "claude-sonnet-4-6-20250514",
+            "max_tokens": 1024,
+            "messages": ({"role": "user", "content": "Hi"},),
+            "conversation_key": "cb-test",
+        };
+        create.doRequest(req);
+        assertEq("cb-test", saved_key);
+        assertEq(True, saved_data.messages.lsize() > 0);
+%endif
+    }
+
+    streamEventsTest() {
+        checkModule();
+%ifndef NoJson
+        FakeAnthropicRestClientIo rest();
+        rest.stream_events = (
+            <SseMessageInfo>{
+                "event": "message_start",
+                "data": "{\"type\":\"message_start\",\"message\":{\"id\":\"msg_s1\",\"type\":\"message\","
+                    "\"role\":\"assistant\",\"content\":[],\"model\":\"claude-sonnet-4-6-20250514\"}}",
+            },
+            <SseMessageInfo>{
+                "event": "content_block_start",
+                "data": "{\"type\":\"content_block_start\",\"index\":0,"
+                    "\"content_block\":{\"type\":\"text\",\"text\":\"\"}}",
+            },
+            <SseMessageInfo>{
+                "event": "content_block_delta",
+                "data": "{\"type\":\"content_block_delta\",\"index\":0,"
+                    "\"delta\":{\"type\":\"text_delta\",\"text\":\"Hello\"}}",
+            },
+            <SseMessageInfo>{
+                "event": "content_block_stop",
+                "data": "{\"type\":\"content_block_stop\",\"index\":0}",
+            },
+            <SseMessageInfo>{
+                "event": "message_delta",
+                "data": "{\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"},"
+                    "\"usage\":{\"output_tokens\":5}}",
+            },
+            <SseMessageInfo>{
+                "event": "message_stop",
+                "data": "{\"type\":\"message_stop\"}",
+            },
+        );
+
+        AnthropicMessageStreamDataProvider stream(rest);
+        StreamObserver obs();
+        stream.registerObserver(obs);
+        stream.observersReady();
+        stream.doRequest({
+            "model": "claude-sonnet-4-6-20250514",
+            "max_tokens": 1024,
+            "messages": ({"role": "user", "content": "Hello!"},),
+        });
+        obs.wait(6);
+
+        assertEq("message_start", obs.events[0].type);
+        assertEq("msg_s1", obs.events[0].message.id);
+        assertEq("content_block_start", obs.events[1].type);
+        assertEq("content_block_delta", obs.events[2].type);
+        assertEq("Hello", obs.events[2].delta.text);
+        assertEq("content_block_stop", obs.events[3].type);
+        assertEq("message_delta", obs.events[4].type);
+        assertEq("end_turn", obs.events[4].delta.stop_reason);
+        assertEq("message_stop", obs.events[5].type);
+
+        # verify stream request had stream=True
+        assertEq(True, rest.last_stream_request.stream);
+%endif
+    }
+
+    streamErrorTest() {
+        checkModule();
+%ifndef NoJson
+        FailingAnthropicRestClientIo rest();
+        AnthropicMessageStreamDataProvider stream(rest);
+        StreamObserver obs();
+        stream.registerObserver(obs);
+        stream.observersReady();
+        stream.doRequest({
+            "model": "claude-sonnet-4-6-20250514",
+            "max_tokens": 1024,
+            "messages": ({"role": "user", "content": "Hello!"},),
+        });
+        obs.wait(1);
+        assertEq("error", obs.events[0].type);
+        assertEq(True, obs.events[0].error instanceof hash);
+%endif
+    }
+
+    countTokensTest() {
+        checkModule();
+%ifndef NoJson
+        FakeAnthropicRestClientIo rest();
+        rest.response_body = {
+            "input_tokens": 42,
+        };
+        AnthropicDataProvider prov(rest);
+        AbstractDataProvider ct = prov.getChildProvider("count-tokens");
+        hash<auto> resp = ct.doRequest({
+            "model": "claude-sonnet-4-6-20250514",
+            "messages": ({"role": "user", "content": "Count my tokens"},),
+        });
+        assertEq("POST", rest.last_method);
+        assertEq("messages/count_tokens", rest.last_path);
+        assertEq(42, resp.input_tokens);
+%endif
+    }
+
+    modelsListTest() {
+        checkModule();
+%ifndef NoJson
+        FakeAnthropicRestClientIo rest();
+        AnthropicDataProvider prov(rest);
+        AbstractDataProvider models = prov.getChildProvider("models").getChildProvider("list");
+        auto resp = models.doRequest(NOTHING);
+        assertEq("GET", rest.last_method);
+        assertEq("models", rest.last_path);
+        assertEq(1, resp.lsize());
+        assertEq("claude-sonnet-4-6-20250514", resp[0].id);
+        assertEq(1000000, resp[0].max_input_tokens);
+        assertEq(64000, resp[0].max_tokens);
+%endif
+    }
+
+    actionSessionCreateTest() {
+        checkModule();
+%ifndef NoJson
+        FakeAnthropicRestClientIo rest();
+        hash<auto> opts = {
+            "restclient": rest,
+        };
+        AnthropicMessageActionSession session(opts);
+
+        hash<auto> result = session.handleAction("anthropic-message-create", {
+            "model": "claude-sonnet-4-6-20250514",
+            "max_tokens": 1024,
+            "messages": ({"role": "user", "content": "Hello!"},),
+        });
+        assertEq("msg_test123", result.message_id);
+        assertEq("assistant", result.role);
+        assertEq("Hello! How can I help you?", result.output_text);
+%endif
+    }
+
+    actionSessionStreamTest() {
+        checkModule();
+%ifndef NoJson
+        FakeAnthropicRestClientIo rest();
+        rest.stream_events = (
+            <SseMessageInfo>{
+                "event": "message_start",
+                "data": "{\"type\":\"message_start\",\"message\":{\"id\":\"msg_as1\"}}",
+            },
+            <SseMessageInfo>{
+                "event": "content_block_delta",
+                "data": "{\"type\":\"content_block_delta\",\"index\":0,"
+                    "\"delta\":{\"type\":\"text_delta\",\"text\":\"Hi\"}}",
+            },
+            <SseMessageInfo>{
+                "event": "message_stop",
+                "data": "{\"type\":\"message_stop\"}",
+            },
+        );
+
+        # test the action session by verifying it can handle create/stop actions
+        # (streaming through the action session is integration-tested via stream events test)
+        hash<auto> opts = {
+            "restclient": rest,
+        };
+        AnthropicMessageActionSession session(opts);
+        hash<auto> stop_result = session.handleAction("anthropic-message-stop");
+        assertEq("stopped", stop_result.status);
+%endif
+    }
+
+    actionSessionInvalidTest() {
+        checkModule();
+%ifndef NoJson
+        FakeAnthropicRestClientIo rest();
+        AnthropicMessageActionSession session({"restclient": rest});
+        assertThrows("INVALID-ACTION", sub () {
+            session.handleAction("invalid-action");
+        });
+%endif
+    }
+
+    exampleEventDataTest() {
+        checkModule();
+%ifndef NoJson
+        # the fake rest client returns a successful response, so getExampleEventDataImpl
+        # returns the API response rather than falling back to fake data
+        FakeAnthropicRestClientIo rest();
+        AnthropicMessageStreamDataProvider stream(rest);
+        auto example = stream.getExampleEventData(AnthropicDataProvider::EVENT_ANTHROPIC_MESSAGE_STREAM);
+        assertEq(True, example instanceof hash);
+        # the fake client returns type="message" from restPost
+        assertEq("message", example.type);
+        assertEq("message_start", example.event);
+%endif
+    }
+
+    dataTypesTest() {
+        checkModule();
+%ifndef NoJson
+        # verify AnthropicJsonSchemaDataType fields
+        AnthropicJsonSchemaDataType schema_type();
+        hash<string, AbstractDataField> schema_fields = schema_type.getFields();
+        assertEq(True, schema_fields.hasKey("type"));
+        assertEq(True, schema_fields.hasKey("properties"));
+        assertEq(True, schema_fields.hasKey("required"));
+        assertEq(True, schema_fields.hasKey("description"));
+
+        # verify AnthropicContentBlockDataType fields
+        AnthropicContentBlockDataType block_type();
+        hash<string, AbstractDataField> block_fields = block_type.getFields();
+        assertEq(True, block_fields.hasKey("type"));
+        assertEq(True, block_fields.hasKey("text"));
+        assertEq(True, block_fields.hasKey("id"));
+        assertEq(True, block_fields.hasKey("name"));
+        assertEq(True, block_fields.hasKey("input"));
+        assertEq(True, block_fields.hasKey("thinking"));
+
+        # verify AnthropicOutputConfigDataType fields
+        AnthropicOutputConfigDataType output_config_type();
+        hash<string, AbstractDataField> oc_fields = output_config_type.getFields();
+        assertEq(True, oc_fields.hasKey("json_schema"));
+        assertEq(True, oc_fields.hasKey("effort"));
+
+        # verify new fields in request type
+        assertEq(True, AnthropicMessageRequestDataType::Fields.hasKey("service_tier"));
+        assertEq(True, AnthropicMessageRequestDataType::Fields.hasKey("output_config"));
+        assertEq(True, AnthropicMessageRequestDataType::Fields.hasKey("container"));
+
+        # verify thinking config has adaptive option
+        hash<auto> thinking_field = AnthropicMessageRequestDataType::Fields.thinking;
+        assertEq(True, thinking_field instanceof hash);
+
+        # verify model data type has new fields
+        AnthropicModelDataType model_type();
+        hash<string, AbstractDataField> model_fields = model_type.getFields();
+        assertEq(True, model_fields.hasKey("max_input_tokens"));
+        assertEq(True, model_fields.hasKey("max_tokens"));
+
+        # verify count tokens request has thinking field
+        assertEq(True, AnthropicCountTokensRequestDataType::Fields.hasKey("thinking"));
+
+        # verify response type has container field with typed sub-type
+        assertEq(True, AnthropicMessageResponseDataType::Fields.hasKey("container"));
+        AnthropicContainerDataType container_type();
+        hash<string, AbstractDataField> container_fields = container_type.getFields();
+        assertEq(True, container_fields.hasKey("id"));
+        assertEq(True, container_fields.hasKey("expires_at"));
+
+        # verify delta data type fields
+        AnthropicDeltaDataType delta_type();
+        hash<string, AbstractDataField> delta_fields = delta_type.getFields();
+        assertEq(True, delta_fields.hasKey("type"));
+        assertEq(True, delta_fields.hasKey("text"));
+        assertEq(True, delta_fields.hasKey("partial_json"));
+        assertEq(True, delta_fields.hasKey("thinking"));
+        assertEq(True, delta_fields.hasKey("signature"));
+        assertEq(True, delta_fields.hasKey("stop_reason"));
+        assertEq(True, delta_fields.hasKey("stop_sequence"));
+
+        # verify stream event type uses typed sub-types
+        AnthropicStreamEventDataType stream_evt_type();
+        hash<string, AbstractDataField> stream_fields = stream_evt_type.getFields();
+        assertEq(True, stream_fields.hasKey("message"));
+        assertEq(True, stream_fields.hasKey("content_block"));
+        assertEq(True, stream_fields.hasKey("delta"));
+%endif
+    }
+
+    liveConnectionPingTest() {
+        checkModule();
+%ifndef NoJson
+        if (!rc) {
+            testSkip("no ANTHROPIC_CONNECTION set");
+        }
+        hash<auto> ping_result = rc.ping(True);
+        assertEq(True, ping_result.ok);
+%endif
+    }
+
+    liveCreateMessageTest() {
+        checkModule();
+%ifndef NoJson
+        if (!rc) {
+            testSkip("no ANTHROPIC_CONNECTION set");
+        }
+        AnthropicDataProvider prov(rc.getAsync());
+        AbstractDataProvider create = prov.getChildProvider("messages").getChildProvider("create");
+        hash<auto> resp = create.doRequest({
+            "model": "claude-haiku-4-5-20241022",
+            "max_tokens": 64,
+            "messages": ({"role": "user", "content": "Say exactly: integration test ok"},),
+        });
+        assertEq("message", resp.type);
+        assertEq("assistant", resp.role);
+        assertTrue(resp.output_text.val());
+        assertTrue(resp.stop_reason.val());
+        assertTrue(resp.usage.input_tokens > 0);
+%endif
+    }
+
+    liveModelsListTest() {
+        checkModule();
+%ifndef NoJson
+        if (!rc) {
+            testSkip("no ANTHROPIC_CONNECTION set");
+        }
+        AnthropicDataProvider prov(rc.getAsync());
+        AbstractDataProvider models = prov.getChildProvider("models").getChildProvider("list");
+        auto resp = models.doRequest(NOTHING);
+        assertTrue(resp.lsize() > 0);
+        assertTrue(resp[0].id.val());
+%endif
+    }
+
+    liveCountTokensTest() {
+        checkModule();
+%ifndef NoJson
+        if (!rc) {
+            testSkip("no ANTHROPIC_CONNECTION set");
+        }
+        AnthropicDataProvider prov(rc.getAsync());
+        AbstractDataProvider ct = prov.getChildProvider("count-tokens");
+        hash<auto> resp = ct.doRequest({
+            "model": "claude-haiku-4-5-20241022",
+            "messages": ({"role": "user", "content": "Count my tokens"},),
+        });
+        assertTrue(resp.input_tokens > 0);
+%endif
+    }
+
+    private setupConnection() {
+%ifndef NoJson
+        *string conn_name = m_options.conn ?? ENV.ANTHROPIC_CONNECTION;
+        if (conn_name.val()) {
+            AbstractConnection conn = get_connection(conn_name);
+            if (conn instanceof AnthropicRestClient::AnthropicRestConnection) {
+                rc = cast<AnthropicRestClient::AnthropicRestConnection>(conn);
+            }
+        }
+%endif
+    }
+}
