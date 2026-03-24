@@ -2278,12 +2278,13 @@ hash: (2 members)
                 if (!cd.val())
                     throw "MULTIPART-FORMDATA-MESSAGE-ERROR", sprintf("the Content-Disposion part header is missing "
                         "in part %d/%d", $# + 1, mh.part.size());
-                *string name = (cd =~ x/name="([^"]+)"/)[0];
-                if (!name.val())
+                *string name_opt = (cd =~ x/name="([^"]+)"/)[0];
+                if (!name_opt.val())
                     throw "MULTIPART-FORMDATA-MESSAGE-ERROR", sprintf("the Content-Disposion part header is missing "
                         "the part name in part %d/%d", $# + 1, mh.part.size());
+                string name = name_opt;  # assured to be non-null by check above
                 *string filename = (cd =~ x/filename="([^"]+)"/)[0];
-                rv{name} = new hash<FormDataMessageInfo>((
+                rv{name} = cast<hash<FormDataMessageInfo>>((
                     "name": name,
                     "filename": filename,
                     "hdr": h.hdr,
