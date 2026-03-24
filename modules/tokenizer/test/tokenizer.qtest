@@ -36,6 +36,11 @@ class TokenizerTest inherits QUnit::Test {
         addTestCase("gpt2Tokenizer", \gpt2TokenizerTest());
         addTestCase("t5Tokenizer", \t5TokenizerTest());
         addTestCase("gpt2Decode", \gpt2DecodeTest());
+        addTestCase("llamaTokenizer", \llamaTokenizerTest());
+        addTestCase("bertSentencePair", \bertSentencePairTest());
+        addTestCase("truncationTest", \truncationTest());
+        addTestCase("paddingTest", \paddingTest());
+        addTestCase("batchEncodingTest", \batchEncodingTest());
 
         set_return_value(main());
     }
@@ -280,6 +285,110 @@ class TokenizerTest inherits QUnit::Test {
         hash<auto> enc = tok.encode(input);
         string decoded = tok.decode(enc.input_ids);
         assertEq(input, decoded, "GPT-2 round-trip should preserve text exactly");
+    }
+
+    llamaTokenizerTest() {
+%ifdef NoTokenizer
+        testSkip("tokenizer module not available");
+%endif
+%ifdef NoJson
+        testSkip("json module not available");
+%endif
+        string json_str = ReadOnlyFile::readTextFile(
+            get_script_dir() + "/test_data/tinyllama-tokenizer.json");
+        Tokenizer::HFTokenizer tok(parse_json(json_str));
+
+        assertEq(32000, tok.getVocabSize(), "Llama vocab size");
+
+        hash<auto> enc = tok.encode("Hello, world!");
+        assertEq((1, 15043, 29892, 3186, 29991), enc.input_ids,
+            "Llama 'Hello, world!' should match Python reference");
+
+        hash<auto> enc2 = tok.encode("The quick brown fox");
+        assertEq((1, 450, 4996, 17354, 1701, 29916), enc2.input_ids,
+            "Llama fox sentence should match Python reference");
+    }
+
+    bertSentencePairTest() {
+%ifdef NoTokenizer
+        testSkip("tokenizer module not available");
+%endif
+%ifdef NoJson
+        testSkip("json module not available");
+%endif
+        string json_str = ReadOnlyFile::readTextFile(
+            get_script_dir() + "/test_data/bert-base-uncased-tokenizer.json");
+        Tokenizer::HFTokenizer tok(parse_json(json_str));
+
+        hash<auto> enc = tok.encodeWithOptions("What is AI?", "AI is intelligence.");
+        assertEq((101, 2054, 2003, 9932, 1029, 102, 9932, 2003, 4454, 1012, 102),
+            enc.input_ids, "BERT sentence pair IDs should match Python reference");
+        assertEq((0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1),
+            enc.token_type_ids, "BERT sentence pair type_ids should be correct");
+    }
+
+    truncationTest() {
+%ifdef NoTokenizer
+        testSkip("tokenizer module not available");
+%endif
+%ifdef NoJson
+        testSkip("json module not available");
+%endif
+        string json_str = ReadOnlyFile::readTextFile(
+            get_script_dir() + "/test_data/bert-base-uncased-tokenizer.json");
+        Tokenizer::HFTokenizer tok(parse_json(json_str));
+
+        hash<auto> enc = tok.encodeAdvanced(
+            "Hello world this is a test of truncation", {
+                "max_length": 6,
+                "truncation": "longest_first",
+            });
+        assertEq(6, enc.input_ids.size(), "truncated should have exactly 6 tokens");
+        assertEq(101, enc.input_ids[0], "first token should be [CLS]");
+        assertEq(102, enc.input_ids[5], "last token should be [SEP]");
+    }
+
+    paddingTest() {
+%ifdef NoTokenizer
+        testSkip("tokenizer module not available");
+%endif
+%ifdef NoJson
+        testSkip("json module not available");
+%endif
+        string json_str = ReadOnlyFile::readTextFile(
+            get_script_dir() + "/test_data/bert-base-uncased-tokenizer.json");
+        Tokenizer::HFTokenizer tok(parse_json(json_str));
+
+        hash<auto> enc = tok.encodeAdvanced("hi", {
+            "max_length": 8,
+            "truncation": "longest_first",
+            "padding": "max_length",
+        });
+        assertEq(8, enc.input_ids.size(), "padded should have exactly 8 tokens");
+        assertEq((1, 1, 1, 0, 0, 0, 0, 0), enc.attention_mask,
+            "attention_mask should be 1 for real, 0 for padding");
+    }
+
+    batchEncodingTest() {
+%ifdef NoTokenizer
+        testSkip("tokenizer module not available");
+%endif
+%ifdef NoJson
+        testSkip("json module not available");
+%endif
+        string json_str = ReadOnlyFile::readTextFile(
+            get_script_dir() + "/test_data/bert-base-uncased-tokenizer.json");
+        Tokenizer::HFTokenizer tok(parse_json(json_str));
+
+        list<hash<auto>> batch = tok.encodeBatch(
+            ("short", "a much longer sentence for testing"), {
+                "max_length": 10,
+                "truncation": "longest_first",
+                "padding": "true",
+            });
+        assertEq(2, batch.size(), "batch should have 2 elements");
+        assertEq(batch[0].input_ids.size(), batch[1].input_ids.size(),
+            "batch elements should have same length");
     }
 
     errorCasesTest() {
