@@ -3,8 +3,7 @@
 %requires ../../../../qlib/Util.qm
 %requires ../../../../qlib/QUnit.qm
 
-%new-style
-%require-types
+%modern
 %enable-all-warnings
 
 %exec-class MathTest

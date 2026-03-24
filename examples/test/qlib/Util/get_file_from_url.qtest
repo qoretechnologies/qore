@@ -13,8 +13,7 @@
 
 %include ../../qore/classes/FtpServer.qc
 
-%new-style
-%require-types
+%modern
 %enable-all-warnings
 
 %exec-class GetFileFromUrlTest

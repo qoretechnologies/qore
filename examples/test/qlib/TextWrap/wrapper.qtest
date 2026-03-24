@@ -2,8 +2,7 @@
 
 %include common.q
 
-%new-style
-%require-types
+%modern
 %enable-all-warnings
 
 %exec-class WrapTest
