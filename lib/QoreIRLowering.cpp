@@ -1079,47 +1079,31 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         return true;
     }
     if (auto* on_block_exit_stmt = dynamic_cast<const OnBlockExitStatement*>(stmt)) {
-        // Phase 3b: Compile handlers to IR + keep Phase 3a inline mechanism
-        // Phase 3: Compilation-only (store IR, don't execute yet - Phase 4 will enable execution)
-        // Phase 3a: Register handlers for inline lowering (keeps working)
+        // Phase 3a: Register handlers for inline lowering
+        // OBE_Unconditional and OBE_Success: inlined at block exit, NOT registered in runtime vector
+        // OBE_Error: registered in runtime vector for exception paths
 
+        // Register in block_handlers for inline lowering
         StatementBlock* handler_code = on_block_exit_stmt->getCode();
-        if (!handler_code) {
-            return true;
-        }
+        if (handler_code) {
+            block_handlers.emplace_back(InlineHandler{
+                on_block_exit_stmt->getType(),
+                handler_code,
+                stmt->loc
+            });
 
-        // Keep Phase 3a: Register in block_handlers for inline lowering
-        block_handlers.emplace_back(InlineHandler{
-            on_block_exit_stmt->getType(),
-            handler_code,
-            stmt->loc
-        });
-
-        // Phase 3b: Analyze and compile handler to IR
-        // Store in compiled_handlers map for Phase 4 to use
-        HandlerVariableCapture capture = analyzeHandlerVariables(handler_code);
-        QoreIRFunction* handler_ir = compileHandlerToIR(handler_code, capture, error);
-
-        if (handler_ir) {
-            // Store compiled handler for Phase 4 execution
-            compiled_handlers[on_block_exit_stmt] = std::unique_ptr<QoreIRFunction>(handler_ir);
-        } else {
-            // Compilation failed - only register OBE_Error in runtime vector (Phase 3a fallback)
-            if (on_block_exit_stmt->getType() == OBE_Error) {
-                builder.createOnBlockExit(on_block_exit_stmt, stmt->loc);
+            // Phase 3b: Compile handler to IR and store for later use
+            HandlerVariableCapture capture = analyzeHandlerVariables(handler_code);
+            QoreIRFunction* handler_ir = compileHandlerToIR(handler_code, capture, error);
+            if (handler_ir) {
+                compiled_handlers[on_block_exit_stmt] = std::unique_ptr<QoreIRFunction>(handler_ir);
             }
         }
 
-        // Phase 3a: Only register OBE_Error handlers in runtime vector
-        // (Phase 4 will handle execution of compiled handlers)
+        // Only register OBE_Error handlers in runtime vector (they're not inlined)
         if (on_block_exit_stmt->getType() == OBE_Error) {
-            // Already created above if compilation failed
-            if (handler_ir || compiled_handlers.count(on_block_exit_stmt)) {
-                // Don't create instruction yet - let Phase 4 handle it with compiled IR
-                // For now, keep Phase 3a behavior: register only if compilation failed
-            }
+            builder.createOnBlockExit(on_block_exit_stmt, stmt->loc);
         }
-
         return true;
     }
     if (auto* debug_stmt = dynamic_cast<const DebugStatement*>(stmt)) {
