@@ -1711,6 +1711,9 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
         return false;
     }
 
+    // Push handler stack to track which handlers are registered in this block
+    handler_stack.push(block_handlers.size());
+
     // Get the block's local variables for cleanup
     const LVList* lvars = block->getLVList();
 
@@ -1764,6 +1767,10 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
         }
     }
 
+    // Pop handler stack and restore block_handlers to previous size
+    size_t block_handler_start = handler_stack.top();
+    handler_stack.pop();
+
     // Emit ScopeExit if we have on_exit handlers and didn't terminate early
     // (early termination like return/break/continue will handle ScopeExit themselves
     // via emitBlockCleanups)
@@ -1773,6 +1780,11 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
         }
         scope_stack.pop_back();
         cleanup_stack.pop_back();
+    }
+
+    // Remove handlers registered in this block (restore to previous size)
+    if (block_handler_start < block_handlers.size()) {
+        block_handlers.erase(block_handlers.begin() + block_handler_start, block_handlers.end());
     }
 
     // Emit UninstantiateLocal for block-scoped local variables in reverse order
@@ -1847,15 +1859,15 @@ bool QoreIRLowering::shouldRunHandler(const InlineHandler& handler, bool is_erro
     return false;
 }
 
-bool QoreIRLowering::lowerHandlersAtExit(bool is_error, std::string& error) {
+bool QoreIRLowering::lowerHandlersAtExit(bool is_error, std::string& error, size_t start_index) {
     // Lower all applicable handlers for current block in LIFO order
     // Handlers are executed in reverse registration order (innermost to outermost)
-    if (block_handlers.empty()) {
+    if (block_handlers.empty() || start_index >= block_handlers.size()) {
         return true;
     }
 
-    // Process handlers in reverse order (LIFO)
-    for (int i = static_cast<int>(block_handlers.size()) - 1; i >= 0; --i) {
+    // Process handlers in reverse order (LIFO), starting from the end
+    for (int i = static_cast<int>(block_handlers.size()) - 1; i >= static_cast<int>(start_index); --i) {
         const InlineHandler& handler = block_handlers[i];
         if (!shouldRunHandler(handler, is_error)) {
             continue;

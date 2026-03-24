@@ -282,9 +282,10 @@ private:
     //! Lower all applicable handlers for the current block at an exit point
     /** Lowers handler code inline into the IR in LIFO order.
      *  @param is_error true if this is an error/exception exit
+     *  @param start_index start index in block_handlers (for multi-block context)
      *  @return false if lowering failed
      */
-    bool lowerHandlersAtExit(bool is_error, std::string& error);
+    bool lowerHandlersAtExit(bool is_error, std::string& error, size_t start_index = 0);
 
     QoreIRBuilder& builder;
     QoreParseContext* parse_context = nullptr;
