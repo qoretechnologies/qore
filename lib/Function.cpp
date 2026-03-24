@@ -1699,7 +1699,6 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
                 continue;
             }
             AbstractFunctionSignature* sig = (*i)->getSignature();
-            fprintf(stderr, "DEBUG: checking variant %s(%s) for %s\n", getName(), sig->getSignatureText(), getName());
 
             // get variant parse flags
             int64 vflags = (*i)->getFlags();
@@ -1745,8 +1744,6 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
                     if (pos_has_arg) {
                         pos_has_arg = QoreTypeInfo::hasType(a);
                     }
-                    fprintf(stderr, "DEBUG: variant %s(%s) param %d: t=%s a=%s\n", getName(), sig->getSignatureText(), pi,
-                            QoreTypeInfo::getName(t), QoreTypeInfo::getName(a));
 
                     //printd(5, "QoreFunction::parseFindVariant() %s(%s) committed pi: %d num_args: %d t: %s "
                     //    "(has type: %d) a: %s (%p) t->parseAccepts(a): %d\n", getName(), sig->getSignatureText(), pi,
@@ -1755,7 +1752,6 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
 
                     qore_type_result_e rc = QTI_UNASSIGNED;
                     qore_type_result_e max_rc = QTI_UNASSIGNED;
-                    fprintf(stderr, "DEBUG: QoreTypeInfo::hasType(t=%s) = %d\n", QoreTypeInfo::getName(t), QoreTypeInfo::hasType(t));
                     if (QoreTypeInfo::hasType(t)) {
                         if (!QoreTypeInfo::hasType(a)) {
                             if (pi < num_args) {
@@ -1774,7 +1770,6 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
                     }
 
                     if (rc == QTI_UNASSIGNED) {
-                        fprintf(stderr, "DEBUG: calling parseAccepts for %s(%s) param %d\n", getName(), sig->getSignatureText(), pi);
                         bool may_not_match = false;
                         bool may_need_filter = false;
                         rc = QoreTypeInfo::parseAccepts(t, a, may_not_match, may_need_filter, max_rc, true);
@@ -1800,7 +1795,6 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
                     }
 
                     if (rc == QTI_NOT_EQUAL) {
-                        fprintf(stderr, "DEBUG: variant %s(%s) parameter %d NOT equal, breaking\n", getName(), sig->getSignatureText(), pi);
                         ok = false;
                         // raise a detailed parse exception immediately if there is only one variant
                         if (ilist.size() == 1 && aqf->vlist.singular() && pgm->getParseExceptionSink()) {
@@ -1809,7 +1803,6 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
                         break;
                     }
                     ++variant_pmatch;
-                    fprintf(stderr, "DEBUG: variant %s(%s) param %d: rc=%d, pscore=%d\n", getName(), sig->getSignatureText(), pi, rc, pscore);
                     if (rc != QTI_IGNORE && pos_has_arg) {
                         pscore += rc;
                         if (max_rc == QTI_UNASSIGNED) {
@@ -1856,8 +1849,6 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
 
                 ++npv;
 
-                fprintf(stderr, "DEBUG: variant %s(%s) before score check: pscore=%d score=%d max_pscore=%d max_score=%d\n",
-                    getName(), sig->getSignatureText(), pscore, score, max_pscore, max_score);
                 if ((pscore > score && max_pscore >= max_score)
                     || (pscore == score
                         && (variant_nperfect > nperfect
@@ -1865,8 +1856,6 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
                                 && (score_len == -1 || sig->numParams() < (unsigned)score_len))))) {
                     // if we could possibly match less than another variant
                     // then we have to match at runtime
-                    fprintf(stderr, "DEBUG: variant %s(%s) SELECTED: pscore=%d score=%d (pscore>score=%d)\n", getName(),
-                        sig->getSignatureText(), pscore, score, (pscore > score));
                     printd(5, "QoreFunction::parseFindVariant() %s(%s) score better: pscore=%d score=%d max_pscore=%d "
                         "max_score=%d nperfect=%d variant_nperfect=%d variant_runtime_match=%d\n", getName(),
                         sig->getSignatureText(), pscore, score, max_pscore, max_score, nperfect, variant_nperfect,
@@ -1889,11 +1878,19 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
                         variant = *i;
                     }
                 } else if (variant_pmatch && (variant_pmatch >= pmatch || max_pscore >= max_score)) {
-                    // if we could possibly match less than another variant
-                    // then we have to match at runtime
-                    variant = nullptr;
-                    pmatch = variant_pmatch;
-                    score_len = -1;
+                    if (variant_soft_match && variant) {
+                        // soft-match variant (union type partial match) cannot override a
+                        // definitively-selected variant — the definitive variant handles ALL
+                        // union components safely, while the soft-match one handles only SOME
+                        // mark as possible to allow post-loop fallback if no definitive match found
+                        has_possible_match = true;
+                    } else {
+                        // if we could possibly match less than another variant
+                        // then we have to match at runtime
+                        variant = nullptr;
+                        pmatch = variant_pmatch;
+                        score_len = -1;
+                    }
                 }
             }
         }
@@ -1917,6 +1914,12 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
     }
 
     assert(!(runtime_match && variant));
+
+    // if no definitive match was found but there are possible (soft-match)
+    // variants that could match at runtime, use runtime dispatch
+    if (!variant && has_possible_match && !runtime_match) {
+        runtime_match = true;
+    }
 
     // if we only have one possible variant, then assign it, even it it's not a guaranteed match
     if (!variant && pvariant) {

@@ -1,0 +1,626 @@
+
+This GDB supports auto-downloading debuginfo from the following URLs:
+  <https://debuginfod.ubuntu.com>
+Enable debuginfod for this session? (y or [n]) [answered N; input not from terminal]
+Debuginfod has been disabled.
+To make this setting permanent, add 'set debuginfod enabled off' to .gdbinit.
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+  checking component 0: hash
+  checking component 1: nothing
+  -> result: 4 (case 3: all match)
+  checking component 0: hash
+  checking component 1: nothing
+  -> result: 4 (case 3: all match)
+  checking component 0: string
+  component 0: string does NOT match
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> result: NOT_EQUAL (case 1: no match)
+  checking component 0: string
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: list
+  checking component 0: string
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  component 0: list match score=2
+  checking component 0: list
+  checking component 0: string
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  component 0: list match score=2
+  checking component 0: list
+  checking component 0: string
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  component 0: list match score=2
+  checking component 0: hash
+  component 0: hash does NOT match
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> result: NOT_EQUAL (case 1: no match)
+  checking component 0: hash
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: string
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: hash
+  component 0: hash does NOT match
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> result: NOT_EQUAL (case 1: no match)
+  checking component 0: hash
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: hash
+  component 0: hash does NOT match
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> result: NOT_EQUAL (case 1: no match)
+  checking component 0: hash
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: hash
+  component 0: hash does NOT match
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> result: NOT_EQUAL (case 1: no match)
+  checking component 0: hash
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: hash
+  component 0: hash does NOT match
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> result: NOT_EQUAL (case 1: no match)
+  checking component 0: hash
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: hash
+  component 0: hash does NOT match
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> result: NOT_EQUAL (case 1: no match)
+  checking component 0: hash
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: string
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: hash
+  component 0: hash does NOT match
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> result: NOT_EQUAL (case 1: no match)
+  checking component 0: hash
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: string
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: string
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: string
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: string
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: string
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: string
+  checking component 1: nothing
+  -> result: 4 (case 3: all match)
+  checking component 0: list
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: list
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: string
+  checking component 1: nothing
+  -> result: 4 (case 3: all match)
+  checking component 0: string
+  component 0: string does NOT match
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> result: NOT_EQUAL (case 1: no match)
+  checking component 0: string
+  checking component 1: nothing
+  -> result: 4 (case 3: all match)
+  checking component 0: list
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: string
+  component 0: string does NOT match
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> result: NOT_EQUAL (case 1: no match)
+  checking component 0: string
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: string
+  component 0: string does NOT match
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> result: NOT_EQUAL (case 1: no match)
+  checking component 0: string
+  component 0: string does NOT match
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> result: NOT_EQUAL (case 1: no match)
+  checking component 0: string
+  component 0: string does NOT match
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> result: NOT_EQUAL (case 1: no match)
+  checking component 0: string
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: string
+  component 0: string does NOT match
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> result: NOT_EQUAL (case 1: no match)
+  checking component 0: string
+  component 0: string does NOT match
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> result: NOT_EQUAL (case 1: no match)
+  checking component 0: string
+  component 0: string does NOT match
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> result: NOT_EQUAL (case 1: no match)
+  checking component 0: string
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: string
+  component 0: string does NOT match
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> result: NOT_EQUAL (case 1: no match)
+  checking component 0: string
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: string
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: string
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: string
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: string
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: string
+  component 0: string does NOT match
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> result: NOT_EQUAL (case 1: no match)
+  checking component 0: string
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: string
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: hash
+  component 0: hash does NOT match
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> result: NOT_EQUAL (case 1: no match)
+  checking component 0: hash
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: hash
+  component 0: hash does NOT match
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> result: NOT_EQUAL (case 1: no match)
+  checking component 0: int
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: int
+  component 0: int does NOT match
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> result: NOT_EQUAL (case 1: no match)
+  checking component 0: list
+  component 0: list does NOT match
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> result: NOT_EQUAL (case 1: no match)
+  checking component 0: list
+  checking component 1: nothing
+  -> result: 4 (case 3: all match)
+  checking component 0: list
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: list
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: list
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: list
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: list
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: list
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: hash
+  component 0: hash does NOT match
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> result: NOT_EQUAL (case 1: no match)
+  checking component 0: hash
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: hash
+  component 0: hash does NOT match
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> result: NOT_EQUAL (case 1: no match)
+  checking component 0: hash
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: hash
+  component 0: hash does NOT match
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> result: NOT_EQUAL (case 1: no match)
+  checking component 0: hash
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: hash
+  component 0: hash does NOT match
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> result: NOT_EQUAL (case 1: no match)
+  checking component 0: hash
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: hash
+  component 0: hash does NOT match
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> result: NOT_EQUAL (case 1: no match)
+  checking component 0: hash
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: hash
+  component 0: hash does NOT match
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> result: NOT_EQUAL (case 1: no match)
+  checking component 0: hash
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: string
+  component 0: string does NOT match
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> result: NOT_EQUAL (case 1: no match)
+  checking component 0: list
+  checking component 1: nothing
+  -> result: 4 (case 3: all match)
+  checking component 0: list
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: list
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: list
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: list
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: string
+  checking component 1: nothing
+  -> result: 4 (case 3: all match)
+  checking component 0: list
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: list
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: string
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: string
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: string
+  checking component 1: nothing
+  -> result: 4 (case 3: all match)
+  checking component 0: string
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: string
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: string
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: string
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: string
+  component 0: string does NOT match
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> result: NOT_EQUAL (case 1: no match)
+  checking component 0: string
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: string
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: string
+  component 0: string does NOT match
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> result: NOT_EQUAL (case 1: no match)
+  checking component 0: string
+  component 0: string does NOT match
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> result: NOT_EQUAL (case 1: no match)
+  checking component 0: string
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: string
+  checking component 1: nothing
+  -> result: 4 (case 3: all match)
+  checking component 0: hash
+  component 0: hash does NOT match
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> result: NOT_EQUAL (case 1: no match)
+  checking component 0: hash
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: hash
+  component 0: hash does NOT match
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> result: NOT_EQUAL (case 1: no match)
+  checking component 0: hash
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: hash
+  component 0: hash does NOT match
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> result: NOT_EQUAL (case 1: no match)
+  checking component 0: hash
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: code
+  checking component 1: code
+  -> result: 4 (case 3: all match)
+  checking component 0: code
+  checking component 1: code
+  -> result: 4 (case 3: all match)
+  checking component 0: hash
+  component 0: hash does NOT match
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> result: NOT_EQUAL (case 1: no match)
+  checking component 0: hash
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: hash
+  component 0: hash does NOT match
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> result: NOT_EQUAL (case 1: no match)
+  checking component 0: hash
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: hash
+  component 0: hash does NOT match
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> result: NOT_EQUAL (case 1: no match)
+  checking component 0: hash
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: hash
+  component 0: hash does NOT match
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> result: NOT_EQUAL (case 1: no match)
+  checking component 0: hash
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: code
+  checking component 1: code
+  -> result: 4 (case 3: all match)
+  checking component 0: hash
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: hash
+  component 0: hash does NOT match
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> result: NOT_EQUAL (case 1: no match)
+  checking component 0: hash
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: hash
+  component 0: hash does NOT match
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> result: NOT_EQUAL (case 1: no match)
+  checking component 0: hash
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: hash
+  component 0: hash does NOT match
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> result: NOT_EQUAL (case 1: no match)
+  checking component 0: hash
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: hash
+  component 0: hash does NOT match
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> result: NOT_EQUAL (case 1: no match)
+  checking component 0: hash
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: hash
+  component 0: hash does NOT match
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> result: NOT_EQUAL (case 1: no match)
+  checking component 0: hash
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: hash
+  component 0: hash does NOT match
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> result: NOT_EQUAL (case 1: no match)
+  checking component 0: hash
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: hash
+  component 0: hash does NOT match
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> result: NOT_EQUAL (case 1: no match)
+  checking component 0: hash
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: hash
+  component 0: hash does NOT match
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> result: NOT_EQUAL (case 1: no match)
+  checking component 0: hash
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: hash
+  component 0: hash does NOT match
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> result: NOT_EQUAL (case 1: no match)
+  checking component 0: hash
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: hash
+  component 0: hash does NOT match
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> result: NOT_EQUAL (case 1: no match)
+  checking component 0: hash
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: hash
+  component 0: hash does NOT match
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> result: NOT_EQUAL (case 1: no match)
+  checking component 0: hash
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> early return: AMBIGUOUS (case 2: partial match), may_not_match=true
+  checking component 0: hash
+  component 0: hash does NOT match
+  checking component 1: nothing
+  component 1: nothing does NOT match
+  -> result: NOT_EQUAL (case 1: no match)
+  checking component 0: hash
+  check
