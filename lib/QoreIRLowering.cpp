@@ -1076,41 +1076,16 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
     }
     if (auto* on_block_exit_stmt = dynamic_cast<const OnBlockExitStatement*>(stmt)) {
         auto* inst = builder.createOnBlockExit(on_block_exit_stmt, stmt->loc);
-        // NOTE: Handler IR compilation is disabled due to complexity of implementing closure variable capture
-        // for handler functions that need access to parent scope variables. AST fallback works correctly
-        // and has proper access to parent scope. Full closure support for handlers is a TODO for future work.
-        // To implement: would need to pass parent frame's local values as closure parameters to handler_ir,
-        // requiring tracking of variable references and proper closure vector construction at execution time.
-        StatementBlock* handler_code = nullptr;  // DISABLED: on_block_exit_stmt->getCode();
-        if (handler_code && false) {  // Disabled handler IR compilation
-            static std::atomic<uint64_t> handler_counter{0};
-            std::string handler_name = "on_block_exit_handler_"
-                + std::to_string(handler_counter.fetch_add(1));
-            auto handler_func = std::make_unique<QoreIRFunction>(handler_name);
-            // On-exit handlers return nothing (NOTHING type) since they're cleanup code
-            handler_func->return_type_info = nothingTypeInfo;
-            // Collect handler's own body locals for pre-instantiation
-            collectAllStatementLocals(handler_code, handler_func->all_body_locals);
-            for (LocalVar* lv : handler_func->all_body_locals) {
-                handler_func->pre_instantiated_locals.insert(
-                    reinterpret_cast<const void*>(lv));
-            }
-            QoreIRBuilder handler_builder(handler_func.get());
-            auto* entry = handler_func->createBlock("entry");
-            handler_builder.setBlock(entry);
-            QoreIRLowering handler_lowering(handler_builder, parse_context);
-            std::string handler_error;
-            if (handler_lowering.lowerStatementBlock(handler_code, handler_error)) {
-                if (!blockHasTerminator(handler_builder.getBlock())) {
-                    handler_builder.createReturnNothing(stmt->loc);
-                }
-                std::string verify_error;
-                if (QoreIRVerifier::verify(*handler_func, verify_error)) {
-                    handler_func->computeIROnlyLocals();
-                    inst->handler_ir = std::move(handler_func);
-                }
-            }
-            // If lowering or verification failed, handler_ir remains nullptr (AST fallback)
+        // Register handler for inline lowering at block exit points
+        // Handlers are stored in block_handlers and will be lowered inline at each exit instruction
+        // This allows natural scope access to parent block's variables without closure overhead
+        StatementBlock* handler_code = on_block_exit_stmt->getCode();
+        if (handler_code) {
+            block_handlers.emplace_back(InlineHandler{
+                on_block_exit_stmt->getType(),
+                handler_code,
+                stmt->loc
+            });
         }
         return true;
     }

@@ -32,6 +32,7 @@
 #ifndef _QORE_INTERN_QOREIRLOWERING_H
 #define _QORE_INTERN_QOREIRLOWERING_H
 
+#include <stack>
 #include <string>
 #include <unordered_set>
 #include <vector>
@@ -288,6 +289,26 @@ private:
      *  On continue, only body inner entries above RefForeachRecord are processed.
      */
     std::vector<BlockCleanupEntry> cleanup_stack;
+
+    //! Handler metadata for inline compilation at block exit points
+    /** Stores on_exit/on_success/on_error handler StatementBlocks along with their type
+     *  and location information. These are lowered inline at block exit points rather than
+     *  compiled as separate QoreIRFunction objects.
+     */
+    struct InlineHandler {
+        obe_type_e type;                     //!< handler type (OBE_Unconditional/Success/Error)
+        StatementBlock* code;                //!< handler code block
+        const QoreProgramLocation* loc;      //!< source location for error reporting
+    };
+
+    //! Handlers registered for current block, to be lowered inline at exit points
+    std::vector<InlineHandler> block_handlers;
+
+    //! Stack of handler vector sizes at each block entry for nested block tracking
+    /** When entering a nested block, push the current block_handlers.size().
+     *  On exit, pop and restore to enable proper handler isolation between block scopes.
+     */
+    std::stack<size_t> handler_stack;
 
     class GuardExceptionTargetOverrideScope {
     public:
