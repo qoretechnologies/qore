@@ -103,12 +103,28 @@ public class ModelRegistryDataProvider inherits AbstractDataProvider {
 */
 public class ModelVersionsDataProvider inherits AbstractDataProvider {
     public {
+        const SearchOptions = {
+            "version_id": <DataProviderOptionInfo>{
+                "display_name": "Version ID",
+                "short_desc": "Filter by version identifier",
+                "type": AbstractDataProviderTypeMap."string",
+                "desc": "Filter versions by their unique version identifier",
+            },
+            "algorithm": <DataProviderOptionInfo>{
+                "display_name": "Algorithm",
+                "short_desc": "Filter by algorithm name",
+                "type": AbstractDataProviderTypeMap."string",
+                "desc": "Filter versions by algorithm class name (e.g., `KMeans`, `LinearRegression`)",
+            },
+        };
+
         const ProviderInfo = <DataProviderInfo>{
             "type": "ModelVersionsDataProvider",
             "supports_read": True,
             "supports_delete": True,
             "supports_native_search": True,
             "has_record": True,
+            "search_options": SearchOptions,
         };
     }
 

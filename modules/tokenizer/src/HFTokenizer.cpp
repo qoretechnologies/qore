@@ -227,7 +227,10 @@ QoreHFTokenizer::InternalEncoding QoreHFTokenizer::encodeText(
 QoreHashNode* QoreHFTokenizer::encode(const QoreStringNode* text,
         const QoreStringNode* text_pair, bool add_special_tokens,
         ExceptionSink* xsink) {
-    // No mutex needed: all pipeline components are immutable after construction
+    // Cooperative cancellation check
+    if (qore_check_cancel(xsink, "encoding text")) {
+        return nullptr;
+    }
 
     if (!model) {
         xsink->raiseException("TOKENIZER-ERROR", "tokenizer model not initialized");
@@ -412,6 +415,9 @@ QoreHashNode* QoreHFTokenizer::getVocab(ExceptionSink* xsink) const {
 
 QoreHashNode* QoreHFTokenizer::encodeAdvanced(const QoreStringNode* text,
         const QoreHashNode* options, ExceptionSink* xsink) {
+    if (qore_check_cancel(xsink, "encoding text")) {
+        return nullptr;
+    }
     if (!model) {
         xsink->raiseException("TOKENIZER-ERROR", "tokenizer model not initialized");
         return nullptr;

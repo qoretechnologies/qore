@@ -144,6 +144,7 @@ public class DataProvider {
             "mcpclient": "McpClientDataProvider",
 
             "ml": "DataProviderML",
+            "model-registry": "QoreModelRegistry",
 
             "mailgun": "MailgunDataProvider",
             "mewsrest": "MewsRestDataProvider",
