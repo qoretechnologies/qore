@@ -1,0 +1,610 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore ElevenLabsDataProvider module definition
+
+/*  ElevenLabsDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%modern
+
+%requires(reexport) DataProvider
+%requires(reexport) ElevenLabsRestClient
+%requires RestClientIo
+%requires Mime
+%requires json
+
+module ElevenLabsDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for ElevenLabs services";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # register the data provider factory
+        DataProvider::registerFactory(new ElevenLabsDataProviderFactory());
+
+        # register the data provider application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": ElevenLabsDataProvider::AppName,
+            "display_name": "ElevenLabs",
+            "short_desc": "ElevenLabs AI voice synthesis services",
+            "desc": "Provides integration with [ElevenLabs](https://elevenlabs.io) AI voice "
+                "synthesis and audio processing services.\n\n"
+                "Supported operations:\n"
+                "- **Speech synthesis**: text-to-speech, speech-to-speech, voice design\n"
+                "- **Audio processing**: audio isolation, text-to-sound-effects\n"
+                "- **Transcription**: speech-to-text with speaker diarization\n"
+                "- **Voice management**: create, edit, delete, and list voices\n"
+                "- **Dubbing**: create and manage dubbing projects\n"
+                "- **Pronunciation**: manage pronunciation dictionaries",
+            "scheme": "elevenlabs",
+            "logo": ElevenLabsLogo,
+            "logo_file_name": "elevenlabs-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::AiLlm,),
+        });
+
+        # === Core AI Actions ===
+
+        # text-to-speech
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ElevenLabsDataProvider::AppName,
+            "path": "/text-to-speech",
+            "action": "text-to-speech",
+            "groups": "Speech Synthesis",
+            "display_name": "Text to Speech",
+            "short_desc": "Convert text to speech audio using AI voice synthesis",
+            "desc": "Convert text to speech audio using ElevenLabs AI voice synthesis. Supports multiple voices, "
+                "models, and output formats",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                ElevenLabsTextToSpeechRequestType::Fields{"voice_id", "text"}, {
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                ElevenLabsTextToSpeechRequestType::Fields{"model_id",}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                ElevenLabsTextToSpeechRequestType::Fields - ("voice_id", "text", "model_id")
+            ),
+            "output_type": AudioResponseType,
+        });
+
+        # speech-to-speech
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ElevenLabsDataProvider::AppName,
+            "path": "/speech-to-speech",
+            "action": "speech-to-speech",
+            "groups": "Speech Synthesis",
+            "display_name": "Speech to Speech",
+            "short_desc": "Convert audio from one voice to another",
+            "desc": "Convert audio from one voice to another using ElevenLabs AI voice conversion",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                ElevenLabsSpeechToSpeechRequestType::Fields{"voice_id", "audio"}, {
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                ElevenLabsSpeechToSpeechRequestType::Fields{"model_id",}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                ElevenLabsSpeechToSpeechRequestType::Fields - ("voice_id", "audio", "model_id")
+            ),
+            "output_type": AudioResponseType,
+        });
+
+        # text-to-sound-effects
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ElevenLabsDataProvider::AppName,
+            "path": "/text-to-sound-effects",
+            "action": "text-to-sound-effects",
+            "groups": "Audio Processing",
+            "display_name": "Text to Sound Effects",
+            "short_desc": "Generate sound effects from a text description",
+            "desc": "Generate sound effects from a text description using ElevenLabs AI",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                ElevenLabsTextToSoundEffectsRequestType::Fields{"text",}, {
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                ElevenLabsTextToSoundEffectsRequestType::Fields{"duration_seconds",}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                ElevenLabsTextToSoundEffectsRequestType::Fields - ("text", "duration_seconds")
+            ),
+            "output_type": AudioResponseType,
+        });
+
+        # audio-isolation
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ElevenLabsDataProvider::AppName,
+            "path": "/audio-isolation",
+            "action": "audio-isolation",
+            "groups": "Audio Processing",
+            "display_name": "Audio Isolation",
+            "short_desc": "Remove background noise from audio",
+            "desc": "Remove background noise from audio, isolating the voice using ElevenLabs AI",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                ElevenLabsAudioIsolationRequestType::Fields{"audio",}, {
+                    "required": True,
+                }
+            ),
+            "output_type": AudioResponseType,
+        });
+
+        # speech-to-text
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ElevenLabsDataProvider::AppName,
+            "path": "/speech-to-text",
+            "action": "speech-to-text",
+            "groups": "Transcription",
+            "display_name": "Speech to Text",
+            "short_desc": "Transcribe audio to text",
+            "desc": "Transcribe audio to text using ElevenLabs Scribe speech-to-text model. Supports 90+ "
+                "languages with word-level timestamps and speaker diarization",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                ElevenLabsSpeechToTextRequestType::Fields{"audio",}, {
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                ElevenLabsSpeechToTextRequestType::Fields{"language_code", "diarize"}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                ElevenLabsSpeechToTextRequestType::Fields - ("audio", "language_code", "diarize")
+            ),
+            "output_type": ElevenLabsSpeechToTextDataProvider::ResponseType,
+        });
+
+        # voice-design
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ElevenLabsDataProvider::AppName,
+            "path": "/voice-design",
+            "action": "voice-design",
+            "groups": "Speech Synthesis",
+            "display_name": "Voice Design",
+            "short_desc": "Design a new voice from a text description",
+            "desc": "Design a new voice from a text description of the desired voice characteristics",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                ElevenLabsVoiceDesignRequestType::Fields{"voice_description", "text"}, {
+                    "required": True,
+                }
+            ),
+            "output_type": ElevenLabsVoiceDesignDataProvider::ResponseType,
+        });
+
+        # === Voice CRUD Actions ===
+
+        # list-voices
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ElevenLabsDataProvider::AppName,
+            "path": "/voices",
+            "action": "list-voices",
+            "groups": "Voice Management",
+            "display_name": "List Voices",
+            "short_desc": "List available voices",
+            "desc": "List available voices with optional filtering and pagination",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                ElevenLabsVoicesRequestType::Fields{"search", "voice_type"}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                ElevenLabsVoicesRequestType::Fields - ("search", "voice_type")
+            ),
+            "output_type": ElevenLabsVoicesDataProvider::ResponseType,
+        });
+
+        # get-voice
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ElevenLabsDataProvider::AppName,
+            "path": "/get-voice",
+            "action": "get-voice",
+            "groups": "Voice Management",
+            "display_name": "Get Voice",
+            "short_desc": "Get details of a specific voice",
+            "desc": "Get details of a specific voice by its ID",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                ElevenLabsGetVoiceRequestType::Fields{"voice_id",}, {
+                    "required": True,
+                }
+            ),
+            "output_type": ElevenLabsGetVoiceDataProvider::ResponseType,
+        });
+
+        # create-voice
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ElevenLabsDataProvider::AppName,
+            "path": "/create-voice",
+            "action": "create-voice",
+            "groups": "Voice Management",
+            "display_name": "Create Voice",
+            "short_desc": "Create a new voice",
+            "desc": "Create a new voice with a name and optional description",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                ElevenLabsCreateVoiceRequestType::Fields{"name",}, {
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                ElevenLabsCreateVoiceRequestType::Fields{"description",}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                ElevenLabsCreateVoiceRequestType::Fields - ("name", "description")
+            ),
+            "output_type": ElevenLabsCreateVoiceDataProvider::ResponseType,
+        });
+
+        # edit-voice
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ElevenLabsDataProvider::AppName,
+            "path": "/edit-voice",
+            "action": "edit-voice",
+            "groups": "Voice Management",
+            "display_name": "Edit Voice",
+            "short_desc": "Edit an existing voice",
+            "desc": "Edit the name, description, or labels of an existing voice",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                ElevenLabsEditVoiceRequestType::Fields{"voice_id",}, {
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                ElevenLabsEditVoiceRequestType::Fields{"name",}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                ElevenLabsEditVoiceRequestType::Fields - ("voice_id", "name")
+            ),
+            "output_type": ElevenLabsEditVoiceDataProvider::ResponseType,
+        });
+
+        # delete-voice
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ElevenLabsDataProvider::AppName,
+            "path": "/delete-voice",
+            "action": "delete-voice",
+            "groups": "Voice Management",
+            "display_name": "Delete Voice",
+            "short_desc": "Delete a voice",
+            "desc": "Delete a voice by its ID",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                ElevenLabsDeleteVoiceRequestType::Fields{"voice_id",}, {
+                    "required": True,
+                }
+            ),
+            "output_type": ElevenLabsDeleteVoiceDataProvider::ResponseType,
+        });
+
+        # === Models ===
+
+        # list-models
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ElevenLabsDataProvider::AppName,
+            "path": "/models",
+            "action": "list-models",
+            "groups": "Models",
+            "display_name": "List Models",
+            "short_desc": "List available AI models",
+            "desc": "List available ElevenLabs AI models and their capabilities",
+            "action_code": DPAT_API,
+            "options": {},
+            "output_type": ElevenLabsModelsDataProvider::ResponseType,
+        });
+
+        # === History Actions ===
+
+        # list-history
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ElevenLabsDataProvider::AppName,
+            "path": "/history",
+            "action": "list-history",
+            "groups": "History",
+            "display_name": "List History",
+            "short_desc": "List generated audio history items",
+            "desc": "List previously generated audio history items with optional pagination",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                ElevenLabsHistoryRequestType::Fields{"page_size",}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                ElevenLabsHistoryRequestType::Fields - ("page_size",)
+            ),
+            "output_type": ElevenLabsHistoryDataProvider::ResponseType,
+        });
+
+        # get-history-item
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ElevenLabsDataProvider::AppName,
+            "path": "/get-history-item",
+            "action": "get-history-item",
+            "groups": "History",
+            "display_name": "Get History Item",
+            "short_desc": "Get details of a history item",
+            "desc": "Get details of a specific audio generation history item",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                ElevenLabsGetHistoryItemRequestType::Fields{"history_item_id",}, {
+                    "required": True,
+                }
+            ),
+            "output_type": ElevenLabsGetHistoryItemDataProvider::ResponseType,
+        });
+
+        # delete-history-item
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ElevenLabsDataProvider::AppName,
+            "path": "/delete-history-item",
+            "action": "delete-history-item",
+            "groups": "History",
+            "display_name": "Delete History Item",
+            "short_desc": "Delete a history item",
+            "desc": "Delete a specific audio generation history item",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                ElevenLabsDeleteHistoryItemRequestType::Fields{"history_item_id",}, {
+                    "required": True,
+                }
+            ),
+            "output_type": ElevenLabsDeleteHistoryItemDataProvider::ResponseType,
+        });
+
+        # get-history-audio
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ElevenLabsDataProvider::AppName,
+            "path": "/get-history-audio",
+            "action": "get-history-audio",
+            "groups": "History",
+            "display_name": "Get History Audio",
+            "short_desc": "Get audio from a history item",
+            "desc": "Get the audio file from a specific history item",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                ElevenLabsGetHistoryAudioRequestType::Fields{"history_item_id",}, {
+                    "required": True,
+                }
+            ),
+            "output_type": AudioResponseType,
+        });
+
+        # === Dubbing Actions ===
+
+        # create-dubbing
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ElevenLabsDataProvider::AppName,
+            "path": "/create-dubbing",
+            "action": "create-dubbing",
+            "groups": "Dubbing",
+            "display_name": "Create Dubbing",
+            "short_desc": "Create a dubbing project",
+            "desc": "Create a new dubbing project to translate audio/video content to another language",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                ElevenLabsCreateDubbingRequestType::Fields{"name", "source_lang", "target_lang"}, {
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                ElevenLabsCreateDubbingRequestType::Fields - ("name", "source_lang", "target_lang")
+            ),
+            "output_type": ElevenLabsCreateDubbingDataProvider::ResponseType,
+        });
+
+        # get-dubbing
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ElevenLabsDataProvider::AppName,
+            "path": "/get-dubbing",
+            "action": "get-dubbing",
+            "groups": "Dubbing",
+            "display_name": "Get Dubbing Status",
+            "short_desc": "Get the status of a dubbing project",
+            "desc": "Get the current status and details of a dubbing project",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                ElevenLabsGetDubbingRequestType::Fields{"dubbing_id",}, {
+                    "required": True,
+                }
+            ),
+            "output_type": ElevenLabsGetDubbingDataProvider::ResponseType,
+        });
+
+        # get-dubbing-audio
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ElevenLabsDataProvider::AppName,
+            "path": "/get-dubbing-audio",
+            "action": "get-dubbing-audio",
+            "groups": "Dubbing",
+            "display_name": "Get Dubbing Audio",
+            "short_desc": "Get dubbed audio for a specific language",
+            "desc": "Download the dubbed audio file from a dubbing project for a specific target language",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                ElevenLabsGetDubbingAudioRequestType::Fields, {
+                    "required": True,
+                }
+            ),
+            "output_type": AudioResponseType,
+        });
+
+        # delete-dubbing
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ElevenLabsDataProvider::AppName,
+            "path": "/delete-dubbing",
+            "action": "delete-dubbing",
+            "groups": "Dubbing",
+            "display_name": "Delete Dubbing",
+            "short_desc": "Delete a dubbing project",
+            "desc": "Delete a dubbing project by its ID",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                ElevenLabsDeleteDubbingRequestType::Fields{"dubbing_id",}, {
+                    "required": True,
+                }
+            ),
+            "output_type": ElevenLabsDeleteDubbingDataProvider::ResponseType,
+        });
+
+        # list-dubbing
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ElevenLabsDataProvider::AppName,
+            "path": "/list-dubbing",
+            "action": "list-dubbing",
+            "groups": "Dubbing",
+            "display_name": "List Dubbing Projects",
+            "short_desc": "List dubbing projects",
+            "desc": "List dubbing projects with optional filtering by status and creator",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                ElevenLabsListDubbingRequestType::Fields{"dubbing_status", "page_size"}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                ElevenLabsListDubbingRequestType::Fields - ("dubbing_status", "page_size")
+            ),
+            "output_type": ElevenLabsListDubbingDataProvider::ResponseType,
+        });
+
+        # === Pronunciation Dictionary ===
+
+        # create-pronunciation-dictionary
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ElevenLabsDataProvider::AppName,
+            "path": "/create-pronunciation-dictionary",
+            "action": "create-pronunciation-dictionary",
+            "groups": "Pronunciation",
+            "display_name": "Create Pronunciation Dictionary",
+            "short_desc": "Create a pronunciation dictionary",
+            "desc": "Create a new pronunciation dictionary with custom pronunciation rules",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                ElevenLabsCreatePronunciationDictionaryRequestType::Fields{"name",}, {
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                ElevenLabsCreatePronunciationDictionaryRequestType::Fields{"description",}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                ElevenLabsCreatePronunciationDictionaryRequestType::Fields - ("name", "description")
+            ),
+            "output_type": ElevenLabsCreatePronunciationDictionaryDataProvider::ResponseType,
+        });
+
+        # list-pronunciation-dictionaries
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ElevenLabsDataProvider::AppName,
+            "path": "/list-pronunciation-dictionaries",
+            "action": "list-pronunciation-dictionaries",
+            "groups": "Pronunciation",
+            "display_name": "List Pronunciation Dictionaries",
+            "short_desc": "List available pronunciation dictionaries",
+            "desc": "List available pronunciation dictionaries with optional pagination",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                ElevenLabsListPronunciationDictionariesRequestType::Fields{"page_size",}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                ElevenLabsListPronunciationDictionariesRequestType::Fields - ("page_size",)
+            ),
+            "output_type": ElevenLabsListPronunciationDictionariesDataProvider::ResponseType,
+        });
+
+        # get-pronunciation-dictionary
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ElevenLabsDataProvider::AppName,
+            "path": "/get-pronunciation-dictionary",
+            "action": "get-pronunciation-dictionary",
+            "groups": "Pronunciation",
+            "display_name": "Get Pronunciation Dictionary",
+            "short_desc": "Get details of a pronunciation dictionary",
+            "desc": "Get details of a specific pronunciation dictionary by its ID",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                ElevenLabsGetPronunciationDictionaryRequestType::Fields{"dictionary_id",}, {
+                    "required": True,
+                }
+            ),
+            "output_type": ElevenLabsGetPronunciationDictionaryDataProvider::ResponseType,
+        });
+
+        # add-pronunciation-rules
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ElevenLabsDataProvider::AppName,
+            "path": "/add-pronunciation-rules",
+            "action": "add-pronunciation-rules",
+            "groups": "Pronunciation",
+            "display_name": "Add Pronunciation Rules",
+            "short_desc": "Add rules to a pronunciation dictionary",
+            "desc": "Add pronunciation rules to an existing pronunciation dictionary. Rules can be alias "
+                "rules (text replacement) or phoneme rules (IPA/phoneme representation)",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                ElevenLabsAddPronunciationRulesRequestType::Fields, {
+                    "required": True,
+                }
+            ),
+            "output_type": ElevenLabsAddPronunciationRulesDataProvider::ResponseType,
+        });
+    };
+}
+
+/** @mainpage ElevenLabsDataProvider Module
+
+    @tableofcontents
+
+    @section elevenlabsdataproviderintro ElevenLabsDataProvider Module Introduction
+
+    The %ElevenLabsDataProvider module provides a data provider API for ElevenLabs AI voice synthesis services.
+
+    To use this module, use \c "%requires ElevenLabsDataProvider" in your code.
+
+    All the public symbols in the module are defined in the ElevenLabsDataProvider namespace.
+
+    The main classes are:
+    - @ref ElevenLabsDataProvider::ElevenLabsDataProvider "ElevenLabsDataProvider":
+      the root data provider for ElevenLabs services
+    - @ref ElevenLabsDataProvider::ElevenLabsTextToSpeechDataProvider "ElevenLabsTextToSpeechDataProvider":
+      provides text-to-speech conversion
+
+    @section ElevenLabsDataProviderRelnotes Release Notes
+
+    @subsection ElevenLabsDataProviderv1_0 ElevenLabsDataProvider v1.0
+    - the initial version of the %ElevenLabsDataProvider module
+*/
+
+#! Contains all public definitions in the ElevenLabsDataProvider module
+public namespace ElevenLabsDataProvider {
+#! Logo file
+const ElevenLabsLogo = File::readTextFile(get_script_dir() + "/elevenlabs-logo.svg");
+}
