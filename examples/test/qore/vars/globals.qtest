@@ -1,9 +1,8 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-%require-types
+%modern
 %enable-all-warnings
-%new-style
 %no-child-restrictions
 
 %requires ../../../../qlib/QUnit.qm

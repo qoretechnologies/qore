@@ -460,9 +460,7 @@ class QoreApiMetadataTest inherits QUnit::Test {
     }
 
     testAstClassExtraction() {
-        string source = "%new-style\n"
-            "%strict-args\n"
-            "%require-types\n"
+        string source = "%modern\n"
             "\n"
             "class MyClass {\n"
             "    public {\n"
@@ -512,9 +510,7 @@ class QoreApiMetadataTest inherits QUnit::Test {
     }
 
     testAstFunctionExtraction() {
-        string source = "%new-style\n"
-            "%strict-args\n"
-            "%require-types\n"
+        string source = "%modern\n"
             "\n"
             "#! Add two numbers\n"
             "/** @param a the first number\n"
@@ -536,9 +532,7 @@ class QoreApiMetadataTest inherits QUnit::Test {
     }
 
     testAstHashdeclExtraction() {
-        string source = "%new-style\n"
-            "%strict-args\n"
-            "%require-types\n"
+        string source = "%modern\n"
             "\n"
             "#! A person record\n"
             "hashdecl PersonInfo {\n"
@@ -572,9 +566,7 @@ class QoreApiMetadataTest inherits QUnit::Test {
     }
 
     testAstEnumExtraction() {
-        string source = "%new-style\n"
-            "%strict-args\n"
-            "%require-types\n"
+        string source = "%modern\n"
             "\n"
             "#! Color values\n"
             "enum Color {\n"
@@ -593,9 +585,7 @@ class QoreApiMetadataTest inherits QUnit::Test {
     }
 
     testAstNamespaceHierarchy() {
-        string source = "%new-style\n"
-            "%strict-args\n"
-            "%require-types\n"
+        string source = "%modern\n"
             "\n"
             "namespace Outer {\n"
             "    namespace Inner {\n"
@@ -644,9 +634,7 @@ class QoreApiMetadataTest inherits QUnit::Test {
     }
 
     testAstDocComments() {
-        string source = "%new-style\n"
-            "%strict-args\n"
-            "%require-types\n"
+        string source = "%modern\n"
             "\n"
             "#! A documented class\n"
             "class DocClass {\n"
@@ -687,9 +675,7 @@ class QoreApiMetadataTest inherits QUnit::Test {
     }
 
     testAstMultipleClasses() {
-        string source = "%new-style\n"
-            "%strict-args\n"
-            "%require-types\n"
+        string source = "%modern\n"
             "\n"
             "class Foo {\n"
             "    int x() { return 1; }\n"
@@ -1327,9 +1313,7 @@ class QoreApiMetadataTest inherits QUnit::Test {
     }
 
     testFacadeFromSourceString() {
-        string source = "%new-style\n"
-            "%strict-args\n"
-            "%require-types\n"
+        string source = "%modern\n"
             "\n"
             "#! A simple class\n"
             "class Simple {\n"
@@ -1404,9 +1388,7 @@ class QoreApiMetadataTest inherits QUnit::Test {
     }
 
     testFacadeJsonRoundtrip() {
-        string source = "%new-style\n"
-            "%strict-args\n"
-            "%require-types\n"
+        string source = "%modern\n"
             "\n"
             "class JsonTest {\n"
             "    int getValue() { return 1; }\n"
@@ -1430,9 +1412,7 @@ class QoreApiMetadataTest inherits QUnit::Test {
     }
 
     testFacadeYamlRoundtrip() {
-        string source = "%new-style\n"
-            "%strict-args\n"
-            "%require-types\n"
+        string source = "%modern\n"
             "\n"
             "class YamlTest {\n"
             "    int getValue() { return 1; }\n"
