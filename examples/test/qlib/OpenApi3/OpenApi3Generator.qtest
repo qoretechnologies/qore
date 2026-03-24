@@ -648,17 +648,16 @@ hash<HttpHandlerResponseInfo> del(hash<auto> cx, *hash<auto> ah) {
             },
         });
 
-        foreach hash<OpenApi3::RestMethodInfo> method in (methods) {
-            gen.addMethod("/users", method);
-        }
+        gen.addMethods("/users", methods);
 
         hash<auto> spec = gen.generate();
 
-        # Verify the round trip worked
-        assertEq(3, spec.paths{"/users"}.size(), "Should have 3 HTTP methods");
-        assertTrue(spec.paths{"/users"}.hasKey("get"));
-        assertTrue(spec.paths{"/users"}.hasKey("post"));
-        assertTrue(spec.paths{"/users"}.hasKey("delete"));
+        # Verify the round trip worked - action=deactivate should be at /users/deactivate
+        assertTrue(spec.paths{"/users"}.hasKey("get"), "GET /users exists");
+        assertTrue(spec.paths{"/users"}.hasKey("post"), "POST /users exists");
+        # DELETE action=deactivate is served as /users/deactivate
+        assertTrue(spec.paths{"/users/deactivate"}.hasKey("delete"),
+            "DELETE /users/deactivate exists");
 
         # Verify component schemas exist
         assertTrue(spec.components.schemas.hasKey("UserInfo"), "UserInfo schema should exist");
@@ -764,7 +763,7 @@ hash<HttpHandlerResponseInfo> del(hash<auto> cx, *hash<auto> ah) {
 
         assertEq("get_users", spec.paths{"/users"}.get.operationId);
         assertEq("get_users_id", spec.paths{"/users/{id}"}.get.operationId);
-        assertEq("put_users_id_activate", spec.paths{"/users/{id}"}.put.operationId);
+        assertEq("put_users_id_activate", spec.paths{"/users/{id}/activate"}.put.operationId);
     }
 
     testSeeAndPerms() {

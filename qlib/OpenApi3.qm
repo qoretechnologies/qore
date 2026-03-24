@@ -5716,6 +5716,15 @@ public class OpenApi3SchemaGenerator {
         @param method_info parsed REST method info
     */
     addMethod(string path, hash<RestMethodInfo> method_info) {
+        # For actions, append as sub-path (actions are served both as
+        # ?action=xxx and /xxx in the REST framework)
+        if (method_info.action) {
+            if (path !~ /\/$/) {
+                path += "/";
+            }
+            path += method_info.action;
+        }
+
         string http_method = method_info.http_method.lwr();
 
         # Build operation object
@@ -5755,11 +5764,8 @@ public class OpenApi3SchemaGenerator {
     #! Add multiple methods for a path
     addMethods(string base_path, list<hash<RestMethodInfo>> methods) {
         foreach hash<RestMethodInfo> method in (methods) {
-            string path = method.path ?? base_path;
-            if (method.action) {
-                # For actions, append to path
-                path += "?action=" + method.action;
-            }
+            string path = method.path.val() ? method.path : base_path;
+            # action sub-path is handled by addMethod()
             addMethod(path, method);
         }
     }
@@ -5848,15 +5854,13 @@ public class OpenApi3SchemaGenerator {
 
     #! Generate operation ID
     private string generateOperationId(string path, string method, *string action) {
+        # action is already part of the path as a sub-path segment
         string id = path;
         id =~ s/[{}\/]/_/g;
         id =~ s/__+/_/g;  # Collapse multiple underscores
         id =~ s/^_//;
         id =~ s/_$//;
         id = method + "_" + id;
-        if (action) {
-            id += "_" + action;
-        }
         return id;
     }
 
