@@ -381,6 +381,10 @@ private:
     //! can execute on_error/on_exit handlers when an invoke throws.
     std::vector<size_t> exception_scope_depth_stack;
 
+    //! Phase 3b: Maps OnBlockExitStatement to compiled handler IR
+    //! Stores compiled handlers during lowering, ready for Phase 4 execution
+    std::unordered_map<const OnBlockExitStatement*, std::unique_ptr<QoreIRFunction>> compiled_handlers;
+
     //! Depth of active catch scopes that need CatchCleanup on non-local exit
     int catch_cleanup_depth = 0;
 
