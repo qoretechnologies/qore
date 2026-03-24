@@ -5,58 +5,235 @@
     @section tokenizerintro tokenizer Module Introduction
 
     The \c tokenizer module provides HuggingFace-compatible text tokenization for %Qore.
-    It can load any \c tokenizer.json file from HuggingFace Hub and produce the same
-    token IDs as the Python \c transformers library.
+    It can load any \c tokenizer.json file from
+    <a href="https://huggingface.co/">HuggingFace Hub</a> and produce the same token IDs
+    as the Python \c transformers library. This enables local text tokenization for ONNX
+    model inference without a Python dependency.
 
     Supported tokenization models:
     - <b>BPE</b> (Byte-Pair Encoding) — used by GPT-2, RoBERTa, Llama, Mistral
     - <b>WordPiece</b> — used by BERT, DistilBERT, ALBERT, sentence-transformers
     - <b>Unigram</b> (SentencePiece) — used by T5, XLM-RoBERTa, mT5
 
-    Supported normalizers: BertNormalizer, Unicode NFC/NFD/NFKC/NFKD, Precompiled
-    (SentencePiece trie), Sequence, Replace, Prepend, Lowercase, StripAccents, Strip.
+    @subsection tokenizer_normalizers Supported Normalizers
+    - \c BertNormalizer — clean text, handle CJK chars, strip accents, lowercase
+    - \c NFC / \c NFD / \c NFKC / \c NFKD — Unicode normalization via utf8proc
+    - \c Precompiled — SentencePiece Darts DoubleArray trie normalization (used by T5)
+    - \c Sequence — chains multiple normalizers
+    - \c Replace / \c Prepend / \c Lowercase / \c StripAccents / \c Strip
 
-    Supported pre-tokenizers: BertPreTokenizer, ByteLevel (GPT-2), Metaspace
-    (SentencePiece), Whitespace, WhitespaceSplit, Sequence.
+    @subsection tokenizer_pretokenizers Supported Pre-tokenizers
+    - \c BertPreTokenizer — split on whitespace and punctuation
+    - \c ByteLevel — GPT-2 byte-to-unicode mapping with regex splitting
+    - \c Metaspace — SentencePiece word boundary marking with \c ▁
+    - \c Whitespace / \c WhitespaceSplit / \c Sequence
 
-    Supported post-processors: TemplateProcessing, BertProcessing, RobertaProcessing,
-    ByteLevel, Sequence.
+    @subsection tokenizer_postprocessors Supported Post-processors
+    - \c TemplateProcessing — configurable special token insertion
+    - \c BertProcessing — \c [CLS] A \c [SEP] / \c [CLS] A \c [SEP] B \c [SEP]
+    - \c RobertaProcessing — \c \<s\> A \c \</s\> / \c \<s\> A \c \</s\>\</s\> B \c \</s\>
+    - \c ByteLevel / \c Sequence
 
-    Supported decoders: WordPiece, ByteLevel, Metaspace, BPEDecoder, ByteFallback,
-    Fuse, Strip, Replace, Sequence.
+    @subsection tokenizer_decoders Supported Decoders
+    - \c WordPiece — strips \c ## prefix, cleanup
+    - \c ByteLevel — reverses GPT-2 byte mapping
+    - \c Metaspace — replaces \c ▁ back to spaces
+    - \c ByteFallback — decodes \c \<0xHH\> byte tokens to UTF-8
+    - \c Fuse / \c Strip / \c Replace / \c Sequence
 
-    @par Example:
+    @section tokenizer_basic Basic Usage
+
+    @par Loading a tokenizer from a tokenizer.json file:
     @code{.py}
 %requires json
 %requires tokenizer
 
-# Load a BERT tokenizer
-hash<auto> config = parse_json(ReadOnlyFile::readTextFile("bert-base-uncased/tokenizer.json"));
+# Load tokenizer configuration from file
+hash<auto> config = parse_json(ReadOnlyFile::readTextFile("tokenizer.json"));
 Tokenizer::HFTokenizer tok(config);
 
-# Encode text
+# Basic encoding — returns token IDs with special tokens
 hash<auto> enc = tok.encode("Hello, world!");
 printf("IDs: %y\n", enc.input_ids);
-# IDs: (101, 7592, 1010, 2088, 999, 102)
+# BERT output: (101, 7592, 1010, 2088, 999, 102)  = [CLS] hello , world ! [SEP]
+# GPT-2 output: (15496, 11, 995, 0)                = Hello , world !
 
-# Decode back
+# Decode back to text
 string text = tok.decode(enc.input_ids);
 printf("Text: %s\n", text);
-# Text: [CLS] hello, world! [SEP]
-
-# Sentence pair
-hash<auto> pair_enc = tok.encode("What is AI?", "AI is intelligence.");
-printf("Type IDs: %y\n", pair_enc.token_type_ids);
-# Type IDs: (0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1)
     @endcode
+
+    @section tokenizer_sentence_pairs Sentence Pair Encoding
+
+    For tasks like question answering and natural language inference that require
+    two input sequences:
+
+    @code{.py}
+# BERT sentence pair: automatically adds [CLS], [SEP], and assigns type IDs
+hash<auto> enc = tok.encodeWithOptions("What is AI?", "AI is intelligence.");
+printf("IDs:      %y\n", enc.input_ids);
+# (101, 2054, 2003, 9932, 1029, 102, 9932, 2003, 4454, 1012, 102)
+printf("Type IDs: %y\n", enc.token_type_ids);
+# (0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1)
+    @endcode
+
+    @section tokenizer_advanced Advanced Encoding with Truncation and Padding
+
+    For model inference, sequences must be fixed-length. Use \c encodeAdvanced()
+    with truncation and padding options:
+
+    @par Truncation — limit sequence length:
+    @code{.py}
+hash<auto> enc = tok.encodeAdvanced("A very long sentence that needs truncation...", {
+    "max_length": 8,              # maximum total length including special tokens
+    "truncation": "longest_first", # strategy: "longest_first", "only_first", "only_second"
+});
+printf("IDs (len=%d): %y\n", enc.input_ids.size(), enc.input_ids);
+# Exactly 8 tokens: [CLS] a very long sentence that [SEP]
+    @endcode
+
+    @par Padding — pad to fixed length:
+    @code{.py}
+hash<auto> enc = tok.encodeAdvanced("hi", {
+    "max_length": 10,
+    "truncation": "longest_first",
+    "padding": "max_length",       # pad to max_length with [PAD] tokens
+});
+printf("IDs:  %y\n", enc.input_ids);
+# (101, 7632, 102, 0, 0, 0, 0, 0, 0, 0)
+printf("Mask: %y\n", enc.attention_mask);
+# (1, 1, 1, 0, 0, 0, 0, 0, 0, 0)  — 0 for padding positions
+    @endcode
+
+    @par Sentence pair with truncation:
+    @code{.py}
+hash<auto> enc = tok.encodeAdvanced("premise text", {
+    "text_pair": "hypothesis text",
+    "max_length": 12,
+    "truncation": "longest_first",  # trims the longer sequence first
+    "padding": "max_length",
+});
+    @endcode
+
+    @section tokenizer_batch Batch Encoding
+
+    Encode multiple texts at once with uniform output length:
+
+    @code{.py}
+list<hash<auto>> batch = tok.encodeBatch(
+    ("short text", "a much longer sentence that will be truncated"), {
+        "max_length": 10,
+        "truncation": "longest_first",
+        "padding": "true",          # pad all to the longest in the batch
+    });
+
+# Both outputs have the same length (suitable for ONNX batch inference)
+printf("Text 1 length: %d\n", batch[0].input_ids.size());
+printf("Text 2 length: %d\n", batch[1].input_ids.size());
+# Both: 10
+    @endcode
+
+    @section tokenizer_offsets Offset Mapping and Special Tokens Mask
+
+    Every encoding result includes byte-level offset mapping and a special tokens mask:
+
+    @code{.py}
+hash<auto> enc = tok.encode("Hello, world!");
+
+# offset_mapping: list of (start_byte, end_byte) pairs in the original text
+printf("Offsets: %y\n", enc.offset_mapping);
+# BERT: ((0, 0), (0, 5), (5, 6), (7, 12), (12, 13), (0, 0))
+#        [CLS]    hello    ,      world     !        [SEP]
+# Special tokens get offset (0, 0)
+
+# special_tokens_mask: 1 for special tokens, 0 for content tokens
+printf("Special: %y\n", enc.special_tokens_mask);
+# BERT: (1, 0, 0, 0, 0, 1)
+    @endcode
+
+    @section tokenizer_vocab Vocabulary Access
+
+    @code{.py}
+# Get vocabulary size
+printf("Vocab size: %d\n", tok.getVocabSize());
+
+# Look up individual tokens
+printf("hello -> %d\n", tok.tokenToId("hello"));
+printf("7592 -> %s\n", tok.idToToken(7592));
+
+# Get the full vocabulary as a hash
+hash<string, int> vocab = tok.getVocab();
+printf("Total entries: %d\n", vocab.size());
+
+# Get the pad token ID (auto-detected from [PAD] or <pad>)
+printf("Pad token ID: %d\n", tok.getPadTokenId());
+    @endcode
+
+    @section tokenizer_decode Decoding
+
+    @code{.py}
+# Decode with special tokens visible
+string with_special = tok.decode(enc.input_ids);
+# "[CLS] hello , world ! [SEP]"
+
+# Decode without special tokens
+string clean = tok.decode(enc.input_ids, True);
+# "hello , world !"
+    @endcode
+
+    @section tokenizer_models Verified Model Families
+
+    The following model families have been verified to produce token IDs matching
+    the Python \c tokenizers library exactly:
+
+    |!Model|!Type|!Example tokenizer.json|!Verified
+    |BERT|WordPiece|bert-base-uncased|Yes — exact match
+    |GPT-2|BPE + ByteLevel|openai-community/gpt2|Yes — exact match
+    |T5|Unigram + Precompiled|google-t5/t5-small|Yes — exact match
+    |Llama/TinyLlama|BPE + byte_fallback|TinyLlama/TinyLlama-1.1B-Chat-v1.0|Yes — exact match
+
+    @section tokenizer_api_summary API Summary
+
+    |!Method|!Description
+    |@ref Tokenizer::HFTokenizer::encode "encode(text)"|Basic encoding with special tokens
+    |@ref Tokenizer::HFTokenizer::encodeWithOptions "encodeWithOptions(text, text_pair, add_special)"|Encoding with sentence pair support
+    |@ref Tokenizer::HFTokenizer::encodeAdvanced "encodeAdvanced(text, options)"|Full encoding with truncation, padding, sentence pairs
+    |@ref Tokenizer::HFTokenizer::encodeBatch "encodeBatch(texts, options)"|Batch encoding with uniform output length
+    |@ref Tokenizer::HFTokenizer::decode "decode(ids, skip_special)"|Decode token IDs back to text
+    |@ref Tokenizer::HFTokenizer::getVocabSize "getVocabSize()"|Return vocabulary size
+    |@ref Tokenizer::HFTokenizer::idToToken "idToToken(id)"|Convert token ID to string
+    |@ref Tokenizer::HFTokenizer::tokenToId "tokenToId(token)"|Convert token string to ID
+    |@ref Tokenizer::HFTokenizer::getVocab "getVocab()"|Return full vocabulary as hash
+    |@ref Tokenizer::HFTokenizer::getPadTokenId "getPadTokenId()"|Return the pad token ID
+
+    @section tokenizer_encoding_result Encoding Result Fields
+
+    All encoding methods return a hash with the following fields:
+
+    |!Field|!Type|!Description
+    |\c input_ids|list\<int\>|Token IDs
+    |\c token_type_ids|list\<int\>|Segment IDs (0 for first text, 1 for second)
+    |\c attention_mask|list\<int\>|1 for real tokens, 0 for padding
+    |\c tokens|list\<string\>|String representation of each token
+    |\c offset_mapping|list\<list\<int\>\>|Byte-level (start, end) offsets in original text
+    |\c special_tokens_mask|list\<int\>|1 for special tokens, 0 for content tokens
 
     @section tokenizer_relnotes tokenizer Module Release Notes
 
     @subsection tokenizer_1_0 tokenizer Module Version 1.0
-    - Initial release with BPE, WordPiece, and Unigram tokenization
-    - Full HuggingFace tokenizer.json support
+    - BPE, WordPiece, and Unigram tokenization models
+    - Full HuggingFace \c tokenizer.json support with auto-detection of model type
     - Precompiled normalizer (SentencePiece Darts DoubleArray trie)
     - GPT-2 byte-level BPE with hand-coded pattern matcher
-    - Thread-safe concurrent encoding
-    - utf8proc-based Unicode normalization (NFC/NFD/NFKC/NFKD)
+    - Truncation: \c longest_first, \c only_first, \c only_second strategies
+    - Padding: \c max_length and batch-longest modes
+    - Batch encoding: \c encodeBatch() for multi-text processing
+    - Byte-level offset mapping and special tokens mask
+    - Added token matching before tokenization pipeline
+    - Sentence pair encoding with correct \c token_type_ids
+    - O(n log n) BPE merge algorithm using priority queue + doubly linked list
+    - Vocabulary access: \c getVocab(), \c getVocabSize(), \c tokenToId(), \c idToToken()
+    - Cooperative cancellation support via \c qore_check_cancel()
+    - utf8proc-based Unicode normalization (NFC/NFD/NFKC/NFKD) and digit classification
+    - Verified against Python \c tokenizers for BERT, GPT-2, T5, and Llama
 */
